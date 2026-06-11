@@ -56997,6 +56997,14 @@
         // mutate (sort, search, slice all trigger innerHTML rewrites).
         // ---------------------------------------------------------------
         let _cmpTableObservers = null;
+        // Set to true while applyComparisonRunsToCategoryTables is
+        // mutating the DOM, so the MutationObserver callbacks ignore
+        // their own self-induced churn. Without this, every apply
+        // queues a follow-up apply on the next animation frame, and
+        // the resulting infinite re-render loop steals focus from any
+        // open native <select> (e.g. the Index Against pickers) which
+        // looks like the dropdown is "spazzing out".
+        let _cmpApplyInProgress = false;
         function _cmpInstallTableObservers() {
             if (_cmpTableObservers) return;
             _cmpTableObservers = [];
@@ -57016,7 +57024,28 @@
             targets.forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
-                const obs = new MutationObserver(() => {
+                const obs = new MutationObserver((records) => {
+                    // Ignore self-induced mutations. Without this we'd
+                    // get an infinite apply loop because every apply
+                    // mutates the DOM (childList changes via
+                    // _cmpClearInjected + appendChild).
+                    if (_cmpApplyInProgress) return;
+                    // Extra guard: if every record only added/removed
+                    // .cmp-col-cell nodes, this mutation came from our
+                    // own code (probably a stale event left in the
+                    // queue after the in-progress flag was cleared).
+                    if (records && records.every(r => {
+                        const isCmpOnly = (nodeList) => {
+                            for (let i = 0; i < nodeList.length; i++) {
+                                const n = nodeList[i];
+                                if (n.nodeType === 1 && !n.classList.contains('cmp-col-cell')) return false;
+                            }
+                            return true;
+                        };
+                        return isCmpOnly(r.addedNodes) && isCmpOnly(r.removedNodes);
+                    })) {
+                        return;
+                    }
                     // Debounce: coalesce bursts into a single re-apply.
                     if (el._cmpReapplyPending) return;
                     el._cmpReapplyPending = true;
@@ -57121,6 +57150,13 @@
         }
 
         function applyComparisonRunsToCategoryTables() {
+            // Re-entrancy guard: if we're already inside an apply (an
+            // observer fired despite the in-progress flag, or a chained
+            // requestAnimationFrame raced), short-circuit. The pending
+            // observer would re-call us anyway once it clears.
+            if (_cmpApplyInProgress) return;
+            _cmpApplyInProgress = true;
+            try {
             const series = (_comparisonRunsState.selectedKeys || [])
                 .map(k => _comparisonRunsState.runsByKey[k])
                 .filter(Boolean);
@@ -57388,6 +57424,22 @@
             try { _cmpStampRowPcts(series); } catch (e) { console.warn('[compare] stamp pcts failed', e); }
             try { _refreshIndexSourcePickerOptions(); } catch (e) { console.warn('[compare] picker refresh failed', e); }
             try { _cmpApplyIndexSourcePicker(); } catch (e) { console.warn('[compare] index picker apply failed', e); }
+            } finally {
+                // Drain any mutation records that piled up during the
+                // apply so the observer doesn't fire AFTER we clear
+                // the flag and re-enter the loop. Defer the actual
+                // flag clear to the next frame so observers (which
+                // queue asynchronously) see the flag during drain.
+                requestAnimationFrame(() => {
+                    try {
+                        if (Array.isArray(_cmpTableObservers)) {
+                            _cmpTableObservers.forEach(o => { try { o.takeRecords(); } catch (_) {} });
+                        }
+                    } finally {
+                        _cmpApplyInProgress = false;
+                    }
+                });
+            }
         }
 
         async function showProfileDeltasModal(subject, sameSubjectRuns) {
