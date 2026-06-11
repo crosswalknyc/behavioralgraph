@@ -22575,11 +22575,52 @@
             const profiles = (typeof dashboardProfiles !== 'undefined' && Array.isArray(dashboardProfiles))
                 ? dashboardProfiles : [];
             let imdb = '';
+            let match = null;
             if (key && profiles.length) {
-                const match = profiles.find(p =>
+                match = profiles.find(p =>
                     p && (p.s3_key === key || p.job_id === key)
                 );
                 if (match) imdb = String(match.imdb_id || '').trim();
+            }
+            // Fallback: variant profiles ("Reba McEntire - Avid Fan",
+            // "Dwayne Johnson 4+") often lack their own imdb_id because the
+            // scraper only populates the base subject row. Borrow the IMDB
+            // id from any sibling in the same canonical group. Uses the
+            // same getProfileGroupKey() + mergeStubGroupsIntoCanonical()
+            // pair the sidebar uses for grouping, so the fallback respects
+            // the same dash/cohort rules.
+            if (!/^nm\d+$/i.test(imdb) && match
+                && typeof getProfileGroupKey === 'function' && profiles.length) {
+                try {
+                    const targetKey = getProfileGroupKey(match);
+                    if (targetKey) {
+                        const bySubject = {};
+                        const displayNames = {};
+                        profiles.forEach(p => {
+                            const k = getProfileGroupKey(p) || (typeof getProfileFullName === 'function' && (getProfileFullName(p) || '').toLowerCase());
+                            if (!k) return;
+                            (bySubject[k] = bySubject[k] || []).push(p);
+                            if (!displayNames[k]) displayNames[k] = k;
+                        });
+                        if (typeof mergeStubGroupsIntoCanonical === 'function') {
+                            try { mergeStubGroupsIntoCanonical(bySubject, displayNames); } catch (_) {}
+                        }
+                        // The merged group containing `match` may live under
+                        // either the variant's key or the canonical parent's
+                        // key — find whichever bucket actually contains it.
+                        const matchId = match.s3_key || match.job_id;
+                        let siblings = bySubject[targetKey];
+                        if (!siblings || !siblings.some(p => (p.s3_key || p.job_id) === matchId)) {
+                            for (const arr of Object.values(bySubject)) {
+                                if (arr.some(p => (p.s3_key || p.job_id) === matchId)) { siblings = arr; break; }
+                            }
+                        }
+                        if (Array.isArray(siblings)) {
+                            const donor = siblings.find(p => /^nm\d+$/i.test(String((p && p.imdb_id) || '').trim()));
+                            if (donor) imdb = String(donor.imdb_id || '').trim();
+                        }
+                    }
+                } catch (_) {}
             }
             if (!/^nm\d+$/i.test(imdb)) {
                 box.style.display = 'none';
