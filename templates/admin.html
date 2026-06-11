@@ -3387,6 +3387,107 @@
                 <input type="text" id="customCategory" placeholder="Enter custom category..." style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
                 <small style="color: var(--text-secondary); font-size: 0.7rem;">Leave blank to use the dropdown selection above.</small>
             </div>
+
+            <div style="margin-bottom: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Add Second Category <span style="font-weight: 400; color: var(--text-secondary);">(optional)</span></label>
+                <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; margin-bottom: 0.5rem;">Profile will appear under both categories simultaneously.</small>
+                <select id="secondaryCategory" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                    <option value="">— None —</option>
+                    <optgroup label="📊 GEN POP">
+                        <option value="GENPOP">Gen Pop</option>
+                    </optgroup>
+                    <optgroup label="📺 CONTENT">
+                        <option value="GAME PLAYERS">GAME PLAYERS</option>
+                        <option value="GAMES">GAMES</option>
+                        <option value="MOVIE">MOVIE</option>
+                        <option value="MOVIE THEATER">MOVIE THEATER</option>
+                        <option value="PODCAST">PODCAST</option>
+                        <option value="VERTICAL SHORTS">VERTICAL SHORTS</option>
+                        <option value="SERIES - AMAZON / MGM STUDIOS">SERIES - AMAZON / MGM STUDIOS</option>
+                        <option value="SERIES - APPLE">SERIES - APPLE</option>
+                        <option value="SERIES - CBS STUDIOS">SERIES - CBS STUDIOS</option>
+                        <option value="SERIES - 20TH CENTURY">SERIES - 20TH CENTURY</option>
+                        <option value="SERIES - FXP">SERIES - FXP</option>
+                        <option value="SERIES - HBO ENTERTAINMENT">SERIES - HBO ENTERTAINMENT</option>
+                        <option value="SERIES - HBO MAX">SERIES - HBO MAX</option>
+                        <option value="SERIES - HULU">SERIES - HULU</option>
+                        <option value="SERIES - LIONSGATE TELEVISION">SERIES - LIONSGATE TELEVISION</option>
+                        <option value="SERIES - NETFLIX">SERIES - NETFLIX</option>
+                        <option value="SERIES - PARAMOUNT TV STUDIOS">SERIES - PARAMOUNT TV STUDIOS</option>
+                        <option value="SERIES - SONY">SERIES - SONY</option>
+                        <option value="SERIES - UNIVERSAL TV">SERIES - UNIVERSAL TV</option>
+                        <option value="SERIES - WBD">SERIES - WBD</option>
+                    </optgroup>
+                    <optgroup label="🏷️ BRAND">
+                        <option value="ACCESSORIES">ACCESSORIES</option>
+                        <option value="ACTIVEWEAR">ACTIVEWEAR</option>
+                        <option value="AMUSEMENT PARKS">AMUSEMENT PARKS</option>
+                        <option value="APPAREL">APPAREL</option>
+                        <option value="AUTOMOBILE">AUTOMOBILE</option>
+                        <option value="B2B">B2B</option>
+                        <option value="BANKS">BANKS</option>
+                        <option value="BEAUTY">BEAUTY</option>
+                        <option value="BETTING">BETTING</option>
+                        <option value="BEVERAGE">BEVERAGE</option>
+                        <option value="CASUAL DINING">CASUAL DINING</option>
+                        <option value="DIGITAL BANKING">DIGITAL BANKING</option>
+                        <option value="EVENTS">EVENTS</option>
+                        <option value="FOOTWEAR">FOOTWEAR</option>
+                        <option value="FRANCHISE">FRANCHISE</option>
+                        <option value="GROCERY">GROCERY</option>
+                        <option value="INTIMATES">INTIMATES</option>
+                        <option value="JEWELRY">JEWELRY</option>
+                        <option value="LOYALTY PROGRAMS">LOYALTY PROGRAMS</option>
+                        <option value="MEMBERSHIP">MEMBERSHIP</option>
+                        <option value="NON PROFIT/CHARITY">NON PROFIT/CHARITY</option>
+                        <option value="PHARMA">PHARMA</option>
+                        <option value="QSR">QSR</option>
+                        <option value="RETAILERS">RETAILERS</option>
+                        <option value="TELECOM">TELECOM</option>
+                        <option value="TICKETING">TICKETING</option>
+                        <option value="TOY">TOY</option>
+                        <option value="TRAVEL">TRAVEL</option>
+                        <option value="VENUE">VENUE</option>
+                        <option value="WORKOUT FACILITY">WORKOUT FACILITY</option>
+                    </optgroup>
+                    <optgroup label="👤 TALENT">
+                        <option value="ACTOR">ACTOR</option>
+                        <option value="ATHLETE">ATHLETE</option>
+                        <option value="CREATOR/INFLUENCER">CREATOR/INFLUENCER</option>
+                        <option value="EMERGING TALENT">EMERGING TALENT</option>
+                        <option value="HOST/PERSONALITY">HOST/PERSONALITY</option>
+                        <option value="MUSICIAN/BAND">MUSICIAN/BAND</option>
+                        <option value="POLITICS/ACTIVIST">POLITICS/ACTIVIST</option>
+                        <option value="WRITER/DIRECTOR/AUTHOR/ARTIST">WRITER/DIRECTOR/AUTHOR/ARTIST</option>
+                    </optgroup>
+                    <optgroup label="⚽ SPORT">
+                        <option value="MILB">MILB</option>
+                        <option value="MLB">MLB</option>
+                        <option value="NBA">NBA</option>
+                        <option value="NFL">NFL</option>
+                        <option value="SPORTS ORGANIZATIONS">SPORTS ORGANIZATIONS</option>
+                        <option value="WNBA">WNBA</option>
+                    </optgroup>
+                    <optgroup label="📈 TRENDS">
+                        <option value="TRENDS">TRENDS</option>
+                    </optgroup>
+                    <optgroup label="📡 PLATFORMS">
+                        <option value="APP/PLATFORM">APP/PLATFORM</option>
+                        <option value="BROADCAST/CABLE">BROADCAST/CABLE</option>
+                        <option value="CREDIT PROVIDERS">CREDIT PROVIDERS</option>
+                        <option value="MEDIA">MEDIA</option>
+                        <option value="SEARCH ENGINE/AI">SEARCH ENGINE/AI</option>
+                        <option value="SOCIAL MEDIA">SOCIAL MEDIA</option>
+                        <option value="STREAMING MUSIC">STREAMING MUSIC</option>
+                        <option value="STREAMING VIDEO">STREAMING VIDEO</option>
+                        <option value="VIRTUAL MVPD/FAST">VIRTUAL MVPD/FAST</option>
+                    </optgroup>
+                    <optgroup label="🎵 MUSIC">
+                        <option value="MUSIC">MUSIC</option>
+                        <option value="MUSICIAN/BAND">MUSICIAN/BAND</option>
+                    </optgroup>
+                </select>
+            </div>
             
             <div style="display: flex; gap: 0.75rem;">
                 <button class="btn btn-secondary" onclick="closeCategoryModal()" style="flex: 1;">Cancel</button>
@@ -9566,6 +9667,11 @@
             document.getElementById('currentCategory').textContent = currentCategory || 'Uncategorized';
             document.getElementById('newCategory').value = currentCategory || '';
             document.getElementById('customCategory').value = '';
+            var secCatEl = document.getElementById('secondaryCategory');
+            if (secCatEl) {
+                var fileObj = contentFiles.find(f => f.key === fileKey);
+                secCatEl.value = (fileObj && fileObj.secondary_category) || '';
+            }
             
             const isSvod = fileKey.startsWith('svod-acquisition/');
             const isBpiq = isBrandPartnership || fileKey.startsWith('brand-partnership-iq/');
@@ -9744,6 +9850,7 @@
             const customCategory = document.getElementById('customCategory').value.trim();
             const selectedCategory = document.getElementById('newCategory').value;
             const newCategory = customCategory || selectedCategory;
+            const secondaryCategory = (document.getElementById('secondaryCategory').value || '').trim().toUpperCase();
             
             if (!fileKey || !newCategory) {
                 showToast('Please select a category', true);
@@ -9757,17 +9864,17 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         file_key: fileKey,
-                        new_category: newCategory.toUpperCase()
+                        new_category: newCategory.toUpperCase(),
+                        secondary_category: secondaryCategory || null
                     })
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
-                    showToast('Category updated successfully!');
+                    showToast('Category updated successfully!' + (secondaryCategory ? ' Also listed under ' + secondaryCategory + '.' : ''));
                     closeCategoryModal();
-                    // Update in place instead of refreshing the whole list
-                    updateFileRowInPlace(fileKey, fileKey, { category: newCategory.toUpperCase() });
+                    updateFileRowInPlace(fileKey, fileKey, { category: newCategory.toUpperCase(), secondary_category: secondaryCategory || null });
                 } else {
                     showToast(data.error || 'Failed to update category', true);
                 }

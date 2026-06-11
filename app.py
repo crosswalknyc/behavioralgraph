@@ -5510,16 +5510,20 @@ def get_admin_content():
                     else:
                         project_name = cached['project_name']
                 last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                secondary_category = cached_lookup.get(key, {}).get('secondary_category')
                 
-                active_files.append({
+                file_entry = {
                     'key': key,
                     'filename': filename,
                     'project_name': project_name,
                     'category': category,
                     'size': obj.get('Size', 0),
                     'last_modified': last_modified,
-                    'created_at': last_modified  # Also include as created_at for sorting
-                })
+                    'created_at': last_modified
+                }
+                if secondary_category:
+                    file_entry['secondary_category'] = secondary_category
+                active_files.append(file_entry)
         
         print(f"✅ Found {len(active_files)} active files")
         
@@ -19506,6 +19510,7 @@ def change_file_category():
         data = request.get_json()
         file_key = data.get('file_key')
         new_category = data.get('new_category', '').strip().upper()
+        secondary_category = (data.get('secondary_category') or '').strip().upper() or None
         
         if not file_key or not new_category:
             return jsonify({'success': False, 'error': 'File key and category required'})
@@ -19618,6 +19623,10 @@ def change_file_category():
             if job.get('key') == file_key or job.get('s3_key') == file_key:
                 job['category'] = new_category
                 job['last_modified'] = new_last_modified
+                if secondary_category:
+                    job['secondary_category'] = secondary_category
+                elif 'secondary_category' in job:
+                    del job['secondary_category']
                 found = True
                 break
         if not found and not file_key.startswith(S3_PURGATORY_PREFIX):
@@ -19626,25 +19635,29 @@ def change_file_category():
             name_without_ext = filename.replace('.csv', '') if filename.endswith('.csv') else filename
             name_without_timestamp = remove_timestamp_from_name(name_without_ext)
             project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
-            jobs.append({
+            entry = {
                 'key': file_key,
                 's3_key': file_key,
                 'category': new_category,
                 'project_name': project_name,
                 'name': project_name,
                 'display_name': project_name,
-            })
+            }
+            if secondary_category:
+                entry['secondary_category'] = secondary_category
+            jobs.append(entry)
             s3_cache['jobs'] = jobs
             print(f"📝 Added new cache entry for {file_key} with category: {new_category}")
         elif found:
             print(f"📝 Updated existing cache entry for {file_key} with category: {new_category}")
         save_persisted_cache()
         
-        print(f"🏷️ Changed category for {file_key} to {new_category}")
+        print(f"🏷️ Changed category for {file_key} to {new_category}" + (f" (also under {secondary_category})" if secondary_category else ""))
         
         return jsonify({
             'success': True,
             'new_category': new_category,
+            'secondary_category': secondary_category,
             'message': 'Category updated successfully'
         })
         
@@ -20247,6 +20260,8 @@ def list_jobs():
                     entry['bucket'] = j['bucket']
                 if 'is_svod' in j:
                     entry['is_svod'] = j['is_svod']
+                if j.get('secondary_category'):
+                    entry['secondary_category'] = j['secondary_category']
                 # Pass IMDB enrichment through to the frontend so the Profile IQ
                 # dashboard can render a clickable "IMDB: nm0000123" pill under
                 # the date range header. Backfilled by migration/scrape_imdb_ids.py
