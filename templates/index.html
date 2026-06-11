@@ -13457,7 +13457,7 @@
     <div id="profileDeltasModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeProfileDeltasModal()">
         <div class="modal-content" style="max-width: 90vw; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h2 id="profileDeltasModalTitle" style="margin: 0; color: var(--text-primary);">Compare date ranges</h2>
+                <h2 id="profileDeltasModalTitle" style="margin: 0; color: var(--text-primary);">Data Cuts</h2>
                 <button type="button" onclick="closeProfileDeltasModal()" style="background: transparent; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer;">×</button>
             </div>
             <div id="profileDeltasModalContent" style="overflow: auto; flex: 1; min-height: 0;">
@@ -15910,9 +15910,9 @@
                                 <div class="dash-brand-box" id="dashBrandNameHeader"></div>
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
                                 <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 0.5rem;">
-                                    <span style="font-size: 0.8rem; color: var(--text-secondary);">Run:</span>
-                                    <select id="dashRunSelect" style="font-size: 0.85rem; padding: 0.25rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); max-width: 12rem;" title="Select a run (dropdown)"></select>
-                                    <button type="button" class="btn btn-small" id="dashViewDeltasBtn" style="font-size: 0.8rem;">Compare date ranges</button>
+                                    <span style="font-size: 0.8rem; color: var(--text-secondary);">Data Cut:</span>
+                                    <select id="dashRunSelect" style="font-size: 0.85rem; padding: 0.25rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); max-width: 12rem;" title="Switch to a different analyzed period or cohort"></select>
+                                    <button type="button" class="btn btn-small" id="dashViewDeltasBtn" style="font-size: 0.8rem;">Data Cuts</button>
                                 </div>
                             </div>
                         </div>
@@ -55647,7 +55647,7 @@
             const btn = document.getElementById('dashViewDeltasBtn');
             if (!btn) return;
             const n = (_comparisonRunsState.selectedKeys || []).length;
-            const base = 'Compare date ranges';
+            const base = 'Data Cuts';
             btn.textContent = n > 0 ? `${base} (${n})` : base;
         }
 
@@ -55703,6 +55703,16 @@
                     // filename year just reflects when the file was
                     // generated.
                     const drYear = _yearFromDateRange(data.date_range);
+                    // Cache it so the sidebar tree, Run dropdown, and any
+                    // future re-render of this profile shows the analyzed-
+                    // period year too, not just the compare popover.
+                    try {
+                        if (typeof setRunDateRangeYear === 'function' && setRunDateRangeYear(key, data.date_range)) {
+                            if (typeof renderDashboardProfileTree === 'function' && Array.isArray(dashboardProfiles)) {
+                                renderDashboardProfileTree(dashboardProfiles);
+                            }
+                        }
+                    } catch (_) {}
                     const preferredLabel = _preferredRunLabel(profile, drYear);
                     const entry = { key, profile, parsed, label: preferredLabel, dateRangeYear: drYear, dateRange: data.date_range || '' };
                     _comparisonRunsState.runsByKey[key] = entry;
@@ -55902,7 +55912,7 @@
             } else {
                 const hint = document.createElement('div');
                 hint.style.cssText = 'font-size:0.72rem;color:var(--text-secondary, #9ca3af);margin-bottom:0.4rem;line-height:1.35;';
-                hint.textContent = 'Toggle prior years or cohorts on to see them as extra bars before Gen Pop.';
+                hint.textContent = 'Toggle prior data cuts on to add them as extra bars and columns alongside this profile.';
                 pop.appendChild(hint);
 
                 available.forEach(item => {
@@ -56430,7 +56440,7 @@
             const contentEl = document.getElementById('profileDeltasModalContent');
             if (!modal || !titleEl || !contentEl) return;
             const profileName = sameSubjectRuns.length ? getProfileFullName(sameSubjectRuns[0]) : subject.replace(/_/g, ' ');
-            titleEl.textContent = 'Compare date ranges: ' + profileName;
+            titleEl.textContent = 'Data Cuts: ' + profileName;
             contentEl.innerHTML = '<div class="loading-placeholder">Loading runs...</div>';
             modal.style.display = 'flex';
             const runs = sortRunsByYearDesc(sameSubjectRuns);
@@ -57022,6 +57032,17 @@
                 const brandNameEl = document.getElementById('dashBrandNameHeader');
                 if (brandNameEl) brandNameEl.textContent = headerTitle;
                 updateDashProfileHeaderMeta(dateRange, parsed);
+                // Cache this run's analyzed-period year so the sidebar tree
+                // and Run dropdown display 2025 (the analyzed period) rather
+                // than 2026 (when the file was generated). The cache is
+                // keyed by s3_key and persists across re-renders.
+                try {
+                    if (typeof setRunDateRangeYear === 'function' && setRunDateRangeYear(profileId, dateRange)) {
+                        if (typeof renderDashboardProfileTree === 'function' && Array.isArray(dashboardProfiles)) {
+                            renderDashboardProfileTree(dashboardProfiles);
+                        }
+                    }
+                } catch (_) {}
                 const runsRow = document.getElementById('dashProfileRunsRow');
                 const runSelect = document.getElementById('dashRunSelect');
                 const deltasBtn = document.getElementById('dashViewDeltasBtn');
@@ -57065,7 +57086,16 @@
                     const sortedRuns = sortRunsByYearDesc(sameSubjectRuns);
                     runSelect.innerHTML = sortedRuns.map(p => {
                         const id = p.s3_key || p.job_id;
-                        const label = getProfileYear(p) || getRunDateLabel(p.s3_key || '') || id;
+                        // Prefer cached analyzed-period year > name-baked
+                        // year > generation-date label. The cached year is
+                        // populated when the run loads (or when the compare
+                        // popover fetches it). On a cold first render the
+                        // OTHER runs in the dropdown still show their
+                        // filename date until the user selects them; the
+                        // currently-loaded run always shows the right year.
+                        const cachedYr = (typeof getCachedRunDateRangeYear === 'function')
+                            ? getCachedRunDateRangeYear(p) : '';
+                        const label = cachedYr || getProfileYear(p) || getRunDateLabel(p.s3_key || '') || id;
                         return `<option value="${escapeAttr(id).replace(/"/g, '&quot;')}" ${id === profileId ? 'selected' : ''}>${escapeAttr(label)}</option>`;
                     }).join('');
                     runSelect.onchange = function() {
@@ -76155,16 +76185,51 @@
             });
         }
 
-        /** Year-only label for a profile run. Prefers a 4-digit year baked
-         *  into the display name (e.g. "Dwayne Johnson 2024" -> "2024"),
-         *  otherwise extracts the year out of the s3_key timestamp
-         *  (e.g. "Dwayne_Johnson_05_14_2026_..." -> "2026"), falling back
-         *  to the created_at year. The sidebar shows years (not full dates)
-         *  because each profile run analyzes a full calendar-year date
-         *  range, so the file-creation day/month is not meaningful in the
-         *  tree. The "Compare date ranges" modal still uses the full date
-         *  via getRunDateLabel() since deltas care about the exact run. */
+        // Per-s3_key cache of the run's analyzed-period year, derived from
+        // the CSV's date_range metadata at the moment the profile is loaded
+        // (or fetched via the Data Cuts compare popover). The filename
+        // timestamp reflects when the run was GENERATED, not the period it
+        // analyzes — these two often disagree (e.g. a 2025-01-01 to
+        // 2025-12-31 run generated in May 2026). When the cache has a hit
+        // for an s3_key, every consumer (sidebar tree child label, Run
+        // dropdown, compare popover) shows the analyzed-period year so the
+        // UI matches the Date Range row at the top of the dashboard.
+        const _runDateRangeYearByKey = {};
+
+        /** Record the analyzed-period year for a run, keyed by s3_key.
+         *  Safe no-op when either input is missing. Returns true if the
+         *  cache mutated so callers can decide whether to re-render. */
+        function setRunDateRangeYear(s3Key, dateRange) {
+            if (!s3Key) return false;
+            const yr = (typeof _yearFromDateRange === 'function')
+                ? _yearFromDateRange(dateRange) : '';
+            if (!yr) return false;
+            if (_runDateRangeYearByKey[s3Key] === yr) return false;
+            _runDateRangeYearByKey[s3Key] = yr;
+            return true;
+        }
+
+        /** Lookup helper. Returns the cached date-range year for a profile
+         *  (resolves either an s3_key string or a profile object). */
+        function getCachedRunDateRangeYear(profileOrKey) {
+            const key = (typeof profileOrKey === 'string')
+                ? profileOrKey
+                : (profileOrKey && (profileOrKey.s3_key || profileOrKey.job_id)) || '';
+            return key ? (_runDateRangeYearByKey[key] || '') : '';
+        }
+
+        /** Year-only label for a profile run. Resolution order:
+         *   1. Cached year from the CSV's date_range (most accurate — this
+         *      is the period the run analyzes).
+         *   2. A 4-digit year baked into the display name ("Dwayne Johnson 2024").
+         *   3. The s3_key timestamp year ("Dwayne_Johnson_05_14_2026.csv" -> "2026")
+         *      — this is the GENERATION year and only used as a fallback.
+         *   4. The created_at year.
+         *  Used by the sidebar tree child labels and the Run dropdown so
+         *  they show the same year as the "Date Range:" header. */
         function getProfileRunYear(profile) {
+            const cached = getCachedRunDateRangeYear(profile);
+            if (cached) return cached;
             const fromName = getProfileYear(profile);
             if (fromName) return fromName;
             const key = profile.s3_key || profile.job_id || '';
