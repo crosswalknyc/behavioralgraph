@@ -57588,14 +57588,18 @@
                     return;
                 }
 
-                // Build new grid: insert N×60px before the index column.
-                // For the "All" table we ALSO honor the Gen Pop hide toggle
-                // by dropping the two GP columns when requested.
+                // Build new grid. Data cuts ALWAYS go RIGHT AFTER the
+                // Profile column (per UX: "always put the avid fan after
+                // the primary profile not at the end"), so the column
+                // order is:
+                //   Rank | Location | Rank | Profile | [cmps] | [GP cols] | Index
+                // For the "All" table we ALSO honor the Gen Pop hide
+                // toggle by dropping the two GP columns when requested.
                 const cmpColsCss = series.map(() => '60px').join(' ');
                 let newGrid;
                 if (sec.isAll) {
                     const gpCols = hideGP ? '' : ' 72px 72px';
-                    newGrid = '58px minmax(0, 1fr) 44px 80px' + gpCols + ' ' + cmpColsCss + ' 58px';
+                    newGrid = '58px minmax(0, 1fr) 44px 80px ' + cmpColsCss + gpCols + ' 58px';
                 } else {
                     // Over/under tables have no native Gen Pop column,
                     // so the hideGP toggle has nothing to hide here.
@@ -57610,23 +57614,35 @@
                     map: _cmpBuildLocationsLookup(s.parsed)
                 }));
 
-                // Header injection — the index column lives at the end,
-                // so we insert comparison header cells just before the
-                // .index-col span. If no .index-col is found, append.
+                // Pick the right insertion anchor for THIS section.
+                //   - "All" table has the Profile column followed by
+                //     .cw-gp-col (CW Gen Pop) — insert before that so
+                //     cmps sit between Profile and Gen Pop.
+                //   - Over/Under tables go Profile → .index-col with no
+                //     Gen Pop in between, so insert before .index-col.
+                // _findAnchor returns null when neither selector matches,
+                // in which case we appendChild as a last resort.
+                const _findAnchor = (rowEl) => {
+                    if (sec.isAll) {
+                        return rowEl.querySelector('.cw-gp-col')
+                            || rowEl.querySelector('.index-col');
+                    }
+                    return rowEl.querySelector('.index-col');
+                };
+
                 if (header) {
                     header.style.gridTemplateColumns = newGrid;
-                    const idxHeader = header.querySelector('.index-col');
+                    const anchor = _findAnchor(header);
                     series.forEach((entry, idx) => {
                         const span = document.createElement('span');
                         span.className = 'cmp-col-cell';
                         span.textContent = entry.label || ('Run ' + (idx + 1));
                         span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;';
-                        if (idxHeader) header.insertBefore(span, idxHeader);
+                        if (anchor) header.insertBefore(span, anchor);
                         else header.appendChild(span);
                     });
                 }
 
-                // Data row injection.
                 list.querySelectorAll('.location-row').forEach(row => {
                     row.style.gridTemplateColumns = newGrid;
                     // Row name lives in data-name attribute (lowercased
@@ -57644,7 +57660,7 @@
                             if (c) canonNorm = _cmpNormName(c);
                         }
                     } catch (_) {}
-                    const idxCell = row.querySelector('.index-col');
+                    const anchor = _findAnchor(row);
                     series.forEach((entry, idx) => {
                         const lookup = locLookups[idx].map;
                         const match = lookup[norm] || (canonNorm && lookup[canonNorm]);
@@ -57655,7 +57671,7 @@
                         if (match && match.pct != null) {
                             span.title = entry.label + ' • ' + rawName + ' • ' + _cmpFmtPct(match.pct);
                         }
-                        if (idxCell) row.insertBefore(span, idxCell);
+                        if (anchor) row.insertBefore(span, anchor);
                         else row.appendChild(span);
                     });
                 });
