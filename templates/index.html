@@ -55767,8 +55767,18 @@
                 if (u === 'PLATFORMS') return 'STREAMING VIDEO'; // backend sometimes uses "PLATFORMS" for streaming video
                 return cat || 'UNCATEGORIZED';
             };
-            const byMasterCategory = {};
+            // Expand profiles with secondary_category into both categories
+            var _expandedProfiles = [];
             profiles.forEach(p => {
+                _expandedProfiles.push(p);
+                if (p.secondary_category && p.secondary_category !== (p.category || '').toUpperCase()) {
+                    var clone = Object.assign({}, p, { category: p.secondary_category, _is_secondary: true });
+                    _expandedProfiles.push(clone);
+                }
+            });
+
+            const byMasterCategory = {};
+            _expandedProfiles.forEach(p => {
                 const cat = p.category || 'UNCATEGORIZED';
                 const subKey = normalizeSubCategoryKey(cat);
                 const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
