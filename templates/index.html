@@ -56078,6 +56078,9 @@
         // -------------------------------------------------------------------
         const _COMPARISON_PALETTE = ['#fd971f', '#ae81ff', '#f92672', '#66d9ef', '#a6e22e', '#e6db74', '#75715e', '#ff79c6'];
         const _COMPARISON_GENPOP_COLOR = '#9ca3af';
+        // Synthetic key for the precomputed Category Norm "run". Treated by
+        // every downstream rendering helper as if it were a real data cut.
+        const CATEGORY_NORM_KEY = '__category_norm__';
         let _comparisonRunsState = {
             subject: '',
             selectedKeys: [],
@@ -56089,6 +56092,13 @@
             // popover exposes a toggle so users can compare old vs new
             // without Gen Pop crowding the bars / columns.
             includeGenPop: true,
+            // Category Norm = sample-size-weighted average BP across every
+            // profile in this profile's category. Precomputed by
+            // migration/compute_category_norms.py + admin Reset button.
+            includeCategoryNorm: false,
+            categoryNormCategory: '',
+            categoryNormProfileCount: 0,
+            categoryNormGeneratedAt: '',
             // When data cuts are selected the popover surfaces a
             // numerator / denominator picker so users can index e.g.
             // "Avid vs Casual" or "Casual vs Gen Pop" instead of the
@@ -56108,6 +56118,10 @@
                 currentKey: currentKey || '',
                 inFlight: {},
                 includeGenPop: true,
+                includeCategoryNorm: false,
+                categoryNormCategory: '',
+                categoryNormProfileCount: 0,
+                categoryNormGeneratedAt: '',
                 indexNumKey: null,
                 indexDenKey: null
             };
@@ -56124,6 +56138,176 @@
             _comparisonRunsState.includeGenPop = !!val;
             try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] genpop toggle charts failed', e); }
             try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] genpop toggle tables failed', e); }
+        }
+
+        // ---------------------------------------------------------------
+        // CATEGORY NORM (Data Cuts → "Show Category Norm")
+        //
+        // Loads the precomputed weighted-average BP norm for the active
+        // profile's category from /api/category-norms/<category>, shapes
+        // it like a parseAllData() payload, and injects it into the
+        // existing comparison-runs pipeline under a synthetic key. From
+        // there it gets the same bar / column / index treatment as any
+        // real data cut.
+        // ---------------------------------------------------------------
+
+        // Translate compute_category_norms.py's UPPERCASE demographic
+        // category keys (AGE, SEXUAL_ORIENTATION, ...) to the lowercase
+        // keys parseAllData() emits and the chart layer expects.
+        function _normDemoCatToParsedKey(cat) {
+            if (!cat) return '';
+            return String(cat).toLowerCase();
+        }
+
+        // Convert a `/api/category-norms/<cat>` response's `norm` payload
+        // into a parseAllData()-shaped object so the rest of the
+        // comparison pipeline can treat it identically to a real run.
+        function _buildCategoryNormParsed(normPayload) {
+            const parsed = {
+                demographics: {},
+                demographicsIndex: {},
+                demographicsGenPop: {},
+                demographicsProjection: {},
+                behavioral: {},
+                interests: {},
+                locations: [],
+                sampleSize: (normPayload && normPayload.total_sample) || 0,
+                projectedUS: 0,
+                brandCategory: (normPayload && normPayload.category) || ''
+            };
+            if (!normPayload) return parsed;
+
+            const demos = normPayload.demographics || {};
+            for (const [cat, buckets] of Object.entries(demos)) {
+                parsed.demographics[_normDemoCatToParsedKey(cat)] = Object.assign({}, buckets || {});
+            }
+
+            const beh = normPayload.behavioral || {};
+            for (const [cat, items] of Object.entries(beh)) {
+                if (!Array.isArray(items)) continue;
+                parsed.behavioral[cat] = items.map(it => ({
+                    name: it.name,
+                    pct: typeof it.pct === 'number' ? it.pct : 0,
+                    // Index/genPopPct/projection are computed downstream
+                    // against the live Gen Pop baseline, so we leave them
+                    // 0/empty here — same as parseAllData does for raw rows.
+                    index: 0,
+                    genPopPct: 0,
+                    projection: 0
+                }));
+            }
+
+            const interests = normPayload.interests || {};
+            for (const [name, pct] of Object.entries(interests)) {
+                parsed.interests[name] = {
+                    pct: typeof pct === 'number' ? pct : 0,
+                    index: 0,
+                    genPopPct: 0
+                };
+            }
+
+            const locs = normPayload.locations || [];
+            parsed.locations = locs.map(l => ({
+                name: l.name,
+                pct: typeof l.pct === 'number' ? l.pct : 0,
+                index: 0,
+                genPopPct: 0
+            }));
+
+            return parsed;
+        }
+
+        function _currentProfileCategory() {
+            try {
+                if (typeof currentProfileData !== 'undefined' && currentProfileData) {
+                    const c = currentProfileData.category || (currentProfileData.parsed && currentProfileData.parsed.brandCategory);
+                    if (c) return String(c).toUpperCase();
+                }
+                if (typeof currentProfile !== 'undefined' && currentProfile) {
+                    if (currentProfile.category) return String(currentProfile.category).toUpperCase();
+                }
+            } catch (_) {}
+            return '';
+        }
+
+        async function _fetchCategoryNorm() {
+            const cat = _currentProfileCategory();
+            if (!cat) {
+                console.warn('[compare] cannot fetch category norm — no category on current profile');
+                return null;
+            }
+            try {
+                const r = await fetch('/api/category-norms/' + encodeURIComponent(cat), { credentials: 'same-origin' });
+                if (!r.ok) {
+                    if (r.status === 404) {
+                        const body = await r.json().catch(() => ({}));
+                        console.info('[compare] no category norm available for', cat, '—', body.reason || '');
+                        return { status: 'not_found', category: cat, reason: (body && body.reason) || 'not computed' };
+                    }
+                    console.warn('[compare] category norm fetch failed', r.status);
+                    return { status: 'error', category: cat, reason: 'HTTP ' + r.status };
+                }
+                const data = await r.json();
+                if (!data || !data.success || !data.norm) {
+                    return { status: 'error', category: cat, reason: 'bad payload' };
+                }
+                const parsed = _buildCategoryNormParsed(data.norm);
+                return {
+                    status: 'ok',
+                    category: cat,
+                    generated_at: data.generated_at || '',
+                    profile_count: data.profile_count || 0,
+                    total_sample: data.total_sample || 0,
+                    parsed
+                };
+            } catch (e) {
+                console.warn('[compare] category norm fetch exception', e);
+                return { status: 'error', category: cat, reason: String(e && e.message || e) };
+            }
+        }
+
+        async function _setComparisonIncludeCategoryNorm(val) {
+            const want = !!val;
+            _comparisonRunsState.includeCategoryNorm = want;
+            if (!want) {
+                _comparisonRunsState.selectedKeys = (_comparisonRunsState.selectedKeys || [])
+                    .filter(k => k !== CATEGORY_NORM_KEY);
+                delete _comparisonRunsState.runsByKey[CATEGORY_NORM_KEY];
+                _updateCompareDateRangesButtonBadge();
+                try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] norm off charts failed', e); }
+                try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] norm off tables failed', e); }
+                try { _refreshIndexSourcePickerOptions(); } catch (_) {}
+                return { ok: true };
+            }
+            // Loading…
+            const fetched = await _fetchCategoryNorm();
+            if (!fetched || fetched.status !== 'ok') {
+                _comparisonRunsState.includeCategoryNorm = false;
+                return { ok: false, reason: (fetched && fetched.reason) || 'fetch failed', status: (fetched && fetched.status) || 'error' };
+            }
+            _comparisonRunsState.categoryNormCategory = fetched.category;
+            _comparisonRunsState.categoryNormProfileCount = fetched.profile_count;
+            _comparisonRunsState.categoryNormGeneratedAt = fetched.generated_at;
+            // Inject into the comparison pipeline.
+            const label = 'Category Norm — ' + fetched.category +
+                (fetched.profile_count ? ' (' + fetched.profile_count + ')' : '');
+            _comparisonRunsState.runsByKey[CATEGORY_NORM_KEY] = {
+                key: CATEGORY_NORM_KEY,
+                profile: { name: label, key: CATEGORY_NORM_KEY, isSynthetic: true },
+                parsed: fetched.parsed,
+                label,
+                dateRangeYear: '',
+                dateRange: '',
+                isSynthetic: true
+            };
+            if (!_comparisonRunsState.selectedKeys.includes(CATEGORY_NORM_KEY)) {
+                _comparisonRunsState.selectedKeys.push(CATEGORY_NORM_KEY);
+            }
+            _updateCompareDateRangesButtonBadge();
+            try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] norm on charts failed', e); }
+            try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] norm on tables failed', e); }
+            try { _refreshIndexSourcePickerOptions(); } catch (_) {}
+            return { ok: true };
         }
 
         // ---------------------------------------------------------------
@@ -56601,12 +56785,16 @@
 
         function _clearAllComparisonRuns() {
             _comparisonRunsState.selectedKeys = [];
+            _comparisonRunsState.includeCategoryNorm = false;
+            delete _comparisonRunsState.runsByKey[CATEGORY_NORM_KEY];
             _updateCompareDateRangesButtonBadge();
             applyComparisonRunsToDashboardCharts();
             try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] category tables re-apply failed', e); }
             const pop = document.getElementById('compareDateRangesPopover');
             if (pop) {
                 pop.querySelectorAll('input[type="checkbox"][data-cmp-key]').forEach(cb => { cb.checked = false; });
+                const cnCb = pop.querySelector('#cmpIncludeCategoryNormCb');
+                if (cnCb) cnCb.checked = false;
             }
         }
 
@@ -56687,6 +56875,62 @@
                 _setComparisonIncludeGenPop(gpCb.checked);
             });
             pop.appendChild(gpRow);
+
+            // ---- Category Norm toggle -------------------------------------
+            // Weighted-average BP across every profile in this profile's
+            // category. Pulls from /api/category-norms/<category>, which
+            // serves a precomputed file from S3 (admin Reset button in
+            // Settings → Category Norms regenerates the file).
+            const cnRow = document.createElement('label');
+            cnRow.style.cssText = 'display:grid;grid-template-columns:18px 1fr minmax(70px,auto);column-gap:0.55rem;align-items:center;padding:0.4rem 0.5rem;border-radius:6px;cursor:pointer;font-size:0.82rem;line-height:1.25;margin-bottom:0.45rem;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.22);';
+            const cnCb = document.createElement('input');
+            cnCb.type = 'checkbox';
+            cnCb.id = 'cmpIncludeCategoryNormCb';
+            cnCb.checked = !!_comparisonRunsState.includeCategoryNorm;
+            cnCb.style.cssText = 'accent-color:#f59e0b;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
+            const cnLbl = document.createElement('span');
+            const curCat = _currentProfileCategory();
+            const catLabel = curCat ? ' (<span style="color:var(--text-secondary, #9ca3af);">' + curCat + '</span>)' : '';
+            cnLbl.innerHTML = 'Show <strong style="color:var(--text-primary, #cbd5e1);">Category Norm</strong>' + catLabel;
+            cnLbl.style.cssText = 'color:var(--text-primary, #e6e6e6);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+            const cnStatus = document.createElement('span');
+            cnStatus.style.cssText = 'font-size:0.68rem;color:var(--text-secondary, #9ca3af);justify-self:end;text-align:right;';
+            if (_comparisonRunsState.includeCategoryNorm && _comparisonRunsState.categoryNormProfileCount) {
+                cnStatus.textContent = 'n=' + _comparisonRunsState.categoryNormProfileCount;
+            }
+            cnRow.appendChild(cnCb);
+            cnRow.appendChild(cnLbl);
+            cnRow.appendChild(cnStatus);
+            cnCb.addEventListener('change', async function() {
+                const wantOn = cnCb.checked;
+                cnStatus.textContent = wantOn ? 'Loading…' : '';
+                cnStatus.style.color = 'var(--text-secondary, #9ca3af)';
+                cnStatus.title = '';
+                try {
+                    const result = await _setComparisonIncludeCategoryNorm(wantOn);
+                    if (!wantOn) {
+                        cnStatus.textContent = '';
+                    } else if (result && result.ok) {
+                        const n = _comparisonRunsState.categoryNormProfileCount;
+                        cnStatus.textContent = n ? 'n=' + n : 'On';
+                    } else {
+                        const reason = (result && result.reason) || 'failed';
+                        const isMissing = result && result.status === 'not_found';
+                        cnStatus.textContent = isMissing ? 'No norm yet' : 'Failed';
+                        cnStatus.style.color = isMissing ? '#fd971f' : '#f92672';
+                        cnStatus.title = isMissing
+                            ? 'No precomputed norm for this category yet.\nAsk an admin to click "Reset Category Norms" in Settings.\n\nDetail: ' + reason
+                            : reason;
+                        cnCb.checked = false;
+                    }
+                } catch (e) {
+                    cnStatus.textContent = 'Failed';
+                    cnStatus.style.color = '#f92672';
+                    cnStatus.title = String(e && e.message || e);
+                    cnCb.checked = false;
+                }
+            });
+            pop.appendChild(cnRow);
 
             // ---- Index source picker --------------------------------------
             // Shown whenever the user has 1+ data cuts selected. Lets them
