@@ -2882,6 +2882,328 @@ def refresh_genpop_cache():
             'error': str(e)
         }), 500
 
+# ---------------------------------------------------------------------------
+# Category Norms (Data Cuts → "Show Category Norm")
+# ---------------------------------------------------------------------------
+#
+# Persisted at s3://dashboard-inputs/system/category_norms.json by
+# migration/compute_category_norms.py. The structure is:
+#   { "generated_at": ISO, "min_profiles": int,
+#     "norms": { "<CATEGORY>": { "category", "profile_count", "total_sample",
+#                                 "demographics", "behavioral", "interests",
+#                                 "locations" } },
+#     "skipped_categories": { "<CATEGORY>": "reason" } }
+#
+# The dashboard fetches norms on demand for the active profile's
+# category, treats them as a synthetic comparison run, and renders them
+# alongside prior data cuts and Gen Pop.
+
+CATEGORY_NORMS_S3_KEY = "system/category_norms.json"
+_category_norms_cache: dict = {"etag": None, "fetched_at": 0.0, "payload": None}
+_category_norms_lock = threading.Lock()
+_CATEGORY_NORMS_TTL_SECS = 60  # short TTL so admin recomputes show up quickly
+
+# Background-recompute status (one job at a time; in-memory + S3 mirror).
+_category_norms_status: dict = {
+    "running": False,
+    "started_at": None,
+    "finished_at": None,
+    "categories_done": 0,
+    "categories_total": 0,
+    "skipped": [],
+    "errors": [],
+    "last_message": None,
+}
+_category_norms_status_lock = threading.Lock()
+
+
+def _category_norms_s3_client():
+    """Match the inline boto3 client pattern used elsewhere in app.py."""
+    s3_endpoint = f'https://s3.{S3_REGION}.amazonaws.com'
+    return boto3.client(
+        's3',
+        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        region_name=S3_REGION,
+        endpoint_url=s3_endpoint,
+    )
+
+
+def _load_category_norms_from_s3(force: bool = False) -> dict:
+    """Return the parsed category_norms.json payload, refreshing the
+    in-memory copy when the S3 ETag has changed (or every TTL seconds)."""
+    now = time.time()
+    with _category_norms_lock:
+        cached_payload = _category_norms_cache.get("payload")
+        cached_etag = _category_norms_cache.get("etag")
+        fetched_at = _category_norms_cache.get("fetched_at") or 0
+        # Cheap path: fresh enough, return cached.
+        if cached_payload is not None and not force and (now - fetched_at) < _CATEGORY_NORMS_TTL_SECS:
+            return cached_payload
+    try:
+        s3 = _category_norms_s3_client()
+        try:
+            head = s3.head_object(Bucket=S3_BUCKET, Key=CATEGORY_NORMS_S3_KEY)
+            etag = head.get("ETag")
+        except Exception:
+            etag = None
+        if etag and cached_payload is not None and etag == cached_etag:
+            with _category_norms_lock:
+                _category_norms_cache["fetched_at"] = now
+            return cached_payload
+        obj = s3.get_object(Bucket=S3_BUCKET, Key=CATEGORY_NORMS_S3_KEY)
+        payload = json.loads(obj["Body"].read().decode("utf-8"))
+    except Exception as e:
+        print(f"[category-norms] load failed: {e}")
+        return {"norms": {}, "skipped_categories": {}}
+    with _category_norms_lock:
+        _category_norms_cache["payload"] = payload
+        _category_norms_cache["etag"] = etag
+        _category_norms_cache["fetched_at"] = now
+    return payload
+
+
+def _norm_category_key(raw: str) -> str:
+    if not raw:
+        return ""
+    key = str(raw).strip().upper()
+    # mirror compute_category_norms.CATEGORY_ALIASES
+    if key == "INTEREST":
+        return "INTERESTS"
+    return key
+
+
+@app.route('/api/category-norms/<path:category>')
+@requires_auth
+def get_category_norm(category):
+    """Return the precomputed BP norm for one category.
+
+    Response:
+      { success: true, category, norm: {...}, generated_at, profile_count, total_sample }
+      { success: false, error: 'not_found' | ... }     # 404
+    """
+    cat_key = _norm_category_key(category)
+    if not cat_key:
+        return jsonify({"success": False, "error": "category required"}), 400
+    payload = _load_category_norms_from_s3()
+    norms = (payload or {}).get("norms") or {}
+    norm = norms.get(cat_key)
+    if not norm:
+        skipped = (payload or {}).get("skipped_categories") or {}
+        reason = skipped.get(cat_key) or "no norm computed for this category"
+        return jsonify({
+            "success": False,
+            "error": "not_found",
+            "category": cat_key,
+            "reason": reason,
+        }), 404
+    return jsonify({
+        "success": True,
+        "category": cat_key,
+        "norm": norm,
+        "profile_count": norm.get("profile_count", 0),
+        "total_sample": norm.get("total_sample", 0),
+        "generated_at": (payload or {}).get("generated_at"),
+    })
+
+
+@app.route('/api/category-norms')
+@requires_auth
+def list_category_norms():
+    """Lightweight directory of which categories have norms available
+    (used by the Data Cuts popover to show counts without pulling each
+    full norm)."""
+    payload = _load_category_norms_from_s3()
+    norms = (payload or {}).get("norms") or {}
+    summary = []
+    for cat, n in sorted(norms.items()):
+        summary.append({
+            "category": cat,
+            "profile_count": n.get("profile_count", 0),
+            "total_sample": n.get("total_sample", 0),
+        })
+    return jsonify({
+        "success": True,
+        "generated_at": (payload or {}).get("generated_at"),
+        "min_profiles": (payload or {}).get("min_profiles", 0),
+        "available": summary,
+        "skipped": (payload or {}).get("skipped_categories") or {},
+    })
+
+
+def _run_category_norms_recompute(workers: int = 12, min_profiles: int = 3) -> None:
+    """Background worker that re-runs the per-category aggregator and
+    persists the result to S3. Updates `_category_norms_status` as it
+    progresses so the admin UI can poll for it."""
+    from datetime import timezone  # local-import: not exported at module top
+    # Import the migration script's primitives so we don't duplicate
+    # the weighted-average logic in two places.
+    import importlib.util
+    script_path = os.path.join(os.path.dirname(__file__), '..', 'migration', 'compute_category_norms.py')
+    script_path = os.path.abspath(script_path)
+    try:
+        spec = importlib.util.spec_from_file_location("compute_category_norms", script_path)
+        ccn = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ccn)  # type: ignore[union-attr]
+    except Exception as e:
+        with _category_norms_status_lock:
+            _category_norms_status.update({
+                "running": False,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "last_message": f"Failed to load compute script: {e}",
+                "errors": [str(e)],
+            })
+        return
+
+    try:
+        s3 = ccn._make_s3()
+        jobs = ccn.load_jobs_cache(s3)
+        by_cat: dict = {}
+        for j in jobs:
+            cat = ccn._norm_cat(j.get("category") or "")
+            if not cat:
+                continue
+            by_cat.setdefault(cat, []).append(j)
+
+        targets = sorted(by_cat.keys())
+        with _category_norms_status_lock:
+            _category_norms_status["categories_total"] = len(targets)
+            _category_norms_status["categories_done"] = 0
+            _category_norms_status["skipped"] = []
+            _category_norms_status["errors"] = []
+            _category_norms_status["last_message"] = f"Processing {len(targets)} categories…"
+
+        existing = ccn.load_norms(s3)
+        norms = dict(existing.get("norms") or {})
+        skipped: dict = {}
+        errors: list = []
+
+        for cat in targets:
+            cat_jobs = by_cat[cat]
+            if len(cat_jobs) < min_profiles:
+                msg = f"fewer than {min_profiles} profiles ({len(cat_jobs)})"
+                skipped[cat] = msg
+                norms.pop(cat, None)
+                with _category_norms_status_lock:
+                    _category_norms_status["categories_done"] += 1
+                    _category_norms_status["skipped"].append({"category": cat, "reason": msg})
+                    _category_norms_status["last_message"] = f"Skipped {cat}: {msg}"
+                continue
+            try:
+                norm = ccn.compute_norm_for_category(s3, cat, cat_jobs, workers=workers)
+            except Exception as e:
+                err = f"{cat}: {e}"
+                errors.append(err)
+                with _category_norms_status_lock:
+                    _category_norms_status["categories_done"] += 1
+                    _category_norms_status["errors"].append(err)
+                    _category_norms_status["last_message"] = f"Error on {cat}: {e}"
+                continue
+            if norm:
+                norm.pop("_meta", None)
+                norms[cat] = norm
+                with _category_norms_status_lock:
+                    _category_norms_status["categories_done"] += 1
+                    _category_norms_status["last_message"] = (
+                        f"Computed {cat} ({norm['profile_count']} profiles)"
+                    )
+            else:
+                with _category_norms_status_lock:
+                    _category_norms_status["categories_done"] += 1
+                    _category_norms_status["last_message"] = f"{cat}: no parseable profiles"
+
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_by": "admin/recompute-category-norms",
+            "min_profiles": min_profiles,
+            "norms": norms,
+            "skipped_categories": skipped,
+        }
+        ccn.save_norms(s3, payload)
+
+        # Bust the in-memory cache so the next /api/category-norms call
+        # picks up the new file immediately.
+        with _category_norms_lock:
+            _category_norms_cache["payload"] = payload
+            _category_norms_cache["etag"] = None
+            _category_norms_cache["fetched_at"] = time.time()
+
+        with _category_norms_status_lock:
+            _category_norms_status.update({
+                "running": False,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "last_message": (
+                    f"Done — {len(norms)} categories with norms, "
+                    f"{len(skipped)} skipped, {len(errors)} errors."
+                ),
+            })
+    except Exception as e:
+        traceback.print_exc()
+        with _category_norms_status_lock:
+            _category_norms_status.update({
+                "running": False,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "last_message": f"Fatal error: {e}",
+                "errors": (_category_norms_status.get("errors") or []) + [str(e)],
+            })
+
+
+@app.route('/api/admin/recompute-category-norms', methods=['POST'])
+@requires_admin
+def admin_recompute_category_norms():
+    """Kick off a background recompute of every category norm. Returns
+    immediately; poll `/api/admin/category-norms-status` for progress."""
+    from datetime import timezone  # local-import: not exported at module top
+    with _category_norms_status_lock:
+        if _category_norms_status.get("running"):
+            return jsonify({
+                "success": False,
+                "error": "A recompute is already running.",
+                "status": dict(_category_norms_status),
+            }), 409
+
+        payload = request.get_json(silent=True) or {}
+        try:
+            min_profiles = int(payload.get("min_profiles", 3))
+        except Exception:
+            min_profiles = 3
+        try:
+            workers = int(payload.get("workers", 12))
+        except Exception:
+            workers = 12
+        # reset status
+        _category_norms_status.update({
+            "running": True,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": None,
+            "categories_done": 0,
+            "categories_total": 0,
+            "skipped": [],
+            "errors": [],
+            "last_message": "Starting…",
+            "min_profiles": min_profiles,
+            "workers": workers,
+        })
+
+    t = threading.Thread(
+        target=_run_category_norms_recompute,
+        kwargs={"workers": workers, "min_profiles": min_profiles},
+        daemon=True,
+        name="recompute-category-norms",
+    )
+    t.start()
+    return jsonify({"success": True, "message": "Recompute started.", "status": dict(_category_norms_status)})
+
+
+@app.route('/api/admin/category-norms-status')
+@requires_admin
+def admin_category_norms_status():
+    """Return the current background-recompute status (running flag,
+    progress, last log line, errors)."""
+    with _category_norms_status_lock:
+        return jsonify({"success": True, "status": dict(_category_norms_status)})
+
+
 @app.route('/api/admin/gmail/status')
 @requires_admin
 def gmail_status():
