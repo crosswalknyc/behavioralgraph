@@ -2089,15 +2089,13 @@ def check_s3_for_existing(brand_search, start_date, end_date):
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                if not key.endswith('.csv'):
-                    continue
-                
-                # Skip system, historic, backup, and purgatory files
-                if (key.startswith('system/')
-                        or key.startswith('historic/')
-                        or key.startswith('backups/')
-                        or key.startswith('_backups/')
-                        or key.startswith(S3_PURGATORY_PREFIX)):
+                # Profile IQ search ONLY considers files at the root of
+                # dashboard-inputs. Anything in a subfolder is system /
+                # cache / reference / archive / backup / audit data and
+                # MUST NOT be surfaced as an existing-profile match.
+                # (2026-06-10 Jenna directive: subfolder files must not
+                # be ingested into the backend or front end.)
+                if not key.endswith('.csv') or '/' in key:
                     continue
                 
                 # Extract the "name part" of the filename (before the date suffix).
@@ -5475,12 +5473,16 @@ def get_admin_content():
         for page in paginator.paginate(Bucket=bucket_name, Prefix=''):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                # Skip historic, system, backup folders, and non-CSV files
-                if (key.startswith('historic/')
-                        or key.startswith('system/')
-                        or key.startswith('backups/')
-                        or key.startswith('_backups/')
-                        or not key.endswith('.csv')):
+                # Active-files panel ONLY shows files at the root of
+                # dashboard-inputs. Anything with '/' lives in a subfolder
+                # (system/, historic/, backups/, _backups/, _archive/,
+                # audit_logs/, purgatory/, brand-partnership-iq/, etc.)
+                # and is system/cache/reference/archive data — it must NOT
+                # appear in the admin active-files view. Archived profiles
+                # are surfaced separately via the historic/ walker below.
+                # (2026-06-10 Jenna directive: subfolder files must not be
+                # ingested into the backend or front end.)
+                if not key.endswith('.csv') or '/' in key:
                     continue
                 
                 # Parse file info
