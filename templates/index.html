@@ -5864,6 +5864,29 @@
         .behavioral-table .behavioral-header-row span.index-col {
             padding-right: 0.35rem;
         }
+        /* Column-header sort (replaces the per-card Sort: dropdown). The
+           span gets data-sort-col set; clicking it triggers
+           handleBehavioralColumnSort. We get a hand cursor + subtle hover
+           tint, and the .cw-sort-arrow child holds the active ↓/↑ marker. */
+        .behavioral-table .behavioral-header-row span[data-sort-col] {
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.12s ease, background 0.12s ease;
+            border-radius: 3px;
+        }
+        .behavioral-table .behavioral-header-row span[data-sort-col]:hover {
+            color: var(--accent-lime, #a6e22e);
+        }
+        .behavioral-table .behavioral-header-row span.cw-sort-active {
+            color: var(--accent-lime, #a6e22e);
+        }
+        .behavioral-table .behavioral-header-row span[data-sort-col] .cw-sort-arrow {
+            font-weight: 700;
+            display: inline-block;
+            min-width: 0.6em;
+            text-align: center;
+            color: inherit;
+        }
         /* Hide GP column when in projection mode */
         .behavioral-card.hide-gp .behavioral-table {
             grid-template-columns: 28px minmax(100px, 1fr) 78px 64px;
@@ -63081,6 +63104,98 @@
         let categoryItemLimits = {};
         const defaultItemLimit = 'All';
         const itemLimitOptions = [3, 5, 10, 15, 20, 25, 'All'];
+
+        // ----- Behavioral column-header sort state -----------------------------
+        // Replaces the per-card "Sort:" dropdown. Each behavioral card now has
+        // clickable column headers (Item / Profile / Gen Pop / Index). Clicking
+        // a header sorts by that column descending; clicking the same header
+        // again toggles ascending. Persisted per category so the order survives
+        // slice / search / item-limit changes within the same dashboard view.
+        //
+        //   behavioralCardSortState[cat] = { column: 'pct'|'index'|'genpop'|'alpha',
+        //                                     direction: 'desc'|'asc' }
+        //
+        // Default = pct ↓ (matches previous dropdown default).
+        let behavioralCardSortState = {};
+
+        function _behavioralDefaultSort() { return { column: 'pct', direction: 'desc' }; }
+
+        function getBehavioralSort(cat) {
+            const s = behavioralCardSortState[cat];
+            if (s && s.column) return { column: s.column, direction: s.direction === 'asc' ? 'asc' : 'desc' };
+            return _behavioralDefaultSort();
+        }
+
+        function getBehavioralSortFromListEl(listEl) {
+            const cat = listEl && listEl.dataset && listEl.dataset.cat;
+            return getBehavioralSort(cat || '');
+        }
+
+        // Apply current sort to an items array in-place. Centralizes the
+        // direction handling so every reader (sortBehavioralCard, sliceSports,
+        // searchInCard, setCategoryItemLimit, etc.) stays consistent.
+        function applyBehavioralSort(items, sort) {
+            if (!Array.isArray(items)) return items;
+            const dir = sort.direction === 'asc' ? 1 : -1;
+            switch (sort.column) {
+                case 'alpha':
+                    return items.sort((a, b) => dir * ((a.name || '').localeCompare(b.name || '')));
+                case 'genpop':
+                    return items.sort((a, b) => {
+                        const av = (a.genPopPct ?? 0), bv = (b.genPopPct ?? 0);
+                        return dir === -1 ? bv - av : av - bv;
+                    });
+                case 'index':
+                    return items.sort((a, b) => {
+                        const av = (a.index || 0), bv = (b.index || 0);
+                        return dir === -1 ? bv - av : av - bv;
+                    });
+                case 'pct':
+                default:
+                    return items.sort((a, b) => {
+                        const av = (a.pct || 0), bv = (b.pct || 0);
+                        return dir === -1 ? bv - av : av - bv;
+                    });
+            }
+        }
+
+        // Wired up via onclick on the header span. Toggles direction when the
+        // same column is clicked, otherwise resets to a sensible default
+        // (alpha = ascending, numeric = descending).
+        function handleBehavioralColumnSort(catId, cat, column) {
+            const cur = getBehavioralSort(cat);
+            let direction;
+            if (cur.column === column) {
+                direction = cur.direction === 'desc' ? 'asc' : 'desc';
+            } else {
+                direction = (column === 'alpha') ? 'asc' : 'desc';
+            }
+            behavioralCardSortState[cat] = { column, direction };
+            sortBehavioralCard(catId, cat, column);
+            _updateBehavioralHeaderArrows(catId);
+        }
+
+        // Refresh the ↓/↑ indicators on the active card's header without
+        // re-rendering the whole card. Idempotent — safe to call on every
+        // sort. Bound to .behavioral-header-row span[data-sort-col].
+        function _updateBehavioralHeaderArrows(catId) {
+            const listEl = document.getElementById('list-' + catId);
+            if (!listEl) return;
+            const card = listEl.closest('.behavioral-card');
+            if (!card) return;
+            const headerRow = card.querySelector('.behavioral-header-row');
+            if (!headerRow) return;
+            const cat = listEl.dataset && listEl.dataset.cat;
+            const sort = getBehavioralSort(cat || '');
+            headerRow.querySelectorAll('span[data-sort-col]').forEach(span => {
+                const arrow = span.querySelector('.cw-sort-arrow');
+                if (!arrow) return;
+                const col = span.dataset.sortCol;
+                const isActive = col === sort.column;
+                arrow.textContent = isActive ? (sort.direction === 'desc' ? ' ↓' : ' ↑') : '';
+                span.classList.toggle('cw-sort-active', isActive);
+            });
+        }
         
         // Generate item limit dropdown options (labels: "Show: Top 15", "Show: All", etc.)
         function generateItemLimitOptions(cat, totalItems) {
@@ -63645,8 +63760,11 @@
                 // Show ALL items (don't filter) - Gen Pop and Index will show "N/A" for items without gen pop match
                 const filteredItems = dedupedItems;
                 
-                // Default sort by percentage descending
-                const sortedItems = filteredItems.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                // Sort by the user's last-clicked column header for this category
+                // (defaults to % descending). Lets the order survive re-renders
+                // triggered by display-mode toggles, profile reloads, etc.
+                const initialSort = getBehavioralSort(cat);
+                const sortedItems = applyBehavioralSort(filteredItems, initialSort);
                 sortedItems.forEach((item, i) => { item._rank = i + 1; });
                 // Apply item limit (default top 15)
                 const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
@@ -64071,25 +64189,18 @@
                                     ${nonProfitSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
                                 </select>
                             ` : ''}
-                            <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
-                            <select class="behavioral-sort-select" onchange="sortBehavioralCard('${catId}', '${cat}', this.value)" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
-                                <option value="pct" selected>${dashDisplayMode === 'projection' ? '# ↓' : '% ↓'}</option>
-                                <option value="index">Idx ↓</option>
-                                <option value="genpop">GP ↓</option>
-                                <option value="alpha">A-Z</option>
-                            </select>
                             <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                         </div>
                         <div class="behavioral-table">
                             <div class="behavioral-header-row">
                                 <span>#</span>
-                                <span>Item</span>
-                                <span class="profile-col">${dashDisplayMode === 'projection' ? 'US #' : 'Profile'}</span>
-                                <span class="genpop-col">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
-                                <span class="index-col">Index</span>
+                                <span data-sort-col="alpha" onclick="handleBehavioralColumnSort('${catId}', '${cat}', 'alpha')" title="Sort by item name">Item<span class="cw-sort-arrow"></span></span>
+                                <span class="profile-col" data-sort-col="pct" onclick="handleBehavioralColumnSort('${catId}', '${cat}', 'pct')" title="Sort by profile %">${dashDisplayMode === 'projection' ? 'US #' : 'Profile'}<span class="cw-sort-arrow"></span></span>
+                                <span class="genpop-col" data-sort-col="genpop" onclick="handleBehavioralColumnSort('${catId}', '${cat}', 'genpop')" title="Sort by Gen Pop %">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}<span class="cw-sort-arrow"></span></span>
+                                <span class="index-col" data-sort-col="index" onclick="handleBehavioralColumnSort('${catId}', '${cat}', 'index')" title="Sort by Index">Index<span class="cw-sort-arrow"></span></span>
                             </div>
                             <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
-                                ${renderBehavioralItems(displayItems, maxPct, 'pct')}
+                                ${renderBehavioralItems(displayItems, maxPct, (behavioralCardSortState[cat] && behavioralCardSortState[cat].column) || 'pct')}
                             </div>
                         </div>
                     </div>
@@ -64098,7 +64209,17 @@
             
             // Re-attach touch event listeners for mobile
             attachTouchDragListeners();
-            
+
+            // Seed the ↓/↑ arrow on the default-sorted column header for every
+            // card we just rendered. Without this the headers would start blank
+            // until the user clicks one. Idempotent.
+            try {
+                document.querySelectorAll('.behavioral-list[id^="list-"]').forEach(el => {
+                    const id = (el.id || '').replace(/^list-/, '');
+                    if (id) _updateBehavioralHeaderArrows(id);
+                });
+            } catch (_) { /* never block render on arrow refresh */ }
+
             // Remove highlight after animation (keep highlight when it's for Amazon Prime Video / streaming platforms)
             if (highlightCategory && !highlightIsForAmazonPrime) {
                 setTimeout(() => {
@@ -64698,36 +64819,23 @@
             }
             
             // Sort first so ranks reflect the full sorted list
-            const sortSelect = listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select');
-            if (sortSelect) {
-                const sortValue = sortSelect.value;
-                if (sortValue === 'index') {
-                    filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
-                } else if (sortValue === 'pct') {
-                    filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
-                } else if (sortValue === 'genpop') {
-                    const gp = (i) => (i.genPopPct ?? 0);
-                    filtered = filtered.sort((a, b) => gp(b) - gp(a));
-                } else if (sortValue === 'alpha') {
-                    filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                }
-            }
-            
+            const sortStateSlice = getBehavioralSortFromListEl(listEl);
+            filtered = applyBehavioralSort(filtered, sortStateSlice);
+
             filtered.forEach((item, i) => { item._rank = i + 1; });
-            
+
             // Apply search filter after rank assignment
             const searchInput = listEl.closest('.behavioral-card').querySelector('input[type="text"]');
             if (searchInput && searchInput.value.trim()) {
                 filtered = filtered.filter(i => i.name.toLowerCase().includes(searchInput.value.toLowerCase()));
             }
-            
+
             // Apply item limit
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = itemLimit === 'All' || itemLimit >= filtered.length ? filtered : filtered.slice(0, itemLimit);
             const maxPct = Math.max(...filtered.map(i => i.pct), 1);
-            const sortValue = (listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select') || {}).value || 'pct';
-            listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct, sortValue)
+            listEl.innerHTML = displayItems.length > 0
+                ? renderBehavioralItems(displayItems, maxPct, sortStateSlice.column)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found for this slice</div>';
         }
         
@@ -64792,37 +64900,24 @@
             }
             
             // Sort first (before search) so ranks reflect the full sorted list
-            const sortSelect = listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select');
-            if (sortSelect) {
-                const sortValue = sortSelect.value;
-                if (sortValue === 'index') {
-                    filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
-                } else if (sortValue === 'pct') {
-                    filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
-                } else if (sortValue === 'genpop') {
-                    const gp = (i) => (i.genPopPct ?? 0);
-                    filtered = filtered.sort((a, b) => gp(b) - gp(a));
-                } else if (sortValue === 'alpha') {
-                    filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                }
-            }
-            
+            const sortStateSearch = getBehavioralSortFromListEl(listEl);
+            filtered = applyBehavioralSort(filtered, sortStateSearch);
+
             // Assign ranks from the full sorted list before filtering by search
             filtered.forEach((item, i) => { item._rank = i + 1; });
-            
+
             // Apply search filter
             if (searchTerm.trim()) {
                 filtered = filtered.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
             }
-            
+
             // Apply item limit (but show all when searching)
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = searchTerm.trim() || (itemLimit === 'All' || itemLimit >= filtered.length) ? filtered : filtered.slice(0, itemLimit);
-            
+
             const maxPct = Math.max(...filtered.map(i => i.pct), 1);
-            const sortVal = (listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select') || {}).value || 'pct';
-            listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct, sortVal)
+            listEl.innerHTML = displayItems.length > 0
+                ? renderBehavioralItems(displayItems, maxPct, sortStateSearch.column)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No matches</div>';
         }
         
@@ -64837,22 +64932,10 @@
             
             let items = [...(allBehavioralData[cat] || [])];
             
-            // Apply current sort
-            const sortSelect = listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select');
-            if (sortSelect) {
-                const sortValue = sortSelect.value;
-                if (sortValue === 'index') {
-                    items = items.sort((a, b) => (b.index || 0) - (a.index || 0));
-                } else if (sortValue === 'pct') {
-                    items = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
-                } else if (sortValue === 'genpop') {
-                    const gp = (i) => (i.genPopPct ?? 0);
-                    items = items.sort((a, b) => gp(b) - gp(a));
-                } else if (sortValue === 'alpha') {
-                    items = items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                }
-            }
-            
+            // Apply current sort (driven by the column-header click state)
+            const sortStateLimit = getBehavioralSortFromListEl(listEl);
+            items = applyBehavioralSort(items, sortStateLimit);
+
             // Apply slice filter if active
             const sliceSelect = document.getElementById('slice-' + catId);
             if (sliceSelect && sliceSelect.value && sliceSelect.value !== 'all') {
@@ -64860,14 +64943,13 @@
                 const sliceValue = sliceSelect.value;
                 // Apply slice filter (simplified - the full logic is in sortBehavioralCard)
             }
-            
+
             // Apply item limit
             const displayItems = parsedLimit === 'All' || parsedLimit >= items.length ? items : items.slice(0, parsedLimit);
-            
+
             const maxPct = Math.max(...items.map(i => i.pct), 1);
-            const sortVal = (listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select') || {}).value || 'pct';
-            listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct, sortVal)
+            listEl.innerHTML = displayItems.length > 0
+                ? renderBehavioralItems(displayItems, maxPct, sortStateLimit.column)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items</div>';
         }
         
@@ -64924,32 +65006,23 @@
                 items = items.filter(i => i.name.toLowerCase().includes(searchInput.value.toLowerCase()));
             }
             
-            // Sort based on selection
-            let sorted;
-            switch (sortBy) {
-                case 'alpha':
-                    sorted = items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                    break;
-                case 'genpop': {
-                    const gp = (i) => (i.genPopPct ?? 0);
-                    sorted = items.sort((a, b) => gp(b) - gp(a));
-                    break;
-                }
-                case 'pct':
-                    sorted = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
-                    break;
-                case 'index':
-                default:
-                    sorted = items.sort((a, b) => (b.index || 0) - (a.index || 0));
-                    break;
+            // Sort using the centralized helper so direction is honored. The
+            // caller (handleBehavioralColumnSort) already stored direction
+            // in behavioralCardSortState[cat]; we read it back here.
+            const sortState = getBehavioralSort(cat);
+            // If the caller passed an explicit column override (legacy path)
+            // honor it but keep the stored direction.
+            if (sortBy && sortBy !== sortState.column) {
+                sortState.column = sortBy;
             }
-            
+            const sorted = applyBehavioralSort(items, sortState);
+
             // Apply item limit
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = itemLimit === 'All' || itemLimit >= sorted.length ? sorted : sorted.slice(0, itemLimit);
             const maxPct = Math.max(...sorted.map(i => i.pct), 1);
-            listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct, sortBy)
+            listEl.innerHTML = displayItems.length > 0
+                ? renderBehavioralItems(displayItems, maxPct, sortState.column)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
         }
         
@@ -64970,32 +65043,19 @@
                 filtered = filtered.filter(i => i.name.toLowerCase().includes(searchInput.value.toLowerCase()));
             }
             
-            // Apply current sort
-            const sortSelect = listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select');
-            if (sortSelect) {
-                const sortValue = sortSelect.value;
-                if (sortValue === 'index') {
-                    filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
-                } else if (sortValue === 'pct') {
-                    filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
-                } else if (sortValue === 'genpop') {
-                    const gp = (i) => (i.genPopPct ?? 0);
-                    filtered = filtered.sort((a, b) => gp(b) - gp(a));
-                } else if (sortValue === 'alpha') {
-                    filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                }
-            }
-            
+            // Apply current sort (column-header driven)
+            const sportsSort = getBehavioralSortFromListEl(listEl);
+            filtered = applyBehavioralSort(filtered, sportsSort);
+
             // Apply item limit
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = itemLimit === 'All' || itemLimit >= filtered.length ? filtered : filtered.slice(0, itemLimit);
             const maxPct = Math.max(...filtered.map(i => i.pct), 1);
-            const sortVal = (listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select') || {}).value || 'pct';
-            listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct, sortVal)
+            listEl.innerHTML = displayItems.length > 0
+                ? renderBehavioralItems(displayItems, maxPct, sportsSort.column)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
         }
-        
+
         function sliceTalent(catId, cat, sliceValue) {
             currentSlices[cat] = sliceValue;
             const listEl = document.getElementById('list-' + catId);
@@ -65037,32 +65097,19 @@
                 filtered = filtered.filter(i => i.name.toLowerCase().includes(searchInput.value.toLowerCase()));
             }
             
-            // Apply current sort
-            const sortSelect = listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select');
-            if (sortSelect) {
-                const sortValue = sortSelect.value;
-                if (sortValue === 'index') {
-                    filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
-                } else if (sortValue === 'pct') {
-                    filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
-                } else if (sortValue === 'genpop') {
-                    const gp = (i) => (i.genPopPct ?? 0);
-                    filtered = filtered.sort((a, b) => gp(b) - gp(a));
-                } else if (sortValue === 'alpha') {
-                    filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                }
-            }
-            
+            // Apply current sort (column-header driven)
+            const talentSort = getBehavioralSortFromListEl(listEl);
+            filtered = applyBehavioralSort(filtered, talentSort);
+
             // Apply item limit
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = itemLimit === 'All' || itemLimit >= filtered.length ? filtered : filtered.slice(0, itemLimit);
             const maxPct = Math.max(...filtered.map(i => i.pct), 1);
-            const sortVal = (listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select') || {}).value || 'pct';
-            listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct, sortVal)
+            listEl.innerHTML = displayItems.length > 0
+                ? renderBehavioralItems(displayItems, maxPct, talentSort.column)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
         }
-        
+
         function sliceWhereTheyShop(catId, cat, sliceValue) {
             currentSlices[cat] = sliceValue;
             const listEl = document.getElementById('list-' + catId);
@@ -65152,32 +65199,19 @@
                 filtered = filtered.filter(i => i.name.toLowerCase().includes(searchInput.value.toLowerCase()));
             }
             
-            // Apply current sort
-            const sortSelect = listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select');
-            if (sortSelect) {
-                const sortValue = sortSelect.value;
-                if (sortValue === 'index') {
-                    filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
-                } else if (sortValue === 'pct') {
-                    filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
-                } else if (sortValue === 'genpop') {
-                    const gp = (i) => (i.genPopPct ?? 0);
-                    filtered = filtered.sort((a, b) => gp(b) - gp(a));
-                } else if (sortValue === 'alpha') {
-                    filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                }
-            }
-            
+            // Apply current sort (column-header driven)
+            const wtsSort = getBehavioralSortFromListEl(listEl);
+            filtered = applyBehavioralSort(filtered, wtsSort);
+
             // Apply item limit
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = itemLimit === 'All' || itemLimit >= filtered.length ? filtered : filtered.slice(0, itemLimit);
             const maxPct = Math.max(...filtered.map(i => i.pct), 1);
-            const sortVal = (listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select') || {}).value || 'pct';
-            listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct, sortVal)
+            listEl.innerHTML = displayItems.length > 0
+                ? renderBehavioralItems(displayItems, maxPct, wtsSort.column)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
         }
-        
+
         // Generic slice function for all new category slicers
         function sliceGeneric(catId, cat, sliceValue) {
             currentSlices[cat] = sliceValue;
@@ -65209,29 +65243,16 @@
                 filtered = filtered.filter(item => (item.name || '').toLowerCase().includes(searchTerm));
             }
             
-            // Apply current sort
-            const sortSelect = document.querySelector(`#list-${catId}`)?.closest('.behavioral-card')?.querySelector('.behavioral-sort-select');
-            if (sortSelect) {
-                const sortValue = sortSelect.value;
-                if (sortValue === 'index') {
-                    filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
-                } else if (sortValue === 'pct') {
-                    filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
-                } else if (sortValue === 'genpop') {
-                    const gp = (i) => (i.genPopPct ?? 0);
-                    filtered = filtered.sort((a, b) => gp(b) - gp(a));
-                } else if (sortValue === 'alpha') {
-                    filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                }
-            }
-            
+            // Apply current sort (column-header driven)
+            const genericSort = getBehavioralSortFromListEl(listEl);
+            filtered = applyBehavioralSort(filtered, genericSort);
+
             // Apply item limit
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = itemLimit === 'All' || itemLimit >= filtered.length ? filtered : filtered.slice(0, itemLimit);
             const maxPct = Math.max(...filtered.map(i => i.pct), 1);
-            const sortVal = (sortSelect || {}).value || 'pct';
-            listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct, sortVal)
+            listEl.innerHTML = displayItems.length > 0
+                ? renderBehavioralItems(displayItems, maxPct, genericSort.column)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
         }
 

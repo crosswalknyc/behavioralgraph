@@ -373,8 +373,19 @@ def apply_avid_transform(df, audience: dict, category_decisions: dict,
             df.at[idx, proj_col] = float(new_uspop)
             df.at[idx, cs_col] = float(new_sample)
             continue
-        if cat in {"BRAND INPUT", "BRAND CATEGORY",
-                   "INPUT_METADATA", "BRAND ID", "REPORT INPUT"}:
+        if cat == "BRAND INPUT":
+            # BRAND INPUT carries the subject's self-pin (BP=100%); its
+            # Original Raw Numbers + US Gen Pop Projection cells must
+            # equal the AVID cohort's sample size and projection, not
+            # the parent OG's. Leaving them stale was the cause of the
+            # 2026-06-12 "avid sample size looks the same as OG" bug
+            # — the dashboard reads BRAND INPUT for the header pill,
+            # so an unwritten row meant analysts saw the OG sample.
+            df.at[idx, raw_col] = float(new_sample)
+            df.at[idx, proj_col] = float(new_uspop)
+            continue
+        if cat in {"BRAND CATEGORY", "INPUT_METADATA",
+                   "BRAND ID", "REPORT INPUT"}:
             continue
 
         old_bp = _fbp(df.at[idx, bp_col])
