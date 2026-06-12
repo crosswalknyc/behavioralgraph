@@ -4881,18 +4881,12 @@
             opacity: 1;
         }
 
-        /* Behavioral Tab: 3 cols on wide, 2 on small/narrow (e.g. Safari) to avoid cut-off */
+        /* Behavioral Tab: 2 cols on wide, 1 on small/narrow */
         .behavioral-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 1rem;
             width: 100%;
-        }
-        
-        @media (max-width: 1400px) {
-            .behavioral-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
         }
         
         @media (max-width: 800px) {
