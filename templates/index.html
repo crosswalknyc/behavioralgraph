@@ -56309,9 +56309,13 @@
             _comparisonRunsState.categoryNormCategory = fetched.category;
             _comparisonRunsState.categoryNormProfileCount = fetched.profile_count;
             _comparisonRunsState.categoryNormGeneratedAt = fetched.generated_at;
-            // Inject into the comparison pipeline.
-            const label = 'Category Norm — ' + fetched.category +
-                (fetched.profile_count ? ' (' + fetched.profile_count + ')' : '');
+            // Inject into the comparison pipeline. Label is intentionally
+            // short ("Norm") because column headers in the behavioral /
+            // interests / location tables are only ~60px wide and the
+            // longer "Category Norm — ACTOR (737)" gets clipped. The
+            // popover row already shows the category + sample count so
+            // users have the full context where it fits.
+            const label = 'Norm';
             _comparisonRunsState.runsByKey[CATEGORY_NORM_KEY] = {
                 key: CATEGORY_NORM_KEY,
                 profile: { name: label, key: CATEGORY_NORM_KEY, isSynthetic: true },
