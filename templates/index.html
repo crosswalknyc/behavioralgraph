@@ -60517,7 +60517,7 @@
                     : `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
             }
             
-            const ageChartType = chartTypePrefs.age || 'bar';
+            const ageChartType = _chartTypeForChartJs(chartTypePrefs.age);
             const ageIsCircular = ['doughnut', 'pie', 'polarArea'].includes(ageChartType);
             const ageIsBarLike = ageChartType === 'bar' || ageChartType === 'column';
             const ageChartTypeEffective = ageChartType === 'column' ? 'bar' : ageChartType;
@@ -60592,7 +60592,7 @@
                 ? genderOrigKeys.map(k => demographicsProjection.gender?.[k] || 0)
                 : genderPcts;
             
-            const genderChartType = chartTypePrefs.gender || 'bar';
+            const genderChartType = _chartTypeForChartJs(chartTypePrefs.gender);
             const genderIsCircular = ['doughnut', 'pie', 'polarArea'].includes(genderChartType);
             const genderIsBarLike = genderChartType === 'bar' || genderChartType === 'column';
             const genderChartTypeEffective = genderChartType === 'column' ? 'bar' : genderChartType;
@@ -60719,7 +60719,7 @@
                 ? ethLabels.map(k => demographicsProjection.ethnicity?.[k] || 0)
                 : ethPcts;
             
-            const ethnicityChartType = chartTypePrefs.ethnicity || 'bar';
+            const ethnicityChartType = _chartTypeForChartJs(chartTypePrefs.ethnicity);
             const ethnicityIsCircular = ['doughnut', 'pie', 'polarArea'].includes(ethnicityChartType);
             
             // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -60842,7 +60842,7 @@
             // Calculate max for x-axis with padding for labels (horizontal bar)
             const incomeMax = Math.max(...incomeData) * 1.5; // 50% padding for horizontal labels
             
-            const incomeChartType = chartTypePrefs.income || 'bar';
+            const incomeChartType = _chartTypeForChartJs(chartTypePrefs.income);
             const incomeIsCircular = ['doughnut', 'pie', 'polarArea'].includes(incomeChartType);
             
             // Calculate median for income — use global Gen Pop baseline for consistent Gen Pop median.
@@ -60961,7 +60961,7 @@
                 const eduData = isProjection ? eduOrigKeys.map(k => demographicsProjection.education?.[k] || 0) : eduPcts;
                 const eduMax = Math.max(...eduData) * 1.5; // 50% padding for labels
                 
-                const educationChartType = chartTypePrefs.education || 'bar';
+                const educationChartType = _chartTypeForChartJs(chartTypePrefs.education);
                 const educationIsCircular = ['doughnut', 'pie', 'polarArea'].includes(educationChartType);
                 
                 // Education median display removed - not needed for categorical data
@@ -61062,7 +61062,7 @@
                 const relPcts = relSorted.values;
                 const relData = isProjection ? relOrigKeys.map(k => demographicsProjection.relationship?.[k] || 0) : relPcts;
                 
-                const relationshipChartType = chartTypePrefs.relationship || 'bar';
+                const relationshipChartType = _chartTypeForChartJs(chartTypePrefs.relationship);
                 const relationshipIsCircular = ['doughnut', 'pie', 'polarArea'].includes(relationshipChartType);
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -61181,7 +61181,7 @@
                 const soPcts = soSorted.values;
                 const soData = isProjection ? soOrigKeys.map(k => demographicsProjection.sexual_orientation?.[k] || 0) : soPcts;
                 
-                const soChartType = chartTypePrefs.sexualOrientation || 'bar';
+                const soChartType = _chartTypeForChartJs(chartTypePrefs.sexualOrientation);
                 const soIsCircular = ['doughnut', 'pie', 'polarArea'].includes(soChartType);
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -61298,7 +61298,7 @@
                 const psPcts = psSorted.values;
                 const psData = isProjection ? psOrigKeys.map(k => demographicsProjection.parental_status?.[k] || 0) : psPcts;
                 
-                const psChartType = chartTypePrefs.parentalStatus || 'bar';
+                const psChartType = _chartTypeForChartJs(chartTypePrefs.parentalStatus);
                 const psIsCircular = ['doughnut', 'pie', 'polarArea'].includes(psChartType);
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -61413,7 +61413,7 @@
                 const occPcts = occSorted.values;
                 const occData = isProjection ? occOrigKeys.map(k => demographicsProjection.occupation?.[k] || 0) : occPcts;
                 
-                const occChartType = chartTypePrefs.occupation || 'bar';
+                const occChartType = _chartTypeForChartJs(chartTypePrefs.occupation);
                 const occIsCircular = ['doughnut', 'pie', 'polarArea'].includes(occChartType);
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -61600,6 +61600,20 @@
         // chart can render as a Chart.js visual ('bar', 'column',
         // 'doughnut', 'pie', 'polarArea', 'line') or as a tabular
         // breakdown ('table') — see _renderDemoTablesForChartsInTableMode.
+        //
+        // 'table' is a UI-only mode: Chart.js itself only knows the visual
+        // types. Feeding it `type: 'table'` throws inside the controller
+        // registry and aborts the entire renderCharts pass, which is why
+        // every card appeared blank when the user switched a single chart
+        // to Table view. _chartTypeForChartJs() funnels 'table' (and
+        // anything falsy) back to a safe 'bar' for the Chart.js
+        // constructor; the swap helper at the end of renderCharts then
+        // detects table mode via chartTypePrefs[k] === 'table', destroys
+        // that just-built chart, and renders the HTML table in its place.
+        function _chartTypeForChartJs(t) {
+            if (!t || t === 'table') return 'bar';
+            return t;
+        }
         const chartTypePrefs = {
             age: 'bar',
             gender: 'bar',
