@@ -3081,6 +3081,7 @@ def _run_category_norms_recompute(workers: int = 12, min_profiles: int = 3) -> N
             _category_norms_status["categories_done"] = 0
             _category_norms_status["skipped"] = []
             _category_norms_status["errors"] = []
+            _category_norms_status["error_details"] = []
             _category_norms_status["last_message"] = f"Processing {len(targets)} categories…"
 
         existing = ccn.load_norms(s3)
@@ -3102,11 +3103,29 @@ def _run_category_norms_recompute(workers: int = 12, min_profiles: int = 3) -> N
             try:
                 norm = ccn.compute_norm_for_category(s3, cat, cat_jobs, workers=workers)
             except Exception as e:
+                # Capture the FULL traceback string so admins can see
+                # exactly which line of compute_category_norms.py blew up.
+                # Previously only the bare exception message hit the status
+                # dict, which made "completed with 1 error" un-debuggable
+                # without an SSH into the box.
+                tb = traceback.format_exc()
                 err = f"{cat}: {e}"
                 errors.append(err)
+                # Mirror to stdout so the error shows up in Render's
+                # application logs even after the in-memory status dict
+                # gets wiped by the next recompute.
+                print(f"[recompute-category-norms] ERROR on {cat}: {e}", flush=True)
+                print(tb, flush=True)
                 with _category_norms_status_lock:
                     _category_norms_status["categories_done"] += 1
                     _category_norms_status["errors"].append(err)
+                    # Stash the traceback alongside the error list so the
+                    # admin UI can render it inline on the failure toast.
+                    _category_norms_status.setdefault("error_details", []).append({
+                        "category": cat,
+                        "error": str(e),
+                        "traceback": tb,
+                    })
                     _category_norms_status["last_message"] = f"Error on {cat}: {e}"
                 continue
             if norm:
