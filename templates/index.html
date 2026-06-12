@@ -9012,11 +9012,11 @@
             justify-self: end;
         }
         #allLocationsContainer .location-row {
-            grid-template-columns: 50px minmax(0, 1fr) 52px 72px 82px 76px 76px;
+            grid-template-columns: 50px minmax(0, 1fr) 52px 72px 82px 76px 90px;
         }
         #allLocationsContainer.hide-cw-gp .cw-gp-col { display: none; }
         #allLocationsContainer.hide-cw-gp .location-row {
-            grid-template-columns: 50px minmax(0, 1fr) 52px 72px 76px 76px;
+            grid-template-columns: 50px minmax(0, 1fr) 52px 72px 76px 90px;
         }
 
         .location-row.header {
@@ -58012,7 +58012,7 @@
                 // id          headerSelector                       baseGrid (no cmp)          isAll
                 { listId: 'locationList',       baseGrid: '50px minmax(0, 1fr) 52px 72px 60px', isAll: false },
                 { listId: 'locationListBottom', baseGrid: '50px minmax(0, 1fr) 52px 72px 60px', isAll: false },
-                { listId: 'locationListAll',    baseGrid: '50px minmax(0, 1fr) 52px 72px 82px 76px 76px', isAll: true }
+                { listId: 'locationListAll',    baseGrid: '50px minmax(0, 1fr) 52px 72px 82px 76px 90px', isAll: true }
             ];
             locSections.forEach(sec => {
                 const list = document.getElementById(sec.listId);
@@ -58064,7 +58064,7 @@
                 let newGrid;
                 if (sec.isAll) {
                     const gpCols = hideGP ? ' 76px' : ' 82px 76px';
-                    newGrid = '50px minmax(0, 1fr) 52px ' + profileColCss + cmpColsCss + gpCols + ' 76px';
+                    newGrid = '50px minmax(0, 1fr) 52px ' + profileColCss + cmpColsCss + gpCols + ' 90px';
                 } else {
                     // Over/under tables have no native Gen Pop column,
                     // so the hideGP toggle has nothing to hide here.
