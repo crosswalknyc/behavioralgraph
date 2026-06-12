@@ -54057,7 +54057,35 @@
             
             // Track tab usage
             trackActivity(tabName);
-            
+
+            // Re-layer any active "Compare date ranges" selections onto
+            // the tab that just became visible. Without this, picking
+            // a data cut (e.g. Avid Fan) while on Demographics doesn't
+            // propagate to the Behavioral / Interests / Location
+            // tables because applyComparisonRunsToCategoryTables runs
+            // synchronously at click time and the corresponding tab
+            // content may not have been rendered into the DOM yet (or
+            // a row-clobbering re-render happened later on that hidden
+            // tab). Re-applying on tab activation makes the compare
+            // state idempotent — equivalent to the user "unclicking
+            // and reclicking" the cut after switching tabs.
+            //
+            // Safe no-op when no cuts are selected. Wrapped in rAF so
+            // we run AFTER any tab-activation rendering (e.g. profile
+            // selector reload, ranker platform switch) settles.
+            if (typeof applyComparisonRunsToCategoryTables === 'function'
+                || typeof applyComparisonRunsToDashboardCharts === 'function'
+                || typeof applyComparisonRunsToHeaderStats === 'function') {
+                requestAnimationFrame(() => {
+                    try { if (typeof applyComparisonRunsToDashboardCharts === 'function') applyComparisonRunsToDashboardCharts(); }
+                    catch (e) { console.warn('[showTab] compare charts re-apply failed', e); }
+                    try { if (typeof applyComparisonRunsToCategoryTables === 'function') applyComparisonRunsToCategoryTables(); }
+                    catch (e) { console.warn('[showTab] compare tables re-apply failed', e); }
+                    try { if (typeof applyComparisonRunsToHeaderStats === 'function') applyComparisonRunsToHeaderStats(); }
+                    catch (e) { console.warn('[showTab] compare header stats re-apply failed', e); }
+                });
+            }
+
             if (tabName === 'demographics') {
                 // Load profile selector in sidebar
                 loadDashboardProfiles();
