@@ -56533,16 +56533,20 @@
         // INDEX SOURCE PICKER
         //
         // Build the dropdown choices for "what should the Index column
-        // compare?". Always includes Current Profile, Gen Pop, and any
-        // currently-selected data cut. The picker lives inside the Data
-        // Cuts popover (#cmpIndexNumSel / #cmpIndexDenSel) and is
-        // re-populated whenever the selection changes.
+        // compare?". Always includes the base profile (labelled
+        // "Casual Fan" to match the unsuffixed-default convention
+        // elsewhere in the UI — see _preferredRunLabel), Gen Pop, and
+        // any currently-selected data cut. The picker lives inside the
+        // Data Cuts popover (#cmpIndexNumSel / #cmpIndexDenSel) and is
+        // re-populated whenever the selection changes. The internal key
+        // stays 'profile' so existing comparison-state logic keeps
+        // working unchanged.
         // ---------------------------------------------------------------
         function _cmpIndexSourceOptions() {
             const series = (_comparisonRunsState.selectedKeys || [])
                 .map(k => _comparisonRunsState.runsByKey[k])
                 .filter(Boolean);
-            const opts = [{ key: 'profile', label: 'Current Profile' }];
+            const opts = [{ key: 'profile', label: 'Casual Fan' }];
             series.forEach(s => {
                 opts.push({ key: s.key, label: s.label || 'Run' });
             });
@@ -56585,7 +56589,7 @@
             if (wrap) wrap.style.display = (series.length > 0) ? '' : 'none';
             if (helpEl) {
                 if (series.length === 0) {
-                    helpEl.textContent = 'Default: Profile vs Gen Pop. Select runs above to add them as options.';
+                    helpEl.textContent = 'Default: Casual Fan vs Gen Pop. Select runs above to add them as options.';
                 } else if (finalNum === finalDen) {
                     helpEl.textContent = 'Numerator and denominator are the same — Index will be 100 for every row.';
                 } else {
