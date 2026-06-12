@@ -4568,48 +4568,34 @@
 
         /* Demographics "Table" chart-type view.
          *
-         * Each .chart-card holds a sibling pair inside .chart-container:
-         * the <canvas> for the chart view and a .demo-table-container
-         * for the table view. _renderDemoTablesForChartsInTableMode()
-         * toggles which one is visible based on chartTypePrefs[k].
+         * Each .chart-card holds two siblings: the .chart-container
+         * (with the <canvas>) for the chart view, and a sibling
+         * .demo-table-container for the table view. The swap helper
+         * toggles display on whichever ISN'T currently selected so
+         * they never compete for layout.
          *
          * Visual treatment intentionally REUSES the behavioral-card
          * classes (.behavioral-table / .behavioral-header-row /
          * .behavioral-item / .behavioral-rank / .behavioral-name /
          * .behavioral-pct / .behavioral-index) so the demographic
          * tables look identical to the behavioral category tables the
-         * user already knows. That also means the Casual Fan +
-         * Gen Pop hide rules (.cmp-hide-profile .profile-col /
-         * .cmp-hide-genpop .genpop-col) auto-apply in compare mode
-         * with no extra wiring.
-         *
-         * Positioning: the parent .chart-container uses
-         * display:flex + align-items:center to center charts. For
-         * tables we absolutely-position inside the same container so
-         * the table fills the chart's footprint top-down regardless
-         * of the centering rule. .chart-container already has
-         * position:relative.
+         * user already knows. The .profile-col / .genpop-col /
+         * .index-col classes inherit the .cmp-hide-profile /
+         * .cmp-hide-genpop hide rules so the Casual Fan + Gen Pop
+         * toggles in compare mode auto-apply.
          */
         .demo-table-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
             width: 100%;
-            height: 100%;
-            padding: 0.5rem 0.25rem;
+            padding: 0.25rem 0;
             box-sizing: border-box;
-            overflow-y: auto;
-            overflow-x: hidden;
             font-family: inherit;
         }
         .demo-table-container .behavioral-table {
             margin-top: 0;
-            width: 100%;
+            max-height: 360px;
         }
-        .demo-table-container .behavioral-list {
-            max-height: none;
+        .chart-card-occupation .demo-table-container .behavioral-table {
+            max-height: 600px;
         }
         .demo-table-empty {
             padding: 1rem;
@@ -16383,7 +16369,8 @@
                                         </span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="ageChart"></canvas><div class="demo-table-container" id="ageTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="ageChartContainer"><canvas id="ageChart"></canvas></div>
+                                <div class="demo-table-container" id="ageTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Gender">
                                 <h3>
@@ -16409,7 +16396,8 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Gender')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Gender')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Gender')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="genderChart"></canvas><div class="demo-table-container" id="genderTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="genderChartContainer"><canvas id="genderChart"></canvas></div>
+                                <div class="demo-table-container" id="genderTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Ethnicity">
                                 <h3>
@@ -16434,7 +16422,8 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Ethnicity')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Ethnicity')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Ethnicity')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="ethnicityChart"></canvas><div class="demo-table-container" id="ethnicityTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="ethnicityChartContainer"><canvas id="ethnicityChart"></canvas></div>
+                                <div class="demo-table-container" id="ethnicityTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Income">
                                 <h3>
@@ -16465,7 +16454,8 @@
                                         </span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="incomeChart"></canvas><div class="demo-table-container" id="incomeTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="incomeChartContainer"><canvas id="incomeChart"></canvas></div>
+                                <div class="demo-table-container" id="incomeTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Education">
                                 <h3>
@@ -16491,7 +16481,8 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Education')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Education')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Education')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="educationChart"></canvas><div class="demo-table-container" id="educationTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="educationChartContainer"><canvas id="educationChart"></canvas></div>
+                                <div class="demo-table-container" id="educationTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Relationship Status">
                                 <h3>
@@ -16517,7 +16508,8 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Relationship Status')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Relationship Status')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Relationship Status')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="relationshipChart"></canvas><div class="demo-table-container" id="relationshipTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="relationshipChartContainer"><canvas id="relationshipChart"></canvas></div>
+                                <div class="demo-table-container" id="relationshipTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Sexual Orientation">
                                 <h3>
@@ -16543,7 +16535,8 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Sexual Orientation')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Sexual Orientation')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Sexual Orientation')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="sexualOrientationChart"></canvas><div class="demo-table-container" id="sexualOrientationTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="sexualOrientationChartContainer"><canvas id="sexualOrientationChart"></canvas></div>
+                                <div class="demo-table-container" id="sexualOrientationTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Parental Status">
                                 <h3>
@@ -16569,7 +16562,8 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Parental Status')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Parental Status')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Parental Status')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="parentalStatusChart"></canvas><div class="demo-table-container" id="parentalStatusTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="parentalStatusChartContainer"><canvas id="parentalStatusChart"></canvas></div>
+                                <div class="demo-table-container" id="parentalStatusTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card chart-card-occupation" data-module="Occupation">
                                 <h3>
@@ -16595,10 +16589,10 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Occupation')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Occupation')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Occupation')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container occupation-chart-container">
+                                <div class="chart-container occupation-chart-container" id="occupationChartContainer">
                                     <canvas id="occupationChart"></canvas>
-                                    <div class="demo-table-container" id="occupationTableContainer" style="display:none; max-height:600px;"></div>
                                 </div>
+                                <div class="demo-table-container" id="occupationTableContainer" style="display:none; max-height:600px;"></div>
                                 <div id="occupationGpActualsTable" style="margin-top:0.75rem;"></div>
                             </div>
                         </div>
@@ -32489,7 +32483,7 @@
                         '<span class="behavioral-rank">' + item._rank + '</span>' +
                         '<div class="behavioral-name-wrapper"><span class="behavioral-name has-tooltip" data-tooltip="' + nm.replace(/"/g, '&quot;') + '">' + nm + '</span></div>' +
                         '<span class="behavioral-pct" style="color: var(--text-primary);">' + profileDisplay + '</span>' +
-                        '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">(' + genPopDisplay + ')</span>' +
+                        '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + genPopDisplay + '</span>' +
                         '<span class="behavioral-index index-col" style="color: ' + indexColor + '; font-weight: 700;">' + indexCell + '</span>' +
                         '</div>';
                 }).join('');
@@ -32628,7 +32622,7 @@
                         '<span class="behavioral-rank">' + item._rank + '</span>' +
                         '<div class="behavioral-name-wrapper"><span class="behavioral-name has-tooltip" data-tooltip="' + nm.replace(/"/g, '&quot;') + '">' + nm + '</span></div>' +
                         '<span class="behavioral-pct" style="color: var(--text-primary);">' + profileDisplay + '</span>' +
-                        '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">(' + genPopDisplay + ')</span>' +
+                        '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + genPopDisplay + '</span>' +
                         '<span class="behavioral-index index-col" style="color: ' + indexColor + '; font-weight: 700;">' + indexCell + '</span>' +
                         '</div>';
                 }).join('');
@@ -54076,7 +54070,35 @@
             
             // Track tab usage
             trackActivity(tabName);
-            
+
+            // Re-layer any active "Compare date ranges" selections onto
+            // the tab that just became visible. Without this, picking
+            // a data cut (e.g. Avid Fan) while on Demographics doesn't
+            // propagate to the Behavioral / Interests / Location
+            // tables because applyComparisonRunsToCategoryTables runs
+            // synchronously at click time and the corresponding tab
+            // content may not have been rendered into the DOM yet (or
+            // a row-clobbering re-render happened later on that hidden
+            // tab). Re-applying on tab activation makes the compare
+            // state idempotent — equivalent to the user "unclicking
+            // and reclicking" the cut after switching tabs.
+            //
+            // Safe no-op when no cuts are selected. Wrapped in rAF so
+            // we run AFTER any tab-activation rendering (e.g. profile
+            // selector reload, ranker platform switch) settles.
+            if (typeof applyComparisonRunsToCategoryTables === 'function'
+                || typeof applyComparisonRunsToDashboardCharts === 'function'
+                || typeof applyComparisonRunsToHeaderStats === 'function') {
+                requestAnimationFrame(() => {
+                    try { if (typeof applyComparisonRunsToDashboardCharts === 'function') applyComparisonRunsToDashboardCharts(); }
+                    catch (e) { console.warn('[showTab] compare charts re-apply failed', e); }
+                    try { if (typeof applyComparisonRunsToCategoryTables === 'function') applyComparisonRunsToCategoryTables(); }
+                    catch (e) { console.warn('[showTab] compare tables re-apply failed', e); }
+                    try { if (typeof applyComparisonRunsToHeaderStats === 'function') applyComparisonRunsToHeaderStats(); }
+                    catch (e) { console.warn('[showTab] compare header stats re-apply failed', e); }
+                });
+            }
+
             if (tabName === 'demographics') {
                 // Load profile selector in sidebar
                 loadDashboardProfiles();
@@ -56533,7 +56555,7 @@
             const series = (_comparisonRunsState.selectedKeys || [])
                 .map(k => _comparisonRunsState.runsByKey[k])
                 .filter(Boolean);
-            const opts = [{ key: 'profile', label: 'Casual Fan' }];
+            const opts = [{ key: 'profile', label: 'Casual' }];
             series.forEach(s => {
                 opts.push({ key: s.key, label: s.label || 'Run' });
             });
@@ -56576,7 +56598,7 @@
             if (wrap) wrap.style.display = (series.length > 0) ? '' : 'none';
             if (helpEl) {
                 if (series.length === 0) {
-                    helpEl.textContent = 'Default: Casual Fan vs Gen Pop. Select runs above to add them as options.';
+                    helpEl.textContent = 'Default: Casual vs Gen Pop. Select runs above to add them as options.';
                 } else if (finalNum === finalDen) {
                     helpEl.textContent = 'Numerator and denominator are the same — Index will be 100 for every row.';
                 } else {
@@ -56734,8 +56756,24 @@
             // Greedy + lazy capture: pick the LAST dash that has space on
             // both sides. Match against U+002D, U+2013 (en-dash), U+2014 (em-dash).
             const m = name.match(/^(.+)\s[\-\u2013\u2014]\s+(.+)$/);
-            if (m && m[2]) return m[2].trim();
+            if (m && m[2]) return _stripFanSuffix(m[2].trim());
             return '';
+        }
+
+        // Trim a trailing " Fan" / " Fans" token from a cohort label so it
+        // fits a single line in tight UI spots (column headers, chips,
+        // popover rows). Year suffix is preserved:
+        //   "Avid Fan"        -> "Avid"
+        //   "Casual Fan"      -> "Casual"
+        //   "Avid Fan 2024"   -> "Avid 2024"
+        //   "4+ Avid Fan"     -> "4+ Avid"
+        //   "Superfan"        -> "Superfan"   (no leading space; left alone)
+        //   "Premium Cohort"  -> "Premium Cohort" (no Fan token; passthrough)
+        function _stripFanSuffix(label) {
+            if (!label) return label;
+            return String(label)
+                .replace(/\s+Fans?(\s+(?:20\d{2}(?:-\d{2})?))?\s*$/i, '$1')
+                .trim();
         }
 
         function _compactRunLabel(profile) {
@@ -56751,23 +56789,23 @@
                 const info = (typeof getProfileSuffixInfo === 'function')
                     ? getProfileSuffixInfo(profile) : { suffixType: 'none', suffixLabel: '' };
                 if (info && (info.suffixType === 'cohort' || info.suffixType === 'year') && info.suffixLabel) {
-                    return info.suffixLabel;
+                    return _stripFanSuffix(info.suffixLabel);
                 }
             } catch (_) {}
             // 3. No suffix at all → by convention the BASE profile (just
             //    "Mark Rober", not "Mark Rober - Netflix" or "Mark Rober -
-            //    Avid Fan") represents the broader CASUAL FAN audience.
-            //    Label it that way on every comparison display so the
-            //    column header / chip / popover row read "Casual Fan"
-            //    instead of an arbitrary date. Append the run date for
-            //    disambiguation when multiple unsuffixed runs are picked.
+            //    Avid Fan") represents the broader CASUAL audience.
+            //    Label it "Casual" (not "Casual Fan") on every comparison
+            //    display so the column header / chip / popover row stay
+            //    on one line. Append the run date for disambiguation when
+            //    multiple unsuffixed runs are picked.
             try {
                 if (typeof getRunDateLabel === 'function') {
                     const d = getRunDateLabel(profile && (profile.s3_key || ''));
-                    if (d) return 'Casual Fan ' + d;
+                    if (d) return 'Casual ' + d;
                 }
             } catch (_) {}
-            return 'Casual Fan';
+            return 'Casual';
         }
 
         // Extract a clean year label from a "YYYY-MM-DD - YYYY-MM-DD" date
@@ -56805,17 +56843,18 @@
                 const info = (typeof getProfileSuffixInfo === 'function')
                     ? getProfileSuffixInfo(profile) : { suffixType: 'none', suffixLabel: '' };
                 if (info && (info.suffixType === 'cohort' || info.suffixType === 'dash') && info.suffixLabel) {
-                    return dateRangeYear ? (info.suffixLabel + ' ' + dateRangeYear) : info.suffixLabel;
+                    const trimmed = _stripFanSuffix(info.suffixLabel);
+                    return dateRangeYear ? (trimmed + ' ' + dateRangeYear) : trimmed;
                 }
             } catch (_) {}
             // No cohort/dash suffix at all — by user convention, an
-            // unsuffixed BASE profile represents the broader CASUAL FAN
-            // audience (the Avid-Fan / Netflix / Premium / etc. cuts are
+            // unsuffixed BASE profile represents the broader CASUAL
+            // audience (the Avid / Netflix / Premium / etc. cuts are
             // always explicitly suffixed). Label comparison columns,
-            // chips, and popover rows for these as "Casual Fan" instead
-            // of falling back to the date or display name. Append the
-            // year for disambiguation when available.
-            return dateRangeYear ? ('Casual Fan ' + dateRangeYear) : 'Casual Fan';
+            // chips, and popover rows as "Casual" (not "Casual Fan")
+            // so they fit on one line. Append the year for
+            // disambiguation when available.
+            return dateRangeYear ? ('Casual ' + dateRangeYear) : 'Casual';
         }
 
         function _setupComparisonForCurrentProfile(subject, currentKey, sameSubjectRuns) {
@@ -57098,7 +57137,7 @@
             cfCb.checked = _comparisonRunsState.includeCasualFan !== false;
             cfCb.style.cssText = 'accent-color:#22d3ee;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
             const cfLbl = document.createElement('span');
-            cfLbl.innerHTML = 'Show <strong style="color:var(--text-primary, #cbd5e1);">Casual Fan</strong> (base profile)';
+            cfLbl.innerHTML = 'Show <strong style="color:var(--text-primary, #cbd5e1);">Casual</strong> (base profile)';
             cfLbl.style.cssText = 'color:var(--text-primary, #e6e6e6);';
             cfRow.appendChild(cfCb);
             cfRow.appendChild(cfLbl);
@@ -57364,7 +57403,31 @@
                 sexualOrientation: 'sexual_orientation', parentalStatus: 'parental_status',
                 occupation: 'occupation'
             };
-            const mainProfileLabel = (currentProfileData && currentProfileData.name) || 'Profile';
+            // Demographic chart legends read "<cohort> <subject>" so the
+            // base profile and each cohort cut both carry the subject
+            // name. Without it the legend renders as e.g.
+            // [Kristen Bell] [Avid] [Gen Pop], which doesn't make it
+            // obvious that the cyan bar IS the Casual Kristen Bell
+            // slice. With it: [Casual Kristen Bell] [Avid Kristen Bell]
+            // [Gen Pop].
+            const profileName = (currentProfileData && currentProfileData.name) || 'Profile';
+            const mainProfileLabel = 'Casual ' + profileName;
+            const _cohortLegendLabel = (entry) => {
+                const base = (entry && entry.label) ? String(entry.label).trim() : 'Run';
+                let subj = profileName;
+                try {
+                    if (entry && entry.profile && typeof getProfileSuffixInfo === 'function') {
+                        const info = getProfileSuffixInfo(entry.profile);
+                        if (info && info.canonicalName) subj = info.canonicalName;
+                    }
+                } catch (_) {}
+                // Skip the subject suffix when the cohort label already
+                // starts with it (cross-profile compares whose
+                // _dashSuffixLabel kept the full "Subject - Suffix"
+                // shape would otherwise duplicate).
+                if (subj && base.toLowerCase().indexOf(subj.toLowerCase()) !== -1) return base;
+                return subj ? (base + ' ' + subj) : base;
+            };
 
             demoChartKeys.forEach(chartKey => {
                 const chart = charts[chartKey];
@@ -57414,7 +57477,7 @@
                     const demoDict = (entry.parsed && entry.parsed.demographics && entry.parsed.demographics[dataCat]) || {};
                     const demoLookup = _buildDemoLookup(demoDict);
                     return {
-                        label: entry.label || 'Run',
+                        label: _cohortLegendLabel(entry),
                         data: origKeys.map(k => {
                             let v = demoDict[k];
                             if (!(typeof v === 'number' && isFinite(v))) {
@@ -57497,6 +57560,21 @@
                     console.error('[compare] chart.update threw for', chartKey, e);
                 }
             });
+
+            // Demographic Table-view cards aren't backed by Chart.js
+            // datasets — they're HTML built by the helper below from
+            // the demographics maps. Compare-state changes (toggling
+            // Avid / Netflix / a prior date range on or off) need to
+            // re-run that helper so the cohort columns appear /
+            // disappear in lockstep with the chart legend. Without
+            // this, a user picking Avid on Insights then switching
+            // to Demographics-Table-view sees Casual / Gen Pop / Index
+            // only — the picked cohort silently doesn't carry
+            // through. See _renderDemoTablesForChartsInTableMode.
+            if (typeof _renderDemoTablesForChartsInTableMode === 'function') {
+                try { _renderDemoTablesForChartsInTableMode(); }
+                catch (e) { console.warn('[compare] demo table re-render failed', e); }
+            }
         }
 
         // ---------------------------------------------------------------
@@ -57794,9 +57872,9 @@
                     wrap.appendChild(row);
                 };
 
-                // Casual Fan = the base profile. Always first when active.
+                // Casual = the base profile. Always first when active.
                 if (baseValue != null && baseValue > 0) {
-                    appendRow('Casual Fan', CASUAL_FAN_LABEL_COLOR, baseValue, { subtle: true });
+                    appendRow('Casual', CASUAL_FAN_LABEL_COLOR, baseValue, { subtle: true });
                 }
 
                 series.forEach((entry, idx) => {
@@ -57864,7 +57942,14 @@
             // Each card has .behavioral-table > .behavioral-header-row +
             // .behavioral-list > .behavioral-item rows. The category name
             // sits on .behavioral-list[data-cat="..."].
-            const behavioralCards = document.querySelectorAll('.behavioral-table');
+            //
+            // Skip any table opted out via data-no-cmp-inject="1" — used
+            // by the Demographics tab's table-view variant (which reuses
+            // the behavioral-table classes for visual parity but holds
+            // demographic buckets, not brand rows, so the brand-name
+            // lookup below would always miss and leave empty cohort
+            // slots in the grid).
+            const behavioralCards = document.querySelectorAll('.behavioral-table:not([data-no-cmp-inject="1"])');
             // Pre-build behavioral lookups per run so we don't rescan
             // for every row.
             const behLookups = series.map(s => ({
@@ -60484,7 +60569,7 @@
                     : `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
             }
             
-            const ageChartType = chartTypePrefs.age || 'bar';
+            const ageChartType = _chartTypeForChartJs(chartTypePrefs.age);
             const ageIsCircular = ['doughnut', 'pie', 'polarArea'].includes(ageChartType);
             const ageIsBarLike = ageChartType === 'bar' || ageChartType === 'column';
             const ageChartTypeEffective = ageChartType === 'column' ? 'bar' : ageChartType;
@@ -60559,7 +60644,7 @@
                 ? genderOrigKeys.map(k => demographicsProjection.gender?.[k] || 0)
                 : genderPcts;
             
-            const genderChartType = chartTypePrefs.gender || 'bar';
+            const genderChartType = _chartTypeForChartJs(chartTypePrefs.gender);
             const genderIsCircular = ['doughnut', 'pie', 'polarArea'].includes(genderChartType);
             const genderIsBarLike = genderChartType === 'bar' || genderChartType === 'column';
             const genderChartTypeEffective = genderChartType === 'column' ? 'bar' : genderChartType;
@@ -60686,7 +60771,7 @@
                 ? ethLabels.map(k => demographicsProjection.ethnicity?.[k] || 0)
                 : ethPcts;
             
-            const ethnicityChartType = chartTypePrefs.ethnicity || 'bar';
+            const ethnicityChartType = _chartTypeForChartJs(chartTypePrefs.ethnicity);
             const ethnicityIsCircular = ['doughnut', 'pie', 'polarArea'].includes(ethnicityChartType);
             
             // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -60809,7 +60894,7 @@
             // Calculate max for x-axis with padding for labels (horizontal bar)
             const incomeMax = Math.max(...incomeData) * 1.5; // 50% padding for horizontal labels
             
-            const incomeChartType = chartTypePrefs.income || 'bar';
+            const incomeChartType = _chartTypeForChartJs(chartTypePrefs.income);
             const incomeIsCircular = ['doughnut', 'pie', 'polarArea'].includes(incomeChartType);
             
             // Calculate median for income — use global Gen Pop baseline for consistent Gen Pop median.
@@ -60928,7 +61013,7 @@
                 const eduData = isProjection ? eduOrigKeys.map(k => demographicsProjection.education?.[k] || 0) : eduPcts;
                 const eduMax = Math.max(...eduData) * 1.5; // 50% padding for labels
                 
-                const educationChartType = chartTypePrefs.education || 'bar';
+                const educationChartType = _chartTypeForChartJs(chartTypePrefs.education);
                 const educationIsCircular = ['doughnut', 'pie', 'polarArea'].includes(educationChartType);
                 
                 // Education median display removed - not needed for categorical data
@@ -61029,7 +61114,7 @@
                 const relPcts = relSorted.values;
                 const relData = isProjection ? relOrigKeys.map(k => demographicsProjection.relationship?.[k] || 0) : relPcts;
                 
-                const relationshipChartType = chartTypePrefs.relationship || 'bar';
+                const relationshipChartType = _chartTypeForChartJs(chartTypePrefs.relationship);
                 const relationshipIsCircular = ['doughnut', 'pie', 'polarArea'].includes(relationshipChartType);
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -61148,7 +61233,7 @@
                 const soPcts = soSorted.values;
                 const soData = isProjection ? soOrigKeys.map(k => demographicsProjection.sexual_orientation?.[k] || 0) : soPcts;
                 
-                const soChartType = chartTypePrefs.sexualOrientation || 'bar';
+                const soChartType = _chartTypeForChartJs(chartTypePrefs.sexualOrientation);
                 const soIsCircular = ['doughnut', 'pie', 'polarArea'].includes(soChartType);
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -61265,7 +61350,7 @@
                 const psPcts = psSorted.values;
                 const psData = isProjection ? psOrigKeys.map(k => demographicsProjection.parental_status?.[k] || 0) : psPcts;
                 
-                const psChartType = chartTypePrefs.parentalStatus || 'bar';
+                const psChartType = _chartTypeForChartJs(chartTypePrefs.parentalStatus);
                 const psIsCircular = ['doughnut', 'pie', 'polarArea'].includes(psChartType);
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -61380,7 +61465,7 @@
                 const occPcts = occSorted.values;
                 const occData = isProjection ? occOrigKeys.map(k => demographicsProjection.occupation?.[k] || 0) : occPcts;
                 
-                const occChartType = chartTypePrefs.occupation || 'bar';
+                const occChartType = _chartTypeForChartJs(chartTypePrefs.occupation);
                 const occIsCircular = ['doughnut', 'pie', 'polarArea'].includes(occChartType);
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -61567,6 +61652,20 @@
         // chart can render as a Chart.js visual ('bar', 'column',
         // 'doughnut', 'pie', 'polarArea', 'line') or as a tabular
         // breakdown ('table') — see _renderDemoTablesForChartsInTableMode.
+        //
+        // 'table' is a UI-only mode: Chart.js itself only knows the visual
+        // types. Feeding it `type: 'table'` throws inside the controller
+        // registry and aborts the entire renderCharts pass, which is why
+        // every card appeared blank when the user switched a single chart
+        // to Table view. _chartTypeForChartJs() funnels 'table' (and
+        // anything falsy) back to a safe 'bar' for the Chart.js
+        // constructor; the swap helper at the end of renderCharts then
+        // detects table mode via chartTypePrefs[k] === 'table', destroys
+        // that just-built chart, and renders the HTML table in its place.
+        function _chartTypeForChartJs(t) {
+            if (!t || t === 'table') return 'bar';
+            return t;
+        }
         const chartTypePrefs = {
             age: 'bar',
             gender: 'bar',
@@ -61635,12 +61734,53 @@
         function _renderDemoTablesForChartsInTableMode() {
             const isProjection = (typeof dashDisplayMode !== 'undefined') && dashDisplayMode === 'projection';
             const US_POP = 329900000;
-            const profileColLabel = isProjection ? 'US #' : 'Profile';
+            const profileColLabel = isProjection ? 'US #' : 'Casual';
             const gpColLabel      = isProjection ? 'GP #' : 'Gen Pop';
             const demoData    = lastRenderedDemographics || {};
             const demoIdxAll  = lastRenderedDemographicsIndex || {};
             const demoProjAll = lastRenderedDemographicsProjection || {};
             const demoGPAll   = lastRenderedDemographicsGenPop || {};
+
+            // Compare-mode wiring: when one or more Data Cuts (Avid /
+            // Netflix / a prior date-range / etc.) are picked, the
+            // demographic table view needs to grow extra columns —
+            // one per cohort — between Casual and Gen Pop, with each
+            // row's bucket value looked up from that cohort's parsed
+            // demographics for the current category. Without this the
+            // table view stays Casual / Gen Pop / Index only and the
+            // user's selection silently doesn't carry through (the
+            // bug Avid showed when picked on Insights and viewed on
+            // Demographics-Table-view).
+            //
+            // We don't go through applyComparisonRunsToCategoryTables
+            // for these tables — that injector rebuilds rows from
+            // already-rendered DOM via brand-name lookup, which doesn't
+            // map onto demographic buckets. Instead we own the render
+            // here end-to-end and just opt the resulting table out of
+            // the injector via data-no-cmp-inject="1" so it doesn't
+            // try to layer a second set of cohort cells on top.
+            const _cmpSeriesForDemo = (typeof _comparisonRunsState !== 'undefined' && _comparisonRunsState)
+                ? ((_comparisonRunsState.selectedKeys || [])
+                    .map(kk => _comparisonRunsState.runsByKey[kk])
+                    .filter(Boolean))
+                : [];
+            const _cmpIncludeCF = !(typeof _comparisonRunsState !== 'undefined' && _comparisonRunsState && _comparisonRunsState.includeCasualFan === false);
+            const _cmpIncludeGP = !(typeof _comparisonRunsState !== 'undefined' && _comparisonRunsState && _comparisonRunsState.includeGenPop === false);
+            const _cmpHideCF    = (_cmpSeriesForDemo.length > 0) && !_cmpIncludeCF;
+            const _cmpHideGP    = (_cmpSeriesForDemo.length > 0) && !_cmpIncludeGP;
+            const _cmpPalette   = (typeof _COMPARISON_PALETTE !== 'undefined' && Array.isArray(_COMPARISON_PALETTE) && _COMPARISON_PALETTE.length)
+                ? _COMPARISON_PALETTE
+                : ['#fd971f', '#a6e22e', '#f92672', '#ae81ff', '#e6db74'];
+            // Chart-key → demographics-dict key (mostly identity, but
+            // camelCase chart keys map to snake_case dict keys).
+            const _cmpDataCatMap = {
+                age: 'age', gender: 'gender', ethnicity: 'ethnicity', income: 'income',
+                education: 'education', relationship: 'relationship',
+                sexualOrientation: 'sexual_orientation',
+                parentalStatus: 'parental_status',
+                occupation: 'occupation'
+            };
+            const _cmpNormKey = (s) => String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' ');
 
             const _fmtPct = (v) => {
                 const n = Number(v);
@@ -61661,13 +61801,13 @@
             };
 
             DEMO_CHART_KEYS.forEach(k => {
-                const canvas = document.getElementById(k + 'Chart');
+                const chartC = document.getElementById(k + 'ChartContainer');
                 const tableC = document.getElementById(k + 'TableContainer');
-                if (!canvas || !tableC) return;
+                if (!chartC || !tableC) return;
                 const wantTable = chartTypePrefs[k] === 'table';
 
                 if (!wantTable) {
-                    canvas.style.display = '';
+                    chartC.style.display = '';
                     tableC.style.display = 'none';
                     return;
                 }
@@ -61679,8 +61819,8 @@
                     try { chart.destroy(); } catch (_) {}
                     if (typeof charts !== 'undefined') delete charts[k];
                 }
-                canvas.style.display = 'none';
-                tableC.style.display = '';
+                chartC.style.display = 'none';
+                tableC.style.display = 'block';
 
                 // Pull bucket data straight from the demographics maps.
                 const dataCat = k;
@@ -61693,6 +61833,20 @@
                     tableC.innerHTML = '<div class="demo-table-empty">No data available.</div>';
                     return;
                 }
+
+                // Per-cohort bucket lookup for this category (chart-key
+                // -> snake_case dict key). Each lookup is keyed by the
+                // normalized bucket name so "65 OR OLDER" still matches
+                // "65 or Older" / "65+" etc.
+                const _cmpDictKey = _cmpDataCatMap[dataCat] || dataCat;
+                const _cmpLookups = _cmpSeriesForDemo.map(entry => {
+                    const dict = (entry && entry.parsed && entry.parsed.demographics && entry.parsed.demographics[_cmpDictKey]) || {};
+                    const norm = {};
+                    for (const [bk, bv] of Object.entries(dict)) {
+                        if (typeof bv === 'number' && isFinite(bv)) norm[_cmpNormKey(bk)] = bv;
+                    }
+                    return { label: entry.label || 'Run', norm };
+                });
 
                 // Sort order: age uses the canonical age sequence; all
                 // others rank by profile pct desc.
@@ -61725,6 +61879,18 @@
                     const idxTier = !showIdx ? '' : (idx >= 100 ? 'index-over' : 'index-under');
                     const idxStr  = showIdx ? Math.round(idx) : 'N/A';
                     const safeLabel = _safeEscape(displayLabel);
+                    // Cohort cells: one per selected Data Cut, keyed
+                    // by the normalized bucket name. Missing buckets
+                    // render as a dim N/A so the column stays aligned.
+                    const normKey = _cmpNormKey(key);
+                    const cmpCellsHtml = _cmpLookups.map((lk, ci) => {
+                        const v = lk.norm[normKey];
+                        const hasV = (typeof v === 'number' && isFinite(v) && v > 0);
+                        const proj = hasV ? Math.round(v / 100 * US_POP) : 0;
+                        const cellStr = !hasV ? 'N/A' : (isProjection ? _fmtNum(proj) : _fmtPct(v));
+                        const color = _cmpPalette[ci % _cmpPalette.length];
+                        return '<span class="cmp-col-cell" style="color:' + color + ';text-align:right;justify-self:end;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">' + cellStr + '</span>';
+                    }).join('');
                     return ''
                         + '<div class="behavioral-item">'
                         +   '<span class="behavioral-rank">' + (i + 1) + '</span>'
@@ -61732,17 +61898,43 @@
                         +     '<span class="behavioral-name has-tooltip" data-tooltip="' + safeLabel + '">' + safeLabel + '</span>'
                         +   '</div>'
                         +   '<span class="behavioral-pct profile-col" style="color: var(--text-primary);">' + profStr + '</span>'
-                        +   '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + (gpStr === 'N/A' ? '(N/A)' : '(' + gpStr + ')') + '</span>'
+                        +   cmpCellsHtml
+                        +   '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + gpStr + '</span>'
                         +   '<span class="behavioral-index index-col ' + idxTier + '" style="' + (showIdx ? '' : 'color: var(--text-secondary);') + ' font-weight: 700;">' + idxStr + '</span>'
                         + '</div>';
                 }).join('');
 
+                // Cohort column headers — palette-colored, ellipsised,
+                // sit between Casual and Gen Pop. Header label uses the
+                // bare cohort name (Avid / 4+ / Premium); the per-chart
+                // legend is where we spell out the subject.
+                const cmpHeaderCellsHtml = _cmpLookups.map((lk, ci) => {
+                    const color = _cmpPalette[ci % _cmpPalette.length];
+                    const lbl = _safeEscape(lk.label || 'Run');
+                    return '<span class="cmp-col-cell" style="color:' + color + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;" title="' + lbl + '">' + lbl + '</span>';
+                }).join('');
+
+                // Match the behavioral-card grid template so the
+                // .cmp-hide-genpop / .cmp-hide-profile CSS rules (set
+                // up in applyComparisonRunsToCategoryTables) collapse
+                // the right cells when the user toggles Casual or
+                // Gen Pop off. 72px per cohort col matches behavioral.
+                const _cmpCols = _cmpLookups.map(() => '72px').join(' ');
+                const _profileColTpl = _cmpHideCF ? '' : '70px ';
+                const _gpColTpl      = _cmpHideGP ? '' : ' 70px';
+                const _gridTpl       = (_cmpLookups.length > 0)
+                    ? ('28px minmax(80px,1fr) ' + _profileColTpl + _cmpCols + _gpColTpl + ' 56px')
+                    : '';
+                const _hideClasses = (_cmpHideCF ? ' cmp-hide-profile' : '') + (_cmpHideGP ? ' cmp-hide-genpop' : '');
+                const _gridStyleAttr = _gridTpl ? (' style="grid-template-columns:' + _gridTpl + ';"') : '';
+
                 tableC.innerHTML = ''
-                    + '<div class="behavioral-table">'
+                    + '<div class="behavioral-table' + _hideClasses + '" data-no-cmp-inject="1"' + _gridStyleAttr + '>'
                     +   '<div class="behavioral-header-row">'
                     +     '<span>#</span>'
                     +     '<span>Bucket</span>'
                     +     '<span class="profile-col">' + profileColLabel + '</span>'
+                    +     cmpHeaderCellsHtml
                     +     '<span class="genpop-col">' + gpColLabel + '</span>'
                     +     '<span class="index-col">Index</span>'
                     +   '</div>'
@@ -63113,7 +63305,7 @@
                 const genPopDisplay = isProjection
                     ? (genPopProjection === 0 || genPopProjection === null ? 'N/A' : formatNumber(Math.round(genPopProjection)))
                     : formatValueOrNA(genPopPct, true);
-                return (item.name || '') + ' · ' + profileDisplay + ' (' + genPopDisplay + ')' + (genPopDisplay === 'N/A' ? '' : ' · ' + formatIndex(item.index) + ' index');
+                return (item.name || '') + ' · ' + profileDisplay + ' · ' + genPopDisplay + (genPopDisplay === 'N/A' ? '' : ' · ' + formatIndex(item.index) + ' index');
             }
             
             // Enhanced header with search
@@ -64542,7 +64734,7 @@
                             <div class="behavioral-header-row">
                                 <span>#</span>
                                 <span>Item</span>
-                                <span class="profile-col">${dashDisplayMode === 'projection' ? 'US #' : 'Profile'}</span>
+                                <span class="profile-col">${dashDisplayMode === 'projection' ? 'US #' : 'Casual'}</span>
                                 <span class="genpop-col">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
                                 <span class="index-col">Index</span>
                             </div>
@@ -65059,7 +65251,7 @@
                             <span class="behavioral-name has-tooltip" data-tooltip="${(item.name || '').replace(/"/g, '&quot;')}">${(item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
                         </div>
                         <span class="behavioral-pct profile-col" style="color: var(--text-primary);">${profileDisplay}</span>
-                        <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">${hasGenPopMatch ? '(' + genPopDisplay + ')' : '(N/A)'}</span>
+                        <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">${hasGenPopMatch ? genPopDisplay : 'N/A'}</span>
                         <span class="behavioral-index index-col ${indexTier}" style="${showIndex ? '' : 'color: var(--text-secondary);'} font-weight: 700;">${showIndex ? formatIndex(index) : 'N/A'}</span>
                     </div>
                 `;
