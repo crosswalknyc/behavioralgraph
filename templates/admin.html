@@ -1496,6 +1496,59 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Profile Selector Cache (full S3 re-scan) -->
+            <div class="card" style="margin-top: 1rem;">
+                <div class="card-header">
+                    <h2>🗂️ Profile Selector Cache</h2>
+                </div>
+                <div style="padding: 1rem; background: var(--bg-input); border-radius: 8px;">
+                    <p style="margin: 0 0 0.75rem 0; color: var(--text-secondary); font-size: 0.85rem;">
+                        Rebuilds the profile-selector cache from a full scan of every CSV at the root
+                        of <code>s3://dashboard-inputs/</code>. Use this when a newly uploaded profile
+                        isn't showing up in the sidebar selector. Typically takes 30 seconds to a few
+                        minutes depending on how many profiles are in the bucket.
+                    </p>
+                    <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+                        <button id="rebuildProfileCacheBtn" class="btn btn-secondary" onclick="rebuildProfileCache()">
+                            🗂️ Rebuild Profile Selector Cache
+                        </button>
+                        <span id="profileCacheRebuildStatus" style="font-size: 0.8rem; color: var(--text-secondary);"></span>
+                    </div>
+                    <div id="profileCacheRebuildProgressWrap" style="display: none; margin-top: 0.75rem;">
+                        <div style="background: var(--bg-secondary, #1f2937); border-radius: 6px; overflow: hidden; height: 8px;">
+                            <div id="profileCacheRebuildProgressBar" style="background: var(--accent, #3b82f6); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                        </div>
+                        <div id="profileCacheRebuildProgressDetail" style="margin-top: 0.4rem; font-size: 0.78rem; color: var(--text-secondary);"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category Norms (weighted-avg BP across all profiles per category) -->
+            <div class="card" style="margin-top: 1rem;">
+                <div class="card-header">
+                    <h2>🧮 Category Norms</h2>
+                </div>
+                <div style="padding: 1rem; background: var(--bg-input); border-radius: 8px;">
+                    <p style="margin: 0 0 0.75rem 0; color: var(--text-secondary); font-size: 0.85rem;">
+                        Pre-computes a sample-size-weighted average BP across every profile in each
+                        category. Used by the dashboard's <em>Data Cuts → Show Category Norm</em> toggle so the
+                        norm appears alongside prior data cuts and Gen Pop without a slow on-demand calc.
+                    </p>
+                    <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+                        <button id="recomputeCategoryNormsBtn" class="btn btn-secondary" onclick="recomputeCategoryNorms()">
+                            🧮 Reset Category Norms
+                        </button>
+                        <span id="categoryNormsStatus" style="font-size: 0.8rem; color: var(--text-secondary);"></span>
+                    </div>
+                    <div id="categoryNormsProgressWrap" style="display: none; margin-top: 0.75rem;">
+                        <div style="background: var(--bg-secondary, #1f2937); border-radius: 6px; overflow: hidden; height: 8px;">
+                            <div id="categoryNormsProgressBar" style="background: var(--accent, #3b82f6); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                        </div>
+                        <div id="categoryNormsProgressDetail" style="margin-top: 0.4rem; font-size: 0.78rem; color: var(--text-secondary);"></div>
+                    </div>
+                </div>
+            </div>
             
             <!-- Gmail Integration -->
             <div class="card" style="margin-top: 1.5rem;">
@@ -3347,6 +3400,7 @@
                     <optgroup label="👤 TALENT">
                         <option value="ACTOR">ACTOR</option>
                         <option value="ATHLETE">ATHLETE</option>
+                        <option value="COMEDIAN">COMEDIAN</option>
                         <option value="CREATOR/INFLUENCER">CREATOR/INFLUENCER</option>
                         <option value="EMERGING TALENT">EMERGING TALENT</option>
                         <option value="HOST/PERSONALITY">HOST/PERSONALITY</option>
@@ -3453,6 +3507,7 @@
                     <optgroup label="👤 TALENT">
                         <option value="ACTOR">ACTOR</option>
                         <option value="ATHLETE">ATHLETE</option>
+                        <option value="COMEDIAN">COMEDIAN</option>
                         <option value="CREATOR/INFLUENCER">CREATOR/INFLUENCER</option>
                         <option value="EMERGING TALENT">EMERGING TALENT</option>
                         <option value="HOST/PERSONALITY">HOST/PERSONALITY</option>
@@ -4626,6 +4681,7 @@
                 <optgroup label="⭐ TALENT">
                     <option value="ACTOR" ${isSel('ACTOR') ? 'selected' : ''}>ACTOR</option>
                     <option value="ATHLETE" ${isSel('ATHLETE') ? 'selected' : ''}>ATHLETE</option>
+                    <option value="COMEDIAN" ${isSel('COMEDIAN') ? 'selected' : ''}>COMEDIAN</option>
                     <option value="CREATOR/INFLUENCER" ${isSel('CREATOR/INFLUENCER') ? 'selected' : ''}>CREATOR/INFLUENCER</option>
                     <option value="HOST/PERSONALITY" ${isSel('HOST/PERSONALITY') ? 'selected' : ''}>HOST/PERSONALITY</option>
                     <option value="MUSICIAN/BAND" ${isSel('MUSICIAN/BAND') ? 'selected' : ''}>MUSICIAN/BAND</option>
@@ -5512,14 +5568,14 @@
         }
         
         const QS_MASTER_CATEGORIES = {
-            'TALENT': ['ACTOR', 'ATHLETE', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
+            'TALENT': ['ACTOR', 'ATHLETE', 'COMEDIAN', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
             'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANKS', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FOOTWEAR', 'FRANCHISE', 'GROCERY', 'INTIMATES', 'JEWELRY', 'LOYALTY PROGRAMS', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
             'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE', 'MOVIE THEATER', 'PODCAST', 'VERTICAL SHORTS', 'VERTICAL SHORT', 'SERIES - AMAZON / MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - 20TH CENTURY', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
             'GEN POP': ['GEN POP'],
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'WNBA'],
             'MUSIC': ['MUSIC', 'MUSICIAN/BAND'],
-            'TRENDS': ['TRENDS']
+            'TRENDS': ['TRENDS', 'SHOPPING INTENT']
         };
 
         const QS_MASTER_ICONS = {
@@ -6505,6 +6561,346 @@
                 if (btn) btn.disabled = false;
             }
         }
+
+        // --- Profile Selector Cache (admin button + progress poll) ----------
+        let _profileCacheRebuildPollTimer = null;
+
+        function _setProfileCacheRebuildBusy(busy) {
+            const btn = document.getElementById('rebuildProfileCacheBtn');
+            if (btn) btn.disabled = !!busy;
+            const wrap = document.getElementById('profileCacheRebuildProgressWrap');
+            if (wrap) wrap.style.display = busy ? 'block' : 'none';
+        }
+
+        function _renderProfileCacheRebuildStatus(status) {
+            const statusEl = document.getElementById('profileCacheRebuildStatus');
+            const bar = document.getElementById('profileCacheRebuildProgressBar');
+            const detail = document.getElementById('profileCacheRebuildProgressDetail');
+            if (!status) return;
+            if (status.running) {
+                // No file-level progress from the underlying scan, so show
+                // an indeterminate-style pulse by sliding the bar back and
+                // forth via timestamp modulo.
+                if (bar) {
+                    const t = (Date.now() / 30) % 200;
+                    const w = t > 100 ? (200 - t) : t;
+                    bar.style.width = Math.max(15, w) + '%';
+                }
+                if (statusEl) statusEl.textContent = status.last_message || 'Running…';
+            } else {
+                if (bar) bar.style.width = status.error ? '100%' : '100%';
+                if (statusEl) {
+                    if (status.error) {
+                        statusEl.textContent = 'Failed: ' + status.error;
+                        statusEl.style.color = '#f92672';
+                    } else {
+                        statusEl.textContent = status.last_message || 'Idle';
+                        statusEl.style.color = '';
+                    }
+                }
+            }
+            if (detail) {
+                const parts = [];
+                if (status.files_total) parts.push(status.files_total.toLocaleString() + ' CSVs at S3 root');
+                if (typeof status.selector_count === 'number' && status.files_total) {
+                    parts.push(status.selector_count.toLocaleString() + ' in selector');
+                }
+                if (status.started_at) {
+                    const dt = new Date(status.started_at);
+                    if (!isNaN(dt)) parts.push('started ' + dt.toLocaleTimeString());
+                }
+                detail.textContent = parts.join(' · ');
+            }
+            // Render the audit list of CSVs that are in S3 but won't appear
+            // in the profile selector (usually missing BRAND CATEGORY, dupe
+            // Gen Pop, SVOD, etc.). Built lazily and rendered into a panel
+            // below the progress bar.
+            _renderProfileCacheMissing(status && status.missing, status && status.missing_count);
+        }
+
+        function _renderProfileCacheMissing(missing, missingCount) {
+            const wrap = document.getElementById('profileCacheRebuildProgressWrap');
+            if (!wrap) return;
+            let panel = document.getElementById('profileCacheMissingPanel');
+            const hasMissing = Array.isArray(missing) && missing.length > 0;
+            if (!hasMissing) {
+                if (panel) panel.remove();
+                return;
+            }
+            if (!panel) {
+                panel = document.createElement('details');
+                panel.id = 'profileCacheMissingPanel';
+                panel.style.cssText = 'margin-top:0.65rem;padding:0.6rem 0.75rem;border:1px solid #444;border-radius:6px;background:rgba(249,38,114,0.06);';
+                panel.innerHTML = '<summary id="profileCacheMissingSummary" style="cursor:pointer;font-size:0.82rem;font-weight:600;color:#ffb86c;"></summary>' +
+                                  '<div id="profileCacheMissingBody" style="margin-top:0.5rem;max-height:280px;overflow-y:auto;font-size:0.75rem;"></div>';
+                wrap.appendChild(panel);
+            }
+            const summary = panel.querySelector('#profileCacheMissingSummary');
+            const body = panel.querySelector('#profileCacheMissingBody');
+            if (summary) {
+                summary.textContent = '⚠ ' + (missingCount || missing.length).toLocaleString() +
+                                      ' CSV' + ((missingCount || missing.length) === 1 ? '' : 's') +
+                                      ' in S3 won\'t appear in the profile selector (click to expand)';
+            }
+            if (body) {
+                // Group by reason for a more scannable list.
+                const groups = {};
+                missing.forEach(m => {
+                    const r = m.reason || 'Unknown reason';
+                    (groups[r] = groups[r] || []).push(m);
+                });
+                const reasonOrder = Object.keys(groups).sort();
+                body.innerHTML = reasonOrder.map(reason => {
+                    const items = groups[reason]
+                        .slice()
+                        .sort((a, b) => (a.s3_key || '').localeCompare(b.s3_key || ''));
+                    const rows = items.map(m => {
+                        const cat = m.category ? ' <span style="color:#888;">[' + _escapeHtml(m.category) + ']</span>' : '';
+                        const disp = _escapeHtml(m.display || m.s3_key || '');
+                        const sk = m.s3_key && m.s3_key !== m.display
+                            ? ' <span style="color:#666;font-size:0.7rem;">(' + _escapeHtml(m.s3_key) + ')</span>'
+                            : '';
+                        return '<li style="padding:0.18rem 0;">' + disp + cat + sk + '</li>';
+                    }).join('');
+                    return '<div style="margin-bottom:0.55rem;">' +
+                           '<div style="color:#f8d56b;font-weight:600;margin-bottom:0.25rem;">' +
+                           _escapeHtml(reason) + ' <span style="color:#888;font-weight:400;">(' + items.length + ')</span></div>' +
+                           '<ul style="margin:0;padding-left:1.1rem;list-style:disc;color:#cbd5e1;">' + rows + '</ul>' +
+                           '</div>';
+                }).join('');
+            }
+        }
+
+        function _escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        async function _pollProfileCacheRebuildStatus() {
+            try {
+                const r = await fetch('/api/admin/rebuild-profile-cache-status', { credentials: 'same-origin' });
+                const j = await r.json();
+                if (!j.success) return;
+                const status = j.status || {};
+                _renderProfileCacheRebuildStatus(status);
+                if (status.running) {
+                    _profileCacheRebuildPollTimer = setTimeout(_pollProfileCacheRebuildStatus, 1500);
+                } else {
+                    _setProfileCacheRebuildBusy(false);
+                    // Auto-hide the progress bar after a short delay UNLESS
+                    // we have a missing-CSV report to show — in that case
+                    // leave the wrap open so the user can drill into it.
+                    setTimeout(() => {
+                        const wrap = document.getElementById('profileCacheRebuildProgressWrap');
+                        const hasMissing = Array.isArray(status.missing) && status.missing.length > 0;
+                        if (wrap && !status.running && !hasMissing) wrap.style.display = 'none';
+                    }, 5000);
+                    if (status.error) {
+                        showToast('❌ Profile cache rebuild failed: ' + status.error, true);
+                    } else if (status.last_message) {
+                        showToast('✅ ' + status.last_message);
+                        // Bust the session/storage cache for /api/jobs so
+                        // the sidebar selector picks up the new state on
+                        // next render without a hard reload. Also hit the
+                        // endpoint with ?refresh=1 here so any worker that
+                        // serves the next request has the freshest cache
+                        // (cross-worker propagation already kicks in via
+                        // the ETag probe — this is belt-and-suspenders).
+                        try {
+                            sessionStorage.removeItem('bg_jobs_session_cache_v2');
+                            sessionStorage.removeItem('bg_jobs_session_cache');
+                        } catch (_) {}
+                        try {
+                            fetch('/api/jobs?refresh=1', { credentials: 'same-origin' }).catch(() => {});
+                        } catch (_) {}
+                    }
+                }
+            } catch (e) {
+                _profileCacheRebuildPollTimer = setTimeout(_pollProfileCacheRebuildStatus, 3000);
+            }
+        }
+
+        async function rebuildProfileCache() {
+            const ok = confirm(
+                'Rebuild profile selector cache?\n\n' +
+                'Walks every CSV at the root of s3://dashboard-inputs/ and rebuilds the profile-' +
+                'selector entries from scratch. Takes 30 seconds to a few minutes depending on how ' +
+                'many profiles are in the bucket. Newly uploaded profiles will appear in the sidebar ' +
+                'as soon as this completes.'
+            );
+            if (!ok) return;
+            if (_profileCacheRebuildPollTimer) {
+                clearTimeout(_profileCacheRebuildPollTimer);
+                _profileCacheRebuildPollTimer = null;
+            }
+            _setProfileCacheRebuildBusy(true);
+            const statusEl = document.getElementById('profileCacheRebuildStatus');
+            if (statusEl) {
+                statusEl.textContent = 'Starting…';
+                statusEl.style.color = '';
+            }
+            try {
+                const r = await fetch('/api/admin/rebuild-profile-cache', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const j = await r.json();
+                if (!r.ok || !j.success) {
+                    throw new Error(j.error || 'Failed to start rebuild');
+                }
+                _renderProfileCacheRebuildStatus(j.status || {});
+                _profileCacheRebuildPollTimer = setTimeout(_pollProfileCacheRebuildStatus, 1200);
+            } catch (e) {
+                _setProfileCacheRebuildBusy(false);
+                if (statusEl) {
+                    statusEl.textContent = 'Failed to start: ' + e.message;
+                    statusEl.style.color = '#f92672';
+                }
+                showToast('❌ ' + e.message, true);
+            }
+        }
+
+        // Resume any in-flight rebuild on page load.
+        document.addEventListener('DOMContentLoaded', () => {
+            fetch('/api/admin/rebuild-profile-cache-status', { credentials: 'same-origin' })
+                .then(r => r.ok ? r.json() : null)
+                .then(j => {
+                    if (j && j.success && j.status && j.status.running) {
+                        _setProfileCacheRebuildBusy(true);
+                        _renderProfileCacheRebuildStatus(j.status);
+                        _profileCacheRebuildPollTimer = setTimeout(_pollProfileCacheRebuildStatus, 1500);
+                    }
+                })
+                .catch(() => {});
+        });
+
+        // --- Category Norms (admin button + progress poll) -----------------
+        let _categoryNormsPollTimer = null;
+
+        function _setCategoryNormsBusy(busy) {
+            const btn = document.getElementById('recomputeCategoryNormsBtn');
+            if (btn) btn.disabled = !!busy;
+            const wrap = document.getElementById('categoryNormsProgressWrap');
+            if (wrap) wrap.style.display = busy ? 'block' : 'none';
+        }
+
+        function _renderCategoryNormsStatus(status) {
+            const statusEl = document.getElementById('categoryNormsStatus');
+            const bar = document.getElementById('categoryNormsProgressBar');
+            const detail = document.getElementById('categoryNormsProgressDetail');
+            if (!status) return;
+            const done = status.categories_done || 0;
+            const total = status.categories_total || 0;
+            const pct = total > 0 ? Math.round((done / total) * 100) : (status.running ? 0 : 100);
+            if (bar) bar.style.width = pct + '%';
+            if (statusEl) {
+                if (status.running) {
+                    statusEl.textContent = `Running… ${done}/${total} categories (${pct}%)`;
+                } else if (status.finished_at) {
+                    statusEl.textContent = status.last_message || 'Idle';
+                } else {
+                    statusEl.textContent = '';
+                }
+            }
+            if (detail) {
+                const errs = (status.errors || []).length;
+                const skips = (status.skipped || []).length;
+                const parts = [];
+                if (status.last_message) parts.push(status.last_message);
+                if (errs) parts.push(`${errs} error${errs === 1 ? '' : 's'}`);
+                if (skips) parts.push(`${skips} skipped`);
+                detail.textContent = parts.join(' · ');
+            }
+        }
+
+        async function _pollCategoryNormsStatus() {
+            try {
+                const r = await fetch('/api/admin/category-norms-status', { credentials: 'same-origin' });
+                const j = await r.json();
+                if (!j.success) return;
+                const status = j.status || {};
+                _renderCategoryNormsStatus(status);
+                if (status.running) {
+                    _categoryNormsPollTimer = setTimeout(_pollCategoryNormsStatus, 1500);
+                } else {
+                    _setCategoryNormsBusy(false);
+                    // Keep the bar visible briefly for closure feedback.
+                    setTimeout(() => {
+                        const wrap = document.getElementById('categoryNormsProgressWrap');
+                        if (wrap && !status.running) wrap.style.display = 'none';
+                    }, 5000);
+                    if (status.last_message) {
+                        const errCount = (status.errors || []).length;
+                        if (errCount > 0) {
+                            showToast(`⚠️ Category norms recompute finished with ${errCount} error${errCount === 1 ? '' : 's'}.`, true);
+                        } else {
+                            showToast(`✅ Category norms recomputed.`);
+                        }
+                    }
+                }
+            } catch (e) {
+                // Network blip; retry once shortly.
+                _categoryNormsPollTimer = setTimeout(_pollCategoryNormsStatus, 3000);
+            }
+        }
+
+        async function recomputeCategoryNorms() {
+            const wantsConfirm = confirm(
+                'Reset category norms?\n\n' +
+                'This walks every profile CSV in each category and rebuilds the weighted-average ' +
+                'BP norms used by the Data Cuts "Show Category Norm" toggle. It typically takes 1–3 ' +
+                'minutes depending on how many profiles are in the heaviest category (e.g. ACTOR).'
+            );
+            if (!wantsConfirm) return;
+            if (_categoryNormsPollTimer) {
+                clearTimeout(_categoryNormsPollTimer);
+                _categoryNormsPollTimer = null;
+            }
+            _setCategoryNormsBusy(true);
+            const statusEl = document.getElementById('categoryNormsStatus');
+            if (statusEl) statusEl.textContent = 'Starting…';
+            try {
+                const r = await fetch('/api/admin/recompute-category-norms', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const j = await r.json();
+                if (!r.ok || !j.success) {
+                    throw new Error(j.error || 'Failed to start recompute');
+                }
+                _renderCategoryNormsStatus(j.status || {});
+                _categoryNormsPollTimer = setTimeout(_pollCategoryNormsStatus, 1200);
+            } catch (e) {
+                _setCategoryNormsBusy(false);
+                if (statusEl) statusEl.textContent = 'Failed to start: ' + e.message;
+                showToast('❌ ' + e.message, true);
+            }
+        }
+
+        // If the admin lands on Settings while a recompute is already
+        // running (e.g. from another tab), pick up the in-flight status
+        // and resume polling without requiring the button click again.
+        document.addEventListener('DOMContentLoaded', () => {
+            fetch('/api/admin/category-norms-status', { credentials: 'same-origin' })
+                .then(r => r.ok ? r.json() : null)
+                .then(j => {
+                    if (j && j.success && j.status && j.status.running) {
+                        _setCategoryNormsBusy(true);
+                        _renderCategoryNormsStatus(j.status);
+                        _categoryNormsPollTimer = setTimeout(_pollCategoryNormsStatus, 1500);
+                    }
+                })
+                .catch(() => {});
+        });
+
         
         async function disconnectGmail() {
             if (!confirm('Disconnect Gmail? Welcome emails will fall back to SMTP (if configured).')) return;
@@ -8733,8 +9129,8 @@
             'GEN POP': ['GEN POP'],
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'WNBA'],
-            'TRENDS': ['TRENDS'],
-            'TALENT': ['ACTOR', 'ATHLETE', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
+            'TRENDS': ['TRENDS', 'SHOPPING INTENT'],
+            'TALENT': ['ACTOR', 'ATHLETE', 'COMEDIAN', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
             'MUSIC': ['MUSIC', 'MUSICIAN/BAND']
         };
         
@@ -9763,6 +10159,7 @@
                     <optgroup label="⭐ TALENT">
                         <option value="ACTOR">ACTOR</option>
                         <option value="ATHLETE">ATHLETE</option>
+                        <option value="COMEDIAN">COMEDIAN</option>
                         <option value="CREATOR/INFLUENCER">CREATOR/INFLUENCER</option>
                         <option value="EMERGING TALENT">EMERGING TALENT</option>
                         <option value="HOST/PERSONALITY">HOST/PERSONALITY</option>

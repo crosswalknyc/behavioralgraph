@@ -57,7 +57,7 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
         "WORKOUT FACILITY",
     ],
     "TALENT": [
-        "ACTOR", "ATHLETE", "INFLUENCER/CREATOR",
+        "ACTOR", "ATHLETE", "COMEDIAN", "INFLUENCER/CREATOR",
         "EMERGING TALENT", "HOST/PERSONALITY", "MUSICIAN/BAND", "PODCASTER",
         "POLITICS/ACTIVIST", "WRITER/DIRECTOR/AUTHOR/ARTIST",
     ],
@@ -73,7 +73,7 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
     ],
     "SPORT": ["MILB", "MLB", "NBA", "NFL", "SPORTS ORGANIZATIONS",
               "SPORTS ORGANIZATION", "WNBA"],
-    "TRENDS": ["TRENDS"],
+    "TRENDS": ["TRENDS", "SHOPPING INTENT"],
 }
 
 

@@ -2882,6 +2882,570 @@ def refresh_genpop_cache():
             'error': str(e)
         }), 500
 
+# ---------------------------------------------------------------------------
+# Category Norms (Data Cuts → "Show Category Norm")
+# ---------------------------------------------------------------------------
+#
+# Persisted at s3://dashboard-inputs/system/category_norms.json by
+# migration/compute_category_norms.py. The structure is:
+#   { "generated_at": ISO, "min_profiles": int,
+#     "norms": { "<CATEGORY>": { "category", "profile_count", "total_sample",
+#                                 "demographics", "behavioral", "interests",
+#                                 "locations" } },
+#     "skipped_categories": { "<CATEGORY>": "reason" } }
+#
+# The dashboard fetches norms on demand for the active profile's
+# category, treats them as a synthetic comparison run, and renders them
+# alongside prior data cuts and Gen Pop.
+
+CATEGORY_NORMS_S3_KEY = "system/category_norms.json"
+_category_norms_cache: dict = {"etag": None, "fetched_at": 0.0, "payload": None}
+_category_norms_lock = threading.Lock()
+_CATEGORY_NORMS_TTL_SECS = 60  # short TTL so admin recomputes show up quickly
+
+# Background-recompute status (one job at a time; in-memory + S3 mirror).
+_category_norms_status: dict = {
+    "running": False,
+    "started_at": None,
+    "finished_at": None,
+    "categories_done": 0,
+    "categories_total": 0,
+    "skipped": [],
+    "errors": [],
+    "last_message": None,
+}
+_category_norms_status_lock = threading.Lock()
+
+
+def _category_norms_s3_client():
+    """Match the inline boto3 client pattern used elsewhere in app.py."""
+    s3_endpoint = f'https://s3.{S3_REGION}.amazonaws.com'
+    return boto3.client(
+        's3',
+        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        region_name=S3_REGION,
+        endpoint_url=s3_endpoint,
+    )
+
+
+def _load_category_norms_from_s3(force: bool = False) -> dict:
+    """Return the parsed category_norms.json payload, refreshing the
+    in-memory copy when the S3 ETag has changed (or every TTL seconds)."""
+    now = time.time()
+    with _category_norms_lock:
+        cached_payload = _category_norms_cache.get("payload")
+        cached_etag = _category_norms_cache.get("etag")
+        fetched_at = _category_norms_cache.get("fetched_at") or 0
+        # Cheap path: fresh enough, return cached.
+        if cached_payload is not None and not force and (now - fetched_at) < _CATEGORY_NORMS_TTL_SECS:
+            return cached_payload
+    try:
+        s3 = _category_norms_s3_client()
+        try:
+            head = s3.head_object(Bucket=S3_BUCKET, Key=CATEGORY_NORMS_S3_KEY)
+            etag = head.get("ETag")
+        except Exception:
+            etag = None
+        if etag and cached_payload is not None and etag == cached_etag:
+            with _category_norms_lock:
+                _category_norms_cache["fetched_at"] = now
+            return cached_payload
+        obj = s3.get_object(Bucket=S3_BUCKET, Key=CATEGORY_NORMS_S3_KEY)
+        payload = json.loads(obj["Body"].read().decode("utf-8"))
+    except Exception as e:
+        print(f"[category-norms] load failed: {e}")
+        return {"norms": {}, "skipped_categories": {}}
+    with _category_norms_lock:
+        _category_norms_cache["payload"] = payload
+        _category_norms_cache["etag"] = etag
+        _category_norms_cache["fetched_at"] = now
+    return payload
+
+
+def _norm_category_key(raw: str) -> str:
+    if not raw:
+        return ""
+    key = str(raw).strip().upper()
+    # mirror compute_category_norms.CATEGORY_ALIASES
+    if key == "INTEREST":
+        return "INTERESTS"
+    return key
+
+
+@app.route('/api/category-norms/<path:category>')
+@requires_auth
+def get_category_norm(category):
+    """Return the precomputed BP norm for one category.
+
+    Response:
+      { success: true, category, norm: {...}, generated_at, profile_count, total_sample }
+      { success: false, error: 'not_found' | ... }     # 404
+    """
+    cat_key = _norm_category_key(category)
+    if not cat_key:
+        return jsonify({"success": False, "error": "category required"}), 400
+    payload = _load_category_norms_from_s3()
+    norms = (payload or {}).get("norms") or {}
+    norm = norms.get(cat_key)
+    if not norm:
+        skipped = (payload or {}).get("skipped_categories") or {}
+        reason = skipped.get(cat_key) or "no norm computed for this category"
+        return jsonify({
+            "success": False,
+            "error": "not_found",
+            "category": cat_key,
+            "reason": reason,
+        }), 404
+    return jsonify({
+        "success": True,
+        "category": cat_key,
+        "norm": norm,
+        "profile_count": norm.get("profile_count", 0),
+        "total_sample": norm.get("total_sample", 0),
+        "generated_at": (payload or {}).get("generated_at"),
+    })
+
+
+@app.route('/api/category-norms')
+@requires_auth
+def list_category_norms():
+    """Lightweight directory of which categories have norms available
+    (used by the Data Cuts popover to show counts without pulling each
+    full norm)."""
+    payload = _load_category_norms_from_s3()
+    norms = (payload or {}).get("norms") or {}
+    summary = []
+    for cat, n in sorted(norms.items()):
+        summary.append({
+            "category": cat,
+            "profile_count": n.get("profile_count", 0),
+            "total_sample": n.get("total_sample", 0),
+        })
+    return jsonify({
+        "success": True,
+        "generated_at": (payload or {}).get("generated_at"),
+        "min_profiles": (payload or {}).get("min_profiles", 0),
+        "available": summary,
+        "skipped": (payload or {}).get("skipped_categories") or {},
+    })
+
+
+def _run_category_norms_recompute(workers: int = 12, min_profiles: int = 3) -> None:
+    """Background worker that re-runs the per-category aggregator and
+    persists the result to S3. Updates `_category_norms_status` as it
+    progresses so the admin UI can poll for it."""
+    from datetime import timezone  # local-import: not exported at module top
+    # Import the migration script's primitives so we don't duplicate
+    # the weighted-average logic in two places.
+    import importlib.util
+    script_path = os.path.join(os.path.dirname(__file__), '..', 'migration', 'compute_category_norms.py')
+    script_path = os.path.abspath(script_path)
+    try:
+        spec = importlib.util.spec_from_file_location("compute_category_norms", script_path)
+        ccn = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ccn)  # type: ignore[union-attr]
+    except Exception as e:
+        with _category_norms_status_lock:
+            _category_norms_status.update({
+                "running": False,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "last_message": f"Failed to load compute script: {e}",
+                "errors": [str(e)],
+            })
+        return
+
+    try:
+        s3 = ccn._make_s3()
+        jobs = ccn.load_jobs_cache(s3)
+        by_cat: dict = {}
+        for j in jobs:
+            cat = ccn._norm_cat(j.get("category") or "")
+            if not cat:
+                continue
+            by_cat.setdefault(cat, []).append(j)
+
+        targets = sorted(by_cat.keys())
+        with _category_norms_status_lock:
+            _category_norms_status["categories_total"] = len(targets)
+            _category_norms_status["categories_done"] = 0
+            _category_norms_status["skipped"] = []
+            _category_norms_status["errors"] = []
+            _category_norms_status["last_message"] = f"Processing {len(targets)} categories…"
+
+        existing = ccn.load_norms(s3)
+        norms = dict(existing.get("norms") or {})
+        skipped: dict = {}
+        errors: list = []
+
+        for cat in targets:
+            cat_jobs = by_cat[cat]
+            if len(cat_jobs) < min_profiles:
+                msg = f"fewer than {min_profiles} profiles ({len(cat_jobs)})"
+                skipped[cat] = msg
+                norms.pop(cat, None)
+                with _category_norms_status_lock:
+                    _category_norms_status["categories_done"] += 1
+                    _category_norms_status["skipped"].append({"category": cat, "reason": msg})
+                    _category_norms_status["last_message"] = f"Skipped {cat}: {msg}"
+                continue
+            try:
+                norm = ccn.compute_norm_for_category(s3, cat, cat_jobs, workers=workers)
+            except Exception as e:
+                err = f"{cat}: {e}"
+                errors.append(err)
+                with _category_norms_status_lock:
+                    _category_norms_status["categories_done"] += 1
+                    _category_norms_status["errors"].append(err)
+                    _category_norms_status["last_message"] = f"Error on {cat}: {e}"
+                continue
+            if norm:
+                norm.pop("_meta", None)
+                norms[cat] = norm
+                with _category_norms_status_lock:
+                    _category_norms_status["categories_done"] += 1
+                    _category_norms_status["last_message"] = (
+                        f"Computed {cat} ({norm['profile_count']} profiles)"
+                    )
+            else:
+                with _category_norms_status_lock:
+                    _category_norms_status["categories_done"] += 1
+                    _category_norms_status["last_message"] = f"{cat}: no parseable profiles"
+
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_by": "admin/recompute-category-norms",
+            "min_profiles": min_profiles,
+            "norms": norms,
+            "skipped_categories": skipped,
+        }
+        ccn.save_norms(s3, payload)
+
+        # Bust the in-memory cache so the next /api/category-norms call
+        # picks up the new file immediately.
+        with _category_norms_lock:
+            _category_norms_cache["payload"] = payload
+            _category_norms_cache["etag"] = None
+            _category_norms_cache["fetched_at"] = time.time()
+
+        with _category_norms_status_lock:
+            _category_norms_status.update({
+                "running": False,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "last_message": (
+                    f"Done — {len(norms)} categories with norms, "
+                    f"{len(skipped)} skipped, {len(errors)} errors."
+                ),
+            })
+    except Exception as e:
+        traceback.print_exc()
+        with _category_norms_status_lock:
+            _category_norms_status.update({
+                "running": False,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "last_message": f"Fatal error: {e}",
+                "errors": (_category_norms_status.get("errors") or []) + [str(e)],
+            })
+
+
+@app.route('/api/admin/recompute-category-norms', methods=['POST'])
+@requires_admin
+def admin_recompute_category_norms():
+    """Kick off a background recompute of every category norm. Returns
+    immediately; poll `/api/admin/category-norms-status` for progress."""
+    from datetime import timezone  # local-import: not exported at module top
+    with _category_norms_status_lock:
+        if _category_norms_status.get("running"):
+            return jsonify({
+                "success": False,
+                "error": "A recompute is already running.",
+                "status": dict(_category_norms_status),
+            }), 409
+
+        payload = request.get_json(silent=True) or {}
+        try:
+            # Default min_profiles=1 so EVERY category gets a norm — even
+            # single-profile ones. The dashboard surfaces the sample count
+            # in the popover label ("Category Norm — ACTOR (737)") so
+            # users can see when a norm is thin.
+            min_profiles = int(payload.get("min_profiles", 1))
+        except Exception:
+            min_profiles = 1
+        try:
+            workers = int(payload.get("workers", 12))
+        except Exception:
+            workers = 12
+        # reset status
+        _category_norms_status.update({
+            "running": True,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": None,
+            "categories_done": 0,
+            "categories_total": 0,
+            "skipped": [],
+            "errors": [],
+            "last_message": "Starting…",
+            "min_profiles": min_profiles,
+            "workers": workers,
+        })
+
+    t = threading.Thread(
+        target=_run_category_norms_recompute,
+        kwargs={"workers": workers, "min_profiles": min_profiles},
+        daemon=True,
+        name="recompute-category-norms",
+    )
+    t.start()
+    return jsonify({"success": True, "message": "Recompute started.", "status": dict(_category_norms_status)})
+
+
+@app.route('/api/admin/category-norms-status')
+@requires_admin
+def admin_category_norms_status():
+    """Return the current background-recompute status (running flag,
+    progress, last log line, errors)."""
+    with _category_norms_status_lock:
+        return jsonify({"success": True, "status": dict(_category_norms_status)})
+
+
+# ---------------------------------------------------------------------------
+# Profile-selector cache rebuild (admin Settings → Rebuild Profile Cache)
+# ---------------------------------------------------------------------------
+#
+# The dashboard's profile selector reads from `s3_cache` (built by
+# `process_s3_file_metadata` for every CSV at the root of s3://dashboard-inputs).
+# Incremental refresh fires on demand (`/api/refresh-cache`), but new files
+# uploaded out-of-band sometimes don't show up promptly. This endpoint kicks
+# off a FULL re-scan in a background thread so the admin can force a sync
+# without waiting for the request to return.
+
+_profile_cache_rebuild_status: dict = {
+    "running": False,
+    "started_at": None,
+    "finished_at": None,
+    "files_total": 0,
+    "selector_count": 0,
+    "missing_count": 0,
+    "missing": [],
+    "last_message": None,
+    "error": None,
+}
+_profile_cache_rebuild_lock = threading.Lock()
+
+
+def _audit_profile_selector_coverage(jobs_list):
+    """Compare a freshly-rebuilt `s3_cache['jobs']` against the filter
+    chain in `list_jobs()` and return a list of root-CSV entries that
+    will NOT appear in the profile selector, with a human-readable
+    reason. Helps the admin spot CSVs that were uploaded to S3 but
+    can't be selected (usually because the CSV is missing a BRAND
+    CATEGORY row so it ingests as UNCATEGORIZED).
+
+    Mirrors the post-cache filters in `list_jobs()`:
+      - s3_key in a subfolder (any '/')
+      - SVOD Acquisition (lives in Subscriber IQ, not Profile IQ)
+      - Category OTHER / UNCATEGORIZED / blank
+      - Gen Pop duplicates (only the canonical entry is shown)
+    """
+    missing = []
+    seen_gen_pop = False
+    for j in (jobs_list or []):
+        if not isinstance(j, dict):
+            continue
+        sk = j.get('s3_key') or j.get('key') or ''
+        cat = (j.get('category') or '').upper()
+        display = j.get('project_name') or j.get('display_name') or sk
+
+        if not sk:
+            continue
+        if '/' in sk:
+            missing.append({
+                's3_key': sk, 'display': display, 'category': cat or '(blank)',
+                'reason': 'In subfolder (not at root of dashboard-inputs)'
+            })
+            continue
+        if cat == 'SVOD ACQUISITION' or sk.startswith('svod-acquisition/') or j.get('is_svod'):
+            missing.append({
+                's3_key': sk, 'display': display, 'category': cat or 'SVOD',
+                'reason': 'SVOD Acquisition (shown in Subscriber IQ, not Profile IQ)'
+            })
+            continue
+        if cat in ('OTHER', 'UNCATEGORIZED', ''):
+            missing.append({
+                's3_key': sk, 'display': display, 'category': cat or '(blank)',
+                'reason': "Missing BRAND CATEGORY row in CSV — fix the CSV or assign a category in Admin."
+            })
+            continue
+        if 'gen_pop' in sk.lower():
+            if seen_gen_pop:
+                missing.append({
+                    's3_key': sk, 'display': display, 'category': cat,
+                    'reason': 'Duplicate Gen Pop entry (selector keeps the canonical Gen_Pop_2026.csv)'
+                })
+                continue
+            seen_gen_pop = True
+    return missing
+
+
+def _run_profile_cache_rebuild() -> None:
+    """Worker: full S3 scan + persisted-cache rewrite. Updates the
+    status dict as it goes so the admin UI can poll for progress.
+
+    After the cache is rebuilt we ALSO:
+      1. Reset `_persisted_cache_etag` + the throttled HEAD timestamp so
+         every other gunicorn worker re-pulls the fresh cache on its very
+         next /api/jobs call (instead of waiting up to 3s for the throttle).
+      2. Audit the freshly-built cache against the /api/jobs filter chain
+         and report any root CSVs that won't appear in the profile selector
+         (usually CSVs without a BRAND CATEGORY row).
+    """
+    from datetime import timezone  # local import: not at module top
+    global _persisted_cache_etag, _persisted_cache_last_head_ts
+    try:
+        if not s3_client:
+            with _profile_cache_rebuild_lock:
+                _profile_cache_rebuild_status.update({
+                    "running": False,
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "error": "S3 not configured",
+                    "last_message": "S3 not configured",
+                })
+            return
+        with _profile_cache_rebuild_lock:
+            _profile_cache_rebuild_status["last_message"] = "Scanning s3://dashboard-inputs/ …"
+
+        result = refresh_s3_cache(incremental=False)
+        if isinstance(result, dict) and result.get("error"):
+            with _profile_cache_rebuild_lock:
+                _profile_cache_rebuild_status.update({
+                    "running": False,
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "error": result["error"],
+                    "last_message": "Failed: " + str(result["error"]),
+                })
+            return
+        total = (result or {}).get("total", 0)
+
+        # Defense in depth: even though refresh_s3_cache() filters out
+        # subfolder keys at scan time via _is_root_csv_key, run the same
+        # invariant check on the in-memory cache once more. This catches
+        # any legacy entries that survived a prior merge or pre-invariant
+        # admin action, and writes a clean cache back to S3.
+        try:
+            clean_jobs, dropped_subfolder = _enforce_root_only_jobs(
+                s3_cache.get('jobs') or [], context='rebuild post-scan'
+            )
+            if dropped_subfolder:
+                s3_cache['jobs'] = clean_jobs
+                s3_cache['file_count'] = len(clean_jobs)
+                # Persist the cleaned cache so the next worker that loads
+                # doesn't have to re-strip them. save_persisted_cache also
+                # enforces the invariant, but rewriting here means the
+                # ETag bumps and other workers re-pull the clean copy.
+                try:
+                    save_persisted_cache()
+                except Exception as e:
+                    print(f"⚠️ couldn't persist cleaned cache: {e}")
+                total = len(clean_jobs)
+        except Exception as enf_err:
+            dropped_subfolder = []
+            print(f"⚠️ post-scan root-only enforcement failed: {enf_err}")
+
+        # Force cross-worker propagation: every other gunicorn worker
+        # holds its own in-memory `s3_cache`. They normally rediscover
+        # changes via the throttled persisted-cache HEAD probe (3s
+        # interval). Zeroing the etag + last-head timestamp here means
+        # the very next /api/jobs call in any worker re-reads the
+        # cache from S3 immediately — no 3s grace window.
+        try:
+            _persisted_cache_etag = None
+            _persisted_cache_last_head_ts = 0.0
+        except Exception:
+            pass
+
+        # Audit the freshly-built cache against the same filter chain
+        # /api/jobs runs, so we can show the admin every root CSV that
+        # WON'T appear in the profile selector (and why).
+        missing = []
+        try:
+            missing = _audit_profile_selector_coverage(s3_cache.get('jobs') or [])
+        except Exception as audit_err:
+            print(f"⚠️ profile-selector audit failed: {audit_err}")
+            traceback.print_exc()
+
+        selector_count = max(0, int(total) - len(missing))
+        msg = f"Rebuilt cache: {total} root CSVs scanned, {selector_count} in selector"
+        if missing:
+            msg += f", {len(missing)} hidden (see details)"
+        if dropped_subfolder:
+            msg += f". Stripped {len(dropped_subfolder)} legacy subfolder entries from persisted cache"
+        msg += "."
+
+        with _profile_cache_rebuild_lock:
+            _profile_cache_rebuild_status.update({
+                "running": False,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "files_total": int(total),
+                "selector_count": selector_count,
+                "missing_count": len(missing),
+                "missing": missing,
+                "last_message": msg,
+                "error": None,
+            })
+    except Exception as e:
+        traceback.print_exc()
+        with _profile_cache_rebuild_lock:
+            _profile_cache_rebuild_status.update({
+                "running": False,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "error": str(e),
+                "last_message": f"Fatal error: {e}",
+            })
+
+
+@app.route('/api/admin/rebuild-profile-cache', methods=['POST'])
+@requires_admin
+def admin_rebuild_profile_cache():
+    """Kick off a full S3 re-scan of the profile-selector cache.
+    Returns immediately; poll `/api/admin/rebuild-profile-cache-status`
+    for progress. Use this when newly-uploaded CSVs aren't appearing in
+    the profile selector promptly."""
+    from datetime import timezone  # local import: not at module top
+    with _profile_cache_rebuild_lock:
+        if _profile_cache_rebuild_status.get("running"):
+            return jsonify({
+                "success": False,
+                "error": "A profile-cache rebuild is already running.",
+                "status": dict(_profile_cache_rebuild_status),
+            }), 409
+        _profile_cache_rebuild_status.update({
+            "running": True,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": None,
+            "files_total": 0,
+            "selector_count": 0,
+            "missing_count": 0,
+            "missing": [],
+            "last_message": "Starting full S3 scan…",
+            "error": None,
+        })
+    t = threading.Thread(
+        target=_run_profile_cache_rebuild,
+        daemon=True,
+        name="rebuild-profile-cache",
+    )
+    t.start()
+    return jsonify({"success": True, "message": "Rebuild started.", "status": dict(_profile_cache_rebuild_status)})
+
+
+@app.route('/api/admin/rebuild-profile-cache-status')
+@requires_admin
+def admin_rebuild_profile_cache_status():
+    """Return the current background-rebuild status."""
+    with _profile_cache_rebuild_lock:
+        return jsonify({"success": True, "status": dict(_profile_cache_rebuild_status)})
+
+
 @app.route('/api/admin/gmail/status')
 @requires_admin
 def gmail_status():
@@ -18160,25 +18724,32 @@ def rename_file():
                 found = True
                 break
         if not found:
-            # File was not in cache; add entry so admin list shows updated name
-            if display_name and display_name.strip():
-                new_display_name = display_name.strip()
+            # File was not in cache; add entry so admin list shows updated name.
+            # Profile-IQ selector cache is root-only; subfolder renames
+            # (sentiment-iq/, brand-partnership-iq/, ticket-sales-iq/,
+            # svod-acquisition/, etc.) get handled by their own metadata
+            # stores above, NOT by mixing them into the profile cache.
+            if not _is_root_csv_key(new_key):
+                print(f"⏭️  Skipping cache-add for non-root key: {new_key}")
             else:
-                new_filename = new_key.split('/')[-1]
-                name_without_ext = new_filename.rsplit('.', 1)[0] if '.' in new_filename else new_filename
-                name_without_timestamp = remove_timestamp_from_name(name_without_ext)
-                new_display_name = smart_title_case(name_without_timestamp.replace('_', ' '))
-            jobs.append({
-                'key': new_key,
-                's3_key': new_key,
-                'name': new_display_name,
-                'display_name': new_display_name,
-                'project_name': new_display_name,
-                'brand': new_display_name,
-                'category': 'Uncategorized',
-            })
-            s3_cache['jobs'] = jobs
-            print(f"📝 Added new cache entry for {new_key} with display name: {new_display_name}")
+                if display_name and display_name.strip():
+                    new_display_name = display_name.strip()
+                else:
+                    new_filename = new_key.split('/')[-1]
+                    name_without_ext = new_filename.rsplit('.', 1)[0] if '.' in new_filename else new_filename
+                    name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+                    new_display_name = smart_title_case(name_without_timestamp.replace('_', ' '))
+                jobs.append({
+                    'key': new_key,
+                    's3_key': new_key,
+                    'name': new_display_name,
+                    'display_name': new_display_name,
+                    'project_name': new_display_name,
+                    'brand': new_display_name,
+                    'category': 'Uncategorized',
+                })
+                s3_cache['jobs'] = jobs
+                print(f"📝 Added new cache entry for {new_key} with display name: {new_display_name}")
         save_persisted_cache()
         
         print(f"📝 Renamed file: {old_key} -> {new_key}")
@@ -19692,24 +20263,29 @@ def change_file_category():
                 found = True
                 break
         if not found and not file_key.startswith(S3_PURGATORY_PREFIX):
-            # File not in cache (e.g. new upload); add entry so admin list shows updated category
-            filename = file_key.split('/')[-1]
-            name_without_ext = filename.replace('.csv', '') if filename.endswith('.csv') else filename
-            name_without_timestamp = remove_timestamp_from_name(name_without_ext)
-            project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
-            entry = {
-                'key': file_key,
-                's3_key': file_key,
-                'category': new_category,
-                'project_name': project_name,
-                'name': project_name,
-                'display_name': project_name,
-            }
-            if secondary_category:
-                entry['secondary_category'] = secondary_category
-            jobs.append(entry)
-            s3_cache['jobs'] = jobs
-            print(f"📝 Added new cache entry for {file_key} with category: {new_category}")
+            # File not in cache (e.g. new upload); add entry so admin list shows
+            # updated category. Profile-IQ selector cache is root-only — never
+            # add a subfolder key here even if the admin recategorizes one.
+            if not _is_root_csv_key(file_key):
+                print(f"⏭️  Skipping cache-add for non-root key: {file_key}")
+            else:
+                filename = file_key.split('/')[-1]
+                name_without_ext = filename.replace('.csv', '') if filename.endswith('.csv') else filename
+                name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+                project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
+                entry = {
+                    'key': file_key,
+                    's3_key': file_key,
+                    'category': new_category,
+                    'project_name': project_name,
+                    'name': project_name,
+                    'display_name': project_name,
+                }
+                if secondary_category:
+                    entry['secondary_category'] = secondary_category
+                jobs.append(entry)
+                s3_cache['jobs'] = jobs
+                print(f"📝 Added new cache entry for {file_key} with category: {new_category}")
         elif found:
             print(f"📝 Updated existing cache entry for {file_key} with category: {new_category}")
         save_persisted_cache()
@@ -19827,6 +20403,62 @@ def get_all_profile_images():
         'count': len(images)
     })
 
+def _is_root_csv_key(key) -> bool:
+    """Profile IQ selector invariant: only `.csv` files at the ROOT of
+    `s3://dashboard-inputs/` may appear in the profile-selector cache.
+
+    Any key with a `/` lives in a subfolder (archive/, _backups/, backups/,
+    historic/, purgatory/, metadata/, system/, reference/, persona_cache/,
+    sentiment-iq/, roas-iq/, brand-partnership-iq/, svod-acquisition/,
+    ticket-sales-iq/, etc.) and must NEVER be surfaced to users via the
+    profile selector. This helper is the single source of truth for the
+    root-only check; every cache write/read path must use it.
+
+    Returns False for:
+      - empty / non-string keys
+      - any key containing '/'
+      - any key not ending in '.csv'
+    """
+    if not key or not isinstance(key, str):
+        return False
+    if '/' in key:
+        return False
+    if not key.lower().endswith('.csv'):
+        return False
+    return True
+
+
+def _enforce_root_only_jobs(jobs, context: str = ''):
+    """Drop any cache entry whose s3_key violates the root-CSV invariant.
+    Logs the dropped keys so an admin can spot how they slipped in
+    (almost always a stale persisted cache from before the invariant
+    was tightened, or a legacy rename/recategorize admin action)."""
+    if not jobs:
+        return jobs, []
+    kept = []
+    dropped = []
+    for j in jobs:
+        if not isinstance(j, dict):
+            continue
+        sk = j.get('s3_key') or j.get('key') or ''
+        # Locally-running jobs are tracked here too (source='local') and
+        # may not have a real s3_key yet — keep them.
+        if j.get('source') == 'local' and not sk:
+            kept.append(j)
+            continue
+        if _is_root_csv_key(sk):
+            kept.append(j)
+        else:
+            dropped.append(sk)
+    if dropped:
+        ctx = f" [{context}]" if context else ''
+        sample = ', '.join(dropped[:5])
+        if len(dropped) > 5:
+            sample += f", … (+{len(dropped) - 5} more)"
+        print(f"⚠️ root-only cache invariant{ctx}: dropped {len(dropped)} non-root entries: {sample}")
+    return kept, dropped
+
+
 def load_persisted_cache():
     """Load the S3 file cache from S3 storage."""
     global s3_cache, _persisted_cache_etag
@@ -19835,10 +20467,16 @@ def load_persisted_cache():
     try:
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_CACHE_KEY)
         cached_data = json.loads(response['Body'].read().decode('utf-8'))
-        s3_cache['jobs'] = cached_data.get('jobs', [])
+        # Defense in depth: a persisted cache written before the
+        # root-only invariant existed (or by a legacy admin action)
+        # could contain subfolder keys. Strip them here so the
+        # in-memory cache always reflects the invariant.
+        raw_jobs = cached_data.get('jobs', [])
+        clean_jobs, _dropped = _enforce_root_only_jobs(raw_jobs, context='load_persisted_cache')
+        s3_cache['jobs'] = clean_jobs
         s3_cache['categories'] = cached_data.get('categories', [])
         s3_cache['last_updated'] = cached_data.get('last_updated')
-        s3_cache['file_count'] = cached_data.get('file_count', 0)
+        s3_cache['file_count'] = len(clean_jobs)
         s3_cache['last_full_scan'] = cached_data.get('last_full_scan')
         # Track ETag so other workers can detect changes via cheap HEAD requests.
         _persisted_cache_etag = (response.get('ETag') or '').strip('"') or None
@@ -19916,11 +20554,21 @@ def save_persisted_cache():
             # Merge is a soft guarantee; never fail a save on it.
             print(f"⚠️ persisted-cache imdb merge failed (non-fatal): {merge_err}")
 
+        # Defense in depth: never PERSIST anything that violates the
+        # root-only invariant. If a subfolder key snuck in via a legacy
+        # admin path (rename / recategorize) or stale cache merge,
+        # drop it here so the next worker that loads can't see it.
+        # Mutates s3_cache in place so the in-memory view stays
+        # consistent with what we wrote.
+        clean_jobs, _dropped = _enforce_root_only_jobs(s3_cache.get('jobs', []), context='save_persisted_cache')
+        if _dropped:
+            s3_cache['jobs'] = clean_jobs
+            s3_cache['file_count'] = len(clean_jobs)
         cache_data = {
-            'jobs': s3_cache.get('jobs', []),
+            'jobs': clean_jobs,
             'categories': s3_cache.get('categories', []),
             'last_updated': s3_cache.get('last_updated'),
-            'file_count': s3_cache.get('file_count', 0),
+            'file_count': len(clean_jobs),
             'last_full_scan': s3_cache.get('last_full_scan')
         }
         put_resp = s3_client.put_object(
@@ -20731,13 +21379,15 @@ def smart_cache_update():
             for obj in page.get('Contents', []):
                 key = obj['Key']
                 # Profile IQ only shows files at the root of dashboard-inputs.
-                # Any key with '/' lives in a subfolder (system/, historic/, backups/,
-                # _backups/, purgatory/, metadata/, sentiment-iq/, roas-iq/,
-                # brand-partnership-iq/, reference/, persona_cache/, etc.) and must
-                # not appear in the profile selector.
-                if not key.endswith('.csv') or '/' in key:
+                # Any key with '/' lives in a subfolder (archive/, system/,
+                # historic/, backups/, _backups/, purgatory/, metadata/,
+                # sentiment-iq/, roas-iq/, brand-partnership-iq/, reference/,
+                # persona_cache/, svod-acquisition/, ticket-sales-iq/, etc.)
+                # and must not appear in the profile selector. _is_root_csv_key
+                # is the single source of truth for this check.
+                if not _is_root_csv_key(key):
                     continue
-                
+
                 current_s3_keys.add(key)
                 obj_modified = obj['LastModified'].isoformat()
                 
@@ -20839,11 +21489,12 @@ def refresh_s3_cache(incremental=True):
             for obj in page.get('Contents', []):
                 key = obj['Key']
                 # Profile IQ only shows files at the root of dashboard-inputs —
-                # anything in a subfolder is system/cache/reference data and must
-                # not appear in the profile selector.
-                if not key.endswith('.csv') or '/' in key:
+                # anything in a subfolder is system/cache/reference/archive data
+                # and must not appear in the profile selector. _is_root_csv_key
+                # is the single source of truth for this check.
+                if not _is_root_csv_key(key):
                     continue
-                
+
                 job_data = process_s3_file_metadata(key, obj)
                 job_data['last_modified'] = obj['LastModified'].isoformat()
                 job_list.append(job_data)

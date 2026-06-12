@@ -13813,6 +13813,7 @@
                                         <optgroup label="⭐ TALENT">
                                             <option value="ACTOR">Actor</option>
                                             <option value="ATHLETE">Athlete</option>
+                                            <option value="COMEDIAN">Comedian</option>
                                             <option value="CREATOR/INFLUENCER">Creator/Influencer</option>
                                             <option value="EMERGING TALENT">Emerging Talent</option>
                                             <option value="HOST/PERSONALITY">Host/Personality</option>
@@ -14271,6 +14272,7 @@
                                                 <optgroup label="⭐ TALENT">
                                                     <option value="ACTOR">Actor</option>
                                                     <option value="ATHLETE">Athlete</option>
+                                                    <option value="COMEDIAN">Comedian</option>
                                                     <option value="CREATOR/INFLUENCER">Creator/Influencer</option>
                                                     <option value="EMERGING TALENT">Emerging Talent</option>
                                                     <option value="HOST/PERSONALITY">Host/Personality</option>
@@ -35669,7 +35671,19 @@
 
             // Curves — render as filled area paths using monotone-cubic
             // approximation via the smooth-path helper.
+            // Track peak labels as bounding-box rectangles so collision
+            // detection can use real text width + height (not just a
+            // single x,y point like the prior heuristic).
             var _jiqPeakLabels = [];
+            // Reserve the "🎬 THEATRICAL RELEASE" badge area at the top
+            // of the chart so peak labels never overlap it.
+            var releaseBadgeHalfW = 70;
+            _jiqPeakLabels.push({
+                l: relX - releaseBadgeHalfW,
+                t: padT - 18,
+                r: relX + releaseBadgeHalfW,
+                b: padT + 4,
+            });
             curves.forEach(function(c) {
                 var prop = props[c.property] || {};
                 var color = c.color || prop.color || '#5b6cff';
@@ -35700,19 +35714,80 @@
                 parts.push('<path d="' + areaD + '" fill="url(#' + gradId + ')" stroke="none"/>');
                 parts.push('<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2.5" stroke-linecap="round"/>');
 
-                // Peak label — find the max-y point, then offset to avoid overlap
+                // Peak label placement — find the max-y point on the curve
+                // and pick the first non-overlapping candidate position
+                // (above / below / left / right / further offsets) so
+                // multiple curves whose peaks land near each other don't
+                // stack their labels into a pile or run off-chart.
                 var peak = pts.reduce(function(best, p) {
                     return (p.y < best.y) ? p : best;
                 }, pts[0]);
-                var labelY = peak.y - 14;
-                _jiqPeakLabels.forEach(function(prev) {
-                    if (Math.abs(peak.x - prev.x) < 120 && Math.abs(labelY - prev.y) < 16) {
-                        labelY = prev.y - 16;
+                var labelText = (prop.icon || '◆') + ' ' + (prop.name || c.property);
+                var labelW    = labelText.length * 6.0 + 6;
+                var labelH    = 14;
+                var pad       = 4;     // breathing room between adjacent labels
+                var minTop    = padT + 4; // never let label cross the chart top
+                var maxBot    = H - padB - 4; // or the baseline
+                // Candidate positions, ordered by editorial preference.
+                // Each `y` is the text BASELINE; bounding box uses (y-12, y+2).
+                var cands = [
+                    { x: peak.x,                y: peak.y - 14, anchor: 'middle' },
+                    { x: peak.x,                y: peak.y + 22, anchor: 'middle' },
+                    { x: peak.x - 10,           y: peak.y - 2,  anchor: 'end'    },
+                    { x: peak.x + 10,           y: peak.y - 2,  anchor: 'start'  },
+                    { x: peak.x,                y: peak.y - 30, anchor: 'middle' },
+                    { x: peak.x,                y: peak.y + 38, anchor: 'middle' },
+                    { x: peak.x - 10,           y: peak.y + 14, anchor: 'end'    },
+                    { x: peak.x + 10,           y: peak.y + 14, anchor: 'start'  },
+                ];
+                function _bbox(c) {
+                    var l = c.anchor === 'middle' ? c.x - labelW / 2
+                          : c.anchor === 'end'    ? c.x - labelW
+                          : c.x;
+                    var r = l + labelW;
+                    return { l: l - pad, r: r + pad, t: c.y - labelH + 2, b: c.y + 2 };
+                }
+                function _overlap(a, b) {
+                    return !(a.r < b.l || a.l > b.r || a.b < b.t || a.t > b.b);
+                }
+                function _inBounds(bb) {
+                    return bb.t >= minTop && bb.b <= maxBot && bb.l >= 4 && bb.r <= W - 4;
+                }
+                var chosen = null;
+                for (var ci = 0; ci < cands.length; ci++) {
+                    var bb = _bbox(cands[ci]);
+                    if (!_inBounds(bb)) continue;
+                    var clash = false;
+                    for (var pi = 0; pi < _jiqPeakLabels.length; pi++) {
+                        if (_overlap(bb, _jiqPeakLabels[pi])) { clash = true; break; }
                     }
-                });
-                _jiqPeakLabels.push({ x: peak.x, y: labelY });
+                    if (!clash) { chosen = cands[ci]; break; }
+                }
+                if (!chosen) {
+                    // Fallback: force the first candidate, then nudge it up
+                    // in 14-px steps until it clears all reservations OR
+                    // hits the top guard. Worst-case label sits flush at
+                    // the chart top — still visible, just very close.
+                    chosen = cands[0];
+                    var bb2 = _bbox(chosen);
+                    var guard = 0;
+                    while (guard++ < 8) {
+                        var clash2 = false;
+                        for (var pj = 0; pj < _jiqPeakLabels.length; pj++) {
+                            if (_overlap(bb2, _jiqPeakLabels[pj])) { clash2 = true; break; }
+                        }
+                        if (!clash2 || bb2.t <= minTop) break;
+                        chosen = { x: chosen.x, y: chosen.y - 14, anchor: chosen.anchor };
+                        bb2 = _bbox(chosen);
+                    }
+                }
+                _jiqPeakLabels.push(_bbox(chosen));
                 parts.push('<circle cx="' + peak.x + '" cy="' + peak.y + '" r="4" fill="' + color + '" stroke="#fff" stroke-width="2"/>');
-                parts.push('<text x="' + peak.x + '" y="' + labelY + '" text-anchor="middle" fill="' + color + '" font-weight="700" font-size="10">' + _jiqEsc(prop.icon || '◆') + ' ' + _jiqEsc(prop.name || c.property) + '</text>');
+                parts.push('<text x="' + chosen.x + '" y="' + chosen.y + '"'
+                         +   ' text-anchor="' + chosen.anchor + '"'
+                         +   ' fill="' + color + '" font-weight="700" font-size="10"'
+                         +   ' paint-order="stroke" stroke="var(--bg-card)" stroke-width="3" stroke-linejoin="round">'
+                         +   _jiqEsc(labelText) + '</text>');
             });
 
             // Legend — bottom-left
@@ -55387,6 +55462,22 @@
                 if (category === 'BRAND INPUT') {
                     const projectedFromF4 = parseInt(String(row['US Gen Pop Projection'] || row['Gen Pop Projection'] || row[5] || '0').replace(/,/g, '')) || 0;
                     if (projectedFromF4 > 0) result.projectedUS = projectedFromF4;
+                    // Also capture this cohort's PANEL respondent count from
+                    // BRAND INPUT's Original Raw Numbers / Category Share /
+                    // Raw cell. For cohort-cut CSVs (e.g. "Subject - Avid Fan",
+                    // "Subject - Netflix Only"), the SAMPLE SIZE row is
+                    // inherited from the upstream panel and is IDENTICAL
+                    // across all cuts — so it can't tell cuts apart. The
+                    // BRAND INPUT Raw cell IS per-cut and carries the
+                    // cohort respondent count. We surface it as a separate
+                    // field so the Data Cuts comparison can show distinct
+                    // n= values per cohort instead of repeating the panel
+                    // size four times.
+                    const rawFromBrandInput = parseInt(String(
+                        row['Original Raw Numbers'] || row['Raw'] || row['Category Share'] ||
+                        row[3] || row[4] || '0'
+                    ).replace(/,/g, '')) || 0;
+                    if (rawFromBrandInput > 0) result.cohortRaw = rawFromBrandInput;
                 }
 
                 // Store BRAND CATEGORY for display (e.g. SERIES - Netflix -> append platform to title)
@@ -56011,6 +56102,9 @@
         // -------------------------------------------------------------------
         const _COMPARISON_PALETTE = ['#fd971f', '#ae81ff', '#f92672', '#66d9ef', '#a6e22e', '#e6db74', '#75715e', '#ff79c6'];
         const _COMPARISON_GENPOP_COLOR = '#9ca3af';
+        // Synthetic key for the precomputed Category Norm "run". Treated by
+        // every downstream rendering helper as if it were a real data cut.
+        const CATEGORY_NORM_KEY = '__category_norm__';
         let _comparisonRunsState = {
             subject: '',
             selectedKeys: [],
@@ -56022,6 +56116,13 @@
             // popover exposes a toggle so users can compare old vs new
             // without Gen Pop crowding the bars / columns.
             includeGenPop: true,
+            // Category Norm = sample-size-weighted average BP across every
+            // profile in this profile's category. Precomputed by
+            // migration/compute_category_norms.py + admin Reset button.
+            includeCategoryNorm: false,
+            categoryNormCategory: '',
+            categoryNormProfileCount: 0,
+            categoryNormGeneratedAt: '',
             // When data cuts are selected the popover surfaces a
             // numerator / denominator picker so users can index e.g.
             // "Avid vs Casual" or "Casual vs Gen Pop" instead of the
@@ -56041,11 +56142,24 @@
                 currentKey: currentKey || '',
                 inFlight: {},
                 includeGenPop: true,
+                includeCategoryNorm: false,
+                categoryNormCategory: '',
+                categoryNormProfileCount: 0,
+                categoryNormGeneratedAt: '',
                 indexNumKey: null,
                 indexDenKey: null
             };
             _updateCompareDateRangesButtonBadge();
             _closeCompareDateRangesPopover();
+            // Switching profiles wipes the comparison state; also wipe
+            // any injected sample-size / projection sub-lines so the
+            // header stat cards on the new profile aren't stuck with
+            // the previous profile's data-cut blocks below them.
+            try {
+                if (typeof applyComparisonRunsToHeaderStats === 'function') {
+                    applyComparisonRunsToHeaderStats();
+                }
+            } catch (_) {}
         }
 
         // Toggle whether the Gen Pop baseline bar/column is layered into
@@ -56057,6 +56171,192 @@
             _comparisonRunsState.includeGenPop = !!val;
             try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] genpop toggle charts failed', e); }
             try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] genpop toggle tables failed', e); }
+        }
+
+        // ---------------------------------------------------------------
+        // CATEGORY NORM (Data Cuts → "Show Category Norm")
+        //
+        // Loads the precomputed weighted-average BP norm for the active
+        // profile's category from /api/category-norms/<category>, shapes
+        // it like a parseAllData() payload, and injects it into the
+        // existing comparison-runs pipeline under a synthetic key. From
+        // there it gets the same bar / column / index treatment as any
+        // real data cut.
+        // ---------------------------------------------------------------
+
+        // Translate compute_category_norms.py's UPPERCASE demographic
+        // category keys (AGE, SEXUAL_ORIENTATION, ...) to the lowercase
+        // keys parseAllData() emits and the chart layer expects.
+        function _normDemoCatToParsedKey(cat) {
+            if (!cat) return '';
+            return String(cat).toLowerCase();
+        }
+
+        // Convert a `/api/category-norms/<cat>` response's `norm` payload
+        // into a parseAllData()-shaped object so the rest of the
+        // comparison pipeline can treat it identically to a real run.
+        function _buildCategoryNormParsed(normPayload) {
+            const parsed = {
+                demographics: {},
+                demographicsIndex: {},
+                demographicsGenPop: {},
+                demographicsProjection: {},
+                behavioral: {},
+                interests: {},
+                locations: [],
+                sampleSize: (normPayload && normPayload.total_sample) || 0,
+                projectedUS: 0,
+                brandCategory: (normPayload && normPayload.category) || ''
+            };
+            if (!normPayload) return parsed;
+
+            const demos = normPayload.demographics || {};
+            for (const [cat, buckets] of Object.entries(demos)) {
+                parsed.demographics[_normDemoCatToParsedKey(cat)] = Object.assign({}, buckets || {});
+            }
+
+            const beh = normPayload.behavioral || {};
+            for (const [cat, items] of Object.entries(beh)) {
+                if (!Array.isArray(items)) continue;
+                parsed.behavioral[cat] = items.map(it => ({
+                    name: it.name,
+                    pct: typeof it.pct === 'number' ? it.pct : 0,
+                    // Index/genPopPct/projection are computed downstream
+                    // against the live Gen Pop baseline, so we leave them
+                    // 0/empty here — same as parseAllData does for raw rows.
+                    index: 0,
+                    genPopPct: 0,
+                    projection: 0
+                }));
+            }
+
+            const interests = normPayload.interests || {};
+            for (const [name, pct] of Object.entries(interests)) {
+                parsed.interests[name] = {
+                    pct: typeof pct === 'number' ? pct : 0,
+                    index: 0,
+                    genPopPct: 0
+                };
+            }
+
+            const locs = normPayload.locations || [];
+            parsed.locations = locs.map(l => ({
+                name: l.name,
+                pct: typeof l.pct === 'number' ? l.pct : 0,
+                index: 0,
+                genPopPct: 0
+            }));
+
+            return parsed;
+        }
+
+        // The "category" we want here is the JOB's category (what groups
+        // profiles in the sidebar selector — ACTOR / SPORTS TEAM /
+        // MUSICIAN-BAND / etc.), NOT the per-profile BRAND CATEGORY row
+        // from the CSV (which is free-text and brand-specific). Look it
+        // up on the dashboardProfiles entry that matches the active S3
+        // key. Falls back to currentProfileData.category if a caller
+        // stamped one, and finally to parsed.brandCategory as a last
+        // resort so the toggle isn't completely dead for unusual paths.
+        function _currentProfileCategory() {
+            try {
+                const key = (typeof currentS3Key !== 'undefined' && currentS3Key) ? String(currentS3Key) : '';
+                if (key && typeof dashboardProfiles !== 'undefined' && Array.isArray(dashboardProfiles)) {
+                    const hit = dashboardProfiles.find(p => (p && (p.s3_key === key || p.job_id === key)));
+                    if (hit && hit.category) return String(hit.category).toUpperCase();
+                }
+                if (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.category) {
+                    return String(currentProfileData.category).toUpperCase();
+                }
+                if (typeof currentDashboardData !== 'undefined' && currentDashboardData && currentDashboardData.brandCategory) {
+                    return String(currentDashboardData.brandCategory).toUpperCase();
+                }
+            } catch (_) {}
+            return '';
+        }
+
+        async function _fetchCategoryNorm() {
+            const cat = _currentProfileCategory();
+            if (!cat) {
+                console.warn('[compare] cannot fetch category norm — no category on current profile');
+                return null;
+            }
+            try {
+                const r = await fetch('/api/category-norms/' + encodeURIComponent(cat), { credentials: 'same-origin' });
+                if (!r.ok) {
+                    if (r.status === 404) {
+                        const body = await r.json().catch(() => ({}));
+                        console.info('[compare] no category norm available for', cat, '—', body.reason || '');
+                        return { status: 'not_found', category: cat, reason: (body && body.reason) || 'not computed' };
+                    }
+                    console.warn('[compare] category norm fetch failed', r.status);
+                    return { status: 'error', category: cat, reason: 'HTTP ' + r.status };
+                }
+                const data = await r.json();
+                if (!data || !data.success || !data.norm) {
+                    return { status: 'error', category: cat, reason: 'bad payload' };
+                }
+                const parsed = _buildCategoryNormParsed(data.norm);
+                return {
+                    status: 'ok',
+                    category: cat,
+                    generated_at: data.generated_at || '',
+                    profile_count: data.profile_count || 0,
+                    total_sample: data.total_sample || 0,
+                    parsed
+                };
+            } catch (e) {
+                console.warn('[compare] category norm fetch exception', e);
+                return { status: 'error', category: cat, reason: String(e && e.message || e) };
+            }
+        }
+
+        async function _setComparisonIncludeCategoryNorm(val) {
+            const want = !!val;
+            _comparisonRunsState.includeCategoryNorm = want;
+            if (!want) {
+                _comparisonRunsState.selectedKeys = (_comparisonRunsState.selectedKeys || [])
+                    .filter(k => k !== CATEGORY_NORM_KEY);
+                delete _comparisonRunsState.runsByKey[CATEGORY_NORM_KEY];
+                _updateCompareDateRangesButtonBadge();
+                try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] norm off charts failed', e); }
+                try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] norm off tables failed', e); }
+                try { _refreshIndexSourcePickerOptions(); } catch (_) {}
+                return { ok: true };
+            }
+            // Loading…
+            const fetched = await _fetchCategoryNorm();
+            if (!fetched || fetched.status !== 'ok') {
+                _comparisonRunsState.includeCategoryNorm = false;
+                return { ok: false, reason: (fetched && fetched.reason) || 'fetch failed', status: (fetched && fetched.status) || 'error' };
+            }
+            _comparisonRunsState.categoryNormCategory = fetched.category;
+            _comparisonRunsState.categoryNormProfileCount = fetched.profile_count;
+            _comparisonRunsState.categoryNormGeneratedAt = fetched.generated_at;
+            // Inject into the comparison pipeline. Label is intentionally
+            // short ("Norm") because column headers in the behavioral /
+            // interests / location tables are only ~60px wide and the
+            // longer "Category Norm — ACTOR (737)" gets clipped. The
+            // popover row already shows the category + sample count so
+            // users have the full context where it fits.
+            const label = 'Norm';
+            _comparisonRunsState.runsByKey[CATEGORY_NORM_KEY] = {
+                key: CATEGORY_NORM_KEY,
+                profile: { name: label, key: CATEGORY_NORM_KEY, isSynthetic: true },
+                parsed: fetched.parsed,
+                label,
+                dateRangeYear: '',
+                dateRange: '',
+                isSynthetic: true
+            };
+            if (!_comparisonRunsState.selectedKeys.includes(CATEGORY_NORM_KEY)) {
+                _comparisonRunsState.selectedKeys.push(CATEGORY_NORM_KEY);
+            }
+            _updateCompareDateRangesButtonBadge();
+            try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] norm on charts failed', e); }
+            try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] norm on tables failed', e); }
+            try { _refreshIndexSourcePickerOptions(); } catch (_) {}
+            return { ok: true };
         }
 
         // ---------------------------------------------------------------
@@ -56534,12 +56834,16 @@
 
         function _clearAllComparisonRuns() {
             _comparisonRunsState.selectedKeys = [];
+            _comparisonRunsState.includeCategoryNorm = false;
+            delete _comparisonRunsState.runsByKey[CATEGORY_NORM_KEY];
             _updateCompareDateRangesButtonBadge();
             applyComparisonRunsToDashboardCharts();
             try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] category tables re-apply failed', e); }
             const pop = document.getElementById('compareDateRangesPopover');
             if (pop) {
                 pop.querySelectorAll('input[type="checkbox"][data-cmp-key]').forEach(cb => { cb.checked = false; });
+                const cnCb = pop.querySelector('#cmpIncludeCategoryNormCb');
+                if (cnCb) cnCb.checked = false;
             }
         }
 
@@ -56620,6 +56924,76 @@
                 _setComparisonIncludeGenPop(gpCb.checked);
             });
             pop.appendChild(gpRow);
+
+            // ---- Category Norm toggle -------------------------------------
+            // Weighted-average BP across every profile in this profile's
+            // category. Pulls from /api/category-norms/<category>, which
+            // serves a precomputed file from S3 (admin Reset button in
+            // Settings → Category Norms regenerates the file).
+            // Layout: [checkbox][label stack][status]
+            //   The label stack is two lines — "Show Category Norm" on top,
+            //   the category name as a smaller subtitle below — so long
+            //   categories like "SEARCH ENGINE/AI" or "INFLUENCER" don't
+            //   get truncated when the popover is narrow.
+            const cnRow = document.createElement('label');
+            cnRow.style.cssText = 'display:grid;grid-template-columns:18px 1fr minmax(70px,auto);column-gap:0.55rem;align-items:center;padding:0.4rem 0.5rem;border-radius:6px;cursor:pointer;font-size:0.82rem;line-height:1.25;margin-bottom:0.45rem;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.22);';
+            const cnCb = document.createElement('input');
+            cnCb.type = 'checkbox';
+            cnCb.id = 'cmpIncludeCategoryNormCb';
+            cnCb.checked = !!_comparisonRunsState.includeCategoryNorm;
+            cnCb.style.cssText = 'accent-color:#f59e0b;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
+            const cnLbl = document.createElement('span');
+            cnLbl.style.cssText = 'color:var(--text-primary, #e6e6e6);display:flex;flex-direction:column;align-items:flex-start;gap:0.1rem;min-width:0;';
+            const curCat = _currentProfileCategory();
+            const cnTitleLine = document.createElement('span');
+            cnTitleLine.innerHTML = 'Show <strong style="color:var(--text-primary, #cbd5e1);">Category Norm</strong>';
+            cnTitleLine.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;';
+            cnLbl.appendChild(cnTitleLine);
+            if (curCat) {
+                const cnSubtitle = document.createElement('span');
+                cnSubtitle.textContent = curCat;
+                cnSubtitle.title = curCat;
+                cnSubtitle.style.cssText = 'font-size:0.68rem;color:var(--text-secondary, #9ca3af);font-weight:600;letter-spacing:0.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;line-height:1.1;';
+                cnLbl.appendChild(cnSubtitle);
+            }
+            const cnStatus = document.createElement('span');
+            cnStatus.style.cssText = 'font-size:0.68rem;color:var(--text-secondary, #9ca3af);justify-self:end;text-align:right;';
+            if (_comparisonRunsState.includeCategoryNorm && _comparisonRunsState.categoryNormProfileCount) {
+                cnStatus.textContent = 'n=' + _comparisonRunsState.categoryNormProfileCount;
+            }
+            cnRow.appendChild(cnCb);
+            cnRow.appendChild(cnLbl);
+            cnRow.appendChild(cnStatus);
+            cnCb.addEventListener('change', async function() {
+                const wantOn = cnCb.checked;
+                cnStatus.textContent = wantOn ? 'Loading…' : '';
+                cnStatus.style.color = 'var(--text-secondary, #9ca3af)';
+                cnStatus.title = '';
+                try {
+                    const result = await _setComparisonIncludeCategoryNorm(wantOn);
+                    if (!wantOn) {
+                        cnStatus.textContent = '';
+                    } else if (result && result.ok) {
+                        const n = _comparisonRunsState.categoryNormProfileCount;
+                        cnStatus.textContent = n ? 'n=' + n : 'On';
+                    } else {
+                        const reason = (result && result.reason) || 'failed';
+                        const isMissing = result && result.status === 'not_found';
+                        cnStatus.textContent = isMissing ? 'No norm yet' : 'Failed';
+                        cnStatus.style.color = isMissing ? '#fd971f' : '#f92672';
+                        cnStatus.title = isMissing
+                            ? 'No precomputed norm for this category yet.\nAsk an admin to click "Reset Category Norms" in Settings.\n\nDetail: ' + reason
+                            : reason;
+                        cnCb.checked = false;
+                    }
+                } catch (e) {
+                    cnStatus.textContent = 'Failed';
+                    cnStatus.style.color = '#f92672';
+                    cnStatus.title = String(e && e.message || e);
+                    cnCb.checked = false;
+                }
+            });
+            pop.appendChild(cnRow);
 
             // ---- Index source picker --------------------------------------
             // Shown whenever the user has 1+ data cuts selected. Lets them
@@ -56930,6 +57304,14 @@
         // mutate (sort, search, slice all trigger innerHTML rewrites).
         // ---------------------------------------------------------------
         let _cmpTableObservers = null;
+        // Set to true while applyComparisonRunsToCategoryTables is
+        // mutating the DOM, so the MutationObserver callbacks ignore
+        // their own self-induced churn. Without this, every apply
+        // queues a follow-up apply on the next animation frame, and
+        // the resulting infinite re-render loop steals focus from any
+        // open native <select> (e.g. the Index Against pickers) which
+        // looks like the dropdown is "spazzing out".
+        let _cmpApplyInProgress = false;
         function _cmpInstallTableObservers() {
             if (_cmpTableObservers) return;
             _cmpTableObservers = [];
@@ -56949,7 +57331,28 @@
             targets.forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
-                const obs = new MutationObserver(() => {
+                const obs = new MutationObserver((records) => {
+                    // Ignore self-induced mutations. Without this we'd
+                    // get an infinite apply loop because every apply
+                    // mutates the DOM (childList changes via
+                    // _cmpClearInjected + appendChild).
+                    if (_cmpApplyInProgress) return;
+                    // Extra guard: if every record only added/removed
+                    // .cmp-col-cell nodes, this mutation came from our
+                    // own code (probably a stale event left in the
+                    // queue after the in-progress flag was cleared).
+                    if (records && records.every(r => {
+                        const isCmpOnly = (nodeList) => {
+                            for (let i = 0; i < nodeList.length; i++) {
+                                const n = nodeList[i];
+                                if (n.nodeType === 1 && !n.classList.contains('cmp-col-cell')) return false;
+                            }
+                            return true;
+                        };
+                        return isCmpOnly(r.addedNodes) && isCmpOnly(r.removedNodes);
+                    })) {
+                        return;
+                    }
                     // Debounce: coalesce bursts into a single re-apply.
                     if (el._cmpReapplyPending) return;
                     el._cmpReapplyPending = true;
@@ -57053,7 +57456,112 @@
             root.querySelectorAll('.cmp-col-cell').forEach(el => el.remove());
         }
 
+        // Sample-size + US-projection comparison block injected under the
+        // two header stat cards on the Demographics tab AND the two
+        // metric cards on the Insights tab. When data cuts are active,
+        // each selected run's sampleSize / projectedUS appears as a
+        // colored sub-line beneath the primary number so users can see
+        // cohort scale differences (e.g. Avid Fan = 300K vs Profile =
+        // 10M) without having to do mental math.
+        //
+        // Behavior:
+        //   - No data cuts selected -> remove every .cmp-stat-list block
+        //     so the cards return to their single-value state.
+        //   - 1+ data cuts selected -> render one row per cut under each
+        //     stat card, colored to match its bar / column color.
+        //   - Category Norm is treated as just another data cut: its
+        //     sampleSize is the total panel observations behind the
+        //     norm (sum of every profile in the category), so it tells
+        //     you the cohort weight backing the average.
+        function applyComparisonRunsToHeaderStats() {
+            const series = (_comparisonRunsState.selectedKeys || [])
+                .map(k => _comparisonRunsState.runsByKey[k])
+                .filter(Boolean);
+
+            const targets = [
+                { sampleId: 'dashSampleSize',     projId: 'dashProjectedUS',     cardSel: '.stat-card' },
+                { sampleId: 'insightsSampleSize', projId: 'insightsProjectedUS', cardSel: '.metric-card' }
+            ];
+
+            const _fmt = (n) => {
+                if (n == null || !isFinite(n)) return '—';
+                if (typeof formatNumber === 'function') return formatNumber(n);
+                return Number(n).toLocaleString();
+            };
+
+            // For "sample size per cut" we want each cohort's actual
+            // panel respondent count, NOT the upstream panel size.
+            // Resolution order:
+            //   1. parsed.cohortRaw — pulled from BRAND INPUT row's
+            //      Raw / Original Raw Numbers cell. Per-cohort, varies
+            //      between cuts of the same upstream panel.
+            //   2. parsed.sampleSize — panel-level SAMPLE SIZE row.
+            //      Sticky across cuts derived from the same parent, so
+            //      only useful as a fallback when the cut CSV didn't
+            //      populate BRAND INPUT Raw.
+            //   3. derived: projectedUS / 329.9M * 10M (canonical math).
+            //      Last-resort when the CSV has projectedUS but neither
+            //      cohortRaw nor sampleSize.
+            const _cutSampleSize = (parsed) => {
+                if (!parsed) return 0;
+                if (typeof parsed.cohortRaw === 'number' && isFinite(parsed.cohortRaw) && parsed.cohortRaw > 0) {
+                    return parsed.cohortRaw;
+                }
+                if (typeof parsed.sampleSize === 'number' && isFinite(parsed.sampleSize) && parsed.sampleSize > 0) {
+                    return parsed.sampleSize;
+                }
+                if (typeof parsed.projectedUS === 'number' && isFinite(parsed.projectedUS) && parsed.projectedUS > 0) {
+                    return Math.round(parsed.projectedUS / 329900000 * 10000000);
+                }
+                return 0;
+            };
+
+            const buildList = (which) => {
+                const wrap = document.createElement('div');
+                wrap.className = 'cmp-stat-list';
+                wrap.style.cssText = 'margin-top:0.5rem;display:flex;flex-direction:column;gap:0.18rem;padding-top:0.4rem;border-top:1px dashed var(--border-color, rgba(255,255,255,0.08));';
+                series.forEach((entry, idx) => {
+                    const color = _COMPARISON_PALETTE[idx % _COMPARISON_PALETTE.length];
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;font-size:0.72rem;line-height:1.25;';
+                    const lbl = document.createElement('span');
+                    lbl.textContent = entry.label || 'Run';
+                    lbl.title = entry.label || '';
+                    lbl.style.cssText = 'color:' + color + ';font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;';
+                    const n = which === 'sample'
+                        ? _cutSampleSize(entry.parsed)
+                        : (entry.parsed && typeof entry.parsed.projectedUS === 'number' && isFinite(entry.parsed.projectedUS) ? entry.parsed.projectedUS : 0);
+                    const val = document.createElement('span');
+                    val.textContent = (which === 'sample' ? 'n=' : '') + _fmt(n);
+                    val.style.cssText = 'color:var(--text-primary, #e6e6e6);font-variant-numeric:tabular-nums;font-weight:500;';
+                    row.appendChild(lbl);
+                    row.appendChild(val);
+                    wrap.appendChild(row);
+                });
+                return wrap;
+            };
+
+            targets.forEach(t => {
+                const sampleEl = document.getElementById(t.sampleId);
+                const projEl = document.getElementById(t.projId);
+                const sampleCard = sampleEl && sampleEl.closest(t.cardSel);
+                const projCard = projEl && projEl.closest(t.cardSel);
+                if (sampleCard) sampleCard.querySelectorAll(':scope > .cmp-stat-list').forEach(n => n.remove());
+                if (projCard) projCard.querySelectorAll(':scope > .cmp-stat-list').forEach(n => n.remove());
+                if (series.length === 0) return;
+                if (sampleCard) sampleCard.appendChild(buildList('sample'));
+                if (projCard) projCard.appendChild(buildList('proj'));
+            });
+        }
+
         function applyComparisonRunsToCategoryTables() {
+            // Re-entrancy guard: if we're already inside an apply (an
+            // observer fired despite the in-progress flag, or a chained
+            // requestAnimationFrame raced), short-circuit. The pending
+            // observer would re-call us anyway once it clears.
+            if (_cmpApplyInProgress) return;
+            _cmpApplyInProgress = true;
+            try {
             const series = (_comparisonRunsState.selectedKeys || [])
                 .map(k => _comparisonRunsState.runsByKey[k])
                 .filter(Boolean);
@@ -57099,8 +57607,11 @@
                 // Recompute grid: rank | name | profile | [N cmps] | [genpop?] | index.
                 // The "70px " before " 56px" is the Gen Pop column; drop it
                 // when the user has hidden Gen Pop so the row collapses
-                // cleanly instead of leaving a gap.
-                const cmpCols = series.map(() => '60px').join(' ');
+                // cleanly instead of leaving a gap. 72px per cmp leaves
+                // enough room for labels like "NETFLIX ONLY" / "YOUTUBE
+                // ONLY"; longer labels clip with ellipsis (full label in
+                // title attr).
+                const cmpCols = series.map(() => '72px').join(' ');
                 const gpCol = hideGP ? '' : ' 70px';
                 table.style.gridTemplateColumns = '28px minmax(80px,1fr) 70px ' + cmpCols + gpCol + ' 56px';
 
@@ -57111,8 +57622,10 @@
                     series.forEach((entry, idx) => {
                         const span = document.createElement('span');
                         span.className = 'cmp-col-cell';
-                        span.textContent = entry.label || ('Run ' + (idx + 1));
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;';
+                        const label = entry.label || ('Run ' + (idx + 1));
+                        span.textContent = label;
+                        span.title = label;
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;';
                         if (gpHeader) header.insertBefore(span, gpHeader);
                         else header.appendChild(span);
                     });
@@ -57151,37 +57664,48 @@
             });
 
             // -------- INTERESTS LIST ------------------------------------
+            // NOTE: #interestsGrid is display:flex (column). Each
+            // .interest-header-row and .interest-item is its OWN
+            // display:grid with template '30px 1fr 70px 70px 60px'.
+            // Setting gridTemplateColumns on the parent is a no-op,
+            // so we must apply the new template to every header AND
+            // every data row individually (same pattern as Location).
             const intGrid = document.getElementById('interestsGrid');
             if (intGrid) {
                 _cmpClearInjected(intGrid);
+                const intHeader = intGrid.querySelector('.interest-header-row');
+                const intItems = intGrid.querySelectorAll('.interest-item');
                 if (series.length > 0) {
                     intGrid.classList.toggle('cmp-hide-genpop', hideGP);
                     const intLookups = series.map(s => ({
                         label: s.label,
                         map: _cmpBuildInterestsLookup(s.parsed)
                     }));
-                    // The interests grid uses a CSS grid declared in the
-                    // stylesheet. We override grid-template-columns via
-                    // inline style to expand for comparison columns and
-                    // optionally drop the Gen Pop column.
-                    const cmpCols = series.map(() => '60px').join(' ');
+                    // Row layout: # | Item | Profile | [N cmps] | [Gen Pop?] | Index
+                    // 72px per cmp leaves enough room for labels like
+                    // "NETFLIX ONLY" / "YOUTUBE ONLY"; longer labels
+                    // clip with ellipsis (full label in title attr).
+                    const cmpCols = series.map(() => '72px').join(' ');
                     const gpCol = hideGP ? '' : ' 70px';
-                    intGrid.style.gridTemplateColumns = '28px minmax(120px,1fr) 70px ' + cmpCols + gpCol + ' 56px';
+                    const intGridTpl = '30px minmax(120px,1fr) 70px ' + cmpCols + gpCol + ' 60px';
 
-                    const intHeader = intGrid.querySelector('.interest-header-row');
                     if (intHeader) {
+                        intHeader.style.gridTemplateColumns = intGridTpl;
                         const gpHeader = intHeader.querySelector('.genpop-col');
                         series.forEach((entry, idx) => {
                             const span = document.createElement('span');
                             span.className = 'cmp-col-cell';
-                            span.textContent = entry.label || ('Run ' + (idx + 1));
-                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;';
+                            const label = entry.label || ('Run ' + (idx + 1));
+                            span.textContent = label;
+                            span.title = label;
+                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;';
                             if (gpHeader) intHeader.insertBefore(span, gpHeader);
                             else intHeader.appendChild(span);
                         });
                     }
 
-                    intGrid.querySelectorAll('.interest-item').forEach(row => {
+                    intItems.forEach(row => {
+                        row.style.gridTemplateColumns = intGridTpl;
                         const nameEl = row.querySelector('.interest-name');
                         if (!nameEl) return;
                         const name = _cmpNormName(nameEl.textContent || row.dataset.name || '');
@@ -57190,15 +57714,19 @@
                             const match = intLookups[idx].map[name];
                             const span = document.createElement('span');
                             span.className = 'cmp-col-cell';
-                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;';
+                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;overflow:hidden;min-width:0;';
                             span.textContent = match ? _cmpFmtPct(match.pct) : '—';
+                            if (match && match.pct != null) {
+                                span.title = entry.label + ' • ' + name + ' • ' + _cmpFmtPct(match.pct);
+                            }
                             if (gpCell) row.insertBefore(span, gpCell);
                             else row.appendChild(span);
                         });
                     });
                 } else {
-                    intGrid.style.gridTemplateColumns = '';
                     intGrid.classList.remove('cmp-hide-genpop');
+                    if (intHeader) intHeader.style.gridTemplateColumns = '';
+                    intItems.forEach(row => { row.style.gridTemplateColumns = ''; });
                 }
             }
 
@@ -57241,14 +57769,23 @@
                     return;
                 }
 
-                // Build new grid: insert N×60px before the index column.
-                // For the "All" table we ALSO honor the Gen Pop hide toggle
-                // by dropping the two GP columns when requested.
-                const cmpColsCss = series.map(() => '60px').join(' ');
+                // Build new grid. Data cuts ALWAYS go RIGHT AFTER the
+                // Profile column (per UX: "always put the avid fan after
+                // the primary profile not at the end"), so the column
+                // order is:
+                //   Rank | Location | Rank | Profile | [cmps] | [GP cols] | Index
+                // For the "All" table we ALSO honor the Gen Pop hide
+                // toggle. NOTE: only .cw-gp-col is class-hidden via
+                // .cmp-hide-genpop; "GP Census" is a plain <span> with
+                // no class so it stays visible. We must therefore drop
+                // ONLY ONE column (CW Gen Pop) when hideGP is true,
+                // not both, or the row gets one fewer declared column
+                // than visible cells and "CW GP Index" wraps below.
+                const cmpColsCss = series.map(() => '72px').join(' ');
                 let newGrid;
                 if (sec.isAll) {
-                    const gpCols = hideGP ? '' : ' 72px 72px';
-                    newGrid = '58px minmax(0, 1fr) 44px 80px' + gpCols + ' ' + cmpColsCss + ' 58px';
+                    const gpCols = hideGP ? ' 72px' : ' 72px 72px';
+                    newGrid = '58px minmax(0, 1fr) 44px 80px ' + cmpColsCss + gpCols + ' 58px';
                 } else {
                     // Over/under tables have no native Gen Pop column,
                     // so the hideGP toggle has nothing to hide here.
@@ -57263,23 +57800,37 @@
                     map: _cmpBuildLocationsLookup(s.parsed)
                 }));
 
-                // Header injection — the index column lives at the end,
-                // so we insert comparison header cells just before the
-                // .index-col span. If no .index-col is found, append.
+                // Pick the right insertion anchor for THIS section.
+                //   - "All" table has the Profile column followed by
+                //     .cw-gp-col (CW Gen Pop) — insert before that so
+                //     cmps sit between Profile and Gen Pop.
+                //   - Over/Under tables go Profile → .index-col with no
+                //     Gen Pop in between, so insert before .index-col.
+                // _findAnchor returns null when neither selector matches,
+                // in which case we appendChild as a last resort.
+                const _findAnchor = (rowEl) => {
+                    if (sec.isAll) {
+                        return rowEl.querySelector('.cw-gp-col')
+                            || rowEl.querySelector('.index-col');
+                    }
+                    return rowEl.querySelector('.index-col');
+                };
+
                 if (header) {
                     header.style.gridTemplateColumns = newGrid;
-                    const idxHeader = header.querySelector('.index-col');
+                    const anchor = _findAnchor(header);
                     series.forEach((entry, idx) => {
                         const span = document.createElement('span');
                         span.className = 'cmp-col-cell';
-                        span.textContent = entry.label || ('Run ' + (idx + 1));
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;';
-                        if (idxHeader) header.insertBefore(span, idxHeader);
+                        const label = entry.label || ('Run ' + (idx + 1));
+                        span.textContent = label;
+                        span.title = label;
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;';
+                        if (anchor) header.insertBefore(span, anchor);
                         else header.appendChild(span);
                     });
                 }
 
-                // Data row injection.
                 list.querySelectorAll('.location-row').forEach(row => {
                     row.style.gridTemplateColumns = newGrid;
                     // Row name lives in data-name attribute (lowercased
@@ -57297,7 +57848,7 @@
                             if (c) canonNorm = _cmpNormName(c);
                         }
                     } catch (_) {}
-                    const idxCell = row.querySelector('.index-col');
+                    const anchor = _findAnchor(row);
                     series.forEach((entry, idx) => {
                         const lookup = locLookups[idx].map;
                         const match = lookup[norm] || (canonNorm && lookup[canonNorm]);
@@ -57308,7 +57859,7 @@
                         if (match && match.pct != null) {
                             span.title = entry.label + ' • ' + rawName + ' • ' + _cmpFmtPct(match.pct);
                         }
-                        if (idxCell) row.insertBefore(span, idxCell);
+                        if (anchor) row.insertBefore(span, anchor);
                         else row.appendChild(span);
                     });
                 });
@@ -57318,9 +57869,29 @@
             //   1. Stamp per-row pct attributes so the picker can read them
             //   2. Refresh the popover picker options (in case it's open)
             //   3. Apply the picker to recompute Index cells
+            //   4. Update the header / insights sample-size + projection
+            //      stat cards so users can see how each data cut's
+            //      cohort compares to the primary profile at a glance.
             try { _cmpStampRowPcts(series); } catch (e) { console.warn('[compare] stamp pcts failed', e); }
             try { _refreshIndexSourcePickerOptions(); } catch (e) { console.warn('[compare] picker refresh failed', e); }
             try { _cmpApplyIndexSourcePicker(); } catch (e) { console.warn('[compare] index picker apply failed', e); }
+            try { applyComparisonRunsToHeaderStats(); } catch (e) { console.warn('[compare] header stats failed', e); }
+            } finally {
+                // Drain any mutation records that piled up during the
+                // apply so the observer doesn't fire AFTER we clear
+                // the flag and re-enter the loop. Defer the actual
+                // flag clear to the next frame so observers (which
+                // queue asynchronously) see the flag during drain.
+                requestAnimationFrame(() => {
+                    try {
+                        if (Array.isArray(_cmpTableObservers)) {
+                            _cmpTableObservers.forEach(o => { try { o.takeRecords(); } catch (_) {} });
+                        }
+                    } finally {
+                        _cmpApplyInProgress = false;
+                    }
+                });
+            }
         }
 
         async function showProfileDeltasModal(subject, sameSubjectRuns) {
@@ -63304,7 +63875,7 @@
                     });
                 });
                 if (isTalent) {
-                    const _tm = {'actor':['ACTOR'],'athlete':['ATHLETE'],'creator/influencer':['CREATOR/INFLUENCER'],'emerging talent':['EMERGING TALENT'],'host/personality':['HOST/PERSONALITY'],'influencer/creator':['INFLUENCER/CREATOR'],'mlb athlete':['MLB ATHLETE'],'musician/band':['MUSICIAN/BAND'],'nba athlete':['NBA ATHLETE'],'nfl athlete':['NFL ATHLETE'],'nhl athlete':['NHL ATHLETE'],'politics/activist':['POLITICS/ACTIVIST'],'soccer athlete':['SOCCER ATHLETE'],'wnba athlete':['WNBA ATHLETE'],'writer/director/author/artist':['WRITER/DIRECTOR/AUTHOR/ARTIST']};
+                    const _tm = {'actor':['ACTOR'],'athlete':['ATHLETE'],'comedian':['COMEDIAN'],'creator/influencer':['CREATOR/INFLUENCER'],'emerging talent':['EMERGING TALENT'],'host/personality':['HOST/PERSONALITY'],'influencer/creator':['INFLUENCER/CREATOR'],'mlb athlete':['MLB ATHLETE'],'musician/band':['MUSICIAN/BAND'],'nba athlete':['NBA ATHLETE'],'nfl athlete':['NFL ATHLETE'],'nhl athlete':['NHL ATHLETE'],'politics/activist':['POLITICS/ACTIVIST'],'soccer athlete':['SOCCER ATHLETE'],'wnba athlete':['WNBA ATHLETE'],'writer/director/author/artist':['WRITER/DIRECTOR/AUTHOR/ARTIST']};
                     const _live = _hasOrigCatItems(talentSliceOptions, o => _tm[o.toLowerCase()] || [o.toUpperCase()]);
                     talentSliceOptions.length = 0; talentSliceOptions.push('all', ..._live);
                 }
@@ -70989,6 +71560,18 @@
             document.getElementById('insightsProjectedUS').textContent = formatNumber(data.projectedUS || 0);
             document.getElementById('insightsDateRange').textContent = currentProfileData?.dateRange || data.dateRange || 'Not specified';
             document.getElementById('totalDataPoints').textContent = allItems.length.toLocaleString();
+
+            // If data cuts are active, layer their sample-size +
+            // projection sub-lines under the metric cards so the
+            // Insights tab matches the Demographics tab. Re-rendering
+            // insights wipes any prior injected blocks (the textContent
+            // assignments above don't remove siblings, but new ones may
+            // shadow), so always re-apply here.
+            try {
+                if (typeof applyComparisonRunsToHeaderStats === 'function') {
+                    applyComparisonRunsToHeaderStats();
+                }
+            } catch (_) {}
             
             // Demographic highlights - top over/under indexing demographics
             const demoHighlightsData = [];
@@ -76119,8 +76702,8 @@
             'GEN POP': ['GEN POP'],
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'WNBA'],
-            'TRENDS': ['TRENDS'],
-            'TALENT': ['ACTOR', 'ATHLETE', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
+            'TRENDS': ['TRENDS', 'SHOPPING INTENT'],
+            'TALENT': ['ACTOR', 'ATHLETE', 'COMEDIAN', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
             'SVOD ACQUISITION': ['SVOD ACQUISITION']  // SVOD files are always in their own master category
         };
         
