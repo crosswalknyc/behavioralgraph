@@ -6,6 +6,11 @@ an avid superfan and then should go row by row just like in the normal
 pipeline and decide what that avid fan would look like demographically,
 location based, interests, most purchased brands, etc row by row".
 
+Per Jenna 2026-06-12 directive: "automatically does an avid fan skin for
+all profiles pulled moving forward" — `BG.py` calls `synthesize_avid_fan`
+unconditionally at the tail of `run_full_pipeline` for any profile whose
+BRAND CATEGORY is not in `AVID_NON_APPLICABLE_CATEGORIES`.
+
 Differences from migration/super_fan_synthesis.py:
   - No N-touchpoints input. Cohort fraction is decided by Claude based
     on subject's audience structure (concentrated cult vs mass-reach).
@@ -16,7 +21,10 @@ Differences from migration/super_fan_synthesis.py:
     100% which is rule-mandated by Profile IQ Rule #3).
 
 Public API:
+    synthesize_avid_fan(source, *, source_kind='auto', dry_run=False,
+                         register_in_dashboard=True) -> dict
     synthesize_avid_fan_for_s3_key(s3_key, *, dry_run=False) -> dict
+        # back-compat alias
 
 Per-profile cost: ~10-30 Claude calls (1 audience + 1 per non-demo
 category capped at 25).
@@ -49,6 +57,37 @@ from super_fan_synthesis import (  # noqa: E402
 # --- module-level constants --------------------------------------------------
 BUCKET = "dashboard-inputs"
 REGION = "us-east-2"
+
+# Categories where "avid fan" is conceptually meaningless: the underlying
+# profile is itself an audience cohort or baseline (Gen Pop, banking
+# customers, shopping-intent / trend topics) rather than a subject-of-
+# fandom (talent / IP / team / brand). The BG.py post-pipeline hook and
+# the scripts/backfill_avid_fans_all.py orchestrator both gate on this
+# set. Keep tight — when in doubt, run the avid synthesis (e.g. brand
+# cohorts like "Nike" CAN have avid fans = heavy buyers).
+AVID_NON_APPLICABLE_CATEGORIES = frozenset({
+    "GEN POP",
+    "DIGITAL BANKING",     # e.g. "Chime Banking Customers" — already a cohort
+    "LOYALTY PROGRAMS",
+    "SHOPPING INTENT",
+    "TRENDS",
+    "VERTICAL SHORTS",
+    "VERTICAL SHORT",      # singular spelling defensive fallback
+})
+
+
+def should_synthesize_avid_for_category(brand_category) -> bool:
+    """Return True iff an avid-fan skin should be synthesized for a profile
+    whose BRAND CATEGORY is `brand_category`. UNCATEGORIZED is allowed
+    (the avid skin will inherit "UNCATEGORIZED" and a follow-up pass via
+    scripts/categorize_uncategorized_profiles.py will fix it).
+    """
+    if not brand_category:
+        return True
+    bc = str(brand_category).strip().upper()
+    if not bc or bc in ("NAN", "NONE", "UNKNOWN"):
+        return True
+    return bc not in AVID_NON_APPLICABLE_CATEGORIES
 
 
 def _fbp(v):
@@ -582,19 +621,69 @@ def enforce_no_collisions(df_avid, df_baseline, subject: str):
 
 
 # =============================================================================
+# Source loading (s3_key OR local_path) — mirrors super_fan_synthesis._load_source
+# =============================================================================
+def _load_source_df(source: str, source_kind: str = "auto"):
+    """Return (df, resolved_kind). source_kind='auto' picks 'local_path' when
+    `source` is an existing absolute/relative path, else 's3_key'."""
+    import pandas as pd
+    kind = source_kind
+    if kind == "auto":
+        kind = ("local_path" if (os.path.isabs(source) or source.startswith("./")
+                                  or os.path.exists(source))
+                else "s3_key")
+    if kind == "s3_key":
+        import boto3
+        s3 = boto3.client("s3", region_name=REGION)
+        body = s3.get_object(Bucket=BUCKET, Key=source)["Body"].read().decode(
+            "utf-8", "ignore",
+        )
+        df = pd.read_csv(io.StringIO(body), low_memory=False,
+                         on_bad_lines="skip")
+    else:
+        df = pd.read_csv(source, low_memory=False, on_bad_lines="skip")
+    return df, kind
+
+
+# =============================================================================
 # Orchestrator
 # =============================================================================
-def synthesize_avid_fan_for_s3_key(s3_key: str, *, dry_run: bool = False
-                                    ) -> dict:
+def synthesize_avid_fan(
+    source: str,
+    *,
+    source_kind: str = "auto",
+    dry_run: bool = False,
+    register_in_dashboard: bool = True,
+    source_s3_key: Optional[str] = None,
+) -> dict:
+    """End-to-end orchestrator. Loads `source` (an S3 key OR local CSV
+    path), runs Phase 1-4 synthesis, writes the avid fan CSV to S3, and
+    optionally registers it in the dashboard.
+
+    Args:
+      source: S3 key (e.g. "Mark_Rober_06_09_2026_05_43.csv") or a local
+        filesystem path.
+      source_kind: "auto" | "s3_key" | "local_path". "auto" detects via
+        os.path.exists / abs-path heuristic.
+      dry_run: if True, return the avid df without uploading or registering.
+      register_in_dashboard: if True (default), update s3_cache.json and
+        admin_quick_selects.json so the avid profile shows up in the
+        dropdown immediately. Set False when the caller will batch-
+        register many keys at once (e.g. backfill orchestrator) to
+        avoid s3_cache.json read-modify-write races.
+      source_s3_key: optional S3 key the local file came from. Only used
+        when source_kind='local_path' — passed to dashboard_register as
+        `source_key` so the avid entry inherits custom_image / imdb_id
+        from the parent OG cache row. Skip if synthesizing from a non-
+        S3 file.
+
+    Returns: dict with keys `out_key`, `status` ('uploaded'|'dry-run'),
+      `audience`, `stats`, `n_collisions_fixed`, `register_status`.
+    """
     import boto3
-    import pandas as pd
     s3 = boto3.client("s3", region_name=REGION)
 
-    body = s3.get_object(Bucket=BUCKET, Key=s3_key)["Body"].read().decode(
-        "utf-8", "ignore",
-    )
-    df_baseline = pd.read_csv(io.StringIO(body), low_memory=False,
-                              on_bad_lines="skip")
+    df_baseline, kind = _load_source_df(source, source_kind=source_kind)
     snap = build_source_snapshot(df_baseline)
     subject = snap["subject"]
     print(f"  subject={subject!r}  cats={snap['category_count']}  "
@@ -762,23 +851,29 @@ def synthesize_avid_fan_for_s3_key(s3_key: str, *, dry_run: bool = False
 
     # Register in dashboard (s3_cache.json + admin_quick_selects.json) so
     # the new avid profile shows up in the Select Profile dropdown.
+    # Caller can disable for batch backfills that defer registration to
+    # avoid s3_cache.json read-modify-write races between parallel workers.
     register_status = None
-    try:
+    if register_in_dashboard:
         try:
-            from migration.dashboard_register import register_profile_in_dashboard
-        except ImportError:
-            from dashboard_register import register_profile_in_dashboard
-        register_status = register_profile_in_dashboard(
-            out_key,
-            display_name=f"{subj_clean} - Avid Fan",
-            source_key=s3_key,
-            s3_client=s3,
-        )
-        print(f"  ✓ registered in dashboard "
-              f"(quick_select_added={register_status.get('quick_select_added')}, "
-              f"cache_added={register_status.get('cache_added')})")
-    except Exception as e:
-        print(f"  ⚠ dashboard register skipped for {out_key}: {e}")
+            try:
+                from migration.dashboard_register import register_profile_in_dashboard
+            except ImportError:
+                from dashboard_register import register_profile_in_dashboard
+            # Pass the parent S3 key (when known) so the avid entry can
+            # inherit custom_image / imdb_id from the OG cache row.
+            parent_key = source if kind == "s3_key" else source_s3_key
+            register_status = register_profile_in_dashboard(
+                out_key,
+                display_name=f"{subj_clean} - Avid Fan",
+                source_key=parent_key,
+                s3_client=s3,
+            )
+            print(f"  ✓ registered in dashboard "
+                  f"(quick_select_added={register_status.get('quick_select_added')}, "
+                  f"cache_added={register_status.get('cache_added')})")
+        except Exception as e:
+            print(f"  ⚠ dashboard register skipped for {out_key}: {e}")
 
     return {
         "out_key": out_key,
@@ -788,3 +883,18 @@ def synthesize_avid_fan_for_s3_key(s3_key: str, *, dry_run: bool = False
         "n_collisions_fixed": n_fixed,
         "register_status": register_status,
     }
+
+
+# Back-compat shim — original name kept so any existing callers continue
+# to work. Prefer `synthesize_avid_fan(...)` for new code; it accepts
+# either an S3 key or a local path via source_kind.
+def synthesize_avid_fan_for_s3_key(s3_key: str, *, dry_run: bool = False) -> dict:
+    return synthesize_avid_fan(s3_key, source_kind="s3_key", dry_run=dry_run)
+
+
+__all__ = [
+    "synthesize_avid_fan",
+    "synthesize_avid_fan_for_s3_key",
+    "AVID_NON_APPLICABLE_CATEGORIES",
+    "should_synthesize_avid_for_category",
+]
