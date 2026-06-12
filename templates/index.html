@@ -4568,48 +4568,34 @@
 
         /* Demographics "Table" chart-type view.
          *
-         * Each .chart-card holds a sibling pair inside .chart-container:
-         * the <canvas> for the chart view and a .demo-table-container
-         * for the table view. _renderDemoTablesForChartsInTableMode()
-         * toggles which one is visible based on chartTypePrefs[k].
+         * Each .chart-card holds two siblings: the .chart-container
+         * (with the <canvas>) for the chart view, and a sibling
+         * .demo-table-container for the table view. The swap helper
+         * toggles display on whichever ISN'T currently selected so
+         * they never compete for layout.
          *
          * Visual treatment intentionally REUSES the behavioral-card
          * classes (.behavioral-table / .behavioral-header-row /
          * .behavioral-item / .behavioral-rank / .behavioral-name /
          * .behavioral-pct / .behavioral-index) so the demographic
          * tables look identical to the behavioral category tables the
-         * user already knows. That also means the Casual Fan +
-         * Gen Pop hide rules (.cmp-hide-profile .profile-col /
-         * .cmp-hide-genpop .genpop-col) auto-apply in compare mode
-         * with no extra wiring.
-         *
-         * Positioning: the parent .chart-container uses
-         * display:flex + align-items:center to center charts. For
-         * tables we absolutely-position inside the same container so
-         * the table fills the chart's footprint top-down regardless
-         * of the centering rule. .chart-container already has
-         * position:relative.
+         * user already knows. The .profile-col / .genpop-col /
+         * .index-col classes inherit the .cmp-hide-profile /
+         * .cmp-hide-genpop hide rules so the Casual Fan + Gen Pop
+         * toggles in compare mode auto-apply.
          */
         .demo-table-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
             width: 100%;
-            height: 100%;
-            padding: 0.5rem 0.25rem;
+            padding: 0.25rem 0;
             box-sizing: border-box;
-            overflow-y: auto;
-            overflow-x: hidden;
             font-family: inherit;
         }
         .demo-table-container .behavioral-table {
             margin-top: 0;
-            width: 100%;
+            max-height: 360px;
         }
-        .demo-table-container .behavioral-list {
-            max-height: none;
+        .chart-card-occupation .demo-table-container .behavioral-table {
+            max-height: 600px;
         }
         .demo-table-empty {
             padding: 1rem;
@@ -16383,7 +16369,8 @@
                                         </span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="ageChart"></canvas><div class="demo-table-container" id="ageTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="ageChartContainer"><canvas id="ageChart"></canvas></div>
+                                <div class="demo-table-container" id="ageTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Gender">
                                 <h3>
@@ -16409,7 +16396,8 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Gender')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Gender')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Gender')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="genderChart"></canvas><div class="demo-table-container" id="genderTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="genderChartContainer"><canvas id="genderChart"></canvas></div>
+                                <div class="demo-table-container" id="genderTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Ethnicity">
                                 <h3>
@@ -16434,7 +16422,8 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Ethnicity')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Ethnicity')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Ethnicity')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="ethnicityChart"></canvas><div class="demo-table-container" id="ethnicityTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="ethnicityChartContainer"><canvas id="ethnicityChart"></canvas></div>
+                                <div class="demo-table-container" id="ethnicityTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Income">
                                 <h3>
@@ -16465,7 +16454,8 @@
                                         </span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="incomeChart"></canvas><div class="demo-table-container" id="incomeTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="incomeChartContainer"><canvas id="incomeChart"></canvas></div>
+                                <div class="demo-table-container" id="incomeTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Education">
                                 <h3>
@@ -16491,7 +16481,8 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Education')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Education')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Education')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="educationChart"></canvas><div class="demo-table-container" id="educationTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="educationChartContainer"><canvas id="educationChart"></canvas></div>
+                                <div class="demo-table-container" id="educationTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Relationship Status">
                                 <h3>
@@ -16517,7 +16508,8 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Relationship Status')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Relationship Status')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Relationship Status')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="relationshipChart"></canvas><div class="demo-table-container" id="relationshipTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="relationshipChartContainer"><canvas id="relationshipChart"></canvas></div>
+                                <div class="demo-table-container" id="relationshipTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Sexual Orientation">
                                 <h3>
@@ -16543,7 +16535,8 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Sexual Orientation')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Sexual Orientation')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Sexual Orientation')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="sexualOrientationChart"></canvas><div class="demo-table-container" id="sexualOrientationTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="sexualOrientationChartContainer"><canvas id="sexualOrientationChart"></canvas></div>
+                                <div class="demo-table-container" id="sexualOrientationTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card" data-module="Parental Status">
                                 <h3>
@@ -16569,7 +16562,8 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Parental Status')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Parental Status')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Parental Status')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="parentalStatusChart"></canvas><div class="demo-table-container" id="parentalStatusTableContainer" style="display:none;"></div></div>
+                                <div class="chart-container" id="parentalStatusChartContainer"><canvas id="parentalStatusChart"></canvas></div>
+                                <div class="demo-table-container" id="parentalStatusTableContainer" style="display:none;"></div>
                             </div>
                             <div class="chart-card chart-card-occupation" data-module="Occupation">
                                 <h3>
@@ -16595,10 +16589,10 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Occupation')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Occupation')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Occupation')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container occupation-chart-container">
+                                <div class="chart-container occupation-chart-container" id="occupationChartContainer">
                                     <canvas id="occupationChart"></canvas>
-                                    <div class="demo-table-container" id="occupationTableContainer" style="display:none; max-height:600px;"></div>
                                 </div>
+                                <div class="demo-table-container" id="occupationTableContainer" style="display:none; max-height:600px;"></div>
                                 <div id="occupationGpActualsTable" style="margin-top:0.75rem;"></div>
                             </div>
                         </div>
@@ -32489,7 +32483,7 @@
                         '<span class="behavioral-rank">' + item._rank + '</span>' +
                         '<div class="behavioral-name-wrapper"><span class="behavioral-name has-tooltip" data-tooltip="' + nm.replace(/"/g, '&quot;') + '">' + nm + '</span></div>' +
                         '<span class="behavioral-pct" style="color: var(--text-primary);">' + profileDisplay + '</span>' +
-                        '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">(' + genPopDisplay + ')</span>' +
+                        '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + genPopDisplay + '</span>' +
                         '<span class="behavioral-index index-col" style="color: ' + indexColor + '; font-weight: 700;">' + indexCell + '</span>' +
                         '</div>';
                 }).join('');
@@ -32628,7 +32622,7 @@
                         '<span class="behavioral-rank">' + item._rank + '</span>' +
                         '<div class="behavioral-name-wrapper"><span class="behavioral-name has-tooltip" data-tooltip="' + nm.replace(/"/g, '&quot;') + '">' + nm + '</span></div>' +
                         '<span class="behavioral-pct" style="color: var(--text-primary);">' + profileDisplay + '</span>' +
-                        '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">(' + genPopDisplay + ')</span>' +
+                        '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + genPopDisplay + '</span>' +
                         '<span class="behavioral-index index-col" style="color: ' + indexColor + '; font-weight: 700;">' + indexCell + '</span>' +
                         '</div>';
                 }).join('');
@@ -57851,7 +57845,14 @@
             // Each card has .behavioral-table > .behavioral-header-row +
             // .behavioral-list > .behavioral-item rows. The category name
             // sits on .behavioral-list[data-cat="..."].
-            const behavioralCards = document.querySelectorAll('.behavioral-table');
+            //
+            // Skip any table opted out via data-no-cmp-inject="1" — used
+            // by the Demographics tab's table-view variant (which reuses
+            // the behavioral-table classes for visual parity but holds
+            // demographic buckets, not brand rows, so the brand-name
+            // lookup below would always miss and leave empty cohort
+            // slots in the grid).
+            const behavioralCards = document.querySelectorAll('.behavioral-table:not([data-no-cmp-inject="1"])');
             // Pre-build behavioral lookups per run so we don't rescan
             // for every row.
             const behLookups = series.map(s => ({
@@ -61648,13 +61649,13 @@
             };
 
             DEMO_CHART_KEYS.forEach(k => {
-                const canvas = document.getElementById(k + 'Chart');
+                const chartC = document.getElementById(k + 'ChartContainer');
                 const tableC = document.getElementById(k + 'TableContainer');
-                if (!canvas || !tableC) return;
+                if (!chartC || !tableC) return;
                 const wantTable = chartTypePrefs[k] === 'table';
 
                 if (!wantTable) {
-                    canvas.style.display = '';
+                    chartC.style.display = '';
                     tableC.style.display = 'none';
                     return;
                 }
@@ -61666,8 +61667,8 @@
                     try { chart.destroy(); } catch (_) {}
                     if (typeof charts !== 'undefined') delete charts[k];
                 }
-                canvas.style.display = 'none';
-                tableC.style.display = '';
+                chartC.style.display = 'none';
+                tableC.style.display = 'block';
 
                 // Pull bucket data straight from the demographics maps.
                 const dataCat = k;
@@ -61719,13 +61720,13 @@
                         +     '<span class="behavioral-name has-tooltip" data-tooltip="' + safeLabel + '">' + safeLabel + '</span>'
                         +   '</div>'
                         +   '<span class="behavioral-pct profile-col" style="color: var(--text-primary);">' + profStr + '</span>'
-                        +   '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + (gpStr === 'N/A' ? '(N/A)' : '(' + gpStr + ')') + '</span>'
+                        +   '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + gpStr + '</span>'
                         +   '<span class="behavioral-index index-col ' + idxTier + '" style="' + (showIdx ? '' : 'color: var(--text-secondary);') + ' font-weight: 700;">' + idxStr + '</span>'
                         + '</div>';
                 }).join('');
 
                 tableC.innerHTML = ''
-                    + '<div class="behavioral-table">'
+                    + '<div class="behavioral-table" data-no-cmp-inject="1">'
                     +   '<div class="behavioral-header-row">'
                     +     '<span>#</span>'
                     +     '<span>Bucket</span>'
@@ -63100,7 +63101,7 @@
                 const genPopDisplay = isProjection
                     ? (genPopProjection === 0 || genPopProjection === null ? 'N/A' : formatNumber(Math.round(genPopProjection)))
                     : formatValueOrNA(genPopPct, true);
-                return (item.name || '') + ' · ' + profileDisplay + ' (' + genPopDisplay + ')' + (genPopDisplay === 'N/A' ? '' : ' · ' + formatIndex(item.index) + ' index');
+                return (item.name || '') + ' · ' + profileDisplay + ' · ' + genPopDisplay + (genPopDisplay === 'N/A' ? '' : ' · ' + formatIndex(item.index) + ' index');
             }
             
             // Enhanced header with search
@@ -64529,7 +64530,7 @@
                             <div class="behavioral-header-row">
                                 <span>#</span>
                                 <span>Item</span>
-                                <span class="profile-col">${dashDisplayMode === 'projection' ? 'US #' : 'Profile'}</span>
+                                <span class="profile-col">${dashDisplayMode === 'projection' ? 'US #' : 'Casual Fan'}</span>
                                 <span class="genpop-col">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
                                 <span class="index-col">Index</span>
                             </div>
@@ -65046,7 +65047,7 @@
                             <span class="behavioral-name has-tooltip" data-tooltip="${(item.name || '').replace(/"/g, '&quot;')}">${(item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
                         </div>
                         <span class="behavioral-pct profile-col" style="color: var(--text-primary);">${profileDisplay}</span>
-                        <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">${hasGenPopMatch ? '(' + genPopDisplay + ')' : '(N/A)'}</span>
+                        <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">${hasGenPopMatch ? genPopDisplay : 'N/A'}</span>
                         <span class="behavioral-index index-col ${indexTier}" style="${showIndex ? '' : 'color: var(--text-secondary);'} font-weight: 700;">${showIndex ? formatIndex(index) : 'N/A'}</span>
                     </div>
                 `;
