@@ -54775,6 +54775,9 @@
             if (key.includes('gen_pop') || key.includes('genpop') || name.includes('GEN POP')) {
                 return false;
             }
+            if (/\bmichael\b.*\bmovie\b/i.test(name) || /\bpower\s*ballad\b.*\bmovie\b/i.test(name)) {
+                return false;
+            }
             const n = Number(sampleSize);
             return n > 0 && n < PROFILE_IQ_MINI_SAMPLE_THRESHOLD;
         }
