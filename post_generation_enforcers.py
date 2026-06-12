@@ -4842,7 +4842,7 @@ def reverse_propagate_subcat_to_mpb(df, subject, verbose=True):
 # in BOTH TALENT and a sub-cat — but at very different magnitudes (e.g.
 # Pedro Pascal TALENT 72.94% but ACTOR could be at floor for some profiles).
 #
-# This enforcer finds the MAX BP across (TALENT, ACTOR, ATHLETE,
+# This enforcer finds the MAX BP across (TALENT, ACTOR, ATHLETE, COMEDIAN,
 # MUSICIAN/BAND, HOST/PERSONALITY, POLITICS/ACTIVIST, PODCAST, NFL ATHLETE,
 # NBA ATHLETE, MLB ATHLETE, NHL ATHLETE, SOCCER) for each name and aligns
 # every row of that name (in those cats) to MAX ± per-row deterministic
@@ -4850,7 +4850,7 @@ def reverse_propagate_subcat_to_mpb(df, subject, verbose=True):
 # ---------------------------------------------------------------------------
 
 _TALENT_FAMILY = {
-    'TALENT', 'ACTOR', 'ATHLETE', 'MUSICIAN/BAND', 'MUSICIAN',
+    'TALENT', 'ACTOR', 'ATHLETE', 'COMEDIAN', 'MUSICIAN/BAND', 'MUSICIAN',
     'HOST/PERSONALITY', 'POLITICS/ACTIVIST', 'POLITICS', 'PODCAST',
     'NFL ATHLETE', 'NBA ATHLETE', 'MLB ATHLETE', 'NHL ATHLETE', 'SOCCER',
     'WRITER/DIRECTOR/AUTHOR/ARTIST',
@@ -5221,7 +5221,7 @@ def enforce_search_engine_ai_cohort_ceiling(df, subject, verbose=True):
 # ============================================================================
 
 _TALENT_FAMILY_FOR_TIER = frozenset({
-    'TALENT', 'ACTOR', 'ATHLETE', 'MUSICIAN/BAND', 'MUSICIAN',
+    'TALENT', 'ACTOR', 'ATHLETE', 'COMEDIAN', 'MUSICIAN/BAND', 'MUSICIAN',
     'HOST/PERSONALITY', 'POLITICS/ACTIVIST', 'POLITICS', 'PODCAST',
     'NFL ATHLETE', 'NBA ATHLETE', 'MLB ATHLETE', 'NHL ATHLETE', 'SOCCER',
     'WRITER/DIRECTOR/AUTHOR/ARTIST', 'CREATOR/INFLUENCER',
