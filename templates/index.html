@@ -56206,6 +56206,15 @@
         // into a parseAllData()-shaped object so the rest of the
         // comparison pipeline can treat it identically to a real run.
         function _buildCategoryNormParsed(normPayload) {
+            // Project the norm's sample to US population using the same
+            // canonical Rule #3a math the dashboard uses for every other
+            // cell: Proj = Raw / 10M * 329.9M. Without this the US-side
+            // norm row in the Crosswalk Respondents card would render
+            // "0", which is what the user was seeing pre-2026-06-12.
+            const _totalSample = (normPayload && normPayload.total_sample) || 0;
+            const _normProj = _totalSample > 0
+                ? Math.round(_totalSample / 10000000 * 329900000)
+                : 0;
             const parsed = {
                 demographics: {},
                 demographicsIndex: {},
@@ -56214,8 +56223,9 @@
                 behavioral: {},
                 interests: {},
                 locations: [],
-                sampleSize: (normPayload && normPayload.total_sample) || 0,
-                projectedUS: 0,
+                sampleSize: _totalSample,
+                cohortRaw: _totalSample,
+                projectedUS: _normProj,
                 brandCategory: (normPayload && normPayload.category) || ''
             };
             if (!normPayload) return parsed;
@@ -57501,25 +57511,41 @@
 
             // For "sample size per cut" we want each cohort's actual
             // panel respondent count, NOT the upstream panel size.
-            // Resolution order:
-            //   1. parsed.cohortRaw — pulled from BRAND INPUT row's
-            //      Raw / Original Raw Numbers cell. Per-cohort, varies
-            //      between cuts of the same upstream panel.
-            //   2. parsed.sampleSize — panel-level SAMPLE SIZE row.
-            //      Sticky across cuts derived from the same parent, so
-            //      only useful as a fallback when the cut CSV didn't
-            //      populate BRAND INPUT Raw.
-            //   3. derived: projectedUS / 329.9M * 10M (canonical math).
-            //      Last-resort when the CSV has projectedUS but neither
-            //      cohortRaw nor sampleSize.
+            //
+            // Reality on the ground (2026-06-12): cohort CSVs (avid /
+            // casual fan, "netflix only", etc.) have TWO candidate
+            // cells, and they disagree in a predictable way:
+            //
+            //   - SAMPLE SIZE row's Raw cell  -> the cohort's actual
+            //     respondent count (e.g. 9,572 for Kit Harington avid).
+            //     This is set by the cohort generator on every cut file.
+            //
+            //   - BRAND INPUT row's Raw cell  -> SHOULD be the cohort
+            //     size too, but the avid generator was skipping this
+            //     row, so older files have the parent panel size here
+            //     (e.g. 36,257). Only the 5 files patched by
+            //     scripts/fix_avid_brand_input_sample.py have the
+            //     correct cohort number on BRAND INPUT.
+            //
+            // For non-cohort CSVs both cells equal the panel size, so
+            // they agree.
+            //
+            // Taking the MIN of the two when both are present gives the
+            // right answer in every case:
+            //   - backfilled avid       : min(9572,  9572)  = 9572   OK
+            //   - non-backfilled avid   : min(36257, 9572)  = 9572   OK
+            //   - regular (non-cohort)  : min(36257, 36257) = 36257  OK
+            //
+            // Fallback chain when one or both are missing keeps the
+            // old behavior (sampleSize -> cohortRaw -> derive from
+            // projectedUS via canonical Rule #3a math).
             const _cutSampleSize = (parsed) => {
                 if (!parsed) return 0;
-                if (typeof parsed.cohortRaw === 'number' && isFinite(parsed.cohortRaw) && parsed.cohortRaw > 0) {
-                    return parsed.cohortRaw;
-                }
-                if (typeof parsed.sampleSize === 'number' && isFinite(parsed.sampleSize) && parsed.sampleSize > 0) {
-                    return parsed.sampleSize;
-                }
+                const a = (typeof parsed.cohortRaw === 'number' && isFinite(parsed.cohortRaw) && parsed.cohortRaw > 0) ? parsed.cohortRaw : 0;
+                const b = (typeof parsed.sampleSize === 'number' && isFinite(parsed.sampleSize) && parsed.sampleSize > 0) ? parsed.sampleSize : 0;
+                if (a > 0 && b > 0) return Math.min(a, b);
+                if (b > 0) return b;
+                if (a > 0) return a;
                 if (typeof parsed.projectedUS === 'number' && isFinite(parsed.projectedUS) && parsed.projectedUS > 0) {
                     return Math.round(parsed.projectedUS / 329900000 * 10000000);
                 }
