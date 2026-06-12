@@ -4567,76 +4567,50 @@
         }
 
         /* Demographics "Table" chart-type view.
-         * Each .chart-card contains a sibling pair: <canvas> for the
-         * chart view and .demo-table-container for the table view.
-         * _renderDemoTablesForChartsInTableMode() toggles display:none
-         * on whichever one isn't currently selected.
          *
-         * Column layout mirrors the behavioral cards header for visual
-         * continuity (rank | label | profile | gen pop | index), so the
-         * .profile-col / .genpop-col / .index-col classes pick up the
-         * existing .cmp-hide-profile and .cmp-hide-genpop hide rules
-         * once compare-mode injection is wired into demo tables too.
+         * Each .chart-card holds a sibling pair inside .chart-container:
+         * the <canvas> for the chart view and a .demo-table-container
+         * for the table view. _renderDemoTablesForChartsInTableMode()
+         * toggles which one is visible based on chartTypePrefs[k].
+         *
+         * Visual treatment intentionally REUSES the behavioral-card
+         * classes (.behavioral-table / .behavioral-header-row /
+         * .behavioral-item / .behavioral-rank / .behavioral-name /
+         * .behavioral-pct / .behavioral-index) so the demographic
+         * tables look identical to the behavioral category tables the
+         * user already knows. That also means the Casual Fan +
+         * Gen Pop hide rules (.cmp-hide-profile .profile-col /
+         * .cmp-hide-genpop .genpop-col) auto-apply in compare mode
+         * with no extra wiring.
+         *
+         * Positioning: the parent .chart-container uses
+         * display:flex + align-items:center to center charts. For
+         * tables we absolutely-position inside the same container so
+         * the table fills the chart's footprint top-down regardless
+         * of the centering rule. .chart-container already has
+         * position:relative.
          */
         .demo-table-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             width: 100%;
             height: 100%;
-            max-height: 360px;
+            padding: 0.5rem 0.25rem;
+            box-sizing: border-box;
             overflow-y: auto;
             overflow-x: hidden;
-            padding: 0.25rem 0;
-            box-sizing: border-box;
             font-family: inherit;
         }
-        .demo-table-row {
-            display: grid;
-            grid-template-columns: 30px minmax(0, 1fr) 70px 70px 60px;
-            column-gap: 0.4rem;
-            align-items: center;
-            padding: 0.35rem 0.55rem;
-            border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
-            font-size: 0.78rem;
-            line-height: 1.25;
-            color: var(--text-primary, #e6e6e6);
+        .demo-table-container .behavioral-table {
+            margin-top: 0;
+            width: 100%;
         }
-        .demo-table-row .profile-col,
-        .demo-table-row .genpop-col,
-        .demo-table-row .index-col {
-            text-align: right;
-            font-variant-numeric: tabular-nums;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        .demo-table-container .behavioral-list {
+            max-height: none;
         }
-        .demo-table-row .genpop-col { color: var(--text-secondary, #9ca3af); }
-        .demo-table-row .index-col { font-weight: 700; }
-        .demo-table-row.demo-table-header {
-            position: sticky;
-            top: 0;
-            background: var(--bg-secondary, #1f2330);
-            z-index: 1;
-            font-size: 0.65rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: var(--text-secondary, #9ca3af);
-            border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.12));
-        }
-        .demo-table-row .demo-table-rank {
-            color: var(--text-secondary, #9ca3af);
-            font-size: 0.7rem;
-            font-variant-numeric: tabular-nums;
-        }
-        .demo-table-row .demo-table-label {
-            color: var(--text-primary, #e6e6e6);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            min-width: 0;
-        }
-        .demo-table-row .index-col.demo-idx-over  { color: var(--accent-green, #10b981); }
-        .demo-table-row .index-col.demo-idx-under { color: var(--accent-red, #ef4444); }
-        .demo-table-row .index-col.demo-idx-neutral { color: var(--text-secondary, #9ca3af); }
         .demo-table-empty {
             padding: 1rem;
             text-align: center;
@@ -61612,70 +61586,71 @@
         // Demographics "Table" view swap.
         //
         // renderCharts builds a Chart.js instance for every demographic
-        // chart regardless of the user's chosen visual. After all 9 charts
-        // are built we walk through them: any chart whose user-selected
-        // type is 'table' gets its data extracted, the Chart.js instance
-        // destroyed, the canvas hidden, and a flat HTML table rendered
-        // into the sibling <div id="${k}TableContainer"> instead.
+        // chart regardless of the user's chosen visual. After all 9 are
+        // built we walk them: any chart whose user-selected type is
+        // 'table' gets its Chart.js instance destroyed, the canvas
+        // hidden, and a behavioral-card-styled HTML table rendered
+        // into the sibling .demo-table-container instead.
         //
-        // The opposite path (table -> bar/doughnut/etc.) just hides the
-        // table container and shows the canvas — the Chart.js instance
-        // built earlier in renderCharts is already correct.
+        // Data source: lastRenderedDemographics / Index / Projection /
+        // GenPop (the same objects renderCharts itself reads from).
+        // This keeps the table independent of whether each chart block
+        // happens to set _origKeys / _origGenPop / _demoCategory on its
+        // Chart.js instance — only Age did, which is why the earlier
+        // implementation showed empty tables for the other 8 charts.
         //
-        // Data plumbed through chart._origKeys / chart._origGenPop /
-        // chart._demoCategory matches the same per-chart annotations the
-        // existing compare-mode injector relies on, so the table can
-        // recover labels + gp pcts + index values without re-querying
-        // the underlying parseAllData output.
+        // Markup: reuse .behavioral-table / .behavioral-header-row /
+        // .behavioral-item / .behavioral-rank / .behavioral-name /
+        // .behavioral-pct / .behavioral-index so the demographic
+        // tables look identical to the behavioral category tables the
+        // user already knows. The .profile-col / .genpop-col / .index-col
+        // classes carry over for free, so the Casual Fan + Gen Pop
+        // hide rules set by applyComparisonRunsToCategoryTables apply
+        // automatically in compare mode.
         //
-        // Format follows dashDisplayMode: projection mode shows US #
-        // (already in chart.data.datasets[0].data) plus a derived GP
-        // projection (gp_pct/100 * US_POP); percent mode shows raw
-        // pcts. Index always comes from lastRenderedDemographicsIndex.
-        //
-        // Casual Fan / Gen Pop toggle hide rules pick this up for free
-        // because each value cell carries .profile-col / .genpop-col,
-        // matching the CSS rule in applyComparisonRunsToCategoryTables.
+        // Values follow dashDisplayMode: projection mode shows US #
+        // (derived from demographicsProjection / gp_pct * US_POP);
+        // percent mode shows raw pcts. Header labels flip accordingly.
         // -----------------------------------------------------------------
         const DEMO_CHART_KEYS = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexualOrientation', 'parentalStatus', 'occupation'];
 
-        function _demoTableFmtPct(v) {
-            const n = Number(v);
-            if (!isFinite(n) || n === 0) return n === 0 ? '0.00%' : '—';
-            if (typeof formatPct === 'function') return formatPct(n);
-            return n.toFixed(2) + '%';
-        }
-        function _demoTableFmtNum(v) {
-            const n = Number(v);
-            if (!isFinite(n) || n <= 0) return '—';
-            if (typeof formatNumber === 'function') return formatNumber(Math.round(n));
-            return Math.round(n).toLocaleString();
-        }
-        function _demoTableIdxClass(idx) {
-            const n = Number(idx);
-            if (!isFinite(n) || n <= 0) return 'demo-idx-neutral';
-            if (n > 110) return 'demo-idx-over';
-            if (n < 90)  return 'demo-idx-under';
-            return 'demo-idx-neutral';
-        }
-        function _demoTableIdxStr(idx) {
-            const n = Number(idx);
-            if (!isFinite(n) || n <= 0) return '—';
-            return Math.round(n).toString();
-        }
+        // Preferred display order for age buckets — matches the pipeline
+        // schema (PIPELINE_DEMO_SCHEMA in post_generation_enforcers.py).
+        const _DEMO_AGE_ORDER = ['17 and Under', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older'];
 
         function _renderDemoTablesForChartsInTableMode() {
             const isProjection = (typeof dashDisplayMode !== 'undefined') && dashDisplayMode === 'projection';
+            const US_POP = 329900000;
             const profileColLabel = isProjection ? 'US #' : 'Profile';
-            const gpColLabel      = isProjection ? 'GP US #' : 'Gen Pop';
-            const idxLookupAll = lastRenderedDemographicsIndex || {};
+            const gpColLabel      = isProjection ? 'GP #' : 'Gen Pop';
+            const demoData    = lastRenderedDemographics || {};
+            const demoIdxAll  = lastRenderedDemographicsIndex || {};
+            const demoProjAll = lastRenderedDemographicsProjection || {};
+            const demoGPAll   = lastRenderedDemographicsGenPop || {};
+
+            const _fmtPct = (v) => {
+                const n = Number(v);
+                if (!isFinite(n) || n < 0.01) return 'N/A';
+                return n.toFixed(2) + '%';
+            };
+            const _fmtNum = (v) => {
+                const n = Number(v);
+                if (!isFinite(n) || n <= 0) return 'N/A';
+                if (typeof formatNumber === 'function') return formatNumber(Math.round(n));
+                return Math.round(n).toLocaleString();
+            };
+            const _safeEscape = (s) => {
+                if (s == null) return '';
+                if (typeof escapeAttr === 'function') return escapeAttr(String(s));
+                return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            };
 
             DEMO_CHART_KEYS.forEach(k => {
                 const canvas = document.getElementById(k + 'Chart');
                 const tableC = document.getElementById(k + 'TableContainer');
                 if (!canvas || !tableC) return;
                 const wantTable = chartTypePrefs[k] === 'table';
-                const chart = (typeof charts !== 'undefined') ? charts[k] : null;
 
                 if (!wantTable) {
                     canvas.style.display = '';
@@ -61683,64 +61658,84 @@
                     return;
                 }
 
-                // Want table — extract from the just-built chart, destroy,
-                // swap visibility.
-                if (!chart || !chart.data) {
-                    // Chart didn't build (e.g. empty data) — show a stub.
-                    canvas.style.display = 'none';
-                    tableC.style.display = '';
+                // Destroy the Chart.js instance for this card if one
+                // was just built — we'll render the table instead.
+                const chart = (typeof charts !== 'undefined') ? charts[k] : null;
+                if (chart && typeof chart.destroy === 'function') {
+                    try { chart.destroy(); } catch (_) {}
+                    if (typeof charts !== 'undefined') delete charts[k];
+                }
+                canvas.style.display = 'none';
+                tableC.style.display = '';
+
+                // Pull bucket data straight from the demographics maps.
+                const dataCat = k;
+                const buckets    = demoData[dataCat] || {};
+                const idxLookup  = demoIdxAll[dataCat] || {};
+                const projLookup = demoProjAll[dataCat] || {};
+                const gpLookup   = demoGPAll[dataCat] || {};
+                const bucketKeys = Object.keys(buckets);
+                if (bucketKeys.length === 0) {
                     tableC.innerHTML = '<div class="demo-table-empty">No data available.</div>';
                     return;
                 }
-                const labels    = (chart.data.labels) || [];
-                const origKeys  = chart._origKeys || labels;
-                const origGP    = chart._origGenPop || [];
-                const dataCat   = chart._demoCategory || k;
-                const dataset0  = (chart.data.datasets && chart.data.datasets[0]) || { data: [] };
-                const profVals  = dataset0.data || [];
-                const idxLookup = idxLookupAll[dataCat] || {};
 
-                const rowsHtml = labels.map((lbl, i) => {
-                    const ok      = origKeys[i];
-                    const profRaw = Number(profVals[i]) || 0;
-                    const gpPct   = Number(origGP[i]) || 0;
-                    const idx     = Number(idxLookup[ok]) || 0;
-                    // In projection mode profVals is already a count.
-                    // In pct mode profVals is a pct.
-                    const profStr = isProjection
-                        ? _demoTableFmtNum(profRaw)
-                        : _demoTableFmtPct(profRaw);
-                    const gpStr = isProjection
-                        ? (gpPct > 0 ? _demoTableFmtNum(gpPct / 100 * 329900000) : '—')
-                        : (gpPct > 0 ? _demoTableFmtPct(gpPct) : '—');
+                // Sort order: age uses the canonical age sequence; all
+                // others rank by profile pct desc.
+                let sortedKeys;
+                if (dataCat === 'age') {
+                    const displayFn = (typeof getAgeDisplayLabel === 'function') ? getAgeDisplayLabel : (x => x);
+                    sortedKeys = [...bucketKeys].sort((a, b) => {
+                        const ai = _DEMO_AGE_ORDER.indexOf(displayFn(a));
+                        const bi = _DEMO_AGE_ORDER.indexOf(displayFn(b));
+                        if (ai !== -1 && bi !== -1) return ai - bi;
+                        if (ai !== -1) return -1;
+                        if (bi !== -1) return 1;
+                        return (Number(buckets[b]) || 0) - (Number(buckets[a]) || 0);
+                    });
+                } else {
+                    sortedKeys = [...bucketKeys].sort((a, b) => (Number(buckets[b]) || 0) - (Number(buckets[a]) || 0));
+                }
+
+                const rowsHtml = sortedKeys.map((key, i) => {
+                    const profPct = Number(buckets[key]) || 0;
+                    const profProj = Number(projLookup[key]) || (profPct > 0 ? Math.round(profPct / 100 * US_POP) : 0);
+                    const gpPct  = Number(gpLookup[key]) || 0;
+                    const gpProj = gpPct > 0 ? Math.round(gpPct / 100 * US_POP) : 0;
+                    const idx    = Number(idxLookup[key]) || 0;
+                    const displayLabel = (dataCat === 'age' && typeof getAgeDisplayLabel === 'function')
+                        ? getAgeDisplayLabel(key) : key;
+                    const profStr = isProjection ? _fmtNum(profProj) : _fmtPct(profPct);
+                    const gpStr   = isProjection ? _fmtNum(gpProj)   : _fmtPct(gpPct);
+                    const showIdx = idx > 0 && gpStr !== 'N/A';
+                    const idxTier = !showIdx ? '' : (idx >= 100 ? 'index-over' : 'index-under');
+                    const idxStr  = showIdx ? Math.round(idx) : 'N/A';
+                    const safeLabel = _safeEscape(displayLabel);
                     return ''
-                        + '<div class="demo-table-row" data-bucket="' + escapeAttr(String(ok)) + '">'
-                        + '<span class="demo-table-rank">' + (i + 1) + '</span>'
-                        + '<span class="demo-table-label" title="' + escapeAttr(String(lbl)) + '">' + escapeAttr(String(lbl)) + '</span>'
-                        + '<span class="profile-col">' + profStr + '</span>'
-                        + '<span class="genpop-col">' + gpStr + '</span>'
-                        + '<span class="index-col ' + _demoTableIdxClass(idx) + '">' + _demoTableIdxStr(idx) + '</span>'
+                        + '<div class="behavioral-item">'
+                        +   '<span class="behavioral-rank">' + (i + 1) + '</span>'
+                        +   '<div class="behavioral-name-wrapper">'
+                        +     '<span class="behavioral-name has-tooltip" data-tooltip="' + safeLabel + '">' + safeLabel + '</span>'
+                        +   '</div>'
+                        +   '<span class="behavioral-pct profile-col" style="color: var(--text-primary);">' + profStr + '</span>'
+                        +   '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + (gpStr === 'N/A' ? '(N/A)' : '(' + gpStr + ')') + '</span>'
+                        +   '<span class="behavioral-index index-col ' + idxTier + '" style="' + (showIdx ? '' : 'color: var(--text-secondary);') + ' font-weight: 700;">' + idxStr + '</span>'
                         + '</div>';
                 }).join('');
 
                 tableC.innerHTML = ''
-                    + '<div class="demo-table-row demo-table-header">'
-                    + '<span>#</span>'
-                    + '<span>Bucket</span>'
-                    + '<span class="profile-col">' + profileColLabel + '</span>'
-                    + '<span class="genpop-col">' + gpColLabel + '</span>'
-                    + '<span class="index-col">Index</span>'
-                    + '</div>'
-                    + '<div class="demo-table-body" data-cat="' + escapeAttr(String(dataCat)) + '">'
-                    + (rowsHtml || '<div class="demo-table-empty">No data available.</div>')
+                    + '<div class="behavioral-table">'
+                    +   '<div class="behavioral-header-row">'
+                    +     '<span>#</span>'
+                    +     '<span>Bucket</span>'
+                    +     '<span class="profile-col">' + profileColLabel + '</span>'
+                    +     '<span class="genpop-col">' + gpColLabel + '</span>'
+                    +     '<span class="index-col">Index</span>'
+                    +   '</div>'
+                    +   '<div class="behavioral-list" data-cat="' + _safeEscape(dataCat) + '">'
+                    +     rowsHtml
+                    +   '</div>'
                     + '</div>';
-
-                // Destroy the chart and hide the canvas so the table
-                // owns the visible area cleanly.
-                try { chart.destroy(); } catch (_) {}
-                if (typeof charts !== 'undefined') delete charts[k];
-                canvas.style.display = 'none';
-                tableC.style.display = '';
             });
         }
         
