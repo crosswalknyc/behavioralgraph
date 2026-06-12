@@ -56207,15 +56207,30 @@
         // into a parseAllData()-shaped object so the rest of the
         // comparison pipeline can treat it identically to a real run.
         function _buildCategoryNormParsed(normPayload) {
-            // Project the norm's sample to US population using the same
-            // canonical Rule #3a math the dashboard uses for every other
-            // cell: Proj = Raw / 10M * 329.9M. Without this the US-side
-            // norm row in the Crosswalk Respondents card would render
-            // "0", which is what the user was seeing pre-2026-06-12.
+            // US-projection number shown on the Norm row in the
+            // Crosswalk Respondents / US card.
+            //
+            // The backend ships a SAMPLE-WEIGHTED AVERAGE of each
+            // source profile's US Gen Pop Projection (see
+            // CategoryAccumulator.proj_weighted_sum in
+            // migration/compute_category_norms.py). That gives a
+            // number comparable in magnitude to a single profile's
+            // projection — usually a few hundred thousand to a few
+            // tens of millions — instead of the raw sum across
+            // hundreds of profiles, which would balloon past US
+            // population for any reasonable category.
+            //
+            // Older norms payloads (computed before the field was
+            // added) don't carry `weighted_avg_projection`. For
+            // those we fall back to the canonical Rule #3a math
+            // applied to the total sample so the row at least
+            // renders something — but it'll be the inflated number
+            // until the admin reruns "Reset Category Norms".
             const _totalSample = (normPayload && normPayload.total_sample) || 0;
-            const _normProj = _totalSample > 0
-                ? Math.round(_totalSample / 10000000 * 329900000)
-                : 0;
+            const _backendProj = (normPayload && Number(normPayload.weighted_avg_projection)) || 0;
+            const _normProj = _backendProj > 0
+                ? _backendProj
+                : (_totalSample > 0 ? Math.round(_totalSample / 10000000 * 329900000) : 0);
             const parsed = {
                 demographics: {},
                 demographicsIndex: {},
