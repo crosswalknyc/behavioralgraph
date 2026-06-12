@@ -35211,6 +35211,12 @@
                 || (fullRun || {}).site_funnel
             );
 
+            // Fandango only: hide "How to read this chart" above the KPI strip
+            if ((meta.target || '').toLowerCase().indexOf('fandango') >= 0) {
+                var _howto = document.getElementById('jiqKpiStripHowto');
+                if (_howto) _howto.style.display = 'none';
+            }
+
             // ---- Path to Purchase panel (BSFS-style ribbon) ----
             // For Fandango: hide only the stacked bar ribbon, keep pill journeys
             if ((meta.target || '').toLowerCase().indexOf('fandango') < 0) {
