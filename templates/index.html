@@ -37781,10 +37781,10 @@
 
             // ── Compact SVG canvas ───────────────────────────────────
             var W    = 1200;
-            var padT = 60, padB = 70, padL = 44, padR = 72;
-            var H    = 700;
-            var axisY = Math.round(H * 0.50);
-            var LANE_STEP = 120;
+            var padT = 48, padB = 60, padL = 44, padR = 72;
+            var H    = 600;
+            var axisY = Math.round(H * 0.51);
+            var LANE_STEP = 90;
             var MAX_LANES = 4;
             var MAX_LANE_LAYERS = 2;
 
@@ -37813,7 +37813,7 @@
 
             // ── Bubble sizing ────────────────────────────────────────
             rows.forEach(function(e) {
-                e.r  = Math.max(39, Math.min(78, 39 + (e.pct / maxPct) * 39));
+                e.r  = Math.max(26, Math.min(52, 26 + (e.pct / maxPct) * 26));
                 e.cx = xFor(e.center);
                 e.blockW = Math.max(
                     _jiqCompanionLabelWidth(_truncLabel(e.vertical)),
@@ -37970,7 +37970,7 @@
                 ? 'Bubble size = share of viewers · bubbles are evenly spaced (no time scale — all behaviors happen during the same window) · sorted by share, biggest on the left · hover for timing + top sites'
                 : 'Bubble size = share of visitors · horizontal position = typical time relative to ' + anchorWord + ' · hover for timing window + top sites';
             return '<div style="overflow-x:auto;padding:2px 0;">'
-                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;max-height:700px;min-width:820px;">'
+                 + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;max-height:600px;min-width:820px;">'
                  + parts.join('')
                  + '</svg>'
                  + '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:4px;text-align:center;">' + footerSub + '</div>'
