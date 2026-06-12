@@ -20962,7 +20962,7 @@
 
                     <!-- View 2: Spider/network SVG -->
                     <div id="jiqSpiderWrap" style="display: none;">
-                        <svg id="jiqSpiderSvg" viewBox="0 0 1100 460" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: auto; max-height: 460px;"></svg>
+                        <svg id="jiqSpiderSvg" viewBox="0 0 1100 600" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: auto; max-height: 600px;"></svg>
                     </div>
 
                     <!-- View 3: Events flat list -->
@@ -38076,17 +38076,17 @@
         function _jiqRenderSpiderSvg(spider) {
             // Layout (flipped): Leaves at top -> Channels -> TARGET at bottom.
             var chs = (spider.channels || []).slice(0, 8);
-            var W = 1100, H = 460;
+            var W = 1100, H = 600;
             var cx = W / 2;
-            var chY   = 220;
-            var tgtY  = 410;
+            var chY   = 280;
+            var tgtY  = 500;
 
             var parts = [];
             parts.push('<rect width="' + W + '" height="' + H + '" fill="transparent"/>');
 
             // TARGET node at bottom — larger circle so name fits
-            parts.push('<g><circle cx="' + cx + '" cy="' + tgtY + '" r="44" fill="#111" stroke="var(--accent-primary)" stroke-width="3"/>'
-                + '<text x="' + cx + '" y="' + (tgtY + 6) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="15">' + _jiqEsc((spider.target || 'Target').slice(0, 14)) + '</text></g>');
+            parts.push('<g><circle cx="' + cx + '" cy="' + tgtY + '" r="88" fill="#111" stroke="var(--accent-primary)" stroke-width="3"/>'
+                + '<text x="' + cx + '" y="' + (tgtY + 6) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="22">' + _jiqEsc((spider.target || 'Target').slice(0, 14)) + '</text></g>');
 
             // Channels along a horizontal line
             var nCh = chs.length || 1;
@@ -38095,11 +38095,11 @@
                 var x = 60 + chSpacing * (i + 0.5);
                 var color = _jiqChannelColor(ch.channel);
                 // channel -> target edge (downward)
-                parts.push('<line x1="' + x + '" y1="' + (chY + 22) + '" x2="' + cx + '" y2="' + (tgtY - 44) + '" stroke="' + color + '" stroke-width="' + Math.max(1, Math.min(6, ch.reach_pct_of_genpop / 4)) + '" opacity="0.5"/>');
-                var r = Math.max(18, Math.min(36, 18 + ch.reach_pct_of_genpop * 0.8));
+                var r = Math.max(36, Math.min(72, 36 + ch.reach_pct_of_genpop * 1.6));
+                parts.push('<line x1="' + x + '" y1="' + (chY + r) + '" x2="' + cx + '" y2="' + (tgtY - 88) + '" stroke="' + color + '" stroke-width="' + Math.max(1, Math.min(6, ch.reach_pct_of_genpop / 4)) + '" opacity="0.5"/>');
                 parts.push('<g><circle cx="' + x + '" cy="' + chY + '" r="' + r + '" fill="' + color + '" opacity="0.85"/>'
-                    + '<text x="' + x + '" y="' + (chY + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(10, r/2.4) + '">' + ch.reach_pct_of_genpop + '%</text>'
-                    + '<text x="' + x + '" y="' + (chY + r + 12) + '" text-anchor="middle" fill="var(--text-primary)" font-size="10">' + _jiqEsc(ch.label) + '</text></g>');
+                    + '<text x="' + x + '" y="' + (chY + 5) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + Math.max(13, r/2.4) + '">' + ch.reach_pct_of_genpop + '%</text>'
+                    + '<text x="' + x + '" y="' + (chY + r + 16) + '" text-anchor="middle" fill="var(--text-primary)" font-size="11">' + _jiqEsc(ch.label) + '</text></g>');
                 // Top 3 events as leaves ABOVE each channel — staggered heights
                 var evs = (ch.events || []).slice(0, 3);
                 var leafSpacing = Math.min(80, chSpacing - 6);
@@ -38122,8 +38122,8 @@
                               || e.partner || e.site || e.forum || e.track || e.engine
                               || e.channel || e.medium || e.query || '?';
                     actor = String(actor); if (actor.length > 18) actor = actor.slice(0, 17) + '…';
-                    parts.push('<g><circle cx="' + lx + '" cy="' + ly + '" r="5" fill="' + color + '"/>'
-                        + '<text x="' + lx + '" y="' + (ly + 16) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9">' + _jiqEsc(actor) + '</text></g>');
+                    parts.push('<g><circle cx="' + lx + '" cy="' + ly + '" r="10" fill="' + color + '"/>'
+                        + '<text x="' + lx + '" y="' + (ly + 22) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9">' + _jiqEsc(actor) + '</text></g>');
                 });
             });
 
