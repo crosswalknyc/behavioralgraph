@@ -4565,6 +4565,84 @@
         @media (min-height: 700px) {
             .occupation-chart-container { min-height: min(600px, 65vh); }
         }
+
+        /* Demographics "Table" chart-type view.
+         * Each .chart-card contains a sibling pair: <canvas> for the
+         * chart view and .demo-table-container for the table view.
+         * _renderDemoTablesForChartsInTableMode() toggles display:none
+         * on whichever one isn't currently selected.
+         *
+         * Column layout mirrors the behavioral cards header for visual
+         * continuity (rank | label | profile | gen pop | index), so the
+         * .profile-col / .genpop-col / .index-col classes pick up the
+         * existing .cmp-hide-profile and .cmp-hide-genpop hide rules
+         * once compare-mode injection is wired into demo tables too.
+         */
+        .demo-table-container {
+            width: 100%;
+            height: 100%;
+            max-height: 360px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 0.25rem 0;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .demo-table-row {
+            display: grid;
+            grid-template-columns: 30px minmax(0, 1fr) 70px 70px 60px;
+            column-gap: 0.4rem;
+            align-items: center;
+            padding: 0.35rem 0.55rem;
+            border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+            font-size: 0.78rem;
+            line-height: 1.25;
+            color: var(--text-primary, #e6e6e6);
+        }
+        .demo-table-row .profile-col,
+        .demo-table-row .genpop-col,
+        .demo-table-row .index-col {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .demo-table-row .genpop-col { color: var(--text-secondary, #9ca3af); }
+        .demo-table-row .index-col { font-weight: 700; }
+        .demo-table-row.demo-table-header {
+            position: sticky;
+            top: 0;
+            background: var(--bg-secondary, #1f2330);
+            z-index: 1;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-secondary, #9ca3af);
+            border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.12));
+        }
+        .demo-table-row .demo-table-rank {
+            color: var(--text-secondary, #9ca3af);
+            font-size: 0.7rem;
+            font-variant-numeric: tabular-nums;
+        }
+        .demo-table-row .demo-table-label {
+            color: var(--text-primary, #e6e6e6);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+        .demo-table-row .index-col.demo-idx-over  { color: var(--accent-green, #10b981); }
+        .demo-table-row .index-col.demo-idx-under { color: var(--accent-red, #ef4444); }
+        .demo-table-row .index-col.demo-idx-neutral { color: var(--text-secondary, #9ca3af); }
+        .demo-table-empty {
+            padding: 1rem;
+            text-align: center;
+            color: var(--text-secondary, #9ca3af);
+            font-size: 0.8rem;
+        }
         
         /* Demographics cards: aspect ratio maintains proportions at any size */
         @media (max-width: 1400px) {
@@ -16318,6 +16396,7 @@
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                             <option value="line">📈</option>
+                                            <option value="table">📋 Table</option>
                                         </select>
                                         <select id="ageSortSelect" onchange="sortAgeChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort by age or value.">
                                             <option value="age">Age↓</option>
@@ -16330,7 +16409,7 @@
                                         </span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="ageChart"></canvas></div>
+                                <div class="chart-container"><canvas id="ageChart"></canvas><div class="demo-table-container" id="ageTableContainer" style="display:none;"></div></div>
                             </div>
                             <div class="chart-card" data-module="Gender">
                                 <h3>
@@ -16346,6 +16425,7 @@
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
+                                            <option value="table">📋 Table</option>
                                         </select>
                                         <select id="genderSortSelect" onchange="sortGenderChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
                                             <option value="value">%↓</option>
@@ -16355,7 +16435,7 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Gender')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Gender')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Gender')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="genderChart"></canvas></div>
+                                <div class="chart-container"><canvas id="genderChart"></canvas><div class="demo-table-container" id="genderTableContainer" style="display:none;"></div></div>
                             </div>
                             <div class="chart-card" data-module="Ethnicity">
                                 <h3>
@@ -16371,6 +16451,7 @@
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
+                                            <option value="table">📋 Table</option>
                                         </select>
                                         <select id="ethnicitySortSelect" onchange="sortEthnicityChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
                                             <option value="value">%↓</option>
@@ -16379,7 +16460,7 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Ethnicity')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Ethnicity')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Ethnicity')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="ethnicityChart"></canvas></div>
+                                <div class="chart-container"><canvas id="ethnicityChart"></canvas><div class="demo-table-container" id="ethnicityTableContainer" style="display:none;"></div></div>
                             </div>
                             <div class="chart-card" data-module="Income">
                                 <h3>
@@ -16397,6 +16478,7 @@
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                             <option value="line">📈</option>
+                                            <option value="table">📋 Table</option>
                                         </select>
                                         <select id="incomeSortSelect" onchange="sortIncomeChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
                                             <option value="income">Inc↓</option>
@@ -16409,7 +16491,7 @@
                                         </span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="incomeChart"></canvas></div>
+                                <div class="chart-container"><canvas id="incomeChart"></canvas><div class="demo-table-container" id="incomeTableContainer" style="display:none;"></div></div>
                             </div>
                             <div class="chart-card" data-module="Education">
                                 <h3>
@@ -16425,6 +16507,7 @@
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
+                                            <option value="table">📋 Table</option>
                                         </select>
                                         <select id="educationSortSelect" onchange="sortEducationChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
                                             <option value="value">%↓</option>
@@ -16434,7 +16517,7 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Education')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Education')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Education')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="educationChart"></canvas></div>
+                                <div class="chart-container"><canvas id="educationChart"></canvas><div class="demo-table-container" id="educationTableContainer" style="display:none;"></div></div>
                             </div>
                             <div class="chart-card" data-module="Relationship Status">
                                 <h3>
@@ -16450,6 +16533,7 @@
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
+                                            <option value="table">📋 Table</option>
                                         </select>
                                         <select id="relationshipSortSelect" onchange="sortRelationshipChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
                                             <option value="value">%↓</option>
@@ -16459,7 +16543,7 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Relationship Status')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Relationship Status')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Relationship Status')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="relationshipChart"></canvas></div>
+                                <div class="chart-container"><canvas id="relationshipChart"></canvas><div class="demo-table-container" id="relationshipTableContainer" style="display:none;"></div></div>
                             </div>
                             <div class="chart-card" data-module="Sexual Orientation">
                                 <h3>
@@ -16475,6 +16559,7 @@
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
+                                            <option value="table">📋 Table</option>
                                         </select>
                                         <select id="sexualOrientationSortSelect" onchange="sortSexualOrientationChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
                                             <option value="value">%↓</option>
@@ -16484,7 +16569,7 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Sexual Orientation')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Sexual Orientation')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Sexual Orientation')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="sexualOrientationChart"></canvas></div>
+                                <div class="chart-container"><canvas id="sexualOrientationChart"></canvas><div class="demo-table-container" id="sexualOrientationTableContainer" style="display:none;"></div></div>
                             </div>
                             <div class="chart-card" data-module="Parental Status">
                                 <h3>
@@ -16500,6 +16585,7 @@
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
+                                            <option value="table">📋 Table</option>
                                         </select>
                                         <select id="parentalStatusSortSelect" onchange="sortParentalStatusChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
                                             <option value="value">%↓</option>
@@ -16509,7 +16595,7 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Parental Status')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Parental Status')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Parental Status')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="parentalStatusChart"></canvas></div>
+                                <div class="chart-container"><canvas id="parentalStatusChart"></canvas><div class="demo-table-container" id="parentalStatusTableContainer" style="display:none;"></div></div>
                             </div>
                             <div class="chart-card chart-card-occupation" data-module="Occupation">
                                 <h3>
@@ -16525,6 +16611,7 @@
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
+                                            <option value="table">📋 Table</option>
                                         </select>
                                         <select id="occupationSortSelect" onchange="sortOccupationChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
                                             <option value="value">%↓</option>
@@ -16536,6 +16623,7 @@
                                 </h3>
                                 <div class="chart-container occupation-chart-container">
                                     <canvas id="occupationChart"></canvas>
+                                    <div class="demo-table-container" id="occupationTableContainer" style="display:none; max-height:600px;"></div>
                                 </div>
                                 <div id="occupationGpActualsTable" style="margin-top:0.75rem;"></div>
                             </div>
@@ -56445,16 +56533,20 @@
         // INDEX SOURCE PICKER
         //
         // Build the dropdown choices for "what should the Index column
-        // compare?". Always includes Current Profile, Gen Pop, and any
-        // currently-selected data cut. The picker lives inside the Data
-        // Cuts popover (#cmpIndexNumSel / #cmpIndexDenSel) and is
-        // re-populated whenever the selection changes.
+        // compare?". Always includes the base profile (labelled
+        // "Casual Fan" to match the unsuffixed-default convention
+        // elsewhere in the UI — see _preferredRunLabel), Gen Pop, and
+        // any currently-selected data cut. The picker lives inside the
+        // Data Cuts popover (#cmpIndexNumSel / #cmpIndexDenSel) and is
+        // re-populated whenever the selection changes. The internal key
+        // stays 'profile' so existing comparison-state logic keeps
+        // working unchanged.
         // ---------------------------------------------------------------
         function _cmpIndexSourceOptions() {
             const series = (_comparisonRunsState.selectedKeys || [])
                 .map(k => _comparisonRunsState.runsByKey[k])
                 .filter(Boolean);
-            const opts = [{ key: 'profile', label: 'Current Profile' }];
+            const opts = [{ key: 'profile', label: 'Casual Fan' }];
             series.forEach(s => {
                 opts.push({ key: s.key, label: s.label || 'Run' });
             });
@@ -56497,7 +56589,7 @@
             if (wrap) wrap.style.display = (series.length > 0) ? '' : 'none';
             if (helpEl) {
                 if (series.length === 0) {
-                    helpEl.textContent = 'Default: Profile vs Gen Pop. Select runs above to add them as options.';
+                    helpEl.textContent = 'Default: Casual Fan vs Gen Pop. Select runs above to add them as options.';
                 } else if (finalNum === finalDen) {
                     helpEl.textContent = 'Numerator and denominator are the same — Index will be 100 for every row.';
                 } else {
@@ -61411,6 +61503,18 @@
                 renderInterests(currentDashboardData.interests);
             }
 
+            // Swap any demographic chart whose user-selected type is
+            // 'table' into a flat HTML breakdown (Bucket | Profile |
+            // Gen Pop | Index). Builds the table from the just-built
+            // chart's metadata, then destroys the chart and hides the
+            // canvas. Runs BEFORE compare-mode re-apply so the
+            // soon-to-be-injected cohort columns can target the demo
+            // tables once that wiring is added (Phase 2). Today the
+            // compare injector ignores .demo-table-container; safe
+            // no-op for tables in single-profile mode.
+            try { _renderDemoTablesForChartsInTableMode(); }
+            catch (e) { console.warn('demo table swap failed', e); }
+
             // Re-layer any active "Compare date ranges" selections onto the
             // freshly-rendered demographic charts. Safe no-op when no runs
             // are selected. See applyComparisonRunsToDashboardCharts above.
@@ -61431,7 +61535,10 @@
         let currentParentalStatusSortMode = 'value';
         let currentOccupationSortMode = 'value';
         
-        // Chart type preferences (stored per chart)
+        // Chart type preferences (stored per chart). Each demographic
+        // chart can render as a Chart.js visual ('bar', 'column',
+        // 'doughnut', 'pie', 'polarArea', 'line') or as a tabular
+        // breakdown ('table') — see _renderDemoTablesForChartsInTableMode.
         const chartTypePrefs = {
             age: 'bar',
             gender: 'bar',
@@ -61440,7 +61547,8 @@
             education: 'bar',
             relationship: 'bar',
             sexualOrientation: 'bar',
-            parentalStatus: 'bar'
+            parentalStatus: 'bar',
+            occupation: 'bar'
         };
         
         // Last demographics passed to renderCharts (so changing chart type never clears data)
@@ -61458,6 +61566,142 @@
             if (demo && Object.keys(demo).length > 0) {
                 renderCharts(demo, demoIdx, demoProj, demoGP);
             }
+        }
+
+        // -----------------------------------------------------------------
+        // Demographics "Table" view swap.
+        //
+        // renderCharts builds a Chart.js instance for every demographic
+        // chart regardless of the user's chosen visual. After all 9 charts
+        // are built we walk through them: any chart whose user-selected
+        // type is 'table' gets its data extracted, the Chart.js instance
+        // destroyed, the canvas hidden, and a flat HTML table rendered
+        // into the sibling <div id="${k}TableContainer"> instead.
+        //
+        // The opposite path (table -> bar/doughnut/etc.) just hides the
+        // table container and shows the canvas — the Chart.js instance
+        // built earlier in renderCharts is already correct.
+        //
+        // Data plumbed through chart._origKeys / chart._origGenPop /
+        // chart._demoCategory matches the same per-chart annotations the
+        // existing compare-mode injector relies on, so the table can
+        // recover labels + gp pcts + index values without re-querying
+        // the underlying parseAllData output.
+        //
+        // Format follows dashDisplayMode: projection mode shows US #
+        // (already in chart.data.datasets[0].data) plus a derived GP
+        // projection (gp_pct/100 * US_POP); percent mode shows raw
+        // pcts. Index always comes from lastRenderedDemographicsIndex.
+        //
+        // Casual Fan / Gen Pop toggle hide rules pick this up for free
+        // because each value cell carries .profile-col / .genpop-col,
+        // matching the CSS rule in applyComparisonRunsToCategoryTables.
+        // -----------------------------------------------------------------
+        const DEMO_CHART_KEYS = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexualOrientation', 'parentalStatus', 'occupation'];
+
+        function _demoTableFmtPct(v) {
+            const n = Number(v);
+            if (!isFinite(n) || n === 0) return n === 0 ? '0.00%' : '—';
+            if (typeof formatPct === 'function') return formatPct(n);
+            return n.toFixed(2) + '%';
+        }
+        function _demoTableFmtNum(v) {
+            const n = Number(v);
+            if (!isFinite(n) || n <= 0) return '—';
+            if (typeof formatNumber === 'function') return formatNumber(Math.round(n));
+            return Math.round(n).toLocaleString();
+        }
+        function _demoTableIdxClass(idx) {
+            const n = Number(idx);
+            if (!isFinite(n) || n <= 0) return 'demo-idx-neutral';
+            if (n > 110) return 'demo-idx-over';
+            if (n < 90)  return 'demo-idx-under';
+            return 'demo-idx-neutral';
+        }
+        function _demoTableIdxStr(idx) {
+            const n = Number(idx);
+            if (!isFinite(n) || n <= 0) return '—';
+            return Math.round(n).toString();
+        }
+
+        function _renderDemoTablesForChartsInTableMode() {
+            const isProjection = (typeof dashDisplayMode !== 'undefined') && dashDisplayMode === 'projection';
+            const profileColLabel = isProjection ? 'US #' : 'Profile';
+            const gpColLabel      = isProjection ? 'GP US #' : 'Gen Pop';
+            const idxLookupAll = lastRenderedDemographicsIndex || {};
+
+            DEMO_CHART_KEYS.forEach(k => {
+                const canvas = document.getElementById(k + 'Chart');
+                const tableC = document.getElementById(k + 'TableContainer');
+                if (!canvas || !tableC) return;
+                const wantTable = chartTypePrefs[k] === 'table';
+                const chart = (typeof charts !== 'undefined') ? charts[k] : null;
+
+                if (!wantTable) {
+                    canvas.style.display = '';
+                    tableC.style.display = 'none';
+                    return;
+                }
+
+                // Want table — extract from the just-built chart, destroy,
+                // swap visibility.
+                if (!chart || !chart.data) {
+                    // Chart didn't build (e.g. empty data) — show a stub.
+                    canvas.style.display = 'none';
+                    tableC.style.display = '';
+                    tableC.innerHTML = '<div class="demo-table-empty">No data available.</div>';
+                    return;
+                }
+                const labels    = (chart.data.labels) || [];
+                const origKeys  = chart._origKeys || labels;
+                const origGP    = chart._origGenPop || [];
+                const dataCat   = chart._demoCategory || k;
+                const dataset0  = (chart.data.datasets && chart.data.datasets[0]) || { data: [] };
+                const profVals  = dataset0.data || [];
+                const idxLookup = idxLookupAll[dataCat] || {};
+
+                const rowsHtml = labels.map((lbl, i) => {
+                    const ok      = origKeys[i];
+                    const profRaw = Number(profVals[i]) || 0;
+                    const gpPct   = Number(origGP[i]) || 0;
+                    const idx     = Number(idxLookup[ok]) || 0;
+                    // In projection mode profVals is already a count.
+                    // In pct mode profVals is a pct.
+                    const profStr = isProjection
+                        ? _demoTableFmtNum(profRaw)
+                        : _demoTableFmtPct(profRaw);
+                    const gpStr = isProjection
+                        ? (gpPct > 0 ? _demoTableFmtNum(gpPct / 100 * 329900000) : '—')
+                        : (gpPct > 0 ? _demoTableFmtPct(gpPct) : '—');
+                    return ''
+                        + '<div class="demo-table-row" data-bucket="' + escapeAttr(String(ok)) + '">'
+                        + '<span class="demo-table-rank">' + (i + 1) + '</span>'
+                        + '<span class="demo-table-label" title="' + escapeAttr(String(lbl)) + '">' + escapeAttr(String(lbl)) + '</span>'
+                        + '<span class="profile-col">' + profStr + '</span>'
+                        + '<span class="genpop-col">' + gpStr + '</span>'
+                        + '<span class="index-col ' + _demoTableIdxClass(idx) + '">' + _demoTableIdxStr(idx) + '</span>'
+                        + '</div>';
+                }).join('');
+
+                tableC.innerHTML = ''
+                    + '<div class="demo-table-row demo-table-header">'
+                    + '<span>#</span>'
+                    + '<span>Bucket</span>'
+                    + '<span class="profile-col">' + profileColLabel + '</span>'
+                    + '<span class="genpop-col">' + gpColLabel + '</span>'
+                    + '<span class="index-col">Index</span>'
+                    + '</div>'
+                    + '<div class="demo-table-body" data-cat="' + escapeAttr(String(dataCat)) + '">'
+                    + (rowsHtml || '<div class="demo-table-empty">No data available.</div>')
+                    + '</div>';
+
+                // Destroy the chart and hide the canvas so the table
+                // owns the visible area cleanly.
+                try { chart.destroy(); } catch (_) {}
+                if (typeof charts !== 'undefined') delete charts[k];
+                canvas.style.display = 'none';
+                tableC.style.display = '';
+            });
         }
         
         function sortAgeChart(sortMode) {
