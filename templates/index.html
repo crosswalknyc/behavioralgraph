@@ -38141,8 +38141,21 @@
             parts.push('<rect width="' + W + '" height="' + H + '" fill="transparent"/>');
 
             // TARGET node at bottom — larger circle so name fits
-            parts.push('<g><circle cx="' + cx + '" cy="' + tgtY + '" r="88" fill="#111" stroke="var(--accent-primary)" stroke-width="3"/>'
-                + '<text x="' + cx + '" y="' + (tgtY + 6) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="22">' + _jiqEsc((spider.target || 'Target').slice(0, 14)) + '</text></g>');
+            var _tgtName = _jiqEsc(spider.target || 'Target');
+            var _tgtLines = [];
+            if (_tgtName.length > 14) {
+                var _mid = Math.ceil(_tgtName.length / 2);
+                var _spBefore = _tgtName.lastIndexOf(' ', _mid);
+                var _spAfter = _tgtName.indexOf(' ', _mid);
+                var _split = (_spBefore > 2) ? _spBefore : (_spAfter > 0 ? _spAfter : _mid);
+                _tgtLines = [_tgtName.slice(0, _split), _tgtName.slice(_split + 1)];
+            } else {
+                _tgtLines = [_tgtName];
+            }
+            var _tgtTextSvg = _tgtLines.length === 2
+                ? '<text x="' + cx + '" y="' + (tgtY - 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="18"><tspan x="' + cx + '" dy="0">' + _tgtLines[0] + '</tspan><tspan x="' + cx + '" dy="22">' + _tgtLines[1] + '</tspan></text>'
+                : '<text x="' + cx + '" y="' + (tgtY + 6) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="22">' + _tgtLines[0] + '</text>';
+            parts.push('<g><circle cx="' + cx + '" cy="' + tgtY + '" r="88" fill="#111" stroke="var(--accent-primary)" stroke-width="3"/>' + _tgtTextSvg + '</g>');
 
             // Channels along a horizontal line
             var nCh = chs.length || 1;
