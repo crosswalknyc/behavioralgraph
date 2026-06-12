@@ -35858,12 +35858,14 @@
                     }
                 }
                 _jiqPeakLabels.push(_bbox(chosen));
-                parts.push('<circle cx="' + peak.x + '" cy="' + peak.y + '" r="4" fill="' + color + '" stroke="#fff" stroke-width="2"/>');
-                parts.push('<text x="' + chosen.x + '" y="' + chosen.y + '"'
-                         +   ' text-anchor="' + chosen.anchor + '"'
-                         +   ' fill="' + color + '" font-weight="700" font-size="10"'
-                         +   ' paint-order="stroke" stroke="var(--bg-card)" stroke-width="3" stroke-linejoin="round">'
-                         +   _jiqEsc(labelText) + '</text>');
+                if (!_isFandangoEco) {
+                    parts.push('<circle cx="' + peak.x + '" cy="' + peak.y + '" r="4" fill="' + color + '" stroke="#fff" stroke-width="2"/>');
+                    parts.push('<text x="' + chosen.x + '" y="' + chosen.y + '"'
+                             +   ' text-anchor="' + chosen.anchor + '"'
+                             +   ' fill="' + color + '" font-weight="700" font-size="10"'
+                             +   ' paint-order="stroke" stroke="var(--bg-card)" stroke-width="3" stroke-linejoin="round">'
+                             +   _jiqEsc(labelText) + '</text>');
+                }
             });
 
             // Legend — bottom-left
