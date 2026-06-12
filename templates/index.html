@@ -35780,6 +35780,24 @@
                 var peak = pts.reduce(function(best, p) {
                     return (p.y < best.y) ? p : best;
                 }, pts[0]);
+
+                // For Fandango ecosystem: place labels inside the area body
+                // rather than at the peak, to spread them apart.
+                var _isFandangoEco = /fandango/i.test((eco.properties || [])[0] && (eco.properties[0].name || ''));
+                var labelAnchorPt = peak;
+                if (_isFandangoEco && pts.length > 4) {
+                    var peakIdx = pts.indexOf(peak);
+                    var curveIdx = curves.indexOf(c);
+                    var offsetIdx;
+                    if (curveIdx === 0) {
+                        offsetIdx = Math.min(pts.length - 1, peakIdx + Math.round(pts.length * 0.15));
+                    } else if (curveIdx === 1) {
+                        offsetIdx = Math.max(0, peakIdx - Math.round(pts.length * 0.12));
+                    } else {
+                        offsetIdx = Math.min(pts.length - 1, peakIdx + Math.round(pts.length * 0.25));
+                    }
+                    labelAnchorPt = pts[offsetIdx];
+                }
                 var labelText = (prop.icon || '◆') + ' ' + (prop.name || c.property);
                 var labelW    = labelText.length * 6.0 + 6;
                 var labelH    = 14;
@@ -35789,14 +35807,14 @@
                 // Candidate positions, ordered by editorial preference.
                 // Each `y` is the text BASELINE; bounding box uses (y-12, y+2).
                 var cands = [
-                    { x: peak.x,                y: peak.y - 14, anchor: 'middle' },
-                    { x: peak.x,                y: peak.y + 22, anchor: 'middle' },
-                    { x: peak.x - 10,           y: peak.y - 2,  anchor: 'end'    },
-                    { x: peak.x + 10,           y: peak.y - 2,  anchor: 'start'  },
-                    { x: peak.x,                y: peak.y - 30, anchor: 'middle' },
-                    { x: peak.x,                y: peak.y + 38, anchor: 'middle' },
-                    { x: peak.x - 10,           y: peak.y + 14, anchor: 'end'    },
-                    { x: peak.x + 10,           y: peak.y + 14, anchor: 'start'  },
+                    { x: labelAnchorPt.x,                y: labelAnchorPt.y - 14, anchor: 'middle' },
+                    { x: labelAnchorPt.x,                y: labelAnchorPt.y + 22, anchor: 'middle' },
+                    { x: labelAnchorPt.x - 10,           y: labelAnchorPt.y - 2,  anchor: 'end'    },
+                    { x: labelAnchorPt.x + 10,           y: labelAnchorPt.y - 2,  anchor: 'start'  },
+                    { x: labelAnchorPt.x,                y: labelAnchorPt.y - 30, anchor: 'middle' },
+                    { x: labelAnchorPt.x,                y: labelAnchorPt.y + 38, anchor: 'middle' },
+                    { x: labelAnchorPt.x - 10,           y: labelAnchorPt.y + 14, anchor: 'end'    },
+                    { x: labelAnchorPt.x + 10,           y: labelAnchorPt.y + 14, anchor: 'start'  },
                 ];
                 function _bbox(c) {
                     var l = c.anchor === 'middle' ? c.x - labelW / 2
