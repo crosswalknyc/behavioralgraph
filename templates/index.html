@@ -57758,27 +57758,65 @@
                 return 0;
             };
 
-            const buildList = (which) => {
+            // Color used for the "Casual Fan" base-profile callout row.
+            // Distinct from the data-cut palette so users instantly see
+            // that the big number above belongs to the base profile and
+            // not to one of the selected cohorts. Cyan matches the
+            // dashboard's primary accent.
+            const CASUAL_FAN_LABEL_COLOR = 'var(--accent-blue, #5a9ad9)';
+
+            // Pull the currently-displayed big-number from the live DOM
+            // (whatever's in #dashSampleSize / #dashProjectedUS at call
+            // time). Using the DOM means we always reflect what the user
+            // sees regardless of whether currentDashboardData has been
+            // patched mid-render. Strips commas before reparsing.
+            const _baseValueFromEl = (id) => {
+                const el = document.getElementById(id);
+                if (!el) return null;
+                const raw = (el.textContent || '').replace(/[, \u2009\u202f]/g, '').trim();
+                if (!raw) return null;
+                const n = Number(raw);
+                return isFinite(n) ? n : null;
+            };
+
+            // buildList accepts the base sample/projection so the very
+            // first row in compare-mode reads "Casual Fan  n=X" — that
+            // labels the big number above unambiguously when one or more
+            // data cuts are stacked underneath.
+            const buildList = (which, baseValue) => {
                 const wrap = document.createElement('div');
                 wrap.className = 'cmp-stat-list';
                 wrap.style.cssText = 'margin-top:0.5rem;display:flex;flex-direction:column;gap:0.18rem;padding-top:0.4rem;border-top:1px dashed var(--border-color, rgba(255,255,255,0.08));';
-                series.forEach((entry, idx) => {
-                    const color = _COMPARISON_PALETTE[idx % _COMPARISON_PALETTE.length];
+
+                const appendRow = (labelText, labelColor, value, opts) => {
                     const row = document.createElement('div');
                     row.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;font-size:0.72rem;line-height:1.25;';
                     const lbl = document.createElement('span');
-                    lbl.textContent = entry.label || 'Run';
-                    lbl.title = entry.label || '';
-                    lbl.style.cssText = 'color:' + color + ';font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;';
-                    const n = which === 'sample'
-                        ? _cutSampleSize(entry.parsed)
-                        : (entry.parsed && typeof entry.parsed.projectedUS === 'number' && isFinite(entry.parsed.projectedUS) ? entry.parsed.projectedUS : 0);
+                    lbl.textContent = labelText;
+                    lbl.title = labelText;
+                    lbl.style.cssText = 'color:' + labelColor + ';font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;';
                     const val = document.createElement('span');
-                    val.textContent = (which === 'sample' ? 'n=' : '') + _fmt(n);
+                    val.textContent = (which === 'sample' ? 'n=' : '') + _fmt(value);
                     val.style.cssText = 'color:var(--text-primary, #e6e6e6);font-variant-numeric:tabular-nums;font-weight:500;';
+                    if (opts && opts.subtle) {
+                        row.style.opacity = '0.95';
+                    }
                     row.appendChild(lbl);
                     row.appendChild(val);
                     wrap.appendChild(row);
+                };
+
+                // Casual Fan = the base profile. Always first when active.
+                if (baseValue != null && baseValue > 0) {
+                    appendRow('Casual Fan', CASUAL_FAN_LABEL_COLOR, baseValue, { subtle: true });
+                }
+
+                series.forEach((entry, idx) => {
+                    const color = _COMPARISON_PALETTE[idx % _COMPARISON_PALETTE.length];
+                    const n = which === 'sample'
+                        ? _cutSampleSize(entry.parsed)
+                        : (entry.parsed && typeof entry.parsed.projectedUS === 'number' && isFinite(entry.parsed.projectedUS) ? entry.parsed.projectedUS : 0);
+                    appendRow(entry.label || 'Run', color, n);
                 });
                 return wrap;
             };
@@ -57791,8 +57829,10 @@
                 if (sampleCard) sampleCard.querySelectorAll(':scope > .cmp-stat-list').forEach(n => n.remove());
                 if (projCard) projCard.querySelectorAll(':scope > .cmp-stat-list').forEach(n => n.remove());
                 if (series.length === 0) return;
-                if (sampleCard) sampleCard.appendChild(buildList('sample'));
-                if (projCard) projCard.appendChild(buildList('proj'));
+                const baseSample = _baseValueFromEl(t.sampleId);
+                const baseProj   = _baseValueFromEl(t.projId);
+                if (sampleCard) sampleCard.appendChild(buildList('sample', baseSample));
+                if (projCard) projCard.appendChild(buildList('proj', baseProj));
             });
         }
 
