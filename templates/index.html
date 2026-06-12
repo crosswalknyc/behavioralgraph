@@ -38137,7 +38137,10 @@
             // TARGET node at bottom — larger circle so name fits
             var _tgtName = _jiqEsc(spider.target || 'Target');
             var _tgtLines = [];
-            if (_tgtName.length > 14) {
+            var _tgtWords = _tgtName.split(' ');
+            if (_tgtWords.length >= 3) {
+                _tgtLines = _tgtWords.map(function(w) { return w.toUpperCase(); });
+            } else if (_tgtName.length > 14) {
                 var _mid = Math.ceil(_tgtName.length / 2);
                 var _spBefore = _tgtName.lastIndexOf(' ', _mid);
                 var _spAfter = _tgtName.indexOf(' ', _mid);
@@ -38146,10 +38149,23 @@
             } else {
                 _tgtLines = [_tgtName];
             }
-            var _tgtTextSvg = _tgtLines.length === 2
-                ? '<text x="' + cx + '" y="' + (tgtY - 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="18"><tspan x="' + cx + '" dy="0">' + _tgtLines[0] + '</tspan><tspan x="' + cx + '" dy="22">' + _tgtLines[1] + '</tspan></text>'
-                : '<text x="' + cx + '" y="' + (tgtY + 6) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="22">' + _tgtLines[0] + '</text>';
-            parts.push('<g><circle cx="' + cx + '" cy="' + tgtY + '" r="88" fill="#111" stroke="var(--accent-primary)" stroke-width="3"/>' + _tgtTextSvg + '</g>');
+            var _tgtFill = /pop.culture.jeopardy/i.test(_tgtName) ? '#5B2C6F' : '#111';
+            var _tgtTextSvg;
+            if (_tgtLines.length >= 3) {
+                var _tgtFontSz = Math.max(14, Math.min(18, Math.round(88 / (_tgtLines.length * 1.2))));
+                var _tgtLineH = _tgtFontSz + 6;
+                var _tgtStartY = tgtY - ((_tgtLines.length - 1) * _tgtLineH) / 2 + 5;
+                _tgtTextSvg = '<text x="' + cx + '" y="' + _tgtStartY + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="' + _tgtFontSz + '">';
+                _tgtLines.forEach(function(line, li) {
+                    _tgtTextSvg += '<tspan x="' + cx + '"' + (li > 0 ? ' dy="' + _tgtLineH + '"' : '') + '>' + line + '</tspan>';
+                });
+                _tgtTextSvg += '</text>';
+            } else if (_tgtLines.length === 2) {
+                _tgtTextSvg = '<text x="' + cx + '" y="' + (tgtY - 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="18"><tspan x="' + cx + '" dy="0">' + _tgtLines[0] + '</tspan><tspan x="' + cx + '" dy="22">' + _tgtLines[1] + '</tspan></text>';
+            } else {
+                _tgtTextSvg = '<text x="' + cx + '" y="' + (tgtY + 6) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="22">' + _tgtLines[0] + '</text>';
+            }
+            parts.push('<g><circle cx="' + cx + '" cy="' + tgtY + '" r="88" fill="' + _tgtFill + '" stroke="var(--accent-primary)" stroke-width="3"/>' + _tgtTextSvg + '</g>');
 
             // Channels along a horizontal line
             var nCh = chs.length || 1;
