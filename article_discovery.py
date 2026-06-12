@@ -40,7 +40,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 S3_BUCKET   = os.environ.get('BLUE_IQ_CACHE_BUCKET', 'dashboard-inputs')
-S3_PREFIX   = 'blue_iq/articles/v1/'
+S3_PREFIX   = 'blue_iq/articles/v2/'  # v2: banned-term system-prompt clause (2026-06-12)
 CACHE_TTL_S = 12 * 3600                # 12h — articles are time-sensitive
 AGENT_TIMEOUT_S = float(os.environ.get('ARTICLE_AGENT_TIMEOUT', '60'))
 AGENT_MODEL = os.environ.get('ARTICLE_AGENT_MODEL', 'gpt-4o')
@@ -171,6 +171,13 @@ _AGENT_SYSTEM = (
     "national headline (e.g. a Supreme Court ruling that dropped today).\n"
     "20-40 = solid regional / niche piece that's still relevant. Vary\n"
     "the scores — don't return everything at 70.\n"
+    "\n"
+    "BANNED TERMS — do not return any article whose title, topic, or\n"
+    "summary mentions:\n"
+    "  - government shutdown / federal government shutdown / gov shutdown\n"
+    "If a budget / appropriations story is genuinely the lead story for\n"
+    "the geography, only include it if the title can be cited verbatim\n"
+    "WITHOUT the banned phrase. Skip otherwise.\n"
     "\n"
     "OUTPUT FORMAT: return ONLY a JSON object. No markdown fences, no\n"
     "commentary. First char `{`, last char `}`:\n"
