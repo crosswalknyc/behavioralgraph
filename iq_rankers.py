@@ -73,7 +73,7 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
     ],
     "SPORT": ["MILB", "MLB", "NBA", "NFL", "SPORTS ORGANIZATIONS",
               "SPORTS ORGANIZATION", "WNBA"],
-    "TRENDS": ["TRENDS"],
+    "TRENDS": ["TRENDS", "SHOPPING INTENT"],
 }
 
 
