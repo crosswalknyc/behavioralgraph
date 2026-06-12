@@ -3326,6 +3326,31 @@ def _run_profile_cache_rebuild() -> None:
             return
         total = (result or {}).get("total", 0)
 
+        # Defense in depth: even though refresh_s3_cache() filters out
+        # subfolder keys at scan time via _is_root_csv_key, run the same
+        # invariant check on the in-memory cache once more. This catches
+        # any legacy entries that survived a prior merge or pre-invariant
+        # admin action, and writes a clean cache back to S3.
+        try:
+            clean_jobs, dropped_subfolder = _enforce_root_only_jobs(
+                s3_cache.get('jobs') or [], context='rebuild post-scan'
+            )
+            if dropped_subfolder:
+                s3_cache['jobs'] = clean_jobs
+                s3_cache['file_count'] = len(clean_jobs)
+                # Persist the cleaned cache so the next worker that loads
+                # doesn't have to re-strip them. save_persisted_cache also
+                # enforces the invariant, but rewriting here means the
+                # ETag bumps and other workers re-pull the clean copy.
+                try:
+                    save_persisted_cache()
+                except Exception as e:
+                    print(f"⚠️ couldn't persist cleaned cache: {e}")
+                total = len(clean_jobs)
+        except Exception as enf_err:
+            dropped_subfolder = []
+            print(f"⚠️ post-scan root-only enforcement failed: {enf_err}")
+
         # Force cross-worker propagation: every other gunicorn worker
         # holds its own in-memory `s3_cache`. They normally rediscover
         # changes via the throttled persisted-cache HEAD probe (3s
@@ -3349,9 +3374,11 @@ def _run_profile_cache_rebuild() -> None:
             traceback.print_exc()
 
         selector_count = max(0, int(total) - len(missing))
-        msg = f"Rebuilt cache: {total} profiles scanned, {selector_count} in selector"
+        msg = f"Rebuilt cache: {total} root CSVs scanned, {selector_count} in selector"
         if missing:
             msg += f", {len(missing)} hidden (see details)"
+        if dropped_subfolder:
+            msg += f". Stripped {len(dropped_subfolder)} legacy subfolder entries from persisted cache"
         msg += "."
 
         with _profile_cache_rebuild_lock:
@@ -18697,25 +18724,32 @@ def rename_file():
                 found = True
                 break
         if not found:
-            # File was not in cache; add entry so admin list shows updated name
-            if display_name and display_name.strip():
-                new_display_name = display_name.strip()
+            # File was not in cache; add entry so admin list shows updated name.
+            # Profile-IQ selector cache is root-only; subfolder renames
+            # (sentiment-iq/, brand-partnership-iq/, ticket-sales-iq/,
+            # svod-acquisition/, etc.) get handled by their own metadata
+            # stores above, NOT by mixing them into the profile cache.
+            if not _is_root_csv_key(new_key):
+                print(f"⏭️  Skipping cache-add for non-root key: {new_key}")
             else:
-                new_filename = new_key.split('/')[-1]
-                name_without_ext = new_filename.rsplit('.', 1)[0] if '.' in new_filename else new_filename
-                name_without_timestamp = remove_timestamp_from_name(name_without_ext)
-                new_display_name = smart_title_case(name_without_timestamp.replace('_', ' '))
-            jobs.append({
-                'key': new_key,
-                's3_key': new_key,
-                'name': new_display_name,
-                'display_name': new_display_name,
-                'project_name': new_display_name,
-                'brand': new_display_name,
-                'category': 'Uncategorized',
-            })
-            s3_cache['jobs'] = jobs
-            print(f"📝 Added new cache entry for {new_key} with display name: {new_display_name}")
+                if display_name and display_name.strip():
+                    new_display_name = display_name.strip()
+                else:
+                    new_filename = new_key.split('/')[-1]
+                    name_without_ext = new_filename.rsplit('.', 1)[0] if '.' in new_filename else new_filename
+                    name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+                    new_display_name = smart_title_case(name_without_timestamp.replace('_', ' '))
+                jobs.append({
+                    'key': new_key,
+                    's3_key': new_key,
+                    'name': new_display_name,
+                    'display_name': new_display_name,
+                    'project_name': new_display_name,
+                    'brand': new_display_name,
+                    'category': 'Uncategorized',
+                })
+                s3_cache['jobs'] = jobs
+                print(f"📝 Added new cache entry for {new_key} with display name: {new_display_name}")
         save_persisted_cache()
         
         print(f"📝 Renamed file: {old_key} -> {new_key}")
@@ -20229,24 +20263,29 @@ def change_file_category():
                 found = True
                 break
         if not found and not file_key.startswith(S3_PURGATORY_PREFIX):
-            # File not in cache (e.g. new upload); add entry so admin list shows updated category
-            filename = file_key.split('/')[-1]
-            name_without_ext = filename.replace('.csv', '') if filename.endswith('.csv') else filename
-            name_without_timestamp = remove_timestamp_from_name(name_without_ext)
-            project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
-            entry = {
-                'key': file_key,
-                's3_key': file_key,
-                'category': new_category,
-                'project_name': project_name,
-                'name': project_name,
-                'display_name': project_name,
-            }
-            if secondary_category:
-                entry['secondary_category'] = secondary_category
-            jobs.append(entry)
-            s3_cache['jobs'] = jobs
-            print(f"📝 Added new cache entry for {file_key} with category: {new_category}")
+            # File not in cache (e.g. new upload); add entry so admin list shows
+            # updated category. Profile-IQ selector cache is root-only — never
+            # add a subfolder key here even if the admin recategorizes one.
+            if not _is_root_csv_key(file_key):
+                print(f"⏭️  Skipping cache-add for non-root key: {file_key}")
+            else:
+                filename = file_key.split('/')[-1]
+                name_without_ext = filename.replace('.csv', '') if filename.endswith('.csv') else filename
+                name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+                project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
+                entry = {
+                    'key': file_key,
+                    's3_key': file_key,
+                    'category': new_category,
+                    'project_name': project_name,
+                    'name': project_name,
+                    'display_name': project_name,
+                }
+                if secondary_category:
+                    entry['secondary_category'] = secondary_category
+                jobs.append(entry)
+                s3_cache['jobs'] = jobs
+                print(f"📝 Added new cache entry for {file_key} with category: {new_category}")
         elif found:
             print(f"📝 Updated existing cache entry for {file_key} with category: {new_category}")
         save_persisted_cache()
@@ -20364,6 +20403,62 @@ def get_all_profile_images():
         'count': len(images)
     })
 
+def _is_root_csv_key(key) -> bool:
+    """Profile IQ selector invariant: only `.csv` files at the ROOT of
+    `s3://dashboard-inputs/` may appear in the profile-selector cache.
+
+    Any key with a `/` lives in a subfolder (archive/, _backups/, backups/,
+    historic/, purgatory/, metadata/, system/, reference/, persona_cache/,
+    sentiment-iq/, roas-iq/, brand-partnership-iq/, svod-acquisition/,
+    ticket-sales-iq/, etc.) and must NEVER be surfaced to users via the
+    profile selector. This helper is the single source of truth for the
+    root-only check; every cache write/read path must use it.
+
+    Returns False for:
+      - empty / non-string keys
+      - any key containing '/'
+      - any key not ending in '.csv'
+    """
+    if not key or not isinstance(key, str):
+        return False
+    if '/' in key:
+        return False
+    if not key.lower().endswith('.csv'):
+        return False
+    return True
+
+
+def _enforce_root_only_jobs(jobs, context: str = ''):
+    """Drop any cache entry whose s3_key violates the root-CSV invariant.
+    Logs the dropped keys so an admin can spot how they slipped in
+    (almost always a stale persisted cache from before the invariant
+    was tightened, or a legacy rename/recategorize admin action)."""
+    if not jobs:
+        return jobs, []
+    kept = []
+    dropped = []
+    for j in jobs:
+        if not isinstance(j, dict):
+            continue
+        sk = j.get('s3_key') or j.get('key') or ''
+        # Locally-running jobs are tracked here too (source='local') and
+        # may not have a real s3_key yet — keep them.
+        if j.get('source') == 'local' and not sk:
+            kept.append(j)
+            continue
+        if _is_root_csv_key(sk):
+            kept.append(j)
+        else:
+            dropped.append(sk)
+    if dropped:
+        ctx = f" [{context}]" if context else ''
+        sample = ', '.join(dropped[:5])
+        if len(dropped) > 5:
+            sample += f", … (+{len(dropped) - 5} more)"
+        print(f"⚠️ root-only cache invariant{ctx}: dropped {len(dropped)} non-root entries: {sample}")
+    return kept, dropped
+
+
 def load_persisted_cache():
     """Load the S3 file cache from S3 storage."""
     global s3_cache, _persisted_cache_etag
@@ -20372,10 +20467,16 @@ def load_persisted_cache():
     try:
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_CACHE_KEY)
         cached_data = json.loads(response['Body'].read().decode('utf-8'))
-        s3_cache['jobs'] = cached_data.get('jobs', [])
+        # Defense in depth: a persisted cache written before the
+        # root-only invariant existed (or by a legacy admin action)
+        # could contain subfolder keys. Strip them here so the
+        # in-memory cache always reflects the invariant.
+        raw_jobs = cached_data.get('jobs', [])
+        clean_jobs, _dropped = _enforce_root_only_jobs(raw_jobs, context='load_persisted_cache')
+        s3_cache['jobs'] = clean_jobs
         s3_cache['categories'] = cached_data.get('categories', [])
         s3_cache['last_updated'] = cached_data.get('last_updated')
-        s3_cache['file_count'] = cached_data.get('file_count', 0)
+        s3_cache['file_count'] = len(clean_jobs)
         s3_cache['last_full_scan'] = cached_data.get('last_full_scan')
         # Track ETag so other workers can detect changes via cheap HEAD requests.
         _persisted_cache_etag = (response.get('ETag') or '').strip('"') or None
@@ -20453,11 +20554,21 @@ def save_persisted_cache():
             # Merge is a soft guarantee; never fail a save on it.
             print(f"⚠️ persisted-cache imdb merge failed (non-fatal): {merge_err}")
 
+        # Defense in depth: never PERSIST anything that violates the
+        # root-only invariant. If a subfolder key snuck in via a legacy
+        # admin path (rename / recategorize) or stale cache merge,
+        # drop it here so the next worker that loads can't see it.
+        # Mutates s3_cache in place so the in-memory view stays
+        # consistent with what we wrote.
+        clean_jobs, _dropped = _enforce_root_only_jobs(s3_cache.get('jobs', []), context='save_persisted_cache')
+        if _dropped:
+            s3_cache['jobs'] = clean_jobs
+            s3_cache['file_count'] = len(clean_jobs)
         cache_data = {
-            'jobs': s3_cache.get('jobs', []),
+            'jobs': clean_jobs,
             'categories': s3_cache.get('categories', []),
             'last_updated': s3_cache.get('last_updated'),
-            'file_count': s3_cache.get('file_count', 0),
+            'file_count': len(clean_jobs),
             'last_full_scan': s3_cache.get('last_full_scan')
         }
         put_resp = s3_client.put_object(
@@ -21268,13 +21379,15 @@ def smart_cache_update():
             for obj in page.get('Contents', []):
                 key = obj['Key']
                 # Profile IQ only shows files at the root of dashboard-inputs.
-                # Any key with '/' lives in a subfolder (system/, historic/, backups/,
-                # _backups/, purgatory/, metadata/, sentiment-iq/, roas-iq/,
-                # brand-partnership-iq/, reference/, persona_cache/, etc.) and must
-                # not appear in the profile selector.
-                if not key.endswith('.csv') or '/' in key:
+                # Any key with '/' lives in a subfolder (archive/, system/,
+                # historic/, backups/, _backups/, purgatory/, metadata/,
+                # sentiment-iq/, roas-iq/, brand-partnership-iq/, reference/,
+                # persona_cache/, svod-acquisition/, ticket-sales-iq/, etc.)
+                # and must not appear in the profile selector. _is_root_csv_key
+                # is the single source of truth for this check.
+                if not _is_root_csv_key(key):
                     continue
-                
+
                 current_s3_keys.add(key)
                 obj_modified = obj['LastModified'].isoformat()
                 
@@ -21376,11 +21489,12 @@ def refresh_s3_cache(incremental=True):
             for obj in page.get('Contents', []):
                 key = obj['Key']
                 # Profile IQ only shows files at the root of dashboard-inputs —
-                # anything in a subfolder is system/cache/reference data and must
-                # not appear in the profile selector.
-                if not key.endswith('.csv') or '/' in key:
+                # anything in a subfolder is system/cache/reference/archive data
+                # and must not appear in the profile selector. _is_root_csv_key
+                # is the single source of truth for this check.
+                if not _is_root_csv_key(key):
                     continue
-                
+
                 job_data = process_s3_file_metadata(key, obj)
                 job_data['last_modified'] = obj['LastModified'].isoformat()
                 job_list.append(job_data)
