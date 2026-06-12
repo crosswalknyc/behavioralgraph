@@ -34774,7 +34774,7 @@
                             ['Transacted On Site', _jiqFmt(kpis.converted_users)],
                             ['On-Site CR', _jiqFmt(_convU) + '  |  ' + (kpis.conversion_pct != null ? kpis.conversion_pct + '%' : '—')],
                             ['Switched & Bought Elsewhere', _jiqFmt(_swU) + '  |  ' + _swPct + '%'],
-                            ['Total Captured (Fandango + Other Sellers)', _capturedNum + '  |  ' + (kpis.captured_pct != null ? kpis.captured_pct + '%' : '—')],
+                            ['Total Captured\n(Fandango + Other Sellers)', _capturedNum + '  |  ' + (kpis.captured_pct != null ? kpis.captured_pct + '%' : '—')],
                             ['DID NOT TRANSACT ONLINE', _neverNum + '  |  ' + (kpis.never_transacted_pct != null ? kpis.never_transacted_pct + '%' : '—')],
                         ];
                     } else {
@@ -34999,8 +34999,9 @@
                                    : (accent === 'violet')  ? '#a78bfa'
                                    : 'var(--text-primary)';
                     var border = accent ? '1px solid ' + valueColor : '1px solid var(--border-color)';
+                    var labelHtml = _jiqEsc(label).replace(/\n/g, '<br>');
                     return '<div style="background: var(--bg-secondary); border: ' + border + '; border-radius: 8px; padding: 0.6rem 0.8rem 1.4rem; display: flex; flex-direction: column;">'
-                         +   '<div style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; min-height: 3.2em; display: flex; align-items: flex-end; line-height: 1.4;">' + _jiqEsc(label) + '</div>'
+                         +   '<div style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; min-height: 3.2em; display: flex; align-items: flex-end; line-height: 1.4;">' + labelHtml + '</div>'
                          +   '<div style="font-size: 1.25rem; font-weight: 700; margin-top: 4px; color: ' + valueColor + ';">' + _jiqEsc(value) + '</div>'
                          + (sub ? '<div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 2px;">' + _jiqEsc(sub) + '</div>' : '')
                          + '</div>';
