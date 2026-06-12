@@ -32483,7 +32483,7 @@
                         '<span class="behavioral-rank">' + item._rank + '</span>' +
                         '<div class="behavioral-name-wrapper"><span class="behavioral-name has-tooltip" data-tooltip="' + nm.replace(/"/g, '&quot;') + '">' + nm + '</span></div>' +
                         '<span class="behavioral-pct" style="color: var(--text-primary);">' + profileDisplay + '</span>' +
-                        '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">(' + genPopDisplay + ')</span>' +
+                        '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + genPopDisplay + '</span>' +
                         '<span class="behavioral-index index-col" style="color: ' + indexColor + '; font-weight: 700;">' + indexCell + '</span>' +
                         '</div>';
                 }).join('');
@@ -32622,7 +32622,7 @@
                         '<span class="behavioral-rank">' + item._rank + '</span>' +
                         '<div class="behavioral-name-wrapper"><span class="behavioral-name has-tooltip" data-tooltip="' + nm.replace(/"/g, '&quot;') + '">' + nm + '</span></div>' +
                         '<span class="behavioral-pct" style="color: var(--text-primary);">' + profileDisplay + '</span>' +
-                        '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">(' + genPopDisplay + ')</span>' +
+                        '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + genPopDisplay + '</span>' +
                         '<span class="behavioral-index index-col" style="color: ' + indexColor + '; font-weight: 700;">' + indexCell + '</span>' +
                         '</div>';
                 }).join('');
@@ -61719,7 +61719,7 @@
                         +     '<span class="behavioral-name has-tooltip" data-tooltip="' + safeLabel + '">' + safeLabel + '</span>'
                         +   '</div>'
                         +   '<span class="behavioral-pct profile-col" style="color: var(--text-primary);">' + profStr + '</span>'
-                        +   '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + (gpStr === 'N/A' ? '(N/A)' : '(' + gpStr + ')') + '</span>'
+                        +   '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + gpStr + '</span>'
                         +   '<span class="behavioral-index index-col ' + idxTier + '" style="' + (showIdx ? '' : 'color: var(--text-secondary);') + ' font-weight: 700;">' + idxStr + '</span>'
                         + '</div>';
                 }).join('');
@@ -63100,7 +63100,7 @@
                 const genPopDisplay = isProjection
                     ? (genPopProjection === 0 || genPopProjection === null ? 'N/A' : formatNumber(Math.round(genPopProjection)))
                     : formatValueOrNA(genPopPct, true);
-                return (item.name || '') + ' · ' + profileDisplay + ' (' + genPopDisplay + ')' + (genPopDisplay === 'N/A' ? '' : ' · ' + formatIndex(item.index) + ' index');
+                return (item.name || '') + ' · ' + profileDisplay + ' · ' + genPopDisplay + (genPopDisplay === 'N/A' ? '' : ' · ' + formatIndex(item.index) + ' index');
             }
             
             // Enhanced header with search
@@ -65046,7 +65046,7 @@
                             <span class="behavioral-name has-tooltip" data-tooltip="${(item.name || '').replace(/"/g, '&quot;')}">${(item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
                         </div>
                         <span class="behavioral-pct profile-col" style="color: var(--text-primary);">${profileDisplay}</span>
-                        <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">${hasGenPopMatch ? '(' + genPopDisplay + ')' : '(N/A)'}</span>
+                        <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">${hasGenPopMatch ? genPopDisplay : 'N/A'}</span>
                         <span class="behavioral-index index-col ${indexTier}" style="${showIndex ? '' : 'color: var(--text-secondary);'} font-weight: 700;">${showIndex ? formatIndex(index) : 'N/A'}</span>
                     </div>
                 `;
