@@ -57078,6 +57078,7 @@
             // render owns the Profile column).
             const cfRow = document.createElement('label');
             cfRow.style.cssText = 'display:grid;grid-template-columns:18px 1fr;column-gap:0.55rem;align-items:center;padding:0.4rem 0.5rem;border-radius:6px;cursor:pointer;font-size:0.82rem;line-height:1.25;margin-bottom:0.45rem;background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.22);';
+            cfRow.title = 'The CASUAL FAN audience is composed of panelists who have 1 or more digital touchpoints to ' + (_comparisonRunsState.subject || 'this profile').toUpperCase() + ' within the stated timeframe.';
             const cfCb = document.createElement('input');
             cfCb.type = 'checkbox';
             cfCb.id = 'cmpIncludeCasualFanCb';
