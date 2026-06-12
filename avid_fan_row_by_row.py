@@ -7,7 +7,7 @@ pipeline and decide what that avid fan would look like demographically,
 location based, interests, most purchased brands, etc row by row".
 
 Per Jenna 2026-06-12 directive: "automatically does an avid fan skin for
-all profiles pulled moving forward" — `BG.py` calls `synthesize_avid_fan`
+all profiles pulled moving forward" -- `BG.py` calls `synthesize_avid_fan`
 unconditionally at the tail of `run_full_pipeline` for any profile whose
 BRAND CATEGORY is not in `AVID_NON_APPLICABLE_CATEGORIES`.
 
@@ -60,14 +60,14 @@ REGION = "us-east-2"
 
 # Categories where "avid fan" is conceptually meaningless: the underlying
 # profile is itself an audience cohort or baseline (Gen Pop, banking
-# customers, shopping-intent / trend topics) rather than a subject-of-
-# fandom (talent / IP / team / brand). The BG.py post-pipeline hook and
-# the scripts/backfill_avid_fans_all.py orchestrator both gate on this
-# set. Keep tight — when in doubt, run the avid synthesis (e.g. brand
-# cohorts like "Nike" CAN have avid fans = heavy buyers).
+# customers, shopping-intent/trend topics) rather than a subject-of-fandom
+# (talent / IP / team / brand). The BG.py post-pipeline hook and the
+# scripts/backfill_avid_fans_all.py orchestrator both gate on this set.
+# Keep tight -- when in doubt, run the avid synthesis (e.g. brand cohorts
+# like "Nike" CAN have avid fans = heavy buyers).
 AVID_NON_APPLICABLE_CATEGORIES = frozenset({
     "GEN POP",
-    "DIGITAL BANKING",     # e.g. "Chime Banking Customers" — already a cohort
+    "DIGITAL BANKING",     # e.g. "Chime Banking Customers" -- already a cohort
     "LOYALTY PROGRAMS",
     "SHOPPING INTENT",
     "TRENDS",
@@ -76,17 +76,17 @@ AVID_NON_APPLICABLE_CATEGORIES = frozenset({
 })
 
 
-def should_synthesize_avid_for_category(brand_category) -> bool:
+def should_synthesize_avid_for_category(brand_category: Optional[str]) -> bool:
     """Return True iff an avid-fan skin should be synthesized for a profile
     whose BRAND CATEGORY is `brand_category`. UNCATEGORIZED is allowed
-    (the avid skin will inherit "UNCATEGORIZED" and a follow-up pass via
-    scripts/categorize_uncategorized_profiles.py will fix it).
+    (the avid skin will inherit "UNCATEGORIZED" and a follow-up pass
+    via scripts/categorize_uncategorized_profiles.py will fix it).
     """
     if not brand_category:
         return True
     bc = str(brand_category).strip().upper()
     if not bc or bc in ("NAN", "NONE", "UNKNOWN"):
-        return True
+        return True  # treat as UNCATEGORIZED (run avid; leave categorize for later)
     return bc not in AVID_NON_APPLICABLE_CATEGORIES
 
 
@@ -293,14 +293,18 @@ def _audience_summary_text(audience: dict) -> str:
 
 
 def reason_category_rows(subject: str, audience: dict, category: str,
-                         rows: list, *, max_rows: int = 80) -> dict:
-    """Phase 2 Claude call. Returns {label_upper: new_bp} for at least
-    the top-`max_rows` rows in the category."""
+                         rows: list, *, chunk_size: int = 200) -> dict:
+    """Phase 2 Claude call -- reasons over EVERY row in the category (no
+    top-N truncation). Long lists are split into sequential chunks of
+    `chunk_size` rows so the agent can reason about each row without
+    hitting context limits; decisions from all chunks are merged.
+
+    Per Jenna 2026-06-12 "no caps on anything anywhere for agents",
+    there is no row-count cap and no priority gating upstream.
+    """
     if not rows:
         return {}
     audience_summary = _audience_summary_text(audience)
-    rows_sorted = sorted(rows, key=lambda kv: -kv[1])
-    head = rows_sorted[:max_rows]
 
     try:
         from claude_client import claude_messages
@@ -311,30 +315,40 @@ def reason_category_rows(subject: str, audience: dict, category: str,
         except Exception:
             return {}
 
-    user = _format_category_user(subject, audience_summary, category, head)
-    try:
-        resp = claude_messages(
-            system=_CAT_ROW_SYSTEM, user=user,
-            max_tokens=4096, temperature=0.3,
-        )
-    except Exception as e:
-        print(f"[avid-fan] cat={category} claude failed: {e}")
-        return {}
-    obj = _extract_json_block(resp) if resp else None
-    if not isinstance(obj, dict):
-        return {}
-    out = {}
-    for it in obj.get("items", []) or []:
-        if not isinstance(it, dict):
+    rows_sorted = sorted(rows, key=lambda kv: -kv[1])
+    out: dict = {}
+    n_chunks = (len(rows_sorted) + chunk_size - 1) // chunk_size
+    for i in range(n_chunks):
+        chunk = rows_sorted[i * chunk_size:(i + 1) * chunk_size]
+        if n_chunks > 1:
+            chunk_label = f"{category} (chunk {i + 1}/{n_chunks})"
+        else:
+            chunk_label = category
+        user = _format_category_user(subject, audience_summary,
+                                     chunk_label, chunk)
+        try:
+            resp = claude_messages(
+                system=_CAT_ROW_SYSTEM, user=user,
+                max_tokens=24000, temperature=0.3,
+            )
+        except Exception as e:
+            print(f"[avid-fan] cat={category} chunk {i+1}/{n_chunks} "
+                  f"claude failed: {e}")
             continue
-        label = str(it.get("label", "")).strip().upper()
-        bp = it.get("new_bp")
-        if not label or not isinstance(bp, (int, float)):
+        obj = _extract_json_block(resp) if resp else None
+        if not isinstance(obj, dict):
             continue
-        bp = float(bp)
-        if bp <= 0 or bp >= 99.99:
-            continue
-        out[label] = round(bp, 4)
+        for it in obj.get("items", []) or []:
+            if not isinstance(it, dict):
+                continue
+            label = str(it.get("label", "")).strip().upper()
+            bp = it.get("new_bp")
+            if not label or not isinstance(bp, (int, float)):
+                continue
+            bp = float(bp)
+            if bp <= 0 or bp >= 99.99:
+                continue
+            out[label] = round(bp, 4)
     return out
 
 
@@ -358,8 +372,12 @@ def apply_avid_transform(df, audience: dict, category_decisions: dict,
       - DEMO category: use audience_demo_targets bucket value if present
       - SUBJECT pin category: keep at 100% (rule #3)
       - SAMPLE SIZE / META: leave as-is, sample_size and US_POP recompute
-      - Other categories: use category_decisions[CAT][LABEL] if present;
-        else apply a small audience-aware default lift.
+      - Other categories: use category_decisions[CAT][LABEL] if Claude
+        returned a per-row decision. If Claude did NOT return a row,
+        the BP is left at the source value with subject-salted
+        ±0.10pp jitter -- NO multiplier, no flat lift, no default
+        push (per Jenna 2026-06-12 "no caps on anything anywhere
+        for agents -- must always go row by row").
     Recompute Raw + Projection from new sample_size + US_POP.
     """
     import pandas as pd  # noqa
@@ -418,7 +436,7 @@ def apply_avid_transform(df, audience: dict, category_decisions: dict,
             # equal the AVID cohort's sample size and projection, not
             # the parent OG's. Leaving them stale was the cause of the
             # 2026-06-12 "avid sample size looks the same as OG" bug
-            # — the dashboard reads BRAND INPUT for the header pill,
+            # -- the dashboard reads BRAND INPUT for the header pill,
             # so an unwritten row meant analysts saw the OG sample.
             df.at[idx, raw_col] = float(new_sample)
             df.at[idx, proj_col] = float(new_uspop)
@@ -465,29 +483,28 @@ def apply_avid_transform(df, audience: dict, category_decisions: dict,
             n_demo += 1
             continue
 
-        # Non-demo brand row: use category_decisions if available
+        # Non-demo brand row: use category_decisions if available.
+        # Per Jenna 2026-06-12 "no caps on anything anywhere for
+        # agents", there is NO default lift. Rows the agent didn't
+        # decide are left near source BP with subject-salted micro-
+        # jitter (±0.10pp) -- enough to break a 4dp collision with the
+        # source but with no directional push, since the agent didn't
+        # justify any push.
         cat_dec = category_decisions.get(cat, {})
         if val_u in cat_dec:
             new_bp = float(cat_dec[val_u])
             n_brand += 1
+            new_bp = max(0.0001, min(99.49, round(new_bp, 4)))
         else:
-            # Default audience-aware mild lift, with subject-salted jitter
-            mult = 1.10 + _seed_jitter(
-                f"{subject}|{cat}|{val_u}|avid-default", span=0.18,
+            new_bp = round(
+                old_bp + _seed_jitter(
+                    f"{subject}|{cat}|{val_u}|avid-no-claude-jitter",
+                    span=0.10,
+                ),
+                4,
             )
-            new_bp = round(old_bp * mult, 4)
-            n_unchanged += 1
-
-        # Bound + ensure differs from old by >=0.5pp
-        new_bp = max(0.0001, min(99.49, round(new_bp, 4)))
-        if abs(new_bp - old_bp) < 0.5:
-            direction = 1.0 if old_bp < 50 else -1.0
-            new_bp = round(old_bp + direction * (
-                0.5 + abs(_seed_jitter(
-                    f"{subject}|{cat}|{val_u}|min-delta", span=0.4,
-                ))
-            ), 4)
             new_bp = max(0.0001, min(99.49, new_bp))
+            n_unchanged += 1
 
         df.at[idx, bp_col] = f"{new_bp:.4f}%"
         df.at[idx, raw_col] = float(round(new_sample * new_bp / 100.0))
@@ -550,7 +567,7 @@ def apply_avid_transform(df, audience: dict, category_decisions: dict,
         "n_demo_renormed": n_demo_renorm,
         "n_brand_rows": n_brand,
         "n_subject_pin_rows": n_pin,
-        "n_default_lift_rows": n_unchanged,
+        "n_no_claude_jitter_rows": n_unchanged,
     }
 
 
@@ -621,7 +638,7 @@ def enforce_no_collisions(df_avid, df_baseline, subject: str):
 
 
 # =============================================================================
-# Source loading (s3_key OR local_path) — mirrors super_fan_synthesis._load_source
+# Source loading (s3_key OR local_path) -- mirrors super_fan_synthesis._load_source
 # =============================================================================
 def _load_source_df(source: str, source_kind: str = "auto"):
     """Return (df, resolved_kind). source_kind='auto' picks 'local_path' when
@@ -656,7 +673,7 @@ def synthesize_avid_fan(
     register_in_dashboard: bool = True,
     source_s3_key: Optional[str] = None,
 ) -> dict:
-    """End-to-end orchestrator. Loads `source` (an S3 key OR local CSV
+    """End-to-end orchestrator. Loads `source` (an S3 key or local CSV
     path), runs Phase 1-4 synthesis, writes the avid fan CSV to S3, and
     optionally registers it in the dashboard.
 
@@ -672,10 +689,10 @@ def synthesize_avid_fan(
         register many keys at once (e.g. backfill orchestrator) to
         avoid s3_cache.json read-modify-write races.
       source_s3_key: optional S3 key the local file came from. Only used
-        when source_kind='local_path' — passed to dashboard_register as
+        when source_kind='local_path' -- passed to dashboard_register as
         `source_key` so the avid entry inherits custom_image / imdb_id
-        from the parent OG cache row. Skip if synthesizing from a non-
-        S3 file.
+        from the parent OG cache row. Skip if synthesizing from a non-S3
+        file.
 
     Returns: dict with keys `out_key`, `status` ('uploaded'|'dry-run'),
       `audience`, `stats`, `n_collisions_fixed`, `register_status`.
@@ -696,28 +713,13 @@ def synthesize_avid_fan(
           f"claude={audience.get('claude_used', False)}")
     print(f"     reasoning: {audience.get('reasoning', '')[:200]}")
 
-    # Phase 2: per-category row-by-row Claude reasoning, scoped to the
-    # high-signal categories. Long-tail / single-cat-of-the-genre rows
-    # get the default audience-aware jittered lift in Phase 3 (no
-    # Claude call) so total runtime stays bounded (~3-5 min/profile
-    # instead of ~30 min).
-    PRIORITY_CATS = [
-        "TALENT", "MUSICIAN/BAND", "ACTOR", "COMEDIAN",
-        "ATHLETE", "HOST/PERSONALITY", "AUTHOR", "DIRECTOR",
-        "MOVIE", "SERIES - HBO", "SERIES - NETFLIX",
-        "SERIES - AMAZON / MGM STUDIOS", "SERIES - DISNEY+",
-        "SERIES - APPLE TV+", "SERIES - PARAMOUNT+", "SERIES - PEACOCK",
-        "SERIES - HULU", "SERIES - MAX", "SERIES - FX",
-        "MEDIA", "PODCAST", "MOST PURCHASED BRANDS",
-        "APPAREL/FOOTWEAR", "WHERE THEY SHOP", "HOME/OUTDOOR",
-        "GAMES", "GAME PLAYERS", "RESTAURANT", "TRAVEL",
-        "PORN MEDIA", "SEARCH ENGINE/AI", "SOCIAL", "CREDIT PROVIDER",
-        "TELECOM", "SPORTS TEAM", "AL/NL", "AFC/NFC",
-        "AFC EAST", "AFC WEST", "AFC NORTH", "AFC SOUTH",
-        "NFC EAST", "NFC WEST", "NFC NORTH", "NFC SOUTH",
-        "DIGITAL BANK", "CONSUMER ELECTRONICS",
-        "FRANCHISE", "MOVIE THEATER",
-    ]
+    # Phase 2: per-category row-by-row Claude reasoning. Per Jenna
+    # 2026-06-12 directive "no caps on anything anywhere for agents",
+    # this iterates EVERY non-demo, non-skip category in the profile
+    # -- no PRIORITY_CATS allowlist, no row-count cap, no default-lift
+    # fallback in Phase 3. Categories with > chunk_size rows get
+    # split into multiple sequential Claude calls in
+    # reason_category_rows.
     cat_col = "Column"
     val_col = "Value"
     bp_col = "Brand Penetration (Row)"
@@ -734,12 +736,14 @@ def synthesize_avid_fan(
         if cu in DEMO_CATS_TF or cu in SKIP_CATS or cu == "":
             continue
         all_non_demo.append(cu)
-    # Process priority cats first (in order), then any remaining priority
-    # cats found in this profile that we missed; long-tail cats get
-    # default audience-aware lifts only.
-    cats_to_call = [c for c in PRIORITY_CATS if c in all_non_demo]
-    print(f"  -> Phase 2: {len(cats_to_call)}/{len(all_non_demo)} priority "
-          f"category Claude calls (others get default audience lifts) ...")
+    # Largest cats first so any rate-limit hiccup falls on the tail.
+    cat_sizes = {c: int((cats_upper == c).sum()) for c in all_non_demo}
+    cats_to_call = sorted(all_non_demo, key=lambda c: -cat_sizes[c])
+    total_rows = sum(cat_sizes.values())
+    print(f"  -> Phase 2: ALL {len(cats_to_call)} non-demo categories "
+          f"({total_rows} rows total) -- no priority gating, no top-N cap, "
+          f"no default-lift fallback ...")
+    rows_decided = 0
     for i, cat in enumerate(cats_to_call, start=1):
         rows = []
         for _, r in df_baseline[cats_upper == cat].iterrows():
@@ -749,12 +753,13 @@ def synthesize_avid_fan(
             rows.append((str(r.get(val_col, "")).strip(), v))
         if not rows:
             continue
-        decisions = reason_category_rows(subject, audience, cat, rows,
-                                         max_rows=60)
+        decisions = reason_category_rows(subject, audience, cat, rows)
         if decisions:
             cat_decisions[cat] = decisions
-        print(f"     [{i:>2d}/{len(cats_to_call)}] {cat:32s} rows={len(rows):>4d}  "
-              f"claude_returned={len(decisions)}",
+        rows_decided += len(decisions)
+        print(f"     [{i:>2d}/{len(cats_to_call)}] {cat:32s} "
+              f"rows={len(rows):>4d}  claude_returned={len(decisions):>4d}  "
+              f"(running total decided={rows_decided}/{total_rows})",
               flush=True)
 
     # Phase 3: apply
@@ -775,7 +780,7 @@ def synthesize_avid_fan(
 
     # Defense-in-depth: ensure df has a populated BRAND CATEGORY row so
     # the dashboard groups the avid fan profile correctly (User rule
-    # 2026-06-11: "always make it a rule" — every profile we create
+    # 2026-06-11: "always make it a rule" -- every profile we create
     # MUST have a canonical BRAND CATEGORY). Inherit from source df by
     # scanning Column='BRAND CATEGORY' rows; if missing/blank, the avid
     # output is left without one and a loud warning is printed (we
@@ -817,7 +822,7 @@ def synthesize_avid_fan(
                     )
         else:
             print(
-                f"   ⚠ no BRAND CATEGORY found on source profile for {subject!r} — "
+                f"   ⚠ no BRAND CATEGORY found on source profile for {subject!r} -- "
                 f"avid output will be UNCATEGORIZED in dashboard. Patch via "
                 f"scripts/categorize_uncategorized_profiles.py after upload."
             )
@@ -885,7 +890,7 @@ def synthesize_avid_fan(
     }
 
 
-# Back-compat shim — original name kept so any existing callers continue
+# Back-compat shim -- original name kept so any existing callers continue
 # to work. Prefer `synthesize_avid_fan(...)` for new code; it accepts
 # either an S3 key or a local path via source_kind.
 def synthesize_avid_fan_for_s3_key(s3_key: str, *, dry_run: bool = False) -> dict:
