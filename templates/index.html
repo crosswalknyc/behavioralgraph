@@ -57543,8 +57543,11 @@
                 // Recompute grid: rank | name | profile | [N cmps] | [genpop?] | index.
                 // The "70px " before " 56px" is the Gen Pop column; drop it
                 // when the user has hidden Gen Pop so the row collapses
-                // cleanly instead of leaving a gap.
-                const cmpCols = series.map(() => '60px').join(' ');
+                // cleanly instead of leaving a gap. 72px per cmp leaves
+                // enough room for labels like "NETFLIX ONLY" / "YOUTUBE
+                // ONLY"; longer labels clip with ellipsis (full label in
+                // title attr).
+                const cmpCols = series.map(() => '72px').join(' ');
                 const gpCol = hideGP ? '' : ' 70px';
                 table.style.gridTemplateColumns = '28px minmax(80px,1fr) 70px ' + cmpCols + gpCol + ' 56px';
 
@@ -57555,8 +57558,10 @@
                     series.forEach((entry, idx) => {
                         const span = document.createElement('span');
                         span.className = 'cmp-col-cell';
-                        span.textContent = entry.label || ('Run ' + (idx + 1));
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;';
+                        const label = entry.label || ('Run ' + (idx + 1));
+                        span.textContent = label;
+                        span.title = label;
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;';
                         if (gpHeader) header.insertBefore(span, gpHeader);
                         else header.appendChild(span);
                     });
@@ -57595,37 +57600,48 @@
             });
 
             // -------- INTERESTS LIST ------------------------------------
+            // NOTE: #interestsGrid is display:flex (column). Each
+            // .interest-header-row and .interest-item is its OWN
+            // display:grid with template '30px 1fr 70px 70px 60px'.
+            // Setting gridTemplateColumns on the parent is a no-op,
+            // so we must apply the new template to every header AND
+            // every data row individually (same pattern as Location).
             const intGrid = document.getElementById('interestsGrid');
             if (intGrid) {
                 _cmpClearInjected(intGrid);
+                const intHeader = intGrid.querySelector('.interest-header-row');
+                const intItems = intGrid.querySelectorAll('.interest-item');
                 if (series.length > 0) {
                     intGrid.classList.toggle('cmp-hide-genpop', hideGP);
                     const intLookups = series.map(s => ({
                         label: s.label,
                         map: _cmpBuildInterestsLookup(s.parsed)
                     }));
-                    // The interests grid uses a CSS grid declared in the
-                    // stylesheet. We override grid-template-columns via
-                    // inline style to expand for comparison columns and
-                    // optionally drop the Gen Pop column.
-                    const cmpCols = series.map(() => '60px').join(' ');
+                    // Row layout: # | Item | Profile | [N cmps] | [Gen Pop?] | Index
+                    // 72px per cmp leaves enough room for labels like
+                    // "NETFLIX ONLY" / "YOUTUBE ONLY"; longer labels
+                    // clip with ellipsis (full label in title attr).
+                    const cmpCols = series.map(() => '72px').join(' ');
                     const gpCol = hideGP ? '' : ' 70px';
-                    intGrid.style.gridTemplateColumns = '28px minmax(120px,1fr) 70px ' + cmpCols + gpCol + ' 56px';
+                    const intGridTpl = '30px minmax(120px,1fr) 70px ' + cmpCols + gpCol + ' 60px';
 
-                    const intHeader = intGrid.querySelector('.interest-header-row');
                     if (intHeader) {
+                        intHeader.style.gridTemplateColumns = intGridTpl;
                         const gpHeader = intHeader.querySelector('.genpop-col');
                         series.forEach((entry, idx) => {
                             const span = document.createElement('span');
                             span.className = 'cmp-col-cell';
-                            span.textContent = entry.label || ('Run ' + (idx + 1));
-                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;';
+                            const label = entry.label || ('Run ' + (idx + 1));
+                            span.textContent = label;
+                            span.title = label;
+                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;';
                             if (gpHeader) intHeader.insertBefore(span, gpHeader);
                             else intHeader.appendChild(span);
                         });
                     }
 
-                    intGrid.querySelectorAll('.interest-item').forEach(row => {
+                    intItems.forEach(row => {
+                        row.style.gridTemplateColumns = intGridTpl;
                         const nameEl = row.querySelector('.interest-name');
                         if (!nameEl) return;
                         const name = _cmpNormName(nameEl.textContent || row.dataset.name || '');
@@ -57634,15 +57650,19 @@
                             const match = intLookups[idx].map[name];
                             const span = document.createElement('span');
                             span.className = 'cmp-col-cell';
-                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;';
+                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;overflow:hidden;min-width:0;';
                             span.textContent = match ? _cmpFmtPct(match.pct) : '—';
+                            if (match && match.pct != null) {
+                                span.title = entry.label + ' • ' + name + ' • ' + _cmpFmtPct(match.pct);
+                            }
                             if (gpCell) row.insertBefore(span, gpCell);
                             else row.appendChild(span);
                         });
                     });
                 } else {
-                    intGrid.style.gridTemplateColumns = '';
                     intGrid.classList.remove('cmp-hide-genpop');
+                    if (intHeader) intHeader.style.gridTemplateColumns = '';
+                    intItems.forEach(row => { row.style.gridTemplateColumns = ''; });
                 }
             }
 
@@ -57691,11 +57711,16 @@
                 // order is:
                 //   Rank | Location | Rank | Profile | [cmps] | [GP cols] | Index
                 // For the "All" table we ALSO honor the Gen Pop hide
-                // toggle by dropping the two GP columns when requested.
-                const cmpColsCss = series.map(() => '60px').join(' ');
+                // toggle. NOTE: only .cw-gp-col is class-hidden via
+                // .cmp-hide-genpop; "GP Census" is a plain <span> with
+                // no class so it stays visible. We must therefore drop
+                // ONLY ONE column (CW Gen Pop) when hideGP is true,
+                // not both, or the row gets one fewer declared column
+                // than visible cells and "CW GP Index" wraps below.
+                const cmpColsCss = series.map(() => '72px').join(' ');
                 let newGrid;
                 if (sec.isAll) {
-                    const gpCols = hideGP ? '' : ' 72px 72px';
+                    const gpCols = hideGP ? ' 72px' : ' 72px 72px';
                     newGrid = '58px minmax(0, 1fr) 44px 80px ' + cmpColsCss + gpCols + ' 58px';
                 } else {
                     // Over/under tables have no native Gen Pop column,
@@ -57733,8 +57758,10 @@
                     series.forEach((entry, idx) => {
                         const span = document.createElement('span');
                         span.className = 'cmp-col-cell';
-                        span.textContent = entry.label || ('Run ' + (idx + 1));
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;';
+                        const label = entry.label || ('Run ' + (idx + 1));
+                        span.textContent = label;
+                        span.title = label;
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;';
                         if (anchor) header.insertBefore(span, anchor);
                         else header.appendChild(span);
                     });
