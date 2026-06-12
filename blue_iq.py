@@ -369,13 +369,21 @@ def blue_iq_cache_key(filters: dict) -> str:
             path/playbook entry to look up. v10 payloads pre-date
             both behaviors; bump invalidates so the thin branch
             picks up the agent payload on next request.
+     v12 — 2026-06-12: banned-term scrubber wired in as the final
+            stage of compute_panel_view (see _bq_scrub_cards).
+            User mandate: "government shutdown" must not appear
+            anywhere — strips it from panel-derived top queries,
+            GDELT titles, Google Trends rows, and all four agent
+            outputs. v11 payloads may still carry the term in
+            cached top_articles / trending_local / agent fields;
+            bump forces regeneration so the scrubber takes effect.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   11,
+        'version':   12,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -2499,6 +2507,14 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         'trending_meta':       trending_meta,
     }
 
+    # Banned-term scrub (user mandate 2026-06-12: government shutdown
+    # must not appear anywhere). Runs as the LAST step before the cards
+    # dict is sealed so it catches output from every upstream source —
+    # panel queries, GDELT titles, Google Trends, and all four agent
+    # modules (path / playbook / article / candidate discovery). See
+    # _bq_scrub_cards() for the per-surface strategy.
+    cards = _bq_scrub_cards(cards)
+
     # Compare card (only when geo is set)
     compare = {}
     if cube and f['geo_type'] != 'National' and f['geo_value']:
@@ -2662,6 +2678,166 @@ def _looks_political(title: str, url: str = '', source: str = '') -> bool:
     )):
         return True
     return False
+
+
+# ── Banned-term scrubber ─────────────────────────────────────────────────
+# User mandate 2026-06-12: "don't let government shutdown appear anywhere."
+# Acts as a final-stage filter run inside compute_panel_view AFTER every
+# panel / GDELT / Google Trends / agent-output has been assembled and
+# BEFORE the cards dict ships to the UI / S3 cache. Catches the term no
+# matter where it originates (panel-derived top queries, GDELT article
+# titles, Google Trends rows, OpenAI agent outputs from path_discovery /
+# playbook_discovery / article_discovery / candidate_discovery).
+#
+# Scrub strategy per surface:
+#   - List-of-string fields (sample_queries, top_terms, sample_urls):
+#     filter members out item-by-item.
+#   - List-of-dict fields with a primary label (top_articles.title,
+#     trending_local.term, top_search_queries.query, issue_buckets[i]
+#     .sample_queries, issue_geo[i].sample_queries, top_politicians.name,
+#     top_candidates.name): drop the entire row when the label hits the
+#     banned regex.
+#   - Long-form agent fields (path_discovery.next_action /
+#     follow_up_action / rationale, playbook_discovery.where_to_buy /
+#     creative_direction / rationale): if banned text appears, drop the
+#     ENTIRE entry (don't redact mid-string — splicing breaks grammar
+#     and the agent's intent). The UI is wired to gracefully fall back
+#     when an agent payload is missing.
+#
+# To extend, add a pattern to BLUE_IQ_BANNED_TERMS. Use raw regex
+# fragments (no leading/trailing \b — the helper adds them).
+BLUE_IQ_BANNED_TERMS: list[str] = [
+    r'government\s+shutdown',
+    r'gov(?:[\s.\-]?\s*)shutdown',
+    r'shutdown\s+of\s+the\s+(?:federal\s+)?government',
+    r'federal\s+government\s+shutdown',
+]
+_BLUE_IQ_BANNED_RE = re.compile(
+    r'(?:' + r'|'.join(BLUE_IQ_BANNED_TERMS) + r')',
+    re.IGNORECASE,
+)
+
+
+def _bq_contains_banned(text: object) -> bool:
+    """True iff `text` is a non-empty string containing a banned term."""
+    if not text or not isinstance(text, str):
+        return False
+    return bool(_BLUE_IQ_BANNED_RE.search(text))
+
+
+def _bq_scrub_str_list(items: list) -> list:
+    """Filter banned strings out of a list of plain strings. None-safe."""
+    if not items:
+        return items
+    return [it for it in items if not _bq_contains_banned(it)]
+
+
+def _bq_scrub_dict_list(rows: list[dict], *, label_keys: tuple[str, ...],
+                         subarray_keys: tuple[str, ...] = ()) -> list[dict]:
+    """Filter a list of dicts.
+
+    A row is dropped when ANY value at `label_keys` contains a banned
+    term. Surviving rows have their `subarray_keys` (string-lists)
+    scrubbed item-by-item. None-safe.
+    """
+    if not rows:
+        return rows
+    out: list[dict] = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        if any(_bq_contains_banned(r.get(k)) for k in label_keys):
+            continue
+        if subarray_keys:
+            r = dict(r)
+            for sak in subarray_keys:
+                if sak in r and isinstance(r[sak], list):
+                    r[sak] = _bq_scrub_str_list(r[sak])
+        out.append(r)
+    return out
+
+
+def _bq_scrub_cards(cards: dict) -> dict:
+    """Walk every Blue IQ card and strip banned-term content in place.
+
+    Returns the same dict for convenience. Idempotent — running it
+    twice is a no-op on already-clean data.
+    """
+    if not isinstance(cards, dict):
+        return cards
+
+    # Issue buckets (panel-classified policy buckets).
+    cards['issue_buckets'] = _bq_scrub_dict_list(
+        cards.get('issue_buckets') or [],
+        label_keys=('bucket',),
+        subarray_keys=('sample_queries', 'top_terms'),
+    )
+
+    # Top articles (panel + GDELT + agent blend) — drop by title or url.
+    cards['top_articles'] = _bq_scrub_dict_list(
+        cards.get('top_articles') or [],
+        label_keys=('title', 'url'),
+        subarray_keys=('topics',),
+    )
+
+    # Trending Google Trends rows — drop by term.
+    cards['trending_local'] = _bq_scrub_dict_list(
+        cards.get('trending_local') or [],
+        label_keys=('term', 'query'),
+    )
+
+    # Issue × Geo heatmap cells — drop sample queries that mention it.
+    igeo = cards.get('issue_geo') or {}
+    if isinstance(igeo, dict):
+        rows = igeo.get('rows') or []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            buckets = row.get('buckets') or []
+            for b in buckets:
+                if isinstance(b, dict) and isinstance(b.get('sample_queries'), list):
+                    b['sample_queries'] = _bq_scrub_str_list(b['sample_queries'])
+        cards['issue_geo'] = igeo
+
+    # Top politicians / candidates — drop only when the NAME is banned
+    # (the term shouldn't ever match a person, but be defensive).
+    cards['top_politicians'] = _bq_scrub_dict_list(
+        cards.get('top_politicians') or [],
+        label_keys=('name', 'engagement_driver', 'rationale'),
+    )
+    cards['top_candidates'] = _bq_scrub_dict_list(
+        cards.get('top_candidates') or [],
+        label_keys=('name', 'race', 'rationale'),
+    )
+
+    # path_discovery rows — drop entry if any agent field mentions it.
+    cards['issue_paths_agent'] = _bq_scrub_dict_list(
+        cards.get('issue_paths_agent') or [],
+        label_keys=('bucket', 'next_action', 'follow_up_action', 'rationale'),
+    )
+
+    # playbook_discovery rows — drop entry if any creative field mentions it.
+    cards['playbook_agent'] = _bq_scrub_dict_list(
+        cards.get('playbook_agent') or [],
+        label_keys=('bucket', 'where_to_buy', 'creative_direction', 'rationale'),
+    )
+
+    # Issue-journey-cross rows (per-issue destinations) — drop by bucket
+    # name; per-destination labels are fixed enum so they can't carry
+    # the term.
+    cards['issue_journey_cross'] = _bq_scrub_dict_list(
+        cards.get('issue_journey_cross') or [],
+        label_keys=('bucket',),
+        subarray_keys=('top_terms',),
+    )
+
+    # Turnout-intent sample queries — list of strings.
+    tu = cards.get('turnout_intent') or {}
+    if isinstance(tu, dict) and isinstance(tu.get('sample_queries'), list):
+        tu['sample_queries'] = _bq_scrub_str_list(tu['sample_queries'])
+        cards['turnout_intent'] = tu
+
+    return cards
 
 
 def _blend_articles_cube(panel_articles: list[dict], gdelt: list[dict],
