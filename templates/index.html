@@ -13813,6 +13813,7 @@
                                         <optgroup label="⭐ TALENT">
                                             <option value="ACTOR">Actor</option>
                                             <option value="ATHLETE">Athlete</option>
+                                            <option value="COMEDIAN">Comedian</option>
                                             <option value="CREATOR/INFLUENCER">Creator/Influencer</option>
                                             <option value="EMERGING TALENT">Emerging Talent</option>
                                             <option value="HOST/PERSONALITY">Host/Personality</option>
@@ -14271,6 +14272,7 @@
                                                 <optgroup label="⭐ TALENT">
                                                     <option value="ACTOR">Actor</option>
                                                     <option value="ATHLETE">Athlete</option>
+                                                    <option value="COMEDIAN">Comedian</option>
                                                     <option value="CREATOR/INFLUENCER">Creator/Influencer</option>
                                                     <option value="EMERGING TALENT">Emerging Talent</option>
                                                     <option value="HOST/PERSONALITY">Host/Personality</option>
@@ -63811,7 +63813,7 @@
                     });
                 });
                 if (isTalent) {
-                    const _tm = {'actor':['ACTOR'],'athlete':['ATHLETE'],'creator/influencer':['CREATOR/INFLUENCER'],'emerging talent':['EMERGING TALENT'],'host/personality':['HOST/PERSONALITY'],'influencer/creator':['INFLUENCER/CREATOR'],'mlb athlete':['MLB ATHLETE'],'musician/band':['MUSICIAN/BAND'],'nba athlete':['NBA ATHLETE'],'nfl athlete':['NFL ATHLETE'],'nhl athlete':['NHL ATHLETE'],'politics/activist':['POLITICS/ACTIVIST'],'soccer athlete':['SOCCER ATHLETE'],'wnba athlete':['WNBA ATHLETE'],'writer/director/author/artist':['WRITER/DIRECTOR/AUTHOR/ARTIST']};
+                    const _tm = {'actor':['ACTOR'],'athlete':['ATHLETE'],'comedian':['COMEDIAN'],'creator/influencer':['CREATOR/INFLUENCER'],'emerging talent':['EMERGING TALENT'],'host/personality':['HOST/PERSONALITY'],'influencer/creator':['INFLUENCER/CREATOR'],'mlb athlete':['MLB ATHLETE'],'musician/band':['MUSICIAN/BAND'],'nba athlete':['NBA ATHLETE'],'nfl athlete':['NFL ATHLETE'],'nhl athlete':['NHL ATHLETE'],'politics/activist':['POLITICS/ACTIVIST'],'soccer athlete':['SOCCER ATHLETE'],'wnba athlete':['WNBA ATHLETE'],'writer/director/author/artist':['WRITER/DIRECTOR/AUTHOR/ARTIST']};
                     const _live = _hasOrigCatItems(talentSliceOptions, o => _tm[o.toLowerCase()] || [o.toUpperCase()]);
                     talentSliceOptions.length = 0; talentSliceOptions.push('all', ..._live);
                 }
@@ -76639,7 +76641,7 @@
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'WNBA'],
             'TRENDS': ['TRENDS'],
-            'TALENT': ['ACTOR', 'ATHLETE', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
+            'TALENT': ['ACTOR', 'ATHLETE', 'COMEDIAN', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
             'SVOD ACQUISITION': ['SVOD ACQUISITION']  // SVOD files are always in their own master category
         };
         
