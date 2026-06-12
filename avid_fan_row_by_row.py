@@ -673,6 +673,57 @@ def synthesize_avid_fan_for_s3_key(s3_key: str, *, dry_run: bool = False
     subj_clean = re.sub(r"\s+", " ", subject).strip()
     out_key = f"{subj_clean} - Avid Fan.csv"
 
+    # Defense-in-depth: ensure df has a populated BRAND CATEGORY row so
+    # the dashboard groups the avid fan profile correctly (User rule
+    # 2026-06-11: "always make it a rule" — every profile we create
+    # MUST have a canonical BRAND CATEGORY). Inherit from source df by
+    # scanning Column='BRAND CATEGORY' rows; if missing/blank, the avid
+    # output is left without one and a loud warning is printed (we
+    # never fabricate a category from thin air per the no-pinning rule).
+    try:
+        col_u_bc = df_avid["Column"].astype(str).str.strip().str.upper()
+        bc_mask = col_u_bc == "BRAND CATEGORY"
+        bc_value = ""
+        if bc_mask.any():
+            bc_value = str(df_avid.loc[bc_mask, "Value"].iloc[0]).strip()
+        if not bc_value or bc_value.upper() in ("UNKNOWN", "NAN", "NONE"):
+            try:
+                src_col_u = df_baseline["Column"].astype(str).str.strip().str.upper()
+                src_mask = src_col_u == "BRAND CATEGORY"
+                if src_mask.any():
+                    bc_value = str(df_baseline.loc[src_mask, "Value"].iloc[0]).strip()
+            except Exception:
+                pass
+        if bc_value and bc_value.upper() not in ("UNKNOWN", "NAN", "NONE"):
+            # Insert/overwrite via the canonical helper from BG.py so
+            # the row uses the canonical position + blank numeric cells.
+            try:
+                from BG import enforce_brand_category_row
+                df_avid = enforce_brand_category_row(df_avid, bc_value)
+            except Exception:
+                # Fallback: simple direct insertion.
+                if not bc_mask.any():
+                    import pandas as _pd_bc
+                    new_row = {c: "" for c in df_avid.columns}
+                    new_row[df_avid.columns[0]] = "BRAND CATEGORY"
+                    new_row[df_avid.columns[1]] = bc_value
+                    ss_idx = df_avid.index[col_u_bc == "SAMPLE SIZE"].tolist()
+                    insert_at = ss_idx[0] + 1 if ss_idx else 2
+                    top = df_avid.iloc[:insert_at]
+                    bot = df_avid.iloc[insert_at:]
+                    df_avid = _pd_bc.concat(
+                        [top, _pd_bc.DataFrame([new_row]), bot],
+                        ignore_index=True,
+                    )
+        else:
+            print(
+                f"   ⚠ no BRAND CATEGORY found on source profile for {subject!r} — "
+                f"avid output will be UNCATEGORIZED in dashboard. Patch via "
+                f"scripts/categorize_uncategorized_profiles.py after upload."
+            )
+    except Exception as _bc_err:
+        print(f"   ⚠ avid BRAND CATEGORY safeguard skipped: {_bc_err}")
+
     if dry_run:
         return {
             "out_key": out_key,
