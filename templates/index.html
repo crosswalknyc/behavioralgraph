@@ -35213,6 +35213,12 @@
                 || (fullRun || {}).site_funnel
             );
 
+            // Fandango only: hide "How to read this chart" above the KPI strip
+            if ((meta.target || '').toLowerCase().indexOf('fandango') >= 0) {
+                var _howto = document.getElementById('jiqKpiStripHowto');
+                if (_howto) _howto.style.display = 'none';
+            }
+
             // ---- Path to Purchase panel (BSFS-style ribbon) ----
             // For Fandango: hide only the stacked bar ribbon, keep pill journeys
             if ((meta.target || '').toLowerCase().indexOf('fandango') < 0) {
@@ -56924,6 +56930,11 @@
             // category. Pulls from /api/category-norms/<category>, which
             // serves a precomputed file from S3 (admin Reset button in
             // Settings → Category Norms regenerates the file).
+            // Layout: [checkbox][label stack][status]
+            //   The label stack is two lines — "Show Category Norm" on top,
+            //   the category name as a smaller subtitle below — so long
+            //   categories like "SEARCH ENGINE/AI" or "INFLUENCER" don't
+            //   get truncated when the popover is narrow.
             const cnRow = document.createElement('label');
             cnRow.style.cssText = 'display:grid;grid-template-columns:18px 1fr minmax(70px,auto);column-gap:0.55rem;align-items:center;padding:0.4rem 0.5rem;border-radius:6px;cursor:pointer;font-size:0.82rem;line-height:1.25;margin-bottom:0.45rem;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.22);';
             const cnCb = document.createElement('input');
@@ -56932,10 +56943,19 @@
             cnCb.checked = !!_comparisonRunsState.includeCategoryNorm;
             cnCb.style.cssText = 'accent-color:#f59e0b;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
             const cnLbl = document.createElement('span');
+            cnLbl.style.cssText = 'color:var(--text-primary, #e6e6e6);display:flex;flex-direction:column;align-items:flex-start;gap:0.1rem;min-width:0;';
             const curCat = _currentProfileCategory();
-            const catLabel = curCat ? ' (<span style="color:var(--text-secondary, #9ca3af);">' + curCat + '</span>)' : '';
-            cnLbl.innerHTML = 'Show <strong style="color:var(--text-primary, #cbd5e1);">Category Norm</strong>' + catLabel;
-            cnLbl.style.cssText = 'color:var(--text-primary, #e6e6e6);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+            const cnTitleLine = document.createElement('span');
+            cnTitleLine.innerHTML = 'Show <strong style="color:var(--text-primary, #cbd5e1);">Category Norm</strong>';
+            cnTitleLine.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;';
+            cnLbl.appendChild(cnTitleLine);
+            if (curCat) {
+                const cnSubtitle = document.createElement('span');
+                cnSubtitle.textContent = curCat;
+                cnSubtitle.title = curCat;
+                cnSubtitle.style.cssText = 'font-size:0.68rem;color:var(--text-secondary, #9ca3af);font-weight:600;letter-spacing:0.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;line-height:1.1;';
+                cnLbl.appendChild(cnSubtitle);
+            }
             const cnStatus = document.createElement('span');
             cnStatus.style.cssText = 'font-size:0.68rem;color:var(--text-secondary, #9ca3af);justify-self:end;text-align:right;';
             if (_comparisonRunsState.includeCategoryNorm && _comparisonRunsState.categoryNormProfileCount) {
