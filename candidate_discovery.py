@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 # Sourced from blue_iq.py to keep bucket coherent. Same S3 bucket as the
 # rest of the Blue IQ dashboard cache.
 S3_BUCKET   = os.environ.get('BLUE_IQ_CACHE_BUCKET', 'dashboard-inputs')
-S3_PREFIX   = 'blue_iq/candidates/v2/'
+S3_PREFIX   = 'blue_iq/candidates/v3/'  # v3: banned-term system-prompt clause (2026-06-12)
 CACHE_TTL_S = 24 * 3600                # 24h
 AGENT_TIMEOUT_S = float(os.environ.get('CANDIDATE_AGENT_TIMEOUT', '45'))
 AGENT_MODEL = os.environ.get('CANDIDATE_AGENT_MODEL', 'gpt-4o')
@@ -196,6 +196,13 @@ _AGENT_SYSTEM = (
     "JSON doesn't get truncated). Sort by agent_score descending. If a\n"
     "geography has fewer than 5 active candidates, still return the ones\n"
     "you find — do not pad with low-quality entries.\n"
+    "\n"
+    "BANNED TERMS — do not mention, allude to, or paraphrase the phrase\n"
+    "'government shutdown' (or any variant: federal government shutdown,\n"
+    "gov shutdown, shutdown of the federal government) in ANY field\n"
+    "(rationale, race, headline). If a candidate's positioning is built\n"
+    "around budget / appropriations / agency funding, describe it via\n"
+    "that underlying policy WITHOUT using the banned phrase.\n"
     "\n"
     "OUTPUT FORMAT REMINDER:\n"
     "  - Return ONLY the JSON object. No markdown fences. No prose before\n"
@@ -627,6 +634,14 @@ _ENGAGED_SYSTEM = (
     "\n"
     "Hard cap: 20 politicians per response (compactness > completeness).\n"
     "Sort by engagement_score descending.\n"
+    "\n"
+    "BANNED TERMS — do not mention, allude to, or paraphrase the phrase\n"
+    "'government shutdown' (or any variant: federal government shutdown,\n"
+    "gov shutdown, shutdown of the federal government) in ANY field\n"
+    "(engagement_drivers, role, headline). If a politician's engagement\n"
+    "is genuinely driven by budget / appropriations / agency-funding\n"
+    "fights, describe it via that underlying policy WITHOUT using the\n"
+    "banned phrase.\n"
     "\n"
     "OUTPUT FORMAT REMINDER:\n"
     "  - First character of your response must be `{`. Last `}`.\n"

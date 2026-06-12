@@ -66,7 +66,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 S3_BUCKET   = os.environ.get('BLUE_IQ_CACHE_BUCKET', 'dashboard-inputs')
-S3_PREFIX   = 'blue_iq/playbook/v1/'
+S3_PREFIX   = 'blue_iq/playbook/v2/'  # v2: banned-term system-prompt clause (2026-06-12)
 CACHE_TTL_S = 24 * 3600
 AGENT_TIMEOUT_S = float(os.environ.get('PLAYBOOK_AGENT_TIMEOUT', '90'))
 AGENT_MODEL = os.environ.get('PLAYBOOK_AGENT_MODEL', 'gpt-4o')
@@ -214,6 +214,13 @@ _AGENT_SYSTEM = (
     "    'omnichannel' or other agency cliches.\n"
     "  - American English. Real, specific publishers, podcasts, and\n"
     "    creator handles where you can. Avoid 'social media in general'.\n"
+    "\n"
+    "BANNED TERMS — do not mention, allude to, or paraphrase any of\n"
+    "these in any field (where_to_buy, creative_direction, rationale):\n"
+    "  - government shutdown / federal government shutdown / gov shutdown\n"
+    "If a recommendation would naturally invoke that phrase, frame it\n"
+    "via the underlying policy (budget impasse, appropriations, agency\n"
+    "funding) WITHOUT using the banned phrase.\n"
     "\n"
     "OUTPUT FORMAT: return ONLY a JSON object matching this schema, no\n"
     "markdown fences, no commentary, first char `{`, last char `}`:\n"
