@@ -21076,7 +21076,7 @@
                         <div id="jiqPathMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqPathSubtitle" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Right-aligned ribbon: each converter's last few events before purchase, collapsed into channel categories. Column height ∝ unique users at that step. Hover for the top hosts.</div>
-                    <details style="margin: 0 0 0.85rem;">
+                    <details id="jiqPathHowto" style="margin: 0 0 0.85rem;">
                         <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
                         <div id="jiqPathHowtoBody" style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
                             <ul style="margin:0;padding-left:1.1rem;">
@@ -35213,10 +35213,17 @@
                 || (fullRun || {}).site_funnel
             );
 
-            // Fandango only: hide "How to read this chart" above the KPI strip
+            // Fandango only: hide "How to read this chart" elements
             if ((meta.target || '').toLowerCase().indexOf('fandango') >= 0) {
                 var _howto = document.getElementById('jiqKpiStripHowto');
                 if (_howto) _howto.style.display = 'none';
+                var _pathHowto = document.getElementById('jiqPathHowto');
+                if (_pathHowto) _pathHowto.style.display = 'none';
+            } else {
+                var _howto = document.getElementById('jiqKpiStripHowto');
+                if (_howto) _howto.style.display = '';
+                var _pathHowto = document.getElementById('jiqPathHowto');
+                if (_pathHowto) _pathHowto.style.display = '';
             }
 
             // ---- Path to Purchase panel (BSFS-style ribbon) ----
