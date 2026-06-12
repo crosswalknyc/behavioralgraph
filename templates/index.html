@@ -55775,6 +55775,43 @@
             return `<div class="${cls}"${onclick} title="${escapeAttr(plainTitle)}">${lockIcon}${labelHtml}</div>`;
         }
 
+        // Pick the run that represents the BASE / Casual Fan profile out of
+        // a subject's cluster of cuts. The profile selector tree shows the
+        // subject name ONCE (no dropdown / no children) and clicking it
+        // should load the broader audience — i.e. the unsuffixed file, not
+        // a specific cohort cut like "Mark Rober - Avid Fan" or "Reba
+        // McEntire - 4+ Touchpoints". All cohort cuts remain accessible
+        // through the Data Cuts popover.
+        //
+        // Resolution order:
+        //   1. The first run whose name has no recognised suffix
+        //      (getProfileSuffixInfo.suffixType === 'none'). That's the
+        //      true Casual Fan base — e.g. just "Mark Rober".
+        //   2. Otherwise fall back to sortRunsForGroup's preferred order
+        //      (newest year / canonical sort), so the click still does
+        //      something sensible for subjects that ONLY have suffixed
+        //      files (e.g. avid-only backfills).
+        function _pickBaseRun(runs) {
+            if (!runs || !runs.length) return null;
+            try {
+                const base = runs.find(p => {
+                    try {
+                        const info = (typeof getProfileSuffixInfo === 'function')
+                            ? getProfileSuffixInfo(p) : null;
+                        return info && info.suffixType === 'none';
+                    } catch (_) { return false; }
+                });
+                if (base) return base;
+            } catch (_) {}
+            try {
+                if (typeof sortRunsForGroup === 'function') {
+                    const sorted = sortRunsForGroup(runs);
+                    if (sorted && sorted.length) return sorted[0];
+                }
+            } catch (_) {}
+            return runs[0];
+        }
+
         function renderDashboardProfileTree(profiles) {
             dashboardProfiles = profiles;
             // Now that the profile list (with imdb_id enrichment) is loaded,
@@ -55853,17 +55890,14 @@
                         const searchLabel = `<div style="display: flex; align-items: center; gap: 0.5rem;"><span style="font-size: 0.9rem; opacity: 0.7;">${isLocked ? '🔒' : icon}</span><span style="flex: 1;">${escapeAttr(fullName)}</span><span style="font-size: 0.75rem; color: var(--text-secondary); opacity: 0.6;">${getCategoryDisplayLabel(cat)}</span></div>`;
                         html += _profileItemHtml(first, searchLabel, { skipLockIcon: true });
                     } else {
-                        html += `
-                        <div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-size: 0.7rem; display: flex; align-items: center; gap: 0.5rem;">
-                            <span style="font-size: 0.9rem; opacity: 0.7;">${icon}</span>
-                            <span class="profile-cat-label" style="flex: 1;">${escapeAttr(subjectDisplayName)}</span>
-                            <span class="profile-cat-count" style="font-size: 0.75rem; color: var(--text-secondary);">(${runs.length} entries)</span>
-                        </div>
-                        <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0;">
-                            ${sortRunsForGroup(runs).map(p => {
-                                return _profileItemHtml(p, escapeAttr(getCanonicalChildLabel(p)));
-                            }).join('')}
-                        </div>`;
+                        // Collapse multi-cut subjects to a single clickable
+                        // item showing only the canonical subject name.
+                        // Click loads the Casual Fan / base run; cohort
+                        // cuts are accessed via the Data Cuts popover.
+                        const base = _pickBaseRun(runs) || first;
+                        const isLocked = base.accessible === false;
+                        const searchLabel = `<div style="display: flex; align-items: center; gap: 0.5rem;"><span style="font-size: 0.9rem; opacity: 0.7;">${isLocked ? '🔒' : icon}</span><span style="flex: 1;">${escapeAttr(subjectDisplayName)}</span><span style="font-size: 0.75rem; color: var(--text-secondary); opacity: 0.6;">${getCategoryDisplayLabel(cat)}</span></div>`;
+                        html += _profileItemHtml(base, searchLabel, { skipLockIcon: true });
                     }
                 });
                 
@@ -55955,21 +55989,15 @@
                     Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
                         const runs = bySubject[subj];
                         const first = runs[0];
-                        const subjectId = 'subj_' + String(subj).replace(/[^a-zA-Z0-9_]/g, '_');
-                        const subjectExpanded = expandedDashSubjects.has(subj);
                         if (runs.length === 1) {
                             html += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                         } else {
+                            // One row per subject: clicking loads the base
+                            // / Casual Fan run. Cohort cuts live in the
+                            // Data Cuts popover, not in the tree.
                             const displayName = displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first);
-                            html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-size: 0.7rem;">
-                                <span class="profile-cat-label">${escapeAttr(displayName)}</span>
-                                <span class="profile-cat-count">(${runs.length} entries)</span>
-                            </div>
-                            <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0;">
-                                ${sortRunsForGroup(runs).map(p => {
-                                    return _profileItemHtml(p, escapeAttr(getCanonicalChildLabel(p)));
-                                }).join('')}
-                            </div>`;
+                            const base = _pickBaseRun(runs) || first;
+                            html += _profileItemHtml(base, escapeAttr(displayName));
                         }
                     });
                 } else if (master === 'GEN POP') {
@@ -55997,21 +56025,12 @@
                     Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
                         const runs = bySubject[subj];
                         const first = runs[0];
-                        const subjectId = 'subj_' + String(subj).replace(/[^a-zA-Z0-9_]/g, '_');
-                        const subjectExpanded = expandedDashSubjects.has(subj);
                         if (runs.length === 1) {
                             html += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                         } else {
                             const displayName = displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first);
-                            html += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-size: 0.7rem;">
-                                <span class="profile-cat-label">${escapeAttr(displayName)}</span>
-                                <span class="profile-cat-count">(${runs.length} entries)</span>
-                            </div>
-                            <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0;">
-                                ${sortRunsForGroup(runs).map(p => {
-                                    return _profileItemHtml(p, escapeAttr(getCanonicalChildLabel(p)));
-                                }).join('')}
-                            </div>`;
+                            const base = _pickBaseRun(runs) || first;
+                            html += _profileItemHtml(base, escapeAttr(displayName));
                         }
                     });
                 } else {
@@ -56039,21 +56058,12 @@
                         Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
                             const runs = bySubject[subj];
                             const first = runs[0];
-                            const subjectId = 'subj_' + String(subj).replace(/[^a-zA-Z0-9_]/g, '_');
-                            const subjectExpanded = expandedDashSubjects.has(subj);
                             if (runs.length === 1) {
                                 itemsHtml += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                             } else {
                                 const displayNameAttr = escapeAttr(displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first));
-                                itemsHtml += `<div class="profile-cat-item ${subjectExpanded ? 'open' : ''}" data-dash-subject="${escapeAttr(subj)}" onclick="event.stopPropagation(); toggleDashSubject(this)" style="font-size: 0.7rem;">
-                                    <span class="profile-cat-label">${displayNameAttr}</span>
-                                    <span class="profile-cat-count">(${runs.length} entries)</span>
-                                </div>
-                                <div class="profile-cat-children ${subjectExpanded ? 'open' : ''}" id="cat-${subjectId}" style="padding-left: 0;">
-                                    ${sortRunsForGroup(runs).map(p => {
-                                        return _profileItemHtml(p, escapeAttr(getCanonicalChildLabel(p)));
-                                    }).join('')}
-                                </div>`;
+                                const base = _pickBaseRun(runs) || first;
+                                itemsHtml += _profileItemHtml(base, displayNameAttr);
                             }
                         });
                         html += `
@@ -56123,6 +56133,13 @@
             availableRuns: [],
             currentKey: '',
             inFlight: {},
+            // The currently-loaded profile IS the Casual Fan / base run
+            // (see _pickBaseRun + the profile selector tree). Its column
+            // shows on cards by default so users always see the broader
+            // audience as a baseline. The popover exposes a toggle to
+            // hide it when comparing pure cohort cuts (e.g. just Avid
+            // Fan vs Netflix vs Gen Pop).
+            includeCasualFan: true,
             // Gen Pop is layered into compare-mode views by default. The
             // popover exposes a toggle so users can compare old vs new
             // without Gen Pop crowding the bars / columns.
@@ -56152,6 +56169,7 @@
                 availableRuns: Array.isArray(availableRuns) ? availableRuns.slice() : [],
                 currentKey: currentKey || '',
                 inFlight: {},
+                includeCasualFan: true,
                 includeGenPop: true,
                 includeCategoryNorm: false,
                 categoryNormCategory: '',
@@ -56182,6 +56200,19 @@
             _comparisonRunsState.includeGenPop = !!val;
             try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] genpop toggle charts failed', e); }
             try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] genpop toggle tables failed', e); }
+        }
+
+        // Toggle whether the main Profile (= Casual Fan / base) column is
+        // shown on compare-mode visuals. The currently-loaded profile is
+        // always the Casual Fan run (see _pickBaseRun); hiding its column
+        // lets users compare pure cohort cuts (e.g. Avid Fan vs Netflix
+        // vs Gen Pop) without the baseline column getting in the way.
+        // No-op outside compare mode — without any selected runs, the
+        // native single-profile render owns the Profile column.
+        function _setComparisonIncludeCasualFan(val) {
+            _comparisonRunsState.includeCasualFan = !!val;
+            try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] casual-fan toggle charts failed', e); }
+            try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] casual-fan toggle tables failed', e); }
         }
 
         // ---------------------------------------------------------------
@@ -56956,6 +56987,31 @@
             header.appendChild(clearLink);
             pop.appendChild(header);
 
+            // ---- Casual Fan (base profile) toggle ------------------------
+            // The currently-loaded profile is always the Casual Fan / base
+            // run (selected by clicking the subject name in the tree). Its
+            // column shows on compare-mode visuals by default; uncheck to
+            // hide it and compare cohort cuts head-to-head without the
+            // baseline crowding the layout. No effect outside compare
+            // mode (selectedKeys empty -> the native single-profile
+            // render owns the Profile column).
+            const cfRow = document.createElement('label');
+            cfRow.style.cssText = 'display:grid;grid-template-columns:18px 1fr;column-gap:0.55rem;align-items:center;padding:0.4rem 0.5rem;border-radius:6px;cursor:pointer;font-size:0.82rem;line-height:1.25;margin-bottom:0.45rem;background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.22);';
+            const cfCb = document.createElement('input');
+            cfCb.type = 'checkbox';
+            cfCb.id = 'cmpIncludeCasualFanCb';
+            cfCb.checked = _comparisonRunsState.includeCasualFan !== false;
+            cfCb.style.cssText = 'accent-color:#22d3ee;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
+            const cfLbl = document.createElement('span');
+            cfLbl.innerHTML = 'Show <strong style="color:var(--text-primary, #cbd5e1);">Casual Fan</strong> (base profile)';
+            cfLbl.style.cssText = 'color:var(--text-primary, #e6e6e6);';
+            cfRow.appendChild(cfCb);
+            cfRow.appendChild(cfLbl);
+            cfCb.addEventListener('change', function() {
+                _setComparisonIncludeCasualFan(cfCb.checked);
+            });
+            pop.appendChild(cfRow);
+
             // ---- Gen Pop baseline toggle ----------------------------------
             // Always visible: lets the user drop Gen Pop from compare-mode
             // visuals when they only care about old-vs-new (or run-vs-run).
@@ -57276,6 +57332,12 @@
                     data: origGP.map(v => (typeof v === 'number' && isFinite(v)) ? v : 0),
                     backgroundColor: _COMPARISON_GENPOP_COLOR
                 }] : [];
+                // Whether to lay the main Profile (Casual Fan) bar in.
+                // Always show it on its own (when no cohort cuts are
+                // selected) so the chart never goes empty; only honor the
+                // toggle in true compare mode.
+                const includeCasualFan = _comparisonRunsState.includeCasualFan !== false;
+                const showProfileBar = includeCasualFan || cmpSeries.length === 0;
 
                 const buildSanitized = (label, data, bg) => ({
                     _isComparison: true,
@@ -57299,7 +57361,7 @@
                 }
 
                 chart.data.datasets = [
-                    buildSanitized(mainProfileLabel, profileData, '#22d3ee'),
+                    ...(showProfileBar ? [buildSanitized(mainProfileLabel, profileData, '#22d3ee')] : []),
                     ...cmpSeries.map(s => buildSanitized(s.label, s.data, s.backgroundColor)),
                     ...gpDataset.map(s => buildSanitized(s.label, s.data, s.backgroundColor))
                 ];
@@ -57641,16 +57703,23 @@
             // to touch each row's display directly. Matches the .genpop-col
             // class used across behavioral / interests rows and the
             // .location-genpop variant used by the regional breakdown.
+            //
+            // .cmp-hide-profile does the same job for the main Profile
+            // column when the user unchecks "Show Casual Fan" in the
+            // Data Cuts popover.
             if (!document.getElementById('cmpHideGenpopStyle')) {
                 const s = document.createElement('style');
                 s.id = 'cmpHideGenpopStyle';
-                s.textContent = '.cmp-hide-genpop .genpop-col, .cmp-hide-genpop .location-genpop, .cmp-hide-genpop .cw-gp-col { display: none !important; }';
+                s.textContent = '.cmp-hide-genpop .genpop-col, .cmp-hide-genpop .location-genpop, .cmp-hide-genpop .cw-gp-col { display: none !important; }'
+                    + ' .cmp-hide-profile .profile-col, .cmp-hide-profile .cw-profile-col { display: none !important; }';
                 document.head.appendChild(s);
             }
 
             const palette = _COMPARISON_PALETTE;
             const includeGenPop = _comparisonRunsState.includeGenPop !== false;
             const hideGP = (series.length > 0 && !includeGenPop);
+            const includeCasualFan = _comparisonRunsState.includeCasualFan !== false;
+            const hideCF = (series.length > 0 && !includeCasualFan);
 
             // -------- BEHAVIORAL CARDS ----------------------------------
             // Each card has .behavioral-table > .behavioral-header-row +
@@ -57668,21 +57737,24 @@
                 if (series.length === 0) {
                     table.style.gridTemplateColumns = '';
                     table.classList.remove('cmp-hide-genpop');
+                    table.classList.remove('cmp-hide-profile');
                     return;
                 }
                 table.classList.toggle('cmp-hide-genpop', hideGP);
+                table.classList.toggle('cmp-hide-profile', hideCF);
                 const list = table.querySelector('.behavioral-list');
                 const cat = list && list.dataset.cat;
-                // Recompute grid: rank | name | profile | [N cmps] | [genpop?] | index.
-                // The "70px " before " 56px" is the Gen Pop column; drop it
-                // when the user has hidden Gen Pop so the row collapses
-                // cleanly instead of leaving a gap. 72px per cmp leaves
-                // enough room for labels like "NETFLIX ONLY" / "YOUTUBE
-                // ONLY"; longer labels clip with ellipsis (full label in
-                // title attr).
+                // Recompute grid: rank | name | [profile?] | [N cmps] | [genpop?] | index.
+                // Drop the 70px Profile slot when Casual Fan is hidden,
+                // and the 70px Gen Pop slot when GP is hidden, so each
+                // row collapses cleanly instead of leaving an empty gap.
+                // 72px per cmp leaves enough room for labels like
+                // "NETFLIX ONLY" / "YOUTUBE ONLY"; longer labels clip
+                // with ellipsis (full label in title attr).
                 const cmpCols = series.map(() => '72px').join(' ');
+                const profileCol = hideCF ? '' : '70px ';
                 const gpCol = hideGP ? '' : ' 70px';
-                table.style.gridTemplateColumns = '28px minmax(80px,1fr) 70px ' + cmpCols + gpCol + ' 56px';
+                table.style.gridTemplateColumns = '28px minmax(80px,1fr) ' + profileCol + cmpCols + gpCol + ' 56px';
 
                 // Header row injection
                 const header = table.querySelector('.behavioral-header-row');
@@ -57746,17 +57818,19 @@
                 const intItems = intGrid.querySelectorAll('.interest-item');
                 if (series.length > 0) {
                     intGrid.classList.toggle('cmp-hide-genpop', hideGP);
+                    intGrid.classList.toggle('cmp-hide-profile', hideCF);
                     const intLookups = series.map(s => ({
                         label: s.label,
                         map: _cmpBuildInterestsLookup(s.parsed)
                     }));
-                    // Row layout: # | Item | Profile | [N cmps] | [Gen Pop?] | Index
+                    // Row layout: # | Item | [Profile?] | [N cmps] | [Gen Pop?] | Index
                     // 72px per cmp leaves enough room for labels like
                     // "NETFLIX ONLY" / "YOUTUBE ONLY"; longer labels
                     // clip with ellipsis (full label in title attr).
                     const cmpCols = series.map(() => '72px').join(' ');
+                    const profileCol = hideCF ? '' : '70px ';
                     const gpCol = hideGP ? '' : ' 70px';
-                    const intGridTpl = '30px minmax(120px,1fr) 70px ' + cmpCols + gpCol + ' 60px';
+                    const intGridTpl = '30px minmax(120px,1fr) ' + profileCol + cmpCols + gpCol + ' 60px';
 
                     if (intHeader) {
                         intHeader.style.gridTemplateColumns = intGridTpl;
@@ -57794,6 +57868,7 @@
                     });
                 } else {
                     intGrid.classList.remove('cmp-hide-genpop');
+                    intGrid.classList.remove('cmp-hide-profile');
                     if (intHeader) intHeader.style.gridTemplateColumns = '';
                     intItems.forEach(row => { row.style.gridTemplateColumns = ''; });
                 }
@@ -62922,7 +62997,7 @@
                 <div class="interest-header-row">
                     <span>#</span>
                     <span>Item</span>
-                    <span>Profile</span>
+                    <span class="profile-col">Profile</span>
                     <span class="genpop-col">Gen Pop</span>
                     <span class="index-col">Index</span>
                 </div>
@@ -62946,7 +63021,7 @@
                     <div class="interest-item" data-name="${item.name.toLowerCase()}" data-category="${item.category}">
                         <span class="interest-rank">${idx + 1}</span>
                         <span class="interest-name" title="${item.name}">${item.name}</span>
-                        <span class="interest-pct">${profileDisplay}</span>
+                        <span class="interest-pct profile-col">${profileDisplay}</span>
                         <span class="interest-genpop genpop-col" style="color: var(--text-secondary);">${genPopDisplay}</span>
                         <span class="interest-index index-col ${indexTier}">${genPopDisplay === 'N/A' ? '' : formatIndex(item.index)}</span>
                     </div>
@@ -64659,7 +64734,7 @@
                         <div class="behavioral-name-wrapper">
                             <span class="behavioral-name has-tooltip" data-tooltip="${(item.name || '').replace(/"/g, '&quot;')}">${(item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
                         </div>
-                        <span class="behavioral-pct" style="color: var(--text-primary);">${profileDisplay}</span>
+                        <span class="behavioral-pct profile-col" style="color: var(--text-primary);">${profileDisplay}</span>
                         <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">${hasGenPopMatch ? '(' + genPopDisplay + ')' : '(N/A)'}</span>
                         <span class="behavioral-index index-col ${indexTier}" style="${showIndex ? '' : 'color: var(--text-secondary);'} font-weight: 700;">${showIndex ? formatIndex(index) : 'N/A'}</span>
                     </div>
