@@ -35496,12 +35496,12 @@
             //   5+      → polygon on a circle
             var W, H, cx, cy, bubbleR, positions = {};
             if (props.length === 3) {
-                W = 760; H = 380;
+                W = 760; H = 420;
                 cx = W / 2; cy = H / 2 + 10;
-                bubbleR = 64;
-                positions[props[0].key] = { x: cx,         y: cy - 110 };
-                positions[props[1].key] = { x: cx - 200,   y: cy + 80  };
-                positions[props[2].key] = { x: cx + 200,   y: cy + 80  };
+                bubbleR = 82;
+                positions[props[0].key] = { x: cx,         y: cy - 130 };
+                positions[props[1].key] = { x: cx - 220,   y: cy + 100  };
+                positions[props[2].key] = { x: cx + 220,   y: cy + 100  };
             } else if (props.length === 4) {
                 // Diamond: extra vertical room so the bottom bubble's
                 // role + URL caption (bubbleR + 32px) fits inside.
@@ -35666,9 +35666,9 @@
                 var mauMil = Math.round((p.mau_us || 0) / 1e6);
                 parts.push('<g>'
                      + '<circle cx="' + pos.x + '" cy="' + pos.y + '" r="' + bubbleR + '" fill="' + color + '" opacity="0.95" stroke="#fff" stroke-width="3"/>'
-                     + '<text x="' + pos.x + '" y="' + (pos.y - 18) + '" text-anchor="middle" font-size="22">' + _jiqEsc(p.icon || '◆') + '</text>'
-                     + '<text x="' + pos.x + '" y="' + (pos.y + 6) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">' + _jiqEsc((p.name || '').slice(0, 18)) + '</text>'
-                     + '<text x="' + pos.x + '" y="' + (pos.y + 22) + '" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-weight="700" font-size="14">' + mauMil + 'M MAU</text>'
+                     + '<text x="' + pos.x + '" y="' + (pos.y - 22) + '" text-anchor="middle" font-size="24">' + _jiqEsc(p.icon || '◆') + '</text>'
+                     + '<text x="' + pos.x + '" y="' + (pos.y + 6) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="15">' + _jiqEsc((p.name || '').slice(0, 20)) + '</text>'
+                     + '<text x="' + pos.x + '" y="' + (pos.y + 26) + '" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-weight="700" font-size="15">' + mauMil + 'M MAU</text>'
                      + '<title>' + _jiqEsc(p.name + ' — ' + (p.role || '') + ' — ' + (p.mau_label || mauMil + 'M MAU')) + '</title>'
                      + '</g>');
                 // Caption under each bubble
