@@ -6598,13 +6598,83 @@
             }
             if (detail) {
                 const parts = [];
-                if (status.files_total) parts.push(status.files_total.toLocaleString() + ' profiles');
+                if (status.files_total) parts.push(status.files_total.toLocaleString() + ' CSVs at S3 root');
+                if (typeof status.selector_count === 'number' && status.files_total) {
+                    parts.push(status.selector_count.toLocaleString() + ' in selector');
+                }
                 if (status.started_at) {
                     const dt = new Date(status.started_at);
                     if (!isNaN(dt)) parts.push('started ' + dt.toLocaleTimeString());
                 }
                 detail.textContent = parts.join(' · ');
             }
+            // Render the audit list of CSVs that are in S3 but won't appear
+            // in the profile selector (usually missing BRAND CATEGORY, dupe
+            // Gen Pop, SVOD, etc.). Built lazily and rendered into a panel
+            // below the progress bar.
+            _renderProfileCacheMissing(status && status.missing, status && status.missing_count);
+        }
+
+        function _renderProfileCacheMissing(missing, missingCount) {
+            const wrap = document.getElementById('profileCacheRebuildProgressWrap');
+            if (!wrap) return;
+            let panel = document.getElementById('profileCacheMissingPanel');
+            const hasMissing = Array.isArray(missing) && missing.length > 0;
+            if (!hasMissing) {
+                if (panel) panel.remove();
+                return;
+            }
+            if (!panel) {
+                panel = document.createElement('details');
+                panel.id = 'profileCacheMissingPanel';
+                panel.style.cssText = 'margin-top:0.65rem;padding:0.6rem 0.75rem;border:1px solid #444;border-radius:6px;background:rgba(249,38,114,0.06);';
+                panel.innerHTML = '<summary id="profileCacheMissingSummary" style="cursor:pointer;font-size:0.82rem;font-weight:600;color:#ffb86c;"></summary>' +
+                                  '<div id="profileCacheMissingBody" style="margin-top:0.5rem;max-height:280px;overflow-y:auto;font-size:0.75rem;"></div>';
+                wrap.appendChild(panel);
+            }
+            const summary = panel.querySelector('#profileCacheMissingSummary');
+            const body = panel.querySelector('#profileCacheMissingBody');
+            if (summary) {
+                summary.textContent = '⚠ ' + (missingCount || missing.length).toLocaleString() +
+                                      ' CSV' + ((missingCount || missing.length) === 1 ? '' : 's') +
+                                      ' in S3 won\'t appear in the profile selector (click to expand)';
+            }
+            if (body) {
+                // Group by reason for a more scannable list.
+                const groups = {};
+                missing.forEach(m => {
+                    const r = m.reason || 'Unknown reason';
+                    (groups[r] = groups[r] || []).push(m);
+                });
+                const reasonOrder = Object.keys(groups).sort();
+                body.innerHTML = reasonOrder.map(reason => {
+                    const items = groups[reason]
+                        .slice()
+                        .sort((a, b) => (a.s3_key || '').localeCompare(b.s3_key || ''));
+                    const rows = items.map(m => {
+                        const cat = m.category ? ' <span style="color:#888;">[' + _escapeHtml(m.category) + ']</span>' : '';
+                        const disp = _escapeHtml(m.display || m.s3_key || '');
+                        const sk = m.s3_key && m.s3_key !== m.display
+                            ? ' <span style="color:#666;font-size:0.7rem;">(' + _escapeHtml(m.s3_key) + ')</span>'
+                            : '';
+                        return '<li style="padding:0.18rem 0;">' + disp + cat + sk + '</li>';
+                    }).join('');
+                    return '<div style="margin-bottom:0.55rem;">' +
+                           '<div style="color:#f8d56b;font-weight:600;margin-bottom:0.25rem;">' +
+                           _escapeHtml(reason) + ' <span style="color:#888;font-weight:400;">(' + items.length + ')</span></div>' +
+                           '<ul style="margin:0;padding-left:1.1rem;list-style:disc;color:#cbd5e1;">' + rows + '</ul>' +
+                           '</div>';
+                }).join('');
+            }
+        }
+
+        function _escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         async function _pollProfileCacheRebuildStatus() {
@@ -6618,9 +6688,13 @@
                     _profileCacheRebuildPollTimer = setTimeout(_pollProfileCacheRebuildStatus, 1500);
                 } else {
                     _setProfileCacheRebuildBusy(false);
+                    // Auto-hide the progress bar after a short delay UNLESS
+                    // we have a missing-CSV report to show — in that case
+                    // leave the wrap open so the user can drill into it.
                     setTimeout(() => {
                         const wrap = document.getElementById('profileCacheRebuildProgressWrap');
-                        if (wrap && !status.running) wrap.style.display = 'none';
+                        const hasMissing = Array.isArray(status.missing) && status.missing.length > 0;
+                        if (wrap && !status.running && !hasMissing) wrap.style.display = 'none';
                     }, 5000);
                     if (status.error) {
                         showToast('❌ Profile cache rebuild failed: ' + status.error, true);
@@ -6628,10 +6702,17 @@
                         showToast('✅ ' + status.last_message);
                         // Bust the session/storage cache for /api/jobs so
                         // the sidebar selector picks up the new state on
-                        // next render without a hard reload.
+                        // next render without a hard reload. Also hit the
+                        // endpoint with ?refresh=1 here so any worker that
+                        // serves the next request has the freshest cache
+                        // (cross-worker propagation already kicks in via
+                        // the ETag probe — this is belt-and-suspenders).
                         try {
                             sessionStorage.removeItem('bg_jobs_session_cache_v2');
                             sessionStorage.removeItem('bg_jobs_session_cache');
+                        } catch (_) {}
+                        try {
+                            fetch('/api/jobs?refresh=1', { credentials: 'same-origin' }).catch(() => {});
                         } catch (_) {}
                     }
                 }

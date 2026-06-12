@@ -3224,16 +3224,83 @@ _profile_cache_rebuild_status: dict = {
     "started_at": None,
     "finished_at": None,
     "files_total": 0,
+    "selector_count": 0,
+    "missing_count": 0,
+    "missing": [],
     "last_message": None,
     "error": None,
 }
 _profile_cache_rebuild_lock = threading.Lock()
 
 
+def _audit_profile_selector_coverage(jobs_list):
+    """Compare a freshly-rebuilt `s3_cache['jobs']` against the filter
+    chain in `list_jobs()` and return a list of root-CSV entries that
+    will NOT appear in the profile selector, with a human-readable
+    reason. Helps the admin spot CSVs that were uploaded to S3 but
+    can't be selected (usually because the CSV is missing a BRAND
+    CATEGORY row so it ingests as UNCATEGORIZED).
+
+    Mirrors the post-cache filters in `list_jobs()`:
+      - s3_key in a subfolder (any '/')
+      - SVOD Acquisition (lives in Subscriber IQ, not Profile IQ)
+      - Category OTHER / UNCATEGORIZED / blank
+      - Gen Pop duplicates (only the canonical entry is shown)
+    """
+    missing = []
+    seen_gen_pop = False
+    for j in (jobs_list or []):
+        if not isinstance(j, dict):
+            continue
+        sk = j.get('s3_key') or j.get('key') or ''
+        cat = (j.get('category') or '').upper()
+        display = j.get('project_name') or j.get('display_name') or sk
+
+        if not sk:
+            continue
+        if '/' in sk:
+            missing.append({
+                's3_key': sk, 'display': display, 'category': cat or '(blank)',
+                'reason': 'In subfolder (not at root of dashboard-inputs)'
+            })
+            continue
+        if cat == 'SVOD ACQUISITION' or sk.startswith('svod-acquisition/') or j.get('is_svod'):
+            missing.append({
+                's3_key': sk, 'display': display, 'category': cat or 'SVOD',
+                'reason': 'SVOD Acquisition (shown in Subscriber IQ, not Profile IQ)'
+            })
+            continue
+        if cat in ('OTHER', 'UNCATEGORIZED', ''):
+            missing.append({
+                's3_key': sk, 'display': display, 'category': cat or '(blank)',
+                'reason': "Missing BRAND CATEGORY row in CSV — fix the CSV or assign a category in Admin."
+            })
+            continue
+        if 'gen_pop' in sk.lower():
+            if seen_gen_pop:
+                missing.append({
+                    's3_key': sk, 'display': display, 'category': cat,
+                    'reason': 'Duplicate Gen Pop entry (selector keeps the canonical Gen_Pop_2026.csv)'
+                })
+                continue
+            seen_gen_pop = True
+    return missing
+
+
 def _run_profile_cache_rebuild() -> None:
     """Worker: full S3 scan + persisted-cache rewrite. Updates the
-    status dict as it goes so the admin UI can poll for progress."""
+    status dict as it goes so the admin UI can poll for progress.
+
+    After the cache is rebuilt we ALSO:
+      1. Reset `_persisted_cache_etag` + the throttled HEAD timestamp so
+         every other gunicorn worker re-pulls the fresh cache on its very
+         next /api/jobs call (instead of waiting up to 3s for the throttle).
+      2. Audit the freshly-built cache against the /api/jobs filter chain
+         and report any root CSVs that won't appear in the profile selector
+         (usually CSVs without a BRAND CATEGORY row).
+    """
     from datetime import timezone  # local import: not at module top
+    global _persisted_cache_etag, _persisted_cache_last_head_ts
     try:
         if not s3_client:
             with _profile_cache_rebuild_lock:
@@ -3258,12 +3325,44 @@ def _run_profile_cache_rebuild() -> None:
                 })
             return
         total = (result or {}).get("total", 0)
+
+        # Force cross-worker propagation: every other gunicorn worker
+        # holds its own in-memory `s3_cache`. They normally rediscover
+        # changes via the throttled persisted-cache HEAD probe (3s
+        # interval). Zeroing the etag + last-head timestamp here means
+        # the very next /api/jobs call in any worker re-reads the
+        # cache from S3 immediately — no 3s grace window.
+        try:
+            _persisted_cache_etag = None
+            _persisted_cache_last_head_ts = 0.0
+        except Exception:
+            pass
+
+        # Audit the freshly-built cache against the same filter chain
+        # /api/jobs runs, so we can show the admin every root CSV that
+        # WON'T appear in the profile selector (and why).
+        missing = []
+        try:
+            missing = _audit_profile_selector_coverage(s3_cache.get('jobs') or [])
+        except Exception as audit_err:
+            print(f"⚠️ profile-selector audit failed: {audit_err}")
+            traceback.print_exc()
+
+        selector_count = max(0, int(total) - len(missing))
+        msg = f"Rebuilt cache: {total} profiles scanned, {selector_count} in selector"
+        if missing:
+            msg += f", {len(missing)} hidden (see details)"
+        msg += "."
+
         with _profile_cache_rebuild_lock:
             _profile_cache_rebuild_status.update({
                 "running": False,
                 "finished_at": datetime.now(timezone.utc).isoformat(),
                 "files_total": int(total),
-                "last_message": f"Rebuilt cache: {total} profiles scanned.",
+                "selector_count": selector_count,
+                "missing_count": len(missing),
+                "missing": missing,
+                "last_message": msg,
                 "error": None,
             })
     except Exception as e:
@@ -3297,6 +3396,9 @@ def admin_rebuild_profile_cache():
             "started_at": datetime.now(timezone.utc).isoformat(),
             "finished_at": None,
             "files_total": 0,
+            "selector_count": 0,
+            "missing_count": 0,
+            "missing": [],
             "last_message": "Starting full S3 scan…",
             "error": None,
         })
