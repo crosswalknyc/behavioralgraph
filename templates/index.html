@@ -56619,19 +56619,30 @@
             //    name (separated by a dash), show that verbatim.
             const dashSuffix = _dashSuffixLabel(profile);
             if (dashSuffix) return dashSuffix;
+            // 2. Explicit cohort/year suffix on the bare name ("Reba 4+",
+            //    "Dwayne Johnson 2024"). These ARE specific labels, so
+            //    keep them as-is.
             try {
-                if (typeof getCanonicalChildLabel === 'function') {
-                    const lbl = getCanonicalChildLabel(profile);
-                    if (lbl && lbl !== 'Run') return lbl;
+                const info = (typeof getProfileSuffixInfo === 'function')
+                    ? getProfileSuffixInfo(profile) : { suffixType: 'none', suffixLabel: '' };
+                if (info && (info.suffixType === 'cohort' || info.suffixType === 'year') && info.suffixLabel) {
+                    return info.suffixLabel;
                 }
             } catch (_) {}
+            // 3. No suffix at all → by convention the BASE profile (just
+            //    "Mark Rober", not "Mark Rober - Netflix" or "Mark Rober -
+            //    Avid Fan") represents the broader CASUAL FAN audience.
+            //    Label it that way on every comparison display so the
+            //    column header / chip / popover row read "Casual Fan"
+            //    instead of an arbitrary date. Append the run date for
+            //    disambiguation when multiple unsuffixed runs are picked.
             try {
                 if (typeof getRunDateLabel === 'function') {
                     const d = getRunDateLabel(profile && (profile.s3_key || ''));
-                    if (d) return d;
+                    if (d) return 'Casual Fan ' + d;
                 }
             } catch (_) {}
-            return (profile && (profile.display_name || profile.name)) || 'Run';
+            return 'Casual Fan';
         }
 
         // Extract a clean year label from a "YYYY-MM-DD - YYYY-MM-DD" date
@@ -56672,8 +56683,14 @@
                     return dateRangeYear ? (info.suffixLabel + ' ' + dateRangeYear) : info.suffixLabel;
                 }
             } catch (_) {}
-            if (dateRangeYear) return dateRangeYear;
-            return _compactRunLabel(profile);
+            // No cohort/dash suffix at all — by user convention, an
+            // unsuffixed BASE profile represents the broader CASUAL FAN
+            // audience (the Avid-Fan / Netflix / Premium / etc. cuts are
+            // always explicitly suffixed). Label comparison columns,
+            // chips, and popover rows for these as "Casual Fan" instead
+            // of falling back to the date or display name. Append the
+            // year for disambiguation when available.
+            return dateRangeYear ? ('Casual Fan ' + dateRangeYear) : 'Casual Fan';
         }
 
         function _setupComparisonForCurrentProfile(subject, currentKey, sameSubjectRuns) {
