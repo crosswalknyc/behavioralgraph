@@ -57390,7 +57390,31 @@
                 sexualOrientation: 'sexual_orientation', parentalStatus: 'parental_status',
                 occupation: 'occupation'
             };
-            const mainProfileLabel = (currentProfileData && currentProfileData.name) || 'Profile';
+            // Demographic chart legends read "<cohort> <subject>" so the
+            // base profile and each cohort cut both carry the subject
+            // name. Without it the legend renders as e.g.
+            // [Kristen Bell] [Avid] [Gen Pop], which doesn't make it
+            // obvious that the cyan bar IS the Casual Kristen Bell
+            // slice. With it: [Casual Kristen Bell] [Avid Kristen Bell]
+            // [Gen Pop].
+            const profileName = (currentProfileData && currentProfileData.name) || 'Profile';
+            const mainProfileLabel = 'Casual ' + profileName;
+            const _cohortLegendLabel = (entry) => {
+                const base = (entry && entry.label) ? String(entry.label).trim() : 'Run';
+                let subj = profileName;
+                try {
+                    if (entry && entry.profile && typeof getProfileSuffixInfo === 'function') {
+                        const info = getProfileSuffixInfo(entry.profile);
+                        if (info && info.canonicalName) subj = info.canonicalName;
+                    }
+                } catch (_) {}
+                // Skip the subject suffix when the cohort label already
+                // starts with it (cross-profile compares whose
+                // _dashSuffixLabel kept the full "Subject - Suffix"
+                // shape would otherwise duplicate).
+                if (subj && base.toLowerCase().indexOf(subj.toLowerCase()) !== -1) return base;
+                return subj ? (base + ' ' + subj) : base;
+            };
 
             demoChartKeys.forEach(chartKey => {
                 const chart = charts[chartKey];
@@ -57440,7 +57464,7 @@
                     const demoDict = (entry.parsed && entry.parsed.demographics && entry.parsed.demographics[dataCat]) || {};
                     const demoLookup = _buildDemoLookup(demoDict);
                     return {
-                        label: entry.label || 'Run',
+                        label: _cohortLegendLabel(entry),
                         data: origKeys.map(k => {
                             let v = demoDict[k];
                             if (!(typeof v === 'number' && isFinite(v))) {
