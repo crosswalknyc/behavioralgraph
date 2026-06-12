@@ -3003,6 +3003,16 @@ def get_category_norm(category):
         "norm": norm,
         "profile_count": norm.get("profile_count", 0),
         "total_sample": norm.get("total_sample", 0),
+        # Sample-weighted-average US projection across all source
+        # profiles. Frontend uses this for the Norm row's US side in
+        # the Crosswalk Respondents card so the displayed number is
+        # comparable in magnitude to a single profile's projection
+        # rather than the inflated sum-of-all-projections. Older
+        # norms payloads (computed before the field was added) fall
+        # back to 0; rerun the admin "Reset Category Norms" button
+        # to populate it.
+        "weighted_avg_projection": norm.get("weighted_avg_projection", 0),
+        "total_projection": norm.get("total_projection", 0),
         "generated_at": (payload or {}).get("generated_at"),
     })
 
