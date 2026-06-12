@@ -57547,6 +57547,21 @@
                     console.error('[compare] chart.update threw for', chartKey, e);
                 }
             });
+
+            // Demographic Table-view cards aren't backed by Chart.js
+            // datasets — they're HTML built by the helper below from
+            // the demographics maps. Compare-state changes (toggling
+            // Avid / Netflix / a prior date range on or off) need to
+            // re-run that helper so the cohort columns appear /
+            // disappear in lockstep with the chart legend. Without
+            // this, a user picking Avid on Insights then switching
+            // to Demographics-Table-view sees Casual / Gen Pop / Index
+            // only — the picked cohort silently doesn't carry
+            // through. See _renderDemoTablesForChartsInTableMode.
+            if (typeof _renderDemoTablesForChartsInTableMode === 'function') {
+                try { _renderDemoTablesForChartsInTableMode(); }
+                catch (e) { console.warn('[compare] demo table re-render failed', e); }
+            }
         }
 
         // ---------------------------------------------------------------
@@ -61713,6 +61728,47 @@
             const demoProjAll = lastRenderedDemographicsProjection || {};
             const demoGPAll   = lastRenderedDemographicsGenPop || {};
 
+            // Compare-mode wiring: when one or more Data Cuts (Avid /
+            // Netflix / a prior date-range / etc.) are picked, the
+            // demographic table view needs to grow extra columns —
+            // one per cohort — between Casual and Gen Pop, with each
+            // row's bucket value looked up from that cohort's parsed
+            // demographics for the current category. Without this the
+            // table view stays Casual / Gen Pop / Index only and the
+            // user's selection silently doesn't carry through (the
+            // bug Avid showed when picked on Insights and viewed on
+            // Demographics-Table-view).
+            //
+            // We don't go through applyComparisonRunsToCategoryTables
+            // for these tables — that injector rebuilds rows from
+            // already-rendered DOM via brand-name lookup, which doesn't
+            // map onto demographic buckets. Instead we own the render
+            // here end-to-end and just opt the resulting table out of
+            // the injector via data-no-cmp-inject="1" so it doesn't
+            // try to layer a second set of cohort cells on top.
+            const _cmpSeriesForDemo = (typeof _comparisonRunsState !== 'undefined' && _comparisonRunsState)
+                ? ((_comparisonRunsState.selectedKeys || [])
+                    .map(kk => _comparisonRunsState.runsByKey[kk])
+                    .filter(Boolean))
+                : [];
+            const _cmpIncludeCF = !(typeof _comparisonRunsState !== 'undefined' && _comparisonRunsState && _comparisonRunsState.includeCasualFan === false);
+            const _cmpIncludeGP = !(typeof _comparisonRunsState !== 'undefined' && _comparisonRunsState && _comparisonRunsState.includeGenPop === false);
+            const _cmpHideCF    = (_cmpSeriesForDemo.length > 0) && !_cmpIncludeCF;
+            const _cmpHideGP    = (_cmpSeriesForDemo.length > 0) && !_cmpIncludeGP;
+            const _cmpPalette   = (typeof _COMPARISON_PALETTE !== 'undefined' && Array.isArray(_COMPARISON_PALETTE) && _COMPARISON_PALETTE.length)
+                ? _COMPARISON_PALETTE
+                : ['#fd971f', '#a6e22e', '#f92672', '#ae81ff', '#e6db74'];
+            // Chart-key → demographics-dict key (mostly identity, but
+            // camelCase chart keys map to snake_case dict keys).
+            const _cmpDataCatMap = {
+                age: 'age', gender: 'gender', ethnicity: 'ethnicity', income: 'income',
+                education: 'education', relationship: 'relationship',
+                sexualOrientation: 'sexual_orientation',
+                parentalStatus: 'parental_status',
+                occupation: 'occupation'
+            };
+            const _cmpNormKey = (s) => String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' ');
+
             const _fmtPct = (v) => {
                 const n = Number(v);
                 if (!isFinite(n) || n < 0.01) return 'N/A';
@@ -61765,6 +61821,20 @@
                     return;
                 }
 
+                // Per-cohort bucket lookup for this category (chart-key
+                // -> snake_case dict key). Each lookup is keyed by the
+                // normalized bucket name so "65 OR OLDER" still matches
+                // "65 or Older" / "65+" etc.
+                const _cmpDictKey = _cmpDataCatMap[dataCat] || dataCat;
+                const _cmpLookups = _cmpSeriesForDemo.map(entry => {
+                    const dict = (entry && entry.parsed && entry.parsed.demographics && entry.parsed.demographics[_cmpDictKey]) || {};
+                    const norm = {};
+                    for (const [bk, bv] of Object.entries(dict)) {
+                        if (typeof bv === 'number' && isFinite(bv)) norm[_cmpNormKey(bk)] = bv;
+                    }
+                    return { label: entry.label || 'Run', norm };
+                });
+
                 // Sort order: age uses the canonical age sequence; all
                 // others rank by profile pct desc.
                 let sortedKeys;
@@ -61796,6 +61866,18 @@
                     const idxTier = !showIdx ? '' : (idx >= 100 ? 'index-over' : 'index-under');
                     const idxStr  = showIdx ? Math.round(idx) : 'N/A';
                     const safeLabel = _safeEscape(displayLabel);
+                    // Cohort cells: one per selected Data Cut, keyed
+                    // by the normalized bucket name. Missing buckets
+                    // render as a dim N/A so the column stays aligned.
+                    const normKey = _cmpNormKey(key);
+                    const cmpCellsHtml = _cmpLookups.map((lk, ci) => {
+                        const v = lk.norm[normKey];
+                        const hasV = (typeof v === 'number' && isFinite(v) && v > 0);
+                        const proj = hasV ? Math.round(v / 100 * US_POP) : 0;
+                        const cellStr = !hasV ? 'N/A' : (isProjection ? _fmtNum(proj) : _fmtPct(v));
+                        const color = _cmpPalette[ci % _cmpPalette.length];
+                        return '<span class="cmp-col-cell" style="color:' + color + ';text-align:right;justify-self:end;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">' + cellStr + '</span>';
+                    }).join('');
                     return ''
                         + '<div class="behavioral-item">'
                         +   '<span class="behavioral-rank">' + (i + 1) + '</span>'
@@ -61803,17 +61885,43 @@
                         +     '<span class="behavioral-name has-tooltip" data-tooltip="' + safeLabel + '">' + safeLabel + '</span>'
                         +   '</div>'
                         +   '<span class="behavioral-pct profile-col" style="color: var(--text-primary);">' + profStr + '</span>'
+                        +   cmpCellsHtml
                         +   '<span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">' + gpStr + '</span>'
                         +   '<span class="behavioral-index index-col ' + idxTier + '" style="' + (showIdx ? '' : 'color: var(--text-secondary);') + ' font-weight: 700;">' + idxStr + '</span>'
                         + '</div>';
                 }).join('');
 
+                // Cohort column headers — palette-colored, ellipsised,
+                // sit between Casual and Gen Pop. Header label uses the
+                // bare cohort name (Avid / 4+ / Premium); the per-chart
+                // legend is where we spell out the subject.
+                const cmpHeaderCellsHtml = _cmpLookups.map((lk, ci) => {
+                    const color = _cmpPalette[ci % _cmpPalette.length];
+                    const lbl = _safeEscape(lk.label || 'Run');
+                    return '<span class="cmp-col-cell" style="color:' + color + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;" title="' + lbl + '">' + lbl + '</span>';
+                }).join('');
+
+                // Match the behavioral-card grid template so the
+                // .cmp-hide-genpop / .cmp-hide-profile CSS rules (set
+                // up in applyComparisonRunsToCategoryTables) collapse
+                // the right cells when the user toggles Casual or
+                // Gen Pop off. 72px per cohort col matches behavioral.
+                const _cmpCols = _cmpLookups.map(() => '72px').join(' ');
+                const _profileColTpl = _cmpHideCF ? '' : '70px ';
+                const _gpColTpl      = _cmpHideGP ? '' : ' 70px';
+                const _gridTpl       = (_cmpLookups.length > 0)
+                    ? ('28px minmax(80px,1fr) ' + _profileColTpl + _cmpCols + _gpColTpl + ' 56px')
+                    : '';
+                const _hideClasses = (_cmpHideCF ? ' cmp-hide-profile' : '') + (_cmpHideGP ? ' cmp-hide-genpop' : '');
+                const _gridStyleAttr = _gridTpl ? (' style="grid-template-columns:' + _gridTpl + ';"') : '';
+
                 tableC.innerHTML = ''
-                    + '<div class="behavioral-table" data-no-cmp-inject="1">'
+                    + '<div class="behavioral-table' + _hideClasses + '" data-no-cmp-inject="1"' + _gridStyleAttr + '>'
                     +   '<div class="behavioral-header-row">'
                     +     '<span>#</span>'
                     +     '<span>Bucket</span>'
                     +     '<span class="profile-col">' + profileColLabel + '</span>'
+                    +     cmpHeaderCellsHtml
                     +     '<span class="genpop-col">' + gpColLabel + '</span>'
                     +     '<span class="index-col">Index</span>'
                     +   '</div>'
