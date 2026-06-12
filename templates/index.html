@@ -16668,7 +16668,7 @@
                         <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: left;">DMA<br>Rank</span>
                         <span>Location</span>
                         <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
-                        <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
+                        <span class="profile-col has-tooltip" data-tooltip="Profile percentage">Profile</span>
                         <span class="cw-gp-col has-tooltip" data-tooltip="Gen Pop % from CrossWalk panel data" style="line-height:1.1;">CW<br>Gen Pop</span>
                         <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Census/Nielsen)" style="line-height:1.1;">GP<br>Census</span>
                         <span class="index-col has-tooltip" data-tooltip="CrossWalk Gen Pop Index">CW GP<br>Index</span>
@@ -16736,7 +16736,7 @@
                             <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: left;">DMA<br>Rank</span>
                             <span>Location</span>
                             <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
-                            <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
+                            <span class="profile-col has-tooltip" data-tooltip="Profile percentage">Profile</span>
                             <span class="index-col">Index</span>
                         </div>
                         <div id="locationList" style="max-height: 500px; overflow-y: auto;"></div>
@@ -16770,7 +16770,7 @@
                             <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: left;">DMA<br>Rank</span>
                             <span>Location</span>
                             <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
-                            <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
+                            <span class="profile-col has-tooltip" data-tooltip="Profile percentage">Profile</span>
                             <span class="index-col">Index</span>
                         </div>
                         <div id="locationListBottom" style="max-height: 500px; overflow-y: auto;"></div>
@@ -57924,7 +57924,10 @@
                     // the CSS rule wins again.
                     if (header) header.style.gridTemplateColumns = '';
                     list.querySelectorAll('.location-row').forEach(r => { r.style.gridTemplateColumns = ''; });
-                    if (parent) parent.classList.remove('cmp-hide-genpop');
+                    if (parent) {
+                        parent.classList.remove('cmp-hide-genpop');
+                        parent.classList.remove('cmp-hide-profile');
+                    }
                     return;
                 }
 
@@ -57932,7 +57935,7 @@
                 // Profile column (per UX: "always put the avid fan after
                 // the primary profile not at the end"), so the column
                 // order is:
-                //   Rank | Location | Rank | Profile | [cmps] | [GP cols] | Index
+                //   Rank | Location | Rank | [Profile?] | [cmps] | [GP cols] | Index
                 // For the "All" table we ALSO honor the Gen Pop hide
                 // toggle. NOTE: only .cw-gp-col is class-hidden via
                 // .cmp-hide-genpop; "GP Census" is a plain <span> with
@@ -57940,17 +57943,26 @@
                 // ONLY ONE column (CW Gen Pop) when hideGP is true,
                 // not both, or the row gets one fewer declared column
                 // than visible cells and "CW GP Index" wraps below.
+                //
+                // Same logic for the Profile slot when hideCF is true:
+                // drop the 80px column so the row collapses cleanly
+                // instead of leaving an empty gap where the now-hidden
+                // Profile cell used to sit.
                 const cmpColsCss = series.map(() => '72px').join(' ');
+                const profileColCss = hideCF ? '' : '80px ';
                 let newGrid;
                 if (sec.isAll) {
                     const gpCols = hideGP ? ' 72px' : ' 72px 72px';
-                    newGrid = '58px minmax(0, 1fr) 44px 80px ' + cmpColsCss + gpCols + ' 58px';
+                    newGrid = '58px minmax(0, 1fr) 44px ' + profileColCss + cmpColsCss + gpCols + ' 58px';
                 } else {
                     // Over/under tables have no native Gen Pop column,
                     // so the hideGP toggle has nothing to hide here.
-                    newGrid = '58px minmax(0, 1fr) 44px 80px ' + cmpColsCss + ' 58px';
+                    newGrid = '58px minmax(0, 1fr) 44px ' + profileColCss + cmpColsCss + ' 58px';
                 }
-                if (parent) parent.classList.toggle('cmp-hide-genpop', hideGP);
+                if (parent) {
+                    parent.classList.toggle('cmp-hide-genpop', hideGP);
+                    parent.classList.toggle('cmp-hide-profile', hideCF);
+                }
 
                 // Per-run lookups already built earlier? Rebuild here
                 // scoped to this iteration to keep it self-contained.
@@ -65945,7 +65957,7 @@
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
                         <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
-                        <span>${displayValue}</span>
+                        <span class="profile-col">${displayValue}</span>
                         <span class="index-col" style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
                     </div>
                 `;
@@ -65995,7 +66007,7 @@
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
                         <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
-                        <span>${displayValue}</span>
+                        <span class="profile-col">${displayValue}</span>
                         <span class="index-col" style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
                     </div>
                 `;
@@ -66054,7 +66066,7 @@
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
                         <span>${normalizeDmaDisplay(loc.name)}</span>
                         <span>${i + 1}</span>
-                        <span style="font-weight: 600;">${displayValue}</span>
+                        <span class="profile-col" style="font-weight: 600;">${displayValue}</span>
                         <span class="cw-gp-col" style="color: var(--text-secondary);">${genPopDisplay}</span>
                         <span style="color: var(--text-secondary);">${gpStr}</span>
                         <span class="index-col" style="color: ${indexColor};">${formatIndex(loc.index)}</span>
