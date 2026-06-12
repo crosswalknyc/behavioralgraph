@@ -55456,6 +55456,22 @@
                 if (category === 'BRAND INPUT') {
                     const projectedFromF4 = parseInt(String(row['US Gen Pop Projection'] || row['Gen Pop Projection'] || row[5] || '0').replace(/,/g, '')) || 0;
                     if (projectedFromF4 > 0) result.projectedUS = projectedFromF4;
+                    // Also capture this cohort's PANEL respondent count from
+                    // BRAND INPUT's Original Raw Numbers / Category Share /
+                    // Raw cell. For cohort-cut CSVs (e.g. "Subject - Avid Fan",
+                    // "Subject - Netflix Only"), the SAMPLE SIZE row is
+                    // inherited from the upstream panel and is IDENTICAL
+                    // across all cuts — so it can't tell cuts apart. The
+                    // BRAND INPUT Raw cell IS per-cut and carries the
+                    // cohort respondent count. We surface it as a separate
+                    // field so the Data Cuts comparison can show distinct
+                    // n= values per cohort instead of repeating the panel
+                    // size four times.
+                    const rawFromBrandInput = parseInt(String(
+                        row['Original Raw Numbers'] || row['Raw'] || row['Category Share'] ||
+                        row[3] || row[4] || '0'
+                    ).replace(/,/g, '')) || 0;
+                    if (rawFromBrandInput > 0) result.cohortRaw = rawFromBrandInput;
                 }
 
                 // Store BRAND CATEGORY for display (e.g. SERIES - Netflix -> append platform to title)
@@ -57453,6 +57469,33 @@
                 return Number(n).toLocaleString();
             };
 
+            // For "sample size per cut" we want each cohort's actual
+            // panel respondent count, NOT the upstream panel size.
+            // Resolution order:
+            //   1. parsed.cohortRaw — pulled from BRAND INPUT row's
+            //      Raw / Original Raw Numbers cell. Per-cohort, varies
+            //      between cuts of the same upstream panel.
+            //   2. parsed.sampleSize — panel-level SAMPLE SIZE row.
+            //      Sticky across cuts derived from the same parent, so
+            //      only useful as a fallback when the cut CSV didn't
+            //      populate BRAND INPUT Raw.
+            //   3. derived: projectedUS / 329.9M * 10M (canonical math).
+            //      Last-resort when the CSV has projectedUS but neither
+            //      cohortRaw nor sampleSize.
+            const _cutSampleSize = (parsed) => {
+                if (!parsed) return 0;
+                if (typeof parsed.cohortRaw === 'number' && isFinite(parsed.cohortRaw) && parsed.cohortRaw > 0) {
+                    return parsed.cohortRaw;
+                }
+                if (typeof parsed.sampleSize === 'number' && isFinite(parsed.sampleSize) && parsed.sampleSize > 0) {
+                    return parsed.sampleSize;
+                }
+                if (typeof parsed.projectedUS === 'number' && isFinite(parsed.projectedUS) && parsed.projectedUS > 0) {
+                    return Math.round(parsed.projectedUS / 329900000 * 10000000);
+                }
+                return 0;
+            };
+
             const buildList = (which) => {
                 const wrap = document.createElement('div');
                 wrap.className = 'cmp-stat-list';
@@ -57465,10 +57508,9 @@
                     lbl.textContent = entry.label || 'Run';
                     lbl.title = entry.label || '';
                     lbl.style.cssText = 'color:' + color + ';font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;';
-                    const raw = which === 'sample'
-                        ? (entry.parsed && entry.parsed.sampleSize)
-                        : (entry.parsed && entry.parsed.projectedUS);
-                    const n = (typeof raw === 'number' && isFinite(raw)) ? raw : 0;
+                    const n = which === 'sample'
+                        ? _cutSampleSize(entry.parsed)
+                        : (entry.parsed && typeof entry.parsed.projectedUS === 'number' && isFinite(entry.parsed.projectedUS) ? entry.parsed.projectedUS : 0);
                     const val = document.createElement('span');
                     val.textContent = (which === 'sample' ? 'n=' : '') + _fmt(n);
                     val.style.cssText = 'color:var(--text-primary, #e6e6e6);font-variant-numeric:tabular-nums;font-weight:500;';
