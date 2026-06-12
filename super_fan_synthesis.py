@@ -939,7 +939,10 @@ def _register_in_dashboard(out_key: str, subject_label: str,
     is the single source of truth for this registration logic across
     all profile-builder scripts (avid-fan, super-fan, skins, etc.).
     """
-    from .dashboard_register import register_profile_in_dashboard
+    try:
+        from migration.dashboard_register import register_profile_in_dashboard
+    except ImportError:
+        from dashboard_register import register_profile_in_dashboard
     src_key = source if source.endswith('.csv') else f"{source}.csv"
     return register_profile_in_dashboard(
         out_key,

@@ -702,7 +702,10 @@ def synthesize_avid_fan_for_s3_key(s3_key: str, *, dry_run: bool = False
     # the new avid profile shows up in the Select Profile dropdown.
     register_status = None
     try:
-        from migration.dashboard_register import register_profile_in_dashboard
+        try:
+            from migration.dashboard_register import register_profile_in_dashboard
+        except ImportError:
+            from dashboard_register import register_profile_in_dashboard
         register_status = register_profile_in_dashboard(
             out_key,
             display_name=f"{subj_clean} - Avid Fan",
