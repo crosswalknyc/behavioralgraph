@@ -56542,7 +56542,7 @@
             const series = (_comparisonRunsState.selectedKeys || [])
                 .map(k => _comparisonRunsState.runsByKey[k])
                 .filter(Boolean);
-            const opts = [{ key: 'profile', label: 'Casual Fan' }];
+            const opts = [{ key: 'profile', label: 'Casual' }];
             series.forEach(s => {
                 opts.push({ key: s.key, label: s.label || 'Run' });
             });
@@ -56585,7 +56585,7 @@
             if (wrap) wrap.style.display = (series.length > 0) ? '' : 'none';
             if (helpEl) {
                 if (series.length === 0) {
-                    helpEl.textContent = 'Default: Casual Fan vs Gen Pop. Select runs above to add them as options.';
+                    helpEl.textContent = 'Default: Casual vs Gen Pop. Select runs above to add them as options.';
                 } else if (finalNum === finalDen) {
                     helpEl.textContent = 'Numerator and denominator are the same — Index will be 100 for every row.';
                 } else {
@@ -56743,8 +56743,24 @@
             // Greedy + lazy capture: pick the LAST dash that has space on
             // both sides. Match against U+002D, U+2013 (en-dash), U+2014 (em-dash).
             const m = name.match(/^(.+)\s[\-\u2013\u2014]\s+(.+)$/);
-            if (m && m[2]) return m[2].trim();
+            if (m && m[2]) return _stripFanSuffix(m[2].trim());
             return '';
+        }
+
+        // Trim a trailing " Fan" / " Fans" token from a cohort label so it
+        // fits a single line in tight UI spots (column headers, chips,
+        // popover rows). Year suffix is preserved:
+        //   "Avid Fan"        -> "Avid"
+        //   "Casual Fan"      -> "Casual"
+        //   "Avid Fan 2024"   -> "Avid 2024"
+        //   "4+ Avid Fan"     -> "4+ Avid"
+        //   "Superfan"        -> "Superfan"   (no leading space; left alone)
+        //   "Premium Cohort"  -> "Premium Cohort" (no Fan token; passthrough)
+        function _stripFanSuffix(label) {
+            if (!label) return label;
+            return String(label)
+                .replace(/\s+Fans?(\s+(?:20\d{2}(?:-\d{2})?))?\s*$/i, '$1')
+                .trim();
         }
 
         function _compactRunLabel(profile) {
@@ -56760,23 +56776,23 @@
                 const info = (typeof getProfileSuffixInfo === 'function')
                     ? getProfileSuffixInfo(profile) : { suffixType: 'none', suffixLabel: '' };
                 if (info && (info.suffixType === 'cohort' || info.suffixType === 'year') && info.suffixLabel) {
-                    return info.suffixLabel;
+                    return _stripFanSuffix(info.suffixLabel);
                 }
             } catch (_) {}
             // 3. No suffix at all → by convention the BASE profile (just
             //    "Mark Rober", not "Mark Rober - Netflix" or "Mark Rober -
-            //    Avid Fan") represents the broader CASUAL FAN audience.
-            //    Label it that way on every comparison display so the
-            //    column header / chip / popover row read "Casual Fan"
-            //    instead of an arbitrary date. Append the run date for
-            //    disambiguation when multiple unsuffixed runs are picked.
+            //    Avid Fan") represents the broader CASUAL audience.
+            //    Label it "Casual" (not "Casual Fan") on every comparison
+            //    display so the column header / chip / popover row stay
+            //    on one line. Append the run date for disambiguation when
+            //    multiple unsuffixed runs are picked.
             try {
                 if (typeof getRunDateLabel === 'function') {
                     const d = getRunDateLabel(profile && (profile.s3_key || ''));
-                    if (d) return 'Casual Fan ' + d;
+                    if (d) return 'Casual ' + d;
                 }
             } catch (_) {}
-            return 'Casual Fan';
+            return 'Casual';
         }
 
         // Extract a clean year label from a "YYYY-MM-DD - YYYY-MM-DD" date
@@ -56814,17 +56830,18 @@
                 const info = (typeof getProfileSuffixInfo === 'function')
                     ? getProfileSuffixInfo(profile) : { suffixType: 'none', suffixLabel: '' };
                 if (info && (info.suffixType === 'cohort' || info.suffixType === 'dash') && info.suffixLabel) {
-                    return dateRangeYear ? (info.suffixLabel + ' ' + dateRangeYear) : info.suffixLabel;
+                    const trimmed = _stripFanSuffix(info.suffixLabel);
+                    return dateRangeYear ? (trimmed + ' ' + dateRangeYear) : trimmed;
                 }
             } catch (_) {}
             // No cohort/dash suffix at all — by user convention, an
-            // unsuffixed BASE profile represents the broader CASUAL FAN
-            // audience (the Avid-Fan / Netflix / Premium / etc. cuts are
+            // unsuffixed BASE profile represents the broader CASUAL
+            // audience (the Avid / Netflix / Premium / etc. cuts are
             // always explicitly suffixed). Label comparison columns,
-            // chips, and popover rows for these as "Casual Fan" instead
-            // of falling back to the date or display name. Append the
-            // year for disambiguation when available.
-            return dateRangeYear ? ('Casual Fan ' + dateRangeYear) : 'Casual Fan';
+            // chips, and popover rows as "Casual" (not "Casual Fan")
+            // so they fit on one line. Append the year for
+            // disambiguation when available.
+            return dateRangeYear ? ('Casual ' + dateRangeYear) : 'Casual';
         }
 
         function _setupComparisonForCurrentProfile(subject, currentKey, sameSubjectRuns) {
@@ -57107,7 +57124,7 @@
             cfCb.checked = _comparisonRunsState.includeCasualFan !== false;
             cfCb.style.cssText = 'accent-color:#22d3ee;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
             const cfLbl = document.createElement('span');
-            cfLbl.innerHTML = 'Show <strong style="color:var(--text-primary, #cbd5e1);">Casual Fan</strong> (base profile)';
+            cfLbl.innerHTML = 'Show <strong style="color:var(--text-primary, #cbd5e1);">Casual</strong> (base profile)';
             cfLbl.style.cssText = 'color:var(--text-primary, #e6e6e6);';
             cfRow.appendChild(cfCb);
             cfRow.appendChild(cfLbl);
@@ -57803,9 +57820,9 @@
                     wrap.appendChild(row);
                 };
 
-                // Casual Fan = the base profile. Always first when active.
+                // Casual = the base profile. Always first when active.
                 if (baseValue != null && baseValue > 0) {
-                    appendRow('Casual Fan', CASUAL_FAN_LABEL_COLOR, baseValue, { subtle: true });
+                    appendRow('Casual', CASUAL_FAN_LABEL_COLOR, baseValue, { subtle: true });
                 }
 
                 series.forEach((entry, idx) => {
@@ -61651,7 +61668,7 @@
         function _renderDemoTablesForChartsInTableMode() {
             const isProjection = (typeof dashDisplayMode !== 'undefined') && dashDisplayMode === 'projection';
             const US_POP = 329900000;
-            const profileColLabel = isProjection ? 'US #' : 'Profile';
+            const profileColLabel = isProjection ? 'US #' : 'Casual';
             const gpColLabel      = isProjection ? 'GP #' : 'Gen Pop';
             const demoData    = lastRenderedDemographics || {};
             const demoIdxAll  = lastRenderedDemographicsIndex || {};
@@ -64558,7 +64575,7 @@
                             <div class="behavioral-header-row">
                                 <span>#</span>
                                 <span>Item</span>
-                                <span class="profile-col">${dashDisplayMode === 'projection' ? 'US #' : 'Casual Fan'}</span>
+                                <span class="profile-col">${dashDisplayMode === 'projection' ? 'US #' : 'Casual'}</span>
                                 <span class="genpop-col">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
                                 <span class="index-col">Index</span>
                             </div>
