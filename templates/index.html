@@ -56232,30 +56232,47 @@
         // into a parseAllData()-shaped object so the rest of the
         // comparison pipeline can treat it identically to a real run.
         function _buildCategoryNormParsed(normPayload) {
-            // US-projection number shown on the Norm row in the
-            // Crosswalk Respondents / US card.
+            // Rule #3a (PROFILE_AUDIT_RECIPE / profile-iq-pipeline-rules):
+            // the Norm row's Sample Size + US Gen Pop Projection are
+            // anchored on the canonical 10M panel sample so the
+            // relationship is always Proj = Sample / 10M * 329.9M.
             //
-            // The backend ships a SAMPLE-WEIGHTED AVERAGE of each
-            // source profile's US Gen Pop Projection (see
-            // CategoryAccumulator.proj_weighted_sum in
-            // migration/compute_category_norms.py). That gives a
-            // number comparable in magnitude to a single profile's
-            // projection — usually a few hundred thousand to a few
-            // tens of millions — instead of the raw sum across
-            // hundreds of profiles, which would balloon past US
-            // population for any reasonable category.
+            // Backend (compute_category_norms.py CategoryAccumulator)
+            // ships:
+            //   - weighted_avg_sample_size = sum(s_i^2) / sum(s_i)
+            //     (a single representative panel-sample number for
+            //     the category, on the same order as one profile)
+            //   - weighted_avg_projection  = weighted_avg_sample_size
+            //                                / 10M * 329.9M
+            //     (derived from the sample size above — guaranteed
+            //     Rule-3a-canonical regardless of any stale projection
+            //     numbers in source CSVs)
             //
-            // Older norms payloads (computed before the field was
-            // added) don't carry `weighted_avg_projection`. For
-            // those we fall back to the canonical Rule #3a math
-            // applied to the total sample so the row at least
-            // renders something — but it'll be the inflated number
-            // until the admin reruns "Reset Category Norms".
-            const _totalSample = (normPayload && normPayload.total_sample) || 0;
-            const _backendProj = (normPayload && Number(normPayload.weighted_avg_projection)) || 0;
-            const _normProj = _backendProj > 0
-                ? _backendProj
-                : (_totalSample > 0 ? Math.round(_totalSample / 10000000 * 329900000) : 0);
+            // Back-compat fallback chain for older norms files (written
+            // before weighted_avg_sample_size existed):
+            //   1. prefer weighted_avg_sample_size
+            //   2. else legacy_weighted_avg_projection back-solved /
+            //      329.9M * 10M (sample-weighted avg of source projs,
+            //      back into a panel-sample number)
+            //   3. else nothing reliable — show 0 rather than the
+            //      inflated total_sample sum.
+            const _totalSample = (normPayload && Number(normPayload.total_sample)) || 0;
+            const _backendAvgSample = (normPayload && Number(normPayload.weighted_avg_sample_size)) || 0;
+            const _legacyProj = (normPayload && Number(normPayload.weighted_avg_projection)) || 0;
+            // Norm-row Sample Size: prefer the canonical weighted avg,
+            // else back-solve from legacy projection via Rule #3a, else 0.
+            const _normSample = _backendAvgSample > 0
+                ? _backendAvgSample
+                : (_legacyProj > 0 ? Math.round(_legacyProj / 329900000 * 10000000) : 0);
+            // US #: derive from the Norm-row Sample Size by canonical
+            // Rule #3a (Sample/10M*329.9M). This intentionally
+            // SUPERSEDES the backend's pre-derived value when the
+            // backend already shipped weighted_avg_sample_size, so the
+            // displayed Sample Size and US # always satisfy the
+            // canonical ratio exactly — no off-by-rounding surprises.
+            const _normProj = _normSample > 0
+                ? Math.round(_normSample / 10000000 * 329900000)
+                : (_legacyProj > 0 ? _legacyProj : 0);
             const parsed = {
                 demographics: {},
                 demographicsIndex: {},
@@ -56264,9 +56281,13 @@
                 behavioral: {},
                 interests: {},
                 locations: [],
-                sampleSize: _totalSample,
-                cohortRaw: _totalSample,
+                sampleSize: _normSample,
+                cohortRaw: _normSample,
                 projectedUS: _normProj,
+                // Surface the raw sum separately so the popover's
+                // "n=" status line can keep using profile_count *
+                // total_sample for diagnostic context.
+                normTotalSample: _totalSample,
                 brandCategory: (normPayload && normPayload.category) || ''
             };
             if (!normPayload) return parsed;
