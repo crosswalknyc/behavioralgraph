@@ -9016,7 +9016,7 @@
         /* Location tab: same grid for header and data rows, all columns left-aligned */
         .location-row {
             display: grid;
-            grid-template-columns: 58px minmax(0, 1fr) 44px 80px 58px;
+            grid-template-columns: 50px minmax(0, 1fr) 52px 72px 60px;
             gap: 0.5rem;
             padding: 0.4rem 0.5rem;
             border-bottom: 1px solid var(--border-color);
@@ -9038,11 +9038,11 @@
             justify-self: end;
         }
         #allLocationsContainer .location-row {
-            grid-template-columns: 58px minmax(0, 1fr) 44px 80px 72px 72px 58px;
+            grid-template-columns: 50px minmax(0, 1fr) 52px 72px 82px 76px 76px;
         }
         #allLocationsContainer.hide-cw-gp .cw-gp-col { display: none; }
         #allLocationsContainer.hide-cw-gp .location-row {
-            grid-template-columns: 58px minmax(0, 1fr) 44px 80px 72px 58px;
+            grid-template-columns: 50px minmax(0, 1fr) 52px 72px 76px 76px;
         }
 
         .location-row.header {
@@ -16753,13 +16753,13 @@
                         </div>
                     </div>
                     <div class="location-row header" id="allLocationsHeader">
-                        <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: left;">DMA<br>Rank</span>
+                        <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="text-align: left;">Rank</span>
                         <span>Location</span>
                         <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
                         <span class="profile-col has-tooltip" data-tooltip="Profile percentage">Profile</span>
-                        <span class="cw-gp-col has-tooltip" data-tooltip="Gen Pop % from CrossWalk panel data" style="line-height:1.1;">CW<br>Gen Pop</span>
-                        <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Census/Nielsen)" style="line-height:1.1;">GP<br>Census</span>
-                        <span class="index-col has-tooltip" data-tooltip="CrossWalk Gen Pop Index">CW GP<br>Index</span>
+                        <span class="cw-gp-col has-tooltip" data-tooltip="Gen Pop % from CrossWalk panel data">CW Gen Pop</span>
+                        <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Census/Nielsen)">GP Census</span>
+                        <span class="index-col has-tooltip" data-tooltip="CrossWalk Gen Pop Index">CW GP Index</span>
                     </div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
                     <div id="locationCountAll" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
@@ -16821,7 +16821,7 @@
                             </div>
                         </div>
                         <div class="location-row header">
-                            <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: left;">DMA<br>Rank</span>
+                            <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="text-align: left;">Rank</span>
                             <span>Location</span>
                             <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
                             <span class="profile-col has-tooltip" data-tooltip="Profile percentage">Profile</span>
@@ -16855,7 +16855,7 @@
                             </div>
                         </div>
                         <div class="location-row header">
-                            <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: left;">DMA<br>Rank</span>
+                            <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="text-align: left;">Rank</span>
                             <span>Location</span>
                             <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
                             <span class="profile-col has-tooltip" data-tooltip="Profile percentage">Profile</span>
@@ -57995,9 +57995,9 @@
             // correctly instead of overflowing.
             const locSections = [
                 // id          headerSelector                       baseGrid (no cmp)          isAll
-                { listId: 'locationList',       baseGrid: '58px minmax(0, 1fr) 44px 80px 58px', isAll: false },
-                { listId: 'locationListBottom', baseGrid: '58px minmax(0, 1fr) 44px 80px 58px', isAll: false },
-                { listId: 'locationListAll',    baseGrid: '58px minmax(0, 1fr) 44px 80px 72px 72px 58px', isAll: true }
+                { listId: 'locationList',       baseGrid: '50px minmax(0, 1fr) 52px 72px 60px', isAll: false },
+                { listId: 'locationListBottom', baseGrid: '50px minmax(0, 1fr) 52px 72px 60px', isAll: false },
+                { listId: 'locationListAll',    baseGrid: '50px minmax(0, 1fr) 52px 72px 82px 76px 76px', isAll: true }
             ];
             locSections.forEach(sec => {
                 const list = document.getElementById(sec.listId);
@@ -58045,15 +58045,15 @@
                 // instead of leaving an empty gap where the now-hidden
                 // Profile cell used to sit.
                 const cmpColsCss = series.map(() => '72px').join(' ');
-                const profileColCss = hideCF ? '' : '80px ';
+                const profileColCss = hideCF ? '' : '72px ';
                 let newGrid;
                 if (sec.isAll) {
-                    const gpCols = hideGP ? ' 72px' : ' 72px 72px';
-                    newGrid = '58px minmax(0, 1fr) 44px ' + profileColCss + cmpColsCss + gpCols + ' 58px';
+                    const gpCols = hideGP ? ' 76px' : ' 82px 76px';
+                    newGrid = '50px minmax(0, 1fr) 52px ' + profileColCss + cmpColsCss + gpCols + ' 76px';
                 } else {
                     // Over/under tables have no native Gen Pop column,
                     // so the hideGP toggle has nothing to hide here.
-                    newGrid = '58px minmax(0, 1fr) 44px ' + profileColCss + cmpColsCss + ' 58px';
+                    newGrid = '50px minmax(0, 1fr) 52px ' + profileColCss + cmpColsCss + ' 60px';
                 }
                 if (parent) {
                     parent.classList.toggle('cmp-hide-genpop', hideGP);
