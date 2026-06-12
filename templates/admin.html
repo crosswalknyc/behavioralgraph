@@ -6838,7 +6838,23 @@
                     if (status.last_message) {
                         const errCount = (status.errors || []).length;
                         if (errCount > 0) {
-                            showToast(`⚠️ Category norms recompute finished with ${errCount} error${errCount === 1 ? '' : 's'}.`, true);
+                            // Show the first actual error inline on the toast so
+                            // admins don't have to crack open devtools or SSH to
+                            // figure out which category blew up.
+                            const firstErr = (status.errors && status.errors[0]) || 'unknown error';
+                            showToast(
+                                `⚠️ Category norms recompute finished with ${errCount} error${errCount === 1 ? '' : 's'}: ${firstErr}`,
+                                true
+                            );
+                            try { console.warn('[recompute-category-norms] errors:', status.errors, status.error_details || []); } catch (_) {}
+                            // Also drop the error text under the progress bar
+                            // so it stays visible after the toast fades.
+                            const detail = document.getElementById('categoryNormsProgressDetail');
+                            if (detail) {
+                                const lines = (status.errors || []).map(e => `• ${e}`);
+                                detail.innerHTML = `<strong style="color:#c0392b;">${errCount} error${errCount === 1 ? '' : 's'}:</strong><br>` +
+                                    lines.map(l => `<span style="color:#c0392b;">${l.replace(/</g,'&lt;')}</span>`).join('<br>');
+                            }
                         } else {
                             showToast(`✅ Category norms recomputed.`);
                         }
