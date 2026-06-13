@@ -310,9 +310,13 @@ _CAT_ROW_SYSTEM = (
     "  - BPs are percentages 0.0001 to 99.9. Round to 4 decimals.\n"
     "  - If a row genuinely doesn't shift, return source BP rounded to 4dp; "
     "downstream code re-jitters 4dp-collisions.\n"
-    "  - Return STRICT JSON only:\n"
-    '    {"items": [{"label": "...", "new_bp": 12.3456}, ...]}\n'
-    "  - Include EVERY item from the input list. Use exact label spelling."
+    "  - Return STRICT JSON only. Schema (do NOT copy the literal numbers; "
+    "they are illustrative only -- reason fresh for every brand):\n"
+    '    {"items": [{"label": "BRAND_A", "new_bp": 0.4271}, '
+    '{"label": "BRAND_B", "new_bp": 47.8312}, ...]}\n'
+    "  - Include EVERY item from the input list. Use exact label spelling.\n"
+    "  - DO NOT echo placeholder / example values. Every new_bp must come "
+    "from your reasoning about THAT specific brand."
 )
 
 
@@ -546,7 +550,15 @@ def apply_avid_transform(df, audience: dict, category_decisions: dict,
         # source but with no directional push, since the agent didn't
         # justify any push.
         cat_dec = category_decisions.get(cat, {})
-        if val_u in cat_dec:
+        # Placeholder echo defender: prompt examples (12.3456, 0.4271,
+        # 47.8312) sometimes get echoed verbatim by Claude when it can't
+        # decide. Treat these as no-decision -> fall back to source-jitter.
+        claude_val = cat_dec.get(val_u)
+        is_placeholder = claude_val is not None and any(
+            abs(float(claude_val) - p) < 0.0005
+            for p in (12.3456, 0.4271, 47.8312)
+        )
+        if val_u in cat_dec and not is_placeholder:
             new_bp = float(cat_dec[val_u])
             n_brand += 1
             new_bp = max(0.0001, min(99.49, round(new_bp, 4)))
