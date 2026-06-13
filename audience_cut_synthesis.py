@@ -93,6 +93,87 @@ def _label_for_cut(gender: str, intensity: str) -> str:
     return f"{i_word} {g_word} Fan"
 
 
+def _detect_source_intensity(source: str, source_kind: str) -> Optional[str]:
+    """Inspect the source filename to determine if it already represents
+    an intensity cohort. Returns 'avid' | 'casual' | None.
+
+    Files like "Reba McEntire - Avid Fan.csv" are themselves avid
+    cohorts; gender splits of them should NOT re-apply an intensity
+    filter -- they should just split by gender (per Jenna 2026-06-12:
+    "the percentage of female in avid should be the sample size for
+    avid female...").
+    """
+    name = (os.path.basename(source) if source_kind != "s3_key"
+            else source).lower()
+    if " - avid fan" in name or " - avid female fan" in name or \
+       " - avid male fan" in name:
+        return "avid"
+    if " - casual fan" in name or " - casual female fan" in name or \
+       " - casual male fan" in name:
+        return "casual"
+    return None
+
+
+def _compute_deterministic_cohort_fraction(
+    df_source, gender: str, intensity: str,
+    source_intensity: Optional[str],
+) -> Optional[float]:
+    """Compute cohort_fraction directly from the source's GENDER row +
+    (when applicable) the source's intensity (AVID FAN / CASUAL FAN)
+    BPs. Returns the deterministic fraction or None if it can't be
+    computed (caller falls back to Claude's reasoning).
+
+    Math:
+      * source already at target intensity (e.g. avid_F from an avid
+        CSV): fraction = gender_share_in_source. Splits the avid
+        cohort by gender, summing to 100%.
+      * source is OG (or unspecified): fraction = gender_share *
+        intensity_share, where intensity_share is the source's
+        AVID FAN or CASUAL FAN BP.
+    """
+    cat_col = "Column"
+    val_col = "Value"
+    bp_col = next(
+        (c for c in df_source.columns if "Brand Penetration" in c), None
+    )
+    if not bp_col:
+        return None
+
+    target_label = "FEMALE" if gender.upper() == "F" else "MALE"
+    gender_pct: Optional[float] = None
+    intensity_pct_for_target: Optional[float] = None
+
+    cats_upper = df_source[cat_col].astype(str).str.upper().str.strip()
+    vals_upper = df_source[val_col].astype(str).str.upper().str.strip()
+
+    g_mask = (cats_upper == "GENDER") & (vals_upper == target_label)
+    if g_mask.any():
+        gender_pct = _fbp(df_source.loc[g_mask, bp_col].iloc[0])
+    if gender_pct is None:
+        return None
+
+    if source_intensity == intensity:
+        # Source IS the target-intensity cohort. Splitting by gender
+        # only -- the gender share of the avid (or casual) cohort IS
+        # the cohort_fraction.
+        return max(0.005, min(0.995, gender_pct / 100.0))
+
+    # Source is OG (or unspecified intensity). Fold the source's
+    # AVID FAN or CASUAL FAN BP into the fraction.
+    intensity_label = ("AVID FAN" if intensity == "avid"
+                       else "CASUAL FAN")
+    i_mask = cats_upper == intensity_label
+    if i_mask.any():
+        intensity_pct_for_target = _fbp(
+            df_source.loc[i_mask, bp_col].iloc[0]
+        )
+    if intensity_pct_for_target is None:
+        return max(0.005, min(0.995, gender_pct / 100.0))
+
+    combined = (gender_pct / 100.0) * (intensity_pct_for_target / 100.0)
+    return max(0.005, min(0.995, combined))
+
+
 # =============================================================================
 # Phase 1 -- gender + intensity audience reasoning
 # =============================================================================
@@ -694,6 +775,36 @@ def synthesize_audience_cut(
           f"us_pop_fraction={audience['us_pop_fraction']:.4f}  "
           f"claude={audience.get('claude_used', False)}")
     print(f"     reasoning: {audience.get('reasoning', '')[:200]}")
+
+    # Deterministic cohort_fraction override.
+    # Per Jenna 2026-06-12: "the percentage of female in avid should be
+    # the sample size for avid female ... the code needs to know that
+    # these are skins off of the avid so if you split by gender it
+    # would need to conform to those". When source IS already at the
+    # target intensity, cohort_fraction = gender_share_in_source (and
+    # the gender splits sum to 100% of source). When source is OG, we
+    # multiply gender_share * intensity_share. Either way this is
+    # math, not vibes -- so we override Claude's estimate with the
+    # data-derived value. us_pop_fraction is rescaled proportionally.
+    source_intensity = _detect_source_intensity(source, kind)
+    det_cf = _compute_deterministic_cohort_fraction(
+        df_source, gender, intensity, source_intensity,
+    )
+    if det_cf is not None and det_cf > 0:
+        old_cf = float(audience.get("cohort_fraction", 0.0) or 0.0)
+        old_uf = float(audience.get("us_pop_fraction", 0.0) or 0.0)
+        audience["cohort_fraction"] = det_cf
+        if old_cf > 0:
+            audience["us_pop_fraction"] = max(
+                0.001, min(0.95, old_uf * det_cf / old_cf),
+            )
+        audience["deterministic_cf"] = True
+        audience["claude_cf_was"] = old_cf
+        audience["source_intensity"] = source_intensity
+        print(f"     deterministic cohort_fraction (source_intensity="
+              f"{source_intensity!r}, gender={gender}): "
+              f"{det_cf:.4f}  (overriding Claude's {old_cf:.4f})  "
+              f"us_pop_fraction adjusted to {audience['us_pop_fraction']:.4f}")
 
     cat_col = "Column"
     val_col = "Value"
