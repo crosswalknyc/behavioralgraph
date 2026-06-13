@@ -59274,11 +59274,83 @@
             try { sessionStorage.removeItem(SESSION_JOBS_CACHE_KEY); } catch (e) {}
         }
         
+        // Bombproof refresh of the profile selector. Calls /api/jobs with
+        // refresh=1 AND force=1 so the server:
+        //   - does a FULL S3 scan (not the LastModified-diff smart_cache_update)
+        //   - zeros the persisted-cache ETag throttle so every other gunicorn
+        //     worker re-pulls the fresh cache on its next /api/jobs call
+        //   - returns an audit listing any root CSV that won't show in the
+        //     selector and why (almost always "missing BRAND CATEGORY")
+        // The audit is surfaced as a toast + console table so the user can
+        // immediately see whether their just-dropped file is in S3 but
+        // hidden by a CSV defect, vs not in S3 at all.
         async function refreshDashboardProfiles() {
             clearSessionJobsCache();
             const container = document.getElementById('dashProfileTree');
-            if (container) container.innerHTML = '<div style="padding: 0.75rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Refreshing from S3...</div>';
-            await loadDashboardProfiles();
+            if (container) container.innerHTML = '<div style="padding: 0.75rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Forcing full S3 re-scan...</div>';
+            try {
+                const response = await fetch(`/api/jobs?refresh=1&force=1&_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                if (!response.ok) { throw new Error('HTTP ' + response.status); }
+                const data = await response.json();
+                if (data.loading) {
+                    if (container) container.innerHTML = '<div style="padding: 0.75rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Cache still loading…</div>';
+                    setTimeout(refreshDashboardProfiles, 1500);
+                    return;
+                }
+                setSessionJobsCache(data);
+                const profiles = data.jobs || [];
+                dashboardProfiles = profiles;
+                renderDashboardProfileTree(profiles);
+                // Audit feedback so the user knows what actually happened.
+                try {
+                    const audit = (data.cache_info && data.cache_info.audit) || null;
+                    if (audit) {
+                        const inSel = audit.in_selector || 0;
+                        const hidden = audit.hidden_count || 0;
+                        const totalRoot = audit.total_root_csvs || 0;
+                        let msg = `Refreshed: ${inSel} of ${totalRoot} root CSV${totalRoot === 1 ? '' : 's'} in selector`;
+                        if (hidden > 0) {
+                            msg += ` • ${hidden} hidden`;
+                            // Group hidden files by reason so the user sees
+                            // the dominant failure mode at a glance (almost
+                            // always "Missing BRAND CATEGORY").
+                            const byReason = {};
+                            (audit.hidden || []).forEach(h => {
+                                const r = h.reason || 'unknown';
+                                (byReason[r] = byReason[r] || []).push(h);
+                            });
+                            console.group('🔎 Profile selector audit — hidden root CSVs');
+                            console.log(`Total in S3 root: ${totalRoot} • In selector: ${inSel} • Hidden: ${hidden}`);
+                            Object.entries(byReason).forEach(([reason, items]) => {
+                                console.groupCollapsed(`${items.length} × ${reason}`);
+                                console.table(items.map(it => ({
+                                    file: it.display || it.s3_key,
+                                    s3_key: it.s3_key,
+                                    category: it.category
+                                })));
+                                console.groupEnd();
+                            });
+                            console.groupEnd();
+                            showNotification(`${msg}. See console for details.`, 'warning');
+                        } else {
+                            showNotification(msg, 'success');
+                        }
+                    } else {
+                        showNotification(`Refreshed: ${profiles.length} profile${profiles.length === 1 ? '' : 's'}`, 'success');
+                    }
+                } catch (auditErr) {
+                    console.warn('[refresh] audit display failed', auditErr);
+                }
+                // Re-load Gen Pop baseline so a freshly-uploaded Gen Pop is picked up.
+                if (typeof loadGenPopBaseline === 'function') {
+                    try { await loadGenPopBaseline(); } catch (_) {}
+                }
+            } catch (err) {
+                console.error('Refresh failed:', err);
+                if (container) container.innerHTML = '<div style="padding: 0.75rem; color: var(--accent-red); font-size: 0.8rem;">Refresh failed — check console.</div>';
+                showNotification('Refresh failed: ' + (err && err.message ? err.message : 'unknown error'), 'error');
+            }
         }
         
         // Rebuild demographicsGenPop using the profile's own keys but values from the Gen Pop baseline.
@@ -93092,7 +93164,40 @@
                 } else {
                     cacheStatus.innerHTML = `<span style="color: var(--text-secondary); font-size: 0.7rem;">✅ No new files (${data.total} cached)</span>`;
                 }
-                
+                // Surface the audit: if any root CSVs are hidden from the
+                // profile selector (almost always due to a missing BRAND
+                // CATEGORY row), append a clickable note + dump details to
+                // the console so the admin can fix the offending CSVs.
+                try {
+                    const audit = data.audit;
+                    if (audit && audit.hidden_count > 0) {
+                        cacheStatus.innerHTML += ` <span style="color: var(--accent-yellow, #f59e0b); font-size: 0.7rem; margin-left: 0.4rem;">• ${audit.hidden_count} hidden — see console</span>`;
+                        const byReason = {};
+                        (audit.hidden || []).forEach(h => {
+                            const r = h.reason || 'unknown';
+                            (byReason[r] = byReason[r] || []).push(h);
+                        });
+                        console.group(`🔎 Profile-selector audit: ${audit.in_selector}/${audit.total_root_csvs} root CSVs surfaced, ${audit.hidden_count} hidden`);
+                        Object.entries(byReason).forEach(([reason, items]) => {
+                            console.groupCollapsed(`${items.length} × ${reason}`);
+                            console.table(items.map(it => ({
+                                file: it.display || it.s3_key,
+                                s3_key: it.s3_key,
+                                category: it.category
+                            })));
+                            console.groupEnd();
+                        });
+                        console.groupEnd();
+                        if (typeof showNotification === 'function') {
+                            showNotification(`${audit.in_selector}/${audit.total_root_csvs} profiles in selector — ${audit.hidden_count} hidden. See console for fixes.`, 'warning');
+                        }
+                    } else if (audit && typeof showNotification === 'function') {
+                        showNotification(`Cache refreshed: ${audit.in_selector}/${audit.total_root_csvs} root CSVs in selector.`, 'success');
+                    }
+                } catch (auditErr) {
+                    console.warn('[admin refresh] audit display failed', auditErr);
+                }
+
                 clearSessionJobsCache();
                 await loadJobs();
             } catch (error) {
