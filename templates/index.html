@@ -57448,22 +57448,7 @@
             // [Gen Pop].
             const profileName = (currentProfileData && currentProfileData.name) || 'Profile';
             const mainProfileLabel = 'Casual ' + profileName;
-            const _cohortLegendLabel = (entry) => {
-                const base = (entry && entry.label) ? String(entry.label).trim() : 'Run';
-                let subj = profileName;
-                try {
-                    if (entry && entry.profile && typeof getProfileSuffixInfo === 'function') {
-                        const info = getProfileSuffixInfo(entry.profile);
-                        if (info && info.canonicalName) subj = info.canonicalName;
-                    }
-                } catch (_) {}
-                // Skip the subject suffix when the cohort label already
-                // starts with it (cross-profile compares whose
-                // _dashSuffixLabel kept the full "Subject - Suffix"
-                // shape would otherwise duplicate).
-                if (subj && base.toLowerCase().indexOf(subj.toLowerCase()) !== -1) return base;
-                return subj ? (base + ' ' + subj) : base;
-            };
+            const _cohortLegendLabel = (entry) => _cohortDisplayLabel(entry, profileName);
 
             demoChartKeys.forEach(chartKey => {
                 const chart = charts[chartKey];
@@ -57610,6 +57595,20 @@
             if (typeof _renderDemoTablesForChartsInTableMode === 'function') {
                 try { _renderDemoTablesForChartsInTableMode(); }
                 catch (e) { console.warn('[compare] demo table re-render failed', e); }
+            }
+
+            // Same reasoning for the Age + Income median callouts in
+            // the chart-header strip: they need to gain / lose a per-
+            // cohort chip whenever the user toggles a Data Cut. The
+            // helpers are no-ops when lastRenderedDemographics is empty
+            // (initial state) and idempotent otherwise.
+            if (typeof _renderAgeMedianDisplay === 'function') {
+                try { _renderAgeMedianDisplay(); }
+                catch (e) { console.warn('[compare] age median re-render failed', e); }
+            }
+            if (typeof _renderIncomeMedianDisplay === 'function') {
+                try { _renderIncomeMedianDisplay(); }
+                catch (e) { console.warn('[compare] income median re-render failed', e); }
             }
         }
 
@@ -60594,16 +60593,12 @@
             const _gpAgeForMedian = (genPopBaselineData?.demographics?.age) || demographicsGenPop.age || {};
             const genPopMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(_gpAgeForMedian) : 0;
             
-            // Update median display in chart header
-            const ageMedianDisplay = document.getElementById('ageMedianDisplay');
-            if (ageMedianDisplay) {
-                const profileName = currentProfileData?.name || 'Profile';
-                const profileVal = profileMedianAge > 0 ? `${profileMedianAge.toFixed(2)} years` : 'N/A';
-                const genPopVal = genPopMedianAge > 0 ? `${genPopMedianAge.toFixed(2)} years` : 'N/A';
-                ageMedianDisplay.innerHTML = isGenPop 
-                    ? `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>`
-                    : `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
-            }
+            // Update median display in chart header. Delegates to a
+            // shared helper so the same cohort-aware logic runs whether
+            // the trigger was renderCharts or a Data Cuts toggle. See
+            // _renderAgeMedianDisplay above.
+            try { _renderAgeMedianDisplay(); }
+            catch (e) { console.warn('[demo] age median render failed', e); }
             
             const ageChartType = _chartTypeForChartJs(chartTypePrefs.age);
             const ageIsCircular = ['doughnut', 'pie', 'polarArea'].includes(ageChartType);
@@ -60944,16 +60939,13 @@
                 : _gpIncomeRaw;
             const incomeMedian = calculateDemographicMedian(demographics.income, _gpIncomeForMedian, 'income');
             
-            // Update median display in chart header (no Gen Pop comparison when Gen Pop selected)
-            const incomeMedianDisplay = document.getElementById('incomeMedianDisplay');
-            if (incomeMedianDisplay) {
-                const profileName = currentProfileData?.name || 'Profile';
-                const profileVal = incomeMedian.profile ? `$${incomeMedian.profile.value}` : 'N/A';
-                const genPopVal = incomeMedian.genPop ? `$${incomeMedian.genPop.value}` : 'N/A';
-                incomeMedianDisplay.innerHTML = isGenPop 
-                    ? `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>`
-                    : `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
-            }
+            // Update median display in chart header. Same pattern as
+            // the Age median callout — delegates to a shared helper so
+            // toggling a Data Cut re-renders the chip strip without
+            // having to re-run all 9 demographic charts. See
+            // _renderIncomeMedianDisplay above.
+            try { _renderIncomeMedianDisplay(); }
+            catch (e) { console.warn('[demo] income median render failed', e); }
             
             charts.income = new Chart(document.getElementById('incomeChart'), {
                 type: incomeChartType,
@@ -61766,6 +61758,130 @@
         // Preferred display order for age buckets — matches the pipeline
         // schema (PIPELINE_DEMO_SCHEMA in post_generation_enforcers.py).
         const _DEMO_AGE_ORDER = ['17 and Under', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older'];
+
+        // Build a "<cohort> <subject>" display label for a comparison-runs
+        // entry, e.g. "Avid Kristen Bell" or "Premium Mark Rober". Shared
+        // by:
+        //   - applyComparisonRunsToDashboardCharts (Chart.js dataset
+        //     legend labels)
+        //   - renderCharts age + income median chips (so each selected
+        //     Data Cut shows its own median next to the Casual /
+        //     Gen Pop ones)
+        // Subject is resolved from getProfileSuffixInfo(entry.profile)
+        // .canonicalName when available, falling back to the supplied
+        // fallback (typically the currently-loaded profile name). If
+        // the cohort label already contains the subject (cross-profile
+        // dash-suffix cases), we skip the suffix to avoid duplication.
+        function _cohortDisplayLabel(entry, fallbackSubject) {
+            const base = (entry && entry.label) ? String(entry.label).trim() : 'Run';
+            let subj = fallbackSubject || '';
+            try {
+                if (entry && entry.profile && typeof getProfileSuffixInfo === 'function') {
+                    const info = getProfileSuffixInfo(entry.profile);
+                    if (info && info.canonicalName) subj = info.canonicalName;
+                }
+            } catch (_) {}
+            if (subj && base.toLowerCase().indexOf(subj.toLowerCase()) !== -1) return base;
+            return subj ? (base + ' ' + subj) : base;
+        }
+
+        // -----------------------------------------------------------------
+        // Demographic median callouts (Age + Income chart headers).
+        //
+        // Extracted from renderCharts so the same logic runs in two
+        // scenarios:
+        //   1. After renderCharts builds its charts (initial profile
+        //      load, chart-type change, sort change, etc.)
+        //   2. After a compare-state toggle (Avid / Netflix / a prior
+        //      date range checked or unchecked in Data Cuts). Toggles
+        //      don't re-run renderCharts, so without this the median
+        //      callout stays stuck on Casual + Gen Pop only.
+        //
+        // Both helpers append one chip per selected Data Cut, colored
+        // to match the chart legend (_COMPARISON_PALETTE). The Gen Pop
+        // chip is hidden when the active profile IS Gen Pop (no
+        // self-comparison).
+        // -----------------------------------------------------------------
+        function _renderAgeMedianDisplay() {
+            const el = document.getElementById('ageMedianDisplay');
+            if (!el) return;
+            const ageDict = (lastRenderedDemographics && lastRenderedDemographics.age) || {};
+            if (Object.keys(ageDict).length === 0) { el.innerHTML = ''; return; }
+            const gpAge = (typeof genPopBaselineData !== 'undefined' && genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics.age)
+                || (lastRenderedDemographicsGenPop && lastRenderedDemographicsGenPop.age) || {};
+            const profMed = (typeof calculateMedianAgeFromDistribution === 'function')
+                ? calculateMedianAgeFromDistribution(ageDict) : 0;
+            const gpMed = (typeof calculateMedianAgeFromDistribution === 'function')
+                ? calculateMedianAgeFromDistribution(gpAge) : 0;
+            const profileName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || 'Profile';
+            const profileVal = profMed > 0 ? `${profMed.toFixed(2)} years` : 'N/A';
+            const genPopVal  = gpMed > 0 ? `${gpMed.toFixed(2)} years` : 'N/A';
+            const isGP = (typeof isSelectedProfileGenPop === 'function') ? isSelectedProfileGenPop() : false;
+
+            const cohortSeries = (typeof _comparisonRunsState !== 'undefined' && _comparisonRunsState)
+                ? ((_comparisonRunsState.selectedKeys || [])
+                    .map(kk => _comparisonRunsState.runsByKey[kk])
+                    .filter(Boolean))
+                : [];
+            const palette = (typeof _COMPARISON_PALETTE !== 'undefined' && Array.isArray(_COMPARISON_PALETTE) && _COMPARISON_PALETTE.length)
+                ? _COMPARISON_PALETTE
+                : ['#fd971f', '#a6e22e', '#f92672', '#ae81ff', '#e6db74'];
+            const cohortChipsHtml = cohortSeries.map((entry, ci) => {
+                const dict = (entry && entry.parsed && entry.parsed.demographics && entry.parsed.demographics.age) || {};
+                const med = (typeof calculateMedianAgeFromDistribution === 'function')
+                    ? calculateMedianAgeFromDistribution(dict) : 0;
+                if (!(med > 0)) return '';
+                const color = palette[ci % palette.length];
+                const label = _cohortDisplayLabel(entry, profileName);
+                return ` | <span style="color: ${color}; font-weight: 600;">${label} Median: ${med.toFixed(2)} years</span>`;
+            }).join('');
+
+            el.innerHTML = isGP
+                ? `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>${cohortChipsHtml}`
+                : `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>${cohortChipsHtml} | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
+        }
+
+        function _renderIncomeMedianDisplay() {
+            const el = document.getElementById('incomeMedianDisplay');
+            if (!el) return;
+            const incomeDict = (lastRenderedDemographics && lastRenderedDemographics.income) || {};
+            if (Object.keys(incomeDict).length === 0) { el.innerHTML = ''; return; }
+            const gpIncomeRaw = (typeof genPopBaselineData !== 'undefined' && genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics.income)
+                || (lastRenderedDemographicsGenPop && lastRenderedDemographicsGenPop.income) || {};
+            const gpIncome = (typeof _tstEnsureCompleteGenPopIncome === 'function')
+                ? _tstEnsureCompleteGenPopIncome(gpIncomeRaw) : gpIncomeRaw;
+            let baseRes = { profile: null, genPop: null };
+            try { baseRes = calculateDemographicMedian(incomeDict, gpIncome, 'income') || baseRes; } catch (_) {}
+            const profileName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || 'Profile';
+            const profileVal = baseRes.profile ? `$${baseRes.profile.value}` : 'N/A';
+            const genPopVal  = baseRes.genPop ? `$${baseRes.genPop.value}` : 'N/A';
+            const isGP = (typeof isSelectedProfileGenPop === 'function') ? isSelectedProfileGenPop() : false;
+
+            const cohortSeries = (typeof _comparisonRunsState !== 'undefined' && _comparisonRunsState)
+                ? ((_comparisonRunsState.selectedKeys || [])
+                    .map(kk => _comparisonRunsState.runsByKey[kk])
+                    .filter(Boolean))
+                : [];
+            const palette = (typeof _COMPARISON_PALETTE !== 'undefined' && Array.isArray(_COMPARISON_PALETTE) && _COMPARISON_PALETTE.length)
+                ? _COMPARISON_PALETTE
+                : ['#fd971f', '#a6e22e', '#f92672', '#ae81ff', '#e6db74'];
+            const cohortChipsHtml = cohortSeries.map((entry, ci) => {
+                const dict = (entry && entry.parsed && entry.parsed.demographics && entry.parsed.demographics.income) || {};
+                let med = null;
+                try {
+                    const r = calculateDemographicMedian(dict, null, 'income');
+                    med = (r && r.profile) ? r.profile.value : null;
+                } catch (_) {}
+                if (med == null) return '';
+                const color = palette[ci % palette.length];
+                const label = _cohortDisplayLabel(entry, profileName);
+                return ` | <span style="color: ${color}; font-weight: 600;">${label} Median: $${med}</span>`;
+            }).join('');
+
+            el.innerHTML = isGP
+                ? `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>${cohortChipsHtml}`
+                : `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>${cohortChipsHtml} | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
+        }
 
         function _renderDemoTablesForChartsInTableMode() {
             const isProjection = (typeof dashDisplayMode !== 'undefined') && dashDisplayMode === 'projection';
