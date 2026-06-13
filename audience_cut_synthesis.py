@@ -2,10 +2,10 @@
 
 Produces "skins" of an existing profile for narrower audience segments:
 
-  * Casual Female / Casual Male — broad-audience cuts of the OG profile,
+  * Casual Female / Casual Male -- broad-audience cuts of the OG profile,
     pinned to GENDER=100% F or M, with intensity-aware lower BPs (casual
     = light engagement).
-  * Avid Female / Avid Male — gender splits of an EXISTING Avid Fan
+  * Avid Female / Avid Male -- gender splits of an EXISTING Avid Fan
     profile (the avid synthesis already happened upstream; we just
     slice it by gender).
 
@@ -14,14 +14,14 @@ skins from the avid profile". So the avid cuts source the avid CSV,
 not the OG; the casual cuts source the OG.
 
 Methodology mirrors migration/avid_fan_row_by_row:
-  Phase 1 — Claude reasons about cohort_fraction (intensity- and
+  Phase 1 -- Claude reasons about cohort_fraction (intensity- and
             gender-aware) + demographic targets.
-  Phase 2 — per-category Claude calls that lift / sink each row's BP
+  Phase 2 -- per-category Claude calls that lift / sink each row's BP
             for the (gender, intensity) cohort.
-  Phase 3 — apply the transform: GENDER pin to ~99.99 / ~0.01 (with
+  Phase 3 -- apply the transform: GENDER pin to ~99.99 / ~0.01 (with
             jitter so we never sit on an exact boundary), demos
             renormed to 100, brand rows lifted/sunk per Phase 2.
-  Phase 4 — no-collision pass against the source df (so the cut never
+  Phase 4 -- no-collision pass against the source df (so the cut never
             shares a 4dp BP with its source for any common row).
 
 Public API:
@@ -52,7 +52,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-# Reuse helpers from the avid module — same source loader, snapshot
+# Reuse helpers from the avid module -- same source loader, snapshot
 # builder, jitter, collision pass, demo/subject/skip sets.
 from avid_fan_row_by_row import (  # noqa: E402
     BUCKET, REGION,
@@ -75,13 +75,13 @@ GENDER_BUCKET_LABELS = {
 
 INTENSITY_DESCRIPTIONS = {
     "avid": (
-        "deeply engaged superfans — 4+ digital touchpoints/year, active "
+        "deeply engaged superfans -- 4+ digital touchpoints/year, active "
         "community participants, repeat purchasers of subject-related "
         "merch, follow on multiple platforms, parasocial attachment"
     ),
     "casual": (
         "broad audience that recognizes / likes the subject but engages "
-        "lightly — 1-2 touchpoints/year, passive viewers, occasional "
+        "lightly -- 1-2 touchpoints/year, passive viewers, occasional "
         "watchers, not deeply invested, low parasocial pull"
     ),
 }
@@ -94,7 +94,7 @@ def _label_for_cut(gender: str, intensity: str) -> str:
 
 
 # =============================================================================
-# Phase 1 — gender + intensity audience reasoning
+# Phase 1 -- gender + intensity audience reasoning
 # =============================================================================
 _AUDIENCE_SYSTEM = (
     "You are an audience analytics reasoning agent.\n\n"
@@ -105,7 +105,7 @@ _AUDIENCE_SYSTEM = (
     "Reason about:\n"
     "1. cohort_fraction: what fraction of the SOURCE audience belongs in "
     "this (gender, intensity) cohort. Base rate is roughly:\n"
-    "   gender_share × intensity_share. Adjust for known skews — e.g. "
+    "   gender_share × intensity_share. Adjust for known skews -- e.g. "
     "country / talk show audiences skew female; sports / wrestling skew "
     "male; intensity is heavier inside the dominant gender.\n\n"
     "2. us_pop_fraction: fraction of US adults in this cohort. Always "
@@ -249,7 +249,7 @@ def reason_audience_cut(snap: dict, gender: str, intensity: str,
 
 
 # =============================================================================
-# Phase 2 — per-category Claude calls (gender + intensity aware)
+# Phase 2 -- per-category Claude calls (gender + intensity aware)
 # =============================================================================
 _CAT_ROW_SYSTEM = (
     "You are a brand-affinity reasoning agent. Given:\n"
@@ -318,48 +318,63 @@ def _format_category_user(subject: str, audience_summary: str,
 
 def reason_category_rows_cut(subject: str, audience: dict, category: str,
                              rows: list, gender: str, intensity: str,
-                             *, max_rows: int = 60) -> dict:
+                             *, chunk_size: int = 200) -> dict:
+    """Phase 2 Claude call -- reasons over EVERY row in the category (no
+    top-N truncation, no priority gating). Long lists are split into
+    sequential chunks of `chunk_size` rows so the agent gets the full
+    list across calls; decisions from each chunk are merged.
+
+    Per Jenna 2026-06-12: "no caps on anything anywhere for agents".
+    """
     if not rows:
         return {}
     audience_summary = _audience_summary_text(audience, gender, intensity)
-    rows_sorted = sorted(rows, key=lambda kv: -kv[1])
-    head = rows_sorted[:max_rows]
 
     try:
         from claude_client import claude_messages
     except Exception:
         return {}
 
-    user = _format_category_user(subject, audience_summary, category, head,
-                                 gender, intensity)
-    try:
-        resp = claude_messages(
-            system=_CAT_ROW_SYSTEM, user=user,
-            max_tokens=4096, temperature=0.3,
+    rows_sorted = sorted(rows, key=lambda kv: -kv[1])
+    decisions: dict = {}
+    n_chunks = (len(rows_sorted) + chunk_size - 1) // chunk_size
+    for i in range(n_chunks):
+        chunk = rows_sorted[i * chunk_size:(i + 1) * chunk_size]
+        if n_chunks > 1:
+            chunk_label = f"{category} (chunk {i + 1}/{n_chunks})"
+        else:
+            chunk_label = category
+        user = _format_category_user(
+            subject, audience_summary, chunk_label, chunk, gender, intensity,
         )
-    except Exception as e:
-        print(f"[audience-cut] cat={category} claude failed: {e}")
-        return {}
-    obj = _extract_json_block(resp) if resp else None
-    if not isinstance(obj, dict):
-        return {}
-    items = obj.get("items") or []
-    if not isinstance(items, list):
-        return {}
-    decisions = {}
-    for it in items:
-        if not isinstance(it, dict):
+        try:
+            resp = claude_messages(
+                system=_CAT_ROW_SYSTEM, user=user,
+                max_tokens=24000, temperature=0.3,
+            )
+        except Exception as e:
+            print(f"[audience-cut] cat={category} chunk {i+1}/{n_chunks} "
+                  f"claude failed: {e}")
             continue
-        lbl = str(it.get("label", "")).strip().upper()
-        nv = it.get("new_bp")
-        if not lbl or not isinstance(nv, (int, float)):
+        obj = _extract_json_block(resp) if resp else None
+        if not isinstance(obj, dict):
             continue
-        decisions[lbl] = max(0.0001, min(99.49, round(float(nv), 4)))
+        items = obj.get("items") or []
+        if not isinstance(items, list):
+            continue
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            lbl = str(it.get("label", "")).strip().upper()
+            nv = it.get("new_bp")
+            if not lbl or not isinstance(nv, (int, float)):
+                continue
+            decisions[lbl] = max(0.0001, min(99.49, round(float(nv), 4)))
     return decisions
 
 
 # =============================================================================
-# Phase 3 — apply transform with hard gender pin
+# Phase 3 -- apply transform with hard gender pin
 # =============================================================================
 def apply_audience_cut_transform(df, audience: dict, category_decisions: dict,
                                  subject: str, gender: str):
@@ -382,7 +397,7 @@ def apply_audience_cut_transform(df, audience: dict, category_decisions: dict,
 
     # New sample size + projection from the SOURCE's sample, scaled by
     # the cohort_fraction. Source can be the OG (for casual cuts) or
-    # the avid CSV (for avid gender splits) — same arithmetic either
+    # the avid CSV (for avid gender splits) -- same arithmetic either
     # way, since cohort_fraction is "fraction OF the source".
     cats_upper = df[cat_col].astype(str).str.upper().str.strip()
     ss_mask = cats_upper == "SAMPLE SIZE"
@@ -442,7 +457,7 @@ def apply_audience_cut_transform(df, audience: dict, category_decisions: dict,
         if old_bp is None:
             continue
 
-        # Subject self-pin: still 100% — both genders & both intensities
+        # Subject self-pin: still 100% -- both genders & both intensities
         # of fans recognize the subject (it's their fandom level that
         # differs, not the subject identification).
         if cat in SUBJECT_PIN_CATS_TF or cat == "SUBJECT":
@@ -502,30 +517,31 @@ def apply_audience_cut_transform(df, audience: dict, category_decisions: dict,
             n_demo += 1
             continue
 
-        # Non-demo brand row
+        # Non-demo brand row. Per Jenna 2026-06-12 "no caps on anything
+        # anywhere for agents", we DO NOT apply a default lift to rows
+        # the agent didn't decide. Rows the agent didn't return are
+        # re-jittered minimally (subject-salted, ±0.05pp) so they
+        # don't 4dp-collide with the source -- but they're not pushed
+        # up or down beyond that.
         cat_dec = category_decisions.get(cat, {})
         if val_u in cat_dec:
             new_bp = float(cat_dec[val_u])
             n_brand += 1
+            new_bp = max(0.0001, min(99.49, round(new_bp, 4)))
         else:
-            mult = 1.05 + _seed_jitter(
-                f"{subject}|{cat}|{val_u}|cut-default-{gender}",
-                span=0.18,
+            new_bp = round(
+                old_bp + _seed_jitter(
+                    f"{subject}|{cat}|{val_u}|cut-no-claude-jitter-{gender}",
+                    span=0.10,
+                ),
+                4,
             )
-            new_bp = round(old_bp * mult, 4)
+            new_bp = max(0.0001, min(99.49, new_bp))
             n_unchanged += 1
 
-        new_bp = max(0.0001, min(99.49, round(new_bp, 4)))
-        if abs(new_bp - old_bp) < 0.5:
-            direction = 1.0 if old_bp < 50 else -1.0
-            new_bp = round(old_bp + direction * (
-                0.5 + abs(_seed_jitter(
-                    f"{subject}|{cat}|{val_u}|cut-min-delta-{gender}",
-                    span=0.4,
-                ))
-            ), 4)
-            new_bp = max(0.0001, min(99.49, new_bp))
-
+        # Update raw + projection. Bp itself is only over-written if
+        # we have a Claude decision OR a small no-collision jitter; we
+        # never add a flat multiplier.
         df.at[idx, bp_col] = f"{new_bp:.4f}%"
         df.at[idx, raw_col] = float(round(new_sample * new_bp / 100.0))
         df.at[idx, proj_col] = float(round(new_uspop * new_bp / 100.0))
@@ -606,7 +622,7 @@ def apply_audience_cut_transform(df, audience: dict, category_decisions: dict,
         "n_demo_renormed": n_demo_renorm,
         "n_brand_rows": n_brand,
         "n_subject_pin_rows": n_pin,
-        "n_default_lift_rows": n_unchanged,
+        "n_no_claude_jitter_rows": n_unchanged,
         "n_gender_pin_rows": n_gender_pin,
     }
 
@@ -614,22 +630,9 @@ def apply_audience_cut_transform(df, audience: dict, category_decisions: dict,
 # =============================================================================
 # Orchestrator
 # =============================================================================
-PRIORITY_CATS = [
-    "TALENT", "MUSICIAN/BAND", "ACTOR", "COMEDIAN",
-    "ATHLETE", "HOST/PERSONALITY", "AUTHOR", "DIRECTOR",
-    "MOVIE", "SERIES - HBO", "SERIES - NETFLIX",
-    "SERIES - AMAZON / MGM STUDIOS", "SERIES - DISNEY+",
-    "SERIES - APPLE TV+", "SERIES - PARAMOUNT+", "SERIES - PEACOCK",
-    "SERIES - HULU", "SERIES - MAX", "SERIES - FX",
-    "MEDIA", "PODCAST", "MOST PURCHASED BRANDS",
-    "APPAREL/FOOTWEAR", "WHERE THEY SHOP", "HOME/OUTDOOR",
-    "GAMES", "GAME PLAYERS", "RESTAURANT", "TRAVEL",
-    "PORN MEDIA", "SEARCH ENGINE/AI", "SOCIAL", "CREDIT PROVIDER",
-    "TELECOM", "SPORTS TEAM", "AL/NL", "AFC/NFC",
-    "DIGITAL BANK", "CONSUMER ELECTRONICS",
-    "FRANCHISE", "MOVIE THEATER",
-]
-
+# NOTE: there is NO PRIORITY_CATS allowlist. Per Jenna 2026-06-12 "no caps
+# on anything anywhere for agents" -- the agent reasons about every brand
+# category in the source profile, not just a hand-picked subset.
 SKIP_CATS = {
     "BRAND INPUT", "BRAND CATEGORY", "INPUT_METADATA", "BRAND ID",
     "REPORT INPUT", "AVID FAN", "CASUAL FAN", "LOCATION", "SUBJECT",
@@ -646,6 +649,7 @@ def synthesize_audience_cut(
     dry_run: bool = False,
     register_in_dashboard: bool = True,
     source_s3_key: Optional[str] = None,
+    subject_override: Optional[str] = None,
 ) -> dict:
     """End-to-end orchestrator for a (gender, intensity) audience cut.
 
@@ -670,7 +674,14 @@ def synthesize_audience_cut(
 
     df_source, kind = _load_source_df(source, source_kind=source_kind)
     snap = build_source_snapshot(df_source)
-    subject = snap["subject"]
+    detected_subject = snap["subject"]
+    if subject_override:
+        subject = str(subject_override).strip()
+        snap["subject"] = subject
+        print(f"  subject_override applied: {detected_subject!r} -> "
+              f"{subject!r}")
+    else:
+        subject = detected_subject
     source_label = (os.path.basename(source) if kind == "local_path"
                     else source)
     print(f"  subject={subject!r}  cats={snap['category_count']}  "
@@ -694,10 +705,15 @@ def synthesize_audience_cut(
         if cu in DEMO_CATS_TF or cu in SKIP_CATS or cu == "":
             continue
         all_non_demo.append(cu)
-    cats_to_call = [c for c in PRIORITY_CATS if c in all_non_demo]
-    print(f"  -> Phase 2: {len(cats_to_call)}/{len(all_non_demo)} priority "
-          f"category Claude calls ...")
+    # Sort: largest categories first so any rate-limit hiccup affects
+    # tail/small cats, not high-signal ones.
+    cat_sizes = {c: int((cats_upper == c).sum()) for c in all_non_demo}
+    cats_to_call = sorted(all_non_demo, key=lambda c: -cat_sizes[c])
+    total_rows = sum(cat_sizes.values())
+    print(f"  -> Phase 2: ALL {len(cats_to_call)} non-demo categories "
+          f"({total_rows} rows total) -- no priority gating, no top-N cap ...")
     cat_decisions = {}
+    rows_decided = 0
     for i, cat in enumerate(cats_to_call, start=1):
         rows = []
         for _, r in df_source[cats_upper == cat].iterrows():
@@ -708,12 +724,15 @@ def synthesize_audience_cut(
         if not rows:
             continue
         decisions = reason_category_rows_cut(
-            subject, audience, cat, rows, gender, intensity, max_rows=60,
+            subject, audience, cat, rows, gender, intensity,
         )
         if decisions:
             cat_decisions[cat] = decisions
-        print(f"     [{i:>2d}/{len(cats_to_call)}] {cat:32s} rows={len(rows):>4d}  "
-              f"claude_returned={len(decisions)}", flush=True)
+        rows_decided += len(decisions)
+        print(f"     [{i:>2d}/{len(cats_to_call)}] {cat:32s} "
+              f"rows={len(rows):>4d}  claude_returned={len(decisions):>4d}  "
+              f"(running total decided={rows_decided}/{total_rows})",
+              flush=True)
 
     print(f"  -> Phase 3: apply transform row-by-row ...")
     df_cut, stats = apply_audience_cut_transform(
@@ -767,7 +786,7 @@ def synthesize_audience_cut(
                     )
         else:
             print(f"   ⚠ no BRAND CATEGORY found on source for {subject!r} "
-                  f"— cut will be UNCATEGORIZED. Patch via "
+                  f"-- cut will be UNCATEGORIZED. Patch via "
                   f"scripts/categorize_uncategorized_profiles.py.")
     except Exception as _bc_err:
         print(f"   ⚠ BRAND CATEGORY safeguard skipped: {_bc_err}")
