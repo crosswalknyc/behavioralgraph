@@ -5835,6 +5835,50 @@
             opacity: 1;
         }
 
+        /* "Eliminate Items Indexed" filter that sits next to the
+           See All Categories selector in the Behavioral controls bar. */
+        .behavioral-index-filter {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-left: 0.35rem;
+        }
+        .behavioral-index-filter.active {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 1px var(--accent-cyan) inset;
+        }
+        .behavioral-index-filter .bif-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .behavioral-index-filter select,
+        .behavioral-index-filter input[type="number"] {
+            padding: 0.25rem 0.4rem;
+            font-size: 0.7rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+            color: var(--text-primary);
+        }
+        .behavioral-index-filter input[type="number"] {
+            width: 60px;
+            -moz-appearance: textfield;
+        }
+        .behavioral-index-filter input[type="number"]::-webkit-outer-spin-button,
+        .behavioral-index-filter input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        /* Hidden rows from the index filter — set as a class so the
+           filter is re-applicable after any re-render without touching
+           inline style="display" (which other code paths also write). */
+        .behavioral-item.beh-idx-hidden { display: none !important; }
+
         .behavioral-filter {
             display: flex;
             flex-wrap: wrap;
@@ -16643,6 +16687,29 @@
                         <option value="">📌 See All Categories</option>
                     </select>
                     <button class="btn btn-small btn-secondary has-tooltip" data-tooltip="Reset Category Order: Restore the default category order if you've moved any categories to the top." onclick="resetCategoryOrder()" style="padding: 0.3rem 0.5rem; font-size: 0.7rem;">↻</button>
+
+                    <!-- Eliminate Items Indexed: global numeric filter that
+                         hides items in every behavioral card based on the
+                         row's index column. "Under N" hides index < N,
+                         "Over N" hides index > N, and "Both" keeps only
+                         items inside an [N1, N2] range (hides outside).
+                         Items with no index (N/A) are never hidden. -->
+                    <div class="behavioral-index-filter has-tooltip" data-tooltip="Eliminate items by index value across every behavioral card. Reminder: 100 = parity with Gen Pop, 150 = 1.5x, etc.">
+                        <span class="bif-label">Eliminate Items Indexed</span>
+                        <select id="behIndexFilterMode" onchange="onBehIndexFilterChange()">
+                            <option value="off">Off</option>
+                            <option value="under">Under</option>
+                            <option value="over">Over</option>
+                            <option value="both">Both (outside range)</option>
+                        </select>
+                        <input type="number" id="behIndexFilterValue" placeholder="N" min="0" step="1" oninput="onBehIndexFilterChange()">
+                        <span id="behIndexFilterValue2Wrap" style="display:none; align-items:center; gap:0.25rem;">
+                            <span style="color: var(--text-secondary); font-size: 0.7rem;">to</span>
+                            <input type="number" id="behIndexFilterValue2" placeholder="N" min="0" step="1" oninput="onBehIndexFilterChange()">
+                        </span>
+                        <button id="behIndexFilterClearBtn" class="btn btn-small btn-secondary" onclick="clearBehIndexFilter()" style="padding: 0.25rem 0.45rem; font-size: 0.65rem; display:none;" title="Clear index filter">✕</button>
+                        <span id="behIndexFilterStatus" style="color: var(--accent-cyan); font-size: 0.65rem; margin-left: 0.25rem;"></span>
+                    </div>
                 </div>
                 
                 <div class="behavioral-grid" id="behavioralGrid"></div>
@@ -65442,8 +65509,13 @@
                 const showIndex = hasGenPopMatch && genPopDisplay !== 'N/A';
                 const indexTier = !showIndex ? '' : (Number(index) >= 100 ? 'index-over' : 'index-under');
 
+                // data-index carries the numeric index (or empty for
+                // N/A rows) so the global "Eliminate Items Indexed"
+                // filter can hide rows without re-rendering. data-has-
+                // index distinguishes "no index at all" from "index 0".
+                const dataIndexAttr = showIndex ? `data-index="${Number(index)}"` : 'data-index=""';
                 return `
-                    <div class="behavioral-item">
+                    <div class="behavioral-item" ${dataIndexAttr}>
                         <span class="behavioral-rank">${item._rank || (idx + 1)}</span>
                         <div class="behavioral-name-wrapper">
                             <span class="behavioral-name has-tooltip" data-tooltip="${(item.name || '').replace(/"/g, '&quot;')}">${(item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
@@ -65936,8 +66008,159 @@
                 catch (e) { console.warn('[sortBehavioralCard] compare re-apply failed', e); }
             }
             _updateBehavioralSortArrows(card);
+
+            // Re-apply the global "Eliminate Items Indexed" filter
+            // since renderBehavioralItems above wrote fresh markup.
+            if (typeof applyBehavioralIndexFilter === 'function') {
+                try { applyBehavioralIndexFilter(); } catch (_) {}
+            }
         }
-        
+
+        // ============================================================
+        // GLOBAL "ELIMINATE ITEMS INDEXED" FILTER
+        // ------------------------------------------------------------
+        // Toolbar control next to See All Categories that hides rows
+        // in every behavioral card based on the row's index column:
+        //   under N  -> hide items with index < N
+        //   over  N  -> hide items with index > N
+        //   both     -> keep items inside [N1, N2]; hide outside
+        // Rows with N/A index (no Gen Pop match) are never hidden.
+        // State persists in localStorage. A MutationObserver on
+        // #behavioralGrid re-applies the filter on any subtree
+        // change (re-renders, sort, slice, search, cohort injection).
+        // ============================================================
+        const BEH_INDEX_FILTER_LS_KEY = 'cw.behIndexFilter.v1';
+        let _behIndexFilter = { mode: 'off', lo: null, hi: null };
+
+        function _loadBehIndexFilter() {
+            try {
+                const raw = localStorage.getItem(BEH_INDEX_FILTER_LS_KEY);
+                if (!raw) return;
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object') {
+                    _behIndexFilter = {
+                        mode: ['off','under','over','both'].includes(parsed.mode) ? parsed.mode : 'off',
+                        lo: (parsed.lo == null || parsed.lo === '') ? null : Number(parsed.lo),
+                        hi: (parsed.hi == null || parsed.hi === '') ? null : Number(parsed.hi)
+                    };
+                }
+            } catch (_) {}
+        }
+
+        function _saveBehIndexFilter() {
+            try { localStorage.setItem(BEH_INDEX_FILTER_LS_KEY, JSON.stringify(_behIndexFilter)); }
+            catch (_) {}
+        }
+
+        function _syncBehIndexFilterUI() {
+            const modeEl = document.getElementById('behIndexFilterMode');
+            const v1 = document.getElementById('behIndexFilterValue');
+            const v2Wrap = document.getElementById('behIndexFilterValue2Wrap');
+            const v2 = document.getElementById('behIndexFilterValue2');
+            const clearBtn = document.getElementById('behIndexFilterClearBtn');
+            const status = document.getElementById('behIndexFilterStatus');
+            const container = document.querySelector('.behavioral-index-filter');
+            if (!modeEl) return;
+            modeEl.value = _behIndexFilter.mode;
+            if (v1) v1.value = _behIndexFilter.lo == null ? '' : String(_behIndexFilter.lo);
+            if (v2) v2.value = _behIndexFilter.hi == null ? '' : String(_behIndexFilter.hi);
+            if (v2Wrap) v2Wrap.style.display = (_behIndexFilter.mode === 'both') ? 'inline-flex' : 'none';
+            const isActive = _isBehIndexFilterActive();
+            if (clearBtn) clearBtn.style.display = isActive ? 'inline-block' : 'none';
+            if (container) container.classList.toggle('active', isActive);
+            if (status) {
+                if (!isActive) status.textContent = '';
+                else if (_behIndexFilter.mode === 'under') status.textContent = `< ${_behIndexFilter.lo}`;
+                else if (_behIndexFilter.mode === 'over') status.textContent = `> ${_behIndexFilter.lo}`;
+                else if (_behIndexFilter.mode === 'both') status.textContent = `keep ${_behIndexFilter.lo}–${_behIndexFilter.hi}`;
+            }
+        }
+
+        function _isBehIndexFilterActive() {
+            const f = _behIndexFilter;
+            if (f.mode === 'off') return false;
+            if (f.mode === 'both') return Number.isFinite(f.lo) && Number.isFinite(f.hi);
+            return Number.isFinite(f.lo);
+        }
+
+        function applyBehavioralIndexFilter() {
+            const f = _behIndexFilter;
+            const active = _isBehIndexFilterActive();
+            const grid = document.getElementById('behavioralGrid');
+            if (!grid) return;
+            const rows = grid.querySelectorAll('.behavioral-item');
+            rows.forEach(row => {
+                if (!active) { row.classList.remove('beh-idx-hidden'); return; }
+                const raw = row.getAttribute('data-index');
+                if (raw == null || raw === '') { row.classList.remove('beh-idx-hidden'); return; }
+                const n = Math.round(Number(raw));
+                if (!Number.isFinite(n)) { row.classList.remove('beh-idx-hidden'); return; }
+                let hide = false;
+                if (f.mode === 'under') hide = n < f.lo;
+                else if (f.mode === 'over') hide = n > f.lo;
+                else if (f.mode === 'both') hide = (n < f.lo) || (n > f.hi);
+                row.classList.toggle('beh-idx-hidden', hide);
+            });
+        }
+
+        function onBehIndexFilterChange() {
+            const modeEl = document.getElementById('behIndexFilterMode');
+            const v1 = document.getElementById('behIndexFilterValue');
+            const v2 = document.getElementById('behIndexFilterValue2');
+            if (!modeEl) return;
+            const mode = modeEl.value || 'off';
+            const lo = (v1 && v1.value !== '') ? Number(v1.value) : null;
+            const hi = (v2 && v2.value !== '') ? Number(v2.value) : null;
+            _behIndexFilter = { mode, lo, hi };
+            _saveBehIndexFilter();
+            _syncBehIndexFilterUI();
+            applyBehavioralIndexFilter();
+        }
+
+        function clearBehIndexFilter() {
+            _behIndexFilter = { mode: 'off', lo: null, hi: null };
+            _saveBehIndexFilter();
+            _syncBehIndexFilterUI();
+            applyBehavioralIndexFilter();
+        }
+
+        // Re-apply on ANY DOM mutation inside #behavioralGrid so the
+        // filter survives initial render, sort, slice, search, and
+        // cohort-cell injection. The handler is debounced via rAF so
+        // a burst of mutations during a single re-render only triggers
+        // one apply pass.
+        function _installBehIndexFilterObserver() {
+            const grid = document.getElementById('behavioralGrid');
+            if (!grid || grid._behIdxObs) return;
+            let scheduled = false;
+            const obs = new MutationObserver(() => {
+                if (scheduled) return;
+                scheduled = true;
+                requestAnimationFrame(() => {
+                    scheduled = false;
+                    try { applyBehavioralIndexFilter(); } catch (_) {}
+                });
+            });
+            obs.observe(grid, { childList: true, subtree: true });
+            grid._behIdxObs = obs;
+        }
+
+        // Init on DOMContentLoaded (deferred so the toolbar HTML and
+        // the behavioralGrid both exist).
+        (function _initBehIndexFilter() {
+            function go() {
+                _loadBehIndexFilter();
+                _syncBehIndexFilterUI();
+                _installBehIndexFilterObserver();
+                applyBehavioralIndexFilter();
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', go);
+            } else {
+                go();
+            }
+        })();
+
         function sliceSports(catId, cat, sliceValue) {
             currentSlices[cat] = sliceValue;
             const listEl = document.getElementById('list-' + catId);
