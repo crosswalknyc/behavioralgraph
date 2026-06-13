@@ -4511,6 +4511,70 @@
             word-wrap: break-word;
             overflow-wrap: break-word;
         }
+
+        /* When too many cohort medians would wrap the median-display row
+           into multiple lines (squashing the chart underneath), the
+           renderer collapses them into a single trigger pill that
+           expands on hover / focus / tap into a stacked popover. */
+        .median-collapsed {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            cursor: pointer;
+            outline: none;
+        }
+        .median-collapsed .median-trigger-label {
+            color: #f0ff00;
+            font-weight: 700;
+            text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);
+            border-bottom: 1px dashed rgba(240, 255, 0, 0.55);
+            padding: 0 0.15rem 1px 0.15rem;
+        }
+        .median-collapsed .median-trigger-hint {
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.8em;
+            text-shadow: none;
+        }
+        .median-collapsed .median-popover {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 0.4rem;
+            z-index: 200;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.6rem 0.9rem;
+            min-width: 260px;
+            max-width: 420px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+            text-shadow: none;
+            line-height: 1.55;
+            white-space: nowrap;
+        }
+        .median-collapsed .median-popover .median-row {
+            display: block;
+            padding: 0.1rem 0;
+            font-size: 0.85rem;
+            text-shadow: none;
+        }
+        .median-collapsed:hover .median-popover,
+        .median-collapsed:focus-within .median-popover,
+        .median-collapsed.is-open .median-popover {
+            display: block;
+        }
+        body[data-theme="light"] .median-collapsed .median-trigger-label {
+            color: var(--accent-cyan);
+            text-shadow: none;
+            border-bottom-color: var(--accent-cyan);
+        }
+        body[data-theme="light"] .median-collapsed .median-popover {
+            background: #fff;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+        }
         
         .chart-type-select {
             font-size: clamp(0.7rem, 1vw + 0.35rem, 0.85rem);

@@ -119,17 +119,26 @@ def _compute_deterministic_cohort_fraction(
     source_intensity: Optional[str],
 ) -> Optional[float]:
     """Compute cohort_fraction directly from the source's GENDER row +
-    (when applicable) the source's intensity (AVID FAN / CASUAL FAN)
-    BPs. Returns the deterministic fraction or None if it can't be
-    computed (caller falls back to Claude's reasoning).
+    (when applicable) the source's intensity (AVID FAN) BP. Returns
+    the deterministic fraction or None if it can't be computed.
 
-    Math:
-      * source already at target intensity (e.g. avid_F from an avid
-        CSV): fraction = gender_share_in_source. Splits the avid
-        cohort by gender, summing to 100%.
-      * source is OG (or unspecified): fraction = gender_share *
-        intensity_share, where intensity_share is the source's
-        AVID FAN or CASUAL FAN BP.
+    Per Jenna's data model: the OG / broad file IS the casual cohort
+    (every fan is a casual; avid is a subset of casual). Therefore:
+
+      * target = casual_F or casual_M from any "all-fans" file
+        (OG or a casual-labeled file):
+            CF = gender_share_in_source
+        (no intensity multiplier -- casual_F is the full female slice
+        of the source audience)
+
+      * target = avid_F or avid_M from an avid CSV:
+            CF = gender_share_in_avid_file
+        (the avid cohort split by gender)
+
+      * target = avid_F or avid_M from OG (rare):
+            CF = gender_share_in_OG * (avid_share_in_OG)
+        (avid IS a strict subset of OG, so we still need the avid
+        share factor)
     """
     cat_col = "Column"
     val_col = "Value"
@@ -141,7 +150,6 @@ def _compute_deterministic_cohort_fraction(
 
     target_label = "FEMALE" if gender.upper() == "F" else "MALE"
     gender_pct: Optional[float] = None
-    intensity_pct_for_target: Optional[float] = None
 
     cats_upper = df_source[cat_col].astype(str).str.upper().str.strip()
     vals_upper = df_source[val_col].astype(str).str.upper().str.strip()
@@ -152,25 +160,29 @@ def _compute_deterministic_cohort_fraction(
     if gender_pct is None:
         return None
 
-    if source_intensity == intensity:
-        # Source IS the target-intensity cohort. Splitting by gender
-        # only -- the gender share of the avid (or casual) cohort IS
-        # the cohort_fraction.
+    target_intensity = (intensity or "").lower().strip()
+
+    # Casual target -> never apply an intensity multiplier. casual_F's
+    # cohort is the full female slice of source (broad = casual).
+    if target_intensity == "casual":
         return max(0.005, min(0.995, gender_pct / 100.0))
 
-    # Source is OG (or unspecified intensity). Fold the source's
-    # AVID FAN or CASUAL FAN BP into the fraction.
-    intensity_label = ("AVID FAN" if intensity == "avid"
-                       else "CASUAL FAN")
-    i_mask = cats_upper == intensity_label
-    if i_mask.any():
-        intensity_pct_for_target = _fbp(
-            df_source.loc[i_mask, bp_col].iloc[0]
-        )
-    if intensity_pct_for_target is None:
+    # Avid target.
+    if source_intensity == "avid":
+        # Source IS the avid cohort -> just the gender split of avid.
         return max(0.005, min(0.995, gender_pct / 100.0))
 
-    combined = (gender_pct / 100.0) * (intensity_pct_for_target / 100.0)
+    # Avid target sourced from OG -> need to multiply by AVID FAN share.
+    avid_pct: Optional[float] = None
+    a_mask = cats_upper == "AVID FAN"
+    if a_mask.any():
+        avid_pct = _fbp(df_source.loc[a_mask, bp_col].iloc[0])
+    if avid_pct is None:
+        # No avid intensity row in source -- can't derive subset fraction.
+        # Fall back to gender split alone (caller can override).
+        return max(0.005, min(0.995, gender_pct / 100.0))
+
+    combined = (gender_pct / 100.0) * (avid_pct / 100.0)
     return max(0.005, min(0.995, combined))
 
 
