@@ -2064,6 +2064,53 @@
             ]
           }
         ]
+      },
+      {
+        "title": "Disclaimers and Limitations of Use",
+        "paragraphs": [
+          {
+            "text": "Data Accuracy. Crosswalk makes every reasonable effort to ensure the accuracy, completeness, and timeliness of the data presented across all products, dashboards, exports, and other deliverables. Crosswalk does not, however, warrant that every output will be free of error, omission, or misrepresentation, and to the fullest extent permitted by applicable law disclaims liability for any decision made in reliance on misrepresented, incomplete, stale, or otherwise inaccurate data. Recipients are expected to apply their own professional judgment and to use Crosswalk outputs consistent with all applicable legal, regulatory, contractual, and editorial requirements.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Data Accuracy.",
+                "bold": true
+              },
+              {
+                "text": " Crosswalk makes every reasonable effort to ensure the accuracy, completeness, and timeliness of the data presented across all products, dashboards, exports, and other deliverables. Crosswalk does not, however, warrant that every output will be free of error, omission, or misrepresentation, and to the fullest extent permitted by applicable law disclaims liability for any decision made in reliance on misrepresented, incomplete, stale, or otherwise inaccurate data. Recipients are expected to apply their own professional judgment and to use Crosswalk outputs consistent with all applicable legal, regulatory, contractual, and editorial requirements.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Use of Artificial Intelligence. Crosswalk's products incorporate artificial intelligence and machine learning systems to organize, classify, summarize, and surface insights from the underlying panel data. These systems operate within Crosswalk's standard methodology, quality assurance, and review procedures, but AI-generated outputs may occasionally contain hallucinations, misclassifications, or interpretations that diverge from the documented methodology. Crosswalk cannot be held liable for AI-generated content that is not aligned with the documented methodology, and any high-stakes business, financial, legal, editorial, or creative decision should be validated against the underlying data and confirmed with a Crosswalk representative before action is taken.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Use of Artificial Intelligence.",
+                "bold": true
+              },
+              {
+                "text": " Crosswalk's products incorporate artificial intelligence and machine learning systems to organize, classify, summarize, and surface insights from the underlying panel data. These systems operate within Crosswalk's standard methodology, quality assurance, and review procedures, but AI-generated outputs may occasionally contain hallucinations, misclassifications, or interpretations that diverge from the documented methodology. Crosswalk cannot be held liable for AI-generated content that is not aligned with the documented methodology, and any high-stakes business, financial, legal, editorial, or creative decision should be validated against the underlying data and confirmed with a Crosswalk representative before action is taken.",
+                "bold": false
+              }
+            ]
+          },
+          {
+            "text": "Methodology Adjustments. Multipliers, weighting factors, normalization steps, calibration floors, panel-reality adjustments, and other statistical transformations may be applied to any section of any deliverable to align outputs with Crosswalk's audience definitions, sample structure, or benchmark standards. Adjustments are versioned and documented internally and are designed to improve interpretability and cross-profile consistency. For specific questions about how a given metric, factor, or adjustment was applied to a profile or report, please visit our contact page or reach out to your Crosswalk representative.",
+            "is_list": false,
+            "runs": [
+              {
+                "text": "Methodology Adjustments.",
+                "bold": true
+              },
+              {
+                "text": " Multipliers, weighting factors, normalization steps, calibration floors, panel-reality adjustments, and other statistical transformations may be applied to any section of any deliverable to align outputs with Crosswalk's audience definitions, sample structure, or benchmark standards. Adjustments are versioned and documented internally and are designed to improve interpretability and cross-profile consistency. For specific questions about how a given metric, factor, or adjustment was applied to a profile or report, please visit our contact page or reach out to your Crosswalk representative.",
+                "bold": false
+              }
+            ]
+          }
+        ]
       }
     ]
   },
