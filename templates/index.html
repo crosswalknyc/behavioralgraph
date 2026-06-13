@@ -5804,6 +5804,36 @@
             outline: none;
             border-color: var(--accent-lime);
         }
+        /* Sort dropdown is replaced by click-to-sort on column headers.
+           Keep the hidden <select> in the DOM so legacy helpers that read
+           its .value (slice handlers, search filter, etc.) keep working;
+           direction and cohort-sort state live on the card's dataset. */
+        .behavioral-card .behavioral-sort-select { display: none !important; }
+        .behavioral-card .behavioral-sort-label { display: none !important; }
+
+        .behavioral-header-row .behavioral-sortable {
+            cursor: pointer;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            transition: color 0.15s ease;
+        }
+        .behavioral-header-row .behavioral-sortable:hover {
+            color: var(--accent-cyan);
+        }
+        .behavioral-header-row .behavioral-sortable.active-sort {
+            color: var(--accent-cyan);
+        }
+        .behavioral-header-row .behavioral-sortable .sort-arrow {
+            font-size: 0.75em;
+            opacity: 0;
+            margin-left: 1px;
+            transition: opacity 0.15s ease;
+        }
+        .behavioral-header-row .behavioral-sortable.active-sort .sort-arrow {
+            opacity: 1;
+        }
 
         .behavioral-filter {
             display: flex;
@@ -58015,17 +58045,26 @@
                 const gpCol = hideGP ? '' : ' 70px';
                 table.style.gridTemplateColumns = '28px minmax(80px,1fr) ' + profileCol + cmpCols + gpCol + ' 56px';
 
-                // Header row injection
+                // Header row injection. Cohort header cells double as
+                // click-to-sort triggers (key = "cmp:<runKey>") so they
+                // get the same .behavioral-sortable hook as the base
+                // columns, plus a sort-arrow span for the active state.
                 const header = table.querySelector('.behavioral-header-row');
                 if (header) {
                     const gpHeader = header.querySelector('.genpop-col');
                     series.forEach((entry, idx) => {
                         const span = document.createElement('span');
-                        span.className = 'cmp-col-cell';
+                        span.className = 'cmp-col-cell behavioral-sortable';
+                        span.dataset.sortKey = 'cmp:' + entry.key;
                         const label = entry.label || ('Run ' + (idx + 1));
-                        span.textContent = label;
-                        span.title = label;
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;';
+                        const labelText = document.createTextNode(label);
+                        span.appendChild(labelText);
+                        const arrow = document.createElement('span');
+                        arrow.className = 'sort-arrow';
+                        arrow.textContent = '↓';
+                        span.appendChild(arrow);
+                        span.title = 'Sort by ' + label;
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;cursor:pointer;user-select:none;';
                         if (gpHeader) header.insertBefore(span, gpHeader);
                         else header.appendChild(span);
                     });
@@ -58061,6 +58100,13 @@
                         else row.appendChild(span);
                     });
                 });
+
+                // Repaint sort arrows so the active column (whether base
+                // or cohort) shows the correct ↓/↑ glyph on this card.
+                const cardEl = table.closest('.behavioral-card');
+                if (cardEl && typeof _updateBehavioralSortArrows === 'function') {
+                    try { _updateBehavioralSortArrows(cardEl); } catch (_) {}
+                }
             });
 
             // -------- INTERESTS LIST ------------------------------------
@@ -64873,7 +64919,7 @@
                                     ${nonProfitSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
                                 </select>
                             ` : ''}
-                            <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
+                            <span class="behavioral-sort-label" style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                             <select class="behavioral-sort-select" onchange="sortBehavioralCard('${catId}', '${cat}', this.value)" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
                                 <option value="pct" selected>${dashDisplayMode === 'projection' ? '# ↓' : '% ↓'}</option>
                                 <option value="index">Idx ↓</option>
@@ -64882,13 +64928,13 @@
                             </select>
                             <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                         </div>
-                        <div class="behavioral-table">
+                        <div class="behavioral-table" data-sort-key="pct" data-sort-dir="desc">
                             <div class="behavioral-header-row">
                                 <span>#</span>
-                                <span>Item</span>
-                                <span class="profile-col">${dashDisplayMode === 'projection' ? 'US #' : 'Casual'}</span>
-                                <span class="genpop-col">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
-                                <span class="index-col">Index</span>
+                                <span class="behavioral-sortable" data-sort-key="alpha" title="Sort A-Z">Item<span class="sort-arrow">↓</span></span>
+                                <span class="behavioral-sortable profile-col active-sort" data-sort-key="pct" title="Sort by ${dashDisplayMode === 'projection' ? 'US #' : 'Casual %'}">${dashDisplayMode === 'projection' ? 'US #' : 'Casual'}<span class="sort-arrow">↓</span></span>
+                                <span class="behavioral-sortable genpop-col" data-sort-key="genpop" title="Sort by ${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop %'}">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}<span class="sort-arrow">↓</span></span>
+                                <span class="behavioral-sortable index-col" data-sort-key="index" title="Sort by Index">Index<span class="sort-arrow">↓</span></span>
                             </div>
                             <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
                                 ${renderBehavioralItems(displayItems, maxPct, 'pct')}
@@ -65673,8 +65719,114 @@
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items</div>';
         }
         
+        // Build a lookup of normalized item name -> pct for a comparison
+        // run's behavioral data, flattened across categories. Used to
+        // sort behavioral rows by a cohort column ("cmp:<runKey>").
+        function _cmpFlatBehavioralPctLookup(parsed) {
+            const out = {};
+            const beh = parsed && parsed.behavioral;
+            if (!beh) return out;
+            for (const [, items] of Object.entries(beh)) {
+                if (!Array.isArray(items)) continue;
+                items.forEach(it => {
+                    if (!it || !it.name) return;
+                    const key = _cmpNormName(it.name);
+                    const pct = (it.pct == null ? null : Number(it.pct));
+                    if (pct == null || Number.isNaN(pct)) return;
+                    // Keep the first non-null hit; multiple cats can list
+                    // the same brand but pct should agree.
+                    if (out[key] == null) out[key] = pct;
+                });
+            }
+            return out;
+        }
+
+        // Refresh sort-arrow indicators across every header cell in a
+        // behavioral card so the active column shows ↓/↑ and the rest
+        // are dimmed. Operates on both base headers and any cohort
+        // headers injected by applyComparisonRunsToCategoryTables.
+        function _updateBehavioralSortArrows(card) {
+            if (!card) return;
+            const tableEl = card.querySelector('.behavioral-table');
+            if (!tableEl) return;
+            const activeKey = tableEl.dataset.sortKey || 'pct';
+            const dir = tableEl.dataset.sortDir || 'desc';
+            const arrow = (dir === 'asc') ? '↑' : '↓';
+            const headers = tableEl.querySelectorAll('.behavioral-header-row .behavioral-sortable');
+            headers.forEach(h => {
+                const key = h.dataset.sortKey;
+                let arrowEl = h.querySelector('.sort-arrow');
+                if (!arrowEl) {
+                    arrowEl = document.createElement('span');
+                    arrowEl.className = 'sort-arrow';
+                    h.appendChild(arrowEl);
+                }
+                if (key === activeKey) {
+                    h.classList.add('active-sort');
+                    arrowEl.textContent = arrow;
+                } else {
+                    h.classList.remove('active-sort');
+                    arrowEl.textContent = '↓';
+                }
+            });
+        }
+
+        // Delegated click handler so any header cell (including cohort
+        // cells injected by compare-mode) triggers a sort. Bound once,
+        // survives re-renders.
+        if (!window._behavioralHeaderClickBound) {
+            window._behavioralHeaderClickBound = true;
+            document.addEventListener('click', function (e) {
+                const btn = e.target.closest('.behavioral-header-row .behavioral-sortable');
+                if (!btn) return;
+                const card = btn.closest('.behavioral-card');
+                if (!card) return;
+                const listEl = card.querySelector('.behavioral-list');
+                if (!listEl || !listEl.id || listEl.id.indexOf('list-') !== 0) return;
+                const catId = listEl.id.slice('list-'.length);
+                const cat = listEl.dataset.cat || '';
+                const key = btn.dataset.sortKey;
+                if (!key) return;
+                try { sortBehavioralCard(catId, cat, key); }
+                catch (err) { console.warn('[sortBehavioralCard] failed', err); }
+            }, true);
+        }
+
         function sortBehavioralCard(catId, cat, sortBy) {
             const listEl = document.getElementById('list-' + catId);
+            if (!listEl) return;
+            const card = listEl.closest('.behavioral-card');
+            const tableEl = card ? card.querySelector('.behavioral-table') : null;
+
+            // Direction toggle: clicking the same column twice flips
+            // asc <-> desc. Switching to a new column resets to a
+            // sensible default (asc for alpha, desc for everything else
+            // so the biggest values land on top).
+            if (tableEl) {
+                const prevKey = tableEl.dataset.sortKey || 'pct';
+                const prevDir = tableEl.dataset.sortDir || 'desc';
+                let dir;
+                if (sortBy === prevKey) {
+                    dir = (prevDir === 'desc') ? 'asc' : 'desc';
+                } else {
+                    dir = (sortBy === 'alpha') ? 'asc' : 'desc';
+                }
+                tableEl.dataset.sortKey = sortBy;
+                tableEl.dataset.sortDir = dir;
+            }
+
+            // Keep the hidden <select> in sync for the base keys so any
+            // legacy helper that still reads `.behavioral-sort-select`
+            // .value (search/slice handlers) sees the right column.
+            // Cohort keys ("cmp:<runKey>") aren't valid options so we
+            // leave the select on its prior pct/index/genpop value.
+            if (card && sortBy && sortBy.indexOf('cmp:') !== 0) {
+                const hiddenSel = card.querySelector('.behavioral-sort-select');
+                if (hiddenSel && hiddenSel.value !== sortBy) {
+                    try { hiddenSel.value = sortBy; } catch (_) {}
+                }
+            }
+
             let items = [...(allBehavioralData[cat] || [])];
             
             // Apply slice filter if active
@@ -65726,33 +65878,64 @@
                 items = items.filter(i => i.name.toLowerCase().includes(searchInput.value.toLowerCase()));
             }
             
-            // Sort based on selection
+            // Sort based on selection. For cohort columns
+            // (sortBy === 'cmp:<runKey>') we look up each row's pct in
+            // that comparison run's behavioral data; rows missing from
+            // the run sink to the bottom.
             let sorted;
-            switch (sortBy) {
-                case 'alpha':
-                    sorted = items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                    break;
-                case 'genpop': {
-                    const gp = (i) => (i.genPopPct ?? 0);
-                    sorted = items.sort((a, b) => gp(b) - gp(a));
-                    break;
+            if (sortBy && sortBy.indexOf('cmp:') === 0) {
+                const runKey = sortBy.slice('cmp:'.length);
+                const runEntry = (_comparisonRunsState && _comparisonRunsState.runsByKey)
+                    ? _comparisonRunsState.runsByKey[runKey] : null;
+                const lookup = runEntry ? _cmpFlatBehavioralPctLookup(runEntry.parsed) : {};
+                const cohortPct = (i) => {
+                    const v = lookup[_cmpNormName(i.name || '')];
+                    return (v == null) ? -Infinity : v;
+                };
+                sorted = items.sort((a, b) => cohortPct(b) - cohortPct(a));
+            } else {
+                switch (sortBy) {
+                    case 'alpha':
+                        sorted = items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                        break;
+                    case 'genpop': {
+                        const gp = (i) => (i.genPopPct ?? 0);
+                        sorted = items.sort((a, b) => gp(b) - gp(a));
+                        break;
+                    }
+                    case 'pct':
+                        sorted = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                        break;
+                    case 'index':
+                    default:
+                        sorted = items.sort((a, b) => (b.index || 0) - (a.index || 0));
+                        break;
                 }
-                case 'pct':
-                    sorted = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
-                    break;
-                case 'index':
-                default:
-                    sorted = items.sort((a, b) => (b.index || 0) - (a.index || 0));
-                    break;
             }
-            
+
+            // Apply direction. Default for every key above is "desc"
+            // (largest on top, or A-Z for alpha); flip if the user
+            // toggled the column header to ascending.
+            const sortDir = (tableEl && tableEl.dataset.sortDir) || 'desc';
+            if (sortDir === 'asc') sorted.reverse();
+
             // Apply item limit
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = itemLimit === 'All' || itemLimit >= sorted.length ? sorted : sorted.slice(0, itemLimit);
             const maxPct = Math.max(...sorted.map(i => i.pct), 1);
-            listEl.innerHTML = displayItems.length > 0 
+            listEl.innerHTML = displayItems.length > 0
                 ? renderBehavioralItems(displayItems, maxPct, sortBy)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
+
+            // Re-inject cohort columns (rendering rows above wiped the
+            // injected .cmp-col-cell spans) and refresh sort arrows.
+            // applyComparisonRunsToCategoryTables is a no-op when no
+            // comparison runs are active, so this is cheap.
+            if (typeof applyComparisonRunsToCategoryTables === 'function') {
+                try { applyComparisonRunsToCategoryTables(); }
+                catch (e) { console.warn('[sortBehavioralCard] compare re-apply failed', e); }
+            }
+            _updateBehavioralSortArrows(card);
         }
         
         function sliceSports(catId, cat, sliceValue) {
