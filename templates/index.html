@@ -5892,7 +5892,7 @@
         .behavioral-header-row .behavioral-sortable .sort-arrow {
             font-size: 0.75em;
             opacity: 0;
-            margin-left: 1px;
+            margin-right: 1px;
             transition: opacity 0.15s ease;
         }
         .behavioral-header-row .behavioral-sortable.active-sort .sort-arrow {
@@ -6026,13 +6026,21 @@
         .behavioral-table .behavioral-header-row span.profile-col,
         .behavioral-table .behavioral-header-row span.genpop-col,
         .behavioral-table .behavioral-header-row span.index-col {
-            text-align: right !important;
-            justify-self: end;
+            text-align: left !important;
+            justify-self: start !important;
             padding-left: 0.2rem;
             padding-right: 0.1rem;
         }
         .behavioral-table .behavioral-header-row span.index-col {
             padding-right: 0.35rem;
+        }
+        /* Cohort header cells injected by compare-mode also flip to
+           left-aligned. The corresponding data cells inside .behavioral-
+           item rows keep their inline right-align/justify-self:end so
+           the actual numbers stay right-aligned for legibility. */
+        .behavioral-table .behavioral-header-row .cmp-col-cell {
+            text-align: left !important;
+            justify-self: start !important;
         }
         /* Hide GP column when in projection mode */
         .behavioral-card.hide-gp .behavioral-table {
@@ -58188,14 +58196,17 @@
                         span.className = 'cmp-col-cell behavioral-sortable';
                         span.dataset.sortKey = 'cmp:' + entry.key;
                         const label = entry.label || ('Run ' + (idx + 1));
-                        const labelText = document.createTextNode(label);
-                        span.appendChild(labelText);
+                        // Arrow goes FIRST so it renders to the left of
+                        // the label, matching the left-justified header
+                        // layout of the base columns.
                         const arrow = document.createElement('span');
                         arrow.className = 'sort-arrow';
                         arrow.textContent = '↓';
                         span.appendChild(arrow);
+                        const labelText = document.createTextNode(label);
+                        span.appendChild(labelText);
                         span.title = 'Sort by ' + label;
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;cursor:pointer;user-select:none;';
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:left;justify-self:start;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;cursor:pointer;user-select:none;';
                         if (gpHeader) header.insertBefore(span, gpHeader);
                         else header.appendChild(span);
                     });
@@ -65062,10 +65073,10 @@
                         <div class="behavioral-table" data-sort-key="pct" data-sort-dir="desc">
                             <div class="behavioral-header-row">
                                 <span>#</span>
-                                <span class="behavioral-sortable" data-sort-key="alpha" title="Sort A-Z">Item<span class="sort-arrow">↓</span></span>
-                                <span class="behavioral-sortable profile-col active-sort" data-sort-key="pct" title="Sort by ${dashDisplayMode === 'projection' ? 'US #' : 'Casual %'}">${dashDisplayMode === 'projection' ? 'US #' : 'Casual'}<span class="sort-arrow">↓</span></span>
-                                <span class="behavioral-sortable genpop-col" data-sort-key="genpop" title="Sort by ${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop %'}">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}<span class="sort-arrow">↓</span></span>
-                                <span class="behavioral-sortable index-col" data-sort-key="index" title="Sort by Index">Index<span class="sort-arrow">↓</span></span>
+                                <span class="behavioral-sortable" data-sort-key="alpha" title="Sort A-Z"><span class="sort-arrow">↓</span>Item</span>
+                                <span class="behavioral-sortable profile-col active-sort" data-sort-key="pct" title="Sort by ${dashDisplayMode === 'projection' ? 'US #' : 'Casual %'}"><span class="sort-arrow">↓</span>${dashDisplayMode === 'projection' ? 'US #' : 'Casual'}</span>
+                                <span class="behavioral-sortable genpop-col" data-sort-key="genpop" title="Sort by ${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop %'}"><span class="sort-arrow">↓</span>${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
+                                <span class="behavioral-sortable index-col" data-sort-key="index" title="Sort by Index"><span class="sort-arrow">↓</span>Index</span>
                             </div>
                             <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
                                 ${renderBehavioralItems(displayItems, maxPct, 'pct')}
@@ -65895,7 +65906,9 @@
                 if (!arrowEl) {
                     arrowEl = document.createElement('span');
                     arrowEl.className = 'sort-arrow';
-                    h.appendChild(arrowEl);
+                    // Prepend so the arrow sits to the LEFT of the
+                    // header label, matching the rendered layout.
+                    h.insertBefore(arrowEl, h.firstChild);
                 }
                 if (key === activeKey) {
                     h.classList.add('active-sort');
