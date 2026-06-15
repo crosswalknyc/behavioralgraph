@@ -4511,6 +4511,70 @@
             word-wrap: break-word;
             overflow-wrap: break-word;
         }
+
+        /* When too many cohort medians would wrap the median-display row
+           into multiple lines (squashing the chart underneath), the
+           renderer collapses them into a single trigger pill that
+           expands on hover / focus / tap into a stacked popover. */
+        .median-collapsed {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            cursor: pointer;
+            outline: none;
+        }
+        .median-collapsed .median-trigger-label {
+            color: #f0ff00;
+            font-weight: 700;
+            text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);
+            border-bottom: 1px dashed rgba(240, 255, 0, 0.55);
+            padding: 0 0.15rem 1px 0.15rem;
+        }
+        .median-collapsed .median-trigger-hint {
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.8em;
+            text-shadow: none;
+        }
+        .median-collapsed .median-popover {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 0.4rem;
+            z-index: 200;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.6rem 0.9rem;
+            min-width: 260px;
+            max-width: 420px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+            text-shadow: none;
+            line-height: 1.55;
+            white-space: nowrap;
+        }
+        .median-collapsed .median-popover .median-row {
+            display: block;
+            padding: 0.1rem 0;
+            font-size: 0.85rem;
+            text-shadow: none;
+        }
+        .median-collapsed:hover .median-popover,
+        .median-collapsed:focus-within .median-popover,
+        .median-collapsed.is-open .median-popover {
+            display: block;
+        }
+        body[data-theme="light"] .median-collapsed .median-trigger-label {
+            color: var(--accent-cyan);
+            text-shadow: none;
+            border-bottom-color: var(--accent-cyan);
+        }
+        body[data-theme="light"] .median-collapsed .median-popover {
+            background: #fff;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+        }
         
         .chart-type-select {
             font-size: clamp(0.7rem, 1vw + 0.35rem, 0.85rem);
@@ -5804,6 +5868,80 @@
             outline: none;
             border-color: var(--accent-lime);
         }
+        /* Sort dropdown is replaced by click-to-sort on column headers.
+           Keep the hidden <select> in the DOM so legacy helpers that read
+           its .value (slice handlers, search filter, etc.) keep working;
+           direction and cohort-sort state live on the card's dataset. */
+        .behavioral-card .behavioral-sort-select { display: none !important; }
+        .behavioral-card .behavioral-sort-label { display: none !important; }
+
+        .behavioral-header-row .behavioral-sortable {
+            cursor: pointer;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            transition: color 0.15s ease;
+        }
+        .behavioral-header-row .behavioral-sortable:hover {
+            color: var(--accent-cyan);
+        }
+        .behavioral-header-row .behavioral-sortable.active-sort {
+            color: var(--accent-cyan);
+        }
+        .behavioral-header-row .behavioral-sortable .sort-arrow {
+            font-size: 0.75em;
+            opacity: 0;
+            margin-right: 1px;
+            transition: opacity 0.15s ease;
+        }
+        .behavioral-header-row .behavioral-sortable.active-sort .sort-arrow {
+            opacity: 1;
+        }
+
+        /* "Eliminate Items Indexed" filter that sits next to the
+           See All Categories selector in the Behavioral controls bar. */
+        .behavioral-index-filter {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-left: 0.35rem;
+        }
+        .behavioral-index-filter.active {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 1px var(--accent-cyan) inset;
+        }
+        .behavioral-index-filter .bif-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .behavioral-index-filter select,
+        .behavioral-index-filter input[type="number"] {
+            padding: 0.25rem 0.4rem;
+            font-size: 0.7rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+            color: var(--text-primary);
+        }
+        .behavioral-index-filter input[type="number"] {
+            width: 60px;
+            -moz-appearance: textfield;
+        }
+        .behavioral-index-filter input[type="number"]::-webkit-outer-spin-button,
+        .behavioral-index-filter input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        /* Hidden rows from the index filter — set as a class so the
+           filter is re-applicable after any re-render without touching
+           inline style="display" (which other code paths also write). */
+        .behavioral-item.beh-idx-hidden { display: none !important; }
 
         .behavioral-filter {
             display: flex;
@@ -5888,13 +6026,21 @@
         .behavioral-table .behavioral-header-row span.profile-col,
         .behavioral-table .behavioral-header-row span.genpop-col,
         .behavioral-table .behavioral-header-row span.index-col {
-            text-align: right !important;
-            justify-self: end;
+            text-align: left !important;
+            justify-self: start !important;
             padding-left: 0.2rem;
             padding-right: 0.1rem;
         }
         .behavioral-table .behavioral-header-row span.index-col {
             padding-right: 0.35rem;
+        }
+        /* Cohort header cells injected by compare-mode also flip to
+           left-aligned. The corresponding data cells inside .behavioral-
+           item rows keep their inline right-align/justify-self:end so
+           the actual numbers stay right-aligned for legibility. */
+        .behavioral-table .behavioral-header-row .cmp-col-cell {
+            text-align: left !important;
+            justify-self: start !important;
         }
         /* Hide GP column when in projection mode */
         .behavioral-card.hide-gp .behavioral-table {
@@ -16613,6 +16759,29 @@
                         <option value="">📌 See All Categories</option>
                     </select>
                     <button class="btn btn-small btn-secondary has-tooltip" data-tooltip="Reset Category Order: Restore the default category order if you've moved any categories to the top." onclick="resetCategoryOrder()" style="padding: 0.3rem 0.5rem; font-size: 0.7rem;">↻</button>
+
+                    <!-- Eliminate Items Indexed: global numeric filter that
+                         hides items in every behavioral card based on the
+                         row's index column. "Under N" hides index < N,
+                         "Over N" hides index > N, and "Both" keeps only
+                         items inside an [N1, N2] range (hides outside).
+                         Items with no index (N/A) are never hidden. -->
+                    <div class="behavioral-index-filter has-tooltip" data-tooltip="Eliminate items by index value across every behavioral card. Reminder: 100 = parity with Gen Pop, 150 = 1.5x, etc.">
+                        <span class="bif-label">Eliminate Items Indexed</span>
+                        <select id="behIndexFilterMode" onchange="onBehIndexFilterChange()">
+                            <option value="off">Off</option>
+                            <option value="under">Under</option>
+                            <option value="over">Over</option>
+                            <option value="both">Both (outside range)</option>
+                        </select>
+                        <input type="number" id="behIndexFilterValue" placeholder="N" min="0" step="1" oninput="onBehIndexFilterChange()">
+                        <span id="behIndexFilterValue2Wrap" style="display:none; align-items:center; gap:0.25rem;">
+                            <span style="color: var(--text-secondary); font-size: 0.7rem;">to</span>
+                            <input type="number" id="behIndexFilterValue2" placeholder="N" min="0" step="1" oninput="onBehIndexFilterChange()">
+                        </span>
+                        <button id="behIndexFilterClearBtn" class="btn btn-small btn-secondary" onclick="clearBehIndexFilter()" style="padding: 0.25rem 0.45rem; font-size: 0.65rem; display:none;" title="Clear index filter">✕</button>
+                        <span id="behIndexFilterStatus" style="color: var(--accent-cyan); font-size: 0.65rem; margin-left: 0.25rem;"></span>
+                    </div>
                 </div>
                 
                 <div class="behavioral-grid" id="behavioralGrid"></div>
@@ -58015,17 +58184,29 @@
                 const gpCol = hideGP ? '' : ' 70px';
                 table.style.gridTemplateColumns = '28px minmax(80px,1fr) ' + profileCol + cmpCols + gpCol + ' 56px';
 
-                // Header row injection
+                // Header row injection. Cohort header cells double as
+                // click-to-sort triggers (key = "cmp:<runKey>") so they
+                // get the same .behavioral-sortable hook as the base
+                // columns, plus a sort-arrow span for the active state.
                 const header = table.querySelector('.behavioral-header-row');
                 if (header) {
                     const gpHeader = header.querySelector('.genpop-col');
                     series.forEach((entry, idx) => {
                         const span = document.createElement('span');
-                        span.className = 'cmp-col-cell';
+                        span.className = 'cmp-col-cell behavioral-sortable';
+                        span.dataset.sortKey = 'cmp:' + entry.key;
                         const label = entry.label || ('Run ' + (idx + 1));
-                        span.textContent = label;
-                        span.title = label;
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;';
+                        // Arrow goes FIRST so it renders to the left of
+                        // the label, matching the left-justified header
+                        // layout of the base columns.
+                        const arrow = document.createElement('span');
+                        arrow.className = 'sort-arrow';
+                        arrow.textContent = '↓';
+                        span.appendChild(arrow);
+                        const labelText = document.createTextNode(label);
+                        span.appendChild(labelText);
+                        span.title = 'Sort by ' + label;
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:left;justify-self:start;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;cursor:pointer;user-select:none;';
                         if (gpHeader) header.insertBefore(span, gpHeader);
                         else header.appendChild(span);
                     });
@@ -58061,6 +58242,13 @@
                         else row.appendChild(span);
                     });
                 });
+
+                // Repaint sort arrows so the active column (whether base
+                // or cohort) shows the correct ↓/↑ glyph on this card.
+                const cardEl = table.closest('.behavioral-card');
+                if (cardEl && typeof _updateBehavioralSortArrows === 'function') {
+                    try { _updateBehavioralSortArrows(cardEl); } catch (_) {}
+                }
             });
 
             // -------- INTERESTS LIST ------------------------------------
@@ -64873,7 +65061,7 @@
                                     ${nonProfitSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
                                 </select>
                             ` : ''}
-                            <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
+                            <span class="behavioral-sort-label" style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                             <select class="behavioral-sort-select" onchange="sortBehavioralCard('${catId}', '${cat}', this.value)" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
                                 <option value="pct" selected>${dashDisplayMode === 'projection' ? '# ↓' : '% ↓'}</option>
                                 <option value="index">Idx ↓</option>
@@ -64882,13 +65070,13 @@
                             </select>
                             <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                         </div>
-                        <div class="behavioral-table">
+                        <div class="behavioral-table" data-sort-key="pct" data-sort-dir="desc">
                             <div class="behavioral-header-row">
                                 <span>#</span>
-                                <span>Item</span>
-                                <span class="profile-col">${dashDisplayMode === 'projection' ? 'US #' : 'Casual'}</span>
-                                <span class="genpop-col">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
-                                <span class="index-col">Index</span>
+                                <span class="behavioral-sortable" data-sort-key="alpha" title="Sort A-Z"><span class="sort-arrow">↓</span>Item</span>
+                                <span class="behavioral-sortable profile-col active-sort" data-sort-key="pct" title="Sort by ${dashDisplayMode === 'projection' ? 'US #' : 'Casual %'}"><span class="sort-arrow">↓</span>${dashDisplayMode === 'projection' ? 'US #' : 'Casual'}</span>
+                                <span class="behavioral-sortable genpop-col" data-sort-key="genpop" title="Sort by ${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop %'}"><span class="sort-arrow">↓</span>${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
+                                <span class="behavioral-sortable index-col" data-sort-key="index" title="Sort by Index"><span class="sort-arrow">↓</span>Index</span>
                             </div>
                             <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
                                 ${renderBehavioralItems(displayItems, maxPct, 'pct')}
@@ -65396,8 +65584,13 @@
                 const showIndex = hasGenPopMatch && genPopDisplay !== 'N/A';
                 const indexTier = !showIndex ? '' : (Number(index) >= 100 ? 'index-over' : 'index-under');
 
+                // data-index carries the numeric index (or empty for
+                // N/A rows) so the global "Eliminate Items Indexed"
+                // filter can hide rows without re-rendering. data-has-
+                // index distinguishes "no index at all" from "index 0".
+                const dataIndexAttr = showIndex ? `data-index="${Number(index)}"` : 'data-index=""';
                 return `
-                    <div class="behavioral-item">
+                    <div class="behavioral-item" ${dataIndexAttr}>
                         <span class="behavioral-rank">${item._rank || (idx + 1)}</span>
                         <div class="behavioral-name-wrapper">
                             <span class="behavioral-name has-tooltip" data-tooltip="${(item.name || '').replace(/"/g, '&quot;')}">${(item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
@@ -65673,8 +65866,116 @@
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items</div>';
         }
         
+        // Build a lookup of normalized item name -> pct for a comparison
+        // run's behavioral data, flattened across categories. Used to
+        // sort behavioral rows by a cohort column ("cmp:<runKey>").
+        function _cmpFlatBehavioralPctLookup(parsed) {
+            const out = {};
+            const beh = parsed && parsed.behavioral;
+            if (!beh) return out;
+            for (const [, items] of Object.entries(beh)) {
+                if (!Array.isArray(items)) continue;
+                items.forEach(it => {
+                    if (!it || !it.name) return;
+                    const key = _cmpNormName(it.name);
+                    const pct = (it.pct == null ? null : Number(it.pct));
+                    if (pct == null || Number.isNaN(pct)) return;
+                    // Keep the first non-null hit; multiple cats can list
+                    // the same brand but pct should agree.
+                    if (out[key] == null) out[key] = pct;
+                });
+            }
+            return out;
+        }
+
+        // Refresh sort-arrow indicators across every header cell in a
+        // behavioral card so the active column shows ↓/↑ and the rest
+        // are dimmed. Operates on both base headers and any cohort
+        // headers injected by applyComparisonRunsToCategoryTables.
+        function _updateBehavioralSortArrows(card) {
+            if (!card) return;
+            const tableEl = card.querySelector('.behavioral-table');
+            if (!tableEl) return;
+            const activeKey = tableEl.dataset.sortKey || 'pct';
+            const dir = tableEl.dataset.sortDir || 'desc';
+            const arrow = (dir === 'asc') ? '↑' : '↓';
+            const headers = tableEl.querySelectorAll('.behavioral-header-row .behavioral-sortable');
+            headers.forEach(h => {
+                const key = h.dataset.sortKey;
+                let arrowEl = h.querySelector('.sort-arrow');
+                if (!arrowEl) {
+                    arrowEl = document.createElement('span');
+                    arrowEl.className = 'sort-arrow';
+                    // Prepend so the arrow sits to the LEFT of the
+                    // header label, matching the rendered layout.
+                    h.insertBefore(arrowEl, h.firstChild);
+                }
+                if (key === activeKey) {
+                    h.classList.add('active-sort');
+                    arrowEl.textContent = arrow;
+                } else {
+                    h.classList.remove('active-sort');
+                    arrowEl.textContent = '↓';
+                }
+            });
+        }
+
+        // Delegated click handler so any header cell (including cohort
+        // cells injected by compare-mode) triggers a sort. Bound once,
+        // survives re-renders.
+        if (!window._behavioralHeaderClickBound) {
+            window._behavioralHeaderClickBound = true;
+            document.addEventListener('click', function (e) {
+                const btn = e.target.closest('.behavioral-header-row .behavioral-sortable');
+                if (!btn) return;
+                const card = btn.closest('.behavioral-card');
+                if (!card) return;
+                const listEl = card.querySelector('.behavioral-list');
+                if (!listEl || !listEl.id || listEl.id.indexOf('list-') !== 0) return;
+                const catId = listEl.id.slice('list-'.length);
+                const cat = listEl.dataset.cat || '';
+                const key = btn.dataset.sortKey;
+                if (!key) return;
+                try { sortBehavioralCard(catId, cat, key); }
+                catch (err) { console.warn('[sortBehavioralCard] failed', err); }
+            }, true);
+        }
+
         function sortBehavioralCard(catId, cat, sortBy) {
             const listEl = document.getElementById('list-' + catId);
+            if (!listEl) return;
+            const card = listEl.closest('.behavioral-card');
+            const tableEl = card ? card.querySelector('.behavioral-table') : null;
+
+            // Direction toggle: clicking the same column twice flips
+            // asc <-> desc. Switching to a new column resets to a
+            // sensible default (asc for alpha, desc for everything else
+            // so the biggest values land on top).
+            if (tableEl) {
+                const prevKey = tableEl.dataset.sortKey || 'pct';
+                const prevDir = tableEl.dataset.sortDir || 'desc';
+                let dir;
+                if (sortBy === prevKey) {
+                    dir = (prevDir === 'desc') ? 'asc' : 'desc';
+                } else {
+                    dir = (sortBy === 'alpha') ? 'asc' : 'desc';
+                }
+                tableEl.dataset.sortKey = sortBy;
+                tableEl.dataset.sortDir = dir;
+            }
+
+            // Keep the hidden <select> in sync for the base keys so any
+            // legacy helper that still reads `.behavioral-sort-select`
+            // .value (search/slice handlers) sees the right column.
+            // Cohort keys ("cmp:<runKey>") aren't valid options so we
+            // leave the select on its prior pct/index/genpop value.
+            if (card && sortBy && sortBy.indexOf('cmp:') !== 0) {
+                const hiddenSel = card.querySelector('.behavioral-sort-select');
+                if (hiddenSel && hiddenSel.value !== sortBy) {
+                    try { hiddenSel.value = sortBy; } catch (_) {}
+                }
+            }
+
             let items = [...(allBehavioralData[cat] || [])];
             
             // Apply slice filter if active
@@ -65726,35 +66027,217 @@
                 items = items.filter(i => i.name.toLowerCase().includes(searchInput.value.toLowerCase()));
             }
             
-            // Sort based on selection
+            // Sort based on selection. For cohort columns
+            // (sortBy === 'cmp:<runKey>') we look up each row's pct in
+            // that comparison run's behavioral data; rows missing from
+            // the run sink to the bottom.
             let sorted;
-            switch (sortBy) {
-                case 'alpha':
-                    sorted = items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                    break;
-                case 'genpop': {
-                    const gp = (i) => (i.genPopPct ?? 0);
-                    sorted = items.sort((a, b) => gp(b) - gp(a));
-                    break;
+            if (sortBy && sortBy.indexOf('cmp:') === 0) {
+                const runKey = sortBy.slice('cmp:'.length);
+                const runEntry = (_comparisonRunsState && _comparisonRunsState.runsByKey)
+                    ? _comparisonRunsState.runsByKey[runKey] : null;
+                const lookup = runEntry ? _cmpFlatBehavioralPctLookup(runEntry.parsed) : {};
+                const cohortPct = (i) => {
+                    const v = lookup[_cmpNormName(i.name || '')];
+                    return (v == null) ? -Infinity : v;
+                };
+                sorted = items.sort((a, b) => cohortPct(b) - cohortPct(a));
+            } else {
+                switch (sortBy) {
+                    case 'alpha':
+                        sorted = items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                        break;
+                    case 'genpop': {
+                        const gp = (i) => (i.genPopPct ?? 0);
+                        sorted = items.sort((a, b) => gp(b) - gp(a));
+                        break;
+                    }
+                    case 'pct':
+                        sorted = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                        break;
+                    case 'index':
+                    default:
+                        sorted = items.sort((a, b) => (b.index || 0) - (a.index || 0));
+                        break;
                 }
-                case 'pct':
-                    sorted = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
-                    break;
-                case 'index':
-                default:
-                    sorted = items.sort((a, b) => (b.index || 0) - (a.index || 0));
-                    break;
             }
-            
+
+            // Apply direction. Default for every key above is "desc"
+            // (largest on top, or A-Z for alpha); flip if the user
+            // toggled the column header to ascending.
+            const sortDir = (tableEl && tableEl.dataset.sortDir) || 'desc';
+            if (sortDir === 'asc') sorted.reverse();
+
             // Apply item limit
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = itemLimit === 'All' || itemLimit >= sorted.length ? sorted : sorted.slice(0, itemLimit);
             const maxPct = Math.max(...sorted.map(i => i.pct), 1);
-            listEl.innerHTML = displayItems.length > 0 
+            listEl.innerHTML = displayItems.length > 0
                 ? renderBehavioralItems(displayItems, maxPct, sortBy)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
+
+            // Re-inject cohort columns (rendering rows above wiped the
+            // injected .cmp-col-cell spans) and refresh sort arrows.
+            // applyComparisonRunsToCategoryTables is a no-op when no
+            // comparison runs are active, so this is cheap.
+            if (typeof applyComparisonRunsToCategoryTables === 'function') {
+                try { applyComparisonRunsToCategoryTables(); }
+                catch (e) { console.warn('[sortBehavioralCard] compare re-apply failed', e); }
+            }
+            _updateBehavioralSortArrows(card);
+
+            // Re-apply the global "Eliminate Items Indexed" filter
+            // since renderBehavioralItems above wrote fresh markup.
+            if (typeof applyBehavioralIndexFilter === 'function') {
+                try { applyBehavioralIndexFilter(); } catch (_) {}
+            }
         }
-        
+
+        // ============================================================
+        // GLOBAL "ELIMINATE ITEMS INDEXED" FILTER
+        // ------------------------------------------------------------
+        // Toolbar control next to See All Categories that hides rows
+        // in every behavioral card based on the row's index column:
+        //   under N  -> hide items with index < N
+        //   over  N  -> hide items with index > N
+        //   both     -> keep items inside [N1, N2]; hide outside
+        // Rows with N/A index (no Gen Pop match) are never hidden.
+        // State persists in localStorage. A MutationObserver on
+        // #behavioralGrid re-applies the filter on any subtree
+        // change (re-renders, sort, slice, search, cohort injection).
+        // ============================================================
+        const BEH_INDEX_FILTER_LS_KEY = 'cw.behIndexFilter.v1';
+        let _behIndexFilter = { mode: 'off', lo: null, hi: null };
+
+        function _loadBehIndexFilter() {
+            try {
+                const raw = localStorage.getItem(BEH_INDEX_FILTER_LS_KEY);
+                if (!raw) return;
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object') {
+                    _behIndexFilter = {
+                        mode: ['off','under','over','both'].includes(parsed.mode) ? parsed.mode : 'off',
+                        lo: (parsed.lo == null || parsed.lo === '') ? null : Number(parsed.lo),
+                        hi: (parsed.hi == null || parsed.hi === '') ? null : Number(parsed.hi)
+                    };
+                }
+            } catch (_) {}
+        }
+
+        function _saveBehIndexFilter() {
+            try { localStorage.setItem(BEH_INDEX_FILTER_LS_KEY, JSON.stringify(_behIndexFilter)); }
+            catch (_) {}
+        }
+
+        function _syncBehIndexFilterUI() {
+            const modeEl = document.getElementById('behIndexFilterMode');
+            const v1 = document.getElementById('behIndexFilterValue');
+            const v2Wrap = document.getElementById('behIndexFilterValue2Wrap');
+            const v2 = document.getElementById('behIndexFilterValue2');
+            const clearBtn = document.getElementById('behIndexFilterClearBtn');
+            const status = document.getElementById('behIndexFilterStatus');
+            const container = document.querySelector('.behavioral-index-filter');
+            if (!modeEl) return;
+            modeEl.value = _behIndexFilter.mode;
+            if (v1) v1.value = _behIndexFilter.lo == null ? '' : String(_behIndexFilter.lo);
+            if (v2) v2.value = _behIndexFilter.hi == null ? '' : String(_behIndexFilter.hi);
+            if (v2Wrap) v2Wrap.style.display = (_behIndexFilter.mode === 'both') ? 'inline-flex' : 'none';
+            const isActive = _isBehIndexFilterActive();
+            if (clearBtn) clearBtn.style.display = isActive ? 'inline-block' : 'none';
+            if (container) container.classList.toggle('active', isActive);
+            if (status) {
+                if (!isActive) status.textContent = '';
+                else if (_behIndexFilter.mode === 'under') status.textContent = `< ${_behIndexFilter.lo}`;
+                else if (_behIndexFilter.mode === 'over') status.textContent = `> ${_behIndexFilter.lo}`;
+                else if (_behIndexFilter.mode === 'both') status.textContent = `keep ${_behIndexFilter.lo}–${_behIndexFilter.hi}`;
+            }
+        }
+
+        function _isBehIndexFilterActive() {
+            const f = _behIndexFilter;
+            if (f.mode === 'off') return false;
+            if (f.mode === 'both') return Number.isFinite(f.lo) && Number.isFinite(f.hi);
+            return Number.isFinite(f.lo);
+        }
+
+        function applyBehavioralIndexFilter() {
+            const f = _behIndexFilter;
+            const active = _isBehIndexFilterActive();
+            const grid = document.getElementById('behavioralGrid');
+            if (!grid) return;
+            const rows = grid.querySelectorAll('.behavioral-item');
+            rows.forEach(row => {
+                if (!active) { row.classList.remove('beh-idx-hidden'); return; }
+                const raw = row.getAttribute('data-index');
+                if (raw == null || raw === '') { row.classList.remove('beh-idx-hidden'); return; }
+                const n = Math.round(Number(raw));
+                if (!Number.isFinite(n)) { row.classList.remove('beh-idx-hidden'); return; }
+                let hide = false;
+                if (f.mode === 'under') hide = n < f.lo;
+                else if (f.mode === 'over') hide = n > f.lo;
+                else if (f.mode === 'both') hide = (n < f.lo) || (n > f.hi);
+                row.classList.toggle('beh-idx-hidden', hide);
+            });
+        }
+
+        function onBehIndexFilterChange() {
+            const modeEl = document.getElementById('behIndexFilterMode');
+            const v1 = document.getElementById('behIndexFilterValue');
+            const v2 = document.getElementById('behIndexFilterValue2');
+            if (!modeEl) return;
+            const mode = modeEl.value || 'off';
+            const lo = (v1 && v1.value !== '') ? Number(v1.value) : null;
+            const hi = (v2 && v2.value !== '') ? Number(v2.value) : null;
+            _behIndexFilter = { mode, lo, hi };
+            _saveBehIndexFilter();
+            _syncBehIndexFilterUI();
+            applyBehavioralIndexFilter();
+        }
+
+        function clearBehIndexFilter() {
+            _behIndexFilter = { mode: 'off', lo: null, hi: null };
+            _saveBehIndexFilter();
+            _syncBehIndexFilterUI();
+            applyBehavioralIndexFilter();
+        }
+
+        // Re-apply on ANY DOM mutation inside #behavioralGrid so the
+        // filter survives initial render, sort, slice, search, and
+        // cohort-cell injection. The handler is debounced via rAF so
+        // a burst of mutations during a single re-render only triggers
+        // one apply pass.
+        function _installBehIndexFilterObserver() {
+            const grid = document.getElementById('behavioralGrid');
+            if (!grid || grid._behIdxObs) return;
+            let scheduled = false;
+            const obs = new MutationObserver(() => {
+                if (scheduled) return;
+                scheduled = true;
+                requestAnimationFrame(() => {
+                    scheduled = false;
+                    try { applyBehavioralIndexFilter(); } catch (_) {}
+                });
+            });
+            obs.observe(grid, { childList: true, subtree: true });
+            grid._behIdxObs = obs;
+        }
+
+        // Init on DOMContentLoaded (deferred so the toolbar HTML and
+        // the behavioralGrid both exist).
+        (function _initBehIndexFilter() {
+            function go() {
+                _loadBehIndexFilter();
+                _syncBehIndexFilterUI();
+                _installBehIndexFilterObserver();
+                applyBehavioralIndexFilter();
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', go);
+            } else {
+                go();
+            }
+        })();
+
         function sliceSports(catId, cat, sliceValue) {
             currentSlices[cat] = sliceValue;
             const listEl = document.getElementById('list-' + catId);

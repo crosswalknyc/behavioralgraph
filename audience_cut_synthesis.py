@@ -93,6 +93,99 @@ def _label_for_cut(gender: str, intensity: str) -> str:
     return f"{i_word} {g_word} Fan"
 
 
+def _detect_source_intensity(source: str, source_kind: str) -> Optional[str]:
+    """Inspect the source filename to determine if it already represents
+    an intensity cohort. Returns 'avid' | 'casual' | None.
+
+    Files like "Reba McEntire - Avid Fan.csv" are themselves avid
+    cohorts; gender splits of them should NOT re-apply an intensity
+    filter -- they should just split by gender (per Jenna 2026-06-12:
+    "the percentage of female in avid should be the sample size for
+    avid female...").
+    """
+    name = (os.path.basename(source) if source_kind != "s3_key"
+            else source).lower()
+    if " - avid fan" in name or " - avid female fan" in name or \
+       " - avid male fan" in name:
+        return "avid"
+    if " - casual fan" in name or " - casual female fan" in name or \
+       " - casual male fan" in name:
+        return "casual"
+    return None
+
+
+def _compute_deterministic_cohort_fraction(
+    df_source, gender: str, intensity: str,
+    source_intensity: Optional[str],
+) -> Optional[float]:
+    """Compute cohort_fraction directly from the source's GENDER row +
+    (when applicable) the source's intensity (AVID FAN) BP. Returns
+    the deterministic fraction or None if it can't be computed.
+
+    Per Jenna's data model: the OG / broad file IS the casual cohort
+    (every fan is a casual; avid is a subset of casual). Therefore:
+
+      * target = casual_F or casual_M from any "all-fans" file
+        (OG or a casual-labeled file):
+            CF = gender_share_in_source
+        (no intensity multiplier -- casual_F is the full female slice
+        of the source audience)
+
+      * target = avid_F or avid_M from an avid CSV:
+            CF = gender_share_in_avid_file
+        (the avid cohort split by gender)
+
+      * target = avid_F or avid_M from OG (rare):
+            CF = gender_share_in_OG * (avid_share_in_OG)
+        (avid IS a strict subset of OG, so we still need the avid
+        share factor)
+    """
+    cat_col = "Column"
+    val_col = "Value"
+    bp_col = next(
+        (c for c in df_source.columns if "Brand Penetration" in c), None
+    )
+    if not bp_col:
+        return None
+
+    target_label = "FEMALE" if gender.upper() == "F" else "MALE"
+    gender_pct: Optional[float] = None
+
+    cats_upper = df_source[cat_col].astype(str).str.upper().str.strip()
+    vals_upper = df_source[val_col].astype(str).str.upper().str.strip()
+
+    g_mask = (cats_upper == "GENDER") & (vals_upper == target_label)
+    if g_mask.any():
+        gender_pct = _fbp(df_source.loc[g_mask, bp_col].iloc[0])
+    if gender_pct is None:
+        return None
+
+    target_intensity = (intensity or "").lower().strip()
+
+    # Casual target -> never apply an intensity multiplier. casual_F's
+    # cohort is the full female slice of source (broad = casual).
+    if target_intensity == "casual":
+        return max(0.005, min(0.995, gender_pct / 100.0))
+
+    # Avid target.
+    if source_intensity == "avid":
+        # Source IS the avid cohort -> just the gender split of avid.
+        return max(0.005, min(0.995, gender_pct / 100.0))
+
+    # Avid target sourced from OG -> need to multiply by AVID FAN share.
+    avid_pct: Optional[float] = None
+    a_mask = cats_upper == "AVID FAN"
+    if a_mask.any():
+        avid_pct = _fbp(df_source.loc[a_mask, bp_col].iloc[0])
+    if avid_pct is None:
+        # No avid intensity row in source -- can't derive subset fraction.
+        # Fall back to gender split alone (caller can override).
+        return max(0.005, min(0.995, gender_pct / 100.0))
+
+    combined = (gender_pct / 100.0) * (avid_pct / 100.0)
+    return max(0.005, min(0.995, combined))
+
+
 # =============================================================================
 # Phase 1 -- gender + intensity audience reasoning
 # =============================================================================
@@ -252,29 +345,97 @@ def reason_audience_cut(snap: dict, gender: str, intensity: str,
 # Phase 2 -- per-category Claude calls (gender + intensity aware)
 # =============================================================================
 _CAT_ROW_SYSTEM = (
-    "You are a brand-affinity reasoning agent. Given:\n"
+    "You are a brand-affinity reasoning agent. You reason ROW BY ROW about "
+    "whether each brand fits a NARROW audience cut (one gender, one "
+    "intensity tier).\n\n"
+    "INPUT:\n"
     "  - a public-figure subject\n"
-    "  - a NARROW audience cut: a single gender, single intensity tier\n"
+    "  - the cut definition (gender + intensity) and demographic targets\n"
     "  - a category name\n"
-    "  - a list of items in that category with the SOURCE audience BP\n"
-    "Decide each item's BP for the cut.\n\n"
-    "Rules (strict):\n"
-    "  1. Each new_bp MUST differ from the source bp by at least 0.5pp.\n"
-    "  2. Brands directly tied to the subject (their own works, "
-    "businesses, close collaborators) should still skew up vs source for "
-    "the avid cut, and slightly DOWN for the casual cut (casuals like "
-    "but don't obsess).\n"
-    "  3. Gender-coded brands shift sharply: items strongly coded for "
-    "the cohort's gender lift; items strongly coded for the OTHER "
-    "gender sink. E.g. for a female cut: cosmetics / Hallmark / QVC "
-    "lift, NFL / power tools / Monster Energy sink. For a male cut: "
-    "vice versa.\n"
-    "  4. Intensity shifts magnitude: avid cuts have sharper highs and "
-    "lows; casual cuts compress toward the broad-audience baseline.\n"
-    "  5. BPs are percentages 0.0001 to 99.9. Round to 4 decimals.\n\n"
-    "Return STRICT JSON only:\n"
-    '{"items": [{"label": "...", "new_bp": 12.3456}, ...]}\n'
-    "Include EVERY item from the input list. Use exact label spelling."
+    "  - a list of items with the SOURCE-audience BP\n\n"
+    "STEP 0 - BUILD A MENTAL PERSONA OF THIS CUT (do this BEFORE deciding "
+    "any rows). Think concretely about who they ACTUALLY are -- not just "
+    "the demo numbers, but the lifestyle/cultural identity:\n"
+    "  - geography: where do they live? Casual vs avid fans of the same "
+    "subject often live in DIFFERENT places. (e.g. casual Reba fan = "
+    "coastal, culturally-ambient listener. AVID Reba fan = South / "
+    "heartland / small-town, where her music is core to identity. The "
+    "gender split layers further: avid female Reba fan likely "
+    "evangelical-leaning small-town, avid male Reba fan likely working-"
+    "class rural / oil-country / honky-tonk circuit.)\n"
+    "  - cultural taste: what other artists/genres/shows/sports do they "
+    "love? (avid Reba cohort likely over-indexes on country peers, "
+    "Christian artists, NASCAR, college football SEC; under-indexes on "
+    "rap, EDM, soccer, prestige TV)\n"
+    "  - spending priorities: do they prioritize CPG/grocery + home + "
+    "beauty/personal-care, or apparel/luxury, or tech/gadgets, or "
+    "travel/experiences? Avid country/family-values cohorts typically "
+    "spend MORE on CPG and home, LESS on luxury apparel and trendy DTC.\n"
+    "  - media diet: cable news + Facebook + Pinterest + YouTube + "
+    "broadcast TV vs TikTok + Twitter + Letterboxd + Reddit?\n"
+    "  - intensity-specific behavior: AVID = identity-level fan, deep "
+    "into the subject's universe. CASUAL = ambient awareness, lighter "
+    "engagement, more 'just heard the songs at the gym'. Avid cuts "
+    "amplify the subject's adjacent brand universe AND tighten the "
+    "cohort to match the subject's true cultural spine.\n"
+    "  - gender layering: gender doesn't just determine 'female brands' "
+    "vs 'male brands'. It changes EVERYTHING -- where they shop, what "
+    "shows they watch, which fast food they pick, which sports they "
+    "follow, which charities they give to. Build the persona as a "
+    "complete person, not a gender label.\n\n"
+    "FORBIDDEN (HARD RULES):\n"
+    "  - DO NOT apply a multiplier or factor (no 1.1x, no 1.5x, no '+10%').\n"
+    "  - DO NOT shift every row in the same direction.\n"
+    "  - DO NOT use the source BP * a constant. Each new_bp must come from\n"
+    "    independent reasoning about THAT brand's fit with THIS cohort.\n"
+    "  - DO NOT inflate brands just because they have high source BP.\n"
+    "  - DO NOT compress toward source as a default 'casual' move, or "
+    "stretch as a default 'avid' move. Reason about the actual brand "
+    "vs the actual persona.\n\n"
+    "HOW TO REASON (per row, AFTER you have the persona in mind):\n"
+    "  1. Who actually buys/uses this brand? (its real customer demo + "
+    "psychographic + region + values)\n"
+    "  2. Does that customer profile OVERLAP with the cut persona above? "
+    "Closely, partially, weakly, or not at all?\n"
+    "  3. Set new_bp:\n"
+    "     - close overlap + brand is in the subject's universe -> higher\n"
+    "     - close overlap, brand is generic mass-market -> roughly source\n"
+    "     - weak overlap (different region, different values, different "
+    "lifestyle) -> lower\n"
+    "     - no overlap / brand serves a culturally opposite audience -> "
+    "near-zero (0.0001 to ~0.10)\n"
+    "  4. PRESENCE IS NOT REQUIRED. Don't carry brands forward out of "
+    "inertia. An avid female Reba cohort probably has near-zero BP for "
+    "Supreme / SSENSE / Erewhon / Drake / Coachella tickets / Tesla, "
+    "regardless of source BP.\n"
+    "  5. Gender realism is a CONSEQUENCE of this reasoning, not a rule. "
+    "If a brand is heavily gender-coded toward the OTHER gender, the "
+    "cohort genuinely wouldn't engage -- so it drops naturally. Don't "
+    "apply a flat 'female brands up / male brands down' template.\n"
+    "  6. There is NO minimum or maximum delta.\n\n"
+    "EXPECTED DISTRIBUTION (sanity check before returning):\n"
+    "  - You should see a real mix: some up, some down, some near-zero, "
+    "some flat. Real cohort cuts have CLUSTERS by lifestyle/region, not "
+    "uniform direction.\n"
+    "  - If 80%+ of your decisions move the same direction (esp. all up), "
+    "you defaulted to a multiplier -- STOP and re-reason against the "
+    "persona.\n"
+    "  - If your top 15 rows are all 1.10-1.20 of source, you applied a "
+    "lift. STOP.\n"
+    "  - Mass-market shopping brands (Walmart, Target, Amazon) often "
+    "barely move. Cultural / lifestyle / niche brands move most -- in "
+    "BOTH directions.\n\n"
+    "OUTPUT FORMAT:\n"
+    "  - BPs are percentages 0.0001 to 99.9. Round to 4 decimals.\n"
+    "  - If a row genuinely doesn't shift, return source BP rounded to 4dp; "
+    "downstream code re-jitters 4dp-collisions.\n"
+    "  - Return STRICT JSON only. Schema (do NOT copy the literal numbers; "
+    "they are illustrative only -- reason fresh for every brand):\n"
+    '    {"items": [{"label": "BRAND_A", "new_bp": 0.4271}, '
+    '{"label": "BRAND_B", "new_bp": 47.8312}, ...]}\n'
+    "  - Include EVERY item from the input list. Use exact label spelling.\n"
+    "  - DO NOT echo placeholder / example values. Every new_bp must come "
+    "from your reasoning about THAT specific brand."
 )
 
 
@@ -311,8 +472,11 @@ def _format_category_user(subject: str, audience_summary: str,
         L.append(f"  - {label} :: source_bp={bp:.4f}")
     L.append("")
     L.append('Return JSON: {"items":[{"label":"...","new_bp":<float>}, ...]}')
-    L.append("Every item MUST appear in the response. Each new_bp MUST "
-             "differ from source_bp by at least 0.5 percentage points.")
+    L.append("Every item MUST appear in the response. Reason ROW BY ROW. "
+             "Do not apply a uniform multiplier. Brands can go up, down, "
+             "stay flat, OR drop to near-zero if this cohort genuinely "
+             "wouldn't engage. Don't keep a brand on the list out of "
+             "inertia.")
     return "\n".join(L)
 
 
@@ -524,7 +688,15 @@ def apply_audience_cut_transform(df, audience: dict, category_decisions: dict,
         # don't 4dp-collide with the source -- but they're not pushed
         # up or down beyond that.
         cat_dec = category_decisions.get(cat, {})
-        if val_u in cat_dec:
+        # Placeholder echo defender: prompt examples (12.3456, 0.4271,
+        # 47.8312) sometimes get echoed verbatim by Claude when it can't
+        # decide. Treat these as no-decision -> fall back to source-jitter.
+        claude_val = cat_dec.get(val_u)
+        is_placeholder = claude_val is not None and any(
+            abs(float(claude_val) - p) < 0.0005
+            for p in (12.3456, 0.4271, 47.8312)
+        )
+        if val_u in cat_dec and not is_placeholder:
             new_bp = float(cat_dec[val_u])
             n_brand += 1
             new_bp = max(0.0001, min(99.49, round(new_bp, 4)))
@@ -694,6 +866,36 @@ def synthesize_audience_cut(
           f"us_pop_fraction={audience['us_pop_fraction']:.4f}  "
           f"claude={audience.get('claude_used', False)}")
     print(f"     reasoning: {audience.get('reasoning', '')[:200]}")
+
+    # Deterministic cohort_fraction override.
+    # Per Jenna 2026-06-12: "the percentage of female in avid should be
+    # the sample size for avid female ... the code needs to know that
+    # these are skins off of the avid so if you split by gender it
+    # would need to conform to those". When source IS already at the
+    # target intensity, cohort_fraction = gender_share_in_source (and
+    # the gender splits sum to 100% of source). When source is OG, we
+    # multiply gender_share * intensity_share. Either way this is
+    # math, not vibes -- so we override Claude's estimate with the
+    # data-derived value. us_pop_fraction is rescaled proportionally.
+    source_intensity = _detect_source_intensity(source, kind)
+    det_cf = _compute_deterministic_cohort_fraction(
+        df_source, gender, intensity, source_intensity,
+    )
+    if det_cf is not None and det_cf > 0:
+        old_cf = float(audience.get("cohort_fraction", 0.0) or 0.0)
+        old_uf = float(audience.get("us_pop_fraction", 0.0) or 0.0)
+        audience["cohort_fraction"] = det_cf
+        if old_cf > 0:
+            audience["us_pop_fraction"] = max(
+                0.001, min(0.95, old_uf * det_cf / old_cf),
+            )
+        audience["deterministic_cf"] = True
+        audience["claude_cf_was"] = old_cf
+        audience["source_intensity"] = source_intensity
+        print(f"     deterministic cohort_fraction (source_intensity="
+              f"{source_intensity!r}, gender={gender}): "
+              f"{det_cf:.4f}  (overriding Claude's {old_cf:.4f})  "
+              f"us_pop_fraction adjusted to {audience['us_pop_fraction']:.4f}")
 
     cat_col = "Column"
     val_col = "Value"
