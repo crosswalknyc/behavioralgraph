@@ -56680,13 +56680,17 @@
             const container = document.getElementById('dashProfileTree');
             if (!container) return;
             
-            // Filter out purgatory items and OTHER category - these should NEVER appear in profile selector
+            // Filter out purgatory items only. We INTENTIONALLY surface
+            // UNCATEGORIZED/OTHER profiles in the selector (under an
+            // "UNCATEGORIZED" group) so users can still find them — they
+            // were previously hard-dropped which made profiles like
+            // "ROSEANNE BARR - Avid Fan" invisible until BRAND CATEGORY
+            // was patched. The Admin tab still surfaces them as
+            // "missing BRAND CATEGORY" defects via the audit toast.
             profiles = profiles.filter(p => {
                 const s3Key = p.s3_key || p.key || '';
-                const category = (p.category || '').toUpperCase();
                 if (s3Key.includes('purgatory/') || s3Key.startsWith('purgatory/')) return false;
                 if (p.in_purgatory || p.status === 'pending') return false;
-                if (category === 'OTHER' || category === 'UNCATEGORIZED') return false;
                 return true;
             });
             
@@ -57397,7 +57401,7 @@
                     const v = parseFloat(row.getAttribute('data-cmp-pct-genpop'));
                     return isFinite(v) ? v : null;
                 }
-                const v = parseFloat(row.getAttribute('data-cmp-pct-run-' + which));
+                const v = parseFloat(row.getAttribute('data-cmp-pct-run-' + _cmpKeyAttr(which)));
                 return isFinite(v) ? v : null;
             };
 
@@ -57448,6 +57452,22 @@
         // .interest-pct / 4th span on .location-row. Gen Pop comes from
         // .genpop-col. Per-run pcts come from each .cmp-col-cell we
         // injected (one per series.entry, in selectedKeys order).
+        // Sanitize an s3_key (or any free-form identifier) into a valid
+        // HTML attribute-name suffix. Raw s3_keys can contain spaces,
+        // periods, parentheses, brackets — all illegal in attribute names
+        // per the HTML spec — so DOM.setAttribute throws
+        // InvalidCharacterError when fed something like
+        // "data-cmp-pct-run-AARON PAUL - Avid Fan.csv". That throw
+        // aborts the comparison-stamping loop, which cascades into the
+        // index-picker reader returning null for every row and (worse)
+        // looks like the profile selector "isn't pulling things up"
+        // because the parent render fails partway through. Substituting
+        // any non-[A-Za-z0-9_-] char with '_' is deterministic and means
+        // the writer + reader agree as long as both call this helper.
+        function _cmpKeyAttr(key) {
+            return String(key || '').replace(/[^A-Za-z0-9_-]/g, '_');
+        }
+
         function _cmpStampRowPcts(series) {
             const parsePct = (txt) => {
                 if (!txt) return null;
@@ -57465,7 +57485,7 @@
                 const cmpCells = row.querySelectorAll('.cmp-col-cell');
                 cmpCells.forEach((c, i) => {
                     const k = series[i] && series[i].key;
-                    if (k) row.setAttribute('data-cmp-pct-run-' + k, parsePct(c.textContent) ?? '');
+                    if (k) row.setAttribute('data-cmp-pct-run-' + _cmpKeyAttr(k), parsePct(c.textContent) ?? '');
                 });
             });
 
@@ -57478,7 +57498,7 @@
                 const cmpCells = row.querySelectorAll('.cmp-col-cell');
                 cmpCells.forEach((c, i) => {
                     const k = series[i] && series[i].key;
-                    if (k) row.setAttribute('data-cmp-pct-run-' + k, parsePct(c.textContent) ?? '');
+                    if (k) row.setAttribute('data-cmp-pct-run-' + _cmpKeyAttr(k), parsePct(c.textContent) ?? '');
                 });
             });
 
@@ -57499,7 +57519,7 @@
                 const cmpCells = row.querySelectorAll('.cmp-col-cell');
                 cmpCells.forEach((c, i) => {
                     const k = series[i] && series[i].key;
-                    if (k) row.setAttribute('data-cmp-pct-run-' + k, parsePct(c.textContent) ?? '');
+                    if (k) row.setAttribute('data-cmp-pct-run-' + _cmpKeyAttr(k), parsePct(c.textContent) ?? '');
                 });
             });
         }
@@ -59906,22 +59926,31 @@
                 try {
                     const audit = (data.cache_info && data.cache_info.audit) || null;
                     if (audit) {
-                        const inSel = audit.in_selector || 0;
-                        const hidden = audit.hidden_count || 0;
                         const totalRoot = audit.total_root_csvs || 0;
-                        let msg = `Refreshed: ${inSel} of ${totalRoot} root CSV${totalRoot === 1 ? '' : 's'} in selector`;
-                        if (hidden > 0) {
-                            msg += ` • ${hidden} hidden`;
-                            // Group hidden files by reason so the user sees
-                            // the dominant failure mode at a glance (almost
-                            // always "Missing BRAND CATEGORY").
-                            const byReason = {};
-                            (audit.hidden || []).forEach(h => {
-                                const r = h.reason || 'unknown';
-                                (byReason[r] = byReason[r] || []).push(h);
-                            });
-                            console.group('🔎 Profile selector audit — hidden root CSVs');
-                            console.log(`Total in S3 root: ${totalRoot} • In selector: ${inSel} • Hidden: ${hidden}`);
+                        // The server audit treats UNCATEGORIZED as "hidden"
+                        // because it predates our client-side change to
+                        // surface those in the selector under UNCATEGORIZED.
+                        // Reclassify them as "needs fix but visible" so the
+                        // toast doesn't make it look like profiles are
+                        // missing — they're findable, they just need a
+                        // BRAND CATEGORY row in the CSV.
+                        const hiddenAll = audit.hidden || [];
+                        const needsFix = hiddenAll.filter(h => /missing brand category/i.test(h.reason || ''));
+                        const trulyHidden = hiddenAll.filter(h => !/missing brand category/i.test(h.reason || ''));
+                        // Client-effective in-selector count = server's
+                        // in_selector PLUS the UNCATEGORIZED bucket we now
+                        // surface.
+                        const effectiveInSel = (audit.in_selector || 0) + needsFix.length;
+                        let msg = `Refreshed: ${effectiveInSel} of ${totalRoot} root CSV${totalRoot === 1 ? '' : 's'} in selector`;
+
+                        const byReason = {};
+                        hiddenAll.forEach(h => {
+                            const r = h.reason || 'unknown';
+                            (byReason[r] = byReason[r] || []).push(h);
+                        });
+                        if (hiddenAll.length > 0) {
+                            console.group('🔎 Profile selector audit — root-CSV coverage');
+                            console.log(`Total in S3 root: ${totalRoot} • In selector (effective): ${effectiveInSel} • Truly hidden: ${trulyHidden.length} • Needs BRAND CATEGORY (still shown under UNCATEGORIZED): ${needsFix.length}`);
                             Object.entries(byReason).forEach(([reason, items]) => {
                                 console.groupCollapsed(`${items.length} × ${reason}`);
                                 console.table(items.map(it => ({
@@ -59932,7 +59961,15 @@
                                 console.groupEnd();
                             });
                             console.groupEnd();
-                            showNotification(`${msg}. See console for details.`, 'warning');
+                        }
+
+                        if (needsFix.length > 0 && trulyHidden.length === 0) {
+                            msg += ` • ${needsFix.length} need BRAND CATEGORY (shown under UNCATEGORIZED)`;
+                            showNotification(msg + '. See console for the list.', 'warning');
+                        } else if (trulyHidden.length > 0) {
+                            msg += ` • ${trulyHidden.length} truly hidden`;
+                            if (needsFix.length > 0) msg += ` • ${needsFix.length} need BRAND CATEGORY`;
+                            showNotification(msg + '. See console for details.', 'warning');
                         } else {
                             showNotification(msg, 'success');
                         }
