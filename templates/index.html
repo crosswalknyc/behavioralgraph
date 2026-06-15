@@ -10161,7 +10161,7 @@
         }
         
         .comp-table th.primary-col {
-            background: rgba(255, 215, 0, 0.15) !important;
+            background: #14231a !important;
         }
 
         /* Table header close button - white X */
@@ -10193,7 +10193,8 @@
         .comp-table {
             width: 100%;
             table-layout: fixed;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             font-size: 0.8rem;
         }
 
@@ -10204,6 +10205,9 @@
             border: 1px solid var(--border-color);
             font-weight: 600;
             color: var(--accent-cyan);
+            position: sticky;
+            top: 0;
+            z-index: 2;
         }
 
         .comp-table td {
