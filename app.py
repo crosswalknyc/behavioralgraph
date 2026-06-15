@@ -21693,39 +21693,76 @@ def process_s3_file_metadata(key, obj):
     
     # Try to get category from BRAND CATEGORY row in CSV.
     #
-    # D112 fix (2026-06-08): BRAND CATEGORY is written at row index 2-3 of
-    # the CSV (right after BRAND INPUT + SAMPLE SIZE) at byte offset ~280.
-    # The previous code read the LAST 200KB of the file, which silently
-    # misses the BRAND CATEGORY row for any profile larger than 200KB
-    # (which is most recent profiles — Ben Affleck 442KB, Ally Bank 629KB,
-    # Bradley Cooper 465KB all had valid BRAND CATEGORY rows but the
-    # cache reader couldn't see them, so they showed as "Uncategorized"
-    # in the dashboard despite the CSV being correct). Read the FIRST 50KB
-    # instead, which is always enough to capture the header rows.
+    # D112 fix (2026-06-08): BRAND CATEGORY is canonically written at
+    # row index 2-3 of the CSV (right after BRAND INPUT + SAMPLE SIZE)
+    # at byte offset ~280. That fix flipped the reader from LAST 200KB
+    # to FIRST 50KB so >200KB profiles (Ben Affleck 442KB, etc.) were
+    # no longer mis-flagged as UNCATEGORIZED.
+    #
+    # 2026-06-15 follow-up: a different code path (Avid Fan synthesis +
+    # some retro-fit category scripts) writes BRAND CATEGORY at the
+    # BOTTOM of the CSV instead of row 2 — e.g. Steven Yeun's
+    # BRAND CATEGORY=ACTOR row sits at row 4359 (~430KB into the file)
+    # with NO copy at the top. Reading only the first 50KB misses
+    # those, surfacing them as UNCATEGORIZED.
+    #
+    # The robust fix is to read BOTH ends: first ~80KB (covers the
+    # canonical row-2 case + any header noise) AND last ~200KB
+    # (covers the bottom-of-file case). Two Range GETs is the only
+    # bounded-cost way to guarantee we see BRAND CATEGORY regardless
+    # of where the writer put it. Full-object reads would be ~20x
+    # more bandwidth across 2,300+ profiles per cache rebuild.
     category = 'UNCATEGORIZED'
-    try:
-        # Read first 50KB — BRAND CATEGORY is always within first ~5KB.
-        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range='bytes=0-50000')
-        content = response['Body'].read().decode('utf-8', errors='ignore')
-        
-        for line in content.split('\n'):
-            line_upper = line.strip().upper()
-            # Check multiple variations of BRAND CATEGORY
-            if line_upper.startswith('BRAND CATEGORY,') or line_upper.startswith('BRAND CATEGORY ') or line_upper.startswith('"BRAND CATEGORY"'):
+
+    def _extract_brand_category(text: str):
+        for line in text.split('\n'):
+            line_stripped = line.strip()
+            line_upper = line_stripped.upper()
+            if (line_upper.startswith('BRAND CATEGORY,')
+                    or line_upper.startswith('BRAND CATEGORY ')
+                    or line_upper.startswith('"BRAND CATEGORY"')):
                 parts = line.split(',')
                 if len(parts) >= 2:
                     cat = parts[1].strip().strip('"').upper()
                     if cat and cat != 'BRAND CATEGORY':
-                        category = cat
-                        break
-            # Also check for BRAND_CATEGORY variant
+                        return cat
             elif line_upper.startswith('BRAND_CATEGORY,'):
                 parts = line.split(',')
                 if len(parts) >= 2:
                     cat = parts[1].strip().strip('"').upper()
                     if cat:
-                        category = cat
-                        break
+                        return cat
+        return None
+
+    try:
+        # First, try the cheap head-of-file read (covers canonical
+        # row-2 placement, which is the common case).
+        head_resp = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range='bytes=0-80000')
+        head_text = head_resp['Body'].read().decode('utf-8', errors='ignore')
+        found = _extract_brand_category(head_text)
+
+        if not found:
+            # Fall back to tail-of-file read for profiles where the
+            # category landed at the bottom (Steven Yeun, Tan France,
+            # Stephen Fry, Simon Baker, Sunny Hostin pattern — all
+            # written by post-hoc category scripts that append instead
+            # of inserting at row 2).
+            try:
+                size = obj.get('Size') or 0
+                # Read last 200KB. For files smaller than that we just
+                # re-read what we already have — no harm.
+                tail_start = max(0, int(size) - 200_000) if size else 0
+                tail_resp = s3_client.get_object(
+                    Bucket=S3_BUCKET, Key=key,
+                    Range=f'bytes={tail_start}-'
+                )
+                tail_text = tail_resp['Body'].read().decode('utf-8', errors='ignore')
+                found = _extract_brand_category(tail_text)
+            except Exception as tail_err:
+                print(f"⚠️ tail BRAND CATEGORY probe failed for {key}: {tail_err}")
+
+        if found:
+            category = found
     except Exception as e:
         print(f"Error reading category from {key}: {e}")
     
