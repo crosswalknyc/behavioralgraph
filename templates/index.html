@@ -59922,10 +59922,18 @@
                 const profiles = data.jobs || [];
                 dashboardProfiles = profiles;
                 renderDashboardProfileTree(profiles);
-                // Audit feedback so the user knows what actually happened.
+                // Audit feedback. The detailed "X of Y root CSVs in
+                // selector • N need BRAND CATEGORY" breakdown is
+                // operations/diagnostic content meant for the dashboard
+                // operator only — never surface it to regular users
+                // (it leaks file counts, internal defect classes, and
+                // makes it look like the dashboard is broken when it
+                // isn't). Super-admins get the full audit toast +
+                // console.group; everyone else gets a plain
+                // "Refreshed" success toast that hides the internals.
                 try {
                     const audit = (data.cache_info && data.cache_info.audit) || null;
-                    if (audit) {
+                    if (audit && isSuperAdmin) {
                         const totalRoot = audit.total_root_csvs || 0;
                         // The server audit treats UNCATEGORIZED as "hidden"
                         // because it predates our client-side change to
@@ -59937,9 +59945,6 @@
                         const hiddenAll = audit.hidden || [];
                         const needsFix = hiddenAll.filter(h => /missing brand category/i.test(h.reason || ''));
                         const trulyHidden = hiddenAll.filter(h => !/missing brand category/i.test(h.reason || ''));
-                        // Client-effective in-selector count = server's
-                        // in_selector PLUS the UNCATEGORIZED bucket we now
-                        // surface.
                         const effectiveInSel = (audit.in_selector || 0) + needsFix.length;
                         let msg = `Refreshed: ${effectiveInSel} of ${totalRoot} root CSV${totalRoot === 1 ? '' : 's'} in selector`;
 
@@ -59974,10 +59979,12 @@
                             showNotification(msg, 'success');
                         }
                     } else {
+                        // Non-super-admin path (or no audit returned): plain
+                        // success toast. Profile count is fine to show.
                         showNotification(`Refreshed: ${profiles.length} profile${profiles.length === 1 ? '' : 's'}`, 'success');
                     }
                 } catch (auditErr) {
-                    console.warn('[refresh] audit display failed', auditErr);
+                    if (isSuperAdmin) console.warn('[refresh] audit display failed', auditErr);
                 }
                 // Re-load Gen Pop baseline so a freshly-uploaded Gen Pop is picked up.
                 if (typeof loadGenPopBaseline === 'function') {
