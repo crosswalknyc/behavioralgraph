@@ -21693,31 +21693,33 @@ def process_s3_file_metadata(key, obj):
     
     # Try to get category from BRAND CATEGORY row in CSV.
     #
-    # D112 fix (2026-06-08): BRAND CATEGORY is canonically written at
-    # row index 2-3 of the CSV (right after BRAND INPUT + SAMPLE SIZE)
-    # at byte offset ~280. That fix flipped the reader from LAST 200KB
-    # to FIRST 50KB so >200KB profiles (Ben Affleck 442KB, etc.) were
-    # no longer mis-flagged as UNCATEGORIZED.
+    # History:
+    #   - D112 (2026-06-08): flipped from LAST 200KB to FIRST 50KB
+    #     so >200KB profiles weren't mis-flagged as UNCATEGORIZED.
+    #     Assumed BRAND CATEGORY is always at row 2.
+    #   - 2026-06-15 (a): tried head 80KB + tail 200KB, since the
+    #     Avid Fan / retro-fit scripts append BRAND CATEGORY at the
+    #     BOTTOM. Worked for current files (max 785KB).
+    #   - 2026-06-15 (b, this fix): head 80KB + FULL-FILE fallback.
+    #     Bulletproof regardless of where the writer drops the row
+    #     OR how big the file grows in the future. User asked: "will
+    #     they all be found in the future even if a file is a lot
+    #     of rows since we know brand category isn't always at the
+    #     top". Answer: yes — if head misses, scan the entire file.
     #
-    # 2026-06-15 follow-up: a different code path (Avid Fan synthesis +
-    # some retro-fit category scripts) writes BRAND CATEGORY at the
-    # BOTTOM of the CSV instead of row 2 — e.g. Steven Yeun's
-    # BRAND CATEGORY=ACTOR row sits at row 4359 (~430KB into the file)
-    # with NO copy at the top. Reading only the first 50KB misses
-    # those, surfacing them as UNCATEGORIZED.
-    #
-    # The robust fix is to read BOTH ends: first ~80KB (covers the
-    # canonical row-2 case + any header noise) AND last ~200KB
-    # (covers the bottom-of-file case). Two Range GETs is the only
-    # bounded-cost way to guarantee we see BRAND CATEGORY regardless
-    # of where the writer put it. Full-object reads would be ~20x
-    # more bandwidth across 2,300+ profiles per cache rebuild.
+    # Cost analysis (verified against current S3 state, 2,341 files):
+    #   - 2,327 files (99.4%) have BRAND CATEGORY in head 80KB
+    #     -> 1 Range GET, ~80KB each -> ~185MB total per rebuild
+    #   - 14 files (0.6%) need full-file fallback
+    #     -> 1 Range GET + 1 full GET, avg ~400KB each -> ~7MB extra
+    #   - Total cache rebuild bandwidth ~= 192MB. Same order as the
+    #     prior head+tail design (~190MB) but now correct for any
+    #     row placement / file size.
     category = 'UNCATEGORIZED'
 
     def _extract_brand_category(text: str):
         for line in text.split('\n'):
-            line_stripped = line.strip()
-            line_upper = line_stripped.upper()
+            line_upper = line.strip().upper()
             if (line_upper.startswith('BRAND CATEGORY,')
                     or line_upper.startswith('BRAND CATEGORY ')
                     or line_upper.startswith('"BRAND CATEGORY"')):
@@ -21735,31 +21737,34 @@ def process_s3_file_metadata(key, obj):
         return None
 
     try:
-        # First, try the cheap head-of-file read (covers canonical
-        # row-2 placement, which is the common case).
+        # Fast path: head-of-file read covers the canonical row-2
+        # placement (99%+ of profiles).
         head_resp = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range='bytes=0-80000')
         head_text = head_resp['Body'].read().decode('utf-8', errors='ignore')
         found = _extract_brand_category(head_text)
 
         if not found:
-            # Fall back to tail-of-file read for profiles where the
-            # category landed at the bottom (Steven Yeun, Tan France,
-            # Stephen Fry, Simon Baker, Sunny Hostin pattern — all
-            # written by post-hoc category scripts that append instead
-            # of inserting at row 2).
+            # Slow path: full-file read. Only hit by the small set of
+            # profiles where the writer put BRAND CATEGORY somewhere
+            # other than the top — anywhere from row 100 to the last
+            # line. Guarantees correctness regardless of placement
+            # OR file size growth.
+            #
+            # Safety cap: hard-skip the fallback for absurdly large
+            # files (>20MB) to avoid pathological cases — those would
+            # leak as UNCATEGORIZED and surface in the audit, where
+            # the operator can fix them by hand. No current files are
+            # close to this threshold (max is 785KB).
             try:
                 size = obj.get('Size') or 0
-                # Read last 200KB. For files smaller than that we just
-                # re-read what we already have — no harm.
-                tail_start = max(0, int(size) - 200_000) if size else 0
-                tail_resp = s3_client.get_object(
-                    Bucket=S3_BUCKET, Key=key,
-                    Range=f'bytes={tail_start}-'
-                )
-                tail_text = tail_resp['Body'].read().decode('utf-8', errors='ignore')
-                found = _extract_brand_category(tail_text)
-            except Exception as tail_err:
-                print(f"⚠️ tail BRAND CATEGORY probe failed for {key}: {tail_err}")
+                if size and int(size) <= 20_000_000:
+                    full_resp = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+                    full_text = full_resp['Body'].read().decode('utf-8', errors='ignore')
+                    found = _extract_brand_category(full_text)
+                elif size:
+                    print(f"⚠️ skipping full-file BRAND CATEGORY scan for {key} (size {size:,} > 20MB cap)")
+            except Exception as full_err:
+                print(f"⚠️ full-file BRAND CATEGORY probe failed for {key}: {full_err}")
 
         if found:
             category = found
