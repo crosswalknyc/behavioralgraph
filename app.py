@@ -20887,6 +20887,7 @@ def get_queue_status():
 def list_jobs():
     """List all jobs (local + S3 cached) with caching for performance. Use ?refresh=1 to sync from S3 before returning."""
     import time
+    global _persisted_cache_etag, _persisted_cache_last_head_ts
     
     try:
         job_list = []
@@ -20914,10 +20915,35 @@ def list_jobs():
 
         # If refresh=1, also do a full S3 listing sync (catches files written
         # outside the in-app release path, e.g. manual uploads).
+        #
+        # Adding `&force=1` upgrades this to a bombproof refresh:
+        #   1. Full S3 scan via refresh_s3_cache(incremental=False) — bypasses
+        #      the LastModified-based diff so even pathological "exists in S3
+        #      but cache thinks it doesn't" situations are healed.
+        #   2. Zero the persisted-cache ETag + last-HEAD timestamp so every
+        #      OTHER gunicorn worker re-pulls the fresh cache on its very next
+        #      /api/jobs call instead of waiting up to 3s for the throttle.
+        #   3. Re-save the persisted cache so the next worker sees it.
+        # This is what the "↻" button in the profile-selector header sends.
+        forced = bool(request.args.get('force'))
         if request.args.get('refresh') and s3_client and cache_loading_complete:
             try:
                 load_persisted_cache()  # Pick up cache saved by other workers (e.g. after release from purgatory)
-                smart_cache_update()   # Sync with actual S3 listing (add new, remove deleted)
+                if forced:
+                    refresh_s3_cache(incremental=False)
+                    # Cross-worker propagation: see _run_profile_cache_rebuild
+                    # for the same trick.
+                    try:
+                        _persisted_cache_etag = None
+                        _persisted_cache_last_head_ts = 0.0
+                    except Exception:
+                        pass
+                    try:
+                        save_persisted_cache()
+                    except Exception as save_err:
+                        print(f"⚠️ list_jobs force-save persisted cache failed: {save_err}")
+                else:
+                    smart_cache_update()  # Sync with actual S3 listing (add new, remove deleted)
             except Exception as e:
                 print(f"⚠️ list_jobs refresh error: {e}")
         
@@ -21154,15 +21180,39 @@ def list_jobs():
 
         # Sort by created_at descending (safe key for missing/None values)
         sorted_jobs = sorted(job_list, key=lambda x: x.get('created_at') or '', reverse=True)
-        
+
+        # Refresh requests get an audit payload so the UI can show the
+        # user exactly how many root CSVs are in S3, how many made it
+        # into the selector, and (most importantly) why each one that
+        # DIDN'T is hidden. The #1 reason in practice is "CSV is missing
+        # a BRAND CATEGORY row" — without surfacing that, the user just
+        # sees "I uploaded a file and refresh isn't working." With it,
+        # they immediately know what to fix.
+        cache_info = {
+            'last_updated': s3_cache.get('last_updated'),
+            'file_count': s3_cache.get('file_count', 0),
+            'cached': True,
+            'forced': forced,
+        }
+        if request.args.get('refresh'):
+            try:
+                hidden = _audit_profile_selector_coverage(s3_cache.get('jobs') or [])
+            except Exception as audit_err:
+                print(f"⚠️ /api/jobs audit failed: {audit_err}")
+                hidden = []
+            total_root = len(s3_cache.get('jobs') or [])
+            cache_info['audit'] = {
+                'total_root_csvs': total_root,
+                'in_selector': max(0, total_root - len(hidden)),
+                'hidden_count': len(hidden),
+                # Cap to keep payload small; the count above is canonical.
+                'hidden': hidden[:50],
+            }
+
         return jsonify({
             'jobs': sorted_jobs,
             'categories': sorted(list(categories)),
-            'cache_info': {
-                'last_updated': s3_cache.get('last_updated'),
-                'file_count': s3_cache.get('file_count', 0),
-                'cached': True
-            }
+            'cache_info': cache_info,
         })
     except Exception as e:
         traceback.print_exc()
@@ -21179,15 +21229,33 @@ def list_jobs():
 @app.route('/api/refresh-cache')
 @requires_auth
 def force_refresh_cache():
-    """Smart refresh - adds new, updates modified, removes deleted files."""
+    """Smart refresh - adds new, updates modified, removes deleted files.
+
+    Returns an `audit` block listing every root CSV that won't surface in
+    the profile selector and the reason why (usually a missing BRAND
+    CATEGORY row). Lets the user diagnose "I uploaded but don't see it"
+    without having to dig through logs.
+    """
     if s3_client:
         result = smart_cache_update()
+        try:
+            hidden = _audit_profile_selector_coverage(s3_cache.get('jobs') or [])
+        except Exception as audit_err:
+            print(f"⚠️ /api/refresh-cache audit failed: {audit_err}")
+            hidden = []
+        total_root = result.get('total', 0)
         return jsonify({
             'success': True,
             'new_files': result.get('new', 0),
             'updated_files': result.get('updated', 0),
             'deleted_files': result.get('deleted', 0),
-            'total': result.get('total', 0),
+            'total': total_root,
+            'audit': {
+                'total_root_csvs': total_root,
+                'in_selector': max(0, total_root - len(hidden)),
+                'hidden_count': len(hidden),
+                'hidden': hidden[:50],
+            },
             'message': f"Added {result.get('new', 0)}, updated {result.get('updated', 0)}, removed {result.get('deleted', 0)} files"
         })
     return jsonify({'success': False, 'error': 'S3 not configured'})
