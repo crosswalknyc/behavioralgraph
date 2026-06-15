@@ -78925,13 +78925,20 @@
         const PROFILE_SUFFIX_REGEX = /[\s_\-]+(20\d{2}|\d+\+|\d+\s*Plus|Avid(?:\s+Fans?)?|Casual(?:\s+Fans?)?|Super\s*Fans?|Heavy(?:\s+Users?)?|Light(?:\s+Users?)?|Lite|Premium|Standard)$/i;
         const _YEAR_SUFFIX_TEST = /^20\d{2}$/;
 
-        // Dash-separated suffix: anything after the LAST " - " (ASCII
+        // Dash-separated suffix: everything after the FIRST " - " (ASCII
         // hyphen, en-dash, or em-dash) with spaces on both sides. We
         // require surrounding whitespace so genuinely hyphenated names
-        // like "Smith-Jones" or "Jay-Z" aren't split. Use a non-greedy
-        // base capture with a $-anchored tail so the match always lands
-        // on the LAST qualifying dash.
-        const PROFILE_DASH_SUFFIX_REGEX = /^(.+)\s[\-\u2013\u2014]\s+(.+)$/;
+        // like "Smith-Jones" or "Jay-Z" aren't split. The base capture
+        // is non-greedy (`.+?`) so it stops at the FIRST qualifying
+        // dash — critical for multi-segment cohort suffixes like
+        // "Dwayne The Rock Johnson - 2024 - Avid Fan" so they collapse
+        // under the same canonical "Dwayne The Rock Johnson" as both
+        // "Dwayne The Rock Johnson - 2024" and "Dwayne The Rock Johnson
+        // - Avid Fan". With a greedy base, the previous regex would
+        // canonicalize "X - Y - Z" to "X - Y", creating spurious groups
+        // and preventing the sidebar from rolling everything up under
+        // one clickable item.
+        const PROFILE_DASH_SUFFIX_REGEX = /^(.+?)\s[\-\u2013\u2014]\s+(.+)$/;
 
         /** Splits a profile's display name into a {canonicalName,
          *  suffixType, suffixLabel} triple. suffixType is:
@@ -78943,15 +78950,26 @@
          *  ("Superfan 4+ Touchpoints") group correctly even though their
          *  trailing token isn't in the cohort allow-list.
          */
+        // Collapse double/triple internal whitespace and trim. Critical
+        // for grouping: pipeline filenames like
+        // "Dwayne The Rock Johnson  - 2023_05_29_2026_01_02.csv" (note
+        // the double space before the dash) would otherwise canonicalize
+        // to "Dwayne The Rock Johnson " (with trailing/internal whitespace),
+        // creating a separate group key from the clean
+        // "Dwayne The Rock Johnson" base — preventing the rollup.
+        function _normalizeWhitespaceName(s) {
+            return (s || '').replace(/\s+/g, ' ').trim();
+        }
+
         function getProfileSuffixInfo(profile) {
-            const name = (getProfileFullName(profile) || '').trim();
+            const name = _normalizeWhitespaceName(getProfileFullName(profile) || '');
             if (!name) return { canonicalName: '', suffixType: 'none', suffixLabel: '' };
             // 1. Dash-separated suffix wins: "Reba McEntire - Superfan 4+ Touchpoints"
             //    -> canonical "Reba McEntire", label "Superfan 4+ Touchpoints"
             const dm = name.match(PROFILE_DASH_SUFFIX_REGEX);
             if (dm) {
-                const base = (dm[1] || '').trim();
-                const suffix = (dm[2] || '').trim();
+                const base = _normalizeWhitespaceName(dm[1]);
+                const suffix = _normalizeWhitespaceName(dm[2]);
                 if (base && suffix) {
                     return { canonicalName: base, suffixType: 'dash', suffixLabel: suffix };
                 }
@@ -78959,9 +78977,9 @@
             // 2. Allow-listed single-token cohort/year suffixes.
             const m = name.match(PROFILE_SUFFIX_REGEX);
             if (!m) return { canonicalName: name, suffixType: 'none', suffixLabel: '' };
-            const base = name.slice(0, m.index).trim();
+            const base = _normalizeWhitespaceName(name.slice(0, m.index));
             if (!base) return { canonicalName: name, suffixType: 'none', suffixLabel: '' };
-            const suffix = m[1].trim();
+            const suffix = _normalizeWhitespaceName(m[1]);
             const type = _YEAR_SUFFIX_TEST.test(suffix) ? 'year' : 'cohort';
             return { canonicalName: base, suffixType: type, suffixLabel: suffix };
         }
