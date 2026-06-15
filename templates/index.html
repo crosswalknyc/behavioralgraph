@@ -36402,14 +36402,20 @@
 
             // ── Footer hint ──────────────────────────────────────────
             var footerHint = selMonth
-                ? 'Showing <strong>' + _jiqEsc((months[selMonthIdx] || {}).long_label || selMonth) + '</strong>. Click the same pill again — or "All months (avg)" — to clear the filter.'
-                : 'Y-axis scale = monthly unique US visitors. Click any month pill to see every property\'s value for that month + a delta-vs-avg readout. Hover any dot for the exact number.';
+                ? 'Showing <strong>' + _jiqEsc((months[selMonthIdx] || {}).long_label || selMonth) + '</strong> in the chart below. Click the same pill again — or "All months (avg)" — to clear the filter.'
+                : 'Click any month pill to see every property\'s value for that month + a delta-vs-avg readout. The chart below shows the underlying monthly trend; hover any dot for the exact number.';
 
+            // Layout order (per user request):
+            //   1. Month picker pill bar
+            //   2. Per-property detail cards (current selection at-a-glance)
+            //   3. Footer hint
+            //   4. Underlying line chart (the trend visual sits below the
+            //      headline cards so the user reads numbers first, shape second)
             return '<div style="padding:4px 0;">'
-                 + chartHtml
                  + pickerHtml
                  + detailHtml
                  + '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:10px;line-height:1.45;">' + footerHint + '</div>'
+                 + '<div style="margin-top:14px;">' + chartHtml + '</div>'
                  + '</div>';
         }
 
