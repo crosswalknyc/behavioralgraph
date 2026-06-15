@@ -35612,6 +35612,19 @@
         //      property in brand color. Communicates "where the same
         //      moviegoer's attention lives across the release cycle."
         //   3. Hero KPI strip — 4 ecosystem-level metrics.
+        // Per-tab selected-month state for the Ecosystem Spotlight's
+        // monthly lifecycle chart. Null / empty = show Jan–May averages
+        // (no specific month focused). Set by clicking a month pill;
+        // clicking the same pill again clears the selection.
+        window._jiqEcoSelectedMonth = window._jiqEcoSelectedMonth || null;
+        window._jiqEcoPickMonth = function(monthKey) {
+            var prev = window._jiqEcoSelectedMonth;
+            window._jiqEcoSelectedMonth = (monthKey && monthKey !== prev) ? monthKey : null;
+            if (window._jiqLastEcoSpotlight) {
+                renderJourneyIqEcosystem(window._jiqLastEcoSpotlight);
+            }
+        };
+
         function renderJourneyIqEcosystem(eco) {
             var card = document.getElementById('jiqEcosystemCard');
             if (!card) return;
@@ -35620,12 +35633,24 @@
                 return;
             }
             card.style.display = '';
+            // Stash for the month-picker re-render path.
+            window._jiqLastEcoSpotlight = eco;
 
             // ── Subtitle / meta ──────────────────────────────────────
             var subEl  = document.getElementById('jiqEcosystemSubtitle');
             var metaEl = document.getElementById('jiqEcosystemMeta');
-            if (subEl)  subEl.innerHTML = 'How <strong>' + _jiqEsc(eco.properties[0].name) + '</strong> connects to its sibling owned properties — co-visitation flows, audience lifecycle across the release window, and ecosystem-level reach.';
-            if (metaEl) metaEl.textContent = (eco.parent ? 'Owned by ' + eco.parent : '') + (eco.as_of ? '  ·  as of ' + eco.as_of : '');
+            var _isMonthlyEco = (((eco.lifecycle || {}).granularity) === 'monthly');
+            var _selMonthLbl = '';
+            if (_isMonthlyEco && window._jiqEcoSelectedMonth) {
+                var _mm = ((eco.lifecycle || {}).months || []).find(function(m) { return m.key === window._jiqEcoSelectedMonth; });
+                if (_mm) _selMonthLbl = _mm.long_label || _mm.label || window._jiqEcoSelectedMonth;
+            }
+            if (subEl)  subEl.innerHTML = _isMonthlyEco
+                ? 'How <strong>' + _jiqEsc(eco.properties[0].name) + '</strong> connects to its sibling owned properties — co-visitation flows and monthly unique-visitor scale across <strong>' + _jiqEsc((eco.lifecycle || {}).window_label || 'Jan–May 2026') + '</strong>. Use the month pills below to cut every property\'s number by month.'
+                : 'How <strong>' + _jiqEsc(eco.properties[0].name) + '</strong> connects to its sibling owned properties — co-visitation flows, audience lifecycle across the release window, and ecosystem-level reach.';
+            if (metaEl) metaEl.textContent = (eco.parent ? 'Owned by ' + eco.parent : '')
+                + (eco.as_of ? '  ·  as of ' + eco.as_of : '')
+                + (_selMonthLbl ? '  ·  filtered to ' + _selMonthLbl : (_isMonthlyEco ? '  ·  showing Jan–May avg' : ''));
 
             // ── 1) Trinity Triangle SVG ──────────────────────────────
             var tri = document.getElementById('jiqEcosystemTrinity');
@@ -35831,21 +35856,42 @@
                 }
             });
 
-            // Property bubbles
+            // Property bubbles. When the payload carries monthly_mau
+            // (monthly-granularity lifecycle) AND a month pill is
+            // currently active, swap each bubble's headline number to
+            // that month's MAU and tag the figure with the month name
+            // so the user sees the cut they picked reflected here too.
+            var _trLc      = (eco.lifecycle || {});
+            var _trMonthly = (_trLc.granularity === 'monthly');
+            var _trSelKey  = window._jiqEcoSelectedMonth || null;
+            var _trSelLbl  = '';
+            if (_trMonthly && _trSelKey) {
+                var _trSelMo = (_trLc.months || []).find(function(m) { return m.key === _trSelKey; });
+                if (_trSelMo) _trSelLbl = _trSelMo.label || _trSelKey;
+            }
             props.forEach(function(p) {
                 var pos = positions[p.key];
                 if (!pos) return;
                 var color = p.color || '#5b6cff';
-                var mauMil = Math.round((p.mau_us || 0) / 1e6);
+                var mauVal = (_trMonthly && _trSelKey && p.monthly_mau && p.monthly_mau[_trSelKey] != null)
+                    ? p.monthly_mau[_trSelKey]
+                    : (p.mau_us || 0);
+                var mauMil = (mauVal / 1e6);
+                var mauTxt = (mauMil >= 10 ? mauMil.toFixed(0) : mauMil.toFixed(1)) + 'M MAU';
+                var captionLbl = _trMonthly
+                    ? (_trSelLbl ? _trSelLbl + ' uniques' : 'Jan–May avg')
+                    : (p.role || '');
                 parts.push('<g>'
                      + '<circle cx="' + pos.x + '" cy="' + pos.y + '" r="' + bubbleR + '" fill="' + color + '" opacity="0.95" stroke="#fff" stroke-width="3"/>'
                      + '<text x="' + pos.x + '" y="' + (pos.y - 22) + '" text-anchor="middle" font-size="24">' + _jiqEsc(p.icon || '◆') + '</text>'
                      + '<text x="' + pos.x + '" y="' + (pos.y + 6) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="15">' + _jiqEsc((p.name || '').slice(0, 20)) + '</text>'
-                     + '<text x="' + pos.x + '" y="' + (pos.y + 26) + '" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-weight="700" font-size="15">' + mauMil + 'M MAU</text>'
-                     + '<title>' + _jiqEsc(p.name + ' — ' + (p.role || '') + ' — ' + (p.mau_label || mauMil + 'M MAU')) + '</title>'
+                     + '<text x="' + pos.x + '" y="' + (pos.y + 26) + '" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-weight="700" font-size="15">' + _jiqEsc(mauTxt) + '</text>'
+                     + '<title>' + _jiqEsc(p.name + ' — ' + (p.role || '') + ' — ' + (p.mau_label || mauTxt)) + '</title>'
                      + '</g>');
-                // Caption under each bubble
-                parts.push('<text x="' + pos.x + '" y="' + (pos.y + bubbleR + 18) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-style="italic">' + _jiqEsc(p.role || '') + '</text>');
+                // Caption under each bubble — in monthly mode this slot
+                // surfaces the month context ("Apr uniques" / "Jan–May
+                // avg"), since the brand role is already in the legend.
+                parts.push('<text x="' + pos.x + '" y="' + (pos.y + bubbleR + 18) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-style="italic">' + _jiqEsc(captionLbl) + '</text>');
                 if (p.url) {
                     parts.push('<text x="' + pos.x + '" y="' + (pos.y + bubbleR + 32) + '" text-anchor="middle" fill="' + color + '" font-size="10" font-weight="600">' + _jiqEsc(p.url) + '</text>');
                 }
@@ -35859,6 +35905,231 @@
                  + '</div>';
         }
 
+        // ─── Monthly-calendar Lifecycle Ribbon ───────────────────────
+        // Renders ecosystem_spotlight.lifecycle when granularity ==
+        // 'monthly' (e.g. Fandango Jan–May 2026). The chart shows real
+        // monthly unique-visitor scale per property (Y is normalized to
+        // the highest single-month MAU across all properties so visual
+        // height = relative scale; the biggest property sits on top).
+        // A pill row underneath lets the user cut every property by
+        // month; clicking a pill highlights the band on the chart,
+        // adds a value badge on each curve at that month, and updates
+        // the per-property detail strip beneath the picker.
+        function _jiqRenderLifecycleMonthly(eco) {
+            var lc = eco.lifecycle || {};
+            var months = lc.months || [];
+            var curves = lc.curves || [];
+            if (!months.length || !curves.length) return '';
+            var props = {};
+            (eco.properties || []).forEach(function(p) { props[p.key] = p; });
+
+            var selMonth = window._jiqEcoSelectedMonth || null;
+            var selMonthIdx = selMonth
+                ? months.findIndex(function(m) { return m.key === selMonth; })
+                : -1;
+
+            var W = 760, H = 280;
+            var padL = 60, padR = 30, padT = 42, padB = 60;
+            var n = months.length;
+            function xFor(idx) {
+                var bucketW = (W - padL - padR) / n;
+                return padL + bucketW * (idx + 0.5);
+            }
+            function yFor(v) {
+                return padT + (1 - v / 100) * (H - padT - padB);
+            }
+
+            var parts = [];
+            // Title hint at the top of the SVG
+            parts.push('<text x="' + padL + '" y="20" fill="var(--text-secondary)" font-size="11" font-weight="600">Monthly unique US visitors per property · ' + _jiqEsc(lc.window_label || '') + '</text>');
+            // Baseline
+            parts.push('<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="var(--border-color)" stroke-width="1"/>');
+            // Gridlines at each month boundary
+            for (var gi = 0; gi <= n; gi++) {
+                var gx = padL + ((W - padL - padR) / n) * gi;
+                parts.push('<line x1="' + gx + '" y1="' + padT + '" x2="' + gx + '" y2="' + (H - padB) + '" stroke="var(--border-color)" stroke-width="1" opacity="0.18"/>');
+            }
+            // Selected-month highlight band
+            if (selMonthIdx >= 0) {
+                var bw = (W - padL - padR) / n;
+                var hx = padL + bw * selMonthIdx;
+                parts.push('<rect x="' + hx + '" y="' + padT + '" width="' + bw + '" height="' + (H - padT - padB) + '" fill="var(--accent-primary)" opacity="0.12"/>');
+                // Month label badge above highlighted column
+                var hLbl = (months[selMonthIdx].long_label || months[selMonthIdx].label || '');
+                var hLblW = hLbl.length * 6.4 + 14;
+                parts.push('<g>'
+                         + '<rect x="' + (hx + bw / 2 - hLblW / 2) + '" y="' + (padT - 14) + '" width="' + hLblW + '" height="18" rx="9" fill="var(--accent-primary)" opacity="0.9"/>'
+                         + '<text x="' + (hx + bw / 2) + '" y="' + (padT - 1) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="10.5">' + _jiqEsc(hLbl) + '</text>'
+                         + '</g>');
+            }
+            // X-axis month tick labels
+            months.forEach(function(m, i) {
+                var x = xFor(i);
+                parts.push('<text x="' + x + '" y="' + (H - padB + 18) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-weight="' + (selMonthIdx === i ? '700' : '500') + '">' + _jiqEsc(m.label || m.key) + '</text>');
+            });
+            // Y-axis ticks (0%, 50%, 100% — calibrated to shared_max_mau)
+            var sharedMax = (lc.shared_max_mau || 0) / 1e6;
+            [0, 50, 100].forEach(function(pct) {
+                var y = yFor(pct);
+                parts.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="var(--border-color)" stroke-width="1" opacity="' + (pct === 0 ? 0 : 0.18) + '"/>');
+                if (sharedMax > 0) {
+                    parts.push('<text x="' + (padL - 8) + '" y="' + (y + 3) + '" text-anchor="end" fill="var(--text-secondary)" font-size="10">' + (sharedMax * pct / 100).toFixed(0) + 'M</text>');
+                }
+            });
+
+            // Curves
+            curves.forEach(function(c, ci) {
+                var prop = props[c.property] || {};
+                var color = c.color || prop.color || '#5b6cff';
+                var mv = c.monthly_values || [];
+                var pts = mv.map(function(p, i) {
+                    return {
+                        x:    xFor(i),
+                        y:    yFor(p.value || 0),
+                        mau:  p.mau_us || 0,
+                        mlbl: p.month_label || ''
+                    };
+                });
+                if (pts.length < 2) return;
+                // Smooth catmull-rom-ish curve
+                var d = 'M ' + pts[0].x + ' ' + pts[0].y;
+                for (var i = 0; i < pts.length - 1; i++) {
+                    var p0 = pts[i === 0 ? 0 : i - 1];
+                    var p1 = pts[i];
+                    var p2 = pts[i + 1];
+                    var p3 = pts[i + 2] || p2;
+                    var cp1x = p1.x + (p2.x - p0.x) / 6;
+                    var cp1y = p1.y + (p2.y - p0.y) / 6;
+                    var cp2x = p2.x - (p3.x - p1.x) / 6;
+                    var cp2y = p2.y - (p3.y - p1.y) / 6;
+                    d += ' C ' + cp1x + ' ' + cp1y + ', ' + cp2x + ' ' + cp2y + ', ' + p2.x + ' ' + p2.y;
+                }
+                var areaD = d + ' L ' + pts[pts.length - 1].x + ' ' + (H - padB) + ' L ' + pts[0].x + ' ' + (H - padB) + ' Z';
+                var gradId = 'jiqLcMoGrad_' + c.property;
+                parts.push('<defs><linearGradient id="' + gradId + '" x1="0%" y1="0%" x2="0%" y2="100%">'
+                         + '<stop offset="0%" stop-color="' + color + '" stop-opacity="0.55"/>'
+                         + '<stop offset="100%" stop-color="' + color + '" stop-opacity="0.05"/>'
+                         + '</linearGradient></defs>');
+                parts.push('<path d="' + areaD + '" fill="url(#' + gradId + ')" stroke="none"/>');
+                parts.push('<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2.5" stroke-linecap="round"/>');
+                // Per-month dots with full tooltip
+                pts.forEach(function(pp, i) {
+                    var r  = (selMonthIdx === i) ? 5.5 : 3.5;
+                    var sw = (selMonthIdx === i) ? 2.5 : 1.5;
+                    parts.push('<circle cx="' + pp.x + '" cy="' + pp.y + '" r="' + r + '" fill="' + color + '" stroke="#fff" stroke-width="' + sw + '">'
+                             + '<title>' + _jiqEsc((prop.name || c.property) + ' — ' + pp.mlbl + ': ' + (pp.mau / 1e6).toFixed(1) + 'M monthly uniques') + '</title>'
+                             + '</circle>');
+                });
+                // Selected-month value badge on this curve — stack
+                // multiple curves' badges vertically so they don't pile.
+                if (selMonthIdx >= 0 && pts[selMonthIdx]) {
+                    var sp = pts[selMonthIdx];
+                    var txt = (sp.mau / 1e6).toFixed(1) + 'M';
+                    var bw2 = txt.length * 6.5 + 14;
+                    // Stack: first curve above the point, subsequent
+                    // curves slightly further away (with a side offset
+                    // to keep them readable if Y values are close).
+                    var bx = sp.x + (ci - (curves.length - 1) / 2) * 6;
+                    var by = sp.y - 18 - ci * 4;
+                    if (by < padT + 8) by = sp.y + 22 + ci * 4;
+                    parts.push('<g>'
+                             + '<rect x="' + (bx - bw2 / 2) + '" y="' + (by - 11) + '" width="' + bw2 + '" height="20" rx="10" fill="var(--bg-card)" stroke="' + color + '" stroke-width="1.5"/>'
+                             + '<text x="' + bx + '" y="' + (by + 4) + '" text-anchor="middle" fill="' + color + '" font-weight="700" font-size="11">' + _jiqEsc(txt) + '</text>'
+                             + '</g>');
+                }
+            });
+
+            // Legend — bottom-left
+            var legendY = H - 8;
+            var legendX = padL;
+            (eco.properties || []).forEach(function(p) {
+                var labelW = (p.name || '').length * 7 + 30;
+                parts.push('<g>'
+                     + '<rect x="' + legendX + '" y="' + (legendY - 11) + '" width="13" height="13" rx="3" fill="' + (p.color || '#5b6cff') + '"/>'
+                     + '<text x="' + (legendX + 20) + '" y="' + legendY + '" fill="var(--text-primary)" font-size="11" font-weight="600">' + _jiqEsc(p.name || '') + '</text>'
+                     + '</g>');
+                legendX += labelW + 12;
+            });
+
+            var chartHtml = '<svg width="100%" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;">'
+                          + parts.join('')
+                          + '</svg>';
+
+            // ── Month-picker pill row ────────────────────────────────
+            // Inline-styled pills so this works without touching the
+            // shared CSS sheet. Active pill = accent fill + white text.
+            function _pillStyle(active) {
+                return 'background:' + (active ? 'var(--accent-primary)' : 'var(--bg-card)')
+                     + ';color:' + (active ? '#fff' : 'var(--text-primary)')
+                     + ';border:1px solid ' + (active ? 'var(--accent-primary)' : 'var(--border-color)')
+                     + ';border-radius:999px;padding:5px 12px;font-size:0.75rem;font-weight:'
+                     + (active ? '700' : '500')
+                     + ';cursor:pointer;transition:all 0.15s ease;';
+            }
+            var pillBtns = '<button type="button" style="' + _pillStyle(!selMonth) + '" onclick="_jiqEcoPickMonth(\'\')">All months (avg)</button>';
+            months.forEach(function(m) {
+                var on = (selMonth === m.key);
+                pillBtns += '<button type="button" style="' + _pillStyle(on) + '" onclick="_jiqEcoPickMonth(\'' + _jiqEsc(m.key) + '\')">' + _jiqEsc(m.label || m.key) + '</button>';
+            });
+            var pickerHtml = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;align-items:center;">'
+                           + '<span style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.06em;margin-right:6px;font-weight:700;">Cut by month →</span>'
+                           + pillBtns
+                           + '</div>';
+
+            // ── Per-property detail strip (averages OR selected month)
+            // Always three cards (one per property). When "All months"
+            // is active each card shows the Jan–May mean + min/max
+            // bookends; when a specific month is picked each card swaps
+            // to that month's number AND a delta-vs-avg line so the
+            // user can see whether the month over- or under-indexed.
+            var ncols = Math.min(3, curves.length) || 1;
+            var detailHtml = '<div style="display:grid;grid-template-columns:repeat(' + ncols + ',minmax(0,1fr));gap:10px;margin-top:12px;">';
+            curves.forEach(function(c) {
+                var prop = props[c.property] || {};
+                var color = c.color || prop.color || '#5b6cff';
+                var mv = c.monthly_values || [];
+                var avgs = (lc.averages || {})[c.property] || {};
+                var meanM = (avgs.mean_mau || 0) / 1e6;
+                var primaryVal, primaryLbl, secondaryTxt, secondaryColor;
+                if (selMonth) {
+                    var pmv = mv.find(function(x) { return x.month === selMonth; }) || {};
+                    primaryVal = (pmv.mau_us || 0) / 1e6;
+                    primaryLbl = (pmv.month_label || '') + ' 2026 monthly uniques';
+                    var delta = primaryVal - meanM;
+                    var dPct = meanM ? (delta / meanM * 100) : 0;
+                    var sign = delta >= 0 ? '+' : '';
+                    secondaryTxt = sign + delta.toFixed(1) + 'M vs Jan–May avg ('
+                                 + sign + dPct.toFixed(1) + '%)';
+                    secondaryColor = delta >= 0 ? '#16a34a' : '#dc2626';
+                } else {
+                    primaryVal = meanM;
+                    primaryLbl = 'Jan–May 2026 monthly avg';
+                    secondaryTxt = 'min ' + ((avgs.min_mau || 0) / 1e6).toFixed(1) + 'M @ ' + (avgs.min_month || '')
+                                 + ' · max ' + ((avgs.max_mau || 0) / 1e6).toFixed(1) + 'M @ ' + (avgs.max_month || '');
+                    secondaryColor = 'var(--text-secondary)';
+                }
+                detailHtml += '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + color + ';border-radius:10px;padding:10px 12px;">'
+                           +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;font-weight:700;">' + _jiqEsc((prop.icon || '◆') + ' ' + (prop.name || c.property)) + '</div>'
+                           +   '<div style="font-size:1.45rem;font-weight:800;color:' + color + ';line-height:1.05;">' + primaryVal.toFixed(1) + 'M</div>'
+                           +   '<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:3px;">' + _jiqEsc(primaryLbl) + '</div>'
+                           +   '<div style="font-size:0.7rem;color:' + secondaryColor + ';margin-top:6px;font-variant-numeric:tabular-nums;">' + _jiqEsc(secondaryTxt) + '</div>'
+                           + '</div>';
+            });
+            detailHtml += '</div>';
+
+            // ── Footer hint ──────────────────────────────────────────
+            var footerHint = selMonth
+                ? 'Showing <strong>' + _jiqEsc((months[selMonthIdx] || {}).long_label || selMonth) + '</strong>. Click the same pill again — or "All months (avg)" — to clear the filter.'
+                : 'Y-axis scale = monthly unique US visitors. Click any month pill to see every property\'s value for that month + a delta-vs-avg readout. Hover any dot for the exact number.';
+
+            return '<div style="padding:4px 0;">'
+                 + chartHtml
+                 + pickerHtml
+                 + detailHtml
+                 + '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:10px;line-height:1.45;">' + footerHint + '</div>'
+                 + '</div>';
+        }
+
         // Lifecycle Ribbon: horizontal timeline T-90d → T+180d around
         // theatrical release with one smooth filled area per property
         // showing audience intensity over the release cycle.
@@ -35866,6 +36137,10 @@
             var lc = eco.lifecycle || {};
             var curves = lc.curves || [];
             if (!curves.length) return '';
+            // Monthly-axis variant (Fandango Jan–May calendar mode) is
+            // rendered via a separate function below so the legacy
+            // days-from-release renderer stays self-contained.
+            if (lc.granularity === 'monthly') return _jiqRenderLifecycleMonthly(eco);
             var props = {};
             (eco.properties || []).forEach(function(p) { props[p.key] = p; });
 
