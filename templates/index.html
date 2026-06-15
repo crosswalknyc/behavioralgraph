@@ -80548,6 +80548,21 @@
         
         // Sort type for comparison sections: 'pct' (percentage/#) or 'index'
         let comparisonSectionSortTypes = {};
+
+        // Category slice selections for behavioral sections with sub-categories (e.g. Most Purchased Brands)
+        let comparisonSectionSlices = {};
+        const COMP_MPB_SLICE_OPTIONS = ['ACCESSORIES', 'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS', 'CPG', 'HOME/OUTDOOR', 'PETS', 'TECHNOLOGY BRAND', 'TOYS'];
+
+        function setComparisonSectionSlice(sectionKey, sliceValue) {
+            comparisonSectionSlices[sectionKey] = sliceValue;
+            if (window.comparisonProfilesData) {
+                renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
+            }
+        }
+
+        function getComparisonSectionSlice(sectionKey) {
+            return comparisonSectionSlices[sectionKey] || 'all';
+        }
         
         function setComparisonSectionLimit(sectionKey, limit) {
             comparisonSectionLimits[sectionKey] = limit;
@@ -81218,7 +81233,25 @@
                 
                 const currentLimit = getComparisonSectionLimit(catKey);
                 const currentSortType = getComparisonSectionSortType(catKey);
-                const valueCount = getBehavioralCategoryValueCount(profiles, cat);
+
+                // Determine if this category has a sub-category slicer (Most Purchased Brands)
+                const isMPB = cat.toUpperCase().includes('MOST PURCHASED BRANDS') || cat.toUpperCase() === 'MOST PURCHASED';
+                const currentSlice = isMPB ? getComparisonSectionSlice(catKey) : 'all';
+                const effectiveCat = (isMPB && currentSlice !== 'all') ? currentSlice : cat;
+
+                const valueCount = getBehavioralCategoryValueCount(profiles, effectiveCat);
+
+                // Build slice dropdown HTML for MPB
+                const sliceDropdownHtml = isMPB ? `
+                    <select onchange="setComparisonSectionSlice('${catKey}', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 110px;">
+                        <option value="all" ${currentSlice === 'all' ? 'selected' : ''}>Show All</option>
+                        ${COMP_MPB_SLICE_OPTIONS.map(opt => {
+                            const hasData = profiles.some(p => (p.behavioral[opt] || []).length > 0);
+                            if (!hasData) return '';
+                            return `<option value="${opt}" ${currentSlice === opt ? 'selected' : ''}>${opt.split('/').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join('/')}</option>`;
+                        }).join('')}
+                    </select>
+                ` : '';
                 
                 html += `
                     <div class="comp-section" id="comp-beh-${safeCatId}">
@@ -81229,6 +81262,7 @@
                                 <span style="font-size: 0.65rem; font-weight: normal; opacity: 0.7;">Index: <span style="color: #10b981;">●</span> &gt;100 | <span style="color: #ef4444;">●</span> &lt;100</span>
                             </span>
                             <span style="display: flex; align-items: center; gap: 0.35rem;">
+                                ${sliceDropdownHtml}
                                 ${exportMenuHtml('behavioral_' + safeCatId, 'beh_' + safeCatId)}
                                 <select onchange="setComparisonSectionLimit('${catKey}', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                     <option value="15" ${currentLimit == 15 ? 'selected' : ''}>Top 15</option>
@@ -81245,7 +81279,7 @@
                         <table class="comp-table">
                             <thead>
                                 <tr>
-                                    ${sortableLabelHeader(catKey, cat + ' (' + valueCount + ')')}
+                                    ${sortableLabelHeader(catKey, (isMPB && currentSlice !== 'all' ? currentSlice : cat) + ' (' + valueCount + ')')}
                                     ${profiles.map((p, i) => {
                                         const isGenPop = (p.name || '').toUpperCase().includes('GEN POP') || (p.name || '').toUpperCase().includes('GENPOP');
                                         const colLabel = isGenPop ? p.name + ' (%)' : p.name + ' (% / Idx)';
@@ -81254,7 +81288,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === catKey ? sortProfileIdx : primaryProfileIndex, currentLimit, currentSortType, compDisplayMode, catKey)}
+                                ${renderBehavioralComparisonRows(profiles, effectiveCat, sortSection === catKey ? sortProfileIdx : primaryProfileIndex, currentLimit, currentSortType, compDisplayMode, catKey)}
                             </tbody>
                         </table>
                     </div>
