@@ -3874,6 +3874,14 @@
             transition: all 0.15s;
             min-width: 0;
             max-width: 100%;
+            /* Force ALL CAPS for every profile name in the sidebar
+               regardless of how it was cased in the underlying CSV
+               filename or BRAND INPUT row (e.g. "Roseanne BARR",
+               "ROSE Byrne", "Lily Rose Depp" all render uniformly).
+               Category badges in the same item are already uppercase
+               so this is a no-op for them; emoji icons are unaffected
+               by text-transform. */
+            text-transform: uppercase;
         }
 
         .profile-select-item:not(.locked) {
@@ -56704,7 +56712,29 @@
             // All profiles are shown; inaccessible ones appear locked/dimmed
             
             const searchTerm = (document.getElementById('dashProfileSearchInput')?.value || '').toLowerCase();
-            
+
+            // Build a vowel-fuzzy regex from the search term so common
+            // misspellings around vowel choice still match. Examples:
+            //   "rosanne" -> /r[aeiou]?s[aeiou]?nn[aeiou]?/ matches "roseanne"
+            //   "rosa"    -> /r[aeiou]?s[aeiou]?/           matches "rose", "rosa", "rosi"
+            //   "stephan" -> /st[aeiou]?ph[aeiou]?n[aeiou]?/ matches "stephen"
+            // Each vowel becomes [aeiou] (treat any vowel as fungible),
+            // and each consonant boundary tolerates an optional inserted
+            // vowel for the "rosa"->"rose-a-nne" case. Special regex
+            // chars in the search term are escaped so a user typing
+            // "iq.us" doesn't blow up the matcher.
+            const _buildFuzzySearchRegex = (term) => {
+                if (!term) return null;
+                const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const fuzzy = escaped.split('').map(ch => {
+                    if (/[aeiou]/i.test(ch)) return '[aeiou]';
+                    if (/[a-z0-9]/i.test(ch)) return ch + '[aeiou]?';
+                    return ch;
+                }).join('');
+                try { return new RegExp(fuzzy, 'i'); } catch (_) { return null; }
+            };
+            const fuzzyRe = _buildFuzzySearchRegex(searchTerm);
+
             // If searching, group matches by profile_subject (same as non-search) so "The Rock" shows once with sub date ranges
             if (searchTerm) {
                 const matchingProfiles = profiles.filter(p => {
@@ -56714,7 +56744,18 @@
                     const catDisplay = getCategoryDisplayLabel(p.category || 'UNCATEGORIZED').toLowerCase();
                     const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
                     const masterCat = getMasterCategory(p.category || 'UNCATEGORIZED', isSvod).toLowerCase();
-                    return fullName.includes(searchTerm) || subj.replace(/_/g, ' ').includes(searchTerm) || cat.includes(searchTerm) || catDisplay.includes(searchTerm) || masterCat.includes(searchTerm);
+                    // Exact substring first (cheaper + preserves prior
+                    // ranking) — fall through to vowel-fuzzy regex for
+                    // names whose vowel choice differs from what the
+                    // user typed (rosanne vs roseanne, stephan vs
+                    // stephen, etc.).
+                    if (fullName.includes(searchTerm)) return true;
+                    if (subj.replace(/_/g, ' ').includes(searchTerm)) return true;
+                    if (cat.includes(searchTerm)) return true;
+                    if (catDisplay.includes(searchTerm)) return true;
+                    if (masterCat.includes(searchTerm)) return true;
+                    if (fuzzyRe && (fuzzyRe.test(fullName) || fuzzyRe.test(subj.replace(/_/g, ' ')))) return true;
+                    return false;
                 });
                 
                 if (matchingProfiles.length === 0) {
@@ -59928,31 +59969,22 @@
                 const profiles = data.jobs || [];
                 dashboardProfiles = profiles;
                 renderDashboardProfileTree(profiles);
-                // Audit feedback. The detailed "X of Y root CSVs in
-                // selector • N need BRAND CATEGORY" breakdown is
-                // operations/diagnostic content meant for the dashboard
-                // operator only — never surface it to regular users
-                // (it leaks file counts, internal defect classes, and
-                // makes it look like the dashboard is broken when it
-                // isn't). Super-admins get the full audit toast +
-                // console.group; everyone else gets a plain
-                // "Refreshed" success toast that hides the internals.
+                // Audit feedback: NO toast on the main dashboard
+                // sidebar refresh — the operations/diagnostic info
+                // belongs in the Admin tab's Profile Selector Cache
+                // panel, not as a top-right notification on the
+                // analyst's working view. Super-admins still get the
+                // full audit dumped to the browser console so they
+                // can spot anomalies, but nothing visible covers the
+                // chart canvas.
                 try {
                     const audit = (data.cache_info && data.cache_info.audit) || null;
                     if (audit && isSuperAdmin) {
                         const totalRoot = audit.total_root_csvs || 0;
-                        // The server audit treats UNCATEGORIZED as "hidden"
-                        // because it predates our client-side change to
-                        // surface those in the selector under UNCATEGORIZED.
-                        // Reclassify them as "needs fix but visible" so the
-                        // toast doesn't make it look like profiles are
-                        // missing — they're findable, they just need a
-                        // BRAND CATEGORY row in the CSV.
                         const hiddenAll = audit.hidden || [];
                         const needsFix = hiddenAll.filter(h => /missing brand category/i.test(h.reason || ''));
                         const trulyHidden = hiddenAll.filter(h => !/missing brand category/i.test(h.reason || ''));
                         const effectiveInSel = (audit.in_selector || 0) + needsFix.length;
-                        let msg = `Refreshed: ${effectiveInSel} of ${totalRoot} root CSV${totalRoot === 1 ? '' : 's'} in selector`;
 
                         const byReason = {};
                         hiddenAll.forEach(h => {
@@ -59972,22 +60004,9 @@
                                 console.groupEnd();
                             });
                             console.groupEnd();
-                        }
-
-                        if (needsFix.length > 0 && trulyHidden.length === 0) {
-                            msg += ` • ${needsFix.length} need BRAND CATEGORY (shown under UNCATEGORIZED)`;
-                            showNotification(msg + '. See console for the list.', 'warning');
-                        } else if (trulyHidden.length > 0) {
-                            msg += ` • ${trulyHidden.length} truly hidden`;
-                            if (needsFix.length > 0) msg += ` • ${needsFix.length} need BRAND CATEGORY`;
-                            showNotification(msg + '. See console for details.', 'warning');
                         } else {
-                            showNotification(msg, 'success');
+                            console.log(`✅ Profile selector refresh: ${effectiveInSel}/${totalRoot} root CSVs in selector (0 hidden).`);
                         }
-                    } else {
-                        // Non-super-admin path (or no audit returned): plain
-                        // success toast. Profile count is fine to show.
-                        showNotification(`Refreshed: ${profiles.length} profile${profiles.length === 1 ? '' : 's'}`, 'success');
                     }
                 } catch (auditErr) {
                     if (isSuperAdmin) console.warn('[refresh] audit display failed', auditErr);
