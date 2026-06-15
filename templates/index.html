@@ -20859,6 +20859,12 @@
                     <div id="jiqDashTitle" style="font-size: 1.15rem; font-weight: 700;">Select a run</div>
                     <div id="jiqDashSubtitle" style="font-size: 0.75rem; color: var(--text-secondary);"></div>
                     <div id="jiqDateRangeBox" style="display: none; margin-top: 0.4rem; padding: 0.25rem 0.75rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.75rem; font-weight: 700; color: var(--accent-lime); white-space: nowrap; width: fit-content;"></div>
+                    <!-- Page-level monthly cut picker. Auto-shown when the run carries
+                         a monthly_cuts block (e.g. Fandango Jan–May 2026). Clicking a
+                         pill re-renders the entire dashboard with that month's overrides
+                         + traffic-index scaled counts on every card. -->
+                    <div id="jiqMonthCutBar" style="display: none; margin-top: 0.55rem; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
+                    <div id="jiqMonthCutNote" style="display: none; margin-top: 0.45rem; padding: 0.4rem 0.7rem; background: rgba(99, 102, 241, 0.08); border-left: 3px solid var(--accent-primary); border-radius: 6px; font-size: 0.72rem; color: var(--text-primary); line-height: 1.4; max-width: 760px;"></div>
                 </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                     <select id="jiqRunPicker" onchange="onJourneyIqRunPicked(this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; min-width: 240px;">
@@ -34729,12 +34735,22 @@
                         return;
                     }
                     _jiqCurrentRun = payload.data;
+                    // Snapshot the un-filtered run so the page-level
+                    // monthly cut can rebuild from it on every pick
+                    // without ever degrading the source numbers.
+                    window._jiqOriginalRun = _jiqClone(payload.data);
+                    window._jiqCurrentRun = _jiqCurrentRun;
+                    // Reset month + ecosystem-spotlight selection so a
+                    // fresh run starts on the "All months" baseline.
+                    window._jiqPageMonth = null;
+                    window._jiqEcoSelectedMonth = null;
                     window._jiqCurrentAnnotations = (annotData && annotData.annotations) || [];
                     _jiqCurrentClusterIdx = 0;
                     _jiqCurrentCut = 'inception';
                     window._jiqCurrentView = 'blended';
                     if (loading) loading.style.display = 'none';
                     if (content) content.style.display = '';
+                    _jiqApplyPageMonthCut();
                     renderJourneyIqDashboard();
                 }).catch(function(e) {
                     if (loadingMsg) loadingMsg.textContent = 'Failed: ' + (e && e.message ? e.message : e);
@@ -34758,6 +34774,259 @@
         // 'modeled' = Claude-estimated journey at implied audience scale
         // 'blended' (default) = real when N >= 25 converters; otherwise modeled
         if (typeof window._jiqCurrentView === 'undefined') window._jiqCurrentView = 'blended';
+
+        // ──────────────────────────────────────────────────────────────
+        // Page-level monthly-cut machinery
+        // ──────────────────────────────────────────────────────────────
+        // When a run carries a monthly_cuts block (e.g. Fandango Jan–May
+        // 2026), the user can pick a month from the pill bar in the
+        // header to slice every number on the page to that calendar
+        // month. Picking the same pill again — or "All months" — clears
+        // the filter and restores the 5-month baseline.
+        //
+        // Implementation:
+        //   1. The first time a run loads, we stash an un-filtered deep
+        //      clone as window._jiqOriginalRun.
+        //   2. Picking a month deep-clones the original, deep-merges the
+        //      month's explicit overrides (KPIs / site funnel / dates),
+        //      and recursively scales every count-shaped numeric field
+        //      whose name matches _jiqIsCountField() by the month's
+        //      traffic_index. The result becomes the new _jiqCurrentRun
+        //      and renderJourneyIqDashboard() re-paints everything.
+        //   3. The ecosystem spotlight's own month picker is kept in
+        //      sync — picking a page-level month also sets
+        //      window._jiqEcoSelectedMonth.
+
+        window._jiqPageMonth = window._jiqPageMonth || null;
+
+        // Deep clone via JSON round-trip. The run is plain JSON so this
+        // is safe and ~2× faster than structuredClone in older browsers.
+        function _jiqClone(o) {
+            try { return JSON.parse(JSON.stringify(o)); }
+            catch (e) { return o; }
+        }
+
+        // Field-name allowlist for "count-shaped" numerics that should
+        // scale with traffic_index. We intentionally keep this TIGHT —
+        // it's safer to leave a count un-scaled than to accidentally
+        // scale a rate / confidence / index / day-count.
+        // Match a count-shaped TOKEN anywhere in the field name. We
+        // intentionally don't anchor to the end of the string —
+        // many real fields are e.g. visitors_us_in_window (visitors
+        // appears mid-string), first_view_viewers (view→token in
+        // middle), households_reached_q3 etc.
+        var _JIQ_COUNT_FIELD_RX = /(^|_)(users|visitors|viewers|attendees|purchasers|buyers|households|impressions|audience|cohort_size|sample_size|baseline_size|opening_weekend_buyers|reached_count|reach_users|reach_n|reach_count|weighted_users|matched_users|touched_users|unique_users|total_users|total_buyers|total_count|n_obs|n_users|n_buyers|cohort_users|cohort_n)/i;
+        // Hard-block list — names that LOOK count-ish but aren't:
+        var _JIQ_COUNT_BLOCKLIST = {
+            mau_us: 1, mau_us_avg: 1, web_mau_avg: 1, app_mau_avg: 1,
+            shared_max_mau: 1, mean_mau: 1, min_mau: 1, max_mau: 1,
+            x_min_days: 1, x_max_days: 1, release_day: 1,
+            lookback_days: 1, forward_days: 1, days_before_conversion: 1,
+            steps_before_conversion: 1,
+            // Anything from monthly_cuts itself stays untouched.
+            traffic_index: 1, cr_multiplier: 1, switcher_multiplier: 1, reach_multiplier: 1,
+        };
+        function _jiqIsCountField(key, val) {
+            if (typeof val !== 'number' || !isFinite(val)) return false;
+            if (!isFinite(val) || val === 0) return false;
+            if (typeof key !== 'string') return false;
+            if (_JIQ_COUNT_BLOCKLIST[key]) return false;
+            var k = key.toLowerCase();
+            if (k.endsWith('_pct') || k.endsWith('_rate') || k.endsWith('_ratio')) return false;
+            if (k.indexOf('_pct_') >= 0) return false;
+            if (k.startsWith('avg_') || k.startsWith('mean_') || k.startsWith('median_')) return false;
+            if (k.endsWith('_index') || k.endsWith('_multiplier')) return false;
+            // Whole integers >= 100 are almost always counts. Combined
+            // with the regex hit this catches what we want.
+            if (!_JIQ_COUNT_FIELD_RX.test(k)) return false;
+            return val >= 100; // ignore tiny things like an enum flag stored as a number
+        }
+
+        // Subtrees to skip entirely — already month-aware or shouldn't
+        // shift with the page-level cut.
+        var _JIQ_SCALE_SKIP_PATHS = {
+            'modeled_view.ecosystem_spotlight.lifecycle':   1,
+            'modeled_view.ecosystem_spotlight.properties':  1,
+            'modeled_view.ecosystem_spotlight.edges':       1,
+            'monthly_cuts':                                 1,
+            'meta.cut_options':                             1,
+            'meta.conversion_patterns':                     1,
+        };
+
+        function _jiqScaleCounts(node, factor, path) {
+            if (factor === 1 || node == null) return;
+            path = path || '';
+            if (_JIQ_SCALE_SKIP_PATHS[path]) return;
+            if (Array.isArray(node)) {
+                for (var i = 0; i < node.length; i++) {
+                    _jiqScaleCounts(node[i], factor, path);
+                }
+                return;
+            }
+            if (typeof node !== 'object') return;
+            for (var k in node) {
+                if (!Object.prototype.hasOwnProperty.call(node, k)) continue;
+                var v = node[k];
+                var childPath = path ? (path + '.' + k) : k;
+                if (_JIQ_SCALE_SKIP_PATHS[childPath]) continue;
+                if (typeof v === 'number' && _jiqIsCountField(k, v)) {
+                    node[k] = Math.round(v * factor);
+                } else if (v && typeof v === 'object') {
+                    _jiqScaleCounts(v, factor, childPath);
+                }
+            }
+        }
+
+        // Deep-merge override into base in place. Plain objects merge
+        // recursively; arrays + scalars replace. Used to overlay the
+        // pre-computed per-month KPI / site-funnel / meta values that
+        // were authored in apply_fandango_monthly_page_cuts.py.
+        function _jiqDeepMerge(base, override) {
+            if (!override || typeof override !== 'object' || Array.isArray(override)) return;
+            for (var k in override) {
+                if (!Object.prototype.hasOwnProperty.call(override, k)) continue;
+                var v = override[k];
+                if (v && typeof v === 'object' && !Array.isArray(v)
+                    && base[k] && typeof base[k] === 'object' && !Array.isArray(base[k])) {
+                    _jiqDeepMerge(base[k], v);
+                } else {
+                    base[k] = v;
+                }
+            }
+        }
+
+        // Re-derive the headline "captured / never-transacted" tiles
+        // after a month cut so the KPI strip stays self-consistent
+        // regardless of which fields the override set explicitly.
+        function _jiqRebalanceKpis(run) {
+            var k = (run && run.modeled_view && run.modeled_view.kpis) || null;
+            if (!k) return;
+            if (k.conversion_pct != null && k.switched_pct != null) {
+                k.captured_pct = Math.round((k.conversion_pct + k.switched_pct) * 10) / 10;
+                k.never_transacted_pct = Math.round((100 - k.captured_pct) * 10) / 10;
+            }
+            if (k.total_users != null && k.converted_users != null && k.switched_users != null) {
+                k.never_transacted_users = Math.max(0, k.total_users - k.converted_users - k.switched_users);
+            }
+        }
+
+        // Look up a month spec by key in the run's monthly_cuts block.
+        function _jiqFindMonthSpec(run, monthKey) {
+            var mc = (run && run.monthly_cuts) || null;
+            if (!mc || !mc.enabled) return null;
+            var hit = (mc.months || []).find(function(m) { return m.key === monthKey; });
+            return hit || null;
+        }
+
+        // Public entry: pick a month (or '' / null to clear) and
+        // re-render the dashboard. Clicking the same pill clears.
+        window._jiqPickPageMonth = function(monthKey) {
+            var prev = window._jiqPageMonth;
+            var next = (monthKey && monthKey !== prev) ? monthKey : null;
+            window._jiqPageMonth = next;
+            // Mirror the page selection into the ecosystem spotlight so
+            // both pickers stay in sync.
+            window._jiqEcoSelectedMonth = next;
+            _jiqApplyPageMonthCut();
+            renderJourneyIqDashboard();
+        };
+
+        // Rebuild _jiqCurrentRun from _jiqOriginalRun, optionally
+        // applying the current page-month cut. Always overwrites
+        // _jiqCurrentRun in place via reassignment of the module-scope
+        // variable through the window indirection.
+        function _jiqApplyPageMonthCut() {
+            var orig = window._jiqOriginalRun;
+            if (!orig) return;
+            var monthKey = window._jiqPageMonth || null;
+            var monthSpec = monthKey ? _jiqFindMonthSpec(orig, monthKey) : null;
+            // No month → restore the baseline 5-month view.
+            var fresh = _jiqClone(orig);
+            if (monthSpec) {
+                // The baseline payload carries 5-MONTH TOTALS for every
+                // count. Monthly value = total * (traffic_index / 5),
+                // i.e. take 1/5 of the period and re-weight by the
+                // month's seasonality. SCALE FIRST, then OVERRIDE so
+                // the hand-tuned headline numbers from the build
+                // script (KPI strip, site funnel) win for tiles the
+                // data team has authored explicitly.
+                var nMonths = ((orig.monthly_cuts || {}).months || []).length || 5;
+                var scaleFactor = (monthSpec.traffic_index || 1) / nMonths;
+                _jiqScaleCounts(fresh, scaleFactor, '');
+                var overrides = ((orig.monthly_cuts || {}).cuts || {})[monthKey] || {};
+                _jiqDeepMerge(fresh, overrides);
+                _jiqRebalanceKpis(fresh);
+                // Tag the run so renderers / banners can detect the
+                // active cut if needed.
+                fresh.meta = fresh.meta || {};
+                fresh.meta.active_month_cut = monthKey;
+                fresh.meta.active_month_label = monthSpec.long_label;
+            } else {
+                if (fresh.meta) {
+                    delete fresh.meta.active_month_cut;
+                    delete fresh.meta.active_month_label;
+                }
+            }
+            _jiqCurrentRun = fresh;
+            window._jiqCurrentRun = fresh;
+        }
+
+        // Render the page-level monthly pill bar + headline-note row.
+        // Wired here so any path that calls renderJourneyIqDashboard()
+        // also redraws the bar (active-pill state stays correct).
+        function _jiqRenderMonthCutBar() {
+            var bar  = document.getElementById('jiqMonthCutBar');
+            var note = document.getElementById('jiqMonthCutNote');
+            if (!bar) return;
+            var orig = window._jiqOriginalRun || window._jiqCurrentRun || {};
+            var mc = orig.monthly_cuts || null;
+            if (!mc || !mc.enabled || !(mc.months || []).length) {
+                bar.style.display  = 'none';
+                if (note) note.style.display = 'none';
+                return;
+            }
+            bar.style.display = 'flex';
+            var sel = window._jiqPageMonth || '';
+            function pillStyle(active) {
+                return 'padding: 5px 12px; border-radius: 999px; cursor: pointer;'
+                     + ' font-size: 0.72rem; font-weight: ' + (active ? '700' : '600') + ';'
+                     + ' background: ' + (active ? 'var(--accent-primary)' : 'var(--bg-card)') + ';'
+                     + ' color: ' + (active ? '#fff' : 'var(--text-primary)') + ';'
+                     + ' border: 1px solid ' + (active ? 'var(--accent-primary)' : 'var(--border-color)') + ';'
+                     + ' transition: all 0.15s ease;';
+            }
+            var html = '<span style="font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-secondary); font-weight: 700; margin-right: 4px;">Month cut →</span>';
+            html += '<button type="button" style="' + pillStyle(!sel) + '" onclick="_jiqPickPageMonth(\'\')">All months (Jan–May avg)</button>';
+            mc.months.forEach(function(m) {
+                var on = (sel === m.key);
+                var hint = '';
+                if (m.traffic_index != null) {
+                    var delta = ((m.traffic_index - 1) * 100).toFixed(0);
+                    hint = ' <span style="opacity: 0.7; font-weight: 500;">' + (delta >= 0 ? '+' : '') + delta + '%</span>';
+                }
+                html += '<button type="button" title="' + _jiqEsc(m.headline_note || '') + '" style="' + pillStyle(on) + '" onclick="_jiqPickPageMonth(\'' + _jiqEsc(m.key) + '\')">' + _jiqEsc(m.label || m.key) + hint + '</button>';
+            });
+            bar.innerHTML = html;
+
+            // Headline note for the active month (or the baseline blurb)
+            if (note) {
+                if (sel) {
+                    var ms = _jiqFindMonthSpec(orig, sel);
+                    if (ms) {
+                        note.style.display = 'block';
+                        note.innerHTML = '<strong>' + _jiqEsc(ms.long_label) + ':</strong> '
+                                       + _jiqEsc(ms.headline_note || '')
+                                       + ' <span style="color: var(--text-secondary);">·  traffic ' + (ms.traffic_index || 1).toFixed(2) + '× the 5-month avg</span>';
+                    } else {
+                        note.style.display = 'none';
+                    }
+                } else {
+                    note.style.display = 'block';
+                    var bw = mc.baseline_window || {};
+                    note.innerHTML = '<strong>' + _jiqEsc(bw.label || 'All months') + ':</strong> showing the aggregate 5-month view. Pick a month pill to slice every card on the page to that calendar month — KPIs, funnel split, ecosystem MAUs, path-to-purchase volumes, and marketing reach all shift to the month\'s seasonality.';
+                }
+            }
+        }
 
         function _jiqViewSlice() {
             var d = _jiqCurrentRun || {};
@@ -34822,6 +35091,9 @@
         function renderJourneyIqDashboard() {
             var fullRun = _jiqCurrentRun || {};
             window._jiqLastSummary = fullRun;
+            // Page-level monthly pill bar (auto-hides on runs that
+            // don't carry a monthly_cuts block).
+            _jiqRenderMonthCutBar();
             var slice = _jiqViewSlice();
             var d = slice.data;
             var meta = d.meta || {};
@@ -35612,6 +35884,31 @@
         //      property in brand color. Communicates "where the same
         //      moviegoer's attention lives across the release cycle."
         //   3. Hero KPI strip — 4 ecosystem-level metrics.
+        // Per-tab selected-month state for the Ecosystem Spotlight's
+        // monthly lifecycle chart. Null / empty = show Jan–May averages
+        // (no specific month focused). Set by clicking a month pill;
+        // clicking the same pill again clears the selection.
+        window._jiqEcoSelectedMonth = window._jiqEcoSelectedMonth || null;
+        window._jiqEcoPickMonth = function(monthKey) {
+            // If the run carries a page-level monthly_cuts block, the
+            // ecosystem pill is a proxy for the page-level pill —
+            // picking one should slice the whole dashboard, not just
+            // the ecosystem card. Defer to the page-level handler so
+            // both pickers stay in lockstep.
+            var run = window._jiqOriginalRun || window._jiqCurrentRun || {};
+            if (run.monthly_cuts && run.monthly_cuts.enabled && typeof window._jiqPickPageMonth === 'function') {
+                window._jiqPickPageMonth(monthKey);
+                return;
+            }
+            // Standalone ecosystem cut (legacy path, when no page-level
+            // monthly_cuts block exists).
+            var prev = window._jiqEcoSelectedMonth;
+            window._jiqEcoSelectedMonth = (monthKey && monthKey !== prev) ? monthKey : null;
+            if (window._jiqLastEcoSpotlight) {
+                renderJourneyIqEcosystem(window._jiqLastEcoSpotlight);
+            }
+        };
+
         function renderJourneyIqEcosystem(eco) {
             var card = document.getElementById('jiqEcosystemCard');
             if (!card) return;
@@ -35620,12 +35917,24 @@
                 return;
             }
             card.style.display = '';
+            // Stash for the month-picker re-render path.
+            window._jiqLastEcoSpotlight = eco;
 
             // ── Subtitle / meta ──────────────────────────────────────
             var subEl  = document.getElementById('jiqEcosystemSubtitle');
             var metaEl = document.getElementById('jiqEcosystemMeta');
-            if (subEl)  subEl.innerHTML = 'How <strong>' + _jiqEsc(eco.properties[0].name) + '</strong> connects to its sibling owned properties — co-visitation flows, audience lifecycle across the release window, and ecosystem-level reach.';
-            if (metaEl) metaEl.textContent = (eco.parent ? 'Owned by ' + eco.parent : '') + (eco.as_of ? '  ·  as of ' + eco.as_of : '');
+            var _isMonthlyEco = (((eco.lifecycle || {}).granularity) === 'monthly');
+            var _selMonthLbl = '';
+            if (_isMonthlyEco && window._jiqEcoSelectedMonth) {
+                var _mm = ((eco.lifecycle || {}).months || []).find(function(m) { return m.key === window._jiqEcoSelectedMonth; });
+                if (_mm) _selMonthLbl = _mm.long_label || _mm.label || window._jiqEcoSelectedMonth;
+            }
+            if (subEl)  subEl.innerHTML = _isMonthlyEco
+                ? 'How <strong>' + _jiqEsc(eco.properties[0].name) + '</strong> connects to its sibling owned properties — co-visitation flows and monthly unique-visitor scale across <strong>' + _jiqEsc((eco.lifecycle || {}).window_label || 'Jan–May 2026') + '</strong>. Use the month pills below to cut every property\'s number by month.'
+                : 'How <strong>' + _jiqEsc(eco.properties[0].name) + '</strong> connects to its sibling owned properties — co-visitation flows, audience lifecycle across the release window, and ecosystem-level reach.';
+            if (metaEl) metaEl.textContent = (eco.parent ? 'Owned by ' + eco.parent : '')
+                + (eco.as_of ? '  ·  as of ' + eco.as_of : '')
+                + (_selMonthLbl ? '  ·  filtered to ' + _selMonthLbl : (_isMonthlyEco ? '  ·  showing Jan–May avg' : ''));
 
             // ── 1) Trinity Triangle SVG ──────────────────────────────
             var tri = document.getElementById('jiqEcosystemTrinity');
@@ -35831,21 +36140,42 @@
                 }
             });
 
-            // Property bubbles
+            // Property bubbles. When the payload carries monthly_mau
+            // (monthly-granularity lifecycle) AND a month pill is
+            // currently active, swap each bubble's headline number to
+            // that month's MAU and tag the figure with the month name
+            // so the user sees the cut they picked reflected here too.
+            var _trLc      = (eco.lifecycle || {});
+            var _trMonthly = (_trLc.granularity === 'monthly');
+            var _trSelKey  = window._jiqEcoSelectedMonth || null;
+            var _trSelLbl  = '';
+            if (_trMonthly && _trSelKey) {
+                var _trSelMo = (_trLc.months || []).find(function(m) { return m.key === _trSelKey; });
+                if (_trSelMo) _trSelLbl = _trSelMo.label || _trSelKey;
+            }
             props.forEach(function(p) {
                 var pos = positions[p.key];
                 if (!pos) return;
                 var color = p.color || '#5b6cff';
-                var mauMil = Math.round((p.mau_us || 0) / 1e6);
+                var mauVal = (_trMonthly && _trSelKey && p.monthly_mau && p.monthly_mau[_trSelKey] != null)
+                    ? p.monthly_mau[_trSelKey]
+                    : (p.mau_us || 0);
+                var mauMil = (mauVal / 1e6);
+                var mauTxt = (mauMil >= 10 ? mauMil.toFixed(0) : mauMil.toFixed(1)) + 'M MAU';
+                var captionLbl = _trMonthly
+                    ? (_trSelLbl ? _trSelLbl + ' uniques' : 'Jan–May avg')
+                    : (p.role || '');
                 parts.push('<g>'
                      + '<circle cx="' + pos.x + '" cy="' + pos.y + '" r="' + bubbleR + '" fill="' + color + '" opacity="0.95" stroke="#fff" stroke-width="3"/>'
                      + '<text x="' + pos.x + '" y="' + (pos.y - 22) + '" text-anchor="middle" font-size="24">' + _jiqEsc(p.icon || '◆') + '</text>'
                      + '<text x="' + pos.x + '" y="' + (pos.y + 6) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="15">' + _jiqEsc((p.name || '').slice(0, 20)) + '</text>'
-                     + '<text x="' + pos.x + '" y="' + (pos.y + 26) + '" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-weight="700" font-size="15">' + mauMil + 'M MAU</text>'
-                     + '<title>' + _jiqEsc(p.name + ' — ' + (p.role || '') + ' — ' + (p.mau_label || mauMil + 'M MAU')) + '</title>'
+                     + '<text x="' + pos.x + '" y="' + (pos.y + 26) + '" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-weight="700" font-size="15">' + _jiqEsc(mauTxt) + '</text>'
+                     + '<title>' + _jiqEsc(p.name + ' — ' + (p.role || '') + ' — ' + (p.mau_label || mauTxt)) + '</title>'
                      + '</g>');
-                // Caption under each bubble
-                parts.push('<text x="' + pos.x + '" y="' + (pos.y + bubbleR + 18) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-style="italic">' + _jiqEsc(p.role || '') + '</text>');
+                // Caption under each bubble — in monthly mode this slot
+                // surfaces the month context ("Apr uniques" / "Jan–May
+                // avg"), since the brand role is already in the legend.
+                parts.push('<text x="' + pos.x + '" y="' + (pos.y + bubbleR + 18) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-style="italic">' + _jiqEsc(captionLbl) + '</text>');
                 if (p.url) {
                     parts.push('<text x="' + pos.x + '" y="' + (pos.y + bubbleR + 32) + '" text-anchor="middle" fill="' + color + '" font-size="10" font-weight="600">' + _jiqEsc(p.url) + '</text>');
                 }
@@ -35859,6 +36189,231 @@
                  + '</div>';
         }
 
+        // ─── Monthly-calendar Lifecycle Ribbon ───────────────────────
+        // Renders ecosystem_spotlight.lifecycle when granularity ==
+        // 'monthly' (e.g. Fandango Jan–May 2026). The chart shows real
+        // monthly unique-visitor scale per property (Y is normalized to
+        // the highest single-month MAU across all properties so visual
+        // height = relative scale; the biggest property sits on top).
+        // A pill row underneath lets the user cut every property by
+        // month; clicking a pill highlights the band on the chart,
+        // adds a value badge on each curve at that month, and updates
+        // the per-property detail strip beneath the picker.
+        function _jiqRenderLifecycleMonthly(eco) {
+            var lc = eco.lifecycle || {};
+            var months = lc.months || [];
+            var curves = lc.curves || [];
+            if (!months.length || !curves.length) return '';
+            var props = {};
+            (eco.properties || []).forEach(function(p) { props[p.key] = p; });
+
+            var selMonth = window._jiqEcoSelectedMonth || null;
+            var selMonthIdx = selMonth
+                ? months.findIndex(function(m) { return m.key === selMonth; })
+                : -1;
+
+            var W = 760, H = 280;
+            var padL = 60, padR = 30, padT = 42, padB = 60;
+            var n = months.length;
+            function xFor(idx) {
+                var bucketW = (W - padL - padR) / n;
+                return padL + bucketW * (idx + 0.5);
+            }
+            function yFor(v) {
+                return padT + (1 - v / 100) * (H - padT - padB);
+            }
+
+            var parts = [];
+            // Title hint at the top of the SVG
+            parts.push('<text x="' + padL + '" y="20" fill="var(--text-secondary)" font-size="11" font-weight="600">Monthly unique US visitors per property · ' + _jiqEsc(lc.window_label || '') + '</text>');
+            // Baseline
+            parts.push('<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="var(--border-color)" stroke-width="1"/>');
+            // Gridlines at each month boundary
+            for (var gi = 0; gi <= n; gi++) {
+                var gx = padL + ((W - padL - padR) / n) * gi;
+                parts.push('<line x1="' + gx + '" y1="' + padT + '" x2="' + gx + '" y2="' + (H - padB) + '" stroke="var(--border-color)" stroke-width="1" opacity="0.18"/>');
+            }
+            // Selected-month highlight band
+            if (selMonthIdx >= 0) {
+                var bw = (W - padL - padR) / n;
+                var hx = padL + bw * selMonthIdx;
+                parts.push('<rect x="' + hx + '" y="' + padT + '" width="' + bw + '" height="' + (H - padT - padB) + '" fill="var(--accent-primary)" opacity="0.12"/>');
+                // Month label badge above highlighted column
+                var hLbl = (months[selMonthIdx].long_label || months[selMonthIdx].label || '');
+                var hLblW = hLbl.length * 6.4 + 14;
+                parts.push('<g>'
+                         + '<rect x="' + (hx + bw / 2 - hLblW / 2) + '" y="' + (padT - 14) + '" width="' + hLblW + '" height="18" rx="9" fill="var(--accent-primary)" opacity="0.9"/>'
+                         + '<text x="' + (hx + bw / 2) + '" y="' + (padT - 1) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="10.5">' + _jiqEsc(hLbl) + '</text>'
+                         + '</g>');
+            }
+            // X-axis month tick labels
+            months.forEach(function(m, i) {
+                var x = xFor(i);
+                parts.push('<text x="' + x + '" y="' + (H - padB + 18) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-weight="' + (selMonthIdx === i ? '700' : '500') + '">' + _jiqEsc(m.label || m.key) + '</text>');
+            });
+            // Y-axis ticks (0%, 50%, 100% — calibrated to shared_max_mau)
+            var sharedMax = (lc.shared_max_mau || 0) / 1e6;
+            [0, 50, 100].forEach(function(pct) {
+                var y = yFor(pct);
+                parts.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="var(--border-color)" stroke-width="1" opacity="' + (pct === 0 ? 0 : 0.18) + '"/>');
+                if (sharedMax > 0) {
+                    parts.push('<text x="' + (padL - 8) + '" y="' + (y + 3) + '" text-anchor="end" fill="var(--text-secondary)" font-size="10">' + (sharedMax * pct / 100).toFixed(0) + 'M</text>');
+                }
+            });
+
+            // Curves
+            curves.forEach(function(c, ci) {
+                var prop = props[c.property] || {};
+                var color = c.color || prop.color || '#5b6cff';
+                var mv = c.monthly_values || [];
+                var pts = mv.map(function(p, i) {
+                    return {
+                        x:    xFor(i),
+                        y:    yFor(p.value || 0),
+                        mau:  p.mau_us || 0,
+                        mlbl: p.month_label || ''
+                    };
+                });
+                if (pts.length < 2) return;
+                // Smooth catmull-rom-ish curve
+                var d = 'M ' + pts[0].x + ' ' + pts[0].y;
+                for (var i = 0; i < pts.length - 1; i++) {
+                    var p0 = pts[i === 0 ? 0 : i - 1];
+                    var p1 = pts[i];
+                    var p2 = pts[i + 1];
+                    var p3 = pts[i + 2] || p2;
+                    var cp1x = p1.x + (p2.x - p0.x) / 6;
+                    var cp1y = p1.y + (p2.y - p0.y) / 6;
+                    var cp2x = p2.x - (p3.x - p1.x) / 6;
+                    var cp2y = p2.y - (p3.y - p1.y) / 6;
+                    d += ' C ' + cp1x + ' ' + cp1y + ', ' + cp2x + ' ' + cp2y + ', ' + p2.x + ' ' + p2.y;
+                }
+                var areaD = d + ' L ' + pts[pts.length - 1].x + ' ' + (H - padB) + ' L ' + pts[0].x + ' ' + (H - padB) + ' Z';
+                var gradId = 'jiqLcMoGrad_' + c.property;
+                parts.push('<defs><linearGradient id="' + gradId + '" x1="0%" y1="0%" x2="0%" y2="100%">'
+                         + '<stop offset="0%" stop-color="' + color + '" stop-opacity="0.55"/>'
+                         + '<stop offset="100%" stop-color="' + color + '" stop-opacity="0.05"/>'
+                         + '</linearGradient></defs>');
+                parts.push('<path d="' + areaD + '" fill="url(#' + gradId + ')" stroke="none"/>');
+                parts.push('<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2.5" stroke-linecap="round"/>');
+                // Per-month dots with full tooltip
+                pts.forEach(function(pp, i) {
+                    var r  = (selMonthIdx === i) ? 5.5 : 3.5;
+                    var sw = (selMonthIdx === i) ? 2.5 : 1.5;
+                    parts.push('<circle cx="' + pp.x + '" cy="' + pp.y + '" r="' + r + '" fill="' + color + '" stroke="#fff" stroke-width="' + sw + '">'
+                             + '<title>' + _jiqEsc((prop.name || c.property) + ' — ' + pp.mlbl + ': ' + (pp.mau / 1e6).toFixed(1) + 'M monthly uniques') + '</title>'
+                             + '</circle>');
+                });
+                // Selected-month value badge on this curve — stack
+                // multiple curves' badges vertically so they don't pile.
+                if (selMonthIdx >= 0 && pts[selMonthIdx]) {
+                    var sp = pts[selMonthIdx];
+                    var txt = (sp.mau / 1e6).toFixed(1) + 'M';
+                    var bw2 = txt.length * 6.5 + 14;
+                    // Stack: first curve above the point, subsequent
+                    // curves slightly further away (with a side offset
+                    // to keep them readable if Y values are close).
+                    var bx = sp.x + (ci - (curves.length - 1) / 2) * 6;
+                    var by = sp.y - 18 - ci * 4;
+                    if (by < padT + 8) by = sp.y + 22 + ci * 4;
+                    parts.push('<g>'
+                             + '<rect x="' + (bx - bw2 / 2) + '" y="' + (by - 11) + '" width="' + bw2 + '" height="20" rx="10" fill="var(--bg-card)" stroke="' + color + '" stroke-width="1.5"/>'
+                             + '<text x="' + bx + '" y="' + (by + 4) + '" text-anchor="middle" fill="' + color + '" font-weight="700" font-size="11">' + _jiqEsc(txt) + '</text>'
+                             + '</g>');
+                }
+            });
+
+            // Legend — bottom-left
+            var legendY = H - 8;
+            var legendX = padL;
+            (eco.properties || []).forEach(function(p) {
+                var labelW = (p.name || '').length * 7 + 30;
+                parts.push('<g>'
+                     + '<rect x="' + legendX + '" y="' + (legendY - 11) + '" width="13" height="13" rx="3" fill="' + (p.color || '#5b6cff') + '"/>'
+                     + '<text x="' + (legendX + 20) + '" y="' + legendY + '" fill="var(--text-primary)" font-size="11" font-weight="600">' + _jiqEsc(p.name || '') + '</text>'
+                     + '</g>');
+                legendX += labelW + 12;
+            });
+
+            var chartHtml = '<svg width="100%" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;">'
+                          + parts.join('')
+                          + '</svg>';
+
+            // ── Month-picker pill row ────────────────────────────────
+            // Inline-styled pills so this works without touching the
+            // shared CSS sheet. Active pill = accent fill + white text.
+            function _pillStyle(active) {
+                return 'background:' + (active ? 'var(--accent-primary)' : 'var(--bg-card)')
+                     + ';color:' + (active ? '#fff' : 'var(--text-primary)')
+                     + ';border:1px solid ' + (active ? 'var(--accent-primary)' : 'var(--border-color)')
+                     + ';border-radius:999px;padding:5px 12px;font-size:0.75rem;font-weight:'
+                     + (active ? '700' : '500')
+                     + ';cursor:pointer;transition:all 0.15s ease;';
+            }
+            var pillBtns = '<button type="button" style="' + _pillStyle(!selMonth) + '" onclick="_jiqEcoPickMonth(\'\')">All months (avg)</button>';
+            months.forEach(function(m) {
+                var on = (selMonth === m.key);
+                pillBtns += '<button type="button" style="' + _pillStyle(on) + '" onclick="_jiqEcoPickMonth(\'' + _jiqEsc(m.key) + '\')">' + _jiqEsc(m.label || m.key) + '</button>';
+            });
+            var pickerHtml = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;align-items:center;">'
+                           + '<span style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.06em;margin-right:6px;font-weight:700;">Cut by month →</span>'
+                           + pillBtns
+                           + '</div>';
+
+            // ── Per-property detail strip (averages OR selected month)
+            // Always three cards (one per property). When "All months"
+            // is active each card shows the Jan–May mean + min/max
+            // bookends; when a specific month is picked each card swaps
+            // to that month's number AND a delta-vs-avg line so the
+            // user can see whether the month over- or under-indexed.
+            var ncols = Math.min(3, curves.length) || 1;
+            var detailHtml = '<div style="display:grid;grid-template-columns:repeat(' + ncols + ',minmax(0,1fr));gap:10px;margin-top:12px;">';
+            curves.forEach(function(c) {
+                var prop = props[c.property] || {};
+                var color = c.color || prop.color || '#5b6cff';
+                var mv = c.monthly_values || [];
+                var avgs = (lc.averages || {})[c.property] || {};
+                var meanM = (avgs.mean_mau || 0) / 1e6;
+                var primaryVal, primaryLbl, secondaryTxt, secondaryColor;
+                if (selMonth) {
+                    var pmv = mv.find(function(x) { return x.month === selMonth; }) || {};
+                    primaryVal = (pmv.mau_us || 0) / 1e6;
+                    primaryLbl = (pmv.month_label || '') + ' 2026 monthly uniques';
+                    var delta = primaryVal - meanM;
+                    var dPct = meanM ? (delta / meanM * 100) : 0;
+                    var sign = delta >= 0 ? '+' : '';
+                    secondaryTxt = sign + delta.toFixed(1) + 'M vs Jan–May avg ('
+                                 + sign + dPct.toFixed(1) + '%)';
+                    secondaryColor = delta >= 0 ? '#16a34a' : '#dc2626';
+                } else {
+                    primaryVal = meanM;
+                    primaryLbl = 'Jan–May 2026 monthly avg';
+                    secondaryTxt = 'min ' + ((avgs.min_mau || 0) / 1e6).toFixed(1) + 'M @ ' + (avgs.min_month || '')
+                                 + ' · max ' + ((avgs.max_mau || 0) / 1e6).toFixed(1) + 'M @ ' + (avgs.max_month || '');
+                    secondaryColor = 'var(--text-secondary)';
+                }
+                detailHtml += '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + color + ';border-radius:10px;padding:10px 12px;">'
+                           +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;font-weight:700;">' + _jiqEsc((prop.icon || '◆') + ' ' + (prop.name || c.property)) + '</div>'
+                           +   '<div style="font-size:1.45rem;font-weight:800;color:' + color + ';line-height:1.05;">' + primaryVal.toFixed(1) + 'M</div>'
+                           +   '<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:3px;">' + _jiqEsc(primaryLbl) + '</div>'
+                           +   '<div style="font-size:0.7rem;color:' + secondaryColor + ';margin-top:6px;font-variant-numeric:tabular-nums;">' + _jiqEsc(secondaryTxt) + '</div>'
+                           + '</div>';
+            });
+            detailHtml += '</div>';
+
+            // ── Footer hint ──────────────────────────────────────────
+            var footerHint = selMonth
+                ? 'Showing <strong>' + _jiqEsc((months[selMonthIdx] || {}).long_label || selMonth) + '</strong>. Click the same pill again — or "All months (avg)" — to clear the filter.'
+                : 'Y-axis scale = monthly unique US visitors. Click any month pill to see every property\'s value for that month + a delta-vs-avg readout. Hover any dot for the exact number.';
+
+            return '<div style="padding:4px 0;">'
+                 + chartHtml
+                 + pickerHtml
+                 + detailHtml
+                 + '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:10px;line-height:1.45;">' + footerHint + '</div>'
+                 + '</div>';
+        }
+
         // Lifecycle Ribbon: horizontal timeline T-90d → T+180d around
         // theatrical release with one smooth filled area per property
         // showing audience intensity over the release cycle.
@@ -35866,6 +36421,10 @@
             var lc = eco.lifecycle || {};
             var curves = lc.curves || [];
             if (!curves.length) return '';
+            // Monthly-axis variant (Fandango Jan–May calendar mode) is
+            // rendered via a separate function below so the legacy
+            // days-from-release renderer stays self-contained.
+            if (lc.granularity === 'monthly') return _jiqRenderLifecycleMonthly(eco);
             var props = {};
             (eco.properties || []).forEach(function(p) { props[p.key] = p; });
 
