@@ -79828,7 +79828,7 @@
                     const p = openTab.parsed;
                     const medianAge = (typeof calculateMedianAgeFromDistribution === 'function' && p.demographics?.age)
                         ? calculateMedianAgeFromDistribution(p.demographics.age) : 0;
-                    const displayTitle = getProfileDisplayTitle(openTab.name, p.brandCategory, p.behavioral);
+                    const displayTitle = getProfileDisplayTitle(openTab.name, p.brandCategory, p.behavioral, openTab.displayOverride);
                     const profileData = {
                         id: openTab.id,
                         name: displayTitle.toUpperCase(),
@@ -79877,7 +79877,7 @@
                         // Use brand from API response, or extract from s3_key
                         const displayName = data.brand || (profile ? getProfileFullName(profile) : id.split('_')[0]);
                         // Same title as dashboard for SERIES (e.g. "Cobra Kai - Netflix")
-                        const displayTitle = getProfileDisplayTitle(displayName, parsed.brandCategory, parsed.behavioral);
+                        const displayTitle = getProfileDisplayTitle(displayName, parsed.brandCategory, parsed.behavioral, data.display_override);
                         
                         const profileData = {
                             id: id,
