@@ -56963,11 +56963,48 @@
                 return ((profile && (profile.display_name || profile.name)) || '').trim();
             })();
             if (!name) return '';
-            // Greedy + lazy capture: pick the LAST dash that has space on
-            // both sides. Match against U+002D, U+2013 (en-dash), U+2014 (em-dash).
-            const m = name.match(/^(.+)\s[\-\u2013\u2014]\s+(.+)$/);
-            if (m && m[2]) return _stripFanSuffix(m[2].trim());
+            // Non-greedy base capture: pick the FIRST dash that has space
+            // on both sides (U+002D / U+2013 en-dash / U+2014 em-dash) so
+            // multi-segment cohort suffixes like "2023 - Avid Fan" are
+            // captured IN FULL, not just the trailing "Avid Fan" token.
+            // Matches the grouping rule in PROFILE_DASH_SUFFIX_REGEX so
+            // the popover/chip labels stay consistent with the canonical-
+            // name rollup. Without this, "Dwayne ... - 2023 - Avid Fan"
+            // and "Dwayne ... - 2024 - Avid Fan" both display as "AVID"
+            // in the Data Cuts popover with no year distinction.
+            const m = name.match(/^(.+?)\s[\-\u2013\u2014]\s+(.+)$/);
+            if (m && m[2]) return _compactCohortSuffix(m[2].trim());
             return '';
+        }
+
+        // Render a raw dash-suffix as a compact one-line label that keeps
+        // BOTH the cohort token (Avid / Casual / Premium / 4+ / etc.) AND
+        // the year when both are present. Examples:
+        //   "2023 - Avid Fan"            -> "Avid 2023"
+        //   "2024 - Avid Fan"            -> "Avid 2024"
+        //   "Avid Fan - 2023"            -> "Avid 2023"
+        //   "Avid Fan"                   -> "Avid"
+        //   "Casual Fan 2024"            -> "Casual 2024"  (stripFan handles inline)
+        //   "Superfan 4+ Touchpoints"    -> "Superfan 4+ Touchpoints"  (no year, no dash split)
+        //   "2024"                       -> "2024"
+        // Order is always <cohort> <year> so the year reads as a modifier.
+        function _compactCohortSuffix(suffix) {
+            if (!suffix) return suffix;
+            const parts = String(suffix)
+                .split(/\s[\-\u2013\u2014]\s+/)
+                .map(p => p.trim())
+                .filter(Boolean);
+            if (parts.length <= 1) return _stripFanSuffix(suffix);
+            const yearRe = /^20\d{2}(?:-\d{2})?$/;
+            const years = [];
+            const cohorts = [];
+            parts.forEach(p => {
+                if (yearRe.test(p)) years.push(p);
+                else cohorts.push(_stripFanSuffix(p));
+            });
+            if (years.length === 0) return _stripFanSuffix(suffix);
+            if (cohorts.length === 0) return years.join('/');
+            return cohorts.join(' ') + ' ' + years.join('/');
         }
 
         // Trim a trailing " Fan" / " Fans" token from a cohort label so it
