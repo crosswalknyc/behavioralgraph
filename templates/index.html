@@ -13945,41 +13945,38 @@
                     <span class="view-nav-label">SELECT PRODUCT:</span>
                     <div class="view-nav-custom-wrap" id="viewNavCustomWrap">
                         <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate" aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;min-width:0;">
-                            {# Display order updated 2026-06-16:
-                                 Intelligence (nested submenu containing
-                                   Profile IQ, Subscriber IQ, Ranker,
-                                   Share of Time, Blue IQ, Fin IQ, LLMO IQ),
-                                 Attribution (nested submenu containing
-                                   SF Conversion, Intent IQ, ROAS IQ,
-                                   Brand Partnership, Digital Journey IQ,
-                                   Flywheel Conversion),
-                                 Production (nested submenu containing
-                                   Analysis IQ, Workspace),
-                                 then tail (Admin).
+                            {# Display order 2026-06-16 (flat — categorization
+                               groups removed per user request):
+                                 Profile IQ, Subscriber IQ, Ranker,
+                                 Share of Time, Blue IQ, Fin IQ, LLMO IQ,
+                                 SF Conversion, Intent IQ, ROAS IQ,
+                                 Brand Partnership, Digital Journey IQ,
+                                 Flywheel Conversion, Analysis IQ,
+                                 Workspace, then tail (Admin).
 
-                               data-group="<name>" tags options that
-                               should collapse under a single expandable
-                               parent row in the custom dropdown UI. The
-                               native <select> stays flat so existing
-                               setViewNavDropdown('intentIQ') / change-
-                               event wiring keeps working unchanged. #}
-                            <option value="profileIQ" data-group="Intelligence" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
-                            <option value="subscriberIQ" data-group="Intelligence" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
-                            <option value="rankerIQ" data-group="Intelligence" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
-                            <option value="shareOfTimeIQ" data-group="Intelligence" {% if not has_share_of_time_access %}disabled{% endif %}>⏱️ Share of Time</option>
-                            <option value="blueIQ" data-group="Intelligence" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
-                            <option value="hedgeFundIQ" data-group="Intelligence" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
-                            <option value="llmoIQ" data-group="Intelligence" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
-                            <option value="sfConversion" data-group="Attribution" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
-                            <option value="intentIQ" data-group="Attribution" {% if not has_intent_iq_access %}disabled{% endif %}>🎬 Intent IQ</option>
-                            <option value="roasIQ" data-group="Attribution" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
-                            <option value="brandPartnershipIQ" data-group="Attribution" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
-                            <option value="journeyIQ" data-group="Attribution" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
-                            <option value="flywheelConversion" data-group="Attribution" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
+                               Underlying nested-group CSS + JS
+                               (.view-nav-group / data-group rebuilder)
+                               are left in place as dormant infrastructure
+                               so groups can be re-introduced later just
+                               by re-adding data-group="<Name>" to any
+                               option(s). #}
+                            <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
+                            <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
+                            <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
+                            <option value="shareOfTimeIQ" {% if not has_share_of_time_access %}disabled{% endif %}>⏱️ Share of Time</option>
+                            <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
+                            <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
+                            <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
+                            <option value="sfConversion" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
+                            <option value="intentIQ" {% if not has_intent_iq_access %}disabled{% endif %}>🎬 Intent IQ</option>
+                            <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
+                            <option value="brandPartnershipIQ" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
+                            <option value="journeyIQ" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
+                            <option value="flywheelConversion" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
                             {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
-                            <option value="customAnalysis" data-group="Production">🔧 Analysis IQ</option>
+                            <option value="customAnalysis">🔧 Analysis IQ</option>
                             {% endif %}
-                            <option value="workspace" data-group="Production" {% if not has_workspace_access %}disabled{% endif %}>🗂️ Workspace</option>
+                            <option value="workspace" {% if not has_workspace_access %}disabled{% endif %}>🗂️ Workspace</option>
                             <!-- Impact IQ + Ticket Sales Tracker hidden 2026-06-16 per user
                                  request. View divs, handlers, /api routes, and admin
                                  access controls left intact so they can be re-enabled
@@ -36023,9 +36020,26 @@
             // Weekend" for TV shows.
             (function() {
                 var tt = (meta.target_type || '').toLowerCase();
+                var cat = (meta.category || '').toLowerCase();
                 var titleEl = document.getElementById('jiqKpiStripTitle');
                 var bodyEl  = document.getElementById('jiqKpiStripHowtoBody');
-                if (tt === 'tv_show' || kpis.tv_show_mode === true) {
+                if (tt === 'banking_research' || cat === 'banking_research') {
+                    var brand = meta.customer_brand || '';
+                    if (titleEl) titleEl.innerHTML = brand
+                        ? ('🏦 ' + _jiqEsc(brand) + ' Steal-Share Brief — banking research funnel')
+                        : '🏦 Banking Research — headline funnel';
+                    if (bodyEl) bodyEl.innerHTML =
+                        '<ul style="margin:0;padding-left:1.1rem;">'
+                      +   '<li><strong>Funnel reads left to right:</strong> <em>Active researchers</em> → <em>New-account opens</em> → <em>Digital vs traditional split</em> → <em>Cross-shoppers</em>. Three "fates" of a researcher: opened a digital bank, opened a traditional bank, opened both.</li>'
+                      +   '<li><strong>Active researchers</strong> — US adults who actively researched a bank product in the window (browsed comparison sites, ran a banking search, opened a bank PDP). The total in-market opportunity.</li>'
+                      +   '<li><strong>New-account opens</strong> — researchers who actually opened ≥1 new bank account in the window. The conversion rate (opens ÷ researchers) is the category\'s effective close rate.</li>'
+                      +   '<li><strong>Digital share / Traditional share</strong> — split of new-account opens between digital banks (Chime, SoFi, Cash App, Ally, etc.) and traditional banks (Chase, BofA, Wells, etc.). The steal-share KPI: digital share rising = incumbents bleeding.</li>'
+                      +   '<li><strong>Cross-shoppers</strong> — researchers who opened BOTH a digital AND a traditional account in window. The "soft-switching" segment — kept the legacy primary, added a digital secondary. Highest-LTV upside if you can make your account their primary.</li>'
+                      +   '<li><strong>Avg banks cross-shopped</strong> — how many bank PDPs a typical researcher visits before applying. Direct indicator of how saturated your share-of-voice needs to be at the comparison-site + paid-search layer.</li>'
+                      +   '<li><strong>Marketing-touched %</strong> — share of new-account openers exposed to ≥1 marketing channel pre-application. Higher = the category is being shaped by marketing more than organic discovery.</li>'
+                      +   '<li><strong>What to look for:</strong> if digital-share is above category average within a cohort or DMA, that cohort/DMA is already marketing-receptive — concentrate spend there. If avg-banks-cross-shopped is rising, you must be on every comparison site that audience visits or you\'re invisible.</li>'
+                      + '</ul>';
+                } else if (tt === 'tv_show' || kpis.tv_show_mode === true) {
                     if (titleEl) titleEl.innerHTML = '📊 Headline Viewership';
                     if (bodyEl) bodyEl.innerHTML =
                         '<ul style="margin:0;padding-left:1.1rem;">'
@@ -36080,6 +36094,82 @@
                             ['Total Captured (any seller)', (kpis.captured_pct != null ? kpis.captured_pct + '%' : '—')],
                             ['Never Transacted', (kpis.never_transacted_pct != null ? kpis.never_transacted_pct + '%' : '—')],
                         ];
+                    }
+                } else if (targetType === 'banking_research'
+                           || (meta.category || '').toLowerCase() === 'banking_research') {
+                    // Banking-research category run — researchers + new-
+                    // account opens + digital vs traditional share.
+                    // Renderer note: this branch does NOT use any of the
+                    // tv_show_* / Hours / Episode fields. Each tile pulls
+                    // a banking-named KPI directly so labels read clean.
+                    var bk = kpis.banking || {};
+                    var fmt = function(v) { return v != null ? _jiqFmt(v) : '—'; };
+                    var pct = function(v) { return v != null ? Number(v).toFixed(1) + '%' : '—'; };
+                    var researchers   = bk.researchers_window || kpis.total_users;
+                    var totalOpens    = bk.account_opens_window || kpis.converted_users;
+                    var digitalOpens  = bk.digital_bank_opens || kpis.confirmed_fandango_purchases;
+                    var tradOpens     = bk.traditional_bank_opens || kpis.confirmed_other_online_purchases;
+                    var crossShoppers = bk.cross_shopper_opens || kpis.projected_opening_weekend_tickets;
+                    var openRate      = (researchers && totalOpens)
+                        ? (totalOpens / researchers * 100) : null;
+                    var digSharePct   = (totalOpens && digitalOpens)
+                        ? (digitalOpens / totalOpens * 100) : null;
+                    var tradSharePct  = (totalOpens && tradOpens)
+                        ? (tradOpens / totalOpens * 100) : null;
+                    var crossSharePct = (totalOpens && crossShoppers)
+                        ? (crossShoppers / totalOpens * 100) : null;
+                    var avgBanks      = bk.avg_banks_cross_shopped || kpis.avg_banks_cross_shopped;
+                    var avgTouches    = bk.avg_touchpoints_to_open || kpis.avg_events_per_user;
+                    var avgDays       = bk.avg_journey_days || kpis.avg_journey_duration_days;
+                    var mktTouchedPct = bk.marketing_touched_pct || kpis.marketing_touched_pct;
+                    var mktTouchedN   = bk.marketing_touched_openers || kpis.marketing_touched_viewers;
+                    var brandName     = (meta.customer_brand || '').toString();
+                    var brandShareTxt;
+                    if (bk.customer_brand_share_pct_of_opens != null) {
+                        brandShareTxt = brandName
+                            ? (brandName + ' = ' + Number(bk.customer_brand_share_pct_of_opens).toFixed(1) + '% of opens')
+                            : (Number(bk.customer_brand_share_pct_of_opens).toFixed(1) + '% of opens');
+                    }
+                    k = [
+                        ['Active researchers (window)',
+                            fmt(researchers),
+                            'US adults who researched a bank product · ' + (avgDays ? avgDays + 'd avg journey' : '')],
+                        ['New-account opens',
+                            fmt(totalOpens),
+                            (openRate != null ? openRate.toFixed(1) + '% close rate · ' : '')
+                                + (avgTouches ? avgTouches + ' avg touches to open' : '')],
+                        ['Digital-bank opens',
+                            fmt(digitalOpens),
+                            (digSharePct != null ? digSharePct.toFixed(1) + '% of opens' : '')
+                              + (bk.digital_bank_brands ? ' · ' + bk.digital_bank_brands : ''),
+                            'lime'],
+                        ['Traditional-bank opens',
+                            fmt(tradOpens),
+                            (tradSharePct != null ? tradSharePct.toFixed(1) + '% of opens' : '')
+                              + (bk.traditional_bank_brands ? ' · ' + bk.traditional_bank_brands : ''),
+                            'amber'],
+                        ['Cross-shoppers (opened both)',
+                            fmt(crossShoppers),
+                            (crossSharePct != null ? crossSharePct.toFixed(1) + '% of opens · soft-switchers' : ''),
+                            'cyan'],
+                        ['Avg banks cross-shopped',
+                            (avgBanks != null ? Number(avgBanks).toFixed(1) : '—'),
+                            'PDPs visited per researcher before applying'],
+                    ];
+                    if (mktTouchedPct != null) {
+                        k.push(['Marketing-touched %',
+                                pct(mktTouchedPct),
+                                (mktTouchedN != null ? fmt(mktTouchedN) + ' openers reached by ≥1 channel' : ''),
+                                'magenta']);
+                    }
+                    if (brandName && bk.customer_brand_share_pct_of_opens != null) {
+                        k.push([brandName + ' share of opens',
+                                Number(bk.customer_brand_share_pct_of_opens).toFixed(1) + '%',
+                                (bk.customer_brand_addressable_pct != null
+                                    ? 'addressable upside: ' + Number(bk.customer_brand_addressable_pct).toFixed(1) + 'pp · '
+                                       + fmt(bk.customer_brand_addressable_opens) + ' opens'
+                                    : 'category share — track WoW for steal-share signal'),
+                                'magenta']);
                     }
                 } else if (targetType === 'tv_show' || kpis.tv_show_mode === true) {
                     // TV/streaming series — no money/tickets, just viewers
@@ -37499,12 +37589,27 @@
             var kpisAh = runAh.kpis || {};
             var isTvAh = ((metaAh.target_type || '').toLowerCase() === 'tv_show')
                       || (kpisAh.tv_show_mode === true);
+            var isBkAh = ((metaAh.target_type || '').toLowerCase() === 'banking_research')
+                      || ((metaAh.category || '').toLowerCase() === 'banking_research');
+            var brandAh = (metaAh.customer_brand || '').toString();
             var titleAh = document.getElementById('jiqAudienceHypTitle');
             var howAh   = document.getElementById('jiqAudienceHypHowtoBody');
-            if (titleAh) titleAh.innerHTML = isTvAh
-                ? '🎯 Audience Hypothesis — modeled viewer cohorts'
-                : '🎯 Audience Hypothesis — proving / disproving the theses';
-            if (howAh && isTvAh) howAh.innerHTML =
+            if (titleAh) titleAh.innerHTML = isBkAh
+                ? (brandAh
+                    ? '🎯 Steal-Share Cohorts — where ' + _jiqEsc(brandAh) + ' can win'
+                    : '🎯 Steal-Share Cohorts — addressable banking-research audiences')
+                : (isTvAh
+                    ? '🎯 Audience Hypothesis — modeled viewer cohorts'
+                    : '🎯 Audience Hypothesis — proving / disproving the theses');
+            if (howAh && isBkAh) howAh.innerHTML =
+                '<ul style="margin:0;padding-left:1.1rem;">'
+              +   '<li><strong>Each card sizes one researcher cohort + the digital-vs-traditional split of where they actually opened.</strong> Bigger digital share = the cohort has already leaned toward neobanks; that\'s where the steal-share opportunity lives.</li>'
+              +   '<li><strong>Verdict pill:</strong> 🟢 Strongly Validated (intent index ≥3×), 🟡 Validated (1.5–3×), 🟡 Partially (1.0–1.5×), 🔴 Not Validated (&lt;1×).</li>'
+              +   '<li><strong>Top discovery surfaces</strong> — where this cohort actually starts their research. Use these as direct media-buy targets.</li>'
+              +   '<li><strong>Top DMAs</strong> indexed (100 = US average). 150+ = over-index, concentrate spend; &lt;100 = de-prioritize.</li>'
+              +   '<li><strong>Cohort note</strong> = the punchline for media planning: which moments / messages / channels this cohort responds to.</li>'
+              + '</ul>';
+            if (howAh && isTvAh && !isBkAh) howAh.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
               +   '<li><strong>Each card sizes one modeled viewer cohort.</strong> Same three-row layout on every card so they\'re directly comparable. <em>This is the predicted audience composition, not Nielsen-measured;</em> when public measurement becomes available or a Crosswalk panel pull is run, it replaces these estimates.</li>'
               +   '<li><strong>Verdict pill (top-right):</strong> 🟢 Strongly Predicted (≥3× lift), 🟡 Predicted (1.5×–3×), 🔴 Not Predicted (&lt;1.5×) — based on streaming-comp benchmarks (Netflix daily-strip + unscripted-game).</li>'
@@ -37517,12 +37622,16 @@
 
             var subEl  = document.getElementById('jiqAudienceHypSubtitle');
             var metaEl = document.getElementById('jiqAudienceHypMeta');
-            if (subEl) subEl.innerHTML = isTvAh
-                ? 'Modeled viewer cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is projected viewer-conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(2) + '% gen-pop 30-day streaming baseline. Predicted, not measured.'
-                : 'Testing client-stated audience theses against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(1) + '% gen-pop opening-weekend baseline.';
-            if (metaEl) metaEl.textContent = isTvAh
-                ? (ah.hypotheses.length + ' cohorts · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline 30-day viewers')
-                : (ah.hypotheses.length + ' hypotheses · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline opening-weekend buyers');
+            if (subEl) subEl.innerHTML = isBkAh
+                ? ('Sizing 5 banking-research cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is application-rate lift vs. the gen-pop researcher baseline. Each card also shows the cohort\'s <strong>digital-vs-traditional opening split</strong> so you can see at-a-glance where the steal-share already exists.')
+                : (isTvAh
+                    ? 'Modeled viewer cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is projected viewer-conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(2) + '% gen-pop 30-day streaming baseline. Predicted, not measured.'
+                    : 'Testing client-stated audience theses against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(1) + '% gen-pop opening-weekend baseline.');
+            if (metaEl) metaEl.textContent = isBkAh
+                ? (ah.hypotheses.length + ' cohorts · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline new-account opens')
+                : (isTvAh
+                    ? (ah.hypotheses.length + ' cohorts · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline 30-day viewers')
+                    : (ah.hypotheses.length + ' hypotheses · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline opening-weekend buyers'));
 
             // Per-hypothesis tiles
             var tilesEl = document.getElementById('jiqAudienceHypTiles');
@@ -37576,11 +37685,17 @@
                          + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;padding:8px 0;border-top:1px solid var(--border-color);border-bottom:1px solid var(--border-color);">'
                          +   '<div style="text-align:center;border-right:1px solid var(--border-color);">'
                          +     '<div style="font-size:1.25rem;font-weight:800;color:var(--accent-lime);line-height:1;">' + _jiqFmt(h.est_opening_buyers || 0) + '</div>'
-                         +     '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">opening weekend</div>'
+                         +     '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">'
+                         +       (isBkAh
+                                  ? (_jiqEsc(h.tile_a_label || 'digital opens (window)'))
+                                  : (isTvAh ? 'opening week' : 'opening weekend')) + '</div>'
                          +   '</div>'
                          +   '<div style="text-align:center;">'
                          +     '<div style="font-size:1.25rem;font-weight:800;color:var(--accent-cyan);line-height:1;">' + _jiqFmt(h.est_total_buyers || 0) + '</div>'
-                         +     '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">total domestic run</div>'
+                         +     '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">'
+                         +       (isBkAh
+                                  ? (_jiqEsc(h.tile_b_label || 'addressable cohort'))
+                                  : (isTvAh ? '30-day uniques' : 'total domestic run')) + '</div>'
                          +   '</div>'
                          + '</div>'
                          // ── Streaming spillover sub-block (renders when payload carries the fields) ──
@@ -37807,15 +37922,21 @@
             var kpisAn = runAn.kpis || {};
             var isTvAn = ((metaAn.target_type || '').toLowerCase() === 'tv_show')
                       || (kpisAn.tv_show_mode === true);
+            var isBkAn = ((metaAn.target_type || '').toLowerCase() === 'banking_research')
+                      || ((metaAn.category || '').toLowerCase() === 'banking_research');
             var titleAn = document.getElementById('jiqAnchorsTitle');
             var howAn   = document.getElementById('jiqAnchorsHowtoBody');
             var funHead = document.getElementById('jiqAnchorsFunnelHeading');
-            if (titleAn) titleAn.innerHTML = isTvAn
-                ? '📐 Viewer Sizing — modeled US engagers → unique viewers'
-                : '📐 Audience Sizing';
-            if (funHead) funHead.textContent = isTvAn
-                ? 'Conversion Funnel to 30-Day Unique Viewers'
-                : 'Conversion Funnel to Opening Weekend';
+            if (titleAn) titleAn.innerHTML = isBkAn
+                ? '📐 Researcher Sizing — US researchers → applicants'
+                : (isTvAn
+                    ? '📐 Viewer Sizing — modeled US engagers → unique viewers'
+                    : '📐 Audience Sizing');
+            if (funHead) funHead.textContent = isBkAn
+                ? 'Conversion Funnel to New-Account Open'
+                : (isTvAn
+                    ? 'Conversion Funnel to 30-Day Unique Viewers'
+                    : 'Conversion Funnel to Opening Weekend');
             if (howAn && isTvAn) howAn.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
               +   '<li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source the modeled audience overlaps with (e.g., syndicated Jeopardy! viewers, SNL/Weekend-Update engagers, Netflix unscripted-game watchers, NYT Games daily players). Bar = engager range (low–high).</li>'
@@ -37841,9 +37962,11 @@
             var sub = document.getElementById('jiqAnchorsSubtitle');
             if (sub) sub.textContent = an.methodology || '';
             var meta = document.getElementById('jiqAnchorsMeta');
-            if (meta) meta.textContent = isTvAn
-                ? 'trailing 12 months · US digital engagers · modeled (no public Nielsen yet)'
-                : 'trailing 12 months · US digital engagers';
+            if (meta) meta.textContent = isBkAn
+                ? ((metaAn.start_date || '') + ' → ' + (metaAn.end_date || '') + ' · US adults actively researching banks · modeled')
+                : (isTvAn
+                    ? 'trailing 12 months · US digital engagers · modeled (no public Nielsen yet)'
+                    : 'trailing 12 months · US digital engagers');
 
             // ── L1-L6 layer bars (each layer = horizontal bar, length = high engager count)
             var maxEng = Math.max.apply(null,
@@ -38491,6 +38614,9 @@
             var _kpisCtx = (window._jiqCurrentRun && window._jiqCurrentRun.kpis) || {};
             var _isTvCtx = ((_metaCtx.target_type || '').toLowerCase() === 'tv_show')
                         || (_kpisCtx.tv_show_mode === true);
+            var _isBkCtx = ((_metaCtx.target_type || '').toLowerCase() === 'banking_research')
+                        || ((_metaCtx.category || '').toLowerCase() === 'banking_research');
+            var _bkBrand = (_metaCtx.customer_brand || '').toString();
             var TV_LABELS = {
                 site_title:         '📺 Entry Paths — how confirmed accounts came to press play',
                 inception_title:    '📡 How Accounts First Heard About the Show',
@@ -38510,11 +38636,44 @@
                 tile_c_label:       'Re-engaged → watched',
                 tile_c_sub:         'Netflix push / marketing email / social drove them back',
             };
+            var BK_LABELS = {
+                site_title:         '🏦 Entry Paths — how researchers came to a bank PDP',
+                inception_title:    '📡 First-Touch Discovery — where banking research starts',
+                inception_sub:      'First-touch surfaces for researchers who eventually opened ≥1 account. The discovery surfaces a media buyer must show up on.',
+                search_title:       '🔎 Top Banking Search Terms — what people query',
+                search_sub:         'High-volume Google/Bing queries — branded vs category vs rate-shopping. Use these as paid-search anchor terms.',
+                companion_title:    '📱 Research Behaviors — what people do WHILE evaluating banks',
+                companion_sub:      'Concurrent behaviors during the research session: comparison-tab stacking, calculator runs, FDIC safety checks, AI-assistant queries, Reddit threads.',
+                switched_title:     '🏁 Post-Research Destinations — what they did next',
+                switched_sub:       'What researchers did right after closing the bank PDP — opened the account, parked the decision, pivoted to a different bank, or abandoned.',
+                interstep_title:    '🪜 Validation Steps Before Applying',
+                interstep_sub:      'Off-bank validation steps researchers take between first-touch and application start (Reddit threads, YouTube long-form reviews, Trustpilot/BBB, FDIC safety, friend asks).',
+                tile_a_label:       'Opened a traditional bank',
+                tile_a_sub:         'Chase / BofA / Wells / Citi / US Bank / regional / CU only',
+                tile_b_label:       'Opened a digital bank',
+                tile_b_sub:         (_bkBrand
+                                       ? 'Chime / SoFi / Cash App / Ally / Discover / etc. — ' + _bkBrand + ' opportunity'
+                                       : 'Chime / SoFi / Cash App / Ally / Discover / Marcus / Cap One 360'),
+                tile_c_label:       'Opened BOTH (cross-shopper)',
+                tile_c_sub:         'Soft-switching segment — kept primary, added secondary. Highest-LTV upside.',
+            };
             function _setText(id, txt) {
                 var el = document.getElementById(id);
                 if (el && txt) el.innerHTML = txt;
             }
-            if (_isTvCtx) {
+            if (_isBkCtx) {
+                _setText('jiqSiteFunnelTitle',     BK_LABELS.site_title);
+                _setText('jiqInceptionTitle',      BK_LABELS.inception_title);
+                _setText('jiqInceptionSubtitle',   BK_LABELS.inception_sub);
+                _setText('jiqSearchTermsTitle',    BK_LABELS.search_title);
+                _setText('jiqSearchTermsSubtitle', BK_LABELS.search_sub);
+                _setText('jiqCompanionTitle',      BK_LABELS.companion_title);
+                _setText('jiqCompanionSubtitle',   BK_LABELS.companion_sub);
+                _setText('jiqSwitchedTitle',       BK_LABELS.switched_title);
+                _setText('jiqSwitchedSubtitle',    BK_LABELS.switched_sub);
+                _setText('jiqInterstepTitle',      BK_LABELS.interstep_title);
+                _setText('jiqInterstepSubtitle',   BK_LABELS.interstep_sub);
+            } else if (_isTvCtx) {
                 _setText('jiqSiteFunnelTitle',     TV_LABELS.site_title);
                 _setText('jiqInceptionTitle',      TV_LABELS.inception_title);
                 _setText('jiqInceptionSubtitle',   TV_LABELS.inception_sub);
@@ -38567,7 +38726,9 @@
             var metaEl = document.getElementById('jiqFunnelMetaTop');
             if (metaEl) {
                 var visitors = funnel.visitors_us_in_window || 0;
-                var visitorWord = _isTvCtx ? ' confirmed US accounts (entry-path universe)' : ' US visitors in window';
+                var visitorWord = _isBkCtx
+                    ? ' US adults actively researching banks'
+                    : (_isTvCtx ? ' confirmed US accounts (entry-path universe)' : ' US visitors in window');
                 metaEl.textContent = (funnel.vertical ? funnel.vertical : '')
                     + (visitors ? '  ·  ~' + _jiqFmt(visitors) + visitorWord : '')
                     + (funnel.confidence ? '  ·  confidence: ' + funnel.confidence : '');
@@ -38587,7 +38748,16 @@
                         + '<div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">' + sub + '</div>'
                         + '</div>';
                 };
-                if (_isTvCtx) {
+                if (_isBkCtx) {
+                    // Banking funnel split — three opener "fates":
+                    //   tile A = traditional-only opens (amber — defending)
+                    //   tile B = digital-only opens (lime — steal-share)
+                    //   tile C = cross-shoppers opened both (cyan — soft-switch upside)
+                    split.innerHTML = ''
+                        + tile(BK_LABELS.tile_a_label, onSite, '#fbbf24', BK_LABELS.tile_a_sub)
+                        + tile(BK_LABELS.tile_b_label, sw,     '#10b981', BK_LABELS.tile_b_sub)
+                        + tile(BK_LABELS.tile_c_label, ab,     '#22d3ee', BK_LABELS.tile_c_sub);
+                } else if (_isTvCtx) {
                     // Tile 3 = "Re-engaged → watched" (Netflix push/email
                     // pulled them back) — that's a POSITIVE entry path, so
                     // use violet (not red) to avoid implying it's drop-off.
@@ -38842,12 +39012,17 @@
             var _kpisSw = (window._jiqCurrentRun && window._jiqCurrentRun.kpis) || {};
             var isTvSw = ((_metaSw.target_type || '').toLowerCase() === 'tv_show')
                       || (_kpisSw.tv_show_mode === true);
+            var isBkSw = ((_metaSw.target_type || '').toLowerCase() === 'banking_research')
+                      || ((_metaSw.category || '').toLowerCase() === 'banking_research');
             var _isFandangoSw = (_metaSw.target || '').toLowerCase().indexOf('fandango') >= 0;
-            var srcWord1 = isTvSw ? 'ACCOUNTS' : (_isFandangoSw ? 'SWITCHED &' : 'SWITCHERS');
-            var srcWord1b = _isFandangoSw ? 'BOUGHT ELSEWHERE' : '';
-            var srcWord2 = isTvSw ? 'finished episode' : 'left without buying';
-            var footerWord = isTvSw ? 'share of accounts · bubble size = share · color = next-action category'
-                                    : 'share of switchers · bubble size = share · chain brand colors';
+            var srcWord1 = isBkSw ? 'POST-RESEARCH'
+                                  : (isTvSw ? 'ACCOUNTS' : (_isFandangoSw ? 'SWITCHED &' : 'SWITCHERS'));
+            var srcWord1b = isBkSw ? 'DESTINATIONS' : (_isFandangoSw ? 'BOUGHT ELSEWHERE' : '');
+            var srcWord2 = isBkSw ? 'closed bank PDP'
+                                  : (isTvSw ? 'finished episode' : 'left without buying');
+            var footerWord = isBkSw ? 'share of researchers · bubble size = share · next-action category'
+                                    : (isTvSw ? 'share of accounts · bubble size = share · color = next-action category'
+                                              : 'share of switchers · bubble size = share · chain brand colors');
 
             // ── Canvas sizing — rebalanced to give labels ~55% width ──
             // Old layout: ribbon 79% / labels 21% → long TV labels clipped.
@@ -38932,7 +39107,7 @@
                      + (lineHasTwo
                          ? '<text x="' + labelStartX + '" y="' + lineYBot + '" text-anchor="start" fill="var(--text-secondary)" font-weight="500" font-size="10.5">' + _jiqEsc(wrap[1]) + '</text>'
                          : '')
-                     + '<title>' + _jiqEsc(e.d.destination || '') + ' — ' + e.pct.toFixed(1) + '%' + (isTvSw ? ' of accounts' : ' of switchers') + '</title>'
+                     + '<title>' + _jiqEsc(e.d.destination || '') + ' — ' + e.pct.toFixed(1) + '%' + (isBkSw ? ' of researchers' : (isTvSw ? ' of accounts' : ' of switchers')) + '</title>'
                      + '</g>');
             });
 
@@ -39838,13 +40013,19 @@
                 var kpisP = runP.kpis || {};
                 var isTvP = ((metaP.target_type || '').toLowerCase() === 'tv_show')
                           || (kpisP.tv_show_mode === true);
+                var isBkP = ((metaP.target_type || '').toLowerCase() === 'banking_research')
+                          || ((metaP.category || '').toLowerCase() === 'banking_research');
                 var titleP = document.getElementById('jiqPathTitle');
                 var subP   = document.getElementById('jiqPathSubtitle');
                 var howP   = document.getElementById('jiqPathHowtoBody');
-                if (titleP) titleP.innerHTML = isTvP ? '🍿 Path to View' : '🛒 Path to Purchase';
-                if (subP) subP.innerHTML = isTvP
-                    ? 'Right-aligned ribbon: each viewer\'s last few events before first-episode play, collapsed into channel categories. Column height ∝ unique viewers at that step. Hover for the top hosts/platforms.'
-                    : 'Right-aligned ribbon: each converter\'s last few events before purchase, collapsed into channel categories. Column height ∝ unique users at that step. Hover for the top hosts.';
+                if (titleP) titleP.innerHTML = isBkP
+                    ? '🏦 Path to Account Open — banking research funnel'
+                    : (isTvP ? '🍿 Path to View' : '🛒 Path to Purchase');
+                if (subP) subP.innerHTML = isBkP
+                    ? 'Right-aligned ribbon: each researcher\'s last few events before opening a new account, collapsed into channel categories (comparison sites, paid search, FinTok, bank PDP, Reddit/IMDb-style validation, calculator, application). Column height ∝ unique researchers at that step. Hover for the top hosts.'
+                    : (isTvP
+                        ? 'Right-aligned ribbon: each viewer\'s last few events before first-episode play, collapsed into channel categories. Column height ∝ unique viewers at that step. Hover for the top hosts/platforms.'
+                        : 'Right-aligned ribbon: each converter\'s last few events before purchase, collapsed into channel categories. Column height ∝ unique users at that step. Hover for the top hosts.');
                 if (howP && isTvP) howP.innerHTML =
                     '<ul style="margin:0;padding-left:1.1rem;">'
                   +   '<li><strong>Multi-step ribbon, right-aligned:</strong> labels run from <em>-N (FIRST TOUCH POINT)</em> on the far left to <em>0 (FIRST EPISODE PLAY = viewer)</em> on the far right. The ribbon reads like a sentence — "first they saw a clip, then a creator reaction, then a search, then opened Netflix, then pressed play."</li>'
