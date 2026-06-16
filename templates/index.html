@@ -5830,6 +5830,7 @@
             flex-shrink: 0;
             white-space: nowrap;
             font-weight: 600;
+            cursor: default;
         }
         .items-count-badge {
             font-size: 0.7rem;
@@ -23117,6 +23118,76 @@
                 if (el && !el.contains(e.relatedTarget)) hideTooltip();
             }, true);
         }
+
+        (function() {
+            var _sportsSubs = ['AFC','SPORTS TEAM','LA LIGA','METROPOLITAN DIVISION','MLB','MLS','EASTERN CONFERENCE','CENTRAL DIVISION','ATLANTIC DIVISION','AFC EAST','NBA','NFC EAST','NFC NORTH','NFC SOUTH','NFC WEST','NFL','NFC','AFC NORTH','NWSL','PREMIER LEAGUE','RUGBY','SERIE A','SOCCER','PACIFIC DIVISION','AFC SOUTH','AFC WEST','AL','WNBA','AL CENTRAL','AL EAST','AL WEST','SPORTS ORGANIZATIONS','SPORTS ORGANIZATION','HORSE RACING'];
+            var _talentSubs = ['ACTOR','ATHLETE','HOST/PERSONALITY','INFLUENCER/CREATOR','CREATOR/INFLUENCER','MLB ATHLETE','MUSICIAN/BAND','NBA ATHLETE','NFL ATHLETE','NHL ATHLETE','POLITICS/ACTIVIST','SOCCER ATHLETE','WNBA ATHLETE','WRITER/DIRECTOR/AUTHOR/ARTIST'];
+            var _mpbSubs = ['ACCESSORIES','APPAREL/FOOTWEAR','BEAUTY/WELLNESS','CPG','HEALTH & WELLNESS','HOME/OUTDOOR','PETS','TECHNOLOGY BRAND','TOYS'];
+
+            function _countBehItems(behData, cat) {
+                if (!behData) return 0;
+                var upperCat = cat.toUpperCase();
+                var subs = null;
+                if (upperCat === 'SPORTS') subs = _sportsSubs;
+                else if (upperCat === 'TALENT') subs = _talentSubs;
+                else if (upperCat.indexOf('MOST PURCHASED') >= 0) subs = _mpbSubs;
+                if (subs) {
+                    var total = 0;
+                    subs.forEach(function(sc) {
+                        Object.keys(behData).forEach(function(k) {
+                            if (k.toUpperCase() === sc) total += (behData[k] || []).length;
+                        });
+                    });
+                    if (behData[cat]) total += behData[cat].length;
+                    return total || 0;
+                }
+                if (behData[cat]) return behData[cat].length;
+                var count = 0;
+                Object.keys(behData).forEach(function(k) {
+                    if (k.toUpperCase() === upperCat) count = behData[k].length;
+                });
+                return count;
+            }
+
+            document.documentElement.addEventListener('mouseover', function(e) {
+                var pill = e.target.closest('.behavioral-card .count.has-tooltip[data-beh-cat]');
+                if (!pill) return;
+                var cat = pill.getAttribute('data-beh-cat');
+                if (!cat) return;
+                var lines = [];
+                var currentLabel = 'Casual';
+                try {
+                    var info = typeof getProfileSuffixInfo === 'function' && typeof currentProfileData !== 'undefined' && currentProfileData
+                        ? getProfileSuffixInfo(currentProfileData) : null;
+                    if (info && info.suffixType === 'cohort' && info.suffixLabel) {
+                        currentLabel = info.suffixLabel.replace(/\s*fan\s*/i, '').trim() || 'Casual';
+                    }
+                } catch (_) {}
+                var currentCount = 0;
+                if (typeof allBehavioralData !== 'undefined' && allBehavioralData && allBehavioralData[cat]) {
+                    currentCount = allBehavioralData[cat].length;
+                }
+                lines.push('<b>' + currentLabel + ':</b> ' + currentCount);
+                if (typeof _comparisonRunsState !== 'undefined' && _comparisonRunsState.availableRuns) {
+                    _comparisonRunsState.availableRuns.forEach(function(run) {
+                        var entry = _comparisonRunsState.runsByKey[run.key];
+                        if (!entry || !entry.parsed || !entry.parsed.behavioral) {
+                            lines.push('<span style="opacity:0.5"><b>' + (run.label || '…') + ':</b> —</span>');
+                            return;
+                        }
+                        var count = _countBehItems(entry.parsed.behavioral, cat);
+                        lines.push('<b>' + (run.label || run.key) + ':</b> ' + count);
+                    });
+                }
+                if (lines.length < 2) {
+                    pill.setAttribute('data-tooltip', currentCount + ' items in ' + cat);
+                    pill.removeAttribute('data-tooltip-html');
+                } else {
+                    pill.setAttribute('data-tooltip-html', '<div style="text-align:left;line-height:1.7;font-size:12px;"><div style="margin-bottom:4px;font-weight:600;color:#c8e600;">Items by Data Cut</div>' + lines.join('<br>') + '</div>');
+                    pill.removeAttribute('data-tooltip');
+                }
+            }, true);
+        })();
 
         function formatDate(date) { return date.toISOString().split('T')[0]; }
         function formatNumber(num) { 
@@ -65664,7 +65735,7 @@
                             ${positionBadge}
                         </h3>
                         <div class="behavioral-card-controls">
-                            <span class="count">${sortedItems.length} Items</span>
+                            <span class="count has-tooltip" data-beh-cat="${cat}">${sortedItems.length} Items</span>
                             <span class="module-action-btns">
                                 <button class="module-btn csv-btn has-tooltip" onclick="event.stopPropagation(); exportModuleCSV('behavioral', '${cat}')" data-tooltip="Export CSV: Download this behavioral category data as a CSV file.">CSV</button>
                                 <button class="module-btn png-btn has-tooltip" onclick="event.stopPropagation(); exportModulePNG('behavioral', '${cat}')" data-tooltip="Export PNG: Download this behavioral category chart as a PNG image.">PNG</button>
