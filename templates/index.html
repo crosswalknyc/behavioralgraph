@@ -6095,6 +6095,14 @@
             align-self: center;
             min-width: 0;
             box-sizing: border-box;
+            /* Allow long headers (e.g. "CASUAL FEMALE", "CASUAL MALE")
+               to wrap to a second line within their own column rather
+               than overflow into the neighbor. Data cells below keep
+               their inline nowrap so numbers stay single-line. */
+            white-space: normal;
+            overflow-wrap: break-word;
+            word-break: normal;
+            line-height: 1.15;
         }
         .behavioral-table .behavioral-header-row span:first-child {
             padding-left: 0.35rem;
@@ -6111,12 +6119,19 @@
             padding-right: 0.35rem;
         }
         /* Cohort header cells injected by compare-mode also flip to
-           left-aligned. The corresponding data cells inside .behavioral-
-           item rows keep their inline right-align/justify-self:end so
-           the actual numbers stay right-aligned for legibility. */
+           left-aligned + wrappable. The corresponding data cells inside
+           .behavioral-item rows keep their inline right-align/
+           justify-self:end + nowrap so the actual numbers stay
+           right-aligned single-line for legibility. */
         .behavioral-table .behavioral-header-row .cmp-col-cell {
             text-align: left !important;
             justify-self: start !important;
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            overflow-wrap: break-word;
+            word-break: normal;
+            line-height: 1.15;
         }
         /* Hide GP column when in projection mode */
         .behavioral-card.hide-gp .behavioral-table {
@@ -59677,7 +59692,12 @@
                         const labelText = document.createTextNode(label);
                         span.appendChild(labelText);
                         span.title = 'Sort by ' + label;
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:left;justify-self:start;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;cursor:pointer;user-select:none;';
+                        // Header label is allowed to wrap inside its
+                        // own column so long cohort names (e.g.
+                        // "Casual Female") don't visually bleed into
+                        // adjacent columns when the card width is
+                        // tight. Data cells below stay nowrap.
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:left;justify-self:start;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;cursor:pointer;user-select:none;';
                         if (gpHeader) header.insertBefore(span, gpHeader);
                         else header.appendChild(span);
                     });
@@ -59759,7 +59779,7 @@
                             const label = entry.label || ('Run ' + (idx + 1));
                             span.textContent = label;
                             span.title = label;
-                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;';
+                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;';
                             if (gpHeader) intHeader.insertBefore(span, gpHeader);
                             else intHeader.appendChild(span);
                         });
@@ -63793,10 +63813,14 @@
                 // sit between Casual and Gen Pop. Header label uses the
                 // bare cohort name (Avid / 4+ / Premium); the per-chart
                 // legend is where we spell out the subject.
+                // Cohort header label wraps to a second line within
+                // its own column instead of being clipped/ellipsised
+                // when long names ("Casual Female", "Casual Male")
+                // overflow narrow grid columns.
                 const cmpHeaderCellsHtml = _cmpLookups.map((lk, ci) => {
                     const color = _cmpPalette[ci % _cmpPalette.length];
                     const lbl = _safeEscape(lk.label || 'Run');
-                    return '<span class="cmp-col-cell" style="color:' + color + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;" title="' + lbl + '">' + lbl + '</span>';
+                    return '<span class="cmp-col-cell" style="color:' + color + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;" title="' + lbl + '">' + lbl + '</span>';
                 }).join('');
 
                 // Match the behavioral-card grid template so the
