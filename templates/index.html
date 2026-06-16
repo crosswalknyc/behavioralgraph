@@ -13948,14 +13948,14 @@
                             {# Display order updated 2026-06-16:
                                  Intelligence (nested submenu containing
                                    Profile IQ, Subscriber IQ, Ranker,
-                                   Share of Time),
+                                   Share of Time, Blue IQ),
                                  Attribution (nested submenu containing
                                    SF Conversion, Intent IQ, ROAS IQ,
                                    Brand Partnership, Digital Journey IQ,
                                    Flywheel Conversion),
                                  Production (nested submenu containing
                                    Analysis IQ, Workspace),
-                                 Fin IQ, Blue IQ, LLMO IQ, then tail
+                                 Fin IQ, LLMO IQ, then tail
                                  (Admin, Purgatory).
 
                                data-group="<name>" tags options that
@@ -13968,6 +13968,7 @@
                             <option value="subscriberIQ" data-group="Intelligence" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
                             <option value="rankerIQ" data-group="Intelligence" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
                             <option value="shareOfTimeIQ" data-group="Intelligence" {% if not has_share_of_time_access %}disabled{% endif %}>⏱️ Share of Time</option>
+                            <option value="blueIQ" data-group="Intelligence" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
                             <option value="sfConversion" data-group="Attribution" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
                             <option value="intentIQ" data-group="Attribution" {% if not has_intent_iq_access %}disabled{% endif %}>🎬 Intent IQ</option>
                             <option value="roasIQ" data-group="Attribution" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
@@ -13979,7 +13980,6 @@
                             {% endif %}
                             <option value="workspace" data-group="Production" {% if not has_workspace_access %}disabled{% endif %}>🗂️ Workspace</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
-                            <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <!-- Impact IQ + Ticket Sales Tracker hidden 2026-06-16 per user
                                  request. View divs, handlers, /api routes, and admin
