@@ -23344,7 +23344,6 @@
                 customAnalysis: showCustomAnalysis,
                 talentFitIQ: showTalentFitIQ,
                 blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); },
-                intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); },
                 admin: function() { window.location.href = '/admin'; },
                 purgatory: function() { window.location.href = '/admin#purgatory'; }
             };
@@ -23369,12 +23368,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView', 'intentIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -23399,7 +23398,6 @@
                 customAnalysis: 'Analysis IQ: Run custom analyses and pull your own profiles (5 credits per analysis).',
                 talentFitIQ: 'Talent Fit IQ: Analyze how well talents resonate with your brand audience using behavioral data and social metrics.',
                 blueIQ: 'Blue IQ: Political-audience tracker. Filter by party (AI-imputed) and state or DMA to see issue searches, search engines, social platforms, top politicians and articles.',
-                intentIQ: 'Intent IQ: Title-scoped marketing-intent measurement. Ingest a campaign URL map and report on phase performance, audiences-of-interest, paid vs organic interplay, talent halo, trailer viewership, and audience shift over campaign life.',
                 admin: 'Admin: Manage users, access, and system settings.',
                 purgatory: 'Purgatory: Review and release items pending admin approval.'
             };
@@ -23424,8 +23422,7 @@
                         ['ecommerceIQ', !!d.has_ecommerce_iq_access],
                         ['shareOfTimeIQ', d.has_share_of_time_access !== false],
                         ['workspace', d.has_workspace_access !== false],
-                        ['blueIQ', !!d.has_blue_iq_access],
-                        ['intentIQ', d.has_intent_iq_access !== false]
+                        ['blueIQ', !!d.has_blue_iq_access]
                     ];
                     pairs.forEach(function (pv) {
                         var opt = viewDropdown.querySelector('option[value="' + pv[0] + '"]');
@@ -31554,18 +31551,53 @@
             // top 10 ranked brand properties by hits. Hit counts are
             // intentionally NOT displayed — this is a qualitative
             // "where the brand showed up most" list, not a metric.
-            var top = (data.top_brand_properties || [])
-                .filter(function(t) { return !_isSearchEngineProp(t.common_name); })
-                .slice(0, 10);
+            //
+            // Renders TWO side-by-side ordered lists when the run
+            // carries both `top_brand_properties_pre` (before the
+            // campaign window) and `top_brand_properties` (after).
+            // The Δ between the two columns at a glance tells the
+            // partnership-attributable story — e.g., the brand was
+            // ranked #5 by category-relevant competitors before the
+            // campaign and jumped to #1 after.
+            //
+            // Falls back gracefully to a single list when the older
+            // single-array shape is the only thing present (legacy
+            // runs that pre-date the pre/post split).
+            var _bpiqCleanTbp = function(arr) {
+                return (arr || [])
+                    .filter(function(t) { return !_isSearchEngineProp(t.common_name); })
+                    .slice(0, 10);
+            };
+            var topPre  = _bpiqCleanTbp(data.top_brand_properties_pre);
+            var topPost = _bpiqCleanTbp(data.top_brand_properties);
             var tpEl = document.getElementById('bpiqTopProps');
-            if (!top.length) {
-                tpEl.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:13px;">No brand properties matched in the qualifying audience.</div>';
-            } else {
-                tpEl.innerHTML = '<ol style="margin:0;padding:0 0 0 1.25rem;font-size:13px;line-height:1.7;">'
-                    + top.map(function(t) {
+            var _bpiqRenderTbpList = function(rows) {
+                if (!rows.length) {
+                    return '<div style="padding:0.5rem 0.25rem;color:var(--text-secondary);font-size:12px;font-style:italic;">No brand-property signal in this window.</div>';
+                }
+                return '<ol style="margin:0;padding:0 0 0 1.25rem;font-size:13px;line-height:1.7;">'
+                    + rows.map(function(t) {
                         return '<li style="padding:2px 0;font-weight:500;">' + (t.common_name || '') + '</li>';
                     }).join('')
                     + '</ol>';
+            };
+            if (!topPre.length && !topPost.length) {
+                tpEl.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:13px;">No brand properties matched in the qualifying audience.</div>';
+            } else if (!topPre.length) {
+                // Legacy single-list shape — render only the post column
+                // (preserves backwards-compat for older S3 runs).
+                tpEl.innerHTML = _bpiqRenderTbpList(topPost);
+            } else {
+                tpEl.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.25rem;">'
+                    +   '<div>'
+                    +     '<div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin-bottom:0.4rem;border-bottom:1px solid var(--border-color);padding-bottom:0.3rem;">Before Campaign</div>'
+                    +     _bpiqRenderTbpList(topPre)
+                    +   '</div>'
+                    +   '<div>'
+                    +     '<div style="font-size:0.62rem;color:#c8e600;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin-bottom:0.4rem;border-bottom:1px solid rgba(200,230,0,0.45);padding-bottom:0.3rem;">After Campaign</div>'
+                    +     _bpiqRenderTbpList(topPost)
+                    +   '</div>'
+                    + '</div>';
             }
         }
 
