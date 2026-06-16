@@ -30837,11 +30837,7 @@
             var poP = data.post_period || {};
 
             document.getElementById('bpiqDashTitle').textContent = data.project_name || 'Brand Partnership Valuation';
-            var qualLabel = (data.qualifier_type || '').replace('_', ' ');
-            var qualVal = (data.qualifier_value || []).slice(0, 3).join(', ');
-            if ((data.qualifier_value || []).length > 3) qualVal += ' (+' + ((data.qualifier_value || []).length - 3) + ' more)';
-            var meta = '<strong>' + (data.brand_partner || '') + '</strong> × ' + qualLabel + ' (' + qualVal + ')';
-            meta += ' · Campaign: ' + (data.start_date || '') + ' → ' + (data.end_date || '');
+            var meta = 'Campaign: ' + (data.start_date || '') + ' → ' + (data.end_date || '');
             meta += ' · Attribution: ' + (data.attribution_window_days || 0) + 'd';
             meta += ' · Pre-window: ' + (preP.start || '') + ' → ' + (preP.end || '') + ' (' + (preP.days || 0) + 'd)';
             meta += ' · Post-window: ' + (evP.start || '') + ' → ' + (poP.end || '') + ' (' + ((evP.days || 0) + (poP.days || 0)) + 'd)';
