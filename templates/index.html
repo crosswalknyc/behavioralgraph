@@ -1076,6 +1076,42 @@
         }
         .view-nav-option:hover { background: rgba(188, 145, 249, 0.25); }
         .view-nav-option:disabled, .view-nav-option.disabled { opacity: 0.6; cursor: not-allowed; }
+        /* Nested-group support for the custom product dropdown.
+           A parent button (.view-nav-group-trigger) collapses a list of
+           child <button>s (.view-nav-suboption). The chevron flips
+           between right (collapsed) and down (expanded). */
+        .view-nav-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .view-nav-group-trigger {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .view-nav-group-trigger::after {
+            content: '▸';
+            font-size: 0.7em;
+            opacity: 0.7;
+            transition: transform 0.15s ease;
+            margin-left: 0.5rem;
+        }
+        .view-nav-group.open .view-nav-group-trigger::after {
+            transform: rotate(90deg);
+        }
+        .view-nav-submenu {
+            display: none;
+            flex-direction: column;
+            border-left: 2px solid rgba(188, 145, 249, 0.35);
+            margin: 0.15rem 0 0.25rem 0.85rem;
+        }
+        .view-nav-group.open .view-nav-submenu { display: flex; }
+        .view-nav-suboption {
+            font-size: 0.85rem;
+            padding-left: 1.25rem !important;
+            opacity: 0.92;
+        }
+        .view-nav-suboption:hover { opacity: 1; }
         .user-info-bar { display: flex; align-items: center; gap: 1rem; }
         .view-btn {
             padding: 0.5rem 1rem;
@@ -13863,23 +13899,39 @@
                     <span class="view-nav-label">SELECT PRODUCT:</span>
                     <div class="view-nav-custom-wrap" id="viewNavCustomWrap">
                         <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate" aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;min-width:0;">
+                            {# Display order requested 2026-06-16:
+                                 Profile IQ, Subscriber IQ, Ranker,
+                                 Attribution (nested submenu containing
+                                   SF Conversion, Intent IQ, ROAS IQ,
+                                   Brand Partnership, Digital Journey IQ,
+                                   Flywheel Conversion),
+                                 Fin IQ, Share of Time, Blue IQ, LLMO IQ,
+                                 then existing tail (Workspace, Analysis IQ,
+                                 Talent Fit IQ, Admin, Purgatory).
+
+                               data-group="Attribution" tags options to be
+                               collapsed under a single expandable parent
+                               row in the custom dropdown UI. The native
+                               <select> stays flat so existing
+                               setViewNavDropdown('intentIQ') / change-event
+                               wiring keeps working without changes. #}
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
-                            <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
-                            <option value="intentIQ" {% if not has_intent_iq_access %}disabled{% endif %}>🎬 Intent IQ</option>
-                            <option value="sfConversion" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
-                            <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
+                            <option value="sfConversion" data-group="Attribution" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
+                            <option value="intentIQ" data-group="Attribution" {% if not has_intent_iq_access %}disabled{% endif %}>🎬 Intent IQ</option>
+                            <option value="roasIQ" data-group="Attribution" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
+                            <option value="brandPartnershipIQ" data-group="Attribution" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
+                            <option value="journeyIQ" data-group="Attribution" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
+                            <option value="flywheelConversion" data-group="Attribution" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
+                            <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
+                            <option value="shareOfTimeIQ" {% if not has_share_of_time_access %}disabled{% endif %}>⏱️ Share of Time</option>
+                            <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
+                            <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <!-- Impact IQ + Ticket Sales Tracker hidden 2026-06-16 per user
                                  request. View divs, handlers, /api routes, and admin
                                  access controls left intact so they can be re-enabled
                                  later by uncommenting these <option> rows. -->
-                            <option value="shareOfTimeIQ" {% if not has_share_of_time_access %}disabled{% endif %}>⏱️ Share of Time</option>
-                            <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
-                            <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
-                            <option value="brandPartnershipIQ" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
-                            <option value="journeyIQ" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
-                            <option value="flywheelConversion" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
                             <option value="workspace" {% if not has_workspace_access %}disabled{% endif %}>🗂️ Workspace</option>
                             {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                             <option value="customAnalysis">🔧 Analysis IQ</option>
@@ -23436,32 +23488,109 @@
                     // Store Fin IQ data cutoff date for filtering
                     window.hedgeFundIQDataCutoff = d.hedge_fund_iq_data_cutoff || null;
                 }
+                // Track which nested groups the user has expanded so a
+                // rebuild (e.g. from /api/me/product-access re-sync on
+                // focus) doesn't collapse the submenu underneath their
+                // cursor. Group identity is the data-group attribute
+                // value (e.g. "Attribution").
+                var _expandedNavGroups = new Set();
+                // Auto-open the group containing the currently-selected
+                // option so the user sees their context after a refresh.
+                function _groupForCurrentSelection() {
+                    var cur = viewDropdown.value;
+                    for (var j = 0; j < viewDropdown.options.length; j++) {
+                        var o = viewDropdown.options[j];
+                        if (o.value === cur) return o.getAttribute('data-group') || null;
+                    }
+                    return null;
+                }
+
+                function _buildLeafOption(opt) {
+                    var val = opt.value;
+                    var label = opt.textContent;
+                    var disabled = opt.disabled;
+                    var item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'view-nav-option' + (disabled ? ' disabled' : '') + ' has-tooltip';
+                    item.setAttribute('role', 'option');
+                    item.setAttribute('data-value', val);
+                    if (!disabled && viewNavProductTooltips[val]) item.setAttribute('data-tooltip', viewNavProductTooltips[val]);
+                    item.textContent = label;
+                    if (disabled) {
+                        item.disabled = true;
+                    } else {
+                        item.addEventListener('click', function() {
+                            var v = this.getAttribute('data-value');
+                            viewDropdown.value = v;
+                            viewDropdown.dispatchEvent(new Event('change', { bubbles: true }));
+                            triggerEl.textContent = this.textContent;
+                            panelEl.classList.remove('open');
+                            triggerEl.setAttribute('aria-expanded', 'false');
+                        });
+                    }
+                    return item;
+                }
+
                 function rebuildViewNavCustomPanel() {
                     panelEl.innerHTML = '';
+                    // Walk options once and bucket them: ungrouped
+                    // options become leaf buttons at the position they
+                    // first appear; grouped options collapse into a
+                    // single parent button (one per group) whose
+                    // position is also determined by the first member's
+                    // index in the select. This preserves the
+                    // server-side display order while letting the
+                    // <select> remain a flat list for accessibility +
+                    // existing change-event wiring.
+                    var renderedGroups = new Set();
+                    var autoOpenGroup = _groupForCurrentSelection();
+                    if (autoOpenGroup) _expandedNavGroups.add(autoOpenGroup);
+
                     for (var i = 0; i < viewDropdown.options.length; i++) {
                         var opt = viewDropdown.options[i];
-                        var val = opt.value;
-                        var label = opt.textContent;
-                        var disabled = opt.disabled;
-                        var item = document.createElement('button');
-                        item.type = 'button';
-                        item.className = 'view-nav-option' + (disabled ? ' disabled' : '') + ' has-tooltip';
-                        item.setAttribute('role', 'option');
-                        item.setAttribute('data-value', val);
-                        if (!disabled && viewNavProductTooltips[val]) item.setAttribute('data-tooltip', viewNavProductTooltips[val]);
-                        item.textContent = label;
-                        if (disabled) item.disabled = true;
-                        else {
-                            item.addEventListener('click', function() {
-                                var v = this.getAttribute('data-value');
-                                viewDropdown.value = v;
-                                viewDropdown.dispatchEvent(new Event('change', { bubbles: true }));
-                                triggerEl.textContent = this.textContent;
-                                panelEl.classList.remove('open');
-                                triggerEl.setAttribute('aria-expanded', 'false');
-                            });
+                        var groupName = opt.getAttribute('data-group');
+                        if (!groupName) {
+                            panelEl.appendChild(_buildLeafOption(opt));
+                            continue;
                         }
-                        panelEl.appendChild(item);
+                        if (renderedGroups.has(groupName)) continue;
+                        renderedGroups.add(groupName);
+
+                        // Build the group wrapper, parent trigger, and
+                        // collect all sibling options that share this
+                        // group name (regardless of order in the
+                        // <select> — we just need them all under one
+                        // submenu).
+                        var groupWrap = document.createElement('div');
+                        groupWrap.className = 'view-nav-group';
+                        if (_expandedNavGroups.has(groupName)) groupWrap.classList.add('open');
+
+                        var parentBtn = document.createElement('button');
+                        parentBtn.type = 'button';
+                        parentBtn.className = 'view-nav-option view-nav-group-trigger';
+                        parentBtn.setAttribute('aria-expanded', _expandedNavGroups.has(groupName) ? 'true' : 'false');
+                        parentBtn.textContent = groupName;
+                        parentBtn.addEventListener('click', (function(name, wrap, btn) {
+                            return function(e) {
+                                e.stopPropagation();
+                                var nowOpen = wrap.classList.toggle('open');
+                                btn.setAttribute('aria-expanded', nowOpen ? 'true' : 'false');
+                                if (nowOpen) _expandedNavGroups.add(name); else _expandedNavGroups.delete(name);
+                            };
+                        })(groupName, groupWrap, parentBtn));
+                        groupWrap.appendChild(parentBtn);
+
+                        var submenu = document.createElement('div');
+                        submenu.className = 'view-nav-submenu';
+                        for (var k = 0; k < viewDropdown.options.length; k++) {
+                            var sib = viewDropdown.options[k];
+                            if (sib.getAttribute('data-group') !== groupName) continue;
+                            var leaf = _buildLeafOption(sib);
+                            leaf.classList.add('view-nav-suboption');
+                            submenu.appendChild(leaf);
+                        }
+                        groupWrap.appendChild(submenu);
+                        panelEl.appendChild(groupWrap);
                     }
                     updateTriggerText();
                 }
