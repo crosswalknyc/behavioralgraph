@@ -31504,9 +31504,10 @@
             var liftUsers = postProj - preProj;
             document.getElementById('bpiqKpiPreUsers').innerHTML  = _bpiqStackedKpi(_bpiqFmtNum(preProj),  prePct.toFixed(2)  + '%');
             document.getElementById('bpiqKpiPostUsers').innerHTML = _bpiqStackedKpi(_bpiqFmtNum(postProj), postPct.toFixed(2) + '%');
+            var _targetPpHtml = _bpiqFmtPp(postPct - prePct);
             document.getElementById('bpiqKpiLift').innerHTML = _bpiqStackedKpi(
                 '<span style="color:#c8e600">' + _bpiqFmtNum(liftUsers) + '</span>',
-                _bpiqFmtLift(totals.lift_pct_users)
+                _bpiqFmtLift(totals.lift_pct_users) + (_targetPpHtml ? ' | ' + _targetPpHtml : '')
             );
 
             // Gen Pop mirror row
@@ -31526,9 +31527,10 @@
                 document.getElementById('bpiqKpiGenPopAudienceProj').textContent = '';
                 document.getElementById('bpiqKpiGenPopPreUsers').innerHTML  = _bpiqStackedKpi(_bpiqFmtNum(gpPre),  gpPrePct.toFixed(2)  + '%');
                 document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqStackedKpi(_bpiqFmtNum(gpPost), gpPostPct.toFixed(2) + '%');
+                var _controlPpHtml = _bpiqFmtPp(gpPostPct - gpPrePct);
                 document.getElementById('bpiqKpiGenPopLift').innerHTML = _bpiqStackedKpi(
                     '<span style="color:#c8e600">' + _bpiqFmtNum(gpLiftUsers) + '</span>',
-                    _bpiqFmtLift(cg.control_lift_pct_users)
+                    _bpiqFmtLift(cg.control_lift_pct_users) + (_controlPpHtml ? ' | ' + _controlPpHtml : '')
                 );
                 // Δ Target − Control strip — populated whenever the gen-pop
                 // mirror row is shown. Each cell sits directly under the
