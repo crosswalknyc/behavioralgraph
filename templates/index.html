@@ -13870,9 +13870,11 @@
                             <option value="sfConversion" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
-                            <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
+                            <!-- Impact IQ + Ticket Sales Tracker hidden 2026-06-16 per user
+                                 request. View divs, handlers, /api routes, and admin
+                                 access controls left intact so they can be re-enabled
+                                 later by uncommenting these <option> rows. -->
                             <option value="shareOfTimeIQ" {% if not has_share_of_time_access %}disabled{% endif %}>⏱️ Share of Time</option>
-                            <option value="ticketSalesTracker" {% if not has_ticket_sales_tracker_access %}disabled{% endif %}>🎟️ Ticket Sales Tracker</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
                             <option value="brandPartnershipIQ" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
@@ -14251,11 +14253,9 @@
                         🔍 Talent Search IQ
                     </button>
                     {% endif %}
-                    {% if 'talent_theater' in analysis_iq_modules or role == 'super_admin' %}
-                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
-                        🎬 Impact IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
-                    </button>
-                    {% endif %}
+                    {# Impact IQ (talent_theater) tab hidden 2026-06-16 per user request.
+                       Tab content + form handler + /api/attribution/talent-theater
+                       endpoint left intact. Re-enable by uncommenting this block. #}
                     {% if 'svod' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('svod-acquisition')" id="customAnalysisTabSVODAcquisition">
                         📺 Subscriber IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
@@ -14276,11 +14276,9 @@
                         ⏱️ Watch Time IQ
                     </button>
                     {% endif %}
-                    {% if 'ticket_sales_tracker' in analysis_iq_modules or role == 'super_admin' %}
-                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('ticket-sales-tracker')" id="customAnalysisTabTicketSalesTracker">
-                        🎬 Ticket Sales Tracker <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
-                    </button>
-                    {% endif %}
+                    {# Ticket Sales Tracker tab hidden 2026-06-16 per user request.
+                       Tab content + form handler + /api/attribution/ticket-sales-tracker
+                       endpoint left intact. Re-enable by uncommenting this block. #}
                     {% if 'sf_lf_conversion' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('sf-lf-conversion')" id="customAnalysisTabSFLFConversion">
                         🔄 SF-LF Conversion <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
@@ -31550,57 +31548,98 @@
                 if (parts.length < 2) return false;
                 return parts.some(function(p) { return BPIQ_SEARCH_HOSTS.indexOf(p) !== -1; });
             };
-            // Filter out search-engine co-occurrences and cap to the
-            // top 10 ranked brand properties by hits. Hit counts are
-            // intentionally NOT displayed — this is a qualitative
-            // "where the brand showed up most" list, not a metric.
+            // Most Engaged With Brand Touchpoints — every row is a
+            // brand property (NOT a competitor). When the run carries
+            // both `top_brand_properties_pre` and `top_brand_properties`
+            // (post), we render a single ranked table with one row per
+            // property showing Pre Reach → Post Reach + lift %, so the
+            // partnership-attributable lift on each brand touchpoint
+            // is unmistakable.
             //
-            // Renders TWO side-by-side ordered lists when the run
-            // carries both `top_brand_properties_pre` (before the
-            // campaign window) and `top_brand_properties` (after).
-            // The Δ between the two columns at a glance tells the
-            // partnership-attributable story — e.g., the brand was
-            // ranked #5 by category-relevant competitors before the
-            // campaign and jumped to #1 after.
+            // Reach values displayed are projected to US gen pop
+            // (`hits_projected`); lift is post/pre−1 with "new" when
+            // pre=0 (campaign-only properties like a capsule launch).
             //
-            // Falls back gracefully to a single list when the older
-            // single-array shape is the only thing present (legacy
-            // runs that pre-date the pre/post split).
+            // Falls back to the legacy single-list rendering when only
+            // the post array is present (older S3 runs).
             var _bpiqCleanTbp = function(arr) {
                 return (arr || [])
-                    .filter(function(t) { return !_isSearchEngineProp(t.common_name); })
-                    .slice(0, 10);
+                    .filter(function(t) { return !_isSearchEngineProp(t.common_name); });
             };
-            var topPre  = _bpiqCleanTbp(data.top_brand_properties_pre);
-            var topPost = _bpiqCleanTbp(data.top_brand_properties);
+            var topPreRaw  = _bpiqCleanTbp(data.top_brand_properties_pre);
+            var topPostRaw = _bpiqCleanTbp(data.top_brand_properties);
             var tpEl = document.getElementById('bpiqTopProps');
-            var _bpiqRenderTbpList = function(rows) {
-                if (!rows.length) {
-                    return '<div style="padding:0.5rem 0.25rem;color:var(--text-secondary);font-size:12px;font-style:italic;">No brand-property signal in this window.</div>';
-                }
-                return '<ol style="margin:0;padding:0 0 0 1.25rem;font-size:13px;line-height:1.7;">'
-                    + rows.map(function(t) {
+            var _bpiqProj = function(t) {
+                if (t == null) return 0;
+                var v = (t.hits_projected != null) ? t.hits_projected : (t.hits || 0) * BPIQ_PROJ_MULT;
+                return Math.max(0, Math.round(v));
+            };
+            if (!topPreRaw.length && !topPostRaw.length) {
+                tpEl.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:13px;">No brand properties matched in the qualifying audience.</div>';
+            } else if (!topPreRaw.length) {
+                // Legacy: only post array exists — render the original
+                // single ordered list of property names.
+                var legacy = topPostRaw.slice(0, 10);
+                tpEl.innerHTML = '<ol style="margin:0;padding:0 0 0 1.25rem;font-size:13px;line-height:1.7;">'
+                    + legacy.map(function(t) {
                         return '<li style="padding:2px 0;font-weight:500;">' + (t.common_name || '') + '</li>';
                     }).join('')
                     + '</ol>';
-            };
-            if (!topPre.length && !topPost.length) {
-                tpEl.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:13px;">No brand properties matched in the qualifying audience.</div>';
-            } else if (!topPre.length) {
-                // Legacy single-list shape — render only the post column
-                // (preserves backwards-compat for older S3 runs).
-                tpEl.innerHTML = _bpiqRenderTbpList(topPost);
             } else {
-                tpEl.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.25rem;">'
-                    +   '<div>'
-                    +     '<div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin-bottom:0.4rem;border-bottom:1px solid var(--border-color);padding-bottom:0.3rem;">Before Campaign</div>'
-                    +     _bpiqRenderTbpList(topPre)
-                    +   '</div>'
-                    +   '<div>'
-                    +     '<div style="font-size:0.62rem;color:#c8e600;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin-bottom:0.4rem;border-bottom:1px solid rgba(200,230,0,0.45);padding-bottom:0.3rem;">After Campaign</div>'
-                    +     _bpiqRenderTbpList(topPost)
-                    +   '</div>'
-                    + '</div>';
+                // Build a per-property merge keyed by common_name. Pre
+                // entries with pre>0 still surface even if the property
+                // didn't crack the post top — and "new" properties
+                // (pre=0) still rank by their post reach.
+                var byName = {};
+                topPostRaw.forEach(function(t) {
+                    byName[t.common_name] = byName[t.common_name] || { common_name: t.common_name, pre: 0, post: 0 };
+                    byName[t.common_name].post = _bpiqProj(t);
+                });
+                topPreRaw.forEach(function(t) {
+                    byName[t.common_name] = byName[t.common_name] || { common_name: t.common_name, pre: 0, post: 0 };
+                    byName[t.common_name].pre = _bpiqProj(t);
+                });
+                var merged = Object.keys(byName).map(function(k) { return byName[k]; })
+                    .sort(function(a, b) { return b.post - a.post; })
+                    .slice(0, 10);
+                var liftCell = function(pre, post) {
+                    if (pre === 0 && post === 0) return '<span style="color:var(--text-secondary);">—</span>';
+                    if (pre === 0)               return '<span style="color:#c8e600;font-weight:700;">new ▲</span>';
+                    if (post === 0)              return '<span style="color:#ef4444;font-weight:700;">−100% ▼</span>';
+                    var pct = ((post - pre) / pre) * 100;
+                    var sign = pct >= 0 ? '+' : '';
+                    var color = pct >  0.5 ? '#10b981'
+                              : pct < -0.5 ? '#ef4444'
+                              :              'var(--text-secondary)';
+                    var arrow = pct >  0.5 ? ' ▲'
+                              : pct < -0.5 ? ' ▼'
+                              :              '';
+                    return '<span style="color:' + color + ';font-weight:700;">' + sign + pct.toFixed(0) + '%' + arrow + '</span>';
+                };
+                tpEl.innerHTML =
+                      '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
+                    +   'Each row is a property associated with the brand. <strong>Pre Reach</strong> and <strong>Post Reach</strong> are US-projected unique consumers engaged with that touchpoint in each window. <strong>Lift</strong> = (Post − Pre) / Pre, with <em>new</em> tagged on properties that didn\'t exist pre-campaign (e.g., a capsule or co-occurrence specific to the partnership window).'
+                    + '</div>'
+                    + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+                    +   '<thead><tr style="border-bottom:2px solid var(--border-color);">'
+                    +     '<th style="padding:8px 10px;text-align:left;">Brand Touchpoint</th>'
+                    +     '<th style="padding:8px 10px;text-align:right;">Pre Reach</th>'
+                    +     '<th style="padding:8px 10px;text-align:right;">Post Reach</th>'
+                    +     '<th style="padding:8px 10px;text-align:right;">Lift</th>'
+                    +   '</tr></thead><tbody>'
+                    +   merged.map(function(r) {
+                          return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
+                              +    '<td style="padding:8px 10px;font-weight:600;">' + (r.common_name || '') + '</td>'
+                              +    '<td style="padding:8px 10px;text-align:right;color:var(--text-secondary);">'
+                              +      (r.pre  > 0 ? _bpiqFmtNum(r.pre)  : '<span style="font-style:italic;opacity:0.6;">—</span>')
+                              +    '</td>'
+                              +    '<td style="padding:8px 10px;text-align:right;font-weight:600;">'
+                              +      (r.post > 0 ? _bpiqFmtNum(r.post) : '<span style="color:var(--text-secondary);">—</span>')
+                              +    '</td>'
+                              +    '<td style="padding:8px 10px;text-align:right;">' + liftCell(r.pre, r.post) + '</td>'
+                              +  '</tr>';
+                      }).join('')
+                    + '</tbody></table>';
             }
         }
 
