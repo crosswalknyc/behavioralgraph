@@ -853,20 +853,12 @@
         "title": "Core Metrics",
         "paragraphs": [
           {
-            "text": "Total Accounts: The total audience observed engaging with the title during the analysis period.",
+            "text": "Total AccountsThe total audience observed engaging with the title during the analysis period.",
             "is_list": false,
             "runs": [
               {
-                "text": "Total ",
+                "text": "Total Accounts",
                 "bold": true
-              },
-              {
-                "text": "Accounts",
-                "bold": true
-              },
-              {
-                "text": ": ",
-                "bold": false
               },
               {
                 "text": "The total audience observed engaging with the title during the analysis period.",
@@ -875,91 +867,35 @@
             ]
           },
           {
-            "text": "Acquired Accounts: Accounts that joined the platform during the attribution window and whose first view was the specified title; they were not active subscribers for the past six months, based on purchase confirmation.",
+            "text": "Acquired AccountsAccounts that joined the platform during the attribution window and whose first view was the specified title; they were not active subscribers for the past six months, based on purchase confirmation.",
             "is_list": false,
             "runs": [
               {
-                "text": "Acquired ",
+                "text": "Acquired Accounts",
                 "bold": true
               },
               {
-                "text": "Accounts",
-                "bold": true
-              },
-              {
-                "text": ": ",
-                "bold": false
-              },
-              {
-                "text": "Accounts that",
-                "bold": false
-              },
-              {
-                "text": " joined the platform during the attribution window and whose first view was the specified ",
-                "bold": false
-              },
-              {
-                "text": "title;",
-                "bold": false
-              },
-              {
-                "text": " they were not active subscribers for the past six months",
-                "bold": false
-              },
-              {
-                "text": ", based",
-                "bold": false
-              },
-              {
-                "text": " on ",
-                "bold": false
-              },
-              {
-                "text": "purchase",
-                "bold": false
-              },
-              {
-                "text": " confirmation. ",
+                "text": "Accounts that joined the platform during the attribution window and whose first view was the specified title; they were not active subscribers for the past six months, based on purchase confirmation.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "Reactivated Accounts: Accounts that returned to the platform after a period of inactivity of six months or more and their first view back was the specified title.",
+            "text": "Reactivated AccountsAccounts that returned to the platform after a period of inactivity of six months or more and their first view back was the specified title.",
             "is_list": false,
             "runs": [
               {
-                "text": "Reactivated ",
+                "text": "Reactivated Accounts",
                 "bold": true
               },
               {
-                "text": "Accounts",
-                "bold": true
-              },
-              {
-                "text": ": ",
-                "bold": false
-              },
-              {
-                "text": "Accounts that",
-                "bold": false
-              },
-              {
-                "text": " returned to the platform after a period of inactivity of ",
-                "bold": false
-              },
-              {
-                "text": "six",
-                "bold": false
-              },
-              {
-                "text": " months or more and their first view back was the specified title.",
+                "text": "Accounts that returned to the platform after a period of inactivity of six months or more and their first view back was the specified title.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "Acquisition Rate: The percentage of accounts that became acquired or reactivated subscribers.",
+            "text": "Acquisition RateThe percentage of accounts that became acquired or reactivated subscribers.",
             "is_list": false,
             "runs": [
               {
@@ -967,34 +903,18 @@
                 "bold": true
               },
               {
-                "text": ": ",
-                "bold": false
-              },
-              {
-                "text": "The percentage of ",
-                "bold": false
-              },
-              {
-                "text": "accounts that",
-                "bold": false
-              },
-              {
-                "text": " became acquired or reactivated subscribers.",
+                "text": "The percentage of accounts that became acquired or reactivated subscribers.",
                 "bold": false
               }
             ]
           },
           {
-            "text": "Speed to Conversion: The average time between content engagement and subscriber acquisition.",
+            "text": "Speed to ConversionThe average time between content engagement and subscriber acquisition.",
             "is_list": false,
             "runs": [
               {
                 "text": "Speed to Conversion",
                 "bold": true
-              },
-              {
-                "text": ": ",
-                "bold": false
               },
               {
                 "text": "The average time between content engagement and subscriber acquisition.",
