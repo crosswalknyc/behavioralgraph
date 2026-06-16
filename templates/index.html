@@ -18177,7 +18177,7 @@
                                 <div id="bpiqHeroBreak" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; flex: 0 1 auto; width: 75%;"></div>
                             </div>
                         </div>
-                        <div id="bpiqKpiAndLiftWrap" style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem; align-items: stretch;">
+                        <div id="bpiqKpiAndLiftWrap" style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem; align-items: stretch; position: relative;">
                             <div style="flex: 1; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(6,182,212,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem;">
                                 <div style="margin-bottom: 0.75rem;">
                                     <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">TARGET</div>
@@ -18261,17 +18261,20 @@
                                     </div>
                                 </div>
                             </div>
-                            <div id="bpiqNetLiftCard" style="display: none; flex: 0 0 16%; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(6,182,212,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1rem; align-self: center; margin: -40% 0;">
-                                <div style="background: var(--bg-card); border: 1.5px solid #c8e600; border-radius: 12px; padding: 2rem 0.8rem; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                                    <div style="font-size: 0.55rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; line-height: 1.6; margin-bottom: 0.75rem;">
-                                        <div>Target</div>
-                                        <div style="color: #c8e600; font-weight: 700;">vs.</div>
-                                        <div>Control</div>
+                            <div id="bpiqNetLiftCard" style="display: none; flex: 0 0 16%; position: relative;">
+                                <div id="bpiqNetLiftInner" style="background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(6,182,212,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1rem;">
+                                    <div style="background: var(--bg-card); border: 1.5px solid #c8e600; border-radius: 12px; padding: 2rem 0.8rem; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                        <div style="font-size: 0.55rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; line-height: 1.6; margin-bottom: 0.75rem;">
+                                            <div>Target</div>
+                                            <div style="color: #c8e600; font-weight: 700;">vs.</div>
+                                            <div>Control</div>
+                                        </div>
+                                        <div style="font-size: 1.2rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 400;">Brand Lift</div>
+                                        <div id="bpiqNetLiftValue" style="font-size: 1.25rem; font-weight: 800; color: #c8e600; margin-bottom: 0.25rem;"></div>
+                                        <div id="bpiqNetLiftPp" style="font-size: 0.95rem; font-weight: 700; color: #c8e600; opacity: 0.85;"></div>
                                     </div>
-                                    <div style="font-size: 1.2rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; font-weight: 400;">Brand Lift</div>
-                                    <div id="bpiqNetLiftValue" style="font-size: 1.25rem; font-weight: 800; color: #c8e600; margin-bottom: 0.25rem;"></div>
-                                    <div id="bpiqNetLiftPp" style="font-size: 0.95rem; font-weight: 700; color: #c8e600; opacity: 0.85;"></div>
                                 </div>
+                                <svg id="bpiqConnectorArrows" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;"></svg>
                             </div>
                         </div>
                         <!-- 📡 Earned Media Value — subsumes the legacy
@@ -31596,18 +31599,41 @@
                 if (netLiftCard && brandLift != null && gpLift != null && isFinite(brandLift) && isFinite(gpLift)) {
                     var netLift = brandLift - gpLift;
                     var sign = netLift >= 0 ? '+' : '';
-                    netLiftCard.style.display = 'flex';
-                    netLiftCard.style.flexDirection = 'column';
-                    netLiftCard.style.justifyContent = 'center';
+                    netLiftCard.style.display = 'block';
                     document.getElementById('bpiqNetLiftValue').textContent = sign + netLift.toFixed(2);
-                    // Incremental engagement-rate lift in percentage points:
-                    // (target post − target pre) − (control post − control pre).
-                    // This is the cleanest single-number read of campaign-driven
-                    // lift — it's additive in real-world engagement-rate units,
-                    // unlike the relative-% delta above.
                     var ppNet  = (postPct - prePct) - (gpPostPct - gpPrePct);
                     var ppSign = ppNet >= 0 ? '+' : '−';
                     document.getElementById('bpiqNetLiftPp').textContent = ppSign + Math.abs(ppNet).toFixed(2) + ' pp';
+                    setTimeout(function() {
+                        var wrap = document.getElementById('bpiqKpiAndLiftWrap');
+                        var targetLiftBox = document.getElementById('bpiqKpiLift');
+                        var controlLiftBox = document.getElementById('bpiqKpiGenPopLift');
+                        var innerCard = document.getElementById('bpiqNetLiftInner');
+                        if (!wrap || !targetLiftBox || !controlLiftBox || !innerCard) return;
+                        var wrapRect = wrap.getBoundingClientRect();
+                        var tBox = targetLiftBox.closest('.tab-section');
+                        var cBox = controlLiftBox.closest('.tab-section');
+                        if (!tBox || !cBox) return;
+                        var tRect = tBox.getBoundingClientRect();
+                        var cRect = cBox.getBoundingClientRect();
+                        var midY = (tRect.top + tRect.bottom + cRect.top + cRect.bottom) / 4;
+                        var cardH = innerCard.offsetHeight;
+                        var desiredTop = midY - wrapRect.top - cardH / 2;
+                        innerCard.style.marginTop = Math.max(0, desiredTop) + 'px';
+                        var svg = document.getElementById('bpiqConnectorArrows');
+                        if (svg) {
+                            var cardRect = netLiftCard.getBoundingClientRect();
+                            var tMidY = (tRect.top + tRect.bottom) / 2 - cardRect.top;
+                            var cMidY = (cRect.top + cRect.bottom) / 2 - cardRect.top;
+                            var innerRect = innerCard.getBoundingClientRect();
+                            var innerMidY = (innerRect.top + innerRect.bottom) / 2 - cardRect.top;
+                            var arrowX = -8;
+                            var innerLeft = innerRect.left - cardRect.left;
+                            svg.innerHTML = '<defs><marker id="bpiqArrowHead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="var(--border-color)" stroke-width="1.5"/></marker></defs>' +
+                                '<path d="M' + arrowX + ',' + tMidY + ' C' + (arrowX + 20) + ',' + tMidY + ' ' + (innerLeft - 20) + ',' + innerMidY + ' ' + innerLeft + ',' + innerMidY + '" fill="none" stroke="var(--border-color)" stroke-width="1.5" marker-end="url(#bpiqArrowHead)"/>' +
+                                '<path d="M' + arrowX + ',' + cMidY + ' C' + (arrowX + 20) + ',' + cMidY + ' ' + (innerLeft - 20) + ',' + innerMidY + ' ' + innerLeft + ',' + innerMidY + '" fill="none" stroke="var(--border-color)" stroke-width="1.5" marker-end="url(#bpiqArrowHead)"/>';
+                        }
+                    }, 50);
                 }
             } else {
                 if (deltaRow) deltaRow.style.display = 'none';
