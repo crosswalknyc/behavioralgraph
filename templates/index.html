@@ -1077,9 +1077,12 @@
         .view-nav-option:hover { background: rgba(188, 145, 249, 0.25); }
         .view-nav-option:disabled, .view-nav-option.disabled { opacity: 0.6; cursor: not-allowed; }
         /* Nested-group support for the custom product dropdown.
-           A parent button (.view-nav-group-trigger) collapses a list of
-           child <button>s (.view-nav-suboption). The chevron flips
-           between right (collapsed) and down (expanded). */
+           A parent button (.view-nav-group-trigger) is styled as a
+           visually distinct section header (uppercase, letter-spaced,
+           accent color, subtle top divider) so it's obvious it's a
+           category label, not a navigable leaf item. Clicking it
+           toggles a child list of <button>s (.view-nav-suboption).
+           The chevron flips between right (collapsed) and down (open). */
         .view-nav-group {
             display: flex;
             flex-direction: column;
@@ -1088,11 +1091,29 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #BC91F9;
+            padding-top: 0.55rem;
+            padding-bottom: 0.4rem;
+            border-top: 1px solid rgba(188, 145, 249, 0.22);
+            background: rgba(188, 145, 249, 0.06);
+        }
+        /* First group in the panel skips the top divider so we don't
+           draw a line under the rounded panel corner. */
+        .view-nav-panel > .view-nav-group:first-child .view-nav-group-trigger {
+            border-top: none;
+        }
+        .view-nav-group-trigger:hover {
+            background: rgba(188, 145, 249, 0.18);
+            color: #fff;
         }
         .view-nav-group-trigger::after {
             content: '▸';
-            font-size: 0.7em;
-            opacity: 0.7;
+            font-size: 0.8em;
+            opacity: 0.85;
             transition: transform 0.15s ease;
             margin-left: 0.5rem;
         }
@@ -1103,15 +1124,25 @@
             display: none;
             flex-direction: column;
             border-left: 2px solid rgba(188, 145, 249, 0.35);
-            margin: 0.15rem 0 0.25rem 0.85rem;
+            margin: 0.15rem 0 0.35rem 0.85rem;
         }
         .view-nav-group.open .view-nav-submenu { display: flex; }
         .view-nav-suboption {
-            font-size: 0.85rem;
+            font-size: 0.9rem;
             padding-left: 1.25rem !important;
-            opacity: 0.92;
+            opacity: 0.95;
         }
         .view-nav-suboption:hover { opacity: 1; }
+        /* Light-theme variant of the group header. */
+        body[data-theme="light"] .view-nav-group-trigger {
+            color: #6D3FCB;
+            border-top-color: rgba(109, 63, 203, 0.18);
+            background: rgba(109, 63, 203, 0.05);
+        }
+        body[data-theme="light"] .view-nav-group-trigger:hover {
+            background: rgba(109, 63, 203, 0.12);
+            color: #4A2792;
+        }
         .user-info-bar { display: flex; align-items: center; gap: 1rem; }
         .view-btn {
             padding: 0.5rem 1rem;
