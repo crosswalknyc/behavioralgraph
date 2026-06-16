@@ -18178,8 +18178,8 @@
                             </div>
                         </div>
                         <div id="bpiqKpiAndLiftWrap" style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem; align-items: stretch;">
-                            <div style="flex: 1; display: flex; flex-direction: column; gap: 1.5rem;">
-                                <div style="background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(6,182,212,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
+                            <div style="flex: 1; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(6,182,212,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem;">
+                                <div style="margin-bottom: 1.5rem;">
                                     <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">TARGET</div>
                                     <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column;">
@@ -18200,8 +18200,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <!-- Gen Pop / control-cohort mirror row -->
-                                <div id="bpiqGenPopKpiRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.04), rgba(168,85,247,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
+                                <div id="bpiqGenPopKpiRow" style="display: none; margin-bottom: 1.5rem;">
                                     <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">CONTROL</div>
                                     <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column;">
@@ -18223,15 +18222,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <!-- Target ↔ Control delta strip, anchored below
-                                     the CONTROL row. Tabular layout: row
-                                     labels on the left (Relative % / Pp)
-                                     × three metric columns. Drops the
-                                     empty Consumers column entirely
-                                     (cohorts are size-matched, so its
-                                     delta is always 0 and the cell
-                                     looked broken). -->
-                                <div id="bpiqDeltaRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
+                                <div id="bpiqDeltaRow" style="display: none;">
                                     <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">Target vs. Control — Incremental Outperformance</div>
                                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem; align-items: stretch;">
                                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column;">
