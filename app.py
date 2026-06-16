@@ -22,6 +22,12 @@ except Exception as _blue_iq_err:
     _blue_iq = None
     print(f"⚠️ Blue IQ module unavailable at import time: {_blue_iq_err}")
 
+try:
+    import intent_iq as _intent_iq  # type: ignore
+except Exception as _intent_iq_err:
+    _intent_iq = None
+    print(f"⚠️ Intent IQ module unavailable at import time: {_intent_iq_err}")
+
 import uuid
 import json
 import csv
@@ -6909,6 +6915,7 @@ def compute_product_access_flags(user, role):
             'has_share_of_time_access': True,
             'has_share_of_time_run_access': True,
             'has_blue_iq_access': True,
+            'has_intent_iq_access': True,
         }
     u = user or {}
     has_sot_view = bool(u.get('has_share_of_time_access', True))
@@ -6941,6 +6948,7 @@ def compute_product_access_flags(user, role):
         'has_share_of_time_access': has_sot_view,
         'has_share_of_time_run_access': has_sot_run,
         'has_blue_iq_access': bool(u.get('has_blue_iq_access', False)),
+        'has_intent_iq_access': bool(u.get('has_intent_iq_access', True)),
     }
 
 
@@ -7035,7 +7043,8 @@ def index():
     has_share_of_time = _acc.get('has_share_of_time_access', True)
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
     has_blue_iq = _acc.get('has_blue_iq_access', False)
-    
+    has_intent_iq = _acc.get('has_intent_iq_access', True)
+
     # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
 
@@ -7092,6 +7101,7 @@ def index():
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,
                            has_blue_iq_access=has_blue_iq,
+                           has_intent_iq_access=has_intent_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -12534,6 +12544,141 @@ def api_blue_iq_data():
         force = bool(req.get('force_refresh'))
         payload = _blue_iq.compute_panel_view(filters, force_refresh=force)
         return jsonify(payload)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# INTENT IQ — Title-scoped marketing-intent measurement
+# ============================================================================
+# Surfaced as the "Intent IQ" product (added to the view-nav dropdown). Title
+# data lives in ClickHouse intent.* tables on the Hetzner box; raw assets +
+# normalized JSON live in s3://dashboard-inputs/intent/<slug>/. See
+# bg-webapp/intent_iq.py for the query layer and migration/intent_clickhouse_schema.sql
+# for the DDL. See scripts/ingest_intent_campaign.py for the ingestion CLI.
+def _require_intent_iq():
+    """Return (False, error_response) if Intent IQ isn't available."""
+    user = get_current_user()
+    if not user:
+        return False, (jsonify({'success': False, 'error': 'Not authenticated'}), 401)
+    role = _normalize_role(user.get('role', 'user'))
+    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+    if not acc.get('has_intent_iq_access', True):
+        return False, (jsonify({'success': False, 'error': 'Intent IQ access not enabled'}), 403)
+    if _intent_iq is None:
+        return False, (jsonify({'success': False, 'error': 'Intent IQ module not loaded'}), 500)
+    return True, None
+
+
+@app.route('/api/intent/titles', methods=['GET'])
+@requires_auth
+def api_intent_titles():
+    ok, err = _require_intent_iq()
+    if not ok:
+        return err
+    try:
+        return jsonify(_intent_iq.list_titles())
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/intent/<title_slug>/overview', methods=['GET'])
+@requires_auth
+def api_intent_overview(title_slug):
+    ok, err = _require_intent_iq()
+    if not ok:
+        return err
+    try:
+        return jsonify(_intent_iq.get_overview(title_slug))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/intent/<title_slug>/assets', methods=['GET'])
+@requires_auth
+def api_intent_assets(title_slug):
+    ok, err = _require_intent_iq()
+    if not ok:
+        return err
+    try:
+        return jsonify(_intent_iq.get_assets(
+            title_slug,
+            phase=request.args.get('phase'),
+            asset_type=request.args.get('asset_type'),
+            paid_or_organic=request.args.get('paid_or_organic'),
+        ))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/intent/<title_slug>/audiences', methods=['GET'])
+@requires_auth
+def api_intent_audiences(title_slug):
+    ok, err = _require_intent_iq()
+    if not ok:
+        return err
+    try:
+        return jsonify(_intent_iq.get_audiences(title_slug))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/intent/cohorts', methods=['GET'])
+@app.route('/api/intent/<title_slug>/cohorts', methods=['GET'])
+@requires_auth
+def api_intent_cohorts(title_slug=None):
+    ok, err = _require_intent_iq()
+    if not ok:
+        return err
+    try:
+        return jsonify(_intent_iq.get_cohorts(title_slug))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/intent/<title_slug>/questions/<qid>', methods=['GET'])
+@requires_auth
+def api_intent_question(title_slug, qid):
+    ok, err = _require_intent_iq()
+    if not ok:
+        return err
+    try:
+        return jsonify(_intent_iq.answer_question(title_slug, qid))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/intent/<title_slug>/in_flight', methods=['GET'])
+@requires_auth
+def api_intent_in_flight(title_slug):
+    ok, err = _require_intent_iq()
+    if not ok:
+        return err
+    try:
+        return jsonify(_intent_iq.get_in_flight(title_slug,
+                                                  as_of=request.args.get('as_of')))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/intent/compare', methods=['GET'])
+@requires_auth
+def api_intent_compare():
+    ok, err = _require_intent_iq()
+    if not ok:
+        return err
+    try:
+        raw = request.args.get('titles', '')
+        slugs = [s.strip() for s in raw.split(',') if s.strip()]
+        return jsonify(_intent_iq.compare_titles(slugs))
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
