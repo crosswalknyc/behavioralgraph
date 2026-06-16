@@ -13870,9 +13870,11 @@
                             <option value="sfConversion" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
-                            <option value="ticketSalesIQ" {% if not has_ticket_sales_iq_access %}disabled{% endif %}>🎬 Impact IQ</option>
+                            <!-- Impact IQ + Ticket Sales Tracker hidden 2026-06-16 per user
+                                 request. View divs, handlers, /api routes, and admin
+                                 access controls left intact so they can be re-enabled
+                                 later by uncommenting these <option> rows. -->
                             <option value="shareOfTimeIQ" {% if not has_share_of_time_access %}disabled{% endif %}>⏱️ Share of Time</option>
-                            <option value="ticketSalesTracker" {% if not has_ticket_sales_tracker_access %}disabled{% endif %}>🎟️ Ticket Sales Tracker</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
                             <option value="brandPartnershipIQ" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
@@ -14251,11 +14253,9 @@
                         🔍 Talent Search IQ
                     </button>
                     {% endif %}
-                    {% if 'talent_theater' in analysis_iq_modules or role == 'super_admin' %}
-                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
-                        🎬 Impact IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
-                    </button>
-                    {% endif %}
+                    {# Impact IQ (talent_theater) tab hidden 2026-06-16 per user request.
+                       Tab content + form handler + /api/attribution/talent-theater
+                       endpoint left intact. Re-enable by uncommenting this block. #}
                     {% if 'svod' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('svod-acquisition')" id="customAnalysisTabSVODAcquisition">
                         📺 Subscriber IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
@@ -14276,11 +14276,9 @@
                         ⏱️ Watch Time IQ
                     </button>
                     {% endif %}
-                    {% if 'ticket_sales_tracker' in analysis_iq_modules or role == 'super_admin' %}
-                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('ticket-sales-tracker')" id="customAnalysisTabTicketSalesTracker">
-                        🎬 Ticket Sales Tracker <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
-                    </button>
-                    {% endif %}
+                    {# Ticket Sales Tracker tab hidden 2026-06-16 per user request.
+                       Tab content + form handler + /api/attribution/ticket-sales-tracker
+                       endpoint left intact. Re-enable by uncommenting this block. #}
                     {% if 'sf_lf_conversion' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('sf-lf-conversion')" id="customAnalysisTabSFLFConversion">
                         🔄 SF-LF Conversion <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
