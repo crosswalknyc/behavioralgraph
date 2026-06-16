@@ -18227,24 +18227,30 @@
                                      (cohorts are size-matched, so its
                                      delta is always 0 and the cell
                                      looked broken). -->
-                                <div id="bpiqDeltaRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px dashed rgba(200,230,0,0.45); border-radius: 12px; padding: 0.85rem 1.5rem 0.95rem;">
-                                    <div style="font-size: 0.66rem; color: #c8e600; text-transform: uppercase; letter-spacing: 0.12em; text-align: center; margin-bottom: 0.55rem; font-weight: 700;">Target vs. Control — Incremental Outperformance</div>
-                                    <div style="display: grid; grid-template-columns: minmax(110px, auto) repeat(3, minmax(120px, 1fr)); gap: 0.35rem 1rem; align-items: center;">
-                                        <!-- Column header row -->
-                                        <div></div>
-                                        <div style="text-align: center; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;">Pre-Engagement</div>
-                                        <div style="text-align: center; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;">Post-Engagement</div>
-                                        <div style="text-align: center; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;">Brand Lift</div>
-                                        <!-- Relative % row -->
-                                        <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; text-align: right; padding-right: 0.25rem;" title="Relative lift over Control: (target − control) ÷ |control| × 100">Relative %</div>
-                                        <div id="bpiqKpiDeltaPreRel"  style="text-align: center; font-size: 1.1rem; font-weight: 800;">—</div>
-                                        <div id="bpiqKpiDeltaPostRel" style="text-align: center; font-size: 1.1rem; font-weight: 800;">—</div>
-                                        <div id="bpiqKpiDeltaLiftRel" style="text-align: center; font-size: 1.1rem; font-weight: 800;">—</div>
-                                        <!-- Percentage-points row -->
-                                        <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; text-align: right; padding-right: 0.25rem;" title="Absolute lift over Control in percentage points: target − control">Percentage Points</div>
-                                        <div id="bpiqKpiDeltaPrePp"  style="text-align: center; font-size: 0.92rem; font-weight: 700; opacity: 0.88;">—</div>
-                                        <div id="bpiqKpiDeltaPostPp" style="text-align: center; font-size: 0.92rem; font-weight: 700; opacity: 0.88;">—</div>
-                                        <div id="bpiqKpiDeltaLiftPp" style="text-align: center; font-size: 0.92rem; font-weight: 700; opacity: 0.88;">—</div>
+                                <div id="bpiqDeltaRow" style="display: none; background: linear-gradient(135deg, rgba(200,230,0,0.06), rgba(168,85,247,0.06)); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.5rem 1.5rem 0.75rem;">
+                                    <div style="font-size: 0.95rem; font-weight: 800; color: #c8e600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;">Target vs. Control — Incremental Outperformance</div>
+                                    <div class="bpiq-kpi-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column;">
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Pre-Campaign</div>
+                                            <div style="margin-top: auto;">
+                                                <div id="bpiqKpiDeltaPreRel" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">—</div>
+                                                <div id="bpiqKpiDeltaPrePp" style="font-size: 0.95rem; font-weight: 600; opacity: 0.85; margin-top: 0.15rem;">—</div>
+                                            </div>
+                                        </div>
+                                        <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column;">
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Post-Campaign</div>
+                                            <div style="margin-top: auto;">
+                                                <div id="bpiqKpiDeltaPostRel" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-orange);">—</div>
+                                                <div id="bpiqKpiDeltaPostPp" style="font-size: 0.95rem; font-weight: 600; opacity: 0.85; margin-top: 0.15rem;">—</div>
+                                            </div>
+                                        </div>
+                                        <div class="tab-section" style="background: var(--bg-card); border: 1.5px solid #c8e600; border-radius: 12px; padding: 1.25rem; text-align: center; display: flex; flex-direction: column;">
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Brand Lift</div>
+                                            <div style="margin-top: auto;">
+                                                <div id="bpiqKpiDeltaLiftRel" style="font-size: 1.1rem; font-weight: 700;">—</div>
+                                                <div id="bpiqKpiDeltaLiftPp" style="font-size: 0.95rem; font-weight: 600; opacity: 0.85; margin-top: 0.15rem;">—</div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
