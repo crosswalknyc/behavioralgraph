@@ -13955,8 +13955,7 @@
                                    Flywheel Conversion),
                                  Production (nested submenu containing
                                    Analysis IQ, Workspace),
-                                 LLMO IQ, then tail
-                                 (Admin, Purgatory).
+                                 LLMO IQ, then tail (Admin).
 
                                data-group="<name>" tags options that
                                should collapse under a single expandable
@@ -13995,9 +13994,17 @@
                         {% if role == 'super_admin' or role == 'admin' %}
                         <option value="admin">🔐 Admin</option>
                         {% endif %}
+                        {# Purgatory hidden from product dropdown 2026-06-16 per user
+                           request. The /admin#purgatory page, the in-purgatory
+                           release workflow, downloadPurgatoryResult, and the
+                           `purgatory:` handler in initialHandlers all remain
+                           intact so admins can still navigate to it directly via
+                           /admin#purgatory, and pending items still surface from
+                           there. Re-enable in the dropdown by uncommenting:
                         {% if has_purgatory_access %}
                         <option value="purgatory">⏳ Purgatory</option>
                         {% endif %}
+                        #}
                         </select>
                         <button type="button" class="view-nav-trigger" id="viewNavTrigger" aria-haspopup="listbox" aria-expanded="false" aria-label="Select product"></button>
                         <div class="view-nav-panel" id="viewNavPanel" role="listbox" aria-label="Product options"></div>
