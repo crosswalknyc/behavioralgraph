@@ -35835,6 +35835,19 @@
                     if (el) el.style.display = 'none';
                 });
             })();
+
+            // Fandango opt-out: hide the Interesting Facts card so it
+            // doesn't clutter the page (Fandango run already carries
+            // enough narrative in the ecosystem + funnel cards).
+            (function _jiqHideFandangoCards() {
+                var __meta = (window._jiqCurrentRun || {}).meta || {};
+                var __name = (__meta.target_name || __meta.target || __meta.project_name || '').toLowerCase();
+                if (!/fandango/.test(__name)) return;
+                ['jiqFactsCard'].forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
+            })();
         }
 
         function setJourneyIqCluster(i) {
