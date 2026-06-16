@@ -57696,13 +57696,22 @@
                 const masterId = 'master_' + master.replace(/[^a-zA-Z0-9]/g, '_');
                 const isMasterExpanded = expandedDashCategories.has(masterId);
                 
-                // Count total and accessible items in master category
-                let totalInMaster = 0;
+                // Count distinct SUBJECTS (canonical bases) shown in
+                // the tree, not raw file count. Keyed by
+                // getProfileGroupKey so e.g. "Dwayne The Rock Johnson
+                // - Avid Fan", "... - Casual Fan", "... - 2024 - Avid
+                // Fan" all collapse into ONE — same grouping logic
+                // that produces the tree rows below.
+                const _uniqueSubjectsInMaster = new Set();
                 let accessibleInMaster = 0;
                 Object.values(subcats).forEach(items => {
-                    totalInMaster += items.length;
-                    accessibleInMaster += items.filter(p => p.accessible !== false).length;
+                    items.forEach(p => {
+                        const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
+                        _uniqueSubjectsInMaster.add(subj);
+                        if (p.accessible !== false) accessibleInMaster++;
+                    });
                 });
+                const totalInMaster = _uniqueSubjectsInMaster.size;
                 const countLabel = `${totalInMaster}`;
                 const countClass = 'profile-cat-count';
                 
@@ -57815,11 +57824,15 @@
                                 itemsHtml += _profileItemHtml(base, displayNameAttr);
                             }
                         });
+                        // Subcat count = distinct subjects shown in the
+                        // tree (post-mergeStubGroupsIntoCanonical), not
+                        // file count. Matches the per-row grouping.
+                        const _subcatCount = Object.keys(bySubject).length;
                         html += `
                             <div class="profile-cat-item ${isExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleDashCategory('${catId}')">
                                 <span class="cat-arrow">▸</span>
                                 <span class="profile-cat-label">${getCategoryDisplayLabel(cat)}</span>
-                                <span class="profile-cat-count">(${items.length})</span>
+                                <span class="profile-cat-count">(${_subcatCount})</span>
                             </div>
                             <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}" style="padding-left: 0.5rem;">
                                 ${itemsHtml}
