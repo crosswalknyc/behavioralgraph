@@ -35952,16 +35952,34 @@
             if (lc) lc.innerHTML = _jiqRenderLifecycle(eco);
 
             // ── 3) Hero KPI tiles ────────────────────────────────────
-            var kpiEl = document.getElementById('jiqEcosystemKpis');
-            if (kpiEl) {
-                kpiEl.innerHTML = (eco.kpis || []).map(function(k) {
-                    var color = k.color || '#5b6cff';
-                    return '<div style="background: var(--bg-card); border: 1px solid var(--border-color); border-left: 4px solid ' + color + '; border-radius: 12px; padding: 0.85rem 1rem;">'
-                         + '<div style="font-size: 0.68rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">' + _jiqEsc(k.label || '') + '</div>'
-                         + '<div style="font-size: 1.7rem; font-weight: 800; color: ' + color + '; line-height: 1;">' + _jiqEsc(k.value || '—') + '</div>'
-                         + '<div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.35;">' + _jiqEsc(k.sub || '') + '</div>'
-                         + '</div>';
-                }).join('');
+            // In monthly mode the KPI tiles get rendered INLINE with
+            // the per-property monthly detail strip (by
+            // _jiqRenderLifecycleMonthly) so they share one continuous
+            // row with the Fandango / RT / FaH cards. Hide the
+            // standalone right-rail KPI container in that case AND
+            // collapse the parent flywheel grid to a single column so
+            // the lifecycle / detail-strip section takes full width.
+            var kpiEl   = document.getElementById('jiqEcosystemKpis');
+            var rowEl   = document.getElementById('jiqEcosystemFlywheelRow');
+            if (_isMonthlyEco) {
+                if (kpiEl) {
+                    kpiEl.innerHTML = '';
+                    kpiEl.style.display = 'none';
+                }
+                if (rowEl) rowEl.style.gridTemplateColumns = 'minmax(0, 1fr)';
+            } else {
+                if (kpiEl) {
+                    kpiEl.style.display = 'grid';
+                    kpiEl.innerHTML = (eco.kpis || []).map(function(k) {
+                        var color = k.color || '#5b6cff';
+                        return '<div style="background: var(--bg-card); border: 1px solid var(--border-color); border-left: 4px solid ' + color + '; border-radius: 12px; padding: 0.85rem 1rem;">'
+                             + '<div style="font-size: 0.68rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">' + _jiqEsc(k.label || '') + '</div>'
+                             + '<div style="font-size: 1.7rem; font-weight: 800; color: ' + color + '; line-height: 1;">' + _jiqEsc(k.value || '—') + '</div>'
+                             + '<div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.35;">' + _jiqEsc(k.sub || '') + '</div>'
+                             + '</div>';
+                    }).join('');
+                }
+                if (rowEl) rowEl.style.gridTemplateColumns = 'minmax(0, 1.6fr) minmax(280px, 1fr)';
             }
 
             // ── Provenance footer ────────────────────────────────────
@@ -36368,13 +36386,18 @@
                            + '</div>';
 
             // ── Per-property detail strip (averages OR selected month)
-            // Always three cards (one per property). When "All months"
-            // is active each card shows the Jan–May mean + min/max
+            // + inline ecosystem KPI tiles (e.g. "Cross-property co-
+            // visitation 38%", "RT Certified Fresh Lift +24%") so the
+            // user sees every flywheel headline number on a single row
+            // instead of split between this strip and the standalone
+            // KPI block to the right. When "All months" is active each
+            // per-property card shows the Jan–May mean + min/max
             // bookends; when a specific month is picked each card swaps
-            // to that month's number AND a delta-vs-avg line so the
-            // user can see whether the month over- or under-indexed.
-            var ncols = Math.min(3, curves.length) || 1;
-            var detailHtml = '<div style="display:grid;grid-template-columns:repeat(' + ncols + ',minmax(0,1fr));gap:10px;margin-top:12px;">';
+            // to that month's number AND a delta-vs-avg line.
+            var ecoKpis = (eco.kpis || []);
+            var totalCards = curves.length + ecoKpis.length;
+            var ncols = Math.max(1, totalCards);
+            var detailHtml = '<div style="display:grid;grid-template-columns:repeat(' + ncols + ',minmax(0,1fr));gap:10px;margin-top:12px;align-items:stretch;">';
             curves.forEach(function(c) {
                 var prop = props[c.property] || {};
                 var color = c.color || prop.color || '#5b6cff';
@@ -36404,6 +36427,17 @@
                            +   '<div style="font-size:1.45rem;font-weight:800;color:' + color + ';line-height:1.05;">' + primaryVal.toFixed(1) + 'M</div>'
                            +   '<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:3px;">' + _jiqEsc(primaryLbl) + '</div>'
                            +   '<div style="font-size:0.7rem;color:' + secondaryColor + ';margin-top:6px;font-variant-numeric:tabular-nums;">' + _jiqEsc(secondaryTxt) + '</div>'
+                           + '</div>';
+            });
+            // Ecosystem KPI tiles inline in the same grid, matching
+            // the visual treatment of the per-property cards so the
+            // row reads as one continuous strip.
+            ecoKpis.forEach(function(k) {
+                var kColor = k.color || '#5b6cff';
+                detailHtml += '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid ' + kColor + ';border-radius:10px;padding:10px 12px;">'
+                           +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;font-weight:700;">' + _jiqEsc(k.label || '') + '</div>'
+                           +   '<div style="font-size:1.45rem;font-weight:800;color:' + kColor + ';line-height:1.05;">' + _jiqEsc(k.value || '—') + '</div>'
+                           +   '<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:6px;line-height:1.35;">' + _jiqEsc(k.sub || '') + '</div>'
                            + '</div>';
             });
             detailHtml += '</div>';
