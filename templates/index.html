@@ -13866,6 +13866,7 @@
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
                             <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
+                            <option value="intentIQ" {% if not has_intent_iq_access %}disabled{% endif %}>🎬 Intent IQ</option>
                             <option value="sfConversion" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
@@ -19126,6 +19127,445 @@
             </div>
         </div>
 
+        <!-- INTENT IQ VIEW (Title-scoped marketing-intent measurement) -->
+        <style>
+            #intentIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: auto; padding: 1.25rem 1.5rem; }
+            #intentIQView .iiq-header { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+            #intentIQView .iiq-title { font-size: 1.45rem; font-weight: 600; margin: 0; }
+            #intentIQView .iiq-subtitle { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
+            #intentIQView .iiq-selector-bar { display: flex; gap: 0.75rem; align-items: end; flex-wrap: wrap; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+            #intentIQView .iiq-selector-bar label { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem; display: block; }
+            #intentIQView .iiq-selector-bar select, #intentIQView .iiq-selector-bar input { background: rgba(0,0,0,0.4); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.85rem; min-width: 200px; }
+            #intentIQView .iiq-subtab-bar { display: flex; gap: 0.25rem; flex-wrap: wrap; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.5rem; margin-bottom: 1rem; }
+            #intentIQView .iiq-subtab { background: transparent; border: none; color: var(--text-secondary); padding: 0.5rem 0.85rem; font-size: 0.82rem; font-weight: 500; cursor: pointer; border-radius: 6px; }
+            #intentIQView .iiq-subtab:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+            #intentIQView .iiq-subtab.active { background: var(--data-tab-active, #5a9ad9); color: #fff; }
+            #intentIQView .iiq-panel { display: none; }
+            #intentIQView .iiq-panel.active { display: block; }
+            #intentIQView .iiq-meta-row { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
+            #intentIQView .iiq-meta-card { flex: 1; min-width: 180px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.75rem 1rem; }
+            #intentIQView .iiq-meta-card-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+            #intentIQView .iiq-meta-card-value { font-size: 1.1rem; font-weight: 600; margin-top: 0.25rem; }
+            #intentIQView .iiq-phase-timeline { display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; }
+            #intentIQView .iiq-phase-row { display: grid; grid-template-columns: 180px 1fr 160px; gap: 0.75rem; align-items: center; padding: 0.4rem 0.5rem; border-radius: 6px; }
+            #intentIQView .iiq-phase-name { font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; gap: 0.4rem; }
+            #intentIQView .iiq-phase-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+            #intentIQView .iiq-phase-bar { height: 22px; border-radius: 4px; opacity: 0.9; position: relative; }
+            #intentIQView .iiq-phase-dates { font-size: 0.78rem; color: var(--text-secondary); text-align: right; }
+            #intentIQView .iiq-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.85rem; }
+            #intentIQView .iiq-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.85rem 1rem; }
+            #intentIQView .iiq-card-title { font-weight: 600; font-size: 0.92rem; margin-bottom: 0.25rem; }
+            #intentIQView .iiq-card-meta { font-size: 0.78rem; color: var(--text-secondary); }
+            #intentIQView .iiq-chip { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 10px; background: rgba(90,154,217,0.18); color: #c4dcf2; margin-right: 0.3rem; margin-top: 0.3rem; }
+            #intentIQView .iiq-chip.paid { background: rgba(239,68,68,0.18); color: #ffd0d0; }
+            #intentIQView .iiq-chip.organic { background: rgba(34,197,94,0.18); color: #c4f0d0; }
+            #intentIQView .iiq-asset-filter { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.85rem; align-items: end; }
+            #intentIQView .iiq-question-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 1rem 1.1rem; margin-bottom: 0.85rem; }
+            #intentIQView .iiq-question-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.5rem; cursor: pointer; user-select: none; }
+            #intentIQView .iiq-question-body { font-size: 0.85rem; color: var(--text-secondary); }
+            #intentIQView .iiq-question-body pre { background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 4px; overflow: auto; font-size: 0.75rem; }
+            #intentIQView .iiq-empty { padding: 2rem; text-align: center; color: var(--text-secondary); font-size: 0.9rem; }
+            #intentIQView .iiq-aoi-row { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px dashed rgba(255,255,255,0.06); }
+            body[data-theme="light"] #intentIQView .iiq-meta-card,
+            body[data-theme="light"] #intentIQView .iiq-card,
+            body[data-theme="light"] #intentIQView .iiq-phase-timeline,
+            body[data-theme="light"] #intentIQView .iiq-selector-bar,
+            body[data-theme="light"] #intentIQView .iiq-question-card { background: #fff; border-color: rgba(0,0,0,0.08); }
+        </style>
+        <div id="intentIQView">
+            <div class="iiq-header">
+                <h2 class="iiq-title">🎬 Intent IQ <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Title-scoped marketing-intent measurement</span></h2>
+                <p class="iiq-subtitle">Ingest a title's marketing-asset map and report on campaign-phase performance, audience-of-interest overlap, paid vs organic interplay, talent halo, trailer viewership, and audience shift over the campaign life.</p>
+            </div>
+            <div class="iiq-selector-bar">
+                <div>
+                    <label for="iiqTitleSelect">Title</label>
+                    <select id="iiqTitleSelect" onchange="onIntentIQTitleChange()"><option value="">Loading...</option></select>
+                </div>
+                <div>
+                    <label for="iiqAsOf">As-of (in-flight)</label>
+                    <input type="date" id="iiqAsOf" />
+                </div>
+                <div>
+                    <label>&nbsp;</label>
+                    <button type="button" class="blue-iq-apply-btn" onclick="reloadIntentIQ()">Reload</button>
+                </div>
+                <div style="flex: 1; text-align: right; color: var(--text-secondary); font-size: 0.78rem;">
+                    <span id="iiqStatus">Pick a title to begin.</span>
+                </div>
+            </div>
+            <div class="iiq-subtab-bar">
+                <button class="iiq-subtab active" data-iiq-subtab="overview" onclick="showIntentIQSubtab('overview')">📊 OVERVIEW</button>
+                <button class="iiq-subtab" data-iiq-subtab="audiences" onclick="showIntentIQSubtab('audiences')">👥 AUDIENCES</button>
+                <button class="iiq-subtab" data-iiq-subtab="assets" onclick="showIntentIQSubtab('assets')">🎞️ ASSETS</button>
+                <button class="iiq-subtab" data-iiq-subtab="questions" onclick="showIntentIQSubtab('questions')">❓ QUESTIONS</button>
+                <button class="iiq-subtab" data-iiq-subtab="inflight" onclick="showIntentIQSubtab('inflight')">⚡ IN-FLIGHT</button>
+                <button class="iiq-subtab" data-iiq-subtab="compare" onclick="showIntentIQSubtab('compare')">⚖️ COMPARE</button>
+            </div>
+
+            <div class="iiq-panel active" id="iiqPanel-overview">
+                <div class="iiq-meta-row" id="iiqOverviewMeta"></div>
+                <h4 style="margin: 1rem 0 0.5rem;">Campaign phase timeline</h4>
+                <div class="iiq-phase-timeline" id="iiqPhaseTimeline"></div>
+            </div>
+
+            <div class="iiq-panel" id="iiqPanel-audiences">
+                <div class="iiq-cards-grid" id="iiqAudienceCards"></div>
+                <h4 style="margin: 1.25rem 0 0.5rem;">Moviegoing-frequency cohorts (proxy audiences)</h4>
+                <div id="iiqCohortGrid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;"></div>
+            </div>
+
+            <div class="iiq-panel" id="iiqPanel-assets">
+                <div class="iiq-asset-filter">
+                    <div><label>Phase</label><select id="iiqAssetFilterPhase" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
+                    <div><label>Type</label><select id="iiqAssetFilterType" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
+                    <div><label>Paid / Organic</label><select id="iiqAssetFilterPaid" onchange="reloadIntentIQAssets()"><option value="">All</option><option value="paid">Paid</option><option value="organic">Organic</option><option value="unknown">Unknown</option></select></div>
+                    <div style="flex:1; text-align:right;"><span id="iiqAssetMeta" style="color: var(--text-secondary); font-size: 0.8rem;"></span></div>
+                </div>
+                <div class="iiq-cards-grid" id="iiqAssetGrid"></div>
+            </div>
+
+            <div class="iiq-panel" id="iiqPanel-questions">
+                <div id="iiqQuestionList"></div>
+            </div>
+
+            <div class="iiq-panel" id="iiqPanel-inflight">
+                <div id="iiqInFlightBody"></div>
+            </div>
+
+            <div class="iiq-panel" id="iiqPanel-compare">
+                <div style="margin-bottom: 0.85rem;">
+                    <label style="font-size: 0.78rem; color: var(--text-secondary);">Pick titles to compare (Ctrl/Cmd-click for multiple)</label>
+                    <select id="iiqCompareSelect" multiple style="display:block; width: 100%; min-height: 110px; background: rgba(0,0,0,0.4); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 0.4rem;"></select>
+                    <button class="blue-iq-apply-btn" style="margin-top: 0.5rem;" onclick="runIntentIQCompare()">Compare</button>
+                </div>
+                <div id="iiqCompareResult"></div>
+            </div>
+        </div>
+
+        <script>
+        // ============================================================
+        // Intent IQ — frontend controller
+        // ============================================================
+        (function() {
+            window.__intentIQ = window.__intentIQ || { titles: [], currentSlug: null, overview: null, cohorts: null };
+
+            function _iiqHideAllOtherViews() {
+                var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
+                           'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
+                           'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
+                           'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
+                           'shareOfTimeIQView','flywheelConversionView','talentFitIQView',
+                           'journeyIQView','blueIQView'];
+                ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
+            }
+
+            window.showIntentIQ = function() {
+                var dd = document.getElementById('viewNavDropdown');
+                var opt = dd && dd.querySelector('option[value="intentIQ"]');
+                if (opt && opt.disabled) return;
+                if (typeof setViewNavDropdown === 'function') setViewNavDropdown('intentIQ');
+                _iiqHideAllOtherViews();
+                var view = document.getElementById('intentIQView');
+                if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
+                if (!window.__intentIQ.titles.length) loadIntentIQTitles();
+            };
+
+            async function loadIntentIQTitles() {
+                document.getElementById('iiqStatus').textContent = 'Loading titles...';
+                try {
+                    var resp = await fetch('/api/intent/titles', { credentials: 'same-origin' });
+                    var d = await resp.json();
+                    if (!d.success) throw new Error(d.error || 'Failed');
+                    window.__intentIQ.titles = d.titles || [];
+                    var sel = document.getElementById('iiqTitleSelect');
+                    var cmp = document.getElementById('iiqCompareSelect');
+                    sel.innerHTML = ''; cmp.innerHTML = '';
+                    if (!window.__intentIQ.titles.length) {
+                        sel.innerHTML = '<option value="">(no titles ingested yet — run scripts/ingest_intent_campaign.py)</option>';
+                        document.getElementById('iiqStatus').textContent = 'No titles. Ingest one with scripts/ingest_intent_campaign.py.';
+                        return;
+                    }
+                    window.__intentIQ.titles.forEach(function(t) {
+                        var opt = new Option((t.display_name || t.title_slug) + (t.opening_date ? ' (' + t.opening_date + ')' : ''), t.title_slug);
+                        sel.appendChild(opt);
+                        cmp.appendChild(new Option(t.display_name || t.title_slug, t.title_slug));
+                    });
+                    sel.value = window.__intentIQ.titles[0].title_slug;
+                    onIntentIQTitleChange();
+                } catch (e) {
+                    document.getElementById('iiqStatus').textContent = 'Failed to load titles: ' + (e.message || e);
+                }
+            }
+
+            window.onIntentIQTitleChange = function() {
+                var slug = document.getElementById('iiqTitleSelect').value;
+                if (!slug) return;
+                window.__intentIQ.currentSlug = slug;
+                reloadIntentIQ();
+            };
+
+            window.reloadIntentIQ = function() {
+                var slug = window.__intentIQ.currentSlug;
+                if (!slug) return;
+                document.getElementById('iiqStatus').textContent = 'Loading ' + slug + '...';
+                Promise.all([
+                    fetch('/api/intent/' + slug + '/overview', { credentials: 'same-origin' }).then(function(r) { return r.json(); }),
+                    fetch('/api/intent/' + slug + '/audiences', { credentials: 'same-origin' }).then(function(r) { return r.json(); }),
+                    fetch('/api/intent/' + slug + '/cohorts', { credentials: 'same-origin' }).then(function(r) { return r.json(); }),
+                ]).then(function(rs) {
+                    window.__intentIQ.overview = rs[0];
+                    window.__intentIQ.audiences = rs[1];
+                    window.__intentIQ.cohorts = rs[2];
+                    renderIntentIQOverview();
+                    renderIntentIQAudiences();
+                    renderIntentIQCohorts();
+                    renderIntentIQQuestions();
+                    populateAssetFilterDropdowns();
+                    reloadIntentIQAssets();
+                    document.getElementById('iiqStatus').textContent = 'Loaded ' + slug + '.';
+                }).catch(function(e) {
+                    document.getElementById('iiqStatus').textContent = 'Load failed: ' + (e.message || e);
+                });
+            };
+
+            window.showIntentIQSubtab = function(tab) {
+                document.querySelectorAll('#intentIQView .iiq-subtab').forEach(function(b) {
+                    b.classList.toggle('active', b.getAttribute('data-iiq-subtab') === tab);
+                });
+                document.querySelectorAll('#intentIQView .iiq-panel').forEach(function(p) {
+                    p.classList.toggle('active', p.id === 'iiqPanel-' + tab);
+                });
+                if (tab === 'inflight') reloadIntentIQInFlight();
+            };
+
+            function fmtUSD(n) { if (!n) return ''; n = Number(n); if (!isFinite(n)) return ''; if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M'; if (n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K'; return '$' + n; }
+            function fmtInt(n) { return (n || 0).toLocaleString(); }
+            function escapeHtml(s) { return String(s||'').replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+
+            function renderIntentIQOverview() {
+                var ov = window.__intentIQ.overview || {};
+                if (!ov.success) {
+                    document.getElementById('iiqOverviewMeta').innerHTML = '<div class="iiq-empty">' + (ov.error || 'No data') + '</div>';
+                    document.getElementById('iiqPhaseTimeline').innerHTML = '';
+                    return;
+                }
+                var fcst = '';
+                if (ov.predicted_bo_low_usd || ov.predicted_bo_high_usd) {
+                    fcst = fmtUSD(ov.predicted_bo_low_usd) + ' \u2013 ' + fmtUSD(ov.predicted_bo_high_usd);
+                }
+                document.getElementById('iiqOverviewMeta').innerHTML = [
+                    metaCard('Distributor', ov.distributor || '—'),
+                    metaCard('Opening date', ov.opening_date || '—'),
+                    metaCard('Ticketing on sale', ov.ticketing_open_date || '—'),
+                    metaCard('Genre', ov.genre || '—'),
+                    metaCard('Assets ingested', fmtInt(ov.asset_count)),
+                    metaCard('Industry BO forecast', fcst || '—'),
+                ].join('');
+                var phases = (ov.phases || []);
+                if (!phases.length) {
+                    document.getElementById('iiqPhaseTimeline').innerHTML = '<div class="iiq-empty">No phases.</div>';
+                    return;
+                }
+                var allDates = phases.map(function(p) { return p.start_date; }).concat(phases.map(function(p) { return p.end_date; })).filter(Boolean).sort();
+                var minD = new Date(allDates[0]); var maxD = new Date(allDates[allDates.length-1]);
+                var spanMs = Math.max(1, maxD - minD);
+                document.getElementById('iiqPhaseTimeline').innerHTML = phases.map(function(p) {
+                    var s = new Date(p.start_date); var e = new Date(p.end_date);
+                    var leftPct = Math.max(0, (s - minD) / spanMs * 100);
+                    var widthPct = Math.max(2, (e - s) / spanMs * 100);
+                    var color = p.color_hex || '#5a9ad9';
+                    return '<div class="iiq-phase-row">'
+                        + '<div class="iiq-phase-name"><span class="iiq-phase-dot" style="background:' + color + '"></span>' + escapeHtml(p.phase_name) + '</div>'
+                        + '<div style="position: relative; height: 22px;"><div class="iiq-phase-bar" style="position:absolute; left:' + leftPct + '%; width:' + widthPct + '%; background:' + color + ';"></div></div>'
+                        + '<div class="iiq-phase-dates">' + escapeHtml(p.start_date) + ' \u2192 ' + escapeHtml(p.end_date) + '</div>'
+                        + '</div>';
+                }).join('');
+            }
+            function metaCard(label, value) { return '<div class="iiq-meta-card"><div class="iiq-meta-card-label">' + escapeHtml(label) + '</div><div class="iiq-meta-card-value">' + escapeHtml(value) + '</div></div>'; }
+
+            function renderIntentIQAudiences() {
+                var data = window.__intentIQ.audiences || {};
+                var cards = data.cards || [];
+                if (!cards.length) {
+                    document.getElementById('iiqAudienceCards').innerHTML = '<div class="iiq-empty">No audiences-of-interest configured.</div>';
+                    return;
+                }
+                document.getElementById('iiqAudienceCards').innerHTML = cards.map(function(c) {
+                    var bp = (c.overlap_bp !== null && c.overlap_bp !== undefined) ? (Number(c.overlap_bp).toFixed(4) + '%') : '—';
+                    return '<div class="iiq-card">'
+                        + '<div class="iiq-card-title">' + escapeHtml(c.display || c.subject_key) + '</div>'
+                        + '<div class="iiq-card-meta">Category: ' + escapeHtml(c.category || '—') + '</div>'
+                        + '<div class="iiq-card-meta" style="margin-top:0.25rem;">Overlap BP: <strong>' + bp + '</strong></div>'
+                        + '<div style="margin-top:0.4rem;"><span class="iiq-chip">' + escapeHtml(c.subject_key || '') + '</span></div>'
+                        + '</div>';
+                }).join('');
+            }
+
+            function renderIntentIQCohorts() {
+                var d = window.__intentIQ.cohorts || {};
+                var cohorts = d.cohorts || [];
+                if (!cohorts.length) { document.getElementById('iiqCohortGrid').innerHTML = '<div class="iiq-empty">No cohorts defined yet (run scripts/build_moviegoing_cohorts.py --apply).</div>'; return; }
+                document.getElementById('iiqCohortGrid').innerHTML = cohorts.map(function(c) {
+                    return '<div class="iiq-card">'
+                        + '<div class="iiq-card-title">' + escapeHtml(c.display_name) + '</div>'
+                        + '<div class="iiq-card-meta">' + escapeHtml(c.frequency_band) + '</div>'
+                        + '<div class="iiq-card-meta" style="margin-top:0.35rem;">Panel: <strong>' + fmtInt(c.panel_count) + '</strong></div>'
+                        + '<div class="iiq-card-meta">Gen Pop share: <strong>' + (c.gen_pop_share ? (Number(c.gen_pop_share)*100).toFixed(2) + '%' : '—') + '</strong></div>'
+                        + '</div>';
+                }).join('');
+            }
+
+            function populateAssetFilterDropdowns() {
+                var ov = window.__intentIQ.overview || {};
+                var phaseSel = document.getElementById('iiqAssetFilterPhase');
+                phaseSel.innerHTML = '<option value="">All</option>';
+                (ov.phases || []).forEach(function(p) { phaseSel.appendChild(new Option(p.phase_name, p.phase_name)); });
+            }
+
+            window.reloadIntentIQAssets = function() {
+                var slug = window.__intentIQ.currentSlug;
+                if (!slug) return;
+                var params = new URLSearchParams();
+                var ph = document.getElementById('iiqAssetFilterPhase').value;
+                var ty = document.getElementById('iiqAssetFilterType').value;
+                var po = document.getElementById('iiqAssetFilterPaid').value;
+                if (ph) params.set('phase', ph);
+                if (ty) params.set('asset_type', ty);
+                if (po) params.set('paid_or_organic', po);
+                document.getElementById('iiqAssetMeta').textContent = 'Loading...';
+                fetch('/api/intent/' + slug + '/assets?' + params.toString(), { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (!d.success) throw new Error(d.error || 'Failed');
+                        var cards = d.cards || [];
+                        document.getElementById('iiqAssetMeta').textContent = cards.length + ' asset' + (cards.length === 1 ? '' : 's');
+                        var typeSel = document.getElementById('iiqAssetFilterType');
+                        if (typeSel.options.length <= 1) {
+                            var types = Array.from(new Set(cards.map(function(c) { return c.asset_type; }).filter(Boolean))).sort();
+                            types.forEach(function(t) { typeSel.appendChild(new Option(t, t)); });
+                        }
+                        document.getElementById('iiqAssetGrid').innerHTML = cards.map(function(c) {
+                            var paidChip = c.paid_or_organic ? '<span class="iiq-chip ' + escapeHtml(c.paid_or_organic) + '">' + escapeHtml(c.paid_or_organic) + '</span>' : '';
+                            var phaseChip = c.phase_name ? '<span class="iiq-chip">' + escapeHtml(c.phase_name) + '</span>' : '';
+                            return '<div class="iiq-card">'
+                                + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '—') + '</div>'
+                                + '<div class="iiq-card-meta">' + escapeHtml(c.asset_type || '') + ' / ' + escapeHtml(c.channel || '') + '</div>'
+                                + '<div class="iiq-card-meta" style="margin-top:0.25rem;">Posted: ' + escapeHtml(c.posted_date || '') + '</div>'
+                                + (c.url ? '<div class="iiq-card-meta" style="margin-top:0.25rem; word-break:break-all;"><a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener" style="color: var(--accent-cyan, #5a9ad9);">Open</a></div>' : '')
+                                + '<div>' + paidChip + phaseChip + '</div>'
+                                + '</div>';
+                        }).join('') || '<div class="iiq-empty">No assets match filters.</div>';
+                    })
+                    .catch(function(e) {
+                        document.getElementById('iiqAssetMeta').textContent = 'Failed: ' + (e.message || e);
+                    });
+            };
+
+            function renderIntentIQQuestions() {
+                var slug = window.__intentIQ.currentSlug;
+                if (!slug) return;
+                var qids = ['q1','q2','q3','q4','q5','q6'];
+                var qtxt = {
+                    q1: 'Q1. What content categories drive engagement / ticket purchase?',
+                    q2: 'Q2. Organic vs paid interplay + cumulative effect + best in-flight assets',
+                    q3: 'Q3. How can early ticketing / box-office estimates be fine-tuned?',
+                    q4: 'Q4. How do talent & influencer activity boost other marketing?',
+                    q5: 'Q5. How crucial is trailer viewership across the campaign life?',
+                    q6: 'Q6. How do different audiences engage throughout the campaign?',
+                };
+                document.getElementById('iiqQuestionList').innerHTML = qids.map(function(q) {
+                    return '<div class="iiq-question-card">'
+                        + '<div class="iiq-question-title" onclick="toggleIntentIQQuestion(\'' + q + '\')">' + escapeHtml(qtxt[q]) + ' <span style="float:right;color:var(--text-secondary);">▾</span></div>'
+                        + '<div class="iiq-question-body" id="iiqQA-' + q + '" style="display:none;">Loading...</div>'
+                        + '</div>';
+                }).join('');
+            }
+            window.toggleIntentIQQuestion = function(qid) {
+                var slug = window.__intentIQ.currentSlug;
+                var body = document.getElementById('iiqQA-' + qid);
+                if (!body) return;
+                if (body.style.display === 'none') {
+                    body.style.display = 'block';
+                    fetch('/api/intent/' + slug + '/questions/' + qid, { credentials: 'same-origin' })
+                        .then(function(r) { return r.json(); })
+                        .then(function(d) {
+                            var sub = '';
+                            if (d.note) sub += '<p style="color: var(--text-secondary); font-size: 0.8rem;">' + escapeHtml(d.note) + '</p>';
+                            if (d.rows && d.rows.length) {
+                                sub += '<pre>' + escapeHtml(JSON.stringify(d.rows, null, 2)) + '</pre>';
+                            } else if (d.cumulative) {
+                                sub += '<pre>' + escapeHtml(JSON.stringify(d, null, 2)) + '</pre>';
+                            } else if (d.shift_curves) {
+                                sub += '<p><strong>Crossover date:</strong> ' + escapeHtml(d.crossover_date || '(not yet detected)') + '</p>';
+                                sub += '<pre>' + escapeHtml(JSON.stringify(d.shift_curves, null, 2)) + '</pre>';
+                            } else if (d.trailer_view_curve) {
+                                sub += '<pre>' + escapeHtml(JSON.stringify(d.trailer_view_curve, null, 2)) + '</pre>';
+                            } else {
+                                sub += '<pre>' + escapeHtml(JSON.stringify(d, null, 2)) + '</pre>';
+                            }
+                            body.innerHTML = sub;
+                        })
+                        .catch(function(e) { body.innerHTML = 'Failed: ' + escapeHtml(e.message || e); });
+                } else {
+                    body.style.display = 'none';
+                }
+            };
+
+            window.reloadIntentIQInFlight = function() {
+                var slug = window.__intentIQ.currentSlug;
+                if (!slug) return;
+                var asOf = document.getElementById('iiqAsOf').value;
+                var url = '/api/intent/' + slug + '/in_flight' + (asOf ? ('?as_of=' + encodeURIComponent(asOf)) : '');
+                document.getElementById('iiqInFlightBody').innerHTML = 'Loading...';
+                fetch(url, { credentials: 'same-origin' }).then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (!d.success) { document.getElementById('iiqInFlightBody').innerHTML = escapeHtml(d.error || 'Failed'); return; }
+                        function pickCard(label, c) {
+                            if (!c) return '<div class="iiq-card"><div class="iiq-card-title">' + label + '</div><div class="iiq-empty">No asset in 14d window.</div></div>';
+                            return '<div class="iiq-card">'
+                                + '<div class="iiq-card-title">' + label + '</div>'
+                                + '<div class="iiq-card-meta">' + escapeHtml(c.action_label || c.asset_type) + '</div>'
+                                + '<div class="iiq-card-meta">Type: ' + escapeHtml(c.asset_type) + '</div>'
+                                + '<div class="iiq-card-meta">Posted: ' + escapeHtml(c.posted_date) + '</div>'
+                                + '<div class="iiq-card-meta">7d views: <strong>' + fmtInt(c.views_total) + '</strong></div>'
+                                + (c.url ? '<div style="margin-top:0.35rem;"><a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener" style="color: var(--accent-cyan, #5a9ad9);">Open asset</a></div>' : '')
+                                + '</div>';
+                        }
+                        document.getElementById('iiqInFlightBody').innerHTML =
+                            '<p style="color: var(--text-secondary); font-size: 0.82rem; margin-bottom: 0.75rem;">As-of: ' + escapeHtml(d.as_of) + (d.fallback ? ' (fallback — ClickHouse unreachable)' : '') + '</p>'
+                            + '<div class="iiq-cards-grid">'
+                            + pickCard('🏆 Best PAID (last 14d)', d.best_paid)
+                            + pickCard('🌱 Best ORGANIC (last 14d)', d.best_organic)
+                            + '</div>';
+                    })
+                    .catch(function(e) {
+                        document.getElementById('iiqInFlightBody').innerHTML = 'Failed: ' + escapeHtml(e.message || e);
+                    });
+            };
+
+            window.runIntentIQCompare = function() {
+                var sel = document.getElementById('iiqCompareSelect');
+                var slugs = Array.from(sel.selectedOptions).map(function(o) { return o.value; });
+                if (!slugs.length) { document.getElementById('iiqCompareResult').innerHTML = '<div class="iiq-empty">Pick at least one title above.</div>'; return; }
+                fetch('/api/intent/compare?titles=' + encodeURIComponent(slugs.join(',')), { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (!d.success) { document.getElementById('iiqCompareResult').innerHTML = escapeHtml(d.error || 'Failed'); return; }
+                        document.getElementById('iiqCompareResult').innerHTML = (d.titles || []).map(function(t) {
+                            return '<div class="iiq-card" style="margin-bottom:0.5rem;">'
+                                + '<div class="iiq-card-title">' + escapeHtml(t.display_name || t.title_slug) + '</div>'
+                                + '<div class="iiq-card-meta">Open: ' + escapeHtml(t.opening_date) + ' / Assets: ' + fmtInt(t.asset_count) + '</div>'
+                                + '<div class="iiq-card-meta">BO forecast: ' + fmtUSD(t.predicted_bo_low_usd) + ' \u2013 ' + fmtUSD(t.predicted_bo_high_usd) + '</div>'
+                                + '<div class="iiq-card-meta">Actual opening: ' + fmtUSD(t.actual_opening_bo_usd) + '</div>'
+                                + '</div>';
+                        }).join('') || '<div class="iiq-empty">No data.</div>';
+                    });
+            };
+
+        })();
+        </script>
+
         <!-- SF CONVERSION VIEW -->
         <div id="sfConversionView" style="display: none; flex: 1; height: 100%; min-height: 0;">
             <div class="dashboard-layout" style="height: 100%; min-height: 0;">
@@ -22848,7 +23288,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -24392,7 +24832,8 @@
                        'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
                        'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
                        'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
-                       'shareOfTimeIQView','flywheelConversionView','talentFitIQView','journeyIQView'];
+                       'shareOfTimeIQView','flywheelConversionView','talentFitIQView','journeyIQView',
+                       'intentIQView'];
             ids.forEach(function(id) {
                 var el = document.getElementById(id);
                 if (el) el.style.display = 'none';
