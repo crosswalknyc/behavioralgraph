@@ -37918,37 +37918,78 @@
                     return '<span style="display:inline-block;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:14px;padding:4px 10px;margin:0 5px 5px 0;font-size:0.74rem;color:var(--text-primary);">' + _jiqEsc(s) + '</span>';
                 }).join('');
 
+                // Collapsible-panel helper. Renders one <details> card,
+                // closed by default — the user only sees the colored title
+                // until they click. Item count goes in the summary so the
+                // size of each list is visible without expanding.
+                var presPanel = function(accent, emoji, title, count, bodyHtml) {
+                    return '<details class="jiq-pres-panel" style="background:var(--bg-card);border:1px solid var(--border-color);border-top:3px solid ' + accent + ';border-radius:10px;overflow:hidden;">'
+                        +   '<summary class="jiq-pres-summary" style="cursor:pointer;list-style:none;padding:0.7rem 0.9rem;display:flex;justify-content:space-between;align-items:center;gap:10px;user-select:none;">'
+                        +     '<span style="font-weight:700;font-size:0.82rem;color:' + accent + ';">' + emoji + ' ' + _jiqEsc(title) + '</span>'
+                        +     '<span style="display:flex;align-items:center;gap:8px;">'
+                        +       '<span style="font-size:0.66rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">' + (count ? (count + ' item' + (count === 1 ? '' : 's')) : 'click to expand') + '</span>'
+                        +       '<span class="jiq-pres-chev" style="font-size:0.78rem;color:var(--text-secondary);width:14px;text-align:center;transition:transform 0.15s;">▸</span>'
+                        +     '</span>'
+                        +   '</summary>'
+                        +   '<div style="padding:0.6rem 0.9rem 0.9rem;border-top:1px solid var(--border-color);">' + bodyHtml + '</div>'
+                        + '</details>';
+                };
+
+                var dmaCount    = (p.top_dmas_concentrate_spend || []).length;
+                var chanCount   = (p.top_channels_to_concentrate_spend || []).length;
+                var stealCount  = (p.top_steal_targets || []).length;
+                var cohortCount = (p.top_cohorts_target || []).length;
+                var vpCount     = (p.value_prop_priority_for_creative || []).length;
+                var stopCount   = (p.top_journey_stops_for_chime_to_show_up || []).length;
+
                 presEl.innerHTML = ''
-                  + '<h3 style="margin:0 0 0.5rem;">🟣 ' + _jiqEsc(brand || 'Customer brand') + ' Media-Buy Prescription — where to spend, who to target</h3>'
-                  + '<div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.8rem;">A direct read-out of the lifecycle above: where to concentrate spend, which competitors to steal from, which cohorts have the highest addressable upside, and which value props to lead with.</div>'
-                  + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:0.85rem;">'
-                  +   '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-top:3px solid #a855f7;border-radius:10px;padding:0.85rem;">'
-                  +     '<div style="font-weight:700;font-size:0.78rem;color:#a855f7;margin-bottom:0.4rem;">📍 Top DMAs to concentrate spend</div>'
-                  +     '<ol style="margin:0;padding-left:1.1rem;font-size:0.78rem;color:var(--text-primary);">' + dmaList + '</ol>'
-                  +   '</div>'
-                  +   '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-top:3px solid #10b981;border-radius:10px;padding:0.85rem;">'
-                  +     '<div style="font-weight:700;font-size:0.78rem;color:#10b981;margin-bottom:0.4rem;">📡 Top channels to concentrate spend</div>'
-                  +     '<ol style="margin:0;padding-left:1.1rem;font-size:0.78rem;color:var(--text-primary);">' + chanList + '</ol>'
-                  +   '</div>'
-                  +   '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-top:3px solid #ef4444;border-radius:10px;padding:0.85rem;">'
-                  +     '<div style="font-weight:700;font-size:0.78rem;color:#ef4444;margin-bottom:0.4rem;">🎯 Top steal targets (incumbents)</div>'
-                  +     '<ol style="margin:0;padding-left:1.1rem;font-size:0.78rem;color:var(--text-primary);">' + stealList + '</ol>'
-                  +   '</div>'
-                  +   '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-top:3px solid #fbbf24;border-radius:10px;padding:0.85rem;">'
-                  +     '<div style="font-weight:700;font-size:0.78rem;color:#fbbf24;margin-bottom:0.4rem;">👥 Top cohorts to target</div>'
-                  +     '<ol style="margin:0;padding-left:1.1rem;font-size:0.78rem;color:var(--text-primary);">' + cohortList + '</ol>'
+                  + '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:0.4rem;">'
+                  +   '<h3 style="margin:0;">🟣 ' + _jiqEsc(brand || 'Customer brand') + ' Media-Buy Prescription — where to spend, who to target</h3>'
+                  +   '<div style="display:flex;gap:6px;">'
+                  +     '<button id="jiqPresExpandAll" type="button" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 11px;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;">Expand all</button>'
+                  +     '<button id="jiqPresCollapseAll" type="button" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 11px;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;">Collapse all</button>'
                   +   '</div>'
                   + '</div>'
-                  + '<div style="margin-top:0.85rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:0.85rem;">'
-                  +   '<div>'
-                  +     '<div style="font-weight:700;font-size:0.74rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Value props to lead with (creative)</div>'
-                  +     vpList
-                  +   '</div>'
-                  +   '<div>'
-                  +     '<div style="font-weight:700;font-size:0.74rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Top journey stops for ' + _jiqEsc(brand || 'your brand') + ' to show up</div>'
-                  +     topStops
-                  +   '</div>'
+                  + '<div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.8rem;">A direct read-out of the lifecycle above: where to concentrate spend, which competitors to steal from, which cohorts have the highest addressable upside, and which value props to lead with. <em>All panels are collapsed by default — click any title to expand.</em></div>'
+                  + '<div id="jiqPresPanels" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:0.85rem;">'
+                  +   presPanel('#a855f7', '📍', 'Top DMAs to concentrate spend',     dmaCount,
+                        '<ol style="margin:0;padding-left:1.1rem;font-size:0.78rem;color:var(--text-primary);">' + dmaList + '</ol>')
+                  +   presPanel('#10b981', '📡', 'Top channels to concentrate spend', chanCount,
+                        '<ol style="margin:0;padding-left:1.1rem;font-size:0.78rem;color:var(--text-primary);">' + chanList + '</ol>')
+                  +   presPanel('#ef4444', '🎯', 'Top steal targets (incumbents)',    stealCount,
+                        '<ol style="margin:0;padding-left:1.1rem;font-size:0.78rem;color:var(--text-primary);">' + stealList + '</ol>')
+                  +   presPanel('#fbbf24', '👥', 'Top cohorts to target',             cohortCount,
+                        '<ol style="margin:0;padding-left:1.1rem;font-size:0.78rem;color:var(--text-primary);">' + cohortList + '</ol>')
+                  +   presPanel('#a855f7', '💎', 'Value props to lead with (creative)', vpCount, vpList)
+                  +   presPanel('#5b6cff', '🛤️', 'Top journey stops for ' + (brand || 'your brand') + ' to show up', stopCount, topStops)
                   + '</div>';
+
+                // Idempotent style block — hides default <details> arrow,
+                // adds chevron rotate on open, and a subtle hover.
+                if (!document.getElementById('jiqPresStyle')) {
+                    var ps = document.createElement('style');
+                    ps.id = 'jiqPresStyle';
+                    ps.textContent = ''
+                        + '#jiqPresPanels summary.jiq-pres-summary::-webkit-details-marker { display:none; }'
+                        + '#jiqPresPanels summary.jiq-pres-summary { transition: background-color 0.12s; }'
+                        + '#jiqPresPanels summary.jiq-pres-summary:hover { background: rgba(91,108,255,0.06); }'
+                        + '#jiqPresPanels details.jiq-pres-panel[open] > summary.jiq-pres-summary .jiq-pres-chev { transform: rotate(90deg); color: var(--text-primary); }';
+                    document.head.appendChild(ps);
+                }
+
+                // Wire up expand-all / collapse-all
+                var presPanelsEl = document.getElementById('jiqPresPanels');
+                var presAllDetails = function() {
+                    return presPanelsEl ? presPanelsEl.querySelectorAll('details.jiq-pres-panel') : [];
+                };
+                var presExpandBtn   = document.getElementById('jiqPresExpandAll');
+                var presCollapseBtn = document.getElementById('jiqPresCollapseAll');
+                if (presExpandBtn) presExpandBtn.onclick = function() {
+                    presAllDetails().forEach(function(d) { d.open = true; });
+                };
+                if (presCollapseBtn) presCollapseBtn.onclick = function() {
+                    presAllDetails().forEach(function(d) { d.open = false; });
+                };
             } else if (presEl) {
                 presEl.innerHTML = '';
             }
