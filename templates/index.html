@@ -21641,6 +21641,44 @@
                 </div>
 
                 <!-- ════════════════════════════════════════════════════════
+                     JOURNEY LIFECYCLE DETAIL — banking-research only
+                     modeled_view.journey_lifecycle.stops[]
+                     Stop-by-stop view of WHAT HAPPENS at every step of
+                     the digital research journey: dwell time, concurrent
+                     behaviors, queries, objections, emotional state,
+                     drop-off, re-entry triggers, and the per-stop
+                     Chime intercept play. Hidden when the payload does
+                     not include the lifecycle block.
+                     ════════════════════════════════════════════════════════ -->
+                <div class="card" id="jiqJourneyLifecycleCard" style="padding: 1rem; margin-bottom: 1rem; display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem;">
+                        <h3 id="jiqLifecycleTitle" style="margin: 0 0 0.5rem;">🛤️ Journey Lifecycle — what happens at every stop</h3>
+                        <div id="jiqLifecycleMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqLifecycleSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
+                    <details style="margin: 0 0 0.85rem;">
+                        <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
+                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
+                            <ul style="margin:0;padding-left:1.1rem;">
+                                <li><strong>One card per stop, in journey order.</strong> Each stop has its own dwell time, surfaces, concurrent behaviors, queries, objections, emotional state, drop-off / park / re-entry, and a per-stop Chime intercept play.</li>
+                                <li><strong>Top header tile:</strong> emoji + name + 1-line description of what happens at this stop.</li>
+                                <li><strong>Dwell + day strip:</strong> avg minutes in this state (p25-p75 range) + day from journey start.</li>
+                                <li><strong>Researchers reaching this stop:</strong> count + % of total researchers — survivorship narrows toward the right of the journey.</li>
+                                <li><strong>Surfaces &amp; concurrent behaviors:</strong> where they are + what they're doing in parallel (DMing a friend, opening tabs, asking AI, etc.).</li>
+                                <li><strong>Queries &amp; objections:</strong> actual searches/questions + what's making them hesitate at this exact stop.</li>
+                                <li><strong>Emotional state:</strong> top 3-4 dominant feelings at this stop.</li>
+                                <li><strong>Forward / Park / Abandon split:</strong> what fraction of researchers move on, save for later, or quit at this stop.</li>
+                                <li><strong>Re-entry triggers:</strong> what brings parked researchers back into the journey.</li>
+                                <li><strong>Chime intercept (purple block):</strong> WHERE Chime should show up at this stop, WHAT message resonates, and WHAT lift is achievable.</li>
+                            </ul>
+                        </div>
+                    </details>
+                    <div id="jiqLifecycleStops" style="display: grid; grid-template-columns: 1fr; gap: 0.85rem;"></div>
+                    <!-- Chime media-buy prescription summary block -->
+                    <div id="jiqLifecyclePrescription" style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border-color);"></div>
+                </div>
+
+                <!-- ════════════════════════════════════════════════════════
                      AUDIENCE SIZING — PUBLIC ANCHORS card
                      modeled_view.audience_sizing_anchors
                      Public-data-grounded engager funnel with L1-L6 source
@@ -36583,6 +36621,11 @@
                 ((fullRun || {}).modeled_view || {}).audience_hypotheses
             );
 
+            // ---- Journey Lifecycle (banking-research only) ----
+            renderJourneyIqLifecycle(
+                ((fullRun || {}).modeled_view || {}).journey_lifecycle
+            );
+
             // ---- Audience Sizing — Public Anchors card ----
             renderJourneyIqAnchors(
                 ((fullRun || {}).modeled_view || {}).audience_sizing_anchors
@@ -37596,6 +37639,227 @@
         // Below the per-hypothesis tiles, renders pairwise overlaps as
         // a "shared-audience" bar chart + the triple-likely core
         // callout tile.
+        // ────────────────────────────────────────────────────────────
+        // JOURNEY LIFECYCLE — banking-research stop-by-stop renderer
+        // Reads modeled_view.journey_lifecycle.stops[] and produces one
+        // expanded card per stop with surfaces, concurrent behaviors,
+        // queries, objections, emotional state, drop-off, re-entry,
+        // and the Chime intercept play.
+        // ────────────────────────────────────────────────────────────
+        function renderJourneyIqLifecycle(lifecycle) {
+            var card = document.getElementById('jiqJourneyLifecycleCard');
+            if (!card) return;
+            if (!lifecycle || !(lifecycle.stops || []).length) {
+                card.style.display = 'none';
+                return;
+            }
+            card.style.display = '';
+
+            var meta = (window._jiqCurrentRun && window._jiqCurrentRun.meta) || {};
+            var brand = meta.customer_brand || '';
+            var titleEl = document.getElementById('jiqLifecycleTitle');
+            var subEl   = document.getElementById('jiqLifecycleSubtitle');
+            var metaEl  = document.getElementById('jiqLifecycleMeta');
+            if (titleEl) titleEl.innerHTML = brand
+                ? ('🛤️ Journey Lifecycle — every stop in the ' + _jiqEsc(brand) + '-relevant digital research arc')
+                : '🛤️ Journey Lifecycle — every stop in the digital banking-research arc';
+            if (subEl) subEl.innerHTML = 'A stop-by-stop walk-through of what a researcher actually <em>does</em>, '
+                                       + '<em>thinks</em>, <em>asks</em>, and <em>hesitates over</em> — across an avg '
+                                       + '<strong>' + (lifecycle.avg_journey_days || 21) + '-day</strong> digital journey '
+                                       + 'from trigger to account-open. Use this to plan where ' + _jiqEsc(brand || 'your brand') + ' shows up.';
+            if (metaEl) metaEl.textContent = (lifecycle.stops.length + ' stops · '
+                                             + _jiqFmt(lifecycle.cohort_size || 0) + ' researchers · '
+                                             + _jiqFmt(lifecycle.opens_in_window || 0) + ' opens · digital-only');
+
+            var listEl = document.getElementById('jiqLifecycleStops');
+            if (!listEl) return;
+
+            var fmtPctList = function(items, key, valKey) {
+                return (items || []).map(function(x) {
+                    var pct = +(x[valKey] || 0);
+                    var w = Math.min(100, pct);
+                    return '<div style="display:grid;grid-template-columns:1fr 44px;gap:8px;align-items:center;font-size:0.74rem;margin-bottom:3px;">'
+                         +   '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
+                         +     '<div style="background:var(--bg-secondary);border-radius:4px;height:14px;position:relative;overflow:hidden;">'
+                         +       '<div style="width:' + w + '%;height:100%;background:#5b6cff;opacity:0.55;border-radius:4px;"></div>'
+                         +       '<div style="position:absolute;top:0;left:6px;line-height:14px;color:var(--text-primary);font-size:0.7rem;">' + _jiqEsc(x[key] || '') + '</div>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<div style="font-weight:700;color:#5b6cff;text-align:right;font-variant-numeric:tabular-nums;">' + pct + '%</div>'
+                         + '</div>';
+                }).join('');
+            };
+
+            var fmtChips = function(items, accent) {
+                return (items || []).map(function(t) {
+                    return '<span style="display:inline-block;background:var(--bg-secondary);border:1px solid var(--border-color);border-left:3px solid ' + accent + ';border-radius:6px;padding:3px 8px;margin:0 5px 5px 0;font-size:0.72rem;color:var(--text-primary);">' + _jiqEsc(t) + '</span>';
+                }).join('');
+            };
+
+            var stopHtml = lifecycle.stops.map(function(s, i) {
+                var dwellLabel = (s.avg_dwell_minutes > 0)
+                    ? (s.avg_dwell_minutes + ' min avg · range ' + s.dwell_p25 + '–' + s.dwell_p75)
+                    : 'no active dwell — wait state';
+                var advance = +(s.pct_advance_to_next || 0);
+                var park    = +(s.pct_park || 0);
+                var abandon = +(s.pct_abandon || 0);
+                var splitTotal = advance + park + abandon || 1;
+                var advW = (advance / splitTotal) * 100;
+                var parkW = (park / splitTotal) * 100;
+                var abW  = (abandon / splitTotal) * 100;
+
+                var ci = s.chime_intercept || {};
+
+                return '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-left:5px solid #5b6cff;border-radius:12px;padding:1rem 1.1rem;">'
+                     // Header row
+                     + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:0.4rem;flex-wrap:wrap;">'
+                     +   '<div style="display:flex;align-items:center;gap:10px;min-width:0;">'
+                     +     '<div style="font-size:1.6rem;line-height:1;">' + _jiqEsc(s.emoji || '◆') + '</div>'
+                     +     '<div style="min-width:0;">'
+                     +       '<div style="font-weight:700;font-size:1.0rem;line-height:1.2;">'
+                     +         '<span style="color:var(--text-secondary);font-weight:600;font-size:0.78rem;letter-spacing:0.05em;text-transform:uppercase;">stop ' + (i + 1) + ' · day ' + (s.avg_day_from_start || 0) + '</span>'
+                     +         '<span style="margin:0 6px;color:var(--text-secondary);">·</span>'
+                     +         _jiqEsc(s.name || '')
+                     +       '</div>'
+                     +       '<div style="font-size:0.78rem;color:var(--text-secondary);margin-top:3px;">' + _jiqEsc(s.one_liner || '') + '</div>'
+                     +     '</div>'
+                     +   '</div>'
+                     +   '<div style="text-align:right;min-width:160px;">'
+                     +     '<div style="font-size:1.05rem;font-weight:800;color:var(--text-primary);font-variant-numeric:tabular-nums;line-height:1;">' + _jiqFmt(s.researchers_at_stop || 0) + '</div>'
+                     +     '<div style="font-size:0.66rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">researchers reach this stop · ' + (s.pct_researchers_hit || 0) + '%</div>'
+                     +     '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:4px;">' + _jiqEsc(dwellLabel) + '</div>'
+                     +   '</div>'
+                     + '</div>'
+
+                     // Two-column body
+                     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:0.6rem;">'
+                     +   '<div>'
+                     +     '<div style="font-weight:600;font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">Where they are</div>'
+                     +     fmtPctList(s.top_surfaces, 'surface', 'pct')
+                     +     '<div style="font-weight:600;font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:0.7rem;margin-bottom:5px;">What they\'re doing in parallel</div>'
+                     +     fmtPctList(s.concurrent_behaviors, 'behavior', 'pct')
+                     +   '</div>'
+                     +   '<div>'
+                     +     ((s.queries || []).length
+                         ? ('<div style="font-weight:600;font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">What they\'re searching / asking</div>'
+                            + '<div style="margin-bottom:0.7rem;">' + fmtChips(s.queries, '#5b6cff') + '</div>')
+                         : '')
+                     +     ((s.objections || []).length
+                         ? ('<div style="font-weight:600;font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">What\'s making them hesitate</div>'
+                            + fmtPctList(s.objections, 'objection', 'pct'))
+                         : '')
+                     +     ((s.emotional_state || []).length
+                         ? ('<div style="font-weight:600;font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:0.7rem;margin-bottom:5px;">Emotional state</div>'
+                            + fmtPctList(s.emotional_state, 'state', 'pct'))
+                         : '')
+                     +   '</div>'
+                     + '</div>'
+
+                     // Decision factors
+                     + ((s.decision_factors || []).length
+                         ? ('<div style="margin-top:0.7rem;font-size:0.74rem;color:var(--text-secondary);">'
+                            + '<span style="font-weight:700;color:var(--text-primary);text-transform:uppercase;letter-spacing:0.04em;font-size:0.66rem;">Decision factors:</span> '
+                            + (s.decision_factors).map(function(d) { return _jiqEsc(d); }).join(' · ')
+                            + '</div>')
+                         : '')
+
+                     // Forward / Park / Abandon strip
+                     + '<div style="margin-top:0.85rem;padding-top:0.7rem;border-top:1px dashed var(--border-color);">'
+                     +   '<div style="font-weight:600;font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">Where they go from here</div>'
+                     +   '<div style="display:flex;gap:0;width:100%;height:22px;border-radius:6px;overflow:hidden;background:var(--bg-secondary);">'
+                     +     '<div style="width:' + advW + '%;background:#10b981;display:flex;align-items:center;justify-content:center;color:#0a0a0a;font-weight:800;font-size:0.7rem;">' + (advW > 14 ? ('▶ ' + advance.toFixed(0) + '%') : '') + '</div>'
+                     +     '<div style="width:' + parkW + '%;background:#fbbf24;display:flex;align-items:center;justify-content:center;color:#0a0a0a;font-weight:800;font-size:0.7rem;">' + (parkW > 14 ? ('⏸ ' + park.toFixed(0) + '%') : '') + '</div>'
+                     +     '<div style="width:' + abW + '%;background:#ef4444;display:flex;align-items:center;justify-content:center;color:#0a0a0a;font-weight:800;font-size:0.7rem;">' + (abW > 14 ? ('✕ ' + abandon.toFixed(0) + '%') : '') + '</div>'
+                     +   '</div>'
+                     +   '<div style="display:flex;gap:14px;font-size:0.68rem;color:var(--text-secondary);margin-top:4px;">'
+                     +     '<div><span style="color:#10b981;font-weight:800;">▶ ' + advance.toFixed(0) + '%</span> advance to next</div>'
+                     +     '<div><span style="color:#fbbf24;font-weight:800;">⏸ ' + park.toFixed(0) + '%</span> park / save for later</div>'
+                     +     '<div><span style="color:#ef4444;font-weight:800;">✕ ' + abandon.toFixed(0) + '%</span> abandon entirely</div>'
+                     +   '</div>'
+                     + '</div>'
+
+                     // Re-entry triggers
+                     + ((s.re_entry_triggers || []).length
+                         ? ('<div style="margin-top:0.7rem;padding:0.55rem 0.7rem;background:rgba(251,191,36,0.08);border-left:3px solid #fbbf24;border-radius:6px;">'
+                            + '<div style="font-weight:700;font-size:0.66rem;color:#fbbf24;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">↺ Re-entry triggers (for parked researchers)</div>'
+                            + '<div style="font-size:0.74rem;color:var(--text-primary);line-height:1.5;">'
+                            + (s.re_entry_triggers).map(function(t) { return '• ' + _jiqEsc(t); }).join('<br>')
+                            + '</div>'
+                            + '</div>')
+                         : '')
+
+                     // Chime intercept play
+                     + (ci.where
+                         ? ('<div style="margin-top:0.7rem;padding:0.7rem 0.85rem;background:linear-gradient(135deg, rgba(168,85,247,0.10) 0%, rgba(168,85,247,0.02) 100%);border:1px solid rgba(168,85,247,0.45);border-radius:8px;">'
+                            + '<div style="font-weight:700;font-size:0.66rem;color:#a855f7;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px;">🟣 ' + _jiqEsc(brand || 'Customer brand') + ' intercept play at this stop</div>'
+                            + '<div style="font-size:0.78rem;color:var(--text-primary);line-height:1.5;margin-bottom:4px;"><strong>Where:</strong> ' + _jiqEsc(ci.where) + '</div>'
+                            + (ci.message ? '<div style="font-size:0.78rem;color:var(--text-primary);line-height:1.5;margin-bottom:4px;"><strong>Message:</strong> ' + _jiqEsc(ci.message) + '</div>' : '')
+                            + (ci.expected_lift ? '<div style="font-size:0.74rem;color:var(--text-secondary);font-style:italic;margin-top:4px;">' + _jiqEsc(ci.expected_lift) + '</div>' : '')
+                            + '</div>')
+                         : '')
+                     + '</div>';
+            }).join('');
+            listEl.innerHTML = stopHtml;
+
+            // Chime media-buy prescription summary
+            var presEl = document.getElementById('jiqLifecyclePrescription');
+            var p = lifecycle.chime_prescription || {};
+            if (presEl && (p.top_dmas_concentrate_spend || p.top_channels_to_concentrate_spend)) {
+                var dmaList = (p.top_dmas_concentrate_spend || []).map(function(d) {
+                    return '<li style="margin-bottom:4px;"><strong>' + _jiqEsc(d.dma) + '</strong> <span style="color:#a855f7;font-weight:700;">(' + d.index + ' index)</span> — <span style="color:var(--text-secondary);">' + _jiqEsc(d.rationale) + '</span></li>';
+                }).join('');
+                var chanList = (p.top_channels_to_concentrate_spend || []).map(function(c) {
+                    return '<li style="margin-bottom:4px;"><strong>' + _jiqEsc(c.channel) + '</strong> <span style="color:#10b981;font-weight:700;">(' + (c.lift_multiplier_x || 1) + '× lift)</span> — <span style="color:var(--text-secondary);">' + _jiqEsc(c.rationale) + '</span></li>';
+                }).join('');
+                var stealList = (p.top_steal_targets || []).map(function(t) {
+                    return '<li style="margin-bottom:4px;"><strong>' + _jiqEsc(t.bank) + '</strong> — defector pool ~<strong>' + _jiqFmt(t.defector_pool_window || 0) + '</strong>, capture target <strong>' + (t.chime_capture_target_pct || 0) + '%</strong>. <em style="color:var(--text-secondary);">' + _jiqEsc(t.creative_angle) + '</em></li>';
+                }).join('');
+                var cohortList = (p.top_cohorts_target || []).map(function(c) {
+                    return '<li style="margin-bottom:4px;"><strong>' + _jiqEsc(c.cohort) + '</strong> — addressable <strong>' + _jiqFmt(c.addressable_opens || 0) + '</strong> opens · appetite: <span style="color:#a855f7;font-weight:700;">' + _jiqEsc(c.chime_steal_appetite) + '</span><br><span style="color:var(--text-secondary);font-size:0.74rem;">↳ ' + _jiqEsc(c.play) + '</span></li>';
+                }).join('');
+                var vpList = (p.value_prop_priority_for_creative || []).map(function(v) {
+                    return '<span style="display:inline-block;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.4);border-radius:14px;padding:4px 10px;margin:0 5px 5px 0;font-size:0.74rem;color:var(--text-primary);">' + _jiqEsc(v) + '</span>';
+                }).join('');
+                var topStops = (p.top_journey_stops_for_chime_to_show_up || []).map(function(s) {
+                    return '<span style="display:inline-block;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:14px;padding:4px 10px;margin:0 5px 5px 0;font-size:0.74rem;color:var(--text-primary);">' + _jiqEsc(s) + '</span>';
+                }).join('');
+
+                presEl.innerHTML = ''
+                  + '<h3 style="margin:0 0 0.5rem;">🟣 ' + _jiqEsc(brand || 'Customer brand') + ' Media-Buy Prescription — where to spend, who to target</h3>'
+                  + '<div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.8rem;">A direct read-out of the lifecycle above: where to concentrate spend, which competitors to steal from, which cohorts have the highest addressable upside, and which value props to lead with.</div>'
+                  + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:0.85rem;">'
+                  +   '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-top:3px solid #a855f7;border-radius:10px;padding:0.85rem;">'
+                  +     '<div style="font-weight:700;font-size:0.78rem;color:#a855f7;margin-bottom:0.4rem;">📍 Top DMAs to concentrate spend</div>'
+                  +     '<ol style="margin:0;padding-left:1.1rem;font-size:0.78rem;color:var(--text-primary);">' + dmaList + '</ol>'
+                  +   '</div>'
+                  +   '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-top:3px solid #10b981;border-radius:10px;padding:0.85rem;">'
+                  +     '<div style="font-weight:700;font-size:0.78rem;color:#10b981;margin-bottom:0.4rem;">📡 Top channels to concentrate spend</div>'
+                  +     '<ol style="margin:0;padding-left:1.1rem;font-size:0.78rem;color:var(--text-primary);">' + chanList + '</ol>'
+                  +   '</div>'
+                  +   '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-top:3px solid #ef4444;border-radius:10px;padding:0.85rem;">'
+                  +     '<div style="font-weight:700;font-size:0.78rem;color:#ef4444;margin-bottom:0.4rem;">🎯 Top steal targets (incumbents)</div>'
+                  +     '<ol style="margin:0;padding-left:1.1rem;font-size:0.78rem;color:var(--text-primary);">' + stealList + '</ol>'
+                  +   '</div>'
+                  +   '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-top:3px solid #fbbf24;border-radius:10px;padding:0.85rem;">'
+                  +     '<div style="font-weight:700;font-size:0.78rem;color:#fbbf24;margin-bottom:0.4rem;">👥 Top cohorts to target</div>'
+                  +     '<ol style="margin:0;padding-left:1.1rem;font-size:0.78rem;color:var(--text-primary);">' + cohortList + '</ol>'
+                  +   '</div>'
+                  + '</div>'
+                  + '<div style="margin-top:0.85rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:0.85rem;">'
+                  +   '<div>'
+                  +     '<div style="font-weight:700;font-size:0.74rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Value props to lead with (creative)</div>'
+                  +     vpList
+                  +   '</div>'
+                  +   '<div>'
+                  +     '<div style="font-weight:700;font-size:0.74rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Top journey stops for ' + _jiqEsc(brand || 'your brand') + ' to show up</div>'
+                  +     topStops
+                  +   '</div>'
+                  + '</div>';
+            } else if (presEl) {
+                presEl.innerHTML = '';
+            }
+        }
+
         function renderJourneyIqAudienceHypothesis(ah) {
             var card = document.getElementById('jiqAudienceHypCard');
             if (!card) return;
