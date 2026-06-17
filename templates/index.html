@@ -19549,7 +19549,9 @@
                     document.getElementById('iiqAudienceCards').innerHTML = '<div class="iiq-empty">No audiences-of-interest configured.</div>';
                     return;
                 }
-                var US_ADULT_POP = 258000000;
+                // Project against total US population (329.9M) — same denominator
+                // used by Profile IQ and the rest of the dashboard.
+                var US_POP = 329900000;
                 // Left-border color still encodes provenance (green=panel
                 // measured, amber=external estimate) - the chip text was
                 // freeing up to show the actual subject, not the source.
@@ -19607,10 +19609,10 @@
                 document.getElementById('iiqAudienceCards').innerHTML = sorted.map(function(c) {
                     var bp = (c.overlap_bp !== null && c.overlap_bp !== undefined) ? Number(c.overlap_bp) : null;
                     var bpStr = bp !== null ? bp.toFixed(2) + '%' : '—';
-                    var usAdults = bp !== null ? Math.round(bp / 100 * US_ADULT_POP) : null;
-                    var usAdultsFmt = usAdults === null ? '—' :
-                        usAdults >= 1e6 ? (usAdults/1e6).toFixed(1) + 'M' :
-                        usAdults >= 1e3 ? Math.round(usAdults/1e3) + 'K' : usAdults;
+                    var usPeople = bp !== null ? Math.round(bp / 100 * US_POP) : null;
+                    var usPeopleFmt = usPeople === null ? '—' :
+                        usPeople >= 1e6 ? (usPeople/1e6).toFixed(1) + 'M' :
+                        usPeople >= 1e3 ? Math.round(usPeople/1e3) + 'K' : usPeople;
                     var barPct = (bp !== null && maxBp > 0) ? (bp / maxBp * 100) : 0;
                     var color = srcColor(c.source);
                     var descriptor = descriptorFromCard(c);
@@ -19618,10 +19620,10 @@
                     return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';" title="' + escapeHtml(sourceTip) + (c.source ? ': ' + escapeHtml(c.source) : '') + '">'
                         + '<div class="iiq-card-title">' + escapeHtml(c.display || c.subject_key) + '</div>'
                         + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '—') + '</div>'
-                        + '<div style="margin-top:0.65rem;" title="Share of US adults estimated to overlap with both this cohort and the title\'s moviegoing audience">'
+                        + '<div style="margin-top:0.65rem;" title="Share of Americans estimated to overlap with both this cohort and the title\'s moviegoing audience. Projection = % × 329.9M US population.">'
                             + '<div style="font-size:1.45rem; font-weight:700; color:#fff; line-height:1;">' + bpStr + '</div>'
-                            + '<div class="iiq-card-meta" style="margin-top:0.2rem; line-height:1.35;">of US adults'
-                                + (usAdults !== null ? ' <span style="opacity:0.55;">(~' + usAdultsFmt + ' people)</span>' : '')
+                            + '<div class="iiq-card-meta" style="margin-top:0.2rem; line-height:1.35;">of Americans'
+                                + (usPeople !== null ? ' <span style="opacity:0.55;">(~' + usPeopleFmt + ' people)</span>' : '')
                                 + (descriptor ? ' ' + escapeHtml(descriptor) : '')
                                 + '</div>'
                         + '</div>'
@@ -19636,7 +19638,10 @@
                 var d = window.__intentIQ.cohorts || {};
                 var cohorts = d.cohorts || [];
                 if (!cohorts.length) { document.getElementById('iiqCohortGrid').innerHTML = '<div class="iiq-empty">No cohorts defined yet (run scripts/build_moviegoing_cohorts.py --apply).</div>'; return; }
-                var US_ADULT_POP = 258000000;
+                // Project against total US population (329.9M) — matches the
+                // denominator used everywhere else in the dashboard
+                // (see e.g. Profile IQ category projections).
+                var US_POP = 329900000;
                 var maxShare = Math.max.apply(null, cohorts.map(function(c) { return Number(c.gen_pop_share) || 0; }));
                 var palette = {
                     weekly:     '#22c55e',
@@ -19647,8 +19652,8 @@
                 document.getElementById('iiqCohortGrid').innerHTML = cohorts.map(function(c) {
                     var share = Number(c.gen_pop_share) || 0;
                     var sharePct = (share * 100).toFixed(2);
-                    var usAdults = Math.round(share * US_ADULT_POP);
-                    var usAdultsFmt = usAdults >= 1e6 ? (usAdults/1e6).toFixed(1) + 'M' : Math.round(usAdults/1e3) + 'K';
+                    var usPeople = Math.round(share * US_POP);
+                    var usPeopleFmt = usPeople >= 1e6 ? (usPeople/1e6).toFixed(1) + 'M' : Math.round(usPeople/1e3) + 'K';
                     var barPct = maxShare > 0 ? (share / maxShare * 100) : 0;
                     var color = palette[c.cohort_slug] || '#5a9ad9';
                     return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';">'
@@ -19656,13 +19661,11 @@
                         + '<div class="iiq-card-meta" style="margin-top:0.15rem; font-size:0.72rem; opacity:0.75;">' + escapeHtml(c.frequency_band) + '</div>'
                         + '<div style="margin-top:0.6rem;">'
                             + '<div style="font-size:1.55rem; font-weight:700; color:#fff; line-height:1;">' + sharePct + '%</div>'
-                            + '<div class="iiq-card-meta" title="MPAA THEME 2025 US adults 15+ baseline" style="margin-top:0.15rem;">of US adults <span style="opacity:0.55;">(~' + usAdultsFmt + ' people)</span></div>'
+                            + '<div class="iiq-card-meta" title="Projection = ' + sharePct + '% × 329.9M US population" style="margin-top:0.15rem;">of Americans <span style="opacity:0.55;">(~' + usPeopleFmt + ' people)</span></div>'
                         + '</div>'
                         + '<div style="margin-top:0.6rem; background: rgba(255,255,255,0.08); height:6px; border-radius: 3px; overflow:hidden;">'
                             + '<div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + color + ';"></div>'
                         + '</div>'
-                        + '<div class="iiq-card-meta" style="margin-top:0.45rem; font-size:0.7rem; opacity:0.6;" title="Crosswalk panelists matching this cohort filter">'
-                            + 'Panel sample: ' + fmtInt(c.panel_count) + '</div>'
                         + '</div>';
                 }).join('');
             }
@@ -20135,6 +20138,13 @@
             function iiqRenderQ6(d) {
                 var cohorts = d.cohorts || [];
                 if (!cohorts.length) return '<div class="iiq-empty">Q6 has no per-cohort engagement curves yet. Run scripts/synth_goat_all_cohort_engagement.py --apply.</div>';
+                // Project cohort size against full US population (329.9M)
+                // so the "size of cohort" reading matches the rest of the
+                // dashboard's projection convention.
+                var IIQ_US_POP = 329900000;
+                function iiqProjAmericans(c) {
+                    return Math.round((Number(c.gen_pop_share) || 0) * IIQ_US_POP);
+                }
 
                 // Initialize selection: default-on flags from backend (the 4 moviegoing cohorts).
                 // If user has already toggled in this session, preserve their selection but
@@ -20163,7 +20173,7 @@
                     byCat[c.category].push(c);
                 });
                 Object.keys(byCat).forEach(function(cat) {
-                    byCat[cat].sort(function(a,b){ return (b.panel_count||0) - (a.panel_count||0); });
+                    byCat[cat].sort(function(a,b){ return (Number(b.gen_pop_share)||0) - (Number(a.gen_pop_share)||0); });
                     byCat[cat].forEach(function(c, i) { c._color = iiqQ6CohortColor(c, i); });
                 });
 
@@ -20213,14 +20223,16 @@
                         var border = checked ? c._color : 'rgba(255,255,255,0.1)';
                         var textC  = checked ? '#fff' : '#94a3b8';
                         var slugEsc = c.cohort_slug.replace(/'/g, "\\'");
+                        var amer = iiqProjAmericans(c);
+                        var amerFmt = '~' + fmtCompact(amer);
                         html += '<label onclick="iiqQ6Toggle(\'' + slugEsc + '\')" '
                             + 'style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; '
                             + 'background:' + bgFill + '; border:1px solid ' + border + '; '
                             + 'border-radius:6px; padding:0.3rem 0.55rem; font-size:0.75rem; color:' + textC + ';" '
-                            + 'title="' + escapeHtml(c.display) + ' \u00b7 panel ' + fmtCompact(c.panel_count) + ' \u00b7 peak ' + c.peak_engagement_pct.toFixed(1) + '% on ' + c.peak_date + '">'
+                            + 'title="' + escapeHtml(c.display) + ' \u00b7 ' + amerFmt + ' Americans \u00b7 peak ' + c.peak_engagement_pct.toFixed(1) + '% on ' + c.peak_date + '">'
                             + '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:' + c._color + ';"></span>'
                             + escapeHtml(c.display)
-                            + ' <span style="opacity:0.6; font-size:0.68rem;">(' + fmtCompact(c.panel_count) + ')</span>'
+                            + ' <span style="opacity:0.6; font-size:0.68rem;">(' + amerFmt + ')</span>'
                             + '</label>';
                     });
                     html +=   '</div>';
@@ -20263,13 +20275,14 @@
                     html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 0.6rem;">';
                     selected.forEach(function(c) {
                         var pts = (c.points || []).map(function(p) { return { x: p.date, y: p.engagement_pct }; });
+                        var amerDetail = iiqProjAmericans(c);
                         html += '<div class="iiq-card" style="padding:0.7rem; border-left: 3px solid ' + c._color + ';">'
                             + '<div style="display:flex; justify-content:space-between; align-items:baseline;">'
                             +   '<div style="font-size:0.88rem; font-weight:600; color:#e2e8f0;">' + escapeHtml(c.display) + '</div>'
                             +   '<div style="font-size:0.7rem; color: var(--text-secondary);">' + escapeHtml(c.category.replace('_', ' ').toLowerCase()) + '</div>'
                             + '</div>'
                             + '<div style="display:flex; justify-content:space-between; font-size:0.7rem; color: var(--text-secondary); margin-top:0.15rem;">'
-                            +   '<span>panel: ' + fmtCompact(c.panel_count) + '</span>'
+                            +   '<span title="Projection = cohort % × 329.9M US population">~' + fmtCompact(amerDetail) + ' Americans</span>'
                             +   '<span>peak: ' + c.peak_engagement_pct.toFixed(1) + '% on ' + c.peak_date + '</span>'
                             +   '<span>today: ' + c.today_engagement_pct.toFixed(2) + '%</span>'
                             + '</div>'
