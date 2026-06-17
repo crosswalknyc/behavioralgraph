@@ -19349,10 +19349,16 @@
             </div>
 
             <div class="iiq-panel" id="iiqPanel-assets">
+                <div style="margin-bottom: 0.65rem;">
+                    <h4 style="margin: 0;">Asset performance scoreboard</h4>
+                    <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every individual marketing touchpoint in the campaign, ranked by measured engagement. Use this to drill into "which specific posts moved the needle" — the Questions tab rolls these up by category / paid-organic / talent.</div>
+                </div>
+                <div id="iiqAssetSummary" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;"></div>
                 <div class="iiq-asset-filter">
                     <div><label>Phase</label><select id="iiqAssetFilterPhase" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
                     <div><label>Type</label><select id="iiqAssetFilterType" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
                     <div><label>Paid / Organic</label><select id="iiqAssetFilterPaid" onchange="reloadIntentIQAssets()"><option value="">All</option><option value="paid">Paid</option><option value="organic">Organic</option><option value="unknown">Unknown</option></select></div>
+                    <div><label>Sort by</label><select id="iiqAssetSort" onchange="reloadIntentIQAssets()"><option value="views">Views (high → low)</option><option value="engagement">Engagement (high → low)</option><option value="date_desc">Date (newest first)</option><option value="date_asc">Date (oldest first)</option></select></div>
                     <div style="flex:1; text-align:right;"><span id="iiqAssetMeta" style="color: var(--text-secondary); font-size: 0.8rem;"></span></div>
                 </div>
                 <div class="iiq-cards-grid" id="iiqAssetGrid"></div>
@@ -19649,6 +19655,21 @@
                 (ov.phases || []).forEach(function(p) { phaseSel.appendChild(new Option(p.phase_name, p.phase_name)); });
             }
 
+            function fmtCompact(n) {
+                if (n === null || n === undefined || isNaN(n)) return '—';
+                n = Number(n);
+                if (n >= 1e9) return (n/1e9).toFixed(1).replace(/\.0$/,'') + 'B';
+                if (n >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/,'') + 'M';
+                if (n >= 1e3) return (n/1e3).toFixed(1).replace(/\.0$/,'') + 'K';
+                return String(Math.round(n));
+            }
+            function iiqSummaryTile(label, value, sub) {
+                return '<div class="iiq-card" style="padding:0.6rem 0.75rem;">'
+                    + '<div class="iiq-card-meta" style="font-size:0.7rem; text-transform:uppercase; letter-spacing:0.5px; opacity:0.7;">' + escapeHtml(label) + '</div>'
+                    + '<div style="font-size:1.4rem; font-weight:700; color:#fff; margin-top:0.15rem; line-height:1;">' + escapeHtml(value) + '</div>'
+                    + (sub ? '<div class="iiq-card-meta" style="margin-top:0.2rem; font-size:0.7rem; opacity:0.7;">' + escapeHtml(sub) + '</div>' : '')
+                    + '</div>';
+            }
             window.reloadIntentIQAssets = function() {
                 var slug = window.__intentIQ.currentSlug;
                 if (!slug) return;
@@ -19656,6 +19677,8 @@
                 var ph = document.getElementById('iiqAssetFilterPhase').value;
                 var ty = document.getElementById('iiqAssetFilterType').value;
                 var po = document.getElementById('iiqAssetFilterPaid').value;
+                var sortEl = document.getElementById('iiqAssetSort');
+                var sortBy = sortEl ? sortEl.value : 'views';
                 if (ph) params.set('phase', ph);
                 if (ty) params.set('asset_type', ty);
                 if (po) params.set('paid_or_organic', po);
@@ -19664,22 +19687,59 @@
                     .then(function(r) { return r.json(); })
                     .then(function(d) {
                         if (!d.success) throw new Error(d.error || 'Failed');
-                        var cards = d.cards || [];
-                        document.getElementById('iiqAssetMeta').textContent = cards.length + ' asset' + (cards.length === 1 ? '' : 's');
+                        var cards = (d.cards || []).slice();
                         var typeSel = document.getElementById('iiqAssetFilterType');
                         if (typeSel.options.length <= 1) {
                             var types = Array.from(new Set(cards.map(function(c) { return c.asset_type; }).filter(Boolean))).sort();
                             types.forEach(function(t) { typeSel.appendChild(new Option(t, t)); });
                         }
+                        cards.sort(function(a, b) {
+                            if (sortBy === 'engagement') return (Number(b.ext_engagement_count)||0) - (Number(a.ext_engagement_count)||0);
+                            if (sortBy === 'date_desc') return String(b.posted_date||'').localeCompare(String(a.posted_date||''));
+                            if (sortBy === 'date_asc')  return String(a.posted_date||'').localeCompare(String(b.posted_date||''));
+                            return (Number(b.ext_view_count)||0) - (Number(a.ext_view_count)||0);
+                        });
+                        var totalAssets = cards.length;
+                        var totalViews = cards.reduce(function(a,c){ return a + (Number(c.ext_view_count)||0); }, 0);
+                        var totalEng = cards.reduce(function(a,c){ return a + (Number(c.ext_engagement_count)||0); }, 0);
+                        var withViews = cards.filter(function(c){ return Number(c.ext_view_count)>0; }).length;
+                        var topAsset = cards.slice().sort(function(a,b){ return (Number(b.ext_view_count)||0) - (Number(a.ext_view_count)||0); })[0];
+                        var paidCount = cards.filter(function(c){ return c.paid_or_organic === 'paid'; }).length;
+                        var orgCount  = cards.filter(function(c){ return c.paid_or_organic === 'organic' || c.paid_or_organic === 'natural'; }).length;
+                        document.getElementById('iiqAssetMeta').textContent = totalAssets + ' asset' + (totalAssets === 1 ? '' : 's');
+                        document.getElementById('iiqAssetSummary').innerHTML = [
+                            iiqSummaryTile('Total assets', fmtCompact(totalAssets), withViews + ' with measured views'),
+                            iiqSummaryTile('Total views', fmtCompact(totalViews), 'across all measured assets'),
+                            iiqSummaryTile('Total engagement', fmtCompact(totalEng), 'likes + comments + shares'),
+                            iiqSummaryTile('Paid / Organic mix', paidCount + ' / ' + orgCount, (topAsset && topAsset.action_label ? 'Top: ' + topAsset.action_label + ' (' + fmtCompact(topAsset.ext_view_count) + ' views)' : ''))
+                        ].join('');
+                        var maxViews = Math.max.apply(null, cards.map(function(c){ return Number(c.ext_view_count)||0; }).concat([1]));
                         document.getElementById('iiqAssetGrid').innerHTML = cards.map(function(c) {
+                            var v = Number(c.ext_view_count)||0;
+                            var e = Number(c.ext_engagement_count)||0;
+                            var barPct = maxViews > 0 ? (v / maxViews * 100) : 0;
                             var paidChip = c.paid_or_organic ? '<span class="iiq-chip ' + escapeHtml(c.paid_or_organic) + '">' + escapeHtml(c.paid_or_organic) + '</span>' : '';
                             var phaseChip = c.phase_name ? '<span class="iiq-chip">' + escapeHtml(c.phase_name) + '</span>' : '';
-                            return '<div class="iiq-card">'
+                            // Talent badges in golden-amber to make cast-driven assets jump out
+                            var talentBadges = (Array.isArray(c.talent_tags) ? c.talent_tags : []).slice(0,3).map(function(t) {
+                                return '<span class="iiq-chip" style="background: rgba(245,158,11,0.18); color:#fbbf24; border:1px solid rgba(245,158,11,0.4);">' + escapeHtml(t) + '</span>';
+                            }).join('');
+                            // Color by paid (cyan) vs organic (green) on the left edge
+                            var edgeColor = c.paid_or_organic === 'paid' ? '#22d3ee'
+                                          : (c.paid_or_organic === 'organic' || c.paid_or_organic === 'natural') ? '#22c55e'
+                                          : '#64748b';
+                            return '<div class="iiq-card" style="border-left: 3px solid ' + edgeColor + ';">'
                                 + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '—') + '</div>'
-                                + '<div class="iiq-card-meta">' + escapeHtml(c.asset_type || '') + ' / ' + escapeHtml(c.channel || '') + '</div>'
-                                + '<div class="iiq-card-meta" style="margin-top:0.25rem;">Posted: ' + escapeHtml(c.posted_date || '') + '</div>'
-                                + (c.url ? '<div class="iiq-card-meta" style="margin-top:0.25rem; word-break:break-all;"><a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener" style="color: var(--accent-cyan, #5a9ad9);">Open</a></div>' : '')
-                                + '<div>' + paidChip + phaseChip + '</div>'
+                                + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
+                                + '<div style="margin-top:0.55rem; display:flex; align-items:baseline; gap:0.55rem;">'
+                                    + '<div><div style="font-size:1.25rem; font-weight:700; color:#fff; line-height:1;">' + fmtCompact(v) + '</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">views</div></div>'
+                                    + '<div><div style="font-size:0.95rem; font-weight:600; color:#cbd5e1; line-height:1;">' + fmtCompact(e) + '</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">engagement</div></div>'
+                                + '</div>'
+                                + '<div style="margin-top:0.45rem; background: rgba(255,255,255,0.06); height:4px; border-radius: 2px; overflow:hidden;" title="' + barPct.toFixed(1) + '% of top performer">'
+                                    + '<div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + edgeColor + ';"></div>'
+                                + '</div>'
+                                + '<div class="iiq-card-meta" style="margin-top:0.5rem; font-size:0.7rem; opacity:0.7;">Posted ' + escapeHtml(c.posted_date || '—') + (c.url ? ' · <a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener" style="color: var(--accent-cyan, #5a9ad9);">Open</a>' : '') + '</div>'
+                                + '<div style="margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.25rem;">' + paidChip + phaseChip + talentBadges + '</div>'
                                 + '</div>';
                         }).join('') || '<div class="iiq-empty">No assets match filters.</div>';
                     })
