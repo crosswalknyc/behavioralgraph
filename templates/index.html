@@ -22102,7 +22102,10 @@
                             </ul>
                         </div>
                     </details>
-                    <div id="jiqAudienceHypTiles" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 0.85rem; margin-bottom: 0.75rem;"></div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 1rem; margin-bottom: 0.75rem; align-items: start;">
+                        <div id="jiqAudienceHypTiles" style="display: grid; grid-template-columns: 1fr; gap: 0.7rem; min-width: 0;"></div>
+                        <div id="jiqAudienceHypTripleCore" style="min-width: 0;"></div>
+                    </div>
                     <div id="jiqAudienceHypOverlap" style="margin-top: 0.5rem;"></div>
                     <div id="jiqAudienceHypBuyerAttribution" style="margin-top: 0.5rem;"></div>
                 </div>
@@ -38674,13 +38677,48 @@
             }
 
             // Overlaps + triple-likely core
+            // ── Triple-Likely Core panel — now sits to the RIGHT of the
+            // persona tiles (half-width on wide screens) instead of inside
+            // the overlap card. Renders into its own dedicated container.
+            var tcEl = document.getElementById('jiqAudienceHypTripleCore');
+            var triple = ah.triple_core || null;
+            if (tcEl) {
+                if (triple) {
+                    tcEl.innerHTML =
+                        '<div style="background:linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(16,185,129,0.02) 100%); border:2px solid #10b981; border-radius:12px; padding:0.9rem;">'
+                      +     '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">'
+                      +       '<div style="font-size:0.65rem;color:#10b981;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">⭐ ' + _jiqEsc(triple.label || 'Triple-likely core') + '</div>'
+                      +       '<div style="font-size:0.7rem;color:var(--text-secondary);">' + _jiqFmt(triple.size) + ' people · ' + ((triple.size||0)/260_000_000*100).toFixed(1) + '% of US</div>'
+                      +     '</div>'
+                      +     '<div style="text-align:center;padding:4px 0 6px;border-top:1px solid var(--border-color);">'
+                      +       '<div style="font-size:1.4rem;font-weight:800;color:#10b981;line-height:1;">' + ((triple.intent_index||24)).toFixed(1) + '×</div>'
+                      +       '<div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">intent vs gen-pop · ' + (triple.conversion_pct || 0).toFixed(1) + '% open-wknd CR</div>'
+                      +     '</div>'
+                      +     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 0;border-top:1px solid var(--border-color);border-bottom:1px solid var(--border-color);margin-bottom:8px;">'
+                      +       '<div style="text-align:center;border-right:1px solid var(--border-color);">'
+                      +         '<div style="font-size:1.25rem;font-weight:800;color:var(--accent-lime);line-height:1;">' + _jiqFmt(triple.est_opening_buyers || 0) + '</div>'
+                      +         '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">opening weekend</div>'
+                      +       '</div>'
+                      +       '<div style="text-align:center;">'
+                      +         '<div style="font-size:1.25rem;font-weight:800;color:var(--accent-cyan);line-height:1;">' + _jiqFmt(triple.est_total_buyers || 0) + '</div>'
+                      +         '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">total domestic run</div>'
+                      +       '</div>'
+                      +     '</div>'
+                      +     '<div style="font-size:0.72rem;color:var(--text-primary);line-height:1.4;">' + _jiqEsc(triple.description || '') + '</div>'
+                      + '</div>';
+                } else {
+                    tcEl.innerHTML = '';
+                }
+            }
+
+            // ── Pairwise + triple overlaps table — full-width below the
+            // personas + triple-core row.
             var ovEl = document.getElementById('jiqAudienceHypOverlap');
             if (ovEl) {
                 var hMap = {};
                 (ah.hypotheses || []).forEach(function(h) { hMap[h.key] = h; });
                 var ovs  = (ah.overlaps || []).slice().sort(function(a, b) { return (b.size || 0) - (a.size || 0); });
                 var maxOv = Math.max.apply(null, ovs.map(function(o) { return o.size || 0; })) || 1;
-                var triple = ah.triple_core || null;
                 var rows = ovs.map(function(o) {
                     var pct = (o.size / maxOv) * 100;
                     var names = (o.sets || []).map(function(k) { return (hMap[k] || {}).name || k; }).join(' ∩ ');
@@ -38694,36 +38732,13 @@
                          + '<div style="text-align:right;color:var(--text-secondary);font-size:0.7rem;">' + (o.lift_vs_independent || 0).toFixed(1) + '× lift</div>'
                          + '</div>';
                 }).join('');
-                ovEl.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:0.9rem;">'
-                              + '<div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:1rem;">'
-                              +   '<div>'
-                              +     '<div style="font-weight:700;font-size:0.85rem;margin-bottom:6px;">Pairwise + triple overlaps</div>'
-                              +     '<div style="font-size:0.7rem;color:var(--text-secondary);margin-bottom:8px;">"Lift" = how much more concentrated the overlap is vs. what you\'d expect if the cohorts were independent (1.0× = no correlation, 2.0× = double).</div>'
-                              +     rows
-                              +   '</div>'
-                              + (triple ? '<div style="background:linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(16,185,129,0.02) 100%); border:2px solid #10b981; border-radius:12px; padding:0.9rem;">'
-                              +     '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">'
-                              +       '<div style="font-size:0.65rem;color:#10b981;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">⭐ ' + _jiqEsc(triple.label || 'Triple-likely core') + '</div>'
-                              +       '<div style="font-size:0.7rem;color:var(--text-secondary);">' + _jiqFmt(triple.size) + ' people · ' + ((triple.size||0)/260_000_000*100).toFixed(1) + '% of US</div>'
-                              +     '</div>'
-                              +     '<div style="text-align:center;padding:4px 0 6px;border-top:1px solid var(--border-color);">'
-                              +       '<div style="font-size:1.4rem;font-weight:800;color:#10b981;line-height:1;">' + ((triple.intent_index||24)).toFixed(1) + '×</div>'
-                              +       '<div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">intent vs gen-pop · ' + (triple.conversion_pct || 0).toFixed(1) + '% open-wknd CR</div>'
-                              +     '</div>'
-                              +     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 0;border-top:1px solid var(--border-color);border-bottom:1px solid var(--border-color);margin-bottom:8px;">'
-                              +       '<div style="text-align:center;border-right:1px solid var(--border-color);">'
-                              +         '<div style="font-size:1.25rem;font-weight:800;color:var(--accent-lime);line-height:1;">' + _jiqFmt(triple.est_opening_buyers || 0) + '</div>'
-                              +         '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">opening weekend</div>'
-                              +       '</div>'
-                              +       '<div style="text-align:center;">'
-                              +         '<div style="font-size:1.25rem;font-weight:800;color:var(--accent-cyan);line-height:1;">' + _jiqFmt(triple.est_total_buyers || 0) + '</div>'
-                              +         '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">total domestic run</div>'
-                              +       '</div>'
-                              +     '</div>'
-                              +     '<div style="font-size:0.72rem;color:var(--text-primary);line-height:1.4;">' + _jiqEsc(triple.description || '') + '</div>'
-                              +   '</div>' : '')
-                              + '</div>'
-                              + '</div>';
+                ovEl.innerHTML = ovs.length
+                    ? '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:0.9rem;">'
+                    +     '<div style="font-weight:700;font-size:0.85rem;margin-bottom:6px;">Pairwise + triple overlaps</div>'
+                    +     '<div style="font-size:0.7rem;color:var(--text-secondary);margin-bottom:8px;">"Lift" = how much more concentrated the overlap is vs. what you\'d expect if the cohorts were independent (1.0× = no correlation, 2.0× = double).</div>'
+                    +     rows
+                    + '</div>'
+                    : '';
             }
 
             var baEl = document.getElementById('jiqAudienceHypBuyerAttribution');
