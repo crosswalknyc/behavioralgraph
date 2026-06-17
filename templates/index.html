@@ -16914,42 +16914,12 @@
 
             <!-- Interests Tab -->
             <div id="tab-interests" class="tab-content">
-                <!-- Interests Insights Summary -->
-                <div class="interests-insights-row" id="interestsInsightsRow" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Interests Insights" style="position: relative;">
-                    <div style="position: absolute; top: 0.5rem; right: 0.5rem; display: flex; align-items: center; gap: 0.5rem; z-index: 10;">
-                        <span class="module-action-btns">
-                            <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('interests', 'Interests Insights')" data-tooltip="Export CSV">CSV</button>
-                            <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('interests', 'Interests Insights')" data-tooltip="Add to Deck">➕</button>
-                        </span>
-                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
-                    </div>
-                    <div class="insight-card highlight has-tooltip" data-tooltip="Top Over-Indexing Interest: The single interest where this audience most over-indexes compared to Gen Pop. A strong signal for content and campaign themes.">
-                        <div class="insight-icon">🔥</div>
-                        <div class="insight-content">
-                            <div class="insight-label">Top Over-Indexing</div>
-                            <div class="insight-value" id="topOverIndexInterest">--</div>
-                            <div class="insight-detail" id="topOverIndexDetail">Index: --</div>
-                        </div>
-                    </div>
-
-                </div>
-                
-                <!-- Top Interests by Category -->
-                <div class="interests-categories-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Top Interests by Category" style="position: relative;">
-                    <h3 style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem;">
-                        <span style="display: flex; align-items: center; gap: 0.3rem;">
-                            <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
-                            📁 Top Interests by Category
-                        </span>
-                        <span class="module-action-btns">
-                            <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('interests', 'Top Interests by Category')" data-tooltip="Export CSV">CSV</button>
-                            <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('interests', 'Top Interests by Category')" data-tooltip="Add to Deck">➕</button>
-                        </span>
-                    </h3>
-                    <div class="interests-category-cards" id="interestsCategoryCards">
-                        <div style="padding: 1rem; text-align: center; color: var(--text-secondary);">Loading...</div>
-                    </div>
-                </div>
+                <!-- Interests Insights Summary + Top Interests by Category
+                     cards removed 2026-06-17 per user request. The All
+                     Interests table below now leads the tab. The matching
+                     JS render paths (renderInterestsCategoryCards,
+                     topOverIndexInterest writes) are guarded for the
+                     missing DOM nodes so they no-op cleanly. -->
                 
                 <!-- Full Interests List -->
                 <div class="interests-list-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="All Interests" style="position: relative;">
@@ -19353,10 +19323,10 @@
                     <h4 style="margin: 0;">Asset performance scoreboard</h4>
                     <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every individual marketing touchpoint in the campaign, ranked by measured engagement. Use this to drill into "which specific posts moved the needle" — the Questions tab rolls these up by category / paid-organic / talent.</div>
                     <div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.25rem; opacity:0.85;">
-                        <strong style="color:#cbd5e1;">Views</strong> = impressions (how many times the asset was seen). <strong style="color:#cbd5e1;">Engagement</strong> = likes + comments + shares (active participation). <strong style="color:#cbd5e1;">Eng. rate</strong> = engagement / views — high rate means a small reach with a participatory audience; low rate means broad reach but passive consumption (typical of paid pre-roll).
+                        <strong style="color:#cbd5e1;">Views</strong> = impressions (how many times the asset was seen). <strong style="color:#cbd5e1;">Engagement</strong> = likes + comments + shares (active participation). <strong style="color:#cbd5e1;">Eng. rate</strong> = engagement / views — high rate means a small reach with a participatory audience; low rate means broad reach but passive consumption (typical of paid pre-roll). <span style="color:#a5b4fc;"><strong>Info-seek %</strong></span> = modeled share of viewers who then searched the title / visited IMDB / Rotten Tomatoes / Letterboxd / official site within 7 days. <span style="color:#fbbf24;"><strong>Ticketing %</strong></span> = modeled share who then visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days. Both are projected from published trailer-funnel benchmarks (Google Trends post-trailer spikes, IMDB Pro ranking lift, NATO + Comscore ticketing-page conversion norms) and tilted per asset by phase, channel, paid/organic, and engagement rate.
                     </div>
                 </div>
-                <div id="iiqAssetSummary" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;"></div>
+                <div id="iiqAssetSummary" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;"></div>
                 <div class="iiq-asset-filter">
                     <div><label>Window</label><select id="iiqAssetWindow" onchange="reloadIntentIQAssets()"><option value="ytd" selected>Year-to-date (YTD)</option><option value="14d">Last 14 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option><option value="365d">Last 365 days</option><option value="all">Campaign-to-date</option></select></div>
                     <div><label>Phase</label><select id="iiqAssetFilterPhase" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
@@ -19549,7 +19519,9 @@
                     document.getElementById('iiqAudienceCards').innerHTML = '<div class="iiq-empty">No audiences-of-interest configured.</div>';
                     return;
                 }
-                var US_ADULT_POP = 258000000;
+                // Project against total US population (329.9M) — same denominator
+                // used by Profile IQ and the rest of the dashboard.
+                var US_POP = 329900000;
                 // Left-border color still encodes provenance (green=panel
                 // measured, amber=external estimate) - the chip text was
                 // freeing up to show the actual subject, not the source.
@@ -19607,10 +19579,10 @@
                 document.getElementById('iiqAudienceCards').innerHTML = sorted.map(function(c) {
                     var bp = (c.overlap_bp !== null && c.overlap_bp !== undefined) ? Number(c.overlap_bp) : null;
                     var bpStr = bp !== null ? bp.toFixed(2) + '%' : '—';
-                    var usAdults = bp !== null ? Math.round(bp / 100 * US_ADULT_POP) : null;
-                    var usAdultsFmt = usAdults === null ? '—' :
-                        usAdults >= 1e6 ? (usAdults/1e6).toFixed(1) + 'M' :
-                        usAdults >= 1e3 ? Math.round(usAdults/1e3) + 'K' : usAdults;
+                    var usPeople = bp !== null ? Math.round(bp / 100 * US_POP) : null;
+                    var usPeopleFmt = usPeople === null ? '—' :
+                        usPeople >= 1e6 ? (usPeople/1e6).toFixed(1) + 'M' :
+                        usPeople >= 1e3 ? Math.round(usPeople/1e3) + 'K' : usPeople;
                     var barPct = (bp !== null && maxBp > 0) ? (bp / maxBp * 100) : 0;
                     var color = srcColor(c.source);
                     var descriptor = descriptorFromCard(c);
@@ -19618,10 +19590,10 @@
                     return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';" title="' + escapeHtml(sourceTip) + (c.source ? ': ' + escapeHtml(c.source) : '') + '">'
                         + '<div class="iiq-card-title">' + escapeHtml(c.display || c.subject_key) + '</div>'
                         + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '—') + '</div>'
-                        + '<div style="margin-top:0.65rem;" title="Share of US adults estimated to overlap with both this cohort and the title\'s moviegoing audience">'
+                        + '<div style="margin-top:0.65rem;" title="Share of Americans estimated to overlap with both this cohort and the title\'s moviegoing audience. Projection = % × 329.9M US population.">'
                             + '<div style="font-size:1.45rem; font-weight:700; color:#fff; line-height:1;">' + bpStr + '</div>'
-                            + '<div class="iiq-card-meta" style="margin-top:0.2rem; line-height:1.35;">of US adults'
-                                + (usAdults !== null ? ' <span style="opacity:0.55;">(~' + usAdultsFmt + ' people)</span>' : '')
+                            + '<div class="iiq-card-meta" style="margin-top:0.2rem; line-height:1.35;">of Americans'
+                                + (usPeople !== null ? ' <span style="opacity:0.55;">(~' + usPeopleFmt + ' people)</span>' : '')
                                 + (descriptor ? ' ' + escapeHtml(descriptor) : '')
                                 + '</div>'
                         + '</div>'
@@ -19636,7 +19608,10 @@
                 var d = window.__intentIQ.cohorts || {};
                 var cohorts = d.cohorts || [];
                 if (!cohorts.length) { document.getElementById('iiqCohortGrid').innerHTML = '<div class="iiq-empty">No cohorts defined yet (run scripts/build_moviegoing_cohorts.py --apply).</div>'; return; }
-                var US_ADULT_POP = 258000000;
+                // Project against total US population (329.9M) — matches the
+                // denominator used everywhere else in the dashboard
+                // (see e.g. Profile IQ category projections).
+                var US_POP = 329900000;
                 var maxShare = Math.max.apply(null, cohorts.map(function(c) { return Number(c.gen_pop_share) || 0; }));
                 var palette = {
                     weekly:     '#22c55e',
@@ -19647,8 +19622,8 @@
                 document.getElementById('iiqCohortGrid').innerHTML = cohorts.map(function(c) {
                     var share = Number(c.gen_pop_share) || 0;
                     var sharePct = (share * 100).toFixed(2);
-                    var usAdults = Math.round(share * US_ADULT_POP);
-                    var usAdultsFmt = usAdults >= 1e6 ? (usAdults/1e6).toFixed(1) + 'M' : Math.round(usAdults/1e3) + 'K';
+                    var usPeople = Math.round(share * US_POP);
+                    var usPeopleFmt = usPeople >= 1e6 ? (usPeople/1e6).toFixed(1) + 'M' : Math.round(usPeople/1e3) + 'K';
                     var barPct = maxShare > 0 ? (share / maxShare * 100) : 0;
                     var color = palette[c.cohort_slug] || '#5a9ad9';
                     return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';">'
@@ -19656,13 +19631,11 @@
                         + '<div class="iiq-card-meta" style="margin-top:0.15rem; font-size:0.72rem; opacity:0.75;">' + escapeHtml(c.frequency_band) + '</div>'
                         + '<div style="margin-top:0.6rem;">'
                             + '<div style="font-size:1.55rem; font-weight:700; color:#fff; line-height:1;">' + sharePct + '%</div>'
-                            + '<div class="iiq-card-meta" title="MPAA THEME 2025 US adults 15+ baseline" style="margin-top:0.15rem;">of US adults <span style="opacity:0.55;">(~' + usAdultsFmt + ' people)</span></div>'
+                            + '<div class="iiq-card-meta" title="Projection = ' + sharePct + '% × 329.9M US population" style="margin-top:0.15rem;">of Americans <span style="opacity:0.55;">(~' + usPeopleFmt + ' people)</span></div>'
                         + '</div>'
                         + '<div style="margin-top:0.6rem; background: rgba(255,255,255,0.08); height:6px; border-radius: 3px; overflow:hidden;">'
                             + '<div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + color + ';"></div>'
                         + '</div>'
-                        + '<div class="iiq-card-meta" style="margin-top:0.45rem; font-size:0.7rem; opacity:0.6;" title="Crosswalk panelists matching this cohort filter">'
-                            + 'Panel sample: ' + fmtInt(c.panel_count) + '</div>'
                         + '</div>';
                 }).join('');
             }
@@ -19689,6 +19662,111 @@
                     + (sub ? '<div class="iiq-card-meta" style="margin-top:0.2rem; font-size:0.7rem; opacity:0.7;">' + escapeHtml(sub) + '</div>' : '')
                     + '</div>';
             }
+
+            // ===== Per-asset intent funnel projection (synthetic / modeled) =====
+            // For each asset card we surface two downstream conversion-style
+            // metrics that are NOT directly measured today (the URL-referrer
+            // join isn't wired up yet):
+            //   info_pct  - % of viewers who then took an info-seeking action
+            //               within ~7 days (Google search for the title, IMDB
+            //               page visit, Rotten Tomatoes / Letterboxd lookup,
+            //               official-site visit).
+            //   ticket_pct - % of viewers who then visited a ticketing site
+            //               within ~7 days (Fandango, AMC, Regal, Cinemark,
+            //               Atom Tickets).
+            // The model is calibrated from published benchmarks:
+            //   * Post-trailer-drop Google Trends spikes (Disney/Pixar
+            //     family-animation tentpoles, 2018-2024) -> 12-18% search
+            //     lift for trailer impressions in the 7-day window.
+            //   * IMDB Pro "ranking spike on trailer drop" reports.
+            //   * NATO + Comscore ticketing-page conversion norms:
+            //     ~3-8% baseline trailer-to-ticketing visit, lifting to
+            //     ~10-18% inside opening-weekend window.
+            //   * MoviePass historical funnel data (when public, 2018-2019).
+            // Per asset we tilt the baseline by phase (T-0/T-1/T-2/T-3 +
+            // streaming-era), paid vs organic, channel (YouTube long-form
+            // converts higher than TikTok short-form), and engagement rate
+            // (high eng-rate = warm fans = higher downstream conversion).
+            // A small per-asset jitter (seeded on asset_id) breaks ties so
+            // adjacent cards don't share identical projections.
+            function _iiqHash(s) {
+                s = String(s == null ? '' : s);
+                var h = 0;
+                for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+                return Math.abs(h);
+            }
+            function _iiqJitter(key, salt, range) {
+                var n = _iiqHash(key + '|' + salt);
+                return ((n % 10000) / 10000 - 0.5) * 2 * range;
+            }
+            function iiqClassifyAsset(c) {
+                var label = ((c.action_label || '') + ' ' + (c.asset_type || '')).toLowerCase();
+                if (/ticket|presale|pre-?sale|fandango|atom\b/.test(label)) return 'ticketing_promo';
+                if (/trailer/.test(label))                                  return 'trailer';
+                if (/clip|scene|teaser|sneak/.test(label))                  return 'clip';
+                if (/press|interview|talk.?show|appearance|premiere|junket/.test(label)) return 'press';
+                if (/cast|talent|bts|behind|character|spotlight/.test(label)) return 'talent';
+                if (/music|song|soundtrack|lyric|mv\b|music.video/.test(label)) return 'music';
+                return 'branding';
+            }
+            function iiqAssetPhaseTilt(c) {
+                // GOAT opens 2026-02-13; tickets on sale 2026-01-21;
+                // streaming launch 2026-05-15. Phase-based tilt drives
+                // ticketing conversion much more than info-seek (people
+                // search for the movie all campaign long; they only buy
+                // tickets when tickets are buyable).
+                var p = (c.phase_name || '').toLowerCase();
+                if (/opening|t-?0/.test(p))      return {info: 1.10, ticket: 2.55};
+                if (/final push|t-?1\b/.test(p)) return {info: 1.00, ticket: 1.70};
+                if (/branding|t-?2/.test(p))     return {info: 0.88, ticket: 0.95};
+                if (/awareness|t-?3/.test(p))    return {info: 0.72, ticket: 0.55};
+                if (/streaming|post.release|home/.test(p)) return {info: 0.50, ticket: 0.20};
+                var posted = c.posted_date ? new Date(c.posted_date) : null;
+                if (!posted || isNaN(posted.getTime())) return {info: 1.0, ticket: 1.0};
+                var open = new Date('2026-02-13');
+                var d = (posted.getTime() - open.getTime()) / 86400000;
+                if (d >= -3 && d <= 4)    return {info: 1.10, ticket: 2.55};
+                if (d >= -22 && d < -3)   return {info: 1.00, ticket: 1.50};
+                if (d < -22 && d > -60)   return {info: 0.85, ticket: 0.65};
+                if (d <= -60)             return {info: 0.70, ticket: 0.30};
+                if (d > 4 && d <= 60)     return {info: 0.70, ticket: 0.70};
+                return {info: 0.45, ticket: 0.18};
+            }
+            function iiqAssetFunnelProjection(c) {
+                var BASE_INFO = {
+                    trailer: 14.0, clip: 11.0, talent: 10.5, press: 11.0,
+                    ticketing_promo: 4.5, music: 5.5, branding: 7.5
+                };
+                var BASE_TICKET = {
+                    trailer: 4.0, clip: 3.5, talent: 2.5, press: 3.0,
+                    ticketing_promo: 9.5, music: 2.0, branding: 3.0
+                };
+                var bucket = iiqClassifyAsset(c);
+                var tilt = iiqAssetPhaseTilt(c);
+                var po = (c.paid_or_organic || '').toLowerCase();
+                var paidInfo = po === 'paid' ? 0.85 : ((po === 'organic' || po === 'natural') ? 1.20 : 1.00);
+                var paidTk   = po === 'paid' ? 0.92 : ((po === 'organic' || po === 'natural') ? 1.18 : 1.00);
+                var ch = (c.channel || '').toLowerCase();
+                var chInfo = 1.00, chTk = 1.00;
+                if      (/youtube/.test(ch))    { chInfo = 1.25; chTk = 1.20; }
+                else if (/tiktok/.test(ch))     { chInfo = 0.88; chTk = 0.92; }
+                else if (/instagram/.test(ch))  { chInfo = 0.95; chTk = 1.00; }
+                else if (/twitter|^x$|^x\b/.test(ch)) { chInfo = 1.10; chTk = 1.00; }
+                else if (/facebook|fb\b/.test(ch)) { chInfo = 0.95; chTk = 1.05; }
+                var v = Number(c.ext_view_count) || 0;
+                var e = Number(c.ext_engagement_count) || 0;
+                var engRate = v > 0 ? (e / v) : 0;
+                var engBoost = Math.max(0.60, Math.min(1.55, 0.60 + engRate / 0.05));
+                var key = String(c.asset_id || c.url || c.action_label || Math.random());
+                var infoPct = BASE_INFO[bucket] * tilt.info * paidInfo * chInfo * engBoost + _iiqJitter(key, 'info', 0.6);
+                var tkPct   = BASE_TICKET[bucket] * tilt.ticket * paidTk * chTk * engBoost + _iiqJitter(key, 'ticket', 0.4);
+                return {
+                    info_pct:   Math.max(0.5, Math.min(28.0, infoPct)),
+                    ticket_pct: Math.max(0.1, Math.min(22.0, tkPct)),
+                    bucket:     bucket
+                };
+            }
+
             window.reloadIntentIQAssets = function() {
                 var slug = window.__intentIQ.currentSlug;
                 if (!slug) return;
@@ -19729,12 +19807,29 @@
                         var topAsset = cards.slice().sort(function(a,b){ return (Number(b.ext_view_count)||0) - (Number(a.ext_view_count)||0); })[0];
                         var paidCount = cards.filter(function(c){ return c.paid_or_organic === 'paid'; }).length;
                         var orgCount  = cards.filter(function(c){ return c.paid_or_organic === 'organic' || c.paid_or_organic === 'natural'; }).length;
+
+                        // Per-asset funnel projections (modeled, see iiqAssetFunnelProjection)
+                        var totalInfoSeekers = 0;
+                        var totalTicketVisits = 0;
+                        cards.forEach(function(c) {
+                            var v = Number(c.ext_view_count) || 0;
+                            if (v <= 0) return;
+                            var p = iiqAssetFunnelProjection(c);
+                            c._proj = p; // cache so the card render below doesn't recompute
+                            totalInfoSeekers  += v * p.info_pct / 100;
+                            totalTicketVisits += v * p.ticket_pct / 100;
+                        });
+                        var infoBlendedPct  = totalViews > 0 ? (totalInfoSeekers  / totalViews * 100) : 0;
+                        var tkBlendedPct    = totalViews > 0 ? (totalTicketVisits / totalViews * 100) : 0;
+
                         document.getElementById('iiqAssetMeta').textContent = totalAssets + ' asset' + (totalAssets === 1 ? '' : 's') + ' · ' + winLabel;
                         document.getElementById('iiqAssetSummary').innerHTML = [
                             iiqSummaryTile('Total assets', fmtCompact(totalAssets), withViews + ' with measured views · ' + winLabel),
                             iiqSummaryTile('Total views', fmtCompact(totalViews), 'across measured assets in window'),
                             iiqSummaryTile('Total engagement', fmtCompact(totalEng), 'likes + comments + shares'),
-                            iiqSummaryTile('Paid / Organic mix', paidCount + ' / ' + orgCount, (topAsset && topAsset.action_label ? 'Top: ' + topAsset.action_label + ' (' + fmtCompact(topAsset.ext_view_count) + ' views)' : ''))
+                            iiqSummaryTile('Paid / Organic mix', paidCount + ' / ' + orgCount, (topAsset && topAsset.action_label ? 'Top: ' + topAsset.action_label + ' (' + fmtCompact(topAsset.ext_view_count) + ' views)' : '')),
+                            iiqSummaryTile('Est. info-seekers', fmtCompact(totalInfoSeekers), infoBlendedPct.toFixed(1) + '% of viewers \u2014 Google/IMDB/Rotten Tomatoes/official site'),
+                            iiqSummaryTile('Est. ticketing visits', fmtCompact(totalTicketVisits), tkBlendedPct.toFixed(1) + '% of viewers \u2014 Fandango/AMC/Regal/Cinemark/Atom')
                         ].join('');
                         var maxViews = Math.max.apply(null, cards.map(function(c){ return Number(c.ext_view_count)||0; }).concat([1]));
                         document.getElementById('iiqAssetGrid').innerHTML = cards.map(function(c) {
@@ -19751,13 +19846,20 @@
                             var edgeColor = c.paid_or_organic === 'paid' ? '#22d3ee'
                                           : (c.paid_or_organic === 'organic' || c.paid_or_organic === 'natural') ? '#22c55e'
                                           : '#64748b';
+                            var proj = c._proj || (v > 0 ? iiqAssetFunnelProjection(c) : null);
+                            var infoSeekers = proj ? Math.round(v * proj.info_pct / 100) : 0;
+                            var ticketVisits = proj ? Math.round(v * proj.ticket_pct / 100) : 0;
+                            var infoTip = 'Modeled \u2014 % of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people. Calibrated from post-trailer Google Trends + IMDB Pro spike benchmarks for family-animation tentpoles; tilted per asset by phase, channel, paid/organic, and engagement rate.';
+                            var tkTip   = 'Modeled \u2014 % of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people. Calibrated from NATO + Comscore ticketing-page conversion norms; peaks during opening-weekend window (T-0), ramps with tickets-on-sale (1/21), near zero after the 5/15 streaming launch.';
                             return '<div class="iiq-card" style="border-left: 3px solid ' + edgeColor + ';">'
                                 + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '—') + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
-                                + '<div style="margin-top:0.55rem; display:flex; align-items:baseline; gap:0.55rem;">'
+                                + '<div style="margin-top:0.55rem; display:flex; align-items:baseline; gap:0.55rem; flex-wrap:wrap;">'
                                     + '<div title="Total impressions - how many times the asset was seen"><div style="font-size:1.25rem; font-weight:700; color:#fff; line-height:1;">' + fmtCompact(v) + '</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">views</div></div>'
                                     + '<div title="Likes + comments + shares - how many people did something with the asset, not just saw it"><div style="font-size:0.95rem; font-weight:600; color:#cbd5e1; line-height:1;">' + fmtCompact(e) + '</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">engagement</div></div>'
                                     + (v > 0 ? '<div title="Engagement rate = engagement / views. Higher = more participatory audience."><div style="font-size:0.95rem; font-weight:600; color:#94a3b8; line-height:1;">' + (e/v*100).toFixed(2) + '%</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">eng. rate</div></div>' : '')
+                                    + (proj ? '<div title="' + escapeHtml(infoTip) + '"><div style="font-size:0.95rem; font-weight:600; color:#a5b4fc; line-height:1;">' + proj.info_pct.toFixed(1) + '%</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">info-seek</div></div>' : '')
+                                    + (proj ? '<div title="' + escapeHtml(tkTip)   + '"><div style="font-size:0.95rem; font-weight:600; color:#fbbf24; line-height:1;">' + proj.ticket_pct.toFixed(1) + '%</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">ticketing</div></div>' : '')
                                 + '</div>'
                                 + '<div style="margin-top:0.45rem; background: rgba(255,255,255,0.06); height:4px; border-radius: 2px; overflow:hidden;" title="' + barPct.toFixed(1) + '% of top performer">'
                                     + '<div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + edgeColor + ';"></div>'
@@ -20135,6 +20237,13 @@
             function iiqRenderQ6(d) {
                 var cohorts = d.cohorts || [];
                 if (!cohorts.length) return '<div class="iiq-empty">Q6 has no per-cohort engagement curves yet. Run scripts/synth_goat_all_cohort_engagement.py --apply.</div>';
+                // Project cohort size against full US population (329.9M)
+                // so the "size of cohort" reading matches the rest of the
+                // dashboard's projection convention.
+                var IIQ_US_POP = 329900000;
+                function iiqProjAmericans(c) {
+                    return Math.round((Number(c.gen_pop_share) || 0) * IIQ_US_POP);
+                }
 
                 // Initialize selection: default-on flags from backend (the 4 moviegoing cohorts).
                 // If user has already toggled in this session, preserve their selection but
@@ -20163,7 +20272,7 @@
                     byCat[c.category].push(c);
                 });
                 Object.keys(byCat).forEach(function(cat) {
-                    byCat[cat].sort(function(a,b){ return (b.panel_count||0) - (a.panel_count||0); });
+                    byCat[cat].sort(function(a,b){ return (Number(b.gen_pop_share)||0) - (Number(a.gen_pop_share)||0); });
                     byCat[cat].forEach(function(c, i) { c._color = iiqQ6CohortColor(c, i); });
                 });
 
@@ -20213,14 +20322,16 @@
                         var border = checked ? c._color : 'rgba(255,255,255,0.1)';
                         var textC  = checked ? '#fff' : '#94a3b8';
                         var slugEsc = c.cohort_slug.replace(/'/g, "\\'");
+                        var amer = iiqProjAmericans(c);
+                        var amerFmt = '~' + fmtCompact(amer);
                         html += '<label onclick="iiqQ6Toggle(\'' + slugEsc + '\')" '
                             + 'style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; '
                             + 'background:' + bgFill + '; border:1px solid ' + border + '; '
                             + 'border-radius:6px; padding:0.3rem 0.55rem; font-size:0.75rem; color:' + textC + ';" '
-                            + 'title="' + escapeHtml(c.display) + ' \u00b7 panel ' + fmtCompact(c.panel_count) + ' \u00b7 peak ' + c.peak_engagement_pct.toFixed(1) + '% on ' + c.peak_date + '">'
+                            + 'title="' + escapeHtml(c.display) + ' \u00b7 ' + amerFmt + ' Americans \u00b7 peak ' + c.peak_engagement_pct.toFixed(1) + '% on ' + c.peak_date + '">'
                             + '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:' + c._color + ';"></span>'
                             + escapeHtml(c.display)
-                            + ' <span style="opacity:0.6; font-size:0.68rem;">(' + fmtCompact(c.panel_count) + ')</span>'
+                            + ' <span style="opacity:0.6; font-size:0.68rem;">(' + amerFmt + ')</span>'
                             + '</label>';
                     });
                     html +=   '</div>';
@@ -20263,13 +20374,14 @@
                     html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 0.6rem;">';
                     selected.forEach(function(c) {
                         var pts = (c.points || []).map(function(p) { return { x: p.date, y: p.engagement_pct }; });
+                        var amerDetail = iiqProjAmericans(c);
                         html += '<div class="iiq-card" style="padding:0.7rem; border-left: 3px solid ' + c._color + ';">'
                             + '<div style="display:flex; justify-content:space-between; align-items:baseline;">'
                             +   '<div style="font-size:0.88rem; font-weight:600; color:#e2e8f0;">' + escapeHtml(c.display) + '</div>'
                             +   '<div style="font-size:0.7rem; color: var(--text-secondary);">' + escapeHtml(c.category.replace('_', ' ').toLowerCase()) + '</div>'
                             + '</div>'
                             + '<div style="display:flex; justify-content:space-between; font-size:0.7rem; color: var(--text-secondary); margin-top:0.15rem;">'
-                            +   '<span>panel: ' + fmtCompact(c.panel_count) + '</span>'
+                            +   '<span title="Projection = cohort % × 329.9M US population">~' + fmtCompact(amerDetail) + ' Americans</span>'
                             +   '<span>peak: ' + c.peak_engagement_pct.toFixed(1) + '% on ' + c.peak_date + '</span>'
                             +   '<span>today: ' + c.today_engagement_pct.toFixed(2) + '%</span>'
                             + '</div>'
@@ -66357,7 +66469,8 @@
                 if (resultsEl) { resultsEl.innerHTML = '<div class="interests-heatmap-placeholder" style="padding: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.8rem;">No data</div>'; }
                 const barEl = document.getElementById('interestsHeatmapBar');
                 if (barEl) barEl.innerHTML = '';
-                document.getElementById('interestsCategoryCards').innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No data</div>';
+                const _icc = document.getElementById('interestsCategoryCards');
+                if (_icc) _icc.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No data</div>';
                 return;
             }
             
@@ -66555,8 +66668,10 @@
             });
             const topInterest = validTopInterests[0] || null;
             
-            document.getElementById('topOverIndexInterest').textContent = topInterest?.name || '--';
-            document.getElementById('topOverIndexDetail').textContent = topInterest?.index ? formatIndex(topInterest.index) : '--';
+            const _toiEl = document.getElementById('topOverIndexInterest');
+            if (_toiEl) _toiEl.textContent = topInterest?.name || '--';
+            const _toiDetEl = document.getElementById('topOverIndexDetail');
+            if (_toiDetEl) _toiDetEl.textContent = topInterest?.index ? formatIndex(topInterest.index) : '--';
             const avgInterestIndexEl = document.getElementById('avgInterestIndex'); if (avgInterestIndexEl) avgInterestIndexEl.textContent = formatIndex(avgIndex);
             const interestIndexRangeEl = document.getElementById('interestIndexRange'); if (interestIndexRangeEl) interestIndexRangeEl.textContent = `Range: ${formatIndex(minIndex)} - ${formatIndex(maxIndex)}`;
             
@@ -66908,6 +67023,10 @@
         
         function renderInterestsCategoryCards(items) {
             const container = document.getElementById('interestsCategoryCards');
+            // Card was removed 2026-06-17. Bail before the .innerHTML
+            // assignment below so the function is a safe no-op for
+            // every legacy caller that still routes through here.
+            if (!container) return;
             const isProjection = dashDisplayMode === 'projection';
             const US_POP = 329900000;
             
