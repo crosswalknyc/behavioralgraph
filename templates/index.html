@@ -40504,6 +40504,17 @@
             var topPathsEl = document.getElementById('jiqPathTopPaths');
             var metaEl = document.getElementById('jiqPathMeta');
             if (!card || !ribbonEl) return;
+            // Banking-research dashboards have the richer Journey
+            // Lifecycle card with 16 expandable stops, which makes the
+            // condensed ribbon redundant + visually confusing. Hide
+            // unconditionally on those runs.
+            var _ptpMeta = (window._jiqCurrentRun && window._jiqCurrentRun.meta) || {};
+            var _ptpIsBanking = ((_ptpMeta.target_type || '').toLowerCase() === 'banking_research')
+                              || ((_ptpMeta.category || '').toLowerCase() === 'banking_research');
+            if (_ptpIsBanking) {
+                card.style.display = 'none';
+                return;
+            }
             var hasData = ptp && ptp.columns && ptp.columns.some(function(c) { return c.users > 0; });
             if (!hasData) {
                 card.style.display = 'none';
