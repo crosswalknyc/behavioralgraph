@@ -19335,7 +19335,16 @@
 
             <div class="iiq-panel" id="iiqPanel-audiences">
                 <div class="iiq-cards-grid" id="iiqAudienceCards"></div>
-                <h4 style="margin: 1.25rem 0 0.5rem;">Moviegoing-frequency cohorts (proxy audiences)</h4>
+                <div style="margin: 1.25rem 0 0.5rem; display:flex; justify-content:space-between; align-items:end; flex-wrap:wrap; gap:0.5rem;">
+                    <div>
+                        <h4 style="margin:0;">Moviegoing-frequency cohorts</h4>
+                        <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">How often this slice of US adults goes to the movies. Source: MPAA THEME 2025 + Statista US Moviegoing Frequency Q1 2026.</div>
+                    </div>
+                    <div style="font-size:0.7rem; color: var(--text-secondary);">
+                        <span style="display:inline-flex; align-items:center; gap:0.3rem; margin-right:0.8rem;"><span style="width:8px; height:8px; background:#22c55e; border-radius:2px;"></span> Panel-measured</span>
+                        <span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:8px; height:8px; background:#f59e0b; border-radius:2px;"></span> External estimate</span>
+                    </div>
+                </div>
                 <div id="iiqCohortGrid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;"></div>
             </div>
 
@@ -19515,13 +19524,50 @@
                     document.getElementById('iiqAudienceCards').innerHTML = '<div class="iiq-empty">No audiences-of-interest configured.</div>';
                     return;
                 }
-                document.getElementById('iiqAudienceCards').innerHTML = cards.map(function(c) {
-                    var bp = (c.overlap_bp !== null && c.overlap_bp !== undefined) ? (Number(c.overlap_bp).toFixed(4) + '%') : '—';
-                    return '<div class="iiq-card">'
+                var US_ADULT_POP = 258000000;
+                // Color the left border by source so users can see at a glance
+                // which numbers are panel-measured vs. external-estimate
+                var srcColor = function(s) {
+                    if (!s) return '#3b3b3b';
+                    if (s.indexOf('panel') === 0) return '#22c55e';        // green: measured
+                    if (s.indexOf('external') === 0) return '#f59e0b';      // amber: estimate
+                    return '#3b3b3b';
+                };
+                var srcLabel = function(s) {
+                    if (!s) return '';
+                    if (s.indexOf('panel') === 0) return 'Panel-measured';
+                    if (s.indexOf('external') === 0) return 'External estimate';
+                    return s;
+                };
+                // Sort: real values first (descending), then "—" entries
+                var sorted = cards.slice().sort(function(a, b) {
+                    var av = (a.overlap_bp !== null && a.overlap_bp !== undefined) ? Number(a.overlap_bp) : -1;
+                    var bv = (b.overlap_bp !== null && b.overlap_bp !== undefined) ? Number(b.overlap_bp) : -1;
+                    return bv - av;
+                });
+                var maxBp = Math.max.apply(null, sorted.map(function(c) { return Number(c.overlap_bp) || 0; }));
+                document.getElementById('iiqAudienceCards').innerHTML = sorted.map(function(c) {
+                    var bp = (c.overlap_bp !== null && c.overlap_bp !== undefined) ? Number(c.overlap_bp) : null;
+                    var bpStr = bp !== null ? bp.toFixed(2) + '%' : '—';
+                    var usAdults = bp !== null ? Math.round(bp / 100 * US_ADULT_POP) : null;
+                    var usAdultsFmt = usAdults === null ? '—' :
+                        usAdults >= 1e6 ? (usAdults/1e6).toFixed(1) + 'M' :
+                        usAdults >= 1e3 ? Math.round(usAdults/1e3) + 'K' : usAdults;
+                    var barPct = (bp !== null && maxBp > 0) ? (bp / maxBp * 100) : 0;
+                    var color = srcColor(c.source);
+                    var sourceTip = srcLabel(c.source);
+                    return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';">'
                         + '<div class="iiq-card-title">' + escapeHtml(c.display || c.subject_key) + '</div>'
-                        + '<div class="iiq-card-meta">Category: ' + escapeHtml(c.category || '—') + '</div>'
-                        + '<div class="iiq-card-meta" style="margin-top:0.25rem;">Overlap BP: <strong>' + bp + '</strong></div>'
-                        + '<div style="margin-top:0.4rem;"><span class="iiq-chip">' + escapeHtml(c.subject_key || '') + '</span></div>'
+                        + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.65;">' + escapeHtml(c.category || '—')
+                            + (sourceTip ? ' <span style="opacity:0.55;">·</span> <span title="' + escapeHtml(c.source || '') + '" style="color:' + color + '; opacity:0.85;">' + escapeHtml(sourceTip) + '</span>' : '')
+                            + '</div>'
+                        + '<div style="margin-top:0.65rem;" title="Share of US adults estimated to overlap with both this cohort and the GOAT moviegoing audience">'
+                            + '<div style="font-size:1.45rem; font-weight:700; color:#fff; line-height:1;">' + bpStr + '</div>'
+                            + '<div class="iiq-card-meta" style="margin-top:0.15rem;">of US adults' + (usAdults !== null ? ' <span style="opacity:0.55;">(~' + usAdultsFmt + ' people)</span>' : '') + '</div>'
+                        + '</div>'
+                        + (bp !== null ? '<div style="margin-top:0.55rem; background: rgba(255,255,255,0.08); height:5px; border-radius: 3px; overflow:hidden;">'
+                            + '<div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + color + ';"></div>'
+                          + '</div>' : '')
                         + '</div>';
                 }).join('');
             }
@@ -19530,12 +19576,33 @@
                 var d = window.__intentIQ.cohorts || {};
                 var cohorts = d.cohorts || [];
                 if (!cohorts.length) { document.getElementById('iiqCohortGrid').innerHTML = '<div class="iiq-empty">No cohorts defined yet (run scripts/build_moviegoing_cohorts.py --apply).</div>'; return; }
+                var US_ADULT_POP = 258000000;
+                var maxShare = Math.max.apply(null, cohorts.map(function(c) { return Number(c.gen_pop_share) || 0; }));
+                var palette = {
+                    weekly:     '#22c55e',
+                    monthly:    '#3b82f6',
+                    bimonthly:  '#a855f7',
+                    occasional: '#f59e0b'
+                };
                 document.getElementById('iiqCohortGrid').innerHTML = cohorts.map(function(c) {
-                    return '<div class="iiq-card">'
+                    var share = Number(c.gen_pop_share) || 0;
+                    var sharePct = (share * 100).toFixed(2);
+                    var usAdults = Math.round(share * US_ADULT_POP);
+                    var usAdultsFmt = usAdults >= 1e6 ? (usAdults/1e6).toFixed(1) + 'M' : Math.round(usAdults/1e3) + 'K';
+                    var barPct = maxShare > 0 ? (share / maxShare * 100) : 0;
+                    var color = palette[c.cohort_slug] || '#5a9ad9';
+                    return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';">'
                         + '<div class="iiq-card-title">' + escapeHtml(c.display_name) + '</div>'
-                        + '<div class="iiq-card-meta">' + escapeHtml(c.frequency_band) + '</div>'
-                        + '<div class="iiq-card-meta" style="margin-top:0.35rem;">Panel: <strong>' + fmtInt(c.panel_count) + '</strong></div>'
-                        + '<div class="iiq-card-meta">Gen Pop share: <strong>' + (c.gen_pop_share ? (Number(c.gen_pop_share)*100).toFixed(2) + '%' : '—') + '</strong></div>'
+                        + '<div class="iiq-card-meta" style="margin-top:0.15rem; font-size:0.72rem; opacity:0.75;">' + escapeHtml(c.frequency_band) + '</div>'
+                        + '<div style="margin-top:0.6rem;">'
+                            + '<div style="font-size:1.55rem; font-weight:700; color:#fff; line-height:1;">' + sharePct + '%</div>'
+                            + '<div class="iiq-card-meta" title="MPAA THEME 2025 US adults 15+ baseline" style="margin-top:0.15rem;">of US adults <span style="opacity:0.55;">(~' + usAdultsFmt + ' people)</span></div>'
+                        + '</div>'
+                        + '<div style="margin-top:0.6rem; background: rgba(255,255,255,0.08); height:6px; border-radius: 3px; overflow:hidden;">'
+                            + '<div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + color + ';"></div>'
+                        + '</div>'
+                        + '<div class="iiq-card-meta" style="margin-top:0.45rem; font-size:0.7rem; opacity:0.6;" title="Crosswalk panelists matching this cohort filter">'
+                            + 'Panel sample: ' + fmtInt(c.panel_count) + '</div>'
                         + '</div>';
                 }).join('');
             }
