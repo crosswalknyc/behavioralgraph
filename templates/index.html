@@ -19366,7 +19366,9 @@
             </div>
 
             <div class="iiq-panel" id="iiqPanel-questions">
-                <div id="iiqQuestionList"></div>
+                <div id="iiqQNav" style="display:flex; flex-wrap:wrap; gap:0.35rem; margin-bottom:0.85rem; padding-bottom:0.55rem; border-bottom: 1px solid rgba(255,255,255,0.08);"></div>
+                <div id="iiqQTitle" style="margin-bottom:0.65rem;"></div>
+                <div id="iiqQBody"><div class="iiq-empty">Loading...</div></div>
             </div>
 
             <div class="iiq-panel" id="iiqPanel-inflight">
@@ -19771,54 +19773,351 @@
                     });
             };
 
+            // ===== Intent IQ Questions — sub-tabs + per-Q visualizations =====
+            var IIQ_QMETA = {
+                q1: { short: 'Q1 · Content',     title: 'Q1. What content categories drive engagement?',                   intro: 'Mean 7-day views per asset, grouped by asset type and paid/organic. Higher = posts of that type tend to pull more eyeballs in their first week.' },
+                q2: { short: 'Q2 · Paid×Organic', title: 'Q2. How do paid and organic content interact?',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
+                q3: { short: 'Q3 · Box Office',   title: 'Q3. How can early box-office estimates be fine-tuned?',            intro: 'Comparable family-animated titles benchmarked against the Intent IQ forecast. Calibrates expectations for opening 4-day gross.' },
+                q4: { short: 'Q4 · Talent',       title: 'Q4. How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
+                q5: { short: 'Q5 · Trailer',      title: 'Q5. How crucial is trailer viewership across the campaign life?', intro: 'Daily trailer views (across all trailer assets). Spikes mark trailer launches and refreshes.' },
+                q6: { short: 'Q6 · Audience shift', title: 'Q6. How do different audiences engage throughout the campaign?', intro: 'Daily engagement by moviegoing-frequency cohort. General audiences (occasional/bimonthly) typically dominate early; families intensify closer to release.' },
+            };
+            var IIQ_QPALETTE = {
+                paid:    '#22d3ee',
+                organic: '#22c55e',
+                natural: '#22c55e',
+                unknown: '#94a3b8',
+                weekly:     '#22c55e',
+                monthly:    '#3b82f6',
+                bimonthly:  '#a855f7',
+                occasional: '#f59e0b',
+            };
+
+            function iiqBarRow(label, value, maxValue, color, subLabel, subValue) {
+                var pct = (maxValue > 0) ? Math.min(100, (value / maxValue) * 100) : 0;
+                return '<div style="display:grid; grid-template-columns: 200px 1fr auto; gap:0.65rem; align-items:center; padding:0.4rem 0;">'
+                    + '<div style="font-size:0.78rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(label) + '">' + escapeHtml(label) + (subLabel ? ' <span style="color: var(--text-secondary); font-size:0.7rem;">' + escapeHtml(subLabel) + '</span>' : '') + '</div>'
+                    + '<div style="background: rgba(255,255,255,0.06); height: 18px; border-radius: 4px; overflow:hidden;">'
+                    +     '<div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + color + '; transition: width 0.4s ease;"></div>'
+                    + '</div>'
+                    + '<div style="font-size:0.85rem; font-weight:600; color:#fff; text-align:right; min-width:80px;">' + fmtCompact(value) + (subValue ? ' <span style="color: var(--text-secondary); font-weight:400; font-size:0.7rem;">' + escapeHtml(subValue) + '</span>' : '') + '</div>'
+                    + '</div>';
+            }
+
+            function iiqLineChart(series, opts) {
+                // series: [{name, color, points: [{x: <iso date>, y: <num>}]}]
+                opts = opts || {};
+                var W = opts.width || 760, H = opts.height || 240;
+                var P = { t: 14, r: 14, b: 32, l: 50 };
+                var allPts = [].concat.apply([], series.map(function(s) { return s.points || []; }));
+                if (!allPts.length) return '<div class="iiq-empty">No data for this chart yet.</div>';
+                var xs = allPts.map(function(p) { return new Date(p.x).getTime(); });
+                var ys = allPts.map(function(p) { return Number(p.y) || 0; });
+                var xMin = Math.min.apply(null, xs), xMax = Math.max.apply(null, xs);
+                var yMin = 0, yMax = Math.max.apply(null, ys) * 1.08 || 1;
+                var sx = function(x) { return P.l + (W - P.l - P.r) * ((new Date(x).getTime() - xMin) / Math.max(1, xMax - xMin)); };
+                var sy = function(y) { return H - P.b - (H - P.t - P.b) * ((y - yMin) / Math.max(1, yMax - yMin)); };
+                var grid = '';
+                for (var i = 0; i <= 4; i++) {
+                    var gy = P.t + (H - P.t - P.b) * (i / 4);
+                    var gv = yMax - (yMax - yMin) * (i / 4);
+                    grid += '<line x1="' + P.l + '" x2="' + (W - P.r) + '" y1="' + gy + '" y2="' + gy + '" stroke="rgba(255,255,255,0.06)" />';
+                    grid += '<text x="' + (P.l - 6) + '" y="' + (gy + 4) + '" font-size="10" fill="rgba(226,232,240,0.6)" text-anchor="end">' + fmtCompact(gv) + '</text>';
+                }
+                var dateLabels = '';
+                var ndates = 5;
+                for (var j = 0; j <= ndates; j++) {
+                    var t = xMin + (xMax - xMin) * (j / ndates);
+                    var dx = sx(t);
+                    var dLabel = new Date(t).toISOString().slice(5, 10);
+                    dateLabels += '<text x="' + dx + '" y="' + (H - 10) + '" font-size="10" fill="rgba(226,232,240,0.6)" text-anchor="middle">' + dLabel + '</text>';
+                }
+                var paths = series.map(function(s) {
+                    var pts = (s.points || []).slice().sort(function(a,b){ return new Date(a.x) - new Date(b.x); });
+                    if (!pts.length) return '';
+                    var d = pts.map(function(p, i) { return (i === 0 ? 'M' : 'L') + sx(p.x).toFixed(1) + ',' + sy(p.y).toFixed(1); }).join(' ');
+                    var areaD = d + ' L ' + sx(pts[pts.length-1].x).toFixed(1) + ',' + sy(0) + ' L ' + sx(pts[0].x).toFixed(1) + ',' + sy(0) + ' Z';
+                    return '<path d="' + areaD + '" fill="' + s.color + '" fill-opacity="0.08" />'
+                         + '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />';
+                }).join('');
+                var legend = series.map(function(s) {
+                    return '<span style="display:inline-flex; align-items:center; gap:0.3rem; margin-right:0.85rem; font-size:0.75rem; color:#cbd5e1;"><span style="width:10px; height:10px; background:' + s.color + '; border-radius:2px;"></span>' + escapeHtml(s.name) + '</span>';
+                }).join('');
+                return '<div style="overflow-x:auto;"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; max-width:' + W + 'px; display:block;">' + grid + paths + dateLabels + '</svg></div>'
+                    + '<div style="margin-top:0.45rem;">' + legend + '</div>';
+            }
+
+            function iiqDonut(slices, opts) {
+                // slices: [{label, value, color}]
+                opts = opts || {};
+                var size = opts.size || 160;
+                var r = size / 2, R = r - 4, inner = R * 0.62;
+                var total = slices.reduce(function(s, x) { return s + (Number(x.value) || 0); }, 0);
+                if (!total) return '<div class="iiq-empty">No data.</div>';
+                var ang = -Math.PI / 2;
+                var arcs = slices.map(function(s) {
+                    var v = Number(s.value) || 0;
+                    var sweep = (v / total) * Math.PI * 2;
+                    var a0 = ang, a1 = ang + sweep;
+                    ang = a1;
+                    var x0 = r + R * Math.cos(a0), y0 = r + R * Math.sin(a0);
+                    var x1 = r + R * Math.cos(a1), y1 = r + R * Math.sin(a1);
+                    var xi0 = r + inner * Math.cos(a1), yi0 = r + inner * Math.sin(a1);
+                    var xi1 = r + inner * Math.cos(a0), yi1 = r + inner * Math.sin(a0);
+                    var large = (sweep > Math.PI) ? 1 : 0;
+                    var d = 'M ' + x0 + ' ' + y0
+                        + ' A ' + R + ' ' + R + ' 0 ' + large + ' 1 ' + x1 + ' ' + y1
+                        + ' L ' + xi0 + ' ' + yi0
+                        + ' A ' + inner + ' ' + inner + ' 0 ' + large + ' 0 ' + xi1 + ' ' + yi1 + ' Z';
+                    return '<path d="' + d + '" fill="' + s.color + '" stroke="rgba(0,0,0,0.3)" stroke-width="0.5" />';
+                }).join('');
+                var legend = slices.map(function(s) {
+                    var pct = total > 0 ? ((s.value / total) * 100).toFixed(1) : '0';
+                    return '<div style="display:flex; align-items:center; gap:0.45rem; margin:0.3rem 0; font-size:0.78rem;">'
+                        + '<span style="width:10px; height:10px; background:' + s.color + '; border-radius:2px;"></span>'
+                        + '<span style="color:#e2e8f0; flex:1;">' + escapeHtml(s.label) + '</span>'
+                        + '<span style="color:#fff; font-weight:600;">' + pct + '%</span>'
+                        + '<span style="color: var(--text-secondary); font-size:0.7rem;">' + fmtCompact(s.value) + '</span>'
+                        + '</div>';
+                }).join('');
+                return '<div style="display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap;">'
+                    + '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' + arcs + '</svg>'
+                    + '<div style="flex:1; min-width:200px;">' + legend + '</div>'
+                    + '</div>';
+            }
+
+            // ---- Per-Q renderers ----
+            function iiqRenderQ1(d) {
+                if (!d.rows || !d.rows.length) return '<div class="iiq-empty">Q1 has no asset-engagement data yet. Run scripts/refresh_intent_youtube_engagement.py.</div>';
+                var rows = d.rows.slice().sort(function(a,b){ return (Number(b.mean_views_7d)||0) - (Number(a.mean_views_7d)||0); });
+                var maxV = Math.max.apply(null, rows.map(function(r){ return Number(r.mean_views_7d)||0; }).concat([1]));
+                var totalAssets = rows.reduce(function(s,r){ return s + (Number(r.asset_count)||0); }, 0);
+                var weighted = rows.reduce(function(s,r){ return s + (Number(r.mean_views_7d)||0) * (Number(r.asset_count)||0); }, 0);
+                var avgAll = totalAssets > 0 ? weighted / totalAssets : 0;
+                var html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
+                    + iiqSummaryTile('Categories ranked', String(rows.length), 'asset_type × paid/organic')
+                    + iiqSummaryTile('Total assets measured', String(totalAssets), 'with non-zero 7-day views')
+                    + iiqSummaryTile('Avg 7d views / asset', fmtCompact(avgAll), 'weighted across all categories')
+                    + '</div>';
+                html += '<div style="background: rgba(0,0,0,0.25); padding: 0.85rem; border-radius: 6px;">';
+                html += '<div style="font-size:0.75rem; color: var(--text-secondary); margin-bottom:0.4rem;">Mean 7-day views per asset, by content category</div>';
+                html += rows.map(function(r) {
+                    var label = (r.asset_type || '(none)');
+                    var sub   = '(' + (r.paid_or_organic || 'unknown') + ', n=' + r.asset_count + ')';
+                    var color = IIQ_QPALETTE[r.paid_or_organic] || IIQ_QPALETTE.unknown;
+                    var subVal = 'median: ' + fmtCompact(r.median_views_7d);
+                    return iiqBarRow(label, Number(r.mean_views_7d)||0, maxV, color, sub, subVal);
+                }).join('');
+                html += '</div>';
+                return html;
+            }
+
+            function iiqRenderQ2(d) {
+                var cum = d.cumulative || [];
+                var best = d.best_in_flight_14d || [];
+                if (!cum.length && !best.length) return '<div class="iiq-empty">Q2 has no engagement data yet.</div>';
+                // Build per-day cumulative by paid/organic
+                var byKey = {};
+                cum.forEach(function(r) {
+                    var k = r.paid_or_organic || 'unknown';
+                    if (!byKey[k]) byKey[k] = [];
+                    byKey[k].push({ x: r.date, y: Number(r.cumulative_views_to_date) || 0 });
+                });
+                var sumByKey = {};
+                Object.keys(byKey).forEach(function(k) {
+                    sumByKey[k] = byKey[k].reduce(function(s, p) { return s + p.y; }, 0);
+                });
+                var donutSlices = Object.keys(sumByKey).map(function(k) {
+                    return { label: k.charAt(0).toUpperCase() + k.slice(1), value: sumByKey[k], color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown };
+                }).sort(function(a,b){ return b.value - a.value; });
+                // Convert daily drops to a running cumulative for the line chart
+                var dates = Array.from(new Set(cum.map(function(r){ return r.date; }))).sort();
+                var keys = Object.keys(byKey);
+                var series = keys.map(function(k) {
+                    var pts = [], run = 0;
+                    var dayMap = {};
+                    byKey[k].forEach(function(p) { dayMap[p.x] = (dayMap[p.x] || 0) + p.y; });
+                    dates.forEach(function(d) {
+                        run += (dayMap[d] || 0);
+                        pts.push({ x: d, y: run });
+                    });
+                    return { name: k.charAt(0).toUpperCase() + k.slice(1) + ' (cumulative views)', color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown, points: pts };
+                });
+                var html = '<div style="display: grid; grid-template-columns: 1.05fr 1fr; gap: 1rem; margin-bottom: 0.85rem;">';
+                html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Share of total measured views</div>' + iiqDonut(donutSlices) + '</div>';
+                html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Cumulative view growth, paid vs organic</div>' + iiqLineChart(series, {height: 240}) + '</div>';
+                html += '</div>';
+                if (best.length) {
+                    var maxBV = Math.max.apply(null, best.map(function(b){ return Number(b.views_total)||0; }).concat([1]));
+                    html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Top 10 in-flight assets (last 14d)</div>';
+                    html += best.slice(0,10).map(function(b) {
+                        var label = (b.action_label || b.asset_type || 'Asset #' + b.asset_id) + '  ';
+                        var sub = '· ' + (b.asset_type || '') + ' · ' + (b.paid_or_organic || '');
+                        var color = IIQ_QPALETTE[b.paid_or_organic] || IIQ_QPALETTE.unknown;
+                        return iiqBarRow(label, Number(b.views_total)||0, maxBV, color, sub, 'eng ' + fmtCompact(b.engagement_total||0));
+                    }).join('');
+                    html += '</div>';
+                }
+                return html;
+            }
+
+            function iiqRenderQ3(d) {
+                var fc = d.intent_iq_forecast || {};
+                var ind = d.industry_forecast || {};
+                var actual = Number(d.actual_opening_bo_usd) || 0;
+                var comps = d.comp_titles || [];
+                var html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
+                html += iiqSummaryTile('Industry forecast', (ind.low_usd || ind.high_usd) ? fmtUSD(ind.low_usd) + ' – ' + fmtUSD(ind.high_usd) : '—', 'opening weekend range');
+                html += iiqSummaryTile('Intent IQ forecast', fc && fc.predicted_opening_4day_usd ? fmtUSD(fc.predicted_opening_4day_usd) : '—', (fc && fc.note) ? fc.note : 'regression on comp titles');
+                html += iiqSummaryTile('Actual opening', actual ? fmtUSD(actual) : 'Not yet released', actual ? 'measured' : 'pre-release');
+                html += '</div>';
+                if (comps.length) {
+                    var sorted = comps.slice().sort(function(a,b){ return (Number(b.opening_4day_usd)||0) - (Number(a.opening_4day_usd)||0); });
+                    var maxC = Math.max.apply(null, sorted.map(function(c){ return Number(c.opening_4day_usd)||0; }).concat([1]));
+                    html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Comparable family-animated titles, opening 4-day gross</div>';
+                    html += sorted.map(function(c) {
+                        var label = c.display_name || c.title_slug;
+                        var sub = '(opened ' + (c.opening_date || '—') + ')';
+                        return iiqBarRow(label, Number(c.opening_4day_usd)||0, maxC, '#a855f7', sub, 'total ' + fmtUSD(c.cumulative_usd||0));
+                    }).join('');
+                    html += '</div>';
+                } else {
+                    html += '<div class="iiq-empty">No comp titles ingested yet. Run scripts/scrape_box_office_mojo.py.</div>';
+                }
+                if (d.note) html += '<p style="color: var(--text-secondary); font-size: 0.72rem; margin-top:0.6rem;">' + escapeHtml(d.note) + '</p>';
+                return html;
+            }
+
+            function iiqRenderQ4(d) {
+                if (!d.rows || !d.rows.length) return '<div class="iiq-empty">Q4 has no talent attribution yet. Run scripts/intent_attribution.py --apply.</div>';
+                var rows = d.rows.slice().sort(function(a,b){ return (Number(b.views_total)||0) - (Number(a.views_total)||0); });
+                var maxV = Math.max.apply(null, rows.map(function(r){ return Number(r.views_total)||0; }).concat([1]));
+                var totalV = rows.reduce(function(s,r){ return s + (Number(r.views_total)||0); }, 0);
+                var totalE = rows.reduce(function(s,r){ return s + (Number(r.engagement_total)||0); }, 0);
+                var top = rows[0];
+                var html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
+                    + iiqSummaryTile('Cast members surfaced', String(rows.length), 'in tagged campaign assets')
+                    + iiqSummaryTile('Talent-driven views', fmtCompact(totalV), 'across all cast-tagged assets')
+                    + iiqSummaryTile('Top contributor', top ? top.talent : '—', top ? fmtCompact(top.views_total) + ' views · ' + top.asset_count + ' assets' : '')
+                    + '</div>';
+                html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Cast members ranked by total measured views</div>';
+                html += rows.map(function(r) {
+                    var sub = '(n=' + r.asset_count + ' assets)';
+                    return iiqBarRow(r.talent, Number(r.views_total)||0, maxV, '#f59e0b', sub, 'eng ' + fmtCompact(r.engagement_total||0));
+                }).join('');
+                html += '</div>';
+                if (d.note) html += '<p style="color: var(--text-secondary); font-size: 0.72rem; margin-top:0.6rem;">' + escapeHtml(d.note) + '</p>';
+                return html;
+            }
+
+            function iiqRenderQ5(d) {
+                var curve = d.trailer_view_curve || [];
+                if (!curve.length) return '<div class="iiq-empty">Q5 has no trailer engagement series yet.</div>';
+                var totalViews = curve.reduce(function(s,r){ return s + (Number(r.trailer_views)||0); }, 0);
+                var peak = curve.slice().sort(function(a,b){ return (Number(b.trailer_views)||0) - (Number(a.trailer_views)||0); })[0];
+                var html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
+                    + iiqSummaryTile('Total trailer views', fmtCompact(totalViews), 'across all trailer assets in series')
+                    + iiqSummaryTile('Peak day', peak ? peak.date : '—', peak ? fmtCompact(peak.trailer_views) + ' views' : '')
+                    + iiqSummaryTile('Days with measurement', String(curve.length), 'continuous daily series')
+                    + '</div>';
+                var series = [{
+                    name: 'Daily trailer views (all trailer assets)',
+                    color: '#22d3ee',
+                    points: curve.map(function(r){ return { x: r.date, y: Number(r.trailer_views)||0 }; }),
+                }];
+                html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Daily trailer view volume across the campaign</div>'
+                    + iiqLineChart(series, {height: 260}) + '</div>';
+                return html;
+            }
+
+            function iiqRenderQ6(d) {
+                var rows = d.shift_curves || [];
+                if (!rows.length) return '<div class="iiq-empty">Q6 has no per-cohort engagement curves yet. Run scripts/synth_intent_cohort_engagement_daily.py.</div>';
+                var byCohort = {};
+                rows.forEach(function(r) {
+                    var k = r.cohort_slug;
+                    if (!byCohort[k]) byCohort[k] = [];
+                    byCohort[k].push({ x: r.date, y: Number(r.engagement_bp)||0 });
+                });
+                var cohortOrder = ['weekly','monthly','bimonthly','occasional'];
+                var keys = cohortOrder.filter(function(k){ return byCohort[k]; }).concat(Object.keys(byCohort).filter(function(k){ return cohortOrder.indexOf(k) === -1; }));
+                var labelMap = { weekly: 'Weekly Moviegoers', monthly: 'Monthly Moviegoers', bimonthly: 'Bimonthly Moviegoers', occasional: 'Occasional Moviegoers' };
+                var html = '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
+                    + iiqSummaryTile('Cohorts tracked', String(keys.length), 'moviegoing-frequency segments')
+                    + iiqSummaryTile('Crossover detected', d.crossover_date || 'not yet', d.crossover_date ? 'date occasional > weekly engagement' : 'audience shift not yet detected')
+                    + '</div>';
+                var combinedSeries = keys.map(function(k) {
+                    return { name: labelMap[k] || k, color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown, points: byCohort[k].slice().sort(function(a,b){ return new Date(a.x) - new Date(b.x); }) };
+                });
+                html += '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.6rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">All cohorts, daily engagement (basis points)</div>'
+                    + iiqLineChart(combinedSeries, {height: 280}) + '</div>';
+                html += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem;">';
+                html += keys.map(function(k) {
+                    var color = IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown;
+                    var pts = byCohort[k].slice().sort(function(a,b){ return new Date(a.x) - new Date(b.x); });
+                    var avg = pts.reduce(function(s,p){ return s + p.y; }, 0) / Math.max(1, pts.length);
+                    return '<div class="iiq-card" style="padding:0.7rem; border-left: 3px solid ' + color + ';">'
+                        + '<div class="iiq-card-title" style="font-size:0.88rem;">' + escapeHtml(labelMap[k] || k) + '</div>'
+                        + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">avg ' + avg.toFixed(1) + ' bp/day · n=' + pts.length + ' days</div>'
+                        + '<div style="margin-top:0.4rem;">' + iiqLineChart([{name:'', color: color, points: pts}], {height: 100, width: 360}) + '</div>'
+                        + '</div>';
+                }).join('');
+                html += '</div>';
+                return html;
+            }
+
+            var IIQ_QRENDER = { q1: iiqRenderQ1, q2: iiqRenderQ2, q3: iiqRenderQ3, q4: iiqRenderQ4, q5: iiqRenderQ5, q6: iiqRenderQ6 };
+            var IIQ_QCACHE = {};
+
             function renderIntentIQQuestions() {
                 var slug = window.__intentIQ.currentSlug;
                 if (!slug) return;
-                var qids = ['q1','q2','q3','q4','q5','q6'];
-                var qtxt = {
-                    q1: 'Q1. What content categories drive engagement / ticket purchase?',
-                    q2: 'Q2. Organic vs paid interplay + cumulative effect + best in-flight assets',
-                    q3: 'Q3. How can early ticketing / box-office estimates be fine-tuned?',
-                    q4: 'Q4. How do talent & influencer activity boost other marketing?',
-                    q5: 'Q5. How crucial is trailer viewership across the campaign life?',
-                    q6: 'Q6. How do different audiences engage throughout the campaign?',
-                };
-                document.getElementById('iiqQuestionList').innerHTML = qids.map(function(q) {
-                    return '<div class="iiq-question-card">'
-                        + '<div class="iiq-question-title" onclick="toggleIntentIQQuestion(\'' + q + '\')">' + escapeHtml(qtxt[q]) + ' <span style="float:right;color:var(--text-secondary);">▾</span></div>'
-                        + '<div class="iiq-question-body" id="iiqQA-' + q + '" style="display:none;">Loading...</div>'
-                        + '</div>';
+                IIQ_QCACHE = {}; // reset cache when title changes
+                var qids = Object.keys(IIQ_QMETA);
+                document.getElementById('iiqQNav').innerHTML = qids.map(function(q, i) {
+                    return '<button class="iiq-q-tab" data-q="' + q + '" onclick="showIntentIQQuestion(\'' + q + '\')" style="background: rgba(255,255,255,0.04); color:#cbd5e1; border:1px solid rgba(255,255,255,0.08); padding:0.4rem 0.75rem; border-radius:6px; cursor:pointer; font-size:0.78rem;">' + escapeHtml(IIQ_QMETA[q].short) + '</button>';
                 }).join('');
+                showIntentIQQuestion('q1');
             }
-            window.toggleIntentIQQuestion = function(qid) {
+
+            window.showIntentIQQuestion = function(qid) {
                 var slug = window.__intentIQ.currentSlug;
-                var body = document.getElementById('iiqQA-' + qid);
-                if (!body) return;
-                if (body.style.display === 'none') {
-                    body.style.display = 'block';
-                    fetch('/api/intent/' + slug + '/questions/' + qid, { credentials: 'same-origin' })
-                        .then(function(r) { return r.json(); })
-                        .then(function(d) {
-                            var sub = '';
-                            if (d.note) sub += '<p style="color: var(--text-secondary); font-size: 0.8rem;">' + escapeHtml(d.note) + '</p>';
-                            if (d.rows && d.rows.length) {
-                                sub += '<pre>' + escapeHtml(JSON.stringify(d.rows, null, 2)) + '</pre>';
-                            } else if (d.cumulative) {
-                                sub += '<pre>' + escapeHtml(JSON.stringify(d, null, 2)) + '</pre>';
-                            } else if (d.shift_curves) {
-                                sub += '<p><strong>Crossover date:</strong> ' + escapeHtml(d.crossover_date || '(not yet detected)') + '</p>';
-                                sub += '<pre>' + escapeHtml(JSON.stringify(d.shift_curves, null, 2)) + '</pre>';
-                            } else if (d.trailer_view_curve) {
-                                sub += '<pre>' + escapeHtml(JSON.stringify(d.trailer_view_curve, null, 2)) + '</pre>';
-                            } else {
-                                sub += '<pre>' + escapeHtml(JSON.stringify(d, null, 2)) + '</pre>';
-                            }
-                            body.innerHTML = sub;
-                        })
-                        .catch(function(e) { body.innerHTML = 'Failed: ' + escapeHtml(e.message || e); });
-                } else {
-                    body.style.display = 'none';
+                if (!slug || !IIQ_QMETA[qid]) return;
+                Array.prototype.forEach.call(document.querySelectorAll('#iiqQNav .iiq-q-tab'), function(btn) {
+                    if (btn.dataset.q === qid) {
+                        btn.style.background = 'rgba(59,130,246,0.18)';
+                        btn.style.borderColor = 'rgba(59,130,246,0.5)';
+                        btn.style.color = '#fff';
+                    } else {
+                        btn.style.background = 'rgba(255,255,255,0.04)';
+                        btn.style.borderColor = 'rgba(255,255,255,0.08)';
+                        btn.style.color = '#cbd5e1';
+                    }
+                });
+                var meta = IIQ_QMETA[qid];
+                document.getElementById('iiqQTitle').innerHTML =
+                    '<h4 style="margin:0;">' + escapeHtml(meta.title) + '</h4>'
+                    + '<div style="font-size:0.74rem; color: var(--text-secondary); margin-top:0.2rem;">' + escapeHtml(meta.intro) + '</div>';
+                var body = document.getElementById('iiqQBody');
+                if (IIQ_QCACHE[qid]) {
+                    body.innerHTML = IIQ_QCACHE[qid];
+                    return;
                 }
+                body.innerHTML = '<div class="iiq-empty">Loading ' + qid.toUpperCase() + '...</div>';
+                fetch('/api/intent/' + slug + '/questions/' + qid, { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (d.success === false) { body.innerHTML = '<div class="iiq-empty">' + escapeHtml(d.error || 'Failed') + '</div>'; return; }
+                        var renderer = IIQ_QRENDER[qid] || function() { return '<pre>' + escapeHtml(JSON.stringify(d, null, 2)) + '</pre>'; };
+                        try {
+                            var html = renderer(d);
+                            IIQ_QCACHE[qid] = html;
+                            body.innerHTML = html;
+                        } catch (err) {
+                            body.innerHTML = '<div class="iiq-empty">Render error: ' + escapeHtml(err.message || err) + '</div><pre>' + escapeHtml(JSON.stringify(d, null, 2)) + '</pre>';
+                        }
+                    })
+                    .catch(function(e) { body.innerHTML = '<div class="iiq-empty">Failed: ' + escapeHtml(e.message || e) + '</div>'; });
             };
 
             window.reloadIntentIQInFlight = function() {
