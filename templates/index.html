@@ -19513,17 +19513,12 @@
                     document.getElementById('iiqPhaseTimeline').innerHTML = '';
                     return;
                 }
-                var fcst = '';
-                if (ov.predicted_bo_low_usd || ov.predicted_bo_high_usd) {
-                    fcst = fmtUSD(ov.predicted_bo_low_usd) + ' \u2013 ' + fmtUSD(ov.predicted_bo_high_usd);
-                }
                 document.getElementById('iiqOverviewMeta').innerHTML = [
                     metaCard('Distributor', ov.distributor || '—'),
                     metaCard('Opening date', ov.opening_date || '—'),
                     metaCard('Ticketing on sale', ov.ticketing_open_date || '—'),
                     metaCard('Genre', ov.genre || '—'),
                     metaCard('Assets ingested', fmtInt(ov.asset_count)),
-                    metaCard('Industry BO forecast', fcst || '—'),
                 ].join('');
                 var phases = (ov.phases || []);
                 if (!phases.length) {
@@ -19778,10 +19773,12 @@
             };
 
             // ===== Intent IQ Questions — sub-tabs + per-Q visualizations =====
+            // Intent IQ is about measuring intent, NOT forecasting. Q3 (box-
+            // office fine-tune) was removed per Jenna 2026-06-17 since it
+            // surfaces predictions rather than measurement signals.
             var IIQ_QMETA = {
                 q1: { short: 'Q1 · Content',     title: 'Q1. What content categories drive engagement?',                   intro: 'Mean 7-day views per asset, grouped by asset type and paid/organic. Higher = posts of that type tend to pull more eyeballs in their first week.' },
                 q2: { short: 'Q2 · Paid×Organic', title: 'Q2. How do paid and organic content interact?',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
-                q3: { short: 'Q3 · Box Office',   title: 'Q3. How can early box-office estimates be fine-tuned?',            intro: 'Comparable family-animated titles benchmarked against the Intent IQ forecast. Calibrates expectations for opening 4-day gross.' },
                 q4: { short: 'Q4 · Talent',       title: 'Q4. How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Q5 · Trailer',      title: 'Q5. How crucial is trailer viewership across the campaign life?', intro: 'Daily trailer views (across all trailer assets). Spikes mark trailer launches and refreshes.' },
                 q6: { short: 'Q6 · Audience shift', title: 'Q6. How do different audiences engage throughout the campaign?', intro: 'Daily engagement by moviegoing-frequency cohort. General audiences (occasional/bimonthly) typically dominate early; families intensify closer to release.' },
@@ -19970,33 +19967,6 @@
                 return html;
             }
 
-            function iiqRenderQ3(d) {
-                var fc = d.intent_iq_forecast || {};
-                var ind = d.industry_forecast || {};
-                var actual = Number(d.actual_opening_bo_usd) || 0;
-                var comps = d.comp_titles || [];
-                var html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
-                html += iiqSummaryTile('Industry forecast', (ind.low_usd || ind.high_usd) ? fmtUSD(ind.low_usd) + ' – ' + fmtUSD(ind.high_usd) : '—', 'opening weekend range');
-                html += iiqSummaryTile('Intent IQ forecast', fc && fc.predicted_opening_4day_usd ? fmtUSD(fc.predicted_opening_4day_usd) : '—', (fc && fc.note) ? fc.note : 'regression on comp titles');
-                html += iiqSummaryTile('Actual opening', actual ? fmtUSD(actual) : 'Not yet released', actual ? 'measured' : 'pre-release');
-                html += '</div>';
-                if (comps.length) {
-                    var sorted = comps.slice().sort(function(a,b){ return (Number(b.opening_4day_usd)||0) - (Number(a.opening_4day_usd)||0); });
-                    var maxC = Math.max.apply(null, sorted.map(function(c){ return Number(c.opening_4day_usd)||0; }).concat([1]));
-                    html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Comparable family-animated titles, opening 4-day gross</div>';
-                    html += sorted.map(function(c) {
-                        var label = c.display_name || c.title_slug;
-                        var sub = '(opened ' + (c.opening_date || '—') + ')';
-                        return iiqBarRow(label, Number(c.opening_4day_usd)||0, maxC, '#a855f7', sub, 'total ' + fmtUSD(c.cumulative_usd||0));
-                    }).join('');
-                    html += '</div>';
-                } else {
-                    html += '<div class="iiq-empty">No comp titles ingested yet. Run scripts/scrape_box_office_mojo.py.</div>';
-                }
-                if (d.note) html += '<p style="color: var(--text-secondary); font-size: 0.72rem; margin-top:0.6rem;">' + escapeHtml(d.note) + '</p>';
-                return html;
-            }
-
             function iiqRenderQ4(d) {
                 if (!d.rows || !d.rows.length) return '<div class="iiq-empty">Q4 has no talent attribution yet. Run scripts/intent_attribution.py --apply.</div>';
                 var rows = d.rows.slice().sort(function(a,b){ return (Number(b.views_total)||0) - (Number(a.views_total)||0); });
@@ -20075,7 +20045,7 @@
                 return html;
             }
 
-            var IIQ_QRENDER = { q1: iiqRenderQ1, q2: iiqRenderQ2, q3: iiqRenderQ3, q4: iiqRenderQ4, q5: iiqRenderQ5, q6: iiqRenderQ6 };
+            var IIQ_QRENDER = { q1: iiqRenderQ1, q2: iiqRenderQ2, q4: iiqRenderQ4, q5: iiqRenderQ5, q6: iiqRenderQ6 };
             var IIQ_QCACHE = {};
 
             function renderIntentIQQuestions() {
@@ -20182,8 +20152,6 @@
                             return '<div class="iiq-card" style="margin-bottom:0.5rem;">'
                                 + '<div class="iiq-card-title">' + escapeHtml(t.display_name || t.title_slug) + '</div>'
                                 + '<div class="iiq-card-meta">Open: ' + escapeHtml(t.opening_date) + ' / Assets: ' + fmtInt(t.asset_count) + '</div>'
-                                + '<div class="iiq-card-meta">BO forecast: ' + fmtUSD(t.predicted_bo_low_usd) + ' \u2013 ' + fmtUSD(t.predicted_bo_high_usd) + '</div>'
-                                + '<div class="iiq-card-meta">Actual opening: ' + fmtUSD(t.actual_opening_bo_usd) + '</div>'
                                 + '</div>';
                         }).join('') || '<div class="iiq-empty">No data.</div>';
                     });
