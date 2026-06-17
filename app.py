@@ -3828,6 +3828,7 @@ def create_user():
             'has_brand_partnership_iq_access': req_data.get('has_brand_partnership_iq_access', cd.get('has_brand_partnership_iq_access', False) if cd else False),
             'has_sentiment_iq_access': req_data.get('has_sentiment_iq_access', cd.get('has_sentiment_iq_access', False) if cd else False),
             'has_journey_iq_access': req_data.get('has_journey_iq_access', cd.get('has_journey_iq_access', False) if cd else False),
+            'allowed_journey_iq_runs': req_data.get('allowed_journey_iq_runs', cd.get('allowed_journey_iq_runs', ['*']) if cd else ['*']),
             'has_workspace_access': req_data.get('has_workspace_access', cd.get('has_workspace_access', True) if cd else True),
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
@@ -3967,6 +3968,16 @@ def update_user(username):
             user['has_sentiment_iq_access'] = bool(req_data['has_sentiment_iq_access'])
         if 'has_journey_iq_access' in req_data:
             user['has_journey_iq_access'] = bool(req_data['has_journey_iq_access'])
+        if 'allowed_journey_iq_runs' in req_data:
+            # Per-user gate for Digital Journey IQ runs. ['*'] = all visible,
+            # explicit list = only those keys. Unset / missing also = all
+            # visible (default-open) for backward compat with users created
+            # before this gate existed.
+            raw = req_data['allowed_journey_iq_runs']
+            if isinstance(raw, list):
+                user['allowed_journey_iq_runs'] = list(raw)
+            else:
+                user['allowed_journey_iq_runs'] = ['*']
         if 'has_workspace_access' in req_data:
             user['has_workspace_access'] = bool(req_data['has_workspace_access'])
         if 'has_share_of_time_access' in req_data:
@@ -33300,19 +33311,60 @@ def estimate_journey_iq_audience():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+def _user_jiq_run_access(user):
+    """Resolve a user's Journey IQ per-run access policy.
+
+    Returns a tuple ``(is_admin, allow_all, allowed_keys)``:
+      * ``is_admin`` — admin / super_admin / cloaked sessions: see everything.
+      * ``allow_all`` — non-admin user with the default-open policy
+        (``allowed_journey_iq_runs`` is missing, not a list, or contains
+        ``'*'``). Preserves existing behavior for users who haven't been
+        gated yet.
+      * ``allowed_keys`` — a ``set[str]`` of explicit S3 keys when
+        ``allow_all`` is False; an empty list ``[]`` means "no journeys
+        granted" (the admin explicitly revoked everything).
+    """
+    role = (user or {}).get('role')
+    is_admin = role in ('admin', 'super_admin') or bool(session.get('cloaked_from'))
+    if is_admin:
+        return True, True, set()
+    raw = (user or {}).get('allowed_journey_iq_runs')
+    if raw is None:
+        return False, True, set()
+    if isinstance(raw, list):
+        if '*' in raw:
+            return False, True, set()
+        return False, False, set(raw)
+    return False, True, set()
+
+
+def _filter_jiq_runs_for_user(runs, user):
+    """Apply the per-user allow-list to a list of run-summary dicts."""
+    is_admin, allow_all, allowed = _user_jiq_run_access(user)
+    if is_admin or allow_all:
+        return runs
+    return [r for r in runs if (r or {}).get('key') in allowed]
+
+
 @app.route('/api/journey-iq/list', methods=['GET'])
 @requires_auth
 def list_journey_iq():
-    """Return all Journey IQ runs (newest first). Anyone with Digital Journey
-    IQ access — via role (admin/super_admin), the standalone
-    has_journey_iq_access flag, or the umbrella Analysis IQ +
-    'journey_iq' module entitlement — sees every LIVE run regardless of who
-    created it. Users without the feature are blocked at the door.
+    """Return Journey IQ runs visible to the caller (newest first).
 
-    Archived runs (under journey-iq/archive/) are hidden by default. Pass
-    ?include_archive=1 to request them — this is admin-only (role admin or
-    super_admin). Non-admins get the live list back even when they pass
-    the flag, so the UI degrades gracefully."""
+    Visibility rules:
+      * Admin / super_admin / cloaked sessions see every LIVE run.
+      * Other users with Digital Journey IQ access (via role, the standalone
+        ``has_journey_iq_access`` flag, or Analysis IQ + ``journey_iq``
+        module) see runs filtered by their per-user
+        ``allowed_journey_iq_runs`` list. ``['*']``, missing, or empty
+        defaults to "see everything" so existing users keep access until
+        an admin explicitly gates them.
+      * Users without the feature are blocked at the door.
+
+    Archived runs (under ``journey-iq/archive/``) are hidden by default.
+    Pass ``?include_archive=1`` to request them — admin-only. Non-admins
+    get the live list back even when they pass the flag, so the UI
+    degrades gracefully."""
     try:
         from migration import journey_iq as _jiq
     except Exception:
@@ -33333,9 +33385,13 @@ def list_journey_iq():
         if include_archive and is_admin:
             archived_runs = _jiq.list_archived_runs(s3_client, limit=200)
 
+        # Apply per-user run gating to LIVE runs (archive list is admin-only
+        # so it's already past the gate above).
+        visible_runs = _filter_jiq_runs_for_user(all_runs, user)
+
         return jsonify({
             'success':       True,
-            'runs':          all_runs[:200],
+            'runs':          visible_runs[:200],
             'archived_runs': archived_runs,
             'archive_visible': bool(archived_runs) or (include_archive and is_admin),
             'is_admin':      is_admin,
@@ -33349,9 +33405,14 @@ def list_journey_iq():
 def get_journey_iq_result(s3_key):
     """Return a previously-persisted Journey IQ run by S3 key.
 
-    Live runs (under journey-iq/admin/) are loadable by any user with
-    Digital Journey IQ access. Archived runs (under journey-iq/archive/)
-    are admin-only — non-admins requesting an archive key get a 403."""
+    Access rules:
+      * Users without Digital Journey IQ access are blocked at the door.
+      * Admins (admin / super_admin / cloaked) can load any key.
+      * Non-admins must have the requested key in their per-user
+        ``allowed_journey_iq_runs`` list (or have the default-open
+        ``['*']`` / unset list). Prevents URL-guessing past the list view.
+      * Archive keys are admin-only regardless of allow-list.
+    """
     try:
         from migration import journey_iq as _jiq
     except Exception as e:
@@ -33368,12 +33429,17 @@ def get_journey_iq_result(s3_key):
                             'error': 'Digital Journey IQ access required'}), 403
 
         # Access guard #2: archive keys are admin-only.
+        is_admin, allow_all, allowed = _user_jiq_run_access(user)
         if _jiq.is_archive_key(full_key):
-            role = (user or {}).get('role')
-            is_admin = role in ('admin', 'super_admin') or bool(session.get('cloaked_from'))
             if not is_admin:
                 return jsonify({'success': False,
                                 'error': 'Archived runs are admin-only'}), 403
+
+        # Access guard #3: per-user run allow-list (live keys only — archive
+        # already gated above for admins, and non-admins were rejected).
+        if not is_admin and not allow_all and full_key not in allowed:
+            return jsonify({'success': False,
+                            'error': 'You do not have access to this Journey IQ run'}), 403
 
         data = _jiq.load_run_from_s3(s3_client, full_key)
         if data is None:

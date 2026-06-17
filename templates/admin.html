@@ -2790,9 +2790,28 @@
                     <div class="dashboard-access-item">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
-                                <input type="checkbox" id="hasJourneyIQAccess">
+                                <input type="checkbox" id="hasJourneyIQAccess" onchange="syncJourneyIqRunAccessVisibility()">
                                 <span style="font-weight: 600;">🗺️ DIGITAL JOURNEY IQ</span>
                             </label>
+                        </div>
+                        <div class="dashboard-access-content" id="journeyIqRunAccessContent" style="display:none;">
+                            <div style="padding:0.85rem 1rem;background:var(--bg-dark);border-radius:8px;margin-top:0.5rem;">
+                                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;flex-wrap:wrap;">
+                                    <label class="checkbox-group" style="margin:0;">
+                                        <input type="checkbox" id="allJourneyIqRuns" checked onchange="toggleAllJourneyIqRuns()">
+                                        <span>ALL JOURNEY IQ RUNS</span>
+                                    </label>
+                                    <button type="button" class="btn btn-small btn-secondary" onclick="restoreJourneyIqRunDefaults()">Restore Defaults</button>
+                                    <small style="color:var(--text-secondary);font-size:0.68rem;">Pick which journeys this user can open. Uncheck "ALL" to gate.</small>
+                                </div>
+                                <div style="margin-bottom:0.5rem;">
+                                    <input type="text" id="journeyIqRunsSearchInput" placeholder="Search journeys (project, target)..." oninput="filterJourneyIqRunsList()" style="width:100%;padding:0.35rem 0.6rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;">
+                                </div>
+                                <div id="journeyIqRunsCheckboxes" style="margin-top:0.5rem;max-height:280px;overflow-y:auto;border:1px solid var(--border-color);border-radius:6px;padding:0.5rem;background:var(--bg-input);">
+                                    <p style="color:var(--text-secondary);font-size:0.75rem;margin:0;padding:0.5rem;">Loading journeys…</p>
+                                </div>
+                                <div id="journeyIqRunsCount" style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.4rem;"></div>
+                            </div>
                         </div>
                     </div>
 
@@ -7507,6 +7526,9 @@
             if (bpAccessReset) bpAccessReset.checked = false;
             var jiqAccessReset = document.getElementById('hasJourneyIQAccess');
             if (jiqAccessReset) jiqAccessReset.checked = false;
+            // Reset per-user Journey IQ run gating to default-open (['*'])
+            populateJourneyIqRunsCheckboxes(['*']);
+            syncJourneyIqRunAccessVisibility();
             document.getElementById('hasTicketSalesIQAccess').checked = true;
             document.getElementById('hasHedgeFundIQAccess').checked = false;
             document.getElementById('getsHedgeFundIQEmails').checked = false;
@@ -7643,6 +7665,9 @@
             if (bpAccess) bpAccess.checked = user.has_brand_partnership_iq_access === true; // Default false
             var jiqAccess = document.getElementById('hasJourneyIQAccess');
             if (jiqAccess) jiqAccess.checked = user.has_journey_iq_access === true; // Default false
+            // Per-user Journey IQ run gating: list of S3 keys, ['*']/missing = all
+            populateJourneyIqRunsCheckboxes(user.allowed_journey_iq_runs);
+            syncJourneyIqRunAccessVisibility();
             document.getElementById('hasTicketSalesIQAccess').checked = user.has_ticket_sales_iq_access !== false; // Default true
             document.getElementById('hasHedgeFundIQAccess').checked = user.has_hedge_fund_iq_access === true; // Default false
             document.getElementById('getsHedgeFundIQEmails').checked = user.gets_hedge_fund_iq_emails === true; // Default false
@@ -9487,7 +9512,146 @@
                 showToast('Error: ' + e.message, true);
             }
         }
-        
+
+        // ──────────────────────────────────────────────────────────────────
+        // Digital Journey IQ — per-user run gating (in user edit modal)
+        // ──────────────────────────────────────────────────────────────────
+        // State for the current edit-user session.
+        // _jiqRunSelected — Set<string> of S3 keys explicitly checked
+        // _jiqRunIsAll    — true means "['*']" (default-open, user sees all)
+        let _jiqRunSelected = new Set();
+        let _jiqRunIsAll    = true;
+
+        async function loadJourneyIqRunsForAdmin(force = false) {
+            // Cached on `window._jiqAdminRuns` by the Content tab loader; if
+            // the admin opens the user modal before visiting Content Library
+            // we fetch on-demand so the picker isn't empty.
+            if (window._jiqAdminRuns && !force) return window._jiqAdminRuns;
+            try {
+                const resp = await fetch('/api/journey-iq/list?include_archive=1', { credentials: 'same-origin' });
+                const data = await resp.json();
+                window._jiqAdminRuns = (data.runs || []).concat(data.archived_runs || []);
+            } catch (e) {
+                window._jiqAdminRuns = [];
+            }
+            return window._jiqAdminRuns;
+        }
+
+        function syncJourneyIqRunAccessVisibility() {
+            const cb = document.getElementById('hasJourneyIQAccess');
+            const block = document.getElementById('journeyIqRunAccessContent');
+            if (!cb || !block) return;
+            block.style.display = cb.checked ? 'block' : 'none';
+        }
+
+        function toggleAllJourneyIqRuns() {
+            const allCb = document.getElementById('allJourneyIqRuns');
+            if (!allCb) return;
+            _jiqRunIsAll = !!allCb.checked;
+            if (_jiqRunIsAll) {
+                // ALL selected → drop the explicit list; user sees every run.
+                _jiqRunSelected = new Set();
+            } else {
+                // Switching from ALL → explicit. Pre-populate with everything
+                // currently visible so unchecking ALL doesn't immediately
+                // revoke access. Admin then unchecks the ones they want gated.
+                const runs = window._jiqAdminRuns || [];
+                _jiqRunSelected = new Set(runs.map(r => r.key).filter(Boolean));
+            }
+            _renderJourneyIqRunsList();
+        }
+
+        function restoreJourneyIqRunDefaults() {
+            _jiqRunIsAll = true;
+            _jiqRunSelected = new Set();
+            const allCb = document.getElementById('allJourneyIqRuns');
+            if (allCb) allCb.checked = true;
+            _renderJourneyIqRunsList();
+        }
+
+        function filterJourneyIqRunsList() {
+            _renderJourneyIqRunsList();
+        }
+
+        function _renderJourneyIqRunsList() {
+            const container = document.getElementById('journeyIqRunsCheckboxes');
+            const countEl   = document.getElementById('journeyIqRunsCount');
+            if (!container) return;
+
+            const runs = window._jiqAdminRuns || [];
+            if (runs.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.75rem;margin:0;padding:0.5rem;">No Digital Journey IQ runs found.</p>';
+                if (countEl) countEl.textContent = '';
+                return;
+            }
+
+            const search = ((document.getElementById('journeyIqRunsSearchInput') || {}).value || '').trim().toLowerCase();
+            const filtered = !search ? runs : runs.filter(r => {
+                const hay = `${r.project_name || ''} ${r.target || ''} ${r.category || ''} ${r.key || ''}`.toLowerCase();
+                return hay.includes(search);
+            });
+
+            const showDisabled = _jiqRunIsAll;
+            container.innerHTML = filtered.map(r => {
+                const key      = r.key || '';
+                const label    = r.project_name || r.target || r.key || '(unnamed)';
+                const subLabel = [r.target, r.category].filter(Boolean).join(' · ');
+                const archived = !!r.archived;
+                const checked  = _jiqRunIsAll || _jiqRunSelected.has(key);
+                const safeKey  = (key || '').replace(/'/g, "\\'");
+                return `
+                    <label class="checkbox-group" style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;padding:0.25rem 0.4rem;border-bottom:1px solid var(--border-color);${archived ? 'opacity:0.7;' : ''}">
+                        <input type="checkbox" class="jiq-run-checkbox" value="${key}" ${checked ? 'checked' : ''} ${showDisabled ? 'disabled' : ''} onchange="onJourneyIqRunCheckboxChange('${safeKey}', this.checked)">
+                        <span style="flex:1;min-width:0;">
+                            <span style="font-weight:600;">${label}</span>
+                            ${subLabel ? `<span style="color:var(--text-secondary);font-size:0.7rem;margin-left:0.4rem;">${subLabel}</span>` : ''}
+                            ${archived ? '<span style="color:#fbbf24;font-size:0.65rem;margin-left:0.4rem;">(archived)</span>' : ''}
+                        </span>
+                    </label>
+                `;
+            }).join('');
+
+            if (countEl) {
+                if (_jiqRunIsAll) {
+                    countEl.textContent = `${runs.length} journeys available — all granted (default).`;
+                } else {
+                    countEl.textContent = `${_jiqRunSelected.size} of ${runs.length} journeys granted.`;
+                }
+            }
+        }
+
+        function onJourneyIqRunCheckboxChange(key, checked) {
+            if (!key) return;
+            if (checked) _jiqRunSelected.add(key);
+            else         _jiqRunSelected.delete(key);
+            const countEl = document.getElementById('journeyIqRunsCount');
+            const total   = (window._jiqAdminRuns || []).length;
+            if (countEl) countEl.textContent = `${_jiqRunSelected.size} of ${total} journeys granted.`;
+        }
+
+        async function populateJourneyIqRunsCheckboxes(allowed) {
+            // `allowed` = user.allowed_journey_iq_runs:
+            //   undefined / null / ['*'] / []  →  default-open (ALL)
+            //   array of keys                  →  explicit allow-list
+            await loadJourneyIqRunsForAdmin();
+            if (!Array.isArray(allowed) || allowed.length === 0 || allowed.includes('*')) {
+                _jiqRunIsAll = true;
+                _jiqRunSelected = new Set();
+            } else {
+                _jiqRunIsAll = false;
+                _jiqRunSelected = new Set(allowed);
+            }
+            const allCb = document.getElementById('allJourneyIqRuns');
+            if (allCb) allCb.checked = _jiqRunIsAll;
+            _renderJourneyIqRunsList();
+        }
+
+        function getJourneyIqRunsAllowedPayload() {
+            // What gets sent to /api/admin/users on save.
+            if (_jiqRunIsAll) return ['*'];
+            return Array.from(_jiqRunSelected);
+        }
+
         // Populate Behavioral Category Checkboxes in user modal (always show ALL options; default selection from quick select when adding new user)
         function populateBehavioralCategoryCheckboxes(selected = ['*'], useQuickSelect = false) {
             const container = document.getElementById('behavioralCategoryCheckboxes');
@@ -9567,6 +9731,7 @@
                 has_flywheel_conversion_access: document.getElementById('hasFlywheelConversionAccess').checked,
                 has_brand_partnership_iq_access: !!(document.getElementById('hasBrandPartnershipIQAccess') && document.getElementById('hasBrandPartnershipIQAccess').checked),
                 has_journey_iq_access: !!(document.getElementById('hasJourneyIQAccess') && document.getElementById('hasJourneyIQAccess').checked),
+                allowed_journey_iq_runs: getJourneyIqRunsAllowedPayload(),
                 has_ticket_sales_iq_access: document.getElementById('hasTicketSalesIQAccess').checked,
                 has_hedge_fund_iq_access: document.getElementById('hasHedgeFundIQAccess').checked,
                 gets_hedge_fund_iq_emails: document.getElementById('getsHedgeFundIQEmails').checked,
