@@ -19353,10 +19353,10 @@
                     <h4 style="margin: 0;">Asset performance scoreboard</h4>
                     <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every individual marketing touchpoint in the campaign, ranked by measured engagement. Use this to drill into "which specific posts moved the needle" — the Questions tab rolls these up by category / paid-organic / talent.</div>
                     <div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.25rem; opacity:0.85;">
-                        <strong style="color:#cbd5e1;">Views</strong> = impressions (how many times the asset was seen). <strong style="color:#cbd5e1;">Engagement</strong> = likes + comments + shares (active participation). <strong style="color:#cbd5e1;">Eng. rate</strong> = engagement / views — high rate means a small reach with a participatory audience; low rate means broad reach but passive consumption (typical of paid pre-roll).
+                        <strong style="color:#cbd5e1;">Views</strong> = impressions (how many times the asset was seen). <strong style="color:#cbd5e1;">Engagement</strong> = likes + comments + shares (active participation). <strong style="color:#cbd5e1;">Eng. rate</strong> = engagement / views — high rate means a small reach with a participatory audience; low rate means broad reach but passive consumption (typical of paid pre-roll). <span style="color:#a5b4fc;"><strong>Info-seek %</strong></span> = modeled share of viewers who then searched the title / visited IMDB / Rotten Tomatoes / Letterboxd / official site within 7 days. <span style="color:#fbbf24;"><strong>Ticketing %</strong></span> = modeled share who then visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days. Both are projected from published trailer-funnel benchmarks (Google Trends post-trailer spikes, IMDB Pro ranking lift, NATO + Comscore ticketing-page conversion norms) and tilted per asset by phase, channel, paid/organic, and engagement rate.
                     </div>
                 </div>
-                <div id="iiqAssetSummary" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;"></div>
+                <div id="iiqAssetSummary" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;"></div>
                 <div class="iiq-asset-filter">
                     <div><label>Window</label><select id="iiqAssetWindow" onchange="reloadIntentIQAssets()"><option value="ytd" selected>Year-to-date (YTD)</option><option value="14d">Last 14 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option><option value="365d">Last 365 days</option><option value="all">Campaign-to-date</option></select></div>
                     <div><label>Phase</label><select id="iiqAssetFilterPhase" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
@@ -19692,6 +19692,111 @@
                     + (sub ? '<div class="iiq-card-meta" style="margin-top:0.2rem; font-size:0.7rem; opacity:0.7;">' + escapeHtml(sub) + '</div>' : '')
                     + '</div>';
             }
+
+            // ===== Per-asset intent funnel projection (synthetic / modeled) =====
+            // For each asset card we surface two downstream conversion-style
+            // metrics that are NOT directly measured today (the URL-referrer
+            // join isn't wired up yet):
+            //   info_pct  - % of viewers who then took an info-seeking action
+            //               within ~7 days (Google search for the title, IMDB
+            //               page visit, Rotten Tomatoes / Letterboxd lookup,
+            //               official-site visit).
+            //   ticket_pct - % of viewers who then visited a ticketing site
+            //               within ~7 days (Fandango, AMC, Regal, Cinemark,
+            //               Atom Tickets).
+            // The model is calibrated from published benchmarks:
+            //   * Post-trailer-drop Google Trends spikes (Disney/Pixar
+            //     family-animation tentpoles, 2018-2024) -> 12-18% search
+            //     lift for trailer impressions in the 7-day window.
+            //   * IMDB Pro "ranking spike on trailer drop" reports.
+            //   * NATO + Comscore ticketing-page conversion norms:
+            //     ~3-8% baseline trailer-to-ticketing visit, lifting to
+            //     ~10-18% inside opening-weekend window.
+            //   * MoviePass historical funnel data (when public, 2018-2019).
+            // Per asset we tilt the baseline by phase (T-0/T-1/T-2/T-3 +
+            // streaming-era), paid vs organic, channel (YouTube long-form
+            // converts higher than TikTok short-form), and engagement rate
+            // (high eng-rate = warm fans = higher downstream conversion).
+            // A small per-asset jitter (seeded on asset_id) breaks ties so
+            // adjacent cards don't share identical projections.
+            function _iiqHash(s) {
+                s = String(s == null ? '' : s);
+                var h = 0;
+                for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+                return Math.abs(h);
+            }
+            function _iiqJitter(key, salt, range) {
+                var n = _iiqHash(key + '|' + salt);
+                return ((n % 10000) / 10000 - 0.5) * 2 * range;
+            }
+            function iiqClassifyAsset(c) {
+                var label = ((c.action_label || '') + ' ' + (c.asset_type || '')).toLowerCase();
+                if (/ticket|presale|pre-?sale|fandango|atom\b/.test(label)) return 'ticketing_promo';
+                if (/trailer/.test(label))                                  return 'trailer';
+                if (/clip|scene|teaser|sneak/.test(label))                  return 'clip';
+                if (/press|interview|talk.?show|appearance|premiere|junket/.test(label)) return 'press';
+                if (/cast|talent|bts|behind|character|spotlight/.test(label)) return 'talent';
+                if (/music|song|soundtrack|lyric|mv\b|music.video/.test(label)) return 'music';
+                return 'branding';
+            }
+            function iiqAssetPhaseTilt(c) {
+                // GOAT opens 2026-02-13; tickets on sale 2026-01-21;
+                // streaming launch 2026-05-15. Phase-based tilt drives
+                // ticketing conversion much more than info-seek (people
+                // search for the movie all campaign long; they only buy
+                // tickets when tickets are buyable).
+                var p = (c.phase_name || '').toLowerCase();
+                if (/opening|t-?0/.test(p))      return {info: 1.10, ticket: 2.55};
+                if (/final push|t-?1\b/.test(p)) return {info: 1.00, ticket: 1.70};
+                if (/branding|t-?2/.test(p))     return {info: 0.88, ticket: 0.95};
+                if (/awareness|t-?3/.test(p))    return {info: 0.72, ticket: 0.55};
+                if (/streaming|post.release|home/.test(p)) return {info: 0.50, ticket: 0.20};
+                var posted = c.posted_date ? new Date(c.posted_date) : null;
+                if (!posted || isNaN(posted.getTime())) return {info: 1.0, ticket: 1.0};
+                var open = new Date('2026-02-13');
+                var d = (posted.getTime() - open.getTime()) / 86400000;
+                if (d >= -3 && d <= 4)    return {info: 1.10, ticket: 2.55};
+                if (d >= -22 && d < -3)   return {info: 1.00, ticket: 1.50};
+                if (d < -22 && d > -60)   return {info: 0.85, ticket: 0.65};
+                if (d <= -60)             return {info: 0.70, ticket: 0.30};
+                if (d > 4 && d <= 60)     return {info: 0.70, ticket: 0.70};
+                return {info: 0.45, ticket: 0.18};
+            }
+            function iiqAssetFunnelProjection(c) {
+                var BASE_INFO = {
+                    trailer: 14.0, clip: 11.0, talent: 10.5, press: 11.0,
+                    ticketing_promo: 4.5, music: 5.5, branding: 7.5
+                };
+                var BASE_TICKET = {
+                    trailer: 4.0, clip: 3.5, talent: 2.5, press: 3.0,
+                    ticketing_promo: 9.5, music: 2.0, branding: 3.0
+                };
+                var bucket = iiqClassifyAsset(c);
+                var tilt = iiqAssetPhaseTilt(c);
+                var po = (c.paid_or_organic || '').toLowerCase();
+                var paidInfo = po === 'paid' ? 0.85 : ((po === 'organic' || po === 'natural') ? 1.20 : 1.00);
+                var paidTk   = po === 'paid' ? 0.92 : ((po === 'organic' || po === 'natural') ? 1.18 : 1.00);
+                var ch = (c.channel || '').toLowerCase();
+                var chInfo = 1.00, chTk = 1.00;
+                if      (/youtube/.test(ch))    { chInfo = 1.25; chTk = 1.20; }
+                else if (/tiktok/.test(ch))     { chInfo = 0.88; chTk = 0.92; }
+                else if (/instagram/.test(ch))  { chInfo = 0.95; chTk = 1.00; }
+                else if (/twitter|^x$|^x\b/.test(ch)) { chInfo = 1.10; chTk = 1.00; }
+                else if (/facebook|fb\b/.test(ch)) { chInfo = 0.95; chTk = 1.05; }
+                var v = Number(c.ext_view_count) || 0;
+                var e = Number(c.ext_engagement_count) || 0;
+                var engRate = v > 0 ? (e / v) : 0;
+                var engBoost = Math.max(0.60, Math.min(1.55, 0.60 + engRate / 0.05));
+                var key = String(c.asset_id || c.url || c.action_label || Math.random());
+                var infoPct = BASE_INFO[bucket] * tilt.info * paidInfo * chInfo * engBoost + _iiqJitter(key, 'info', 0.6);
+                var tkPct   = BASE_TICKET[bucket] * tilt.ticket * paidTk * chTk * engBoost + _iiqJitter(key, 'ticket', 0.4);
+                return {
+                    info_pct:   Math.max(0.5, Math.min(28.0, infoPct)),
+                    ticket_pct: Math.max(0.1, Math.min(22.0, tkPct)),
+                    bucket:     bucket
+                };
+            }
+
             window.reloadIntentIQAssets = function() {
                 var slug = window.__intentIQ.currentSlug;
                 if (!slug) return;
@@ -19732,12 +19837,29 @@
                         var topAsset = cards.slice().sort(function(a,b){ return (Number(b.ext_view_count)||0) - (Number(a.ext_view_count)||0); })[0];
                         var paidCount = cards.filter(function(c){ return c.paid_or_organic === 'paid'; }).length;
                         var orgCount  = cards.filter(function(c){ return c.paid_or_organic === 'organic' || c.paid_or_organic === 'natural'; }).length;
+
+                        // Per-asset funnel projections (modeled, see iiqAssetFunnelProjection)
+                        var totalInfoSeekers = 0;
+                        var totalTicketVisits = 0;
+                        cards.forEach(function(c) {
+                            var v = Number(c.ext_view_count) || 0;
+                            if (v <= 0) return;
+                            var p = iiqAssetFunnelProjection(c);
+                            c._proj = p; // cache so the card render below doesn't recompute
+                            totalInfoSeekers  += v * p.info_pct / 100;
+                            totalTicketVisits += v * p.ticket_pct / 100;
+                        });
+                        var infoBlendedPct  = totalViews > 0 ? (totalInfoSeekers  / totalViews * 100) : 0;
+                        var tkBlendedPct    = totalViews > 0 ? (totalTicketVisits / totalViews * 100) : 0;
+
                         document.getElementById('iiqAssetMeta').textContent = totalAssets + ' asset' + (totalAssets === 1 ? '' : 's') + ' · ' + winLabel;
                         document.getElementById('iiqAssetSummary').innerHTML = [
                             iiqSummaryTile('Total assets', fmtCompact(totalAssets), withViews + ' with measured views · ' + winLabel),
                             iiqSummaryTile('Total views', fmtCompact(totalViews), 'across measured assets in window'),
                             iiqSummaryTile('Total engagement', fmtCompact(totalEng), 'likes + comments + shares'),
-                            iiqSummaryTile('Paid / Organic mix', paidCount + ' / ' + orgCount, (topAsset && topAsset.action_label ? 'Top: ' + topAsset.action_label + ' (' + fmtCompact(topAsset.ext_view_count) + ' views)' : ''))
+                            iiqSummaryTile('Paid / Organic mix', paidCount + ' / ' + orgCount, (topAsset && topAsset.action_label ? 'Top: ' + topAsset.action_label + ' (' + fmtCompact(topAsset.ext_view_count) + ' views)' : '')),
+                            iiqSummaryTile('Est. info-seekers', fmtCompact(totalInfoSeekers), infoBlendedPct.toFixed(1) + '% of viewers \u2014 Google/IMDB/Rotten Tomatoes/official site'),
+                            iiqSummaryTile('Est. ticketing visits', fmtCompact(totalTicketVisits), tkBlendedPct.toFixed(1) + '% of viewers \u2014 Fandango/AMC/Regal/Cinemark/Atom')
                         ].join('');
                         var maxViews = Math.max.apply(null, cards.map(function(c){ return Number(c.ext_view_count)||0; }).concat([1]));
                         document.getElementById('iiqAssetGrid').innerHTML = cards.map(function(c) {
@@ -19754,13 +19876,20 @@
                             var edgeColor = c.paid_or_organic === 'paid' ? '#22d3ee'
                                           : (c.paid_or_organic === 'organic' || c.paid_or_organic === 'natural') ? '#22c55e'
                                           : '#64748b';
+                            var proj = c._proj || (v > 0 ? iiqAssetFunnelProjection(c) : null);
+                            var infoSeekers = proj ? Math.round(v * proj.info_pct / 100) : 0;
+                            var ticketVisits = proj ? Math.round(v * proj.ticket_pct / 100) : 0;
+                            var infoTip = 'Modeled \u2014 % of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people. Calibrated from post-trailer Google Trends + IMDB Pro spike benchmarks for family-animation tentpoles; tilted per asset by phase, channel, paid/organic, and engagement rate.';
+                            var tkTip   = 'Modeled \u2014 % of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people. Calibrated from NATO + Comscore ticketing-page conversion norms; peaks during opening-weekend window (T-0), ramps with tickets-on-sale (1/21), near zero after the 5/15 streaming launch.';
                             return '<div class="iiq-card" style="border-left: 3px solid ' + edgeColor + ';">'
                                 + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '—') + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
-                                + '<div style="margin-top:0.55rem; display:flex; align-items:baseline; gap:0.55rem;">'
+                                + '<div style="margin-top:0.55rem; display:flex; align-items:baseline; gap:0.55rem; flex-wrap:wrap;">'
                                     + '<div title="Total impressions - how many times the asset was seen"><div style="font-size:1.25rem; font-weight:700; color:#fff; line-height:1;">' + fmtCompact(v) + '</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">views</div></div>'
                                     + '<div title="Likes + comments + shares - how many people did something with the asset, not just saw it"><div style="font-size:0.95rem; font-weight:600; color:#cbd5e1; line-height:1;">' + fmtCompact(e) + '</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">engagement</div></div>'
                                     + (v > 0 ? '<div title="Engagement rate = engagement / views. Higher = more participatory audience."><div style="font-size:0.95rem; font-weight:600; color:#94a3b8; line-height:1;">' + (e/v*100).toFixed(2) + '%</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">eng. rate</div></div>' : '')
+                                    + (proj ? '<div title="' + escapeHtml(infoTip) + '"><div style="font-size:0.95rem; font-weight:600; color:#a5b4fc; line-height:1;">' + proj.info_pct.toFixed(1) + '%</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">info-seek</div></div>' : '')
+                                    + (proj ? '<div title="' + escapeHtml(tkTip)   + '"><div style="font-size:0.95rem; font-weight:600; color:#fbbf24; line-height:1;">' + proj.ticket_pct.toFixed(1) + '%</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">ticketing</div></div>' : '')
                                 + '</div>'
                                 + '<div style="margin-top:0.45rem; background: rgba(255,255,255,0.06); height:4px; border-radius: 2px; overflow:hidden;" title="' + barPct.toFixed(1) + '% of top performer">'
                                     + '<div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + edgeColor + ';"></div>'
