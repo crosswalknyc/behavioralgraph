@@ -1819,7 +1819,17 @@ def run_query(conn, p):
     # values, whatever path got us here.  Inside the function, anything in
     # the plausible band and below the 5% review threshold passes through
     # untouched, so this is cheap when there's nothing to fix.
-    if not p.get('_ai_real_world'):
+    #
+    # Trust-the-analyst escape hatch (2026-06-17): when the caller explicitly
+    # passes a conversion_pct override in the config (e.g. the movie-
+    # benchmarks runner calibrating a licensed catalog title to 0.06%),
+    # honor it without further review. The agent's prior is "average movie
+    # on Netflix is ~0.5%" which is exactly the prior we're trying to break
+    # out of for these calibrated runs.
+    if p.get('conversion_pct') is not None:
+        print(f"   🔒 Skipping always-on conversion review — caller passed "
+              f"explicit conversion_pct={float(p['conversion_pct']):.3f}%")
+    elif not p.get('_ai_real_world'):
         _cur_total = int(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) if not pd.isna(df_summary.loc[0, 'TOTAL_SHOW_WATCHERS']) else 0
         _cur_clean = int(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) if not pd.isna(df_summary.loc[0, 'CLEAN_SAMPLE_SIZE']) else 0
         _cur_signups = int(df_summary.loc[0, 'NEW_SIGNUPS']) if not pd.isna(df_summary.loc[0, 'NEW_SIGNUPS']) else 0
