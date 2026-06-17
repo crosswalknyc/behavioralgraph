@@ -19597,12 +19597,15 @@
                     }
                     return 'match the ' + subj + ' cohort';
                 };
+                // Stable descending sort by overlap_bp - cards with no value
+                // sink to the bottom (treated as 0, not -1, so they still
+                // appear in a sensible order).
                 var sorted = cards.slice().sort(function(a, b) {
-                    var av = (a.overlap_bp !== null && a.overlap_bp !== undefined) ? Number(a.overlap_bp) : -1;
-                    var bv = (b.overlap_bp !== null && b.overlap_bp !== undefined) ? Number(b.overlap_bp) : -1;
+                    var av = Number(a.overlap_bp) || 0;
+                    var bv = Number(b.overlap_bp) || 0;
                     return bv - av;
                 });
-                var maxBp = Math.max.apply(null, sorted.map(function(c) { return Number(c.overlap_bp) || 0; }));
+                var maxBp = Math.max.apply(null, sorted.map(function(c) { return Number(c.overlap_bp) || 0; }).concat([0.0001]));
                 document.getElementById('iiqAudienceCards').innerHTML = sorted.map(function(c) {
                     var bp = (c.overlap_bp !== null && c.overlap_bp !== undefined) ? Number(c.overlap_bp) : null;
                     var bpStr = bp !== null ? bp.toFixed(2) + '%' : '—';
@@ -19612,14 +19615,11 @@
                         usAdults >= 1e3 ? Math.round(usAdults/1e3) + 'K' : usAdults;
                     var barPct = (bp !== null && maxBp > 0) ? (bp / maxBp * 100) : 0;
                     var color = srcColor(c.source);
-                    var subj = subjectFromDisplay(c.display || c.subject_key);
                     var descriptor = descriptorFromCard(c);
                     var sourceTip = srcLabel(c.source);
                     return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';" title="' + escapeHtml(sourceTip) + (c.source ? ': ' + escapeHtml(c.source) : '') + '">'
                         + '<div class="iiq-card-title">' + escapeHtml(c.display || c.subject_key) + '</div>'
-                        + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '—')
-                            + (subj ? ' <span style="opacity:0.5;">·</span> <span style="color:' + color + ';">' + escapeHtml(subj) + '</span>' : '')
-                            + '</div>'
+                        + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '—') + '</div>'
                         + '<div style="margin-top:0.65rem;" title="Share of US adults estimated to overlap with both this cohort and the title\'s moviegoing audience">'
                             + '<div style="font-size:1.45rem; font-weight:700; color:#fff; line-height:1;">' + bpStr + '</div>'
                             + '<div class="iiq-card-meta" style="margin-top:0.2rem; line-height:1.35;">of US adults'
