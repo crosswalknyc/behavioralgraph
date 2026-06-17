@@ -614,6 +614,33 @@ def _q3_box_office_finetune(title_slug: str) -> dict:
         except Exception as e:
             logger.info("Intent IQ Q3 BO backtest skipped: %s", e)
 
+        comp_titles = []
+        try:
+            comp_rows = ch.query(
+                "SELECT t.title_slug, t.display_name, t.opening_date, "
+                "sum(if(b.day_offset_from_open BETWEEN 0 AND 3, "
+                "       b.gross_usd, 0))                  AS opening_4day_usd, "
+                "sum(b.gross_usd)                          AS week_total_usd, "
+                "max(b.cumulative_usd)                     AS cumulative_usd "
+                "FROM intent.titles t "
+                "INNER JOIN intent.title_box_office_truth b "
+                "  ON b.title_slug = t.title_slug "
+                "WHERE t.distributor = 'comp_title' "
+                "GROUP BY t.title_slug, t.display_name, t.opening_date "
+                "ORDER BY opening_4day_usd DESC"
+            ).result_rows
+            comp_titles = _rows_to_dicts(comp_rows, [
+                "title_slug", "display_name", "opening_date",
+                "opening_4day_usd", "week_total_usd", "cumulative_usd",
+            ])
+            for c in comp_titles:
+                c["opening_date"] = _safe_iso_date(c["opening_date"])
+                c["opening_4day_usd"] = int(c["opening_4day_usd"] or 0)
+                c["week_total_usd"]   = int(c["week_total_usd"] or 0)
+                c["cumulative_usd"]   = int(c["cumulative_usd"] or 0)
+        except Exception as e:
+            logger.info("Intent IQ Q3 comp titles unavailable: %s", e)
+
         return {
             "success": True,
             "industry_forecast": {"low_usd": int(pred_low or 0),
@@ -621,10 +648,11 @@ def _q3_box_office_finetune(title_slug: str) -> dict:
             "intent_iq_forecast": intent_forecast,
             "actual_opening_bo_usd": int(actual or 0),
             "daily_truth": truth,
+            "comp_titles": comp_titles,
             "note": ("Intent IQ forecast trains on intent.title_box_office_truth. "
+                      "Comp titles shown for opening-range context. "
                       "Scrape more titles via scripts/scrape_box_office_mojo.py "
-                      "to improve the fit (need >=6 titles for any forecast, "
-                      ">=24 recommended)."),
+                      "to improve regression fit (need >=6, >=24 recommended)."),
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
