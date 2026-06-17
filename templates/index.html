@@ -22204,11 +22204,22 @@
                             </ul>
                         </div>
                     </details>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 1.25rem; margin-bottom: 1rem; align-items: start;">
-                        <div id="jiqAnchorsLayers" style="min-width: 0;"></div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 1.5rem; margin-bottom: 1rem; align-items: start;">
                         <div style="min-width: 0;">
-                            <div id="jiqAnchorsRollup" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;"></div>
-                            <div id="jiqAnchorsFunnelHeading" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Conversion Funnel to Opening Weekend</div>
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:0.55rem;">
+                                <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--accent-primary);font-weight:800;">Where the audience comes from</div>
+                                <div style="height:1px;flex:1;background:var(--border-color);"></div>
+                            </div>
+                            <div id="jiqAnchorsLayers"></div>
+                        </div>
+                        <div style="min-width: 0;">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:0.55rem;">
+                                <div id="jiqAnchorsRightHeader" style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--accent-lime);font-weight:800;">How they convert</div>
+                                <div style="height:1px;flex:1;background:var(--border-color);"></div>
+                            </div>
+                            <div id="jiqAnchorsRollup" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1.1rem;"></div>
+                            <h4 id="jiqAnchorsFunnelHeading" style="margin:0 0 0.3rem;font-size:0.85rem;font-weight:700;color:var(--text-primary);">Conversion Funnel to Opening Weekend</h4>
+                            <div id="jiqAnchorsFunnelExplainer" style="font-size:0.72rem;color:var(--text-secondary);line-height:1.55;margin-bottom:0.75rem;padding:0.6rem 0.8rem;background:var(--bg-secondary);border-left:3px solid var(--accent-lime);border-radius:6px;"></div>
                             <div id="jiqAnchorsFunnel"></div>
                         </div>
                     </div>
@@ -38792,6 +38803,25 @@
                 : (isTvAn
                     ? 'Conversion Funnel to 30-Day Unique Viewers'
                     : 'Conversion Funnel to Opening Weekend');
+            // ── Plain-English explainer under the funnel heading ──
+            // Surfaces what the funnel actually models (audience → outcome
+            // via stage-wise conversion rates) so the viewer doesn't have
+            // to guess at the math.
+            var explEl = document.getElementById('jiqAnchorsFunnelExplainer');
+            if (explEl) {
+                explEl.innerHTML = isBkAn
+                    ? 'How the <strong>addressable researcher pool</strong> above narrows — stage-by-stage — through intent, eligibility, and decision filters into projected <strong>new-account opens</strong>. Each row applies a real-world conversion rate; the rates compound, so the final-stage count is what actually opens an account.'
+                    : (isTvAn
+                        ? 'How the <strong>addressable engager pool</strong> above narrows — stage-by-stage — through intent and platform-fit filters into projected <strong>30-day unique viewers</strong> and total watch hours. Each row applies a real-world conversion rate; the rates compound, so the final-stage count is what actually shows up to watch.'
+                        : 'How the <strong>addressable engager pool</strong> above (the dedup\'d count) narrows — stage-by-stage — into projected <strong>opening-weekend tickets</strong> and total domestic run. Each row applies a real-world conversion rate (e.g., only some engagers are high-intent, only some of those are families, only some families convert). The last two rows scale tickets into seats and full theatrical run.');
+            }
+            // Right-column header copy follows the same mode split.
+            var rightHeader = document.getElementById('jiqAnchorsRightHeader');
+            if (rightHeader) rightHeader.textContent = isBkAn
+                ? 'How they convert to opens'
+                : (isTvAn
+                    ? 'How they convert to viewers'
+                    : 'How they convert to tickets');
             if (howAn && isTvAn) howAn.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
               +   '<li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source the modeled audience overlaps with (genre-comp viewers, format-comp engagers, talent-driven halo audiences, adjacent franchise fans, etc.). Bar = engager range (low–high).</li>'
@@ -38834,15 +38864,15 @@
                     var loPctOfMax  = (lo / maxEng) * 100;
                     var hiPctOfMax  = (hi / maxEng) * 100;
                     var c = L.color || 'var(--accent-primary)';
-                    return '<div style="display:grid;grid-template-columns:48px 1fr 160px;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border-color);">'
-                         +   '<div style="font-size:0.78rem;font-weight:700;color:' + c + ';">' + _jiqEsc(L.id || '') + '</div>'
-                         +   '<div>'
+                    return '<div style="display:grid;grid-template-columns:34px 1fr 130px;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="font-size:0.62rem;font-weight:800;color:#fff;background:' + c + ';border-radius:6px;padding:4px 0;text-align:center;letter-spacing:0.04em;line-height:1;">' + _jiqEsc(L.id || '') + '</div>'
+                         +   '<div style="min-width:0;">'
                          +     '<div style="font-size:0.78rem;color:var(--text-primary);">' + _jiqEsc(L.name || '') + (L.note ? ' <span style="color:var(--text-secondary);font-size:0.7rem;">· ' + _jiqEsc(L.note) + '</span>' : '') + '</div>'
-                         +     '<div style="position:relative;height:8px;background:var(--bg-secondary);border-radius:4px;margin-top:4px;">'
-                         +       '<div style="position:absolute;left:' + loPctOfMax + '%;width:' + Math.max(hiPctOfMax - loPctOfMax, 0.5) + '%;height:100%;background:' + c + ';border-radius:4px;opacity:0.85;"></div>'
+                         +     '<div style="position:relative;height:8px;background:var(--bg-secondary);border-radius:4px;margin-top:5px;">'
+                         +       '<div style="position:absolute;left:' + loPctOfMax + '%;width:' + Math.max(hiPctOfMax - loPctOfMax, 0.5) + '%;height:100%;background:linear-gradient(90deg,' + c + ',' + c + 'dd);border-radius:4px;opacity:0.95;"></div>'
                          +     '</div>'
                          +   '</div>'
-                         +   '<div style="font-size:0.82rem;font-weight:600;text-align:right;color:var(--text-primary);">' + rangeStr(lo, hi, 'engagers') + '</div>'
+                         +   '<div style="font-size:0.78rem;font-weight:700;text-align:right;color:var(--text-primary);font-variant-numeric:tabular-nums;">' + rangeStr(lo, hi, 'engagers') + '</div>'
                          + '</div>';
                 }).join('');
             }
@@ -38867,11 +38897,16 @@
                         color: 'var(--accent-lime)',
                     });
                 }
-                rollEl.innerHTML = tiles.map(function(t) {
-                    return '<div style="background:var(--bg-secondary);border:1px solid ' + t.color + ';border-radius:8px;padding:0.7rem 0.9rem;">'
-                         +   '<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-secondary);font-weight:600;">' + _jiqEsc(t.label) + '</div>'
-                         +   '<div style="font-size:1.35rem;font-weight:700;color:' + t.color + ';margin-top:2px;">' + _jiqEsc(t.value) + '</div>'
-                         +   (t.note ? '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:2px;">' + _jiqEsc(t.note) + '</div>' : '')
+                rollEl.innerHTML = tiles.map(function(t, ti) {
+                    var isDedup = ti === tiles.length - 1 && tiles.length > 1;
+                    var bg = isDedup
+                        ? 'linear-gradient(135deg, rgba(132,204,22,0.10) 0%, rgba(132,204,22,0.02) 100%)'
+                        : 'var(--bg-secondary)';
+                    var borderW = isDedup ? '2px' : '1px';
+                    return '<div style="background:' + bg + ';border:' + borderW + ' solid ' + t.color + ';border-radius:10px;padding:0.7rem 0.9rem;">'
+                         +   '<div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-secondary);font-weight:700;">' + _jiqEsc(t.label) + '</div>'
+                         +   '<div style="font-size:1.4rem;font-weight:800;color:' + t.color + ';margin-top:3px;font-variant-numeric:tabular-nums;line-height:1.1;">' + _jiqEsc(t.value) + '</div>'
+                         +   (t.note ? '<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:3px;line-height:1.4;">' + _jiqEsc(t.note) + '</div>' : '')
                          + '</div>';
                 }).join('');
             }
@@ -38886,14 +38921,18 @@
                     var lo = s.low || 0, hi = s.high || 0;
                     var widthPct = ((lo + hi) / 2 / maxFunnel) * 100;
                     var c = palette[i % palette.length];
-                    return '<div style="display:grid;grid-template-columns:1fr 200px;gap:10px;align-items:center;padding:6px 0;">'
-                         +   '<div>'
-                         +     '<div style="font-size:0.8rem;font-weight:600;color:var(--text-primary);">' + _jiqEsc(s.stage || '') + ' <span style="color:var(--text-secondary);font-weight:400;font-size:0.72rem;">· ' + _jiqEsc(s.rate || '') + '</span></div>'
-                         +     '<div style="height:14px;background:var(--bg-secondary);border-radius:4px;margin-top:4px;position:relative;overflow:hidden;">'
-                         +       '<div style="width:' + Math.max(widthPct, 1) + '%;height:100%;background:linear-gradient(90deg,' + c + ',' + c + 'cc);border-radius:4px;"></div>'
+                    var rateChip = s.rate
+                        ? '<span style="color:' + c + ';font-weight:700;font-size:0.66rem;background:' + c + '22;border:1px solid ' + c + '55;border-radius:99px;padding:2px 8px;margin-left:6px;letter-spacing:0.02em;">' + _jiqEsc(s.rate) + '</span>'
+                        : '';
+                    return '<div style="display:grid;grid-template-columns:28px 1fr 150px;gap:10px;align-items:center;padding:7px 0;">'
+                         +   '<div style="font-size:0.65rem;font-weight:800;color:#fff;background:' + c + ';border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;line-height:1;box-shadow:0 0 0 2px ' + c + '33;">' + (i + 1) + '</div>'
+                         +   '<div style="min-width:0;">'
+                         +     '<div style="font-size:0.78rem;font-weight:600;color:var(--text-primary);">' + _jiqEsc(s.stage || '') + rateChip + '</div>'
+                         +     '<div style="height:10px;background:var(--bg-secondary);border-radius:5px;margin-top:5px;position:relative;overflow:hidden;">'
+                         +       '<div style="width:' + Math.max(widthPct, 1) + '%;height:100%;background:linear-gradient(90deg,' + c + ',' + c + 'cc);border-radius:5px;"></div>'
                          +     '</div>'
                          +   '</div>'
-                         +   '<div style="font-size:0.85rem;font-weight:700;text-align:right;color:' + c + ';">' + rangeStr(lo, hi, s.unit || '') + '</div>'
+                         +   '<div style="font-size:0.82rem;font-weight:700;text-align:right;color:' + c + ';font-variant-numeric:tabular-nums;">' + rangeStr(lo, hi, s.unit || '') + '</div>'
                          + '</div>';
                 }).join('');
             }
