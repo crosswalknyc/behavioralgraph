@@ -105,8 +105,19 @@ def _load_normalized_snapshot(title_slug: str) -> Optional[dict]:
         return None
 
 
+def _scrub_nonfinite(v):
+    """Replace NaN / +inf / -inf floats with 0 so json.dumps emits valid
+    JSON. ClickHouse avgIf / quantileIf return NaN when the predicate
+    matches zero rows; left unchecked, Python json.dumps writes the
+    literal 'NaN' which breaks frontend JSON.parse."""
+    if isinstance(v, float):
+        if v != v or v == float("inf") or v == float("-inf"):
+            return 0
+    return v
+
+
 def _rows_to_dicts(rows, cols) -> list[dict]:
-    return [dict(zip(cols, r)) for r in rows]
+    return [{c: _scrub_nonfinite(v) for c, v in zip(cols, r)} for r in rows]
 
 
 def _phase_color(phase_name: str) -> str:
@@ -473,8 +484,10 @@ def _q1_content_categories_to_engagement(title_slug: str) -> dict:
         )
         SELECT asset_type, paid_or_organic,
                count() AS asset_count,
-               avgIf(views_7d, views_7d > 0) AS mean_views_7d,
-               quantileIf(0.5)(views_7d, views_7d > 0) AS median_views_7d
+               ifNotFinite(avgIf(views_7d, views_7d > 0), 0)
+                   AS mean_views_7d,
+               ifNotFinite(quantileIf(0.5)(views_7d, views_7d > 0), 0)
+                   AS median_views_7d
         FROM per_asset
         GROUP BY asset_type, paid_or_organic
         ORDER BY mean_views_7d DESC
