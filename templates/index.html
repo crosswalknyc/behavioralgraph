@@ -38025,15 +38025,17 @@
             if (howAh && isBkAh) howAh.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
               +   '<li><strong>Each card sizes one researcher cohort + the digital-vs-traditional split of where they actually opened.</strong> Bigger digital share = the cohort has already leaned toward neobanks; that\'s where the steal-share opportunity lives.</li>'
-              +   '<li><strong>Verdict pill:</strong> 🟢 Strongly Validated (intent index ≥3×), 🟡 Validated (1.5–3×), 🟡 Partially (1.0–1.5×), 🔴 Not Validated (&lt;1×).</li>'
+              +   '<li><strong>% chip (right of each row):</strong> share of <em>potential consumers</em> this cohort represents — i.e. cohort size as a % of the addressable researcher base. Use it to size the prize before drilling in.</li>'
+              +   '<li><strong>Cards are collapsed by default.</strong> Click any row to expand intent index, opens-split tiles, top discovery surfaces, DMA concentration, and the cohort note.</li>'
               +   '<li><strong>Top discovery surfaces</strong> — where this cohort actually starts their research. Use these as direct media-buy targets.</li>'
               +   '<li><strong>Top DMAs</strong> indexed (100 = US average). 150+ = over-index, concentrate spend; &lt;100 = de-prioritize.</li>'
               +   '<li><strong>Cohort note</strong> = the punchline for media planning: which moments / messages / channels this cohort responds to.</li>'
               + '</ul>';
             if (howAh && isTvAh && !isBkAh) howAh.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
-              +   '<li><strong>Each card sizes one modeled viewer cohort.</strong> Same three-row layout on every card so they\'re directly comparable. <em>This is the predicted audience composition, not Nielsen-measured;</em> when public measurement becomes available or a Crosswalk panel pull is run, it replaces these estimates.</li>'
-              +   '<li><strong>Verdict pill (top-right):</strong> 🟢 Strongly Predicted (≥3× lift), 🟡 Predicted (1.5×–3×), 🔴 Not Predicted (&lt;1.5×) — based on category streaming-comp benchmarks for similar formats.</li>'
+              +   '<li><strong>Each card sizes one modeled viewer cohort.</strong> <em>This is the predicted audience composition, not Nielsen-measured;</em> when public measurement becomes available or a Crosswalk panel pull is run, it replaces these estimates.</li>'
+              +   '<li><strong>% chip (right of each row):</strong> share of <em>potential consumers</em> this cohort represents — i.e. cohort size as a % of US adults (or the active addressable base). Use it to size the prize before drilling in.</li>'
+              +   '<li><strong>Cards are collapsed by default.</strong> Click any row to expand intent index, viewer tiles, top engagement surfaces, DMA concentration, and the cohort note.</li>'
               +   '<li><strong>Intent index (center, big number):</strong> e.g. <em>4.5×</em> = this cohort is projected to convert to viewers at 4.5 times the gen-pop streaming baseline.</li>'
               +   '<li><strong>First-View / Total Viewers</strong> (lime / cyan): est. unique viewers from this cohort over premiere-week and the full 30-day window.</li>'
               +   '<li><strong>Top engagement surfaces:</strong> % of cohort touching each platform/property. Mini horizontal bars.</li>'
@@ -38054,14 +38056,41 @@
                     ? (ah.hypotheses.length + ' cohorts · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline 30-day viewers')
                     : (ah.hypotheses.length + ' hypotheses · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline opening-weekend buyers'));
 
-            // Per-hypothesis tiles
+            // Per-hypothesis tiles — collapsed by default, click to expand.
             var tilesEl = document.getElementById('jiqAudienceHypTiles');
             if (tilesEl) {
-                tilesEl.innerHTML = ah.hypotheses.map(function(h) {
+                // Switch tile container to a single-column stack so collapsed
+                // summary rows align cleanly without 290px-wide empty boxes.
+                tilesEl.style.gridTemplateColumns = '1fr';
+
+                // ── Expand-all / Collapse-all controls above the stack ──
+                var hypControls = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;">'
+                    + '<div style="font-size:0.72rem;color:var(--text-secondary);">'
+                    +   'Each row is one modeled cohort. % chip = share of potential consumers represented. Click any row to expand for engagement surfaces, DMA concentration, and the cohort note.'
+                    + '</div>'
+                    + '<div style="display:flex;gap:6px;">'
+                    +   '<button id="jiqHypExpandAll" type="button" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 11px;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;">Expand all</button>'
+                    +   '<button id="jiqHypCollapseAll" type="button" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 11px;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;">Collapse all</button>'
+                    + '</div>'
+                    + '</div>';
+
+                // Resolve "% of potential consumers" for the pill. For
+                // banking that's % of researchers in the window; for
+                // TV/movie that's % of US adults (cohort_pct_of_genpop).
+                // Baseline is ah.baseline_size when present.
+                var resolveSharePct = function(h) {
+                    if (h.cohort_pct_of_potential != null) return +h.cohort_pct_of_potential;
+                    if (ah.baseline_size && h.cohort_size) {
+                        return (h.cohort_size / ah.baseline_size) * 100;
+                    }
+                    return +h.cohort_pct_of_genpop || 0;
+                };
+
+                tilesEl.innerHTML = hypControls + ah.hypotheses.map(function(h) {
                     var color = h.color || '#5b6cff';
-                    var verdictColor = (h.verdict || '').toLowerCase().indexOf('strongly') >= 0 ? '#10b981'
-                                     : (h.verdict || '').toLowerCase().indexOf('validated') >= 0 ? '#fbbf24'
-                                     : '#ef4444';
+                    var sharePct = resolveSharePct(h);
+                    var shareLabel = isBkAh ? 'of researchers'
+                                   : (isTvAh ? 'of US adults' : 'of US adults');
                     // Engagement surfaces — mini horizontal bars
                     var surfaces = (h.top_engagement_surfaces || []).slice(0, 5).map(function(s) {
                         var pct = +s.reach_pct_of_cohort || 0;
@@ -38088,18 +38117,28 @@
                              + '<div style="font-weight:700;color:' + color + ';text-align:right;font-variant-numeric:tabular-nums;">' + idx.toFixed(1) + '×</div>'
                              + '</div>';
                     }).join('');
-                    return '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-top:4px solid ' + color + ';border-radius:12px;padding:0.9rem;">'
-                         + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;">'
-                         +   '<div style="display:flex;align-items:center;gap:8px;min-width:0;">'
-                         +     '<div style="font-size:1.8rem;">' + _jiqEsc(h.icon || '◆') + '</div>'
-                         +     '<div style="min-width:0;">'
-                         +       '<div style="font-weight:700;font-size:0.95rem;line-height:1.2;">' + _jiqEsc(h.name) + '</div>'
-                         +       '<div style="font-size:0.7rem;color:var(--text-secondary);">' + _jiqFmt(h.cohort_size) + ' people · ' + (h.cohort_pct_of_genpop || 0).toFixed(1) + '% of US</div>'
-                         +     '</div>'
-                         +   '</div>'
-                         +   '<div style="background:' + verdictColor + ';color:#111;font-weight:700;font-size:0.62rem;padding:3px 8px;border-radius:10px;letter-spacing:0.05em;white-space:nowrap;">' + _jiqEsc(h.verdict || '') + '</div>'
-                         + '</div>'
-                         + '<div style="text-align:center;padding:6px 0;border-top:1px solid var(--border-color);">'
+                    // Collapsed summary row: icon + name + cohort-size +
+                    // the share-% pill that replaces the old verdict pill.
+                    var summaryRow = '<summary class="jiq-hyp-summary" style="cursor:pointer;list-style:none;padding:0.7rem 0.9rem;display:flex;justify-content:space-between;align-items:center;gap:10px;user-select:none;">'
+                        +   '<div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">'
+                        +     '<div style="font-size:1.6rem;line-height:1;">' + _jiqEsc(h.icon || '◆') + '</div>'
+                        +     '<div style="min-width:0;flex:1;">'
+                        +       '<div style="font-weight:700;font-size:0.9rem;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _jiqEsc(h.name) + '</div>'
+                        +       '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:2px;">' + _jiqFmt(h.cohort_size) + ' people · intent ' + (h.intent_index || 0).toFixed(1) + '×</div>'
+                        +     '</div>'
+                        +   '</div>'
+                        +   '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">'
+                        +     '<div title="Share of potential consumers this cohort represents" style="background:' + color + ';color:#0a0a0a;font-weight:800;font-size:0.78rem;padding:5px 11px;border-radius:14px;letter-spacing:0.02em;white-space:nowrap;">' + sharePct.toFixed(1) + '% ' + shareLabel + '</div>'
+                        +     '<div class="jiq-hyp-chev" style="font-size:0.78rem;color:var(--text-secondary);width:14px;text-align:center;transition:transform 0.15s;">▸</div>'
+                        +   '</div>'
+                        + '</summary>';
+
+                    var bodyOpen = '<div style="padding:0 0.9rem 0.9rem;border-top:1px solid var(--border-color);">';
+                    var bodyClose = '</div>';
+                    return '<details class="jiq-hyp-details" style="background:var(--bg-card);border:1px solid var(--border-color);border-top:4px solid ' + color + ';border-radius:12px;overflow:hidden;">'
+                         + summaryRow
+                         + bodyOpen
+                         + '<div style="text-align:center;padding:6px 0;border-top:0;">'
                          +   '<div style="font-size:1.4rem;font-weight:800;color:' + color + ';line-height:1;">' + (h.intent_index || 0).toFixed(1) + '×</div>'
                          +   '<div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">intent vs gen-pop</div>'
                          + '</div>'
@@ -38150,8 +38189,35 @@
                          + '<div style="font-weight:600;font-size:0.72rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-top:10px;margin-bottom:5px;">DMA concentration (index vs nat\'l avg)</div>'
                          + dmas
                          + (h.verdict_note ? '<div style="font-size:0.72rem;color:var(--text-primary);background:var(--bg-secondary);padding:6px 8px;border-radius:6px;margin-top:10px;line-height:1.4;">' + _jiqEsc(h.verdict_note) + '</div>' : '')
-                         + '</div>';
+                         + bodyClose
+                         + '</details>';
                 }).join('');
+
+                // Idempotent style block — hides default <details> arrow,
+                // rotates the chevron on open, and adds a subtle hover.
+                if (!document.getElementById('jiqHypStyle')) {
+                    var hs = document.createElement('style');
+                    hs.id = 'jiqHypStyle';
+                    hs.textContent = ''
+                        + '#jiqAudienceHypTiles summary.jiq-hyp-summary::-webkit-details-marker { display:none; }'
+                        + '#jiqAudienceHypTiles summary.jiq-hyp-summary { transition: background-color 0.12s; }'
+                        + '#jiqAudienceHypTiles summary.jiq-hyp-summary:hover { background: rgba(91,108,255,0.06); }'
+                        + '#jiqAudienceHypTiles details.jiq-hyp-details[open] > summary.jiq-hyp-summary .jiq-hyp-chev { transform: rotate(90deg); color: var(--text-primary); }';
+                    document.head.appendChild(hs);
+                }
+
+                // Wire up Expand-all / Collapse-all
+                var hypAllDetails = function() {
+                    return tilesEl.querySelectorAll('details.jiq-hyp-details');
+                };
+                var hypExpandBtn   = document.getElementById('jiqHypExpandAll');
+                var hypCollapseBtn = document.getElementById('jiqHypCollapseAll');
+                if (hypExpandBtn) hypExpandBtn.onclick = function() {
+                    hypAllDetails().forEach(function(d) { d.open = true; });
+                };
+                if (hypCollapseBtn) hypCollapseBtn.onclick = function() {
+                    hypAllDetails().forEach(function(d) { d.open = false; });
+                };
             }
 
             // Overlaps + triple-likely core
