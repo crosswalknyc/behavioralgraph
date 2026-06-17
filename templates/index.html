@@ -38741,94 +38741,10 @@
                               + '</div>';
             }
 
-            // ───── Buyer Attribution sub-card ─────
-            // Of N confirmed pre-sales, what share fall into each cohort
-            // (overlapping + disjoint). Field names tolerate both the new
-            // *_total_presales_* keys and the legacy *_8147 keys so the
-            // renderer works against either generation of payload.
             var baEl = document.getElementById('jiqAudienceHypBuyerAttribution');
-            var ba   = ah.buyer_attribution;
-            if (baEl && ba && (ba.per_cohort_overlapping || []).length) {
-                var owPickPct = function(x) {
-                    return (x.estimated_share_of_total_presales_pct != null)
-                        ? x.estimated_share_of_total_presales_pct
-                        : x.estimated_share_of_8147_pct;
-                };
-                var owPickCount = function(x) {
-                    return (x.estimated_count_in_total_presales != null)
-                        ? x.estimated_count_in_total_presales
-                        : x.estimated_count_in_8147;
-                };
-                var ow = ba.per_cohort_overlapping;
-                var maxShare = Math.max.apply(null,
-                    ow.map(function(x){ return owPickPct(x) || 0; })) || 1;
-                var owRows = ow.map(function(x) {
-                    var pct = +owPickPct(x) || 0;
-                    var w = (pct / Math.max(maxShare, 1)) * 100;
-                    var isTriple = (x.cohort_key === 'triple_likely_core');
-                    var barColor = isTriple ? '#10b981' : 'var(--accent-primary)';
-                    return '<div style="display:grid;grid-template-columns:minmax(180px,1.2fr) 1fr 90px 90px;gap:10px;align-items:center;font-size:0.78rem;padding:6px 0;border-bottom:1px solid var(--border-color);">'
-                         + '<div style="font-weight:' + (isTriple ? 700 : 600) + ';color:' + (isTriple ? '#10b981' : 'var(--text-primary)') + ';">' + _jiqEsc(x.cohort_label) + '</div>'
-                         + '<div style="background:var(--bg-secondary);border-radius:6px;height:12px;overflow:hidden;">'
-                         +   '<div style="width:' + w + '%;height:100%;background:' + barColor + ';border-radius:6px;"></div>'
-                         + '</div>'
-                         + '<div style="text-align:right;font-weight:800;font-variant-numeric:tabular-nums;color:' + (isTriple ? '#10b981' : 'var(--text-primary)') + ';">' + pct.toFixed(1) + '%</div>'
-                         + '<div style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text-secondary);">≈ ' + _jiqFmt(owPickCount(x)) + '</div>'
-                         + '</div>';
-                }).join('');
-
-                var dpRows = '';
-                if (ba.disjoint_partition && (ba.disjoint_partition.buckets || []).length) {
-                    var dpPickPct = function(b) {
-                        return (b.estimated_share_of_total_presales_pct != null)
-                            ? b.estimated_share_of_total_presales_pct
-                            : b.estimated_share_of_8147_pct;
-                    };
-                    var dpPickCount = function(b) {
-                        return (b.estimated_presales_count != null)
-                            ? b.estimated_presales_count
-                            : b.estimated_presales_8147;
-                    };
-                    var bks = ba.disjoint_partition.buckets;
-                    var maxDp = Math.max.apply(null,
-                        bks.map(function(b){ return dpPickPct(b) || 0; })) || 1;
-                    dpRows = bks.map(function(b) {
-                        var pct = +dpPickPct(b) || 0;
-                        var w = (pct / Math.max(maxDp, 1)) * 100;
-                        var isTriple = (b.segment_key === 'triple_overlap');
-                        var isOutside = (b.segment_key === 'outside_all_named');
-                        var barColor = isTriple ? '#10b981' : (isOutside ? '#94a3b8' : 'var(--accent-primary)');
-                        return '<div style="display:grid;grid-template-columns:minmax(280px,1.4fr) 1fr 80px 90px;gap:10px;align-items:center;font-size:0.74rem;padding:5px 0;border-bottom:1px solid var(--border-color);">'
-                             + '<div style="font-weight:' + (isTriple ? 700 : 500) + ';color:' + (isTriple ? '#10b981' : (isOutside ? 'var(--text-secondary)' : 'var(--text-primary)')) + ';">' + _jiqEsc(b.segment_label) + '</div>'
-                             + '<div style="background:var(--bg-secondary);border-radius:6px;height:10px;overflow:hidden;">'
-                             +   '<div style="width:' + w + '%;height:100%;background:' + barColor + ';border-radius:6px;"></div>'
-                             + '</div>'
-                             + '<div style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;">' + pct.toFixed(1) + '%</div>'
-                             + '<div style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text-secondary);">≈ ' + _jiqFmt(dpPickCount(b)) + '</div>'
-                             + '</div>';
-                    }).join('');
-                }
-
-                baEl.innerHTML = '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:0.9rem;margin-top:0.85rem;">'
-                              + '<div style="font-weight:700;font-size:0.9rem;margin-bottom:4px;">🎯 Pre-Sales Cohort Attribution</div>'
-                              + '<div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:10px;">' + _jiqEsc(ba.headline || '') + '</div>'
-                              + '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:1rem;">'
-                              +   '<div>'
-                              +     '<div style="font-weight:600;font-size:0.78rem;margin-bottom:6px;">By cohort <span style="color:var(--text-secondary);font-size:0.65rem;font-weight:500;">· cohorts overlap, don\'t sum to 100%</span></div>'
-                              +     owRows
-                              +     '<div style="font-size:0.65rem;color:var(--text-secondary);margin-top:6px;font-style:italic;">' + _jiqEsc(ba.overlapping_note || '') + '</div>'
-                              +   '</div>'
-                              +   '<div>'
-                              +     '<div style="font-weight:600;font-size:0.78rem;margin-bottom:6px;">Disjoint partition <span style="color:var(--text-secondary);font-size:0.65rem;font-weight:500;">· each buyer in exactly 1 bucket, sums to 100%</span></div>'
-                              +     dpRows
-                              +     (ba.disjoint_partition && ba.disjoint_partition.method
-                                    ? '<div style="font-size:0.65rem;color:var(--text-secondary);margin-top:6px;font-style:italic;">' + _jiqEsc(ba.disjoint_partition.method) + '</div>'
-                                    : '')
-                              +   '</div>'
-                              + '</div>'
-                              + '</div>';
-            } else if (baEl) {
+            if (baEl) {
                 baEl.innerHTML = '';
+                baEl.style.display = 'none';
             }
         }
 
