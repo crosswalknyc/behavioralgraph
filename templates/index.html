@@ -19919,7 +19919,8 @@
 
             function iiqRenderQ2(d) {
                 var cum = d.cumulative || [];
-                var best = d.best_in_flight_14d || [];
+                var best = d.best_in_flight_ytd || d.best_in_flight_14d || [];
+                var bestLabel = d.best_in_flight_window_label || 'YTD';
                 if (!cum.length && !best.length) return '<div class="iiq-empty">Q2 has no engagement data yet.</div>';
                 // Build per-day cumulative by paid/organic
                 var byKey = {};
@@ -19954,7 +19955,7 @@
                 html += '</div>';
                 if (best.length) {
                     var maxBV = Math.max.apply(null, best.map(function(b){ return Number(b.views_total)||0; }).concat([1]));
-                    html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Top 10 in-flight assets (last 14d)</div>';
+                    html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Top 10 in-flight assets (' + escapeHtml(bestLabel) + ')</div>';
                     html += best.slice(0,10).map(function(b) {
                         var label = (b.action_label || b.asset_type || 'Asset #' + b.asset_id);
                         var color = IIQ_QPALETTE[b.paid_or_organic] || IIQ_QPALETTE.unknown;

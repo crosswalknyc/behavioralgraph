@@ -591,6 +591,11 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
         for r in cumulative:
             r["date"] = _safe_iso_date(r["date"])
 
+        # Default top-asset window is YTD (Jenna 2026-06-17:
+        # 'do YTD unless otherwise specified for all assets'). Same
+        # convention used by the In-Flight tab and Assets tab.
+        year = datetime.utcnow().year
+        ytd_start = f"{year}-01-01"
         best_sql = f"""
         SELECT a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
                a.url, a.posted_date,
@@ -599,7 +604,7 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
         FROM intent.campaign_assets a
         LEFT JOIN intent.asset_engagement_daily e ON e.asset_id = a.asset_id
         WHERE a.title_slug = '{title_slug}'
-          AND a.posted_date >= addDays(today(), -14)
+          AND a.posted_date >= toDate('{ytd_start}')
         GROUP BY a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
                  a.url, a.posted_date
         ORDER BY views_total DESC
@@ -614,7 +619,9 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
 
         return {"success": True,
                  "cumulative": cumulative,
-                 "best_in_flight_14d": best,
+                 "best_in_flight_ytd": best,
+                 "best_in_flight_window_label": f"YTD (since {ytd_start})",
+                 "best_in_flight_14d": best,  # legacy key, kept for back-compat
                  "position_weighted_attribution": position_weighted,
                  "cumulative_lift_curve": cumulative_curve}
     except Exception as e:
