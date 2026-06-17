@@ -35624,6 +35624,28 @@
             try { return Number(n).toLocaleString(); } catch (e) { return String(n); }
         }
 
+        // Returns the brand / platform name to use in JIQ user-visible copy
+        // for the current run. Lets us write "Lionsgate+ push / email"
+        // instead of a hardcoded "Netflix push / email" for non-Netflix
+        // runs. Order of precedence:
+        //   1. explicit override on meta (svod_platform_name / customer_brand)
+        //   2. meta.target / target_display when it already looks like a
+        //      streaming-service brand (e.g. "Lionsgate+", "MovieSphere+",
+        //      "Netflix", "HBO Max")
+        //   3. meta.platform when short enough to render inline
+        //   4. generic fallback: "the platform"
+        function _jiqPlatformName(metaArg) {
+            var m = metaArg || (window._jiqCurrentRun && window._jiqCurrentRun.meta) || {};
+            if (m.svod_platform_name) return m.svod_platform_name;
+            if (m.customer_brand)     return m.customer_brand;
+            var raw = (m.target_display || m.target || '').trim();
+            if (raw && /(\+|\bplus\b|\bchannels?\b|\bprime\b|\bmax\b|\bhbo\b|\bpeacock\b|\bdisney\b|\bhulu\b|\bparamount\b|\btubi\b|\bpluto\b|\bnetflix\b|\bstarz\b|\bfubo\b|\bsling\b|\bkanopy\b|\bcrunchyroll\b|\bapple\s*tv\b|\bmoviesphere\b|\blionsgate\b)/i.test(raw)) {
+                return raw;
+            }
+            if (m.platform && m.platform.length < 60) return m.platform;
+            return 'the platform';
+        }
+
         // Movie-mode view selector: which slice of the summary to render.
         // 'panel'   = raw panel observation (always real)
         // 'scaled'  = panel counts × (implied_audience / panel_converters)
@@ -36320,28 +36342,26 @@
                                 'magenta']);
                     }
                     // Second marketing tile — % of accounts touched by
-                    // OFF-PLATFORM marketing only (strips out Netflix-
-                    // owned channels like homepage rec, Top 10, push,
-                    // Tudum, on-platform trailer, marketing email). The
+                    // OFF-PLATFORM marketing only (strips out the SVOD
+                    // platform's owned channels like homepage rec, Top 10,
+                    // push, on-platform trailer, marketing email). The
                     // delta between the two tiles is the story: how
-                    // dependent the show's reach is on Netflix's own
-                    // discovery surfaces vs paid/earned media off-
-                    // platform.
+                    // dependent the show's reach is on the platform's own
+                    // discovery surfaces vs paid/earned media off-platform.
                     if (kpis.marketing_touched_ex_netflix_pct != null) {
                         var mtExPct = Number(kpis.marketing_touched_ex_netflix_pct);
                         var mtExAcc = kpis.marketing_touched_ex_netflix_accounts;
+                        var _exPlat = _jiqPlatformName(meta);
                         var mtExSub = (mtExAcc != null)
-                            ? _jiqFmt(mtExAcc) + ' accounts · ex-Netflix-owned'
+                            ? _jiqFmt(mtExAcc) + ' accounts · ex-' + _exPlat + '-owned'
                             : 'off-platform marketing only';
-                        // Show delta vs full marketing-touched if both
-                        // present, so the drop-off jumps off the tile.
                         if (kpis.marketing_touched_pct != null) {
                             var dropPp = (Number(kpis.marketing_touched_pct) - mtExPct);
                             if (dropPp > 0) {
                                 mtExSub += ' · -' + dropPp.toFixed(1) + ' pp vs all-channel';
                             }
                         }
-                        k.push(['Marketing-Touched % (ex-Netflix)',
+                        k.push(['Marketing-Touched % (ex-' + _exPlat + ')',
                                 (isNaN(mtExPct) ? '—' : mtExPct.toFixed(1) + '%'),
                                 mtExSub,
                                 'amber']);
@@ -37972,12 +37992,12 @@
             if (howAh && isTvAh && !isBkAh) howAh.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
               +   '<li><strong>Each card sizes one modeled viewer cohort.</strong> Same three-row layout on every card so they\'re directly comparable. <em>This is the predicted audience composition, not Nielsen-measured;</em> when public measurement becomes available or a Crosswalk panel pull is run, it replaces these estimates.</li>'
-              +   '<li><strong>Verdict pill (top-right):</strong> 🟢 Strongly Predicted (≥3× lift), 🟡 Predicted (1.5×–3×), 🔴 Not Predicted (&lt;1.5×) — based on streaming-comp benchmarks (Netflix daily-strip + unscripted-game).</li>'
+              +   '<li><strong>Verdict pill (top-right):</strong> 🟢 Strongly Predicted (≥3× lift), 🟡 Predicted (1.5×–3×), 🔴 Not Predicted (&lt;1.5×) — based on category streaming-comp benchmarks for similar formats.</li>'
               +   '<li><strong>Intent index (center, big number):</strong> e.g. <em>4.5×</em> = this cohort is projected to convert to viewers at 4.5 times the gen-pop streaming baseline.</li>'
               +   '<li><strong>First-View / Total Viewers</strong> (lime / cyan): est. unique viewers from this cohort over premiere-week and the full 30-day window.</li>'
               +   '<li><strong>Top engagement surfaces:</strong> % of cohort touching each platform/property. Mini horizontal bars.</li>'
               +   '<li><strong>DMA concentration:</strong> top markets where the cohort over-indexes vs national avg.</li>'
-              +   '<li><strong>Streaming vs linear note:</strong> for a Jeopardy! format extension on Netflix, the modeled streaming audience is materially younger and more mobile-skewed than the syndicated TV audience — these cohorts capture that delta explicitly.</li>'
+              +   '<li><strong>Streaming vs linear note:</strong> the modeled streaming audience for this title skews materially younger and more mobile-heavy than its linear / syndicated comp — these cohorts capture that delta explicitly.</li>'
               + '</ul>';
 
             var subEl  = document.getElementById('jiqAudienceHypSubtitle');
@@ -38299,9 +38319,9 @@
                     : 'Conversion Funnel to Opening Weekend');
             if (howAn && isTvAn) howAn.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
-              +   '<li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source the modeled audience overlaps with (e.g., syndicated Jeopardy! viewers, SNL/Weekend-Update engagers, Netflix unscripted-game watchers, NYT Games daily players). Bar = engager range (low–high).</li>'
+              +   '<li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source the modeled audience overlaps with (genre-comp viewers, format-comp engagers, talent-driven halo audiences, adjacent franchise fans, etc.). Bar = engager range (low–high).</li>'
               +   '<li><strong>Gross vs Deduplicated tiles:</strong> gross sums all layers (with overlap); dedup = true addressable engager base after removing people who appear in multiple layers. The lime-bordered dedup tile is the answer.</li>'
-              +   '<li><strong>Conversion Funnel (stages):</strong> narrows from total engagers → Netflix-subscribing high-intent → game-show / trivia ready → <em>30-day unique viewers</em> (the streaming analog of "opening-weekend tickets") → premiere-week viewers → full-lifecycle viewers (30-day + 90-day tail) → total watch hours.</li>'
+              +   '<li><strong>Conversion Funnel (stages):</strong> narrows from total engagers → platform-subscribing high-intent → format / genre ready → <em>30-day unique viewers</em> (the streaming analog of "opening-weekend tickets") → premiere-week viewers → full-lifecycle viewers (30-day + 90-day tail) → total watch hours.</li>'
               +   '<li><strong>Methodology note:</strong> follows the same engager-funnel pattern Subscriber IQ uses for streaming viewership — public anchors only, then Crosswalk panel pull replaces with measured numbers.</li>'
               +   '<li><strong>MODELED TAKE (lime callout):</strong> single-sentence conclusion. Mid-case viewers + watch hours, anchored to the closest streaming comp (e.g., Is It Cake, Cunk on Earth).</li>'
               + '</ul>';
@@ -38986,7 +39006,7 @@
                 companion_title:    '📱 Second Screen Behaviors — what accounts did WHILE watching',
                 companion_sub:      'Second-screen behaviors during episodes. Bubble size = share of accounts. "Fully engaged" = no second-screen activity.',
                 switched_title:     '🎬 Post-View Destinations — what they watched / did next',
-                switched_sub:       'What accounts did right after the credits rolled — next Netflix show, off-platform, social, sleep, etc.',
+                switched_sub:       'What accounts did right after the credits rolled — next title on the platform, off-platform, social, sleep, etc.',
                 interstep_title:    '🪜 Discovery Steps Before Pressing Play',
                 interstep_sub:      'Off-app validation steps accounts took between hearing about the show and pressing play (search, Rotten Tomatoes, IMDb, clips on YouTube/TikTok, etc.).',
                 tile_a_label:       'Browsed → watched',
@@ -38994,7 +39014,7 @@
                 tile_b_label:       'Direct intent → watched',
                 tile_b_sub:         'searched by name / deep link / resumed from My List',
                 tile_c_label:       'Re-engaged → watched',
-                tile_c_sub:         'Netflix push / marketing email / social drove them back',
+                tile_c_sub:         'platform push / marketing email / social drove them back',
             };
             var BK_LABELS = {
                 site_title:         '🏦 Entry Paths — how researchers came to a bank PDP',
@@ -40386,15 +40406,18 @@
                     : (isTvP
                         ? 'Right-aligned ribbon: each viewer\'s last few events before first-episode play, collapsed into channel categories. Column height ∝ unique viewers at that step. Hover for the top hosts/platforms.'
                         : 'Right-aligned ribbon: each converter\'s last few events before purchase, collapsed into channel categories. Column height ∝ unique users at that step. Hover for the top hosts.');
-                if (howP && isTvP) howP.innerHTML =
+                if (howP && isTvP) {
+                    var _ribPlat = _jiqPlatformName();
+                    howP.innerHTML =
                     '<ul style="margin:0;padding-left:1.1rem;">'
-                  +   '<li><strong>Multi-step ribbon, right-aligned:</strong> labels run from <em>-N (FIRST TOUCH POINT)</em> on the far left to <em>0 (FIRST EPISODE PLAY = viewer)</em> on the far right. The ribbon reads like a sentence — "first they saw a clip, then a creator reaction, then a search, then opened Netflix, then pressed play."</li>'
+                  +   '<li><strong>Multi-step ribbon, right-aligned:</strong> labels run from <em>-N (FIRST TOUCH POINT)</em> on the far left to <em>0 (FIRST EPISODE PLAY = viewer)</em> on the far right. The ribbon reads like a sentence — "first they saw a clip, then a creator reaction, then a search, then opened ' + _jiqEsc(_ribPlat) + ', then pressed play."</li>'
                   +   '<li><strong>Bar height</strong> = number of viewers who hit that step (survivorship curve — every step has fewer people than the prior one).</li>'
                   +   '<li><strong>% under each bar</strong> = same value as % of the full projected-viewer cohort.</li>'
-                  +   '<li><strong>Hover any column</strong> for the top hosts/platforms at that step (YouTube + TikTok clip drops, Netflix in-app search, etc.).</li>'
+                  +   '<li><strong>Hover any column</strong> for the top hosts/platforms at that step (YouTube + TikTok clip drops, ' + _jiqEsc(_ribPlat) + ' in-app search, etc.).</li>'
                   +   '<li><strong>Top observed paths</strong> (below): the 5 most common K-gram sequences. Big viewer counts = sequences that drove the most first-episode plays.</li>'
                   +   '<li><strong>Note for streaming:</strong> the final step is <em>first-episode play</em>, not a transaction. Subsequent retention (episodes 2+) is tracked in the Headline Viewership tile (avg episodes / viewer).</li>'
                   + '</ul>';
+                }
             })();
 
             // ── Back-compat patch: legacy modeled runs hard-coded every
@@ -41489,9 +41512,9 @@
                 }
                 var subEl2 = document.getElementById('jiqSubIqRevenueSubtitle');
                 if (subEl2) {
-                    subEl2.textContent = 'Subscriber count \u00d7 Netflix US SVOD list price, '
-                        + 'broken into Total (acquired + reactivated), Activated-only (net-new), '
-                        + 'and Blended (industry-typical 60/40 tier mix).';
+                    subEl2.textContent = 'Subscriber count \u00d7 published US SVOD list price for '
+                        + _jiqPlatformName() + ', broken into Total (acquired + reactivated), '
+                        + 'Activated-only (net-new), and Blended (industry-typical 60/40 tier mix).';
                 }
                 var rowsHtml = '';
                 var renderRevenueRow = function(title, tooltip, accent, row) {
