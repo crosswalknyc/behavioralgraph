@@ -61238,10 +61238,12 @@
                 // Drop the 70px Profile slot when Casual Fan is hidden,
                 // and the 70px Gen Pop slot when GP is hidden, so each
                 // row collapses cleanly instead of leaving an empty gap.
-                // 72px per cmp leaves enough room for labels like
-                // "NETFLIX ONLY" / "YOUTUBE ONLY"; longer labels clip
-                // with ellipsis (full label in title attr).
-                const cmpCols = series.map(() => '72px').join(' ');
+                // Per-cohort width via _cmpCohortColWidth so long
+                // labels ("Unprepared Underdogs", "Worried Warriors")
+                // get extra room AND every cohort cell has 8px right
+                // padding so values never visually merge with the
+                // next column.
+                const cmpCols = series.map(s => _cmpCohortColWidth(s.label || '')).join(' ');
                 const profileCol = hideCF ? '' : '70px ';
                 const gpCol = hideGP ? '' : ' 70px';
                 table.style.gridTemplateColumns = '28px minmax(80px,1fr) ' + profileCol + cmpCols + gpCol + ' 56px';
@@ -61273,7 +61275,7 @@
                         // "Casual Female") don't visually bleed into
                         // adjacent columns when the card width is
                         // tight. Data cells below stay nowrap.
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:left;justify-self:start;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;cursor:pointer;user-select:none;';
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:left;justify-self:start;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;cursor:pointer;user-select:none;padding-right:8px;';
                         if (gpHeader) header.insertBefore(span, gpHeader);
                         else header.appendChild(span);
                     });
@@ -61300,7 +61302,7 @@
                         }
                         const span = document.createElement('span');
                         span.className = 'cmp-col-cell';
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;';
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;padding-right:8px;';
                         span.textContent = match ? _cmpFmtPct(match.pct) : '—';
                         if (match && match.pct != null) {
                             span.title = entry.label + ' • ' + name + ' • ' + _cmpFmtPct(match.pct);
@@ -61338,10 +61340,12 @@
                         map: _cmpBuildInterestsLookup(s.parsed)
                     }));
                     // Row layout: # | Item | [Profile?] | [N cmps] | [Gen Pop?] | Index
-                    // 72px per cmp leaves enough room for labels like
-                    // "NETFLIX ONLY" / "YOUTUBE ONLY"; longer labels
-                    // clip with ellipsis (full label in title attr).
-                    const cmpCols = series.map(() => '72px').join(' ');
+                    // Per-cohort width via _cmpCohortColWidth so long
+                    // labels ("Unprepared Underdogs", "Worried Warriors")
+                    // get extra room AND every cohort cell has 8px
+                    // right padding so values never visually merge
+                    // with the next column (the 85.22%65.27% problem).
+                    const cmpCols = series.map(s => _cmpCohortColWidth(s.label || '')).join(' ');
                     const profileCol = hideCF ? '' : '70px ';
                     const gpCol = hideGP ? '' : ' 70px';
                     const intGridTpl = '30px minmax(120px,1fr) ' + profileCol + cmpCols + gpCol + ' 60px';
@@ -61355,7 +61359,7 @@
                             const label = entry.label || ('Run ' + (idx + 1));
                             span.textContent = label;
                             span.title = label;
-                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;';
+                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;padding-right:8px;';
                             if (gpHeader) intHeader.insertBefore(span, gpHeader);
                             else intHeader.appendChild(span);
                         });
@@ -61371,7 +61375,7 @@
                             const match = intLookups[idx].map[name];
                             const span = document.createElement('span');
                             span.className = 'cmp-col-cell';
-                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;overflow:hidden;min-width:0;';
+                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;overflow:hidden;min-width:0;padding-right:8px;';
                             span.textContent = match ? _cmpFmtPct(match.pct) : '—';
                             if (match && match.pct != null) {
                                 span.title = entry.label + ' • ' + name + ' • ' + _cmpFmtPct(match.pct);
@@ -61447,7 +61451,12 @@
                 // drop the 80px column so the row collapses cleanly
                 // instead of leaving an empty gap where the now-hidden
                 // Profile cell used to sit.
-                const cmpColsCss = series.map(() => '72px').join(' ');
+                // Per-cohort width via _cmpCohortColWidth so long
+                // labels ("Unprepared Underdogs", "Worried Warriors")
+                // get extra room AND every cohort cell has 8px right
+                // padding so values never visually merge with the
+                // next column.
+                const cmpColsCss = series.map(s => _cmpCohortColWidth(s.label || '')).join(' ');
                 const profileColCss = hideCF ? '' : '72px ';
                 let newGrid;
                 if (sec.isAll) {
@@ -61497,11 +61506,11 @@
                         span.title = label;
                         // Allow multi-word cohort labels ("Unprepared
                         // Underdogs", "Worried Warriors") to wrap within
-                        // the 72px column instead of overflowing onto the
-                        // next header (user request 2026-06-17: "on
-                        // location it needs to also wrap" — same treatment
-                        // as behavioral cohort headers).
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;';
+                        // the column instead of overflowing onto the
+                        // next header. 8px right padding pairs with
+                        // _cmpCohortColWidth so values never visually
+                        // merge with the adjacent column.
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;padding-right:8px;';
                         if (anchor) header.insertBefore(span, anchor);
                         else header.appendChild(span);
                     });
@@ -61530,7 +61539,7 @@
                         const match = lookup[norm] || (canonNorm && lookup[canonNorm]);
                         const span = document.createElement('span');
                         span.className = 'cmp-col-cell';
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;';
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;padding-right:8px;';
                         span.textContent = match ? _cmpFmtPct(match.pct) : '—';
                         if (match && match.pct != null) {
                             span.title = entry.label + ' • ' + rawName + ' • ' + _cmpFmtPct(match.pct);
@@ -65376,7 +65385,7 @@
                         const proj = hasV ? Math.round(v / 100 * US_POP) : 0;
                         const cellStr = !hasV ? 'N/A' : (isProjection ? _fmtNum(proj) : _fmtPct(v));
                         const color = _cmpPalette[ci % _cmpPalette.length];
-                        return '<span class="cmp-col-cell" style="color:' + color + ';text-align:right;justify-self:end;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">' + cellStr + '</span>';
+                        return '<span class="cmp-col-cell" style="color:' + color + ';text-align:right;justify-self:end;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;padding-right:8px;">' + cellStr + '</span>';
                     }).join('');
                     return ''
                         + '<div class="behavioral-item">'
@@ -65402,15 +65411,17 @@
                 const cmpHeaderCellsHtml = _cmpLookups.map((lk, ci) => {
                     const color = _cmpPalette[ci % _cmpPalette.length];
                     const lbl = _safeEscape(lk.label || 'Run');
-                    return '<span class="cmp-col-cell" style="color:' + color + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;" title="' + lbl + '">' + lbl + '</span>';
+                    return '<span class="cmp-col-cell" style="color:' + color + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;padding-right:8px;" title="' + lbl + '">' + lbl + '</span>';
                 }).join('');
 
                 // Match the behavioral-card grid template so the
                 // .cmp-hide-genpop / .cmp-hide-profile CSS rules (set
                 // up in applyComparisonRunsToCategoryTables) collapse
                 // the right cells when the user toggles Casual or
-                // Gen Pop off. 72px per cohort col matches behavioral.
-                const _cmpCols = _cmpLookups.map(() => '72px').join(' ');
+                // Gen Pop off. Per-cohort width via _cmpCohortColWidth
+                // so long labels ("Unprepared Underdogs", "Worried
+                // Warriors") get extra room.
+                const _cmpCols = _cmpLookups.map(lk => _cmpCohortColWidth(lk.label || '')).join(' ');
                 const _profileColTpl = _cmpHideCF ? '' : '70px ';
                 const _gpColTpl      = _cmpHideGP ? '' : ' 70px';
                 const _gridTpl       = (_cmpLookups.length > 0)
