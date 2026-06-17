@@ -5345,6 +5345,26 @@
             font-size: 0.75rem;
             text-align: left;
         }
+        /* Right-justify Gen Pop and Index data cells so the numbers
+         * line up at the column boundary (matches the behavioral
+         * tab's .behavioral-pct/.behavioral-index treatment). Without
+         * this override, .interest-genpop / .interest-index inherit
+         * the left-align declared above and the values visually drift
+         * to the left of their grid columns. */
+        .interest-genpop,
+        .interest-index {
+            text-align: right !important;
+            justify-self: end;
+        }
+        /* And match the headers so the column label sits over its
+         * right-aligned data. The positional :nth-child rule below
+         * (which forces all 5 header spans left) would otherwise win
+         * and leave the labels stranded at column-left. */
+        .interest-header-row span.genpop-col,
+        .interest-header-row span.index-col {
+            text-align: right !important;
+            justify-self: end;
+        }
         
         .interest-bar-container {
             width: 60px;
@@ -5370,7 +5390,7 @@
             font-size: 0.75rem;
             font-weight: 700;
             min-width: 45px;
-            text-align: left;
+            text-align: right;
             padding: 1px 4px;
             flex-shrink: 0;
         }
@@ -5386,7 +5406,7 @@
             font-size: 0.75rem;
             color: var(--text-secondary);
             min-width: 55px;
-            text-align: left;
+            text-align: right;
             flex-shrink: 0;
         }
         
@@ -9226,11 +9246,13 @@
             text-align: left !important;
             justify-self: start;
         }
-        .location-row span:nth-child(3),
-        .location-row span:nth-child(4),
-        .location-row span:nth-child(5),
-        .location-row span:nth-child(6),
-        .location-row span:nth-child(7) {
+        /* Right-align every data cell from position 3 onwards.
+         * Using nth-child(n+3) (instead of the old 3..7 list) keeps
+         * the CW Gen Pop / GP Census / CW GP Index cells right-aligned
+         * even after comparison-cohort cells get inserted between the
+         * Profile column and CW Gen Pop, which pushes them past
+         * :nth-child(7). */
+        .location-row span:nth-child(n+3) {
             text-align: right !important;
             justify-self: end;
         }
