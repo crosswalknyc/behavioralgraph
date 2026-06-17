@@ -12609,6 +12609,7 @@ def api_intent_assets(title_slug):
             phase=request.args.get('phase'),
             asset_type=request.args.get('asset_type'),
             paid_or_organic=request.args.get('paid_or_organic'),
+            window=request.args.get('window'),
         ))
     except Exception as e:
         traceback.print_exc()
@@ -12663,7 +12664,8 @@ def api_intent_in_flight(title_slug):
         return err
     try:
         return jsonify(_intent_iq.get_in_flight(title_slug,
-                                                  as_of=request.args.get('as_of')))
+                                                  as_of=request.args.get('as_of'),
+                                                  window=request.args.get('window')))
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500

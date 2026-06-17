@@ -256,13 +256,40 @@ def get_overview(title_slug: str) -> dict:
 
 # ── 3. Assets ───────────────────────────────────────────────────────────────
 
+def _resolve_assets_window(window: Optional[str]) -> tuple[Optional[str], Optional[str], str]:
+    """Resolve an assets-window string into (lo_iso, hi_iso, label).
+    Lo/hi are inclusive YYYY-MM-DD or None for unbounded. YTD = since
+    Jan 1 of current year. 'all' = no bound. '14d'/'30d'/'90d'/'365d' =
+    rolling N days back from today.
+    """
+    w = (window or "ytd").strip().lower()
+    today = datetime.utcnow().date()
+    if w in ("all", "campaign", "campaign_to_date"):
+        return (None, None, "Campaign-to-date")
+    if w in ("ytd", "year_to_date"):
+        return (f"{today.year}-01-01", None, f"YTD (since {today.year}-01-01)")
+    days_map = {"14d": 14, "30d": 30, "90d": 90, "365d": 365}
+    if w in days_map:
+        from datetime import timedelta
+        d = days_map[w]
+        lo = (today - timedelta(days=d)).isoformat()
+        return (lo, None, f"Last {d}d")
+    return (f"{today.year}-01-01", None, f"YTD (since {today.year}-01-01)")
+
+
 def get_assets(title_slug: str, phase: Optional[str] = None,
                 asset_type: Optional[str] = None,
-                paid_or_organic: Optional[str] = None) -> dict:
+                paid_or_organic: Optional[str] = None,
+                window: Optional[str] = None) -> dict:
+    """List campaign assets. Default window is YTD per Jenna 2026-06-17:
+    'this should be YTD unless otherwise specified for all assets'."""
     where_clauses = [f"title_slug = '{title_slug}'"]
     if phase:           where_clauses.append(f"phase_name = '{phase}'")
     if asset_type:      where_clauses.append(f"asset_type = '{asset_type}'")
     if paid_or_organic: where_clauses.append(f"paid_or_organic = '{paid_or_organic}'")
+    lo, hi, window_label = _resolve_assets_window(window)
+    if lo: where_clauses.append(f"posted_date >= toDate('{lo}')")
+    if hi: where_clauses.append(f"posted_date <= toDate('{hi}')")
     where_sql = " AND ".join(where_clauses)
 
     ch = _ch_client()
@@ -284,7 +311,8 @@ def get_assets(title_slug: str, phase: Optional[str] = None,
             for c in cards:
                 c["posted_date"] = _safe_iso_date(c.get("posted_date"))
             return {"success": True, "title_slug": title_slug, "cards": cards,
-                    "total": len(cards), "source": "clickhouse"}
+                    "total": len(cards), "source": "clickhouse",
+                    "window": (window or "ytd").lower(), "window_label": window_label}
         except Exception as e:
             logger.warning("Intent IQ: get_assets CH failed: %s", e)
 
@@ -295,8 +323,10 @@ def get_assets(title_slug: str, phase: Optional[str] = None,
     if phase:           cards = [a for a in cards if a.get("phase_name") == phase]
     if asset_type:      cards = [a for a in cards if a.get("asset_type") == asset_type]
     if paid_or_organic: cards = [a for a in cards if a.get("paid_or_organic") == paid_or_organic]
+    if lo:              cards = [a for a in cards if (a.get("posted_date") or "") >= lo]
     return {"success": True, "title_slug": title_slug, "cards": cards,
-            "total": len(cards), "source": "s3_snapshot", "fallback": True}
+            "total": len(cards), "source": "s3_snapshot", "fallback": True,
+            "window": (window or "ytd").lower(), "window_label": window_label}
 
 
 # ── 4. Audiences-of-interest ────────────────────────────────────────────────
@@ -794,19 +824,55 @@ def _q6_audience_shift_over_campaign(title_slug: str) -> dict:
 
 # ── 7. In-flight scoring ────────────────────────────────────────────────────
 
-def get_in_flight(title_slug: str, as_of: Optional[str] = None) -> dict:
+def _resolve_window(window: Optional[str], as_of: Optional[str]) -> tuple[str, str]:
+    """Resolve a window string ('ytd', '14d', '30d', '90d', '365d', 'all')
+    into (sql_lower_bound_clause, human_label).
+
+    The lower-bound clause is empty for 'all', a YYYY-MM-DD date literal
+    for 'ytd', or addDays(..., -N) for the rolling windows. The label is
+    what the UI shows next to the headline number.
+    """
+    w = (window or "ytd").strip().lower()
+    today_expr = f"toDate('{as_of}')" if as_of else "today()"
+    # Year-of as_of (default: current year)
+    if w in ("ytd", "year_to_date"):
+        try:
+            year = (datetime.fromisoformat(as_of).year if as_of
+                    else datetime.utcnow().year)
+        except Exception:
+            year = datetime.utcnow().year
+        return (f"AND a.posted_date >= toDate('{year}-01-01')",
+                f"YTD (since {year}-01-01)")
+    if w == "all":
+        return ("", "All time")
+    days_map = {"14d": 14, "30d": 30, "90d": 90, "365d": 365}
+    if w in days_map:
+        d = days_map[w]
+        return (f"AND a.posted_date >= addDays({today_expr}, -{d})",
+                f"Last {d}d")
+    # Unrecognized -> YTD
+    year = datetime.utcnow().year
+    return (f"AND a.posted_date >= toDate('{year}-01-01')",
+            f"YTD (since {year}-01-01)")
+
+
+def get_in_flight(title_slug: str, as_of: Optional[str] = None,
+                  window: Optional[str] = None) -> dict:
     """Best paid + best organic asset of the moment.
 
-    Same SQL as Q2 best_in_flight_14d but always returns *one* best of
-    each, with a 7-day lift-per-impression ranking.
+    Default window is YTD (year-to-date) per Jenna 2026-06-17: 'this
+    should be YTD unless otherwise specified for all assets'. Override
+    by passing window='14d' / '30d' / '90d' / '365d' / 'all'.
     """
     ch = _ch_client()
     if ch is None:
         return {"success": True, "fallback": True,
-                 "best_paid": None, "best_organic": None}
+                 "best_paid": None, "best_organic": None,
+                 "window_label": "YTD"}
     as_of_clause = f"AND a.posted_date <= '{as_of}'" if as_of else ""
     try:
-        def _query_window(days_back: int):
+        def _query_window(window_key: str):
+            lower_bound, label = _resolve_window(window_key, as_of)
             sql = f"""
             SELECT a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
                    a.url, a.posted_date, sum(e.views) AS views_total
@@ -814,7 +880,7 @@ def get_in_flight(title_slug: str, as_of: Optional[str] = None) -> dict:
             LEFT JOIN intent.asset_engagement_daily e ON e.asset_id = a.asset_id
             WHERE a.title_slug = '{title_slug}'
               {as_of_clause}
-              AND a.posted_date >= addDays(coalesce({f"toDate('{as_of}')" if as_of else "today()"}, today()), -{days_back})
+              {lower_bound}
             GROUP BY a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
                      a.url, a.posted_date
             ORDER BY views_total DESC
@@ -825,23 +891,22 @@ def get_in_flight(title_slug: str, as_of: Optional[str] = None) -> dict:
                                              "views_total"])
             for c in cards:
                 c["posted_date"] = _safe_iso_date(c["posted_date"])
-            return cards
+            return cards, label
 
-        # Try 14d window first; if either paid or organic is missing,
-        # progressively widen so the panel always renders something useful.
-        windows_tried = []
-        cards: list = []
-        best_paid = None
-        best_organic = None
-        for window_days in (14, 30, 90, 365):
-            cards = _query_window(window_days)
-            windows_tried.append(window_days)
-            best_paid    = next((c for c in cards if c["paid_or_organic"] == "paid"),    None)
-            best_organic = next((c for c in cards if c["paid_or_organic"] == "organic"), None)
-            if best_paid and best_organic:
-                break
+        # User-specified window is honoured first. If they ask for YTD and
+        # one side is missing, we widen to 'all' as a last resort so the
+        # panel always renders something useful rather than going blank.
+        requested = (window or "ytd").lower()
+        cards, label_used = _query_window(requested)
+        best_paid    = next((c for c in cards if c["paid_or_organic"] == "paid"),    None)
+        best_organic = next((c for c in cards if c["paid_or_organic"] == "organic" or c["paid_or_organic"] == "natural"), None)
+        if (not best_paid or not best_organic) and requested != "all":
+            cards_all, label_all = _query_window("all")
+            best_paid    = best_paid    or next((c for c in cards_all if c["paid_or_organic"] == "paid"),    None)
+            best_organic = best_organic or next((c for c in cards_all if c["paid_or_organic"] == "organic" or c["paid_or_organic"] == "natural"), None)
+            if not cards: cards = cards_all
         return {"success": True, "as_of": as_of or _safe_iso_date(datetime.utcnow()),
-                 "window_days": windows_tried[-1],
+                 "window": requested, "window_label": label_used,
                  "best_paid": best_paid, "best_organic": best_organic,
                  "all_candidates": cards[:25]}
     except Exception as e:

@@ -19355,6 +19355,7 @@
                 </div>
                 <div id="iiqAssetSummary" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;"></div>
                 <div class="iiq-asset-filter">
+                    <div><label>Window</label><select id="iiqAssetWindow" onchange="reloadIntentIQAssets()"><option value="ytd" selected>Year-to-date (YTD)</option><option value="14d">Last 14 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option><option value="365d">Last 365 days</option><option value="all">Campaign-to-date</option></select></div>
                     <div><label>Phase</label><select id="iiqAssetFilterPhase" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
                     <div><label>Type</label><select id="iiqAssetFilterType" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
                     <div><label>Paid / Organic</label><select id="iiqAssetFilterPaid" onchange="reloadIntentIQAssets()"><option value="">All</option><option value="paid">Paid</option><option value="organic">Organic</option><option value="unknown">Unknown</option></select></div>
@@ -19369,6 +19370,24 @@
             </div>
 
             <div class="iiq-panel" id="iiqPanel-inflight">
+                <div style="margin-bottom: 0.65rem; display:flex; justify-content:space-between; align-items:end; flex-wrap:wrap; gap:0.5rem;">
+                    <div>
+                        <h4 style="margin: 0;">Best assets in-flight</h4>
+                        <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Top-performing paid + organic asset in the selected window. Defaults to year-to-date.</div>
+                    </div>
+                    <div style="display:flex; gap:0.4rem; align-items:end;">
+                        <div><label style="font-size:0.72rem; color: var(--text-secondary);">Window</label>
+                            <select id="iiqInFlightWindow" onchange="reloadIntentIQInFlight()" style="display:block; background: rgba(0,0,0,0.4); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 0.3rem 0.5rem; font-size:0.78rem;">
+                                <option value="ytd" selected>Year-to-date (YTD)</option>
+                                <option value="14d">Last 14 days</option>
+                                <option value="30d">Last 30 days</option>
+                                <option value="90d">Last 90 days</option>
+                                <option value="365d">Last 365 days</option>
+                                <option value="all">Campaign-to-date</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
                 <div id="iiqInFlightBody"></div>
             </div>
 
@@ -19674,6 +19693,9 @@
                 var slug = window.__intentIQ.currentSlug;
                 if (!slug) return;
                 var params = new URLSearchParams();
+                var winEl = document.getElementById('iiqAssetWindow');
+                var win = winEl ? winEl.value : 'ytd';
+                params.set('window', win);
                 var ph = document.getElementById('iiqAssetFilterPhase').value;
                 var ty = document.getElementById('iiqAssetFilterType').value;
                 var po = document.getElementById('iiqAssetFilterPaid').value;
@@ -19688,6 +19710,7 @@
                     .then(function(d) {
                         if (!d.success) throw new Error(d.error || 'Failed');
                         var cards = (d.cards || []).slice();
+                        var winLabel = d.window_label || 'YTD';
                         var typeSel = document.getElementById('iiqAssetFilterType');
                         if (typeSel.options.length <= 1) {
                             var types = Array.from(new Set(cards.map(function(c) { return c.asset_type; }).filter(Boolean))).sort();
@@ -19706,10 +19729,10 @@
                         var topAsset = cards.slice().sort(function(a,b){ return (Number(b.ext_view_count)||0) - (Number(a.ext_view_count)||0); })[0];
                         var paidCount = cards.filter(function(c){ return c.paid_or_organic === 'paid'; }).length;
                         var orgCount  = cards.filter(function(c){ return c.paid_or_organic === 'organic' || c.paid_or_organic === 'natural'; }).length;
-                        document.getElementById('iiqAssetMeta').textContent = totalAssets + ' asset' + (totalAssets === 1 ? '' : 's');
+                        document.getElementById('iiqAssetMeta').textContent = totalAssets + ' asset' + (totalAssets === 1 ? '' : 's') + ' · ' + winLabel;
                         document.getElementById('iiqAssetSummary').innerHTML = [
-                            iiqSummaryTile('Total assets', fmtCompact(totalAssets), withViews + ' with measured views'),
-                            iiqSummaryTile('Total views', fmtCompact(totalViews), 'across all measured assets'),
+                            iiqSummaryTile('Total assets', fmtCompact(totalAssets), withViews + ' with measured views · ' + winLabel),
+                            iiqSummaryTile('Total views', fmtCompact(totalViews), 'across measured assets in window'),
                             iiqSummaryTile('Total engagement', fmtCompact(totalEng), 'likes + comments + shares'),
                             iiqSummaryTile('Paid / Organic mix', paidCount + ' / ' + orgCount, (topAsset && topAsset.action_label ? 'Top: ' + topAsset.action_label + ' (' + fmtCompact(topAsset.ext_view_count) + ' views)' : ''))
                         ].join('');
@@ -19802,27 +19825,36 @@
                 var slug = window.__intentIQ.currentSlug;
                 if (!slug) return;
                 var asOf = document.getElementById('iiqAsOf').value;
-                var url = '/api/intent/' + slug + '/in_flight' + (asOf ? ('?as_of=' + encodeURIComponent(asOf)) : '');
+                var winSel = document.getElementById('iiqInFlightWindow');
+                var win = winSel ? winSel.value : 'ytd';
+                var params = new URLSearchParams();
+                params.set('window', win);
+                if (asOf) params.set('as_of', asOf);
+                var url = '/api/intent/' + slug + '/in_flight?' + params.toString();
                 document.getElementById('iiqInFlightBody').innerHTML = 'Loading...';
                 fetch(url, { credentials: 'same-origin' }).then(function(r) { return r.json(); })
                     .then(function(d) {
                         if (!d.success) { document.getElementById('iiqInFlightBody').innerHTML = escapeHtml(d.error || 'Failed'); return; }
-                        function pickCard(label, c) {
-                            if (!c) return '<div class="iiq-card"><div class="iiq-card-title">' + label + '</div><div class="iiq-empty">No asset in 14d window.</div></div>';
-                            return '<div class="iiq-card">'
+                        var winLabel = d.window_label || 'YTD';
+                        function pickCard(label, edgeColor, c) {
+                            if (!c) return '<div class="iiq-card" style="border-left: 3px solid #64748b;"><div class="iiq-card-title">' + label + '</div><div class="iiq-empty">No asset in ' + escapeHtml(winLabel) + ' window.</div></div>';
+                            var v = Number(c.views_total) || 0;
+                            return '<div class="iiq-card" style="border-left: 3px solid ' + edgeColor + ';">'
                                 + '<div class="iiq-card-title">' + label + '</div>'
-                                + '<div class="iiq-card-meta">' + escapeHtml(c.action_label || c.asset_type) + '</div>'
-                                + '<div class="iiq-card-meta">Type: ' + escapeHtml(c.asset_type) + '</div>'
-                                + '<div class="iiq-card-meta">Posted: ' + escapeHtml(c.posted_date) + '</div>'
-                                + '<div class="iiq-card-meta">7d views: <strong>' + fmtInt(c.views_total) + '</strong></div>'
-                                + (c.url ? '<div style="margin-top:0.35rem;"><a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener" style="color: var(--accent-cyan, #5a9ad9);">Open asset</a></div>' : '')
+                                + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.action_label || c.asset_type || '') + ' · ' + escapeHtml(c.asset_type || '') + '</div>'
+                                + '<div style="margin-top:0.55rem;">'
+                                    + '<div style="font-size:1.45rem; font-weight:700; color:#fff; line-height:1;">' + fmtCompact(v) + '</div>'
+                                    + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7; margin-top:0.15rem;">views (' + escapeHtml(winLabel) + ')</div>'
+                                + '</div>'
+                                + '<div class="iiq-card-meta" style="margin-top:0.55rem; font-size:0.72rem; opacity:0.7;">Posted ' + escapeHtml(c.posted_date) + '</div>'
+                                + (c.url ? '<div style="margin-top:0.35rem;"><a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener" style="color: var(--accent-cyan, #5a9ad9); font-size:0.78rem;">Open asset</a></div>' : '')
                                 + '</div>';
                         }
                         document.getElementById('iiqInFlightBody').innerHTML =
-                            '<p style="color: var(--text-secondary); font-size: 0.82rem; margin-bottom: 0.75rem;">As-of: ' + escapeHtml(d.as_of) + (d.fallback ? ' (fallback — ClickHouse unreachable)' : '') + '</p>'
+                            '<p style="color: var(--text-secondary); font-size: 0.78rem; margin-bottom: 0.75rem;">Window: <strong>' + escapeHtml(winLabel) + '</strong> · As-of: ' + escapeHtml(d.as_of) + (d.fallback ? ' (fallback — ClickHouse unreachable)' : '') + '</p>'
                             + '<div class="iiq-cards-grid">'
-                            + pickCard('🏆 Best PAID (last 14d)', d.best_paid)
-                            + pickCard('🌱 Best ORGANIC (last 14d)', d.best_organic)
+                            + pickCard('🏆 Best PAID', '#22d3ee', d.best_paid)
+                            + pickCard('🌱 Best ORGANIC', '#22c55e', d.best_organic)
                             + '</div>';
                     })
                     .catch(function(e) {
