@@ -19799,12 +19799,17 @@
 
             function iiqBarRow(label, value, maxValue, color, subLabel, subValue) {
                 var pct = (maxValue > 0) ? Math.min(100, (value / maxValue) * 100) : 0;
-                return '<div style="display:grid; grid-template-columns: 200px 1fr auto; gap:0.65rem; align-items:center; padding:0.4rem 0;">'
-                    + '<div style="font-size:0.78rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(label) + '">' + escapeHtml(label) + (subLabel ? ' <span style="color: var(--text-secondary); font-size:0.7rem;">' + escapeHtml(subLabel) + '</span>' : '') + '</div>'
+                // All four columns are fixed widths (except the bar column,
+                // which is 1fr so it fills the available space identically
+                // across every row). This guarantees bars end at the same
+                // x-position and value/subValue columns line up vertically.
+                return '<div style="display:grid; grid-template-columns: 240px 1fr 90px 120px; gap:0.65rem; align-items:center; padding:0.4rem 0;">'
+                    + '<div style="font-size:0.78rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(label) + (subLabel ? ' ' + escapeHtml(subLabel) : '') + '">' + escapeHtml(label) + (subLabel ? ' <span style="color: var(--text-secondary); font-size:0.7rem;">' + escapeHtml(subLabel) + '</span>' : '') + '</div>'
                     + '<div style="background: rgba(255,255,255,0.06); height: 18px; border-radius: 4px; overflow:hidden;">'
                     +     '<div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + color + '; transition: width 0.4s ease;"></div>'
                     + '</div>'
-                    + '<div style="font-size:0.85rem; font-weight:600; color:#fff; text-align:right; min-width:80px;">' + fmtCompact(value) + (subValue ? ' <span style="color: var(--text-secondary); font-weight:400; font-size:0.7rem;">' + escapeHtml(subValue) + '</span>' : '') + '</div>'
+                    + '<div style="font-size:0.85rem; font-weight:600; color:#fff; text-align:right; white-space:nowrap;">' + fmtCompact(value) + '</div>'
+                    + '<div style="font-size:0.7rem; font-weight:400; color: var(--text-secondary); text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(subValue || '') + '">' + escapeHtml(subValue || '') + '</div>'
                     + '</div>';
             }
 
