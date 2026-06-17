@@ -37696,7 +37696,23 @@
                 }).join('');
             };
 
-            var stopHtml = lifecycle.stops.map(function(s, i) {
+            // ─── Expand-all / Collapse-all controls (rendered above the stack) ───
+            var maxResearchers = lifecycle.stops.reduce(function(m, x) {
+                return Math.max(m, x.researchers_at_stop || 0);
+            }, 1);
+
+            var controlsHtml = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:0.6rem;flex-wrap:wrap;">'
+                + '<div style="font-size:0.72rem;color:var(--text-secondary);">'
+                + '<span style="display:inline-block;width:10px;height:10px;background:#5b6cff;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>'
+                + 'Each row is one stop in the digital research journey, in order. Click a row to expand for the full detail.'
+                + '</div>'
+                + '<div style="display:flex;gap:6px;">'
+                + '<button id="jiqLifecycleExpandAll" type="button" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 11px;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;">Expand all</button>'
+                + '<button id="jiqLifecycleCollapseAll" type="button" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 11px;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;">Collapse all</button>'
+                + '</div>'
+                + '</div>';
+
+            var stopHtml = controlsHtml + lifecycle.stops.map(function(s, i) {
                 var dwellLabel = (s.avg_dwell_minutes > 0)
                     ? (s.avg_dwell_minutes + ' min avg · range ' + s.dwell_p25 + '–' + s.dwell_p75)
                     : 'no active dwell — wait state';
@@ -37709,30 +37725,55 @@
                 var abW  = (abandon / splitTotal) * 100;
 
                 var ci = s.chime_intercept || {};
+                var isLast = (i === lifecycle.stops.length - 1);
 
-                return '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-left:5px solid #5b6cff;border-radius:12px;padding:1rem 1.1rem;">'
-                     // Header row
-                     + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:0.4rem;flex-wrap:wrap;">'
-                     +   '<div style="display:flex;align-items:center;gap:10px;min-width:0;">'
-                     +     '<div style="font-size:1.6rem;line-height:1;">' + _jiqEsc(s.emoji || '◆') + '</div>'
-                     +     '<div style="min-width:0;">'
-                     +       '<div style="font-weight:700;font-size:1.0rem;line-height:1.2;">'
-                     +         '<span style="color:var(--text-secondary);font-weight:600;font-size:0.78rem;letter-spacing:0.05em;text-transform:uppercase;">stop ' + (i + 1) + ' · day ' + (s.avg_day_from_start || 0) + '</span>'
-                     +         '<span style="margin:0 6px;color:var(--text-secondary);">·</span>'
-                     +         _jiqEsc(s.name || '')
-                     +       '</div>'
-                     +       '<div style="font-size:0.78rem;color:var(--text-secondary);margin-top:3px;">' + _jiqEsc(s.one_liner || '') + '</div>'
-                     +     '</div>'
-                     +   '</div>'
-                     +   '<div style="text-align:right;min-width:160px;">'
-                     +     '<div style="font-size:1.05rem;font-weight:800;color:var(--text-primary);font-variant-numeric:tabular-nums;line-height:1;">' + _jiqFmt(s.researchers_at_stop || 0) + '</div>'
-                     +     '<div style="font-size:0.66rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">researchers reach this stop · ' + (s.pct_researchers_hit || 0) + '%</div>'
-                     +     '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:4px;">' + _jiqEsc(dwellLabel) + '</div>'
-                     +   '</div>'
+                // Survivorship bar at far-left of the summary — shows the funnel narrowing
+                var survW = Math.max(2, Math.round((s.researchers_at_stop || 0) / maxResearchers * 100));
+
+                // ─── Collapsed summary row (always visible) ───
+                var summaryHtml = '<summary class="jiq-stop-summary" style="cursor:pointer;list-style:none;padding:0.65rem 0.9rem;display:grid;grid-template-columns:42px 36px 1fr auto;gap:12px;align-items:center;user-select:none;">'
+                    // Stop number / day badge
+                    + '<div style="text-align:center;">'
+                    +   '<div style="font-weight:800;font-size:0.78rem;color:#5b6cff;line-height:1;">' + String(i + 1).padStart(2, '0') + '</div>'
+                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">day ' + (s.avg_day_from_start || 0) + '</div>'
+                    + '</div>'
+                    // Emoji
+                    + '<div style="font-size:1.5rem;line-height:1;text-align:center;">' + _jiqEsc(s.emoji || '◆') + '</div>'
+                    // Name + one-liner
+                    + '<div style="min-width:0;">'
+                    +   '<div style="font-weight:700;font-size:0.92rem;color:var(--text-primary);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _jiqEsc(s.name || '') + '</div>'
+                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _jiqEsc(s.one_liner || '') + '</div>'
+                    + '</div>'
+                    // Right-side: survivorship bar + count + 3-tone split + chevron
+                    + '<div style="display:flex;align-items:center;gap:14px;">'
+                    +   '<div style="text-align:right;min-width:120px;">'
+                    +     '<div style="font-size:0.92rem;font-weight:800;color:var(--text-primary);font-variant-numeric:tabular-nums;line-height:1;">' + _jiqFmt(s.researchers_at_stop || 0) + '</div>'
+                    +     '<div style="font-size:0.58rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">' + (s.pct_researchers_hit || 0) + '% of researchers</div>'
+                    +     '<div style="background:var(--bg-secondary);border-radius:3px;height:5px;margin-top:4px;overflow:hidden;">'
+                    +       '<div style="width:' + survW + '%;height:100%;background:linear-gradient(90deg,#5b6cff,#a855f7);"></div>'
+                    +     '</div>'
+                    +   '</div>'
+                    // Mini advance/park/abandon strip
+                    +   '<div title="advance / park / abandon" style="display:flex;width:90px;height:14px;border-radius:4px;overflow:hidden;background:var(--bg-secondary);flex-shrink:0;">'
+                    +     '<div style="width:' + advW + '%;background:#10b981;"></div>'
+                    +     '<div style="width:' + parkW + '%;background:#fbbf24;"></div>'
+                    +     '<div style="width:' + abW + '%;background:#ef4444;"></div>'
+                    +   '</div>'
+                    +   '<div class="jiq-chev" style="font-size:0.78rem;color:var(--text-secondary);width:14px;text-align:center;transition:transform 0.15s;">▸</div>'
+                    + '</div>'
+                    + '</summary>';
+
+                // ─── Expanded body (only renders when <details> is open) ───
+                var bodyHtml = '<div style="padding:0.85rem 1rem 1rem;border-top:1px solid var(--border-color);">'
+                     // Top stats strip (dwell, % hit, count)
+                     + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.85rem;">'
+                     +   '<div><strong style="color:var(--text-primary);">⏱ Dwell:</strong> ' + _jiqEsc(dwellLabel) + '</div>'
+                     +   '<div><strong style="color:var(--text-primary);">📅 Day:</strong> ' + (s.avg_day_from_start || 0) + ' from journey start</div>'
+                     +   '<div><strong style="color:var(--text-primary);">👥 Reach:</strong> ' + _jiqFmt(s.researchers_at_stop || 0) + ' researchers · ' + (s.pct_researchers_hit || 0) + '%</div>'
                      + '</div>'
 
                      // Two-column body
-                     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:0.6rem;">'
+                     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">'
                      +   '<div>'
                      +     '<div style="font-weight:600;font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">Where they are</div>'
                      +     fmtPctList(s.top_surfaces, 'surface', 'pct')
@@ -37763,7 +37804,7 @@
                             + '</div>')
                          : '')
 
-                     // Forward / Park / Abandon strip
+                     // Forward / Park / Abandon strip (full)
                      + '<div style="margin-top:0.85rem;padding-top:0.7rem;border-top:1px dashed var(--border-color);">'
                      +   '<div style="font-weight:600;font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">Where they go from here</div>'
                      +   '<div style="display:flex;gap:0;width:100%;height:22px;border-radius:6px;overflow:hidden;background:var(--bg-secondary);">'
@@ -37798,8 +37839,41 @@
                             + '</div>')
                          : '')
                      + '</div>';
+
+                // Wrap in <details> + container with vertical connector
+                return '<div style="position:relative;">'
+                     + '<details class="jiq-stop-details" style="background:var(--bg-card);border:1px solid var(--border-color);border-left:5px solid #5b6cff;border-radius:10px;overflow:hidden;">'
+                     +   summaryHtml
+                     +   bodyHtml
+                     + '</details>'
+                     + (isLast ? '' : '<div aria-hidden="true" style="width:2px;height:8px;background:linear-gradient(180deg,#5b6cff,#a855f7);margin:0 auto;opacity:0.55;"></div>')
+                     + '</div>';
             }).join('');
             listEl.innerHTML = stopHtml;
+
+            // Inject a tiny style block (idempotent) for chevron-rotate on open + summary hover.
+            if (!document.getElementById('jiqLifecycleStyle')) {
+                var st = document.createElement('style');
+                st.id = 'jiqLifecycleStyle';
+                st.textContent = ''
+                    + '#jiqLifecycleStops summary.jiq-stop-summary::-webkit-details-marker { display:none; }'
+                    + '#jiqLifecycleStops summary.jiq-stop-summary { transition: background-color 0.12s; }'
+                    + '#jiqLifecycleStops summary.jiq-stop-summary:hover { background: rgba(91,108,255,0.06); }'
+                    + '#jiqLifecycleStops details.jiq-stop-details[open] > summary.jiq-stop-summary { background: rgba(91,108,255,0.08); }'
+                    + '#jiqLifecycleStops details.jiq-stop-details[open] > summary.jiq-stop-summary .jiq-chev { transform: rotate(90deg); color: #5b6cff; }';
+                document.head.appendChild(st);
+            }
+
+            // Wire up expand-all / collapse-all controls
+            var expandBtn   = document.getElementById('jiqLifecycleExpandAll');
+            var collapseBtn = document.getElementById('jiqLifecycleCollapseAll');
+            var allDetails  = function() { return listEl.querySelectorAll('details.jiq-stop-details'); };
+            if (expandBtn) expandBtn.onclick = function() {
+                allDetails().forEach(function(d) { d.open = true; });
+            };
+            if (collapseBtn) collapseBtn.onclick = function() {
+                allDetails().forEach(function(d) { d.open = false; });
+            };
 
             // Chime media-buy prescription summary
             var presEl = document.getElementById('jiqLifecyclePrescription');
