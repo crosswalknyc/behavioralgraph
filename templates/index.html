@@ -19525,12 +19525,13 @@
                     return;
                 }
                 var US_ADULT_POP = 258000000;
-                // Color the left border by source so users can see at a glance
-                // which numbers are panel-measured vs. external-estimate
+                // Left-border color still encodes provenance (green=panel
+                // measured, amber=external estimate) - the chip text was
+                // freeing up to show the actual subject, not the source.
                 var srcColor = function(s) {
                     if (!s) return '#3b3b3b';
-                    if (s.indexOf('panel') === 0) return '#22c55e';        // green: measured
-                    if (s.indexOf('external') === 0) return '#f59e0b';      // amber: estimate
+                    if (s.indexOf('panel') === 0) return '#22c55e';
+                    if (s.indexOf('external') === 0) return '#f59e0b';
                     return '#3b3b3b';
                 };
                 var srcLabel = function(s) {
@@ -19539,7 +19540,36 @@
                     if (s.indexOf('external') === 0) return 'External estimate';
                     return s;
                 };
-                // Sort: real values first (descending), then "—" entries
+                // Strip the "Fans of " prefix / "(Cast)" / "(last 3y)" suffix
+                // so the chip shows the actual subject ("Steph Curry",
+                // "Family Animated Films") instead of the source label
+                var subjectFromDisplay = function(display) {
+                    if (!display) return '';
+                    var s = String(display);
+                    s = s.replace(/^Fans of\s+/i, '');
+                    s = s.replace(/\s*\(Cast\)\s*$/i, '');
+                    s = s.replace(/\s*\(last\s+\d+\s*y\)\s*$/i, '');
+                    s = s.replace(/\s*\(incl\..*?\)\s*$/i, '');
+                    return s.trim();
+                };
+                // Render the "are X" tail after "(~Nm people)" so the
+                // number reads as a sentence. Talent cards become
+                // "are Steph Curry fans", genre cards "are Family
+                // Animated Films fans", demo cards "are Black moviegoers"
+                var descriptorFromCard = function(c) {
+                    var subj = subjectFromDisplay(c.display || c.subject_key);
+                    if (!subj) return '';
+                    var cat = (c.category || '').toUpperCase();
+                    if (cat === 'TALENT') return 'are ' + subj + ' fans';
+                    if (cat === 'SPORT') return 'are ' + subj + ' fans';
+                    if (cat === 'STUDIO') return 'are ' + subj + ' fans';
+                    if (cat === 'GENRE') return 'are ' + subj + ' fans';
+                    if (cat === 'DEMO') {
+                        // "Black Moviegoers" / "Hispanic Moviegoers" - already a noun phrase
+                        return 'are ' + subj.charAt(0).toUpperCase() + subj.slice(1).toLowerCase();
+                    }
+                    return 'match the ' + subj + ' cohort';
+                };
                 var sorted = cards.slice().sort(function(a, b) {
                     var av = (a.overlap_bp !== null && a.overlap_bp !== undefined) ? Number(a.overlap_bp) : -1;
                     var bv = (b.overlap_bp !== null && b.overlap_bp !== undefined) ? Number(b.overlap_bp) : -1;
@@ -19555,15 +19585,20 @@
                         usAdults >= 1e3 ? Math.round(usAdults/1e3) + 'K' : usAdults;
                     var barPct = (bp !== null && maxBp > 0) ? (bp / maxBp * 100) : 0;
                     var color = srcColor(c.source);
+                    var subj = subjectFromDisplay(c.display || c.subject_key);
+                    var descriptor = descriptorFromCard(c);
                     var sourceTip = srcLabel(c.source);
-                    return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';">'
+                    return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';" title="' + escapeHtml(sourceTip) + (c.source ? ': ' + escapeHtml(c.source) : '') + '">'
                         + '<div class="iiq-card-title">' + escapeHtml(c.display || c.subject_key) + '</div>'
-                        + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.65;">' + escapeHtml(c.category || '—')
-                            + (sourceTip ? ' <span style="opacity:0.55;">·</span> <span title="' + escapeHtml(c.source || '') + '" style="color:' + color + '; opacity:0.85;">' + escapeHtml(sourceTip) + '</span>' : '')
+                        + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '—')
+                            + (subj ? ' <span style="opacity:0.5;">·</span> <span style="color:' + color + ';">' + escapeHtml(subj) + '</span>' : '')
                             + '</div>'
-                        + '<div style="margin-top:0.65rem;" title="Share of US adults estimated to overlap with both this cohort and the GOAT moviegoing audience">'
+                        + '<div style="margin-top:0.65rem;" title="Share of US adults estimated to overlap with both this cohort and the title\'s moviegoing audience">'
                             + '<div style="font-size:1.45rem; font-weight:700; color:#fff; line-height:1;">' + bpStr + '</div>'
-                            + '<div class="iiq-card-meta" style="margin-top:0.15rem;">of US adults' + (usAdults !== null ? ' <span style="opacity:0.55;">(~' + usAdultsFmt + ' people)</span>' : '') + '</div>'
+                            + '<div class="iiq-card-meta" style="margin-top:0.2rem; line-height:1.35;">of US adults'
+                                + (usAdults !== null ? ' <span style="opacity:0.55;">(~' + usAdultsFmt + ' people)</span>' : '')
+                                + (descriptor ? ' ' + escapeHtml(descriptor) : '')
+                                + '</div>'
                         + '</div>'
                         + (bp !== null ? '<div style="margin-top:0.55rem; background: rgba(255,255,255,0.08); height:5px; border-radius: 3px; overflow:hidden;">'
                             + '<div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + color + ';"></div>'
