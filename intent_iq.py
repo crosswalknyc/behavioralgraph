@@ -882,43 +882,140 @@ def _q5_trailer_viewership_curve(title_slug: str) -> dict:
 
 
 def _q6_audience_shift_over_campaign(title_slug: str) -> dict:
-    """For each audience-of-interest, daily overlap BP across the campaign."""
+    """Per-cohort daily engagement with campaign content.
+
+    Returns ALL cohort engagement series for a title (moviegoing
+    frequency + every audience cohort that appears in
+    intent.title_audience_overlap), each with metadata the UI needs to
+    let the user toggle which to display:
+
+        cohorts: [{
+            cohort_slug, display, category, archetype, panel_count,
+            total_engagers, peak_engagers, peak_engagement_pct,
+            peak_date, today_engagement_pct,
+            points: [{date, engagers, engagement_pct}, ...]
+        }]
+
+    Categories from intent.title_audience_overlap (DEMO, PLATFORM,
+    GENRE, FRANCHISE, TALENT, STUDIO, SPORT) plus a MOVIEGOING_FREQ
+    bucket for the 4 frequency cohorts. The frontend groups its
+    cohort picker by category.
+
+    engagement_pct = % of the cohort's panel that engaged with any GOAT
+    campaign asset on that day (basis points / 100). Clearer than the
+    raw bp value the old UI surfaced.
+    """
     ch = _ch_client()
     if ch is None:
-        return {"success": True, "fallback": True,
-                 "note": "Requires intent.cohort_engagement_daily populated by the "
-                          "nightly cohort-engagement aggregator."}
+        return {"success": True, "fallback": True, "cohorts": [],
+                "note": "ClickHouse unreachable."}
     try:
+        # cohort metadata: 4 moviegoing + N audience-of-interest
+        meta: dict[str, dict] = {}
+
+        # 1) Moviegoing-frequency cohorts (always shown, default-selected).
+        try:
+            mg_rows = ch.query(
+                "SELECT cohort_slug, COALESCE(display_name, cohort_slug), panel_count, "
+                "gen_pop_share FROM intent.moviegoing_cohorts FINAL"
+            ).result_rows
+            for slug, disp, panel, share in mg_rows:
+                meta[slug] = {
+                    "cohort_slug":   slug,
+                    "display":       disp or slug.title() + " Moviegoers",
+                    "category":      "MOVIEGOING_FREQ",
+                    "archetype":     "moviegoing",
+                    "panel_count":   int(panel or 0),
+                    "gen_pop_share": float(share or 0),
+                    "default_on":    True,
+                }
+        except Exception as e:
+            logger.info("Q6: moviegoing_cohorts read failed: %s", e)
+
+        # 2) Audience-of-interest cohorts (subject_key from
+        # title_audience_overlap; panel = 17M * overlap_bp / 10000).
+        PANEL_TOTAL = 17_000_000
+        aud_rows = ch.query(
+            "SELECT subject_key, subject_display, category, overlap_bp "
+            "FROM intent.title_audience_overlap FINAL "
+            f"WHERE title_slug = '{title_slug}'"
+        ).result_rows
+        for slug, disp, cat, bp in aud_rows:
+            if slug in meta:
+                continue
+            meta[slug] = {
+                "cohort_slug":   slug,
+                "display":       disp or slug,
+                "category":      (cat or "AUDIENCE").upper(),
+                "archetype":     "audience",
+                "panel_count":   int(PANEL_TOTAL * (float(bp or 0) / 10000.0)),
+                "gen_pop_share": float(bp or 0) / 100.0,  # as percent
+                "default_on":    False,
+            }
+
+        if not meta:
+            return {"success": True, "cohorts": [],
+                    "note": "No cohorts found for this title."}
+
+        # 3) Daily series for every cohort
+        slugs_in = ",".join("'" + s + "'" for s in meta.keys())
         sql = f"""
-        SELECT date, cohort_slug,
-               sum(panelist_count) AS panelists,
+        SELECT cohort_slug, date,
+               sum(panelist_count) AS engagers,
                avg(engagement_bp)  AS engagement_bp
         FROM intent.cohort_engagement_daily FINAL
-        WHERE title_slug = '{title_slug}'
-        GROUP BY date, cohort_slug
-        ORDER BY date, cohort_slug
+        WHERE title_slug = '{title_slug}' AND cohort_slug IN ({slugs_in})
+        GROUP BY cohort_slug, date
+        ORDER BY cohort_slug, date
         """
         rows = ch.query(sql).result_rows
-        out = _rows_to_dicts(rows, ["date", "cohort_slug", "panelists",
-                                       "engagement_bp"])
-        for r in out:
-            r["date"] = _safe_iso_date(r["date"])
 
-        crossover_date = None
-        by_cohort: dict[str, list] = defaultdict(list)
-        for r in out:
-            by_cohort[r["cohort_slug"]].append(r)
-        if "weekly" in by_cohort and "occasional" in by_cohort:
-            weekly = {x["date"]: x["engagement_bp"] for x in by_cohort["weekly"]}
-            occ = {x["date"]: x["engagement_bp"] for x in by_cohort["occasional"]}
-            for d in sorted(set(weekly) | set(occ)):
-                if (occ.get(d, 0) or 0) > (weekly.get(d, 0) or 0):
-                    crossover_date = d
-                    break
+        from collections import defaultdict as _dd
+        series_by_slug: dict[str, list[dict]] = _dd(list)
+        for slug, dt, engagers, bp in rows:
+            series_by_slug[slug].append({
+                "date":           _safe_iso_date(dt),
+                "engagers":       int(engagers or 0),
+                "engagement_pct": float(bp or 0) / 100.0,  # bp -> percent
+            })
 
-        return {"success": True, "shift_curves": out,
-                 "crossover_date": crossover_date}
+        out_cohorts = []
+        for slug, m in meta.items():
+            pts = series_by_slug.get(slug, [])
+            if not pts:
+                continue
+            total_engagers = sum(p["engagers"] for p in pts)
+            peak = max(pts, key=lambda p: p["engagement_pct"])
+            today_pt = pts[-1] if pts else {}
+            out_cohorts.append({
+                **m,
+                "points":                pts,
+                "total_engagers":        total_engagers,
+                "peak_engagers":         peak["engagers"],
+                "peak_engagement_pct":   peak["engagement_pct"],
+                "peak_date":             peak["date"],
+                "today_engagement_pct":  today_pt.get("engagement_pct", 0.0),
+                "today_engagers":        today_pt.get("engagers", 0),
+            })
+
+        # Sort cohorts: default-on first, then by total engagers
+        out_cohorts.sort(key=lambda c: (not c.get("default_on"), -c["total_engagers"]))
+
+        return {
+            "success": True,
+            "cohorts": out_cohorts,
+            "category_order": ["MOVIEGOING_FREQ", "TALENT", "DEMO",
+                                "FRANCHISE", "GENRE", "STUDIO", "PLATFORM",
+                                "SPORT", "AUDIENCE"],
+            "note": ("Each cohort's curve shows what % of that cohort's "
+                      "panel engaged with any GOAT campaign asset that day "
+                      "(views/likes/comments/shares on campaign URLs). "
+                      "Toggle cohorts on/off in the picker. Default selection "
+                      "is the four moviegoing-frequency cohorts; flip on any "
+                      "audience cohort to overlay how they're engaging."),
+        }
     except Exception as e:
+        logger.exception("Q6 failed")
         return {"success": False, "error": str(e)}
 
 
