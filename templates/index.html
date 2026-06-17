@@ -36209,8 +36209,8 @@
                     var brandShareTxt;
                     if (bk.customer_brand_share_pct_of_opens != null) {
                         brandShareTxt = brandName
-                            ? (brandName + ' = ' + Number(bk.customer_brand_share_pct_of_opens).toFixed(1) + '% of opens')
-                            : (Number(bk.customer_brand_share_pct_of_opens).toFixed(1) + '% of opens');
+                            ? (brandName + ' = ' + Number(bk.customer_brand_share_pct_of_opens).toFixed(1) + '% exposed')
+                            : (Number(bk.customer_brand_share_pct_of_opens).toFixed(1) + '% exposed');
                     }
                     k = [
                         ['Active researchers (window)',
@@ -36245,12 +36245,12 @@
                                 'magenta']);
                     }
                     if (brandName && bk.customer_brand_share_pct_of_opens != null) {
-                        k.push([brandName + ' share of opens',
+                        k.push([brandName + ' exposed',
                                 Number(bk.customer_brand_share_pct_of_opens).toFixed(1) + '%',
                                 (bk.customer_brand_addressable_pct != null
                                     ? 'addressable upside: ' + Number(bk.customer_brand_addressable_pct).toFixed(1) + 'pp · '
-                                       + fmt(bk.customer_brand_addressable_opens) + ' opens'
-                                    : 'category share — track WoW for steal-share signal'),
+                                       + fmt(bk.customer_brand_addressable_opens) + ' exposed'
+                                    : 'category exposure — track WoW for steal-share signal'),
                                 'magenta']);
                     }
                 } else if (targetType === 'tv_show' || kpis.tv_show_mode === true) {
