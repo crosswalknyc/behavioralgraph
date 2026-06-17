@@ -36305,16 +36305,6 @@
                             (avgBanks != null ? Number(avgBanks).toFixed(1) : '—'),
                             'PDPs visited per researcher before applying'],
                     ];
-                    // ─── MARKETING section ───
-                    // Magenta-accented tiles sit under a full-width section
-                    // header so the audience for these tiles (openers, not
-                    // researchers) is unambiguous.
-                    if (mktTouchedPct != null || (brandName && bk.customer_brand_share_pct_of_opens != null)) {
-                        k.push(['__section__',
-                                'MARKETING (out of the ' + fmt(totalOpens) + ' openers):',
-                                '',
-                                'magenta']);
-                    }
                     if (mktTouchedPct != null) {
                         k.push(['Marketing-touched %',
                                 pct(mktTouchedPct),
@@ -36539,16 +36529,6 @@
                                    : (accent === 'magenta') ? '#ec4899'
                                    : (accent === 'violet')  ? '#a78bfa'
                                    : 'var(--text-primary)';
-                    // Section-header sentinel: spans the full grid row,
-                    // rendered as an accent-colored band that visually
-                    // groups the tiles that follow.
-                    if (label === '__section__') {
-                        return '<div style="grid-column: 1 / -1; display:flex;align-items:center;gap:10px;margin:0.5rem 0 -0.1rem;">'
-                             +   '<div style="height:2px;flex:0 0 14px;background:' + valueColor + ';border-radius:2px;"></div>'
-                             +   '<div style="font-size:0.72rem;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:' + valueColor + ';white-space:nowrap;">' + _jiqEsc(value) + '</div>'
-                             +   '<div style="height:2px;flex:1;background:' + valueColor + ';opacity:0.45;border-radius:2px;"></div>'
-                             + '</div>';
-                    }
                     var border = accent ? '1px solid ' + valueColor : '1px solid var(--border-color)';
                     var labelHtml = _jiqEsc(label).replace(/\n/g, '<br>');
                     return '<div style="background: var(--bg-secondary); border: ' + border + '; border-radius: 8px; padding: 0.6rem 0.8rem 1.4rem; display: flex; flex-direction: column;">'
