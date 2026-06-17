@@ -40767,6 +40767,176 @@
                 }).join('')
                 + '</div>';
 
+            // ── Per-step hover-tooltip dictionary ──
+            // Maps a path step name (as it appears on the pills) to the
+            // surfaces / behaviors that comprise that step. Hover any
+            // pill in the Top-observed-paths table to see the breakdown.
+            var STEP_TOOLTIPS_BANKING = {
+                'FIRST TOUCH POINT': {
+                    title: 'What counts as a FIRST TOUCH POINT',
+                    items: [
+                        'Bank app push / fee-charge notification (22.4%)',
+                        'Friend DM / text with referral link (18.8%)',
+                        'TikTok / Reels in-feed video (16.4%)',
+                        'Online news article — rate change / Fed (12.6%)',
+                        'Employer onboarding / direct-deposit prompt (9.8%)',
+                        'TurboTax / Intuit refund-routing flow (7.2%)',
+                        'CTV / streaming pre-roll seen in last 12h (4.8%)',
+                    ],
+                },
+                'CATEGORY RESEARCH': {
+                    title: 'What counts as CATEGORY RESEARCH',
+                    items: [
+                        'NerdWallet best-of editorial (64.2%)',
+                        'Bankrate rate tables (48.6%)',
+                        'WalletHub APY comparison (22.4%)',
+                        'Credit Karma savings tab (18.8%)',
+                        'Forbes Advisor best-of (14.2%)',
+                        'Google / Bing non-branded category search ("best HYSA", "no-fee checking")',
+                    ],
+                },
+                'BANK SHORTLIST FORMED': {
+                    title: 'What counts as BANK SHORTLIST FORMED',
+                    items: [
+                        'TikTok For You page — FinTok creators (62.4%)',
+                        'Instagram Reels / YouTube Shorts (38.4% / 22.6%)',
+                        'YouTube long-form bank review (28.8%)',
+                        'ChatGPT shortlist prompt (56.4% of AI users)',
+                        'Google Gemini / Perplexity bank shortlist',
+                        'Tabs bookmarked / saved-to-Notes from earlier search',
+                    ],
+                },
+                'BANK PDP — DEEP READ': {
+                    title: 'What counts as BANK PDP — DEEP READ',
+                    items: [
+                        'Bank PDP — rates / APY page (78.4%)',
+                        'Bank PDP — fees / disclosures page (54.6%)',
+                        'Bank PDP — features / product detail (48.6%)',
+                        'Bank PDP — FAQ (36.8%)',
+                        'Bank PDP — app store link click-through (28.4%)',
+                        'Bank PDP — sign-up flow start (22.6%)',
+                    ],
+                },
+                'VALIDATION (off-bank)': {
+                    title: 'What counts as VALIDATION (off-bank)',
+                    items: [
+                        'r/personalfinance subreddit (64.4%)',
+                        'r/SmallBusiness, r/CreditCards, r/StudentLoans cross-reads',
+                        'Bogleheads forum (6.2%)',
+                        'Doctor of Credit comments (5.4%)',
+                        'iOS App Store reviews / star rating (64.4%)',
+                        'Google Play reviews (38.2%)',
+                        'Trustpilot / BBB trust pages',
+                    ],
+                },
+                'CALCULATOR / QUOTE': {
+                    title: 'What counts as CALCULATOR / QUOTE',
+                    items: [
+                        'Bankrate savings calculator (48.4%)',
+                        'NerdWallet calculator widget (28.6%)',
+                        'Bank-brand-site calculator (36.4%)',
+                        'Calculator.net generic compounding calc (12.6%)',
+                        'Bankrate refi / mortgage calc (refinancer cohort, 18.4%)',
+                    ],
+                },
+                'APPLICATION STARTED': {
+                    title: 'What counts as APPLICATION STARTED',
+                    items: [
+                        'Bank application form — web (64.4%)',
+                        'Bank application form — mobile app (42.6%)',
+                        'ID-upload / KYC step (76.4%)',
+                        'SSN entry step',
+                        'Funding / direct-deposit setup step (62.4%)',
+                    ],
+                },
+                'NEW ACCOUNT OPENED': {
+                    title: 'What counts as NEW ACCOUNT OPENED',
+                    items: [
+                        'Confirmation page / email landed (96.4%)',
+                        'Bank app first login (78.6%)',
+                        'Direct-deposit setup screen completed (56.4%)',
+                        'Debit-card-en-route screen shown (48.4%)',
+                        'First sign-up bonus posted to the account',
+                    ],
+                },
+                'AI SEARCH': {
+                    title: 'What counts as AI SEARCH',
+                    items: [
+                        'ChatGPT bank shortlist prompt (56.4%)',
+                        'Google Gemini in-Search summary (28.8%)',
+                        'Perplexity bank comparison (18.6%)',
+                        'Claude (8.4%)',
+                        'In-aggregator AI summary widget (14.2%)',
+                    ],
+                },
+                'NEW ACCOUNT OPEN': {  // alias of NEW ACCOUNT OPENED
+                    title: 'What counts as NEW ACCOUNT OPEN',
+                    items: [
+                        'Confirmation page / email landed (96.4%)',
+                        'Bank app first login (78.6%)',
+                        'Direct-deposit setup screen completed (56.4%)',
+                        'Debit-card-en-route screen shown (48.4%)',
+                        'First sign-up bonus posted to the account',
+                    ],
+                },
+            };
+
+            // Idempotent style block + single floating tooltip element.
+            // Reused across every pill so the DOM stays tiny.
+            if (!document.getElementById('jiqPathPillTipStyle')) {
+                var pts = document.createElement('style');
+                pts.id = 'jiqPathPillTipStyle';
+                pts.textContent = ''
+                    + '.jiq-path-pill { cursor: help; transition: filter 0.12s, transform 0.12s; }'
+                    + '.jiq-path-pill:hover { filter: brightness(1.18); transform: translateY(-1px); }'
+                    + '#jiqPathPillTip { position: fixed; z-index: 10000; display: none; max-width: 360px; background: var(--bg-card, #1a1a1a); border: 1px solid var(--border-color, #333); border-radius: 8px; padding: 0.6rem 0.75rem; box-shadow: 0 8px 24px rgba(0,0,0,0.4); pointer-events: none; font-size: 0.74rem; line-height: 1.45; color: var(--text-primary, #fff); }'
+                    + '#jiqPathPillTip .jpt-h { font-weight: 800; font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 6px; }'
+                    + '#jiqPathPillTip ul { margin: 0; padding-left: 1rem; }'
+                    + '#jiqPathPillTip li { margin-bottom: 2px; }';
+                document.head.appendChild(pts);
+            }
+            if (!document.getElementById('jiqPathPillTip')) {
+                var tipEl = document.createElement('div');
+                tipEl.id = 'jiqPathPillTip';
+                document.body.appendChild(tipEl);
+            }
+            // Delegated mouse handlers: install ONCE per page-load on the
+            // top-paths container so re-renders don't accumulate listeners.
+            if (topPathsEl && !topPathsEl._jiqPillTipBound) {
+                topPathsEl._jiqPillTipBound = true;
+                var _tipShow = function(e) {
+                    var t = e.target;
+                    while (t && t !== topPathsEl && !(t.classList && t.classList.contains('jiq-path-pill'))) {
+                        t = t.parentNode;
+                    }
+                    if (!t || t === topPathsEl) return;
+                    var raw = t.getAttribute('data-tip');
+                    if (!raw) return;
+                    var tip = document.getElementById('jiqPathPillTip');
+                    if (!tip) return;
+                    tip.innerHTML = raw;
+                    tip.style.display = 'block';
+                    var rect = t.getBoundingClientRect();
+                    var tipRect = tip.getBoundingClientRect();
+                    var left = rect.left + (rect.width / 2) - (tipRect.width / 2);
+                    var top  = rect.top - tipRect.height - 8;
+                    if (top < 8) top = rect.bottom + 8;
+                    if (left < 8) left = 8;
+                    if (left + tipRect.width > window.innerWidth - 8) {
+                        left = window.innerWidth - tipRect.width - 8;
+                    }
+                    tip.style.left = left + 'px';
+                    tip.style.top  = top  + 'px';
+                };
+                var _tipHide = function() {
+                    var tip = document.getElementById('jiqPathPillTip');
+                    if (tip) tip.style.display = 'none';
+                };
+                topPathsEl.addEventListener('mouseover', _tipShow);
+                topPathsEl.addEventListener('mouseout',  _tipHide);
+                topPathsEl.addEventListener('mousemove', _tipShow);
+            }
+
             // Top paths table
             if (topPathsEl) {
                 if (!ptp.top_paths || !ptp.top_paths.length) {
@@ -40791,7 +40961,18 @@
                                 var label = (step === 'CHATBOT') ? 'AI SEARCH' : step;
                                 var color = colorFor(step);
                                 var arrow = (i < p.path.length - 1) ? ' <span style="color: var(--text-secondary); margin: 0 4px;">→</span> ' : '';
-                                return '<span style="display: inline-block; padding: 2px 8px; border-radius: 99px; background: ' + color + '; color: #fff; font-size: 11px; font-weight: 600;">'
+                                // Hover tooltip — show example surfaces that
+                                // make up this step. Currently sourced from
+                                // the banking lifecycle map; non-matching
+                                // steps just get a plain pill with no tip.
+                                var tipDef = _ptpIsBanking ? (STEP_TOOLTIPS_BANKING[label] || STEP_TOOLTIPS_BANKING[step]) : null;
+                                var dataTip = '';
+                                if (tipDef) {
+                                    var tipHtml = '<div class="jpt-h" style="color:' + color + ';">' + _jiqEsc(tipDef.title) + '</div>'
+                                                + '<ul>' + tipDef.items.map(function(it) { return '<li>' + _jiqEsc(it) + '</li>'; }).join('') + '</ul>';
+                                    dataTip = ' data-tip="' + tipHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"';
+                                }
+                                return '<span class="jiq-path-pill" style="display: inline-block; padding: 2px 8px; border-radius: 99px; background: ' + color + '; color: #fff; font-size: 11px; font-weight: 600;"' + dataTip + '>'
                                      + _jiqEsc(label) + '</span>' + arrow;
                             }).join('');
                             // Pct field is inconsistent across payload
