@@ -22192,9 +22192,6 @@
                                 <li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source (premier Netflix special, Amazon Prime tail, tour purchasers, SNL viral sketch, comp clips, co-lead actor halo). Bar = engager range (low–high).</li>
                                 <li><strong>Gross vs Deduplicated tiles:</strong> gross sums all layers (with overlap); dedup = true addressable audience after removing people who appear in multiple layers. The lime-bordered dedup tile is the answer.</li>
                                 <li><strong>Conversion Funnel (6 stages):</strong> narrows from 22–28M total engagers → high-intent multi-touchpoint → family ticket-buyer → opening-weekend tickets → group multiplier seats → total domestic run. Bar widths shrink so you can see drop-off magnitude.</li>
-                                <li><strong>Public Anchor Inputs table:</strong> source touchpoints + time period feeding the model.</li>
-                                <li><strong>Where the Crosswalk panel adds real lift:</strong> 5 cohort-level questions only the proprietary panel can answer (cross-platform stack, co-lead actor co-viewer, reality-TV business-show overlap, geographic concentration, faith/values).</li>
-                                <li><strong>MODELED TAKE (lime callout):</strong> single-sentence conclusion of the model.</li>
                             </ul>
                         </div>
                     </details>
@@ -22202,7 +22199,6 @@
                     <div id="jiqAnchorsRollup" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;"></div>
                     <div id="jiqAnchorsFunnelHeading" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Conversion Funnel to Opening Weekend</div>
                     <div id="jiqAnchorsFunnel" style="margin-bottom: 1rem;"></div>
-                    <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Public Anchor Inputs</div>
                     <div id="jiqAnchorsInputs" style="margin-bottom: 1rem; overflow-x: auto;"></div>
                     <div id="jiqAnchorsLift" style="margin-bottom: 0.85rem;"></div>
                     <div id="jiqAnchorsSanity" style="font-size: 0.78rem; color: var(--text-primary); background: var(--bg-secondary); border-left: 4px solid var(--accent-cyan); padding: 0.7rem 0.9rem; border-radius: 6px; margin-bottom: 0.5rem;"></div>
@@ -38789,7 +38785,6 @@
               +   '<li><strong>Gross vs Deduplicated tiles:</strong> gross sums all layers (with overlap); dedup = true addressable engager base after removing people who appear in multiple layers. The lime-bordered dedup tile is the answer.</li>'
               +   '<li><strong>Conversion Funnel (stages):</strong> narrows from total engagers → platform-subscribing high-intent → format / genre ready → <em>30-day unique viewers</em> (the streaming analog of "opening-weekend tickets") → premiere-week viewers → full-lifecycle viewers (30-day + 90-day tail) → total watch hours.</li>'
               +   '<li><strong>Methodology note:</strong> follows the same engager-funnel pattern Subscriber IQ uses for streaming viewership — public anchors only, then Crosswalk panel pull replaces with measured numbers.</li>'
-              +   '<li><strong>MODELED TAKE (lime callout):</strong> single-sentence conclusion. Mid-case viewers + watch hours, anchored to the closest streaming comp (e.g., Is It Cake, Cunk on Earth).</li>'
               + '</ul>';
 
             var fmt = function(n) {
@@ -38890,49 +38885,12 @@
                 }).join('');
             }
 
-            // ── Public anchor inputs table (SOURCE column suppressed if all blank)
-            var inputs = an.public_anchor_inputs || [];
             var inputsEl = document.getElementById('jiqAnchorsInputs');
-            if (inputsEl && inputs.length) {
-                var hasSource = inputs.some(function(r) { return r.source; });
-                var thStyle = 'text-align:left;padding:6px 8px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;font-size:0.65rem;letter-spacing:0.05em;';
-                inputsEl.innerHTML =
-                    '<table style="width:100%;border-collapse:collapse;font-size:0.76rem;">'
-                  +   '<thead><tr style="border-bottom:1px solid var(--border-color);">'
-                  +     '<th style="' + thStyle + '">Touchpoint</th>'
-                  +     '<th style="' + thStyle + '">Volume</th>'
-                  +     (hasSource ? '<th style="' + thStyle + '">Source</th>' : '')
-                  +     '<th style="' + thStyle + '">Period</th>'
-                  +   '</tr></thead>'
-                  +   '<tbody>'
-                  +   inputs.map(function(r) {
-                        return '<tr style="border-bottom:1px solid var(--border-color);">'
-                             +   '<td style="padding:6px 8px;color:var(--text-primary);font-weight:600;">' + _jiqEsc(r.touchpoint || '') + '</td>'
-                             +   '<td style="padding:6px 8px;color:var(--text-primary);">' + _jiqEsc(r.volume || '') + '</td>'
-                             +   (hasSource ? '<td style="padding:6px 8px;color:var(--text-secondary);">' + _jiqEsc(r.source || '') + '</td>' : '')
-                             +   '<td style="padding:6px 8px;color:var(--text-secondary);white-space:nowrap;">' + _jiqEsc(r.period || '') + '</td>'
-                             + '</tr>';
-                    }).join('')
-                  +   '</tbody></table>';
-            }
+            if (inputsEl) { inputsEl.innerHTML = ''; inputsEl.style.display = 'none'; }
 
-            // ── Crosswalk panel lift list (where the proprietary panel adds value)
-            var lift = an.crosswalk_panel_lift || [];
             var liftEl = document.getElementById('jiqAnchorsLift');
-            if (liftEl && lift.length) {
-                liftEl.innerHTML =
-                    '<div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-secondary);font-weight:600;margin-bottom:0.4rem;">Where the Crosswalk panel adds real lift</div>'
-                  + lift.map(function(item) {
-                        var name = Array.isArray(item) ? item[0] : (item.name || '');
-                        var desc = Array.isArray(item) ? item[1] : (item.description || '');
-                        return '<div style="display:grid;grid-template-columns:220px 1fr;gap:10px;padding:5px 0;border-bottom:1px solid var(--border-color);font-size:0.76rem;">'
-                             +   '<div style="font-weight:600;color:var(--text-primary);">' + _jiqEsc(name) + '</div>'
-                             +   '<div style="color:var(--text-secondary);">' + _jiqEsc(desc) + '</div>'
-                             + '</div>';
-                    }).join('');
-            }
+            if (liftEl) { liftEl.innerHTML = ''; liftEl.style.display = 'none'; }
 
-            // ── Sanity check + modeled take callouts (hide entirely when blank)
             var sanEl = document.getElementById('jiqAnchorsSanity');
             if (sanEl) {
                 if (an.sanity_check) {
@@ -38942,15 +38900,9 @@
                     sanEl.style.display = 'none';
                 }
             }
+
             var takeEl = document.getElementById('jiqAnchorsTake');
-            if (takeEl) {
-                if (an.modeled_take) {
-                    takeEl.innerHTML = '<strong style="color:var(--accent-lime);">MODELED TAKE · </strong>' + _jiqEsc(an.modeled_take);
-                    takeEl.style.display = '';
-                } else {
-                    takeEl.style.display = 'none';
-                }
-            }
+            if (takeEl) { takeEl.innerHTML = ''; takeEl.style.display = 'none'; }
         }
 
         // ───── Exhibitor Channel Mix renderer ─────
@@ -59241,19 +59193,34 @@
             // Back-compat fallback chain for older norms files (written
             // before weighted_avg_sample_size existed):
             //   1. prefer weighted_avg_sample_size
-            //   2. else legacy_weighted_avg_projection back-solved /
-            //      329.9M * 10M (sample-weighted avg of source projs,
-            //      back into a panel-sample number)
-            //   3. else nothing reliable — show 0 rather than the
-            //      inflated total_sample sum.
+            //      (canonical Rule #3a: sum(s_i^2) / sum(s_i))
+            //   2. else back-solve from legacy_weighted_avg_projection
+            //      (proj / 329.9M * 10M)
+            //   3. else simple arithmetic mean of profile sample sizes
+            //      (total_sample / profile_count) — used when the
+            //      cached norms file in S3 was written by a pre-Rule
+            //      #3a version of compute_category_norms.py and ships
+            //      only total_sample + profile_count. Per user request
+            //      2026-06-17: "the norm is showing sample size of 0
+            //      but should show the weighted average of the
+            //      profiles sample sizes" — never display 0 when we
+            //      have any real sample data to compute an average
+            //      from.
+            //   4. else 0 (truly no usable data).
             const _totalSample = (normPayload && Number(normPayload.total_sample)) || 0;
             const _backendAvgSample = (normPayload && Number(normPayload.weighted_avg_sample_size)) || 0;
             const _legacyProj = (normPayload && Number(normPayload.weighted_avg_projection)) || 0;
-            // Norm-row Sample Size: prefer the canonical weighted avg,
-            // else back-solve from legacy projection via Rule #3a, else 0.
-            const _normSample = _backendAvgSample > 0
-                ? _backendAvgSample
-                : (_legacyProj > 0 ? Math.round(_legacyProj / 329900000 * 10000000) : 0);
+            const _profileCount = (normPayload && Number(normPayload.profile_count)) || 0;
+            let _normSample;
+            if (_backendAvgSample > 0) {
+                _normSample = _backendAvgSample;
+            } else if (_legacyProj > 0) {
+                _normSample = Math.round(_legacyProj / 329900000 * 10000000);
+            } else if (_totalSample > 0 && _profileCount > 0) {
+                _normSample = Math.round(_totalSample / _profileCount);
+            } else {
+                _normSample = 0;
+            }
             // US #: derive from the Norm-row Sample Size by canonical
             // Rule #3a (Sample/10M*329.9M). This intentionally
             // SUPERSEDES the backend's pre-derived value when the
