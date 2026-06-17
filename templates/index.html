@@ -19909,10 +19909,9 @@
                 html += '<div style="font-size:0.75rem; color: var(--text-secondary); margin-bottom:0.4rem;">Mean 7-day views per asset, by content category</div>';
                 html += rows.map(function(r) {
                     var label = (r.asset_type || '(none)');
-                    var sub   = '(' + (r.paid_or_organic || 'unknown') + ', n=' + r.asset_count + ')';
                     var color = IIQ_QPALETTE[r.paid_or_organic] || IIQ_QPALETTE.unknown;
                     var subVal = 'median: ' + fmtCompact(r.median_views_7d);
-                    return iiqBarRow(label, Number(r.mean_views_7d)||0, maxV, color, sub, subVal);
+                    return iiqBarRow(label, Number(r.mean_views_7d)||0, maxV, color, '', subVal);
                 }).join('');
                 html += '</div>';
                 return html;
@@ -19957,10 +19956,9 @@
                     var maxBV = Math.max.apply(null, best.map(function(b){ return Number(b.views_total)||0; }).concat([1]));
                     html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Top 10 in-flight assets (last 14d)</div>';
                     html += best.slice(0,10).map(function(b) {
-                        var label = (b.action_label || b.asset_type || 'Asset #' + b.asset_id) + '  ';
-                        var sub = '· ' + (b.asset_type || '') + ' · ' + (b.paid_or_organic || '');
+                        var label = (b.action_label || b.asset_type || 'Asset #' + b.asset_id);
                         var color = IIQ_QPALETTE[b.paid_or_organic] || IIQ_QPALETTE.unknown;
-                        return iiqBarRow(label, Number(b.views_total)||0, maxBV, color, sub, 'eng ' + fmtCompact(b.engagement_total||0));
+                        return iiqBarRow(label, Number(b.views_total)||0, maxBV, color, '', 'eng ' + fmtCompact(b.engagement_total||0));
                     }).join('');
                     html += '</div>';
                 }
@@ -19981,8 +19979,7 @@
                     + '</div>';
                 html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Cast members ranked by total measured views</div>';
                 html += rows.map(function(r) {
-                    var sub = '(n=' + r.asset_count + ' assets)';
-                    return iiqBarRow(r.talent, Number(r.views_total)||0, maxV, '#f59e0b', sub, 'eng ' + fmtCompact(r.engagement_total||0));
+                    return iiqBarRow(r.talent, Number(r.views_total)||0, maxV, '#f59e0b', '', 'eng ' + fmtCompact(r.engagement_total||0));
                 }).join('');
                 html += '</div>';
                 if (d.note) html += '<p style="color: var(--text-secondary); font-size: 0.72rem; margin-top:0.6rem;">' + escapeHtml(d.note) + '</p>';
