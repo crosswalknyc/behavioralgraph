@@ -61305,7 +61305,13 @@
                         const label = entry.label || ('Run ' + (idx + 1));
                         span.textContent = label;
                         span.title = label;
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;';
+                        // Allow multi-word cohort labels ("Unprepared
+                        // Underdogs", "Worried Warriors") to wrap within
+                        // the 72px column instead of overflowing onto the
+                        // next header (user request 2026-06-17: "on
+                        // location it needs to also wrap" — same treatment
+                        // as behavioral cohort headers).
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;';
                         if (anchor) header.insertBefore(span, anchor);
                         else header.appendChild(span);
                     });
@@ -66711,7 +66717,10 @@
                 categories[item.category].push(item);
             });
             
-            // Sort and take top 5 per category; exclude index 0; sort by percentage descending
+            // Sort and take top 5 per category; exclude index 0; sort by percentage descending.
+            // Drop cards whose category name is empty/blank — those render as
+            // untitled cards on the page (user request 2026-06-17: "remove
+            // these from the interests page" → the 3 untitled top-row cards).
             const categoryCards = Object.entries(categories)
                 .map(([name, catItems]) => {
                     const nonZero = catItems.filter(i => Number(i.index) !== 0);
@@ -66721,7 +66730,7 @@
                     const avgPct = sorted.reduce((sum, i) => sum + (i.pct || 0), 0) / sorted.length;
                     return { name, items: sorted.slice(0, 5), avgIndex, avgPct };
                 })
-                .filter(c => c !== null)
+                .filter(c => c !== null && c.name && String(c.name).trim().length > 0)
                 .sort((a, b) => b.avgPct - a.avgPct)
                 .slice(0, 6);
             
