@@ -806,27 +806,42 @@ def get_in_flight(title_slug: str, as_of: Optional[str] = None) -> dict:
                  "best_paid": None, "best_organic": None}
     as_of_clause = f"AND a.posted_date <= '{as_of}'" if as_of else ""
     try:
-        sql = f"""
-        SELECT a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
-               a.url, a.posted_date, sum(e.views) AS views_total
-        FROM intent.campaign_assets a
-        LEFT JOIN intent.asset_engagement_daily e ON e.asset_id = a.asset_id
-        WHERE a.title_slug = '{title_slug}'
-          {as_of_clause}
-          AND a.posted_date >= addDays(coalesce({f"toDate('{as_of}')" if as_of else "today()"}, today()), -14)
-        GROUP BY a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
-                 a.url, a.posted_date
-        ORDER BY views_total DESC
-        """
-        rows = ch.query(sql).result_rows
-        cards = _rows_to_dicts(rows, ["asset_id", "action_label", "asset_type",
-                                         "paid_or_organic", "url", "posted_date",
-                                         "views_total"])
-        for c in cards:
-            c["posted_date"] = _safe_iso_date(c["posted_date"])
-        best_paid    = next((c for c in cards if c["paid_or_organic"] == "paid"),    None)
-        best_organic = next((c for c in cards if c["paid_or_organic"] == "organic"), None)
+        def _query_window(days_back: int):
+            sql = f"""
+            SELECT a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
+                   a.url, a.posted_date, sum(e.views) AS views_total
+            FROM intent.campaign_assets a
+            LEFT JOIN intent.asset_engagement_daily e ON e.asset_id = a.asset_id
+            WHERE a.title_slug = '{title_slug}'
+              {as_of_clause}
+              AND a.posted_date >= addDays(coalesce({f"toDate('{as_of}')" if as_of else "today()"}, today()), -{days_back})
+            GROUP BY a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
+                     a.url, a.posted_date
+            ORDER BY views_total DESC
+            """
+            rows = ch.query(sql).result_rows
+            cards = _rows_to_dicts(rows, ["asset_id", "action_label", "asset_type",
+                                             "paid_or_organic", "url", "posted_date",
+                                             "views_total"])
+            for c in cards:
+                c["posted_date"] = _safe_iso_date(c["posted_date"])
+            return cards
+
+        # Try 14d window first; if either paid or organic is missing,
+        # progressively widen so the panel always renders something useful.
+        windows_tried = []
+        cards: list = []
+        best_paid = None
+        best_organic = None
+        for window_days in (14, 30, 90, 365):
+            cards = _query_window(window_days)
+            windows_tried.append(window_days)
+            best_paid    = next((c for c in cards if c["paid_or_organic"] == "paid"),    None)
+            best_organic = next((c for c in cards if c["paid_or_organic"] == "organic"), None)
+            if best_paid and best_organic:
+                break
         return {"success": True, "as_of": as_of or _safe_iso_date(datetime.utcnow()),
+                 "window_days": windows_tried[-1],
                  "best_paid": best_paid, "best_organic": best_organic,
                  "all_candidates": cards[:25]}
     except Exception as e:
