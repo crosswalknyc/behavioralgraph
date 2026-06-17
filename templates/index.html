@@ -19352,6 +19352,9 @@
                 <div style="margin-bottom: 0.65rem;">
                     <h4 style="margin: 0;">Asset performance scoreboard</h4>
                     <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every individual marketing touchpoint in the campaign, ranked by measured engagement. Use this to drill into "which specific posts moved the needle" — the Questions tab rolls these up by category / paid-organic / talent.</div>
+                    <div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.25rem; opacity:0.85;">
+                        <strong style="color:#cbd5e1;">Views</strong> = impressions (how many times the asset was seen). <strong style="color:#cbd5e1;">Engagement</strong> = likes + comments + shares (active participation). <strong style="color:#cbd5e1;">Eng. rate</strong> = engagement / views — high rate means a small reach with a participatory audience; low rate means broad reach but passive consumption (typical of paid pre-roll).
+                    </div>
                 </div>
                 <div id="iiqAssetSummary" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;"></div>
                 <div class="iiq-asset-filter">
@@ -19359,7 +19362,7 @@
                     <div><label>Phase</label><select id="iiqAssetFilterPhase" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
                     <div><label>Type</label><select id="iiqAssetFilterType" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
                     <div><label>Paid / Organic</label><select id="iiqAssetFilterPaid" onchange="reloadIntentIQAssets()"><option value="">All</option><option value="paid">Paid</option><option value="organic">Organic</option><option value="unknown">Unknown</option></select></div>
-                    <div><label>Sort by</label><select id="iiqAssetSort" onchange="reloadIntentIQAssets()"><option value="views">Views (high → low)</option><option value="engagement">Engagement (high → low)</option><option value="date_desc">Date (newest first)</option><option value="date_asc">Date (oldest first)</option></select></div>
+                    <div><label title="Engagement = likes + comments + shares per asset">Sort by</label><select id="iiqAssetSort" onchange="reloadIntentIQAssets()"><option value="engagement" selected>Engagement (high → low)</option><option value="views">Views (high → low)</option><option value="date_desc">Date (newest first)</option><option value="date_asc">Date (oldest first)</option></select></div>
                     <div style="flex:1; text-align:right;"><span id="iiqAssetMeta" style="color: var(--text-secondary); font-size: 0.8rem;"></span></div>
                 </div>
                 <div class="iiq-cards-grid" id="iiqAssetGrid"></div>
@@ -19702,7 +19705,7 @@
                 var ty = document.getElementById('iiqAssetFilterType').value;
                 var po = document.getElementById('iiqAssetFilterPaid').value;
                 var sortEl = document.getElementById('iiqAssetSort');
-                var sortBy = sortEl ? sortEl.value : 'views';
+                var sortBy = sortEl ? sortEl.value : 'engagement';
                 if (ph) params.set('phase', ph);
                 if (ty) params.set('asset_type', ty);
                 if (po) params.set('paid_or_organic', po);
@@ -19757,8 +19760,9 @@
                                 + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '—') + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
                                 + '<div style="margin-top:0.55rem; display:flex; align-items:baseline; gap:0.55rem;">'
-                                    + '<div><div style="font-size:1.25rem; font-weight:700; color:#fff; line-height:1;">' + fmtCompact(v) + '</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">views</div></div>'
-                                    + '<div><div style="font-size:0.95rem; font-weight:600; color:#cbd5e1; line-height:1;">' + fmtCompact(e) + '</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">engagement</div></div>'
+                                    + '<div title="Total impressions - how many times the asset was seen"><div style="font-size:1.25rem; font-weight:700; color:#fff; line-height:1;">' + fmtCompact(v) + '</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">views</div></div>'
+                                    + '<div title="Likes + comments + shares - how many people did something with the asset, not just saw it"><div style="font-size:0.95rem; font-weight:600; color:#cbd5e1; line-height:1;">' + fmtCompact(e) + '</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">engagement</div></div>'
+                                    + (v > 0 ? '<div title="Engagement rate = engagement / views. Higher = more participatory audience."><div style="font-size:0.95rem; font-weight:600; color:#94a3b8; line-height:1;">' + (e/v*100).toFixed(2) + '%</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">eng. rate</div></div>' : '')
                                 + '</div>'
                                 + '<div style="margin-top:0.45rem; background: rgba(255,255,255,0.06); height:4px; border-radius: 2px; overflow:hidden;" title="' + barPct.toFixed(1) + '% of top performer">'
                                     + '<div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + edgeColor + ';"></div>'
