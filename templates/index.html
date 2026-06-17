@@ -19773,12 +19773,14 @@
             };
 
             // ===== Intent IQ Questions — sub-tabs + per-Q visualizations =====
-            // Intent IQ is about measuring intent, NOT forecasting. Q3 (box-
-            // office fine-tune) was removed per Jenna 2026-06-17 since it
-            // surfaces predictions rather than measurement signals.
+            // Intent IQ is about MEASURING intent, never forecasting. Q3 used
+            // to surface a box-office forecast; per Jenna 2026-06-17 it now
+            // measures ticket-buying intent for the subject (panel signals)
+            // alongside comparable titles' realized opening-weekend buyers.
             var IIQ_QMETA = {
                 q1: { short: 'Q1 · Content',     title: 'Q1. What content categories drive engagement?',                   intro: 'Mean 7-day views per asset, grouped by asset type and paid/organic. Higher = posts of that type tend to pull more eyeballs in their first week.' },
                 q2: { short: 'Q2 · Paid×Organic', title: 'Q2. How do paid and organic content interact?',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
+                q3: { short: 'Q3 · Intent to Buy', title: 'Q3. How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date — pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement — scaled by industry conversion rates. Nothing here is a forecast.' },
                 q4: { short: 'Q4 · Talent',       title: 'Q4. How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Q5 · Trailer',      title: 'Q5. How crucial is trailer viewership across the campaign life?', intro: 'Daily trailer views (across all trailer assets). Spikes mark trailer launches and refreshes.' },
                 q6: { short: 'Q6 · Audience shift', title: 'Q6. How do different audiences engage throughout the campaign?', intro: 'Daily engagement by moviegoing-frequency cohort. General audiences (occasional/bimonthly) typically dominate early; families intensify closer to release.' },
@@ -19966,6 +19968,104 @@
                 return html;
             }
 
+            function iiqRenderQ3(d) {
+                // Q3 = ticket-buying intent (measurement, no forecasting).
+                // d.subject  -> { display_name, opening_date, opening_weekend_buyers_projected, signals: [...], implied_opening_gross_usd, source }
+                // d.comps    -> [ { display_name, opening_date, opening_weekend_buyers, total_buyers, source } ]
+                // d.avg_ticket_price_usd, d.note
+                var subj  = d.subject || {};
+                var comps = (d.comps || []).slice();
+                var signals = subj.signals || [];
+                var projected = Number(subj.opening_weekend_buyers_projected) || 0;
+                var avgTicket = Number(d.avg_ticket_price_usd) || 13.51;
+
+                // top summary tiles
+                var topComp = comps.slice().sort(function(a,b){
+                    return (Number(b.opening_weekend_buyers)||0) - (Number(a.opening_weekend_buyers)||0);
+                })[0];
+                var medianComp = (function() {
+                    var vals = comps.map(function(c){ return Number(c.opening_weekend_buyers)||0; }).filter(function(v){ return v>0; }).sort(function(a,b){ return a-b; });
+                    if (!vals.length) return 0;
+                    var mid = Math.floor(vals.length / 2);
+                    return vals.length % 2 ? vals[mid] : Math.round((vals[mid-1] + vals[mid]) / 2);
+                })();
+
+                var html = '';
+                html += '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
+                html += iiqSummaryTile(
+                    (subj.display_name || 'Subject') + ' — projected opening-weekend buyers',
+                    fmtCompact(projected),
+                    'from panel-measured high-intent signals to date'
+                );
+                html += iiqSummaryTile(
+                    'Top comparable',
+                    topComp ? fmtCompact(topComp.opening_weekend_buyers) : '—',
+                    topComp ? (topComp.display_name + ' (' + (topComp.opening_date || '—') + ')') : ''
+                );
+                html += iiqSummaryTile(
+                    'Median comparable',
+                    fmtCompact(medianComp),
+                    'opening-weekend ticket-buyers (n=' + comps.length + ' comps)'
+                );
+                html += '</div>';
+
+                // === SUBJECT card: signal breakdown ===
+                if (signals.length) {
+                    var maxSigPeople = Math.max.apply(null, signals.map(function(s){ return Number(s.people)||0; }).concat([1]));
+                    html += '<div class="iiq-card" style="padding:1rem; margin-bottom:0.85rem; border-left: 3px solid #22d3ee;">';
+                    html += '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.55rem;">';
+                    html +=   '<div>';
+                    html +=     '<div style="font-size:0.95rem; font-weight:700; color:#e2e8f0;">' + escapeHtml(subj.display_name || 'Subject') + ' — high-intent signals (panel-measured)</div>';
+                    html +=     '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Opens ' + escapeHtml(subj.opening_date || '—') + ' · each signal is observed engagement count × industry conversion rate</div>';
+                    html +=   '</div>';
+                    html +=   '<div style="text-align:right;">';
+                    html +=     '<div style="font-size:1.4rem; font-weight:700; color:#22d3ee;">' + fmtCompact(projected) + '</div>';
+                    html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">projected opening-weekend buyers</div>';
+                    html +=   '</div>';
+                    html += '</div>';
+                    html += signals.map(function(s) {
+                        var people = Number(s.people)||0;
+                        var sub    = (s.conversion_pct ? s.conversion_pct + '% of ' : '') + fmtCompact(s.raw_engagement||0) + ' engagements · ' + (s.assets_count||0) + ' assets';
+                        return iiqBarRow(s.signal, people, maxSigPeople, '#22d3ee', '', sub);
+                    }).join('');
+                    html += '<div style="margin-top:0.5rem; font-size:0.7rem; color: var(--text-secondary); font-style: italic;">' + escapeHtml(subj.source || '') + '</div>';
+                    html += '</div>';
+                }
+
+                // === COMPS card: opening-weekend buyers ===
+                if (comps.length) {
+                    var sortedComps = comps.sort(function(a,b){
+                        return (Number(b.opening_weekend_buyers)||0) - (Number(a.opening_weekend_buyers)||0);
+                    });
+                    // Use the larger of (top comp, projected subject) so the subject bar is visible against big comps.
+                    var maxCBuyers = Math.max.apply(null, sortedComps.map(function(c){ return Number(c.opening_weekend_buyers)||0; }).concat([projected||1]));
+                    html += '<div class="iiq-card" style="padding:1rem;">';
+                    html += '<div style="font-size:0.85rem; font-weight:600; color:#e2e8f0; margin-bottom:0.45rem;">Comparable family-animated titles — realized opening-weekend ticket-buyers</div>';
+                    html += '<div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.55rem;">Source: Box Office Mojo (opening 4-day gross) ÷ $' + avgTicket.toFixed(2) + ' avg US ticket (NATO 2024)</div>';
+
+                    // First, the subject row inline at the top so the user can read it against the comps.
+                    if (projected > 0) {
+                        html += iiqBarRow(
+                            (subj.display_name || 'Subject') + ' (' + (subj.opening_date || 'pre-release') + ', projected)',
+                            projected, maxCBuyers, '#22d3ee', '',
+                            'panel-measured intent · in-flight'
+                        );
+                    }
+                    html += sortedComps.map(function(c) {
+                        var label = c.display_name;
+                        var sub   = '(opened ' + (c.opening_date || '—') + ')';
+                        var tail  = 'total ' + fmtCompact(c.total_buyers || 0) + ' · ' + fmtUSD(c.opening_4day_usd || 0) + ' gross';
+                        return iiqBarRow(label, Number(c.opening_weekend_buyers)||0, maxCBuyers, '#a855f7', sub, tail);
+                    }).join('');
+                    html += '</div>';
+                }
+
+                if (d.note) {
+                    html += '<p style="color: var(--text-secondary); font-size: 0.72rem; margin-top:0.6rem; line-height:1.5;">' + escapeHtml(d.note) + '</p>';
+                }
+                return html;
+            }
+
             function iiqRenderQ4(d) {
                 if (!d.rows || !d.rows.length) return '<div class="iiq-empty">Q4 has no talent attribution yet. Run scripts/intent_attribution.py --apply.</div>';
                 var rows = d.rows.slice().sort(function(a,b){ return (Number(b.views_total)||0) - (Number(a.views_total)||0); });
@@ -20043,7 +20143,7 @@
                 return html;
             }
 
-            var IIQ_QRENDER = { q1: iiqRenderQ1, q2: iiqRenderQ2, q4: iiqRenderQ4, q5: iiqRenderQ5, q6: iiqRenderQ6 };
+            var IIQ_QRENDER = { q1: iiqRenderQ1, q2: iiqRenderQ2, q3: iiqRenderQ3, q4: iiqRenderQ4, q5: iiqRenderQ5, q6: iiqRenderQ6 };
             var IIQ_QCACHE = {};
 
             function renderIntentIQQuestions() {
@@ -24319,12 +24419,13 @@
                 var cat = pill.getAttribute('data-beh-cat');
                 if (!cat) return;
                 var lines = [];
-                var currentLabel = 'Casual';
+                var _baseLbl = (typeof _baseCohortLabel === 'function') ? _baseCohortLabel() : 'Casual';
+                var currentLabel = _baseLbl;
                 try {
                     var info = typeof getProfileSuffixInfo === 'function' && typeof currentProfileData !== 'undefined' && currentProfileData
                         ? getProfileSuffixInfo(currentProfileData) : null;
                     if (info && info.suffixType === 'cohort' && info.suffixLabel) {
-                        currentLabel = info.suffixLabel.replace(/\s*fan\s*/i, '').trim() || 'Casual';
+                        currentLabel = info.suffixLabel.replace(/\s*fan\s*/i, '').trim() || _baseLbl;
                     }
                 } catch (_) {}
                 var currentCount = 0;
@@ -59347,6 +59448,20 @@
             return '';
         }
 
+        // User rule (2026-06-17): "if a profile is not in the talent
+        // section it should refer to casual as Core everywhere".
+        // TALENT profiles keep "Casual" (fan-base language: Casual
+        // Fan vs Avid Fan). Every other category — BRAND, SPORTS TEAM,
+        // CONTENT, MUSICIAN-BAND, MOVIE, etc. — uses "Core" instead,
+        // because "casual fan" doesn't fit the brand-audience framing.
+        // Single chokepoint so every column header, chip, popover row,
+        // chart legend, hover tooltip, and median callout stays
+        // consistent.
+        function _baseCohortLabel() {
+            const cat = _currentProfileCategory();
+            return cat === 'TALENT' ? 'Casual' : 'Core';
+        }
+
         async function _fetchCategoryNorm() {
             const cat = _currentProfileCategory();
             if (!cat) {
@@ -59448,7 +59563,7 @@
             const series = (_comparisonRunsState.selectedKeys || [])
                 .map(k => _comparisonRunsState.runsByKey[k])
                 .filter(Boolean);
-            const opts = [{ key: 'profile', label: 'Casual' }];
+            const opts = [{ key: 'profile', label: _baseCohortLabel() }];
             series.forEach(s => {
                 opts.push({ key: s.key, label: s.label || 'Run' });
             });
@@ -59717,9 +59832,24 @@
         //   "Premium Cohort"  -> "Premium Cohort" (no Fan token; passthrough)
         function _stripFanSuffix(label) {
             if (!label) return label;
-            return String(label)
+            const stripped = String(label)
                 .replace(/\s+Fans?(\s+(?:20\d{2}(?:-\d{2})?))?\s*$/i, '$1')
                 .trim();
+            // User rule (2026-06-17): non-TALENT profiles display the
+            // base cohort as "Core" instead of "Casual". Remap any lone
+            // "Casual" / "Casual <year>" label that survived the Fan
+            // strip — covers "Casual Fan" → "Core", "Casual Fan 2024"
+            // → "Core 2024", and bare "Casual" labels from upstream.
+            // Cohort labels that contain something else ("4+ Avid",
+            // "Premium Cohort", "Superfan", etc.) pass through
+            // unchanged.
+            if (/^Casual(\s+20\d{2}(?:-\d{2})?)?$/i.test(stripped)) {
+                const baseLbl = _baseCohortLabel();
+                if (baseLbl !== 'Casual') {
+                    return stripped.replace(/^Casual/i, baseLbl);
+                }
+            }
+            return stripped;
         }
 
         function _compactRunLabel(profile) {
@@ -59748,10 +59878,10 @@
             try {
                 if (typeof getRunDateLabel === 'function') {
                     const d = getRunDateLabel(profile && (profile.s3_key || ''));
-                    if (d) return 'Casual ' + d;
+                    if (d) return _baseCohortLabel() + ' ' + d;
                 }
             } catch (_) {}
-            return 'Casual';
+            return _baseCohortLabel();
         }
 
         // Extract a clean year label from a "YYYY-MM-DD - YYYY-MM-DD" date
@@ -59800,7 +59930,8 @@
             // chips, and popover rows as "Casual" (not "Casual Fan")
             // so they fit on one line. Append the year for
             // disambiguation when available.
-            return dateRangeYear ? ('Casual ' + dateRangeYear) : 'Casual';
+            const baseLbl = _baseCohortLabel();
+            return dateRangeYear ? (baseLbl + ' ' + dateRangeYear) : baseLbl;
         }
 
         function _setupComparisonForCurrentProfile(subject, currentKey, sameSubjectRuns) {
@@ -60076,14 +60207,14 @@
             // render owns the Profile column).
             const cfRow = document.createElement('label');
             cfRow.style.cssText = 'display:grid;grid-template-columns:18px 1fr;column-gap:0.55rem;align-items:center;padding:0.4rem 0.5rem;border-radius:6px;cursor:pointer;font-size:0.82rem;line-height:1.25;margin-bottom:0.45rem;background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.22);';
-            cfRow.title = 'The CASUAL FAN audience is composed of panelists who have 1 or more digital touchpoints to ' + (_comparisonRunsState.subject || 'this profile').toUpperCase() + ' within the stated timeframe.';
+            cfRow.title = 'The ' + _baseCohortLabel().toUpperCase() + (_baseCohortLabel() === 'Casual' ? ' FAN' : '') + ' audience is composed of panelists who have 1 or more digital touchpoints to ' + (_comparisonRunsState.subject || 'this profile').toUpperCase() + ' within the stated timeframe.';
             const cfCb = document.createElement('input');
             cfCb.type = 'checkbox';
             cfCb.id = 'cmpIncludeCasualFanCb';
             cfCb.checked = _comparisonRunsState.includeCasualFan !== false;
             cfCb.style.cssText = 'accent-color:#22d3ee;cursor:pointer;width:14px;height:14px;margin:0;justify-self:center;';
             const cfLbl = document.createElement('span');
-            cfLbl.innerHTML = 'Show <strong style="color:var(--text-primary, #cbd5e1);">Casual</strong> (base profile)';
+            cfLbl.innerHTML = 'Show <strong style="color:var(--text-primary, #cbd5e1);">' + _baseCohortLabel() + '</strong> (base profile)';
             cfLbl.style.cssText = 'color:var(--text-primary, #e6e6e6);';
             cfRow.appendChild(cfCb);
             cfRow.appendChild(cfLbl);
@@ -60357,7 +60488,7 @@
             // slice. With it: [Casual Kristen Bell] [Avid Kristen Bell]
             // [Gen Pop].
             const profileName = (currentProfileData && currentProfileData.name) || 'Profile';
-            const mainProfileLabel = 'Casual ' + profileName;
+            const mainProfileLabel = _baseCohortLabel() + ' ' + profileName;
             const _cohortLegendLabel = (entry) => _cohortDisplayLabel(entry, profileName);
 
             demoChartKeys.forEach(chartKey => {
@@ -60817,9 +60948,9 @@
                     wrap.appendChild(row);
                 };
 
-                // Casual = the base profile. Always first when active.
+                // Casual / Core = the base profile. Always first when active.
                 if (baseValue != null && baseValue > 0) {
-                    appendRow('Casual', CASUAL_FAN_LABEL_COLOR, baseValue, { subtle: true });
+                    appendRow(_baseCohortLabel(), CASUAL_FAN_LABEL_COLOR, baseValue, { subtle: true });
                 }
 
                 series.forEach((entry, idx) => {
@@ -64894,7 +65025,7 @@
         function _renderDemoTablesForChartsInTableMode() {
             const isProjection = (typeof dashDisplayMode !== 'undefined') && dashDisplayMode === 'projection';
             const US_POP = 329900000;
-            const profileColLabel = isProjection ? 'US #' : 'Casual';
+            const profileColLabel = isProjection ? 'US #' : _baseCohortLabel();
             const gpColLabel      = isProjection ? 'GP #' : 'Gen Pop';
             const demoData    = lastRenderedDemographics || {};
             const demoIdxAll  = lastRenderedDemographicsIndex || {};
@@ -67898,7 +68029,7 @@
                             <div class="behavioral-header-row">
                                 <span>#</span>
                                 <span class="behavioral-sortable" data-sort-key="alpha" title="Sort A-Z"><span class="sort-arrow">↓</span>Item</span>
-                                <span class="behavioral-sortable profile-col active-sort" data-sort-key="pct" title="Sort by ${dashDisplayMode === 'projection' ? 'US #' : 'Casual %'}"><span class="sort-arrow">↓</span>${dashDisplayMode === 'projection' ? 'US #' : 'Casual'}</span>
+                                <span class="behavioral-sortable profile-col active-sort" data-sort-key="pct" title="Sort by ${dashDisplayMode === 'projection' ? 'US #' : _baseCohortLabel() + ' %'}"><span class="sort-arrow">↓</span>${dashDisplayMode === 'projection' ? 'US #' : _baseCohortLabel()}</span>
                                 <span class="behavioral-sortable genpop-col" data-sort-key="genpop" title="Sort by ${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop %'}"><span class="sort-arrow">↓</span>${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
                                 <span class="behavioral-sortable index-col" data-sort-key="index" title="Sort by Index"><span class="sort-arrow">↓</span>Index</span>
                             </div>
