@@ -19783,7 +19783,7 @@
                 q3: { short: 'Q3 · Intent to Buy', title: 'Q3. How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date — pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement — scaled by industry conversion rates. Nothing here is a forecast.' },
                 q4: { short: 'Q4 · Talent',       title: 'Q4. How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Q5 · Trailer',      title: 'Q5. How crucial is trailer viewership across the campaign life?', intro: 'Daily trailer views (across all trailer assets). Spikes mark trailer launches and refreshes.' },
-                q6: { short: 'Q6 · Audience shift', title: 'Q6. How do different audiences engage throughout the campaign?', intro: 'Daily engagement by moviegoing-frequency cohort. General audiences (occasional/bimonthly) typically dominate early; families intensify closer to release.' },
+                q6: { short: 'Q6 · Cohort engagement', title: 'Q6. How is each audience cohort engaging with GOAT content?', intro: 'For each cohort, the % of that cohort\'s panel that engaged with any GOAT campaign asset (view / like / comment / share) on a given day. Default view is the four moviegoing-frequency cohorts; flip on any audience cohort from the picker (Steph Curry fans, cast members, family-animation fans, Disney+ family subs, demographic cuts) to overlay how they engage. Each cohort\'s curve has its own peak day — talent / franchise cohorts peak earlier (around trailer drops), family / opening cohorts peak on opening weekend, streaming cohorts peak on the 5/15 streaming launch.' },
             };
             var IIQ_QPALETTE = {
                 paid:    '#22d3ee',
@@ -20107,40 +20107,207 @@
                 return html;
             }
 
+            // Q6 cohort color palette: each category gets a hue, individual
+            // cohorts get a shade within that hue. Picked for legibility
+            // against the dark background and to be distinguishable when
+            // 6-10 cohorts are overlaid.
+            var IIQ_Q6_CATEGORY_COLOR = {
+                MOVIEGOING_FREQ: ['#22c55e', '#3b82f6', '#a855f7', '#f59e0b'],  // weekly/monthly/bimonthly/occasional
+                TALENT:          ['#22d3ee', '#0ea5e9', '#0891b2', '#06b6d4', '#67e8f9', '#155e75', '#7dd3fc', '#38bdf8', '#1d4ed8'],
+                DEMO:            ['#ec4899', '#f472b6', '#db2777', '#be185d'],
+                FRANCHISE:       ['#f59e0b', '#fb923c', '#ea580c', '#fbbf24', '#facc15'],
+                GENRE:           ['#a855f7', '#c084fc', '#9333ea', '#7e22ce'],
+                STUDIO:          ['#d946ef', '#e879f9'],
+                PLATFORM:        ['#14b8a6', '#5eead4'],
+                SPORT:           ['#ef4444', '#f87171'],
+                AUDIENCE:        ['#94a3b8', '#cbd5e1'],
+            };
+
+            function iiqQ6CohortColor(cohort, idxInCategory) {
+                var palette = IIQ_Q6_CATEGORY_COLOR[cohort.category] || IIQ_Q6_CATEGORY_COLOR.AUDIENCE;
+                return palette[idxInCategory % palette.length];
+            }
+
+            // module-scoped selection state so cohort picker toggles persist
+            // across re-renders (e.g. when chart is redrawn after a toggle).
+            window._iiqQ6Selection = window._iiqQ6Selection || null;
+
             function iiqRenderQ6(d) {
-                var rows = d.shift_curves || [];
-                if (!rows.length) return '<div class="iiq-empty">Q6 has no per-cohort engagement curves yet. Run scripts/synth_intent_cohort_engagement_daily.py.</div>';
-                var byCohort = {};
-                rows.forEach(function(r) {
-                    var k = r.cohort_slug;
-                    if (!byCohort[k]) byCohort[k] = [];
-                    byCohort[k].push({ x: r.date, y: Number(r.engagement_bp)||0 });
+                var cohorts = d.cohorts || [];
+                if (!cohorts.length) return '<div class="iiq-empty">Q6 has no per-cohort engagement curves yet. Run scripts/synth_goat_all_cohort_engagement.py --apply.</div>';
+
+                // Initialize selection: default-on flags from backend (the 4 moviegoing cohorts).
+                // If user has already toggled in this session, preserve their selection but
+                // ignore cohorts no longer present.
+                var validSlugs = {};
+                cohorts.forEach(function(c) { validSlugs[c.cohort_slug] = true; });
+                if (!window._iiqQ6Selection) {
+                    window._iiqQ6Selection = {};
+                    cohorts.forEach(function(c) { window._iiqQ6Selection[c.cohort_slug] = !!c.default_on; });
+                } else {
+                    Object.keys(window._iiqQ6Selection).forEach(function(s) {
+                        if (!validSlugs[s]) delete window._iiqQ6Selection[s];
+                    });
+                    cohorts.forEach(function(c) {
+                        if (window._iiqQ6Selection[c.cohort_slug] === undefined) {
+                            window._iiqQ6Selection[c.cohort_slug] = !!c.default_on;
+                        }
+                    });
+                }
+
+                // Group cohorts by category, assign within-category color index
+                var catOrder = d.category_order || ['MOVIEGOING_FREQ','TALENT','DEMO','FRANCHISE','GENRE','STUDIO','PLATFORM','SPORT','AUDIENCE'];
+                var byCat = {};
+                cohorts.forEach(function(c) {
+                    if (!byCat[c.category]) byCat[c.category] = [];
+                    byCat[c.category].push(c);
                 });
-                var cohortOrder = ['weekly','monthly','bimonthly','occasional'];
-                var keys = cohortOrder.filter(function(k){ return byCohort[k]; }).concat(Object.keys(byCohort).filter(function(k){ return cohortOrder.indexOf(k) === -1; }));
-                var labelMap = { weekly: 'Weekly Moviegoers', monthly: 'Monthly Moviegoers', bimonthly: 'Bimonthly Moviegoers', occasional: 'Occasional Moviegoers' };
-                var html = '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
-                    + iiqSummaryTile('Cohorts tracked', String(keys.length), 'moviegoing-frequency segments')
-                    + iiqSummaryTile('Crossover detected', d.crossover_date || 'not yet', d.crossover_date ? 'date occasional > weekly engagement' : 'audience shift not yet detected')
-                    + '</div>';
-                var combinedSeries = keys.map(function(k) {
-                    return { name: labelMap[k] || k, color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown, points: byCohort[k].slice().sort(function(a,b){ return new Date(a.x) - new Date(b.x); }) };
+                Object.keys(byCat).forEach(function(cat) {
+                    byCat[cat].sort(function(a,b){ return (b.panel_count||0) - (a.panel_count||0); });
+                    byCat[cat].forEach(function(c, i) { c._color = iiqQ6CohortColor(c, i); });
                 });
-                html += '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.6rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">All cohorts, daily engagement (basis points)</div>'
-                    + iiqLineChart(combinedSeries, {height: 280}) + '</div>';
-                html += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem;">';
-                html += keys.map(function(k) {
-                    var color = IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown;
-                    var pts = byCohort[k].slice().sort(function(a,b){ return new Date(a.x) - new Date(b.x); });
-                    var avg = pts.reduce(function(s,p){ return s + p.y; }, 0) / Math.max(1, pts.length);
-                    return '<div class="iiq-card" style="padding:0.7rem; border-left: 3px solid ' + color + ';">'
-                        + '<div class="iiq-card-title" style="font-size:0.88rem;">' + escapeHtml(labelMap[k] || k) + '</div>'
-                        + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">avg ' + avg.toFixed(1) + ' bp/day · n=' + pts.length + ' days</div>'
-                        + '<div style="margin-top:0.4rem;">' + iiqLineChart([{name:'', color: color, points: pts}], {height: 100, width: 360}) + '</div>'
-                        + '</div>';
-                }).join('');
+
+                // Summary tiles
+                var selected = cohorts.filter(function(c){ return window._iiqQ6Selection[c.cohort_slug]; });
+                var totalSelEng = selected.reduce(function(s,c){ return s + (c.total_engagers||0); }, 0);
+                var topToday = cohorts.slice().sort(function(a,b){ return (b.today_engagement_pct||0) - (a.today_engagement_pct||0); })[0];
+                var topAllTime = cohorts.slice().sort(function(a,b){ return (b.peak_engagement_pct||0) - (a.peak_engagement_pct||0); })[0];
+
+                var html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
+                html +=     iiqSummaryTile('Cohorts available', cohorts.length + ' total', selected.length + ' selected for chart');
+                html +=     iiqSummaryTile('Most engaged today', topToday ? topToday.display : '—', topToday ? topToday.today_engagement_pct.toFixed(2) + '% of cohort engaged today' : '');
+                html +=     iiqSummaryTile('Highest peak ever', topAllTime ? topAllTime.display : '—', topAllTime ? topAllTime.peak_engagement_pct.toFixed(1) + '% on ' + topAllTime.peak_date : '');
                 html += '</div>';
+
+                // Cohort picker (grouped by category, with category-color chips)
+                html += '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.85rem;">';
+                html +=   '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">';
+                html +=     '<div style="font-size:0.85rem; font-weight:600; color:#e2e8f0;">Pick cohorts to overlay on the chart</div>';
+                html +=     '<div style="display:flex; gap:0.4rem;">';
+                html +=       '<button onclick="iiqQ6SelectGroup(\'all\')" style="background:rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.1); padding:0.25rem 0.55rem; border-radius:5px; font-size:0.7rem; cursor:pointer;">Select all</button>';
+                html +=       '<button onclick="iiqQ6SelectGroup(\'none\')" style="background:rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.1); padding:0.25rem 0.55rem; border-radius:5px; font-size:0.7rem; cursor:pointer;">Clear</button>';
+                html +=       '<button onclick="iiqQ6SelectGroup(\'default\')" style="background:rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.1); padding:0.25rem 0.55rem; border-radius:5px; font-size:0.7rem; cursor:pointer;">Reset to default</button>';
+                html +=     '</div>';
+                html +=   '</div>';
+
+                var CAT_LABELS = {
+                    MOVIEGOING_FREQ: 'Moviegoing Frequency',
+                    TALENT:          'Talent / Cast',
+                    DEMO:            'Demographics',
+                    FRANCHISE:       'Franchise & Fandom',
+                    GENRE:           'Genre',
+                    STUDIO:          'Studio',
+                    PLATFORM:        'Platform / Streaming',
+                    SPORT:           'Sport',
+                    AUDIENCE:        'Other Audiences',
+                };
+                catOrder.forEach(function(cat) {
+                    var list = byCat[cat];
+                    if (!list || !list.length) return;
+                    html += '<div style="margin-top:0.55rem;">';
+                    html +=   '<div style="font-size:0.7rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.3rem;">' + escapeHtml(CAT_LABELS[cat] || cat) + '</div>';
+                    html +=   '<div style="display:flex; flex-wrap:wrap; gap:0.4rem;">';
+                    list.forEach(function(c) {
+                        var checked = !!window._iiqQ6Selection[c.cohort_slug];
+                        var bgFill = checked ? (c._color + '33') : 'rgba(255,255,255,0.03)';
+                        var border = checked ? c._color : 'rgba(255,255,255,0.1)';
+                        var textC  = checked ? '#fff' : '#94a3b8';
+                        var slugEsc = c.cohort_slug.replace(/'/g, "\\'");
+                        html += '<label onclick="iiqQ6Toggle(\'' + slugEsc + '\')" '
+                            + 'style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; '
+                            + 'background:' + bgFill + '; border:1px solid ' + border + '; '
+                            + 'border-radius:6px; padding:0.3rem 0.55rem; font-size:0.75rem; color:' + textC + ';" '
+                            + 'title="' + escapeHtml(c.display) + ' \u00b7 panel ' + fmtCompact(c.panel_count) + ' \u00b7 peak ' + c.peak_engagement_pct.toFixed(1) + '% on ' + c.peak_date + '">'
+                            + '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:' + c._color + ';"></span>'
+                            + escapeHtml(c.display)
+                            + ' <span style="opacity:0.6; font-size:0.68rem;">(' + fmtCompact(c.panel_count) + ')</span>'
+                            + '</label>';
+                    });
+                    html +=   '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+
+                // Main overlay chart with the SELECTED cohorts
+                var combinedSeries = selected.map(function(c) {
+                    return {
+                        name: c.display,
+                        color: c._color,
+                        points: (c.points || []).map(function(p) { return { x: p.date, y: p.engagement_pct }; }),
+                    };
+                });
+                html += '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.6rem;">';
+                html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.45rem;">';
+                html +=     '<div style="font-size:0.85rem; font-weight:600; color:#e2e8f0;">Daily engagement \u2014 % of each selected cohort that engaged with GOAT content</div>';
+                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">Y-axis: % of that cohort\'s panel \u00b7 X-axis: date</div>';
+                html +=   '</div>';
+                if (combinedSeries.length) {
+                    html += iiqLineChart(combinedSeries, {height: 320});
+                    // Inline legend with current peak / today readings
+                    html += '<div style="margin-top:0.6rem; display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:0.4rem;">';
+                    selected.forEach(function(c) {
+                        html += '<div style="display:flex; align-items:center; gap:0.4rem; font-size:0.72rem;">'
+                             +   '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:' + c._color + ';"></span>'
+                             +   '<span style="color:#e2e8f0;">' + escapeHtml(c.display) + '</span>'
+                             +   '<span style="color: var(--text-secondary); margin-left:auto;">peak ' + c.peak_engagement_pct.toFixed(1) + '%</span>'
+                             + '</div>';
+                    });
+                    html += '</div>';
+                } else {
+                    html += '<div class="iiq-empty">Pick at least one cohort above to draw the chart.</div>';
+                }
+                html += '</div>';
+
+                // Per-cohort detail cards (one per SELECTED cohort) — small standalone curves
+                if (selected.length) {
+                    html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 0.6rem;">';
+                    selected.forEach(function(c) {
+                        var pts = (c.points || []).map(function(p) { return { x: p.date, y: p.engagement_pct }; });
+                        html += '<div class="iiq-card" style="padding:0.7rem; border-left: 3px solid ' + c._color + ';">'
+                            + '<div style="display:flex; justify-content:space-between; align-items:baseline;">'
+                            +   '<div style="font-size:0.88rem; font-weight:600; color:#e2e8f0;">' + escapeHtml(c.display) + '</div>'
+                            +   '<div style="font-size:0.7rem; color: var(--text-secondary);">' + escapeHtml(c.category.replace('_', ' ').toLowerCase()) + '</div>'
+                            + '</div>'
+                            + '<div style="display:flex; justify-content:space-between; font-size:0.7rem; color: var(--text-secondary); margin-top:0.15rem;">'
+                            +   '<span>panel: ' + fmtCompact(c.panel_count) + '</span>'
+                            +   '<span>peak: ' + c.peak_engagement_pct.toFixed(1) + '% on ' + c.peak_date + '</span>'
+                            +   '<span>today: ' + c.today_engagement_pct.toFixed(2) + '%</span>'
+                            + '</div>'
+                            + '<div style="margin-top:0.4rem;">' + iiqLineChart([{name:'', color: c._color, points: pts}], {height: 90, width: 420}) + '</div>'
+                            + '</div>';
+                    });
+                    html += '</div>';
+                }
+
+                if (d.note) {
+                    html += '<p style="color: var(--text-secondary); font-size: 0.72rem; margin-top:0.6rem; line-height:1.5;">' + escapeHtml(d.note) + '</p>';
+                }
                 return html;
+            }
+
+            // Cohort picker handlers (module-scoped state lives on window._iiqQ6Selection)
+            window.iiqQ6Toggle = function(slug) {
+                if (!window._iiqQ6Selection) return;
+                window._iiqQ6Selection[slug] = !window._iiqQ6Selection[slug];
+                _iiqQ6Rerender();
+            };
+            window.iiqQ6SelectGroup = function(mode) {
+                var cached = IIQ_QCACHE.q6;
+                if (!cached) return;
+                var cohorts = cached.cohorts || [];
+                window._iiqQ6Selection = window._iiqQ6Selection || {};
+                cohorts.forEach(function(c) {
+                    if (mode === 'all')          window._iiqQ6Selection[c.cohort_slug] = true;
+                    else if (mode === 'none')    window._iiqQ6Selection[c.cohort_slug] = false;
+                    else if (mode === 'default') window._iiqQ6Selection[c.cohort_slug] = !!c.default_on;
+                });
+                _iiqQ6Rerender();
+            };
+            function _iiqQ6Rerender() {
+                var cached = IIQ_QCACHE.q6;
+                if (!cached) return;
+                var body = document.getElementById('iiqQBody');
+                if (body) body.innerHTML = iiqRenderQ6(cached);
             }
 
             var IIQ_QRENDER = { q1: iiqRenderQ1, q2: iiqRenderQ2, q3: iiqRenderQ3, q4: iiqRenderQ4, q5: iiqRenderQ5, q6: iiqRenderQ6 };
@@ -20150,6 +20317,7 @@
                 var slug = window.__intentIQ.currentSlug;
                 if (!slug) return;
                 IIQ_QCACHE = {}; // reset cache when title changes
+                window._iiqQ6Selection = null; // reset Q6 cohort picks for new title
                 var qids = Object.keys(IIQ_QMETA);
                 document.getElementById('iiqQNav').innerHTML = qids.map(function(q, i) {
                     return '<button class="iiq-q-tab" data-q="' + q + '" onclick="showIntentIQQuestion(\'' + q + '\')" style="background: rgba(255,255,255,0.04); color:#cbd5e1; border:1px solid rgba(255,255,255,0.08); padding:0.4rem 0.75rem; border-radius:6px; cursor:pointer; font-size:0.78rem;">' + escapeHtml(IIQ_QMETA[q].short) + '</button>';
@@ -60824,6 +60992,28 @@
             root.querySelectorAll('.cmp-col-cell').forEach(el => el.remove());
         }
 
+        // Per-cohort grid column width. Solves the user complaint
+        // (2026-06-17: "if there are long titles you need to give some
+        // extra padding so this doesnt happen like worried warriors
+        // and gen pop"): with a fixed 72px width, right-aligned cohort
+        // values land flush at the column boundary, and the
+        // left-aligned Gen Pop value in the next column starts flush
+        // at ITS left boundary — producing "85.22%65.27%" with no
+        // gap. Baseline 80px = 72px data area + 8px right-side
+        // breathing room (paired with padding-right:8px on each
+        // injected cohort cell). Long labels grow proportionally so
+        // wrap-line widths stay readable, capped at 120px to keep
+        // many-cohort selections from blowing out the row width.
+        function _cmpCohortColWidth(label) {
+            const lbl = String(label || '').trim();
+            if (!lbl) return '80px';
+            let maxWord = 0;
+            lbl.split(/\s+/).forEach(w => { if (w.length > maxWord) maxWord = w.length; });
+            if (maxWord <= 8) return '80px';
+            const w = Math.min(120, maxWord * 8 + 16);
+            return w + 'px';
+        }
+
         // Sample-size + US-projection comparison block injected under the
         // two header stat cards on the Demographics tab AND the two
         // metric cards on the Insights tab. When data cuts are active,
@@ -61048,10 +61238,12 @@
                 // Drop the 70px Profile slot when Casual Fan is hidden,
                 // and the 70px Gen Pop slot when GP is hidden, so each
                 // row collapses cleanly instead of leaving an empty gap.
-                // 72px per cmp leaves enough room for labels like
-                // "NETFLIX ONLY" / "YOUTUBE ONLY"; longer labels clip
-                // with ellipsis (full label in title attr).
-                const cmpCols = series.map(() => '72px').join(' ');
+                // Per-cohort width via _cmpCohortColWidth so long
+                // labels ("Unprepared Underdogs", "Worried Warriors")
+                // get extra room AND every cohort cell has 8px right
+                // padding so values never visually merge with the
+                // next column.
+                const cmpCols = series.map(s => _cmpCohortColWidth(s.label || '')).join(' ');
                 const profileCol = hideCF ? '' : '70px ';
                 const gpCol = hideGP ? '' : ' 70px';
                 table.style.gridTemplateColumns = '28px minmax(80px,1fr) ' + profileCol + cmpCols + gpCol + ' 56px';
@@ -61083,7 +61275,7 @@
                         // "Casual Female") don't visually bleed into
                         // adjacent columns when the card width is
                         // tight. Data cells below stay nowrap.
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:left;justify-self:start;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;cursor:pointer;user-select:none;';
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:left;justify-self:start;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;cursor:pointer;user-select:none;padding-right:8px;';
                         if (gpHeader) header.insertBefore(span, gpHeader);
                         else header.appendChild(span);
                     });
@@ -61110,7 +61302,7 @@
                         }
                         const span = document.createElement('span');
                         span.className = 'cmp-col-cell';
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;';
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;padding-right:8px;';
                         span.textContent = match ? _cmpFmtPct(match.pct) : '—';
                         if (match && match.pct != null) {
                             span.title = entry.label + ' • ' + name + ' • ' + _cmpFmtPct(match.pct);
@@ -61148,10 +61340,12 @@
                         map: _cmpBuildInterestsLookup(s.parsed)
                     }));
                     // Row layout: # | Item | [Profile?] | [N cmps] | [Gen Pop?] | Index
-                    // 72px per cmp leaves enough room for labels like
-                    // "NETFLIX ONLY" / "YOUTUBE ONLY"; longer labels
-                    // clip with ellipsis (full label in title attr).
-                    const cmpCols = series.map(() => '72px').join(' ');
+                    // Per-cohort width via _cmpCohortColWidth so long
+                    // labels ("Unprepared Underdogs", "Worried Warriors")
+                    // get extra room AND every cohort cell has 8px
+                    // right padding so values never visually merge
+                    // with the next column (the 85.22%65.27% problem).
+                    const cmpCols = series.map(s => _cmpCohortColWidth(s.label || '')).join(' ');
                     const profileCol = hideCF ? '' : '70px ';
                     const gpCol = hideGP ? '' : ' 70px';
                     const intGridTpl = '30px minmax(120px,1fr) ' + profileCol + cmpCols + gpCol + ' 60px';
@@ -61165,7 +61359,7 @@
                             const label = entry.label || ('Run ' + (idx + 1));
                             span.textContent = label;
                             span.title = label;
-                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;';
+                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;padding-right:8px;';
                             if (gpHeader) intHeader.insertBefore(span, gpHeader);
                             else intHeader.appendChild(span);
                         });
@@ -61181,7 +61375,7 @@
                             const match = intLookups[idx].map[name];
                             const span = document.createElement('span');
                             span.className = 'cmp-col-cell';
-                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;overflow:hidden;min-width:0;';
+                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;overflow:hidden;min-width:0;padding-right:8px;';
                             span.textContent = match ? _cmpFmtPct(match.pct) : '—';
                             if (match && match.pct != null) {
                                 span.title = entry.label + ' • ' + name + ' • ' + _cmpFmtPct(match.pct);
@@ -61257,7 +61451,12 @@
                 // drop the 80px column so the row collapses cleanly
                 // instead of leaving an empty gap where the now-hidden
                 // Profile cell used to sit.
-                const cmpColsCss = series.map(() => '72px').join(' ');
+                // Per-cohort width via _cmpCohortColWidth so long
+                // labels ("Unprepared Underdogs", "Worried Warriors")
+                // get extra room AND every cohort cell has 8px right
+                // padding so values never visually merge with the
+                // next column.
+                const cmpColsCss = series.map(s => _cmpCohortColWidth(s.label || '')).join(' ');
                 const profileColCss = hideCF ? '' : '72px ';
                 let newGrid;
                 if (sec.isAll) {
@@ -61307,11 +61506,11 @@
                         span.title = label;
                         // Allow multi-word cohort labels ("Unprepared
                         // Underdogs", "Worried Warriors") to wrap within
-                        // the 72px column instead of overflowing onto the
-                        // next header (user request 2026-06-17: "on
-                        // location it needs to also wrap" — same treatment
-                        // as behavioral cohort headers).
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;';
+                        // the column instead of overflowing onto the
+                        // next header. 8px right padding pairs with
+                        // _cmpCohortColWidth so values never visually
+                        // merge with the adjacent column.
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;padding-right:8px;';
                         if (anchor) header.insertBefore(span, anchor);
                         else header.appendChild(span);
                     });
@@ -61340,7 +61539,7 @@
                         const match = lookup[norm] || (canonNorm && lookup[canonNorm]);
                         const span = document.createElement('span');
                         span.className = 'cmp-col-cell';
-                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;';
+                        span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.78rem;text-align:right;justify-self:end;font-variant-numeric:tabular-nums;padding-right:8px;';
                         span.textContent = match ? _cmpFmtPct(match.pct) : '—';
                         if (match && match.pct != null) {
                             span.title = entry.label + ' • ' + rawName + ' • ' + _cmpFmtPct(match.pct);
@@ -65186,7 +65385,7 @@
                         const proj = hasV ? Math.round(v / 100 * US_POP) : 0;
                         const cellStr = !hasV ? 'N/A' : (isProjection ? _fmtNum(proj) : _fmtPct(v));
                         const color = _cmpPalette[ci % _cmpPalette.length];
-                        return '<span class="cmp-col-cell" style="color:' + color + ';text-align:right;justify-self:end;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">' + cellStr + '</span>';
+                        return '<span class="cmp-col-cell" style="color:' + color + ';text-align:right;justify-self:end;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;padding-right:8px;">' + cellStr + '</span>';
                     }).join('');
                     return ''
                         + '<div class="behavioral-item">'
@@ -65212,15 +65411,17 @@
                 const cmpHeaderCellsHtml = _cmpLookups.map((lk, ci) => {
                     const color = _cmpPalette[ci % _cmpPalette.length];
                     const lbl = _safeEscape(lk.label || 'Run');
-                    return '<span class="cmp-col-cell" style="color:' + color + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;" title="' + lbl + '">' + lbl + '</span>';
+                    return '<span class="cmp-col-cell" style="color:' + color + ';font-size:0.65rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;padding-right:8px;" title="' + lbl + '">' + lbl + '</span>';
                 }).join('');
 
                 // Match the behavioral-card grid template so the
                 // .cmp-hide-genpop / .cmp-hide-profile CSS rules (set
                 // up in applyComparisonRunsToCategoryTables) collapse
                 // the right cells when the user toggles Casual or
-                // Gen Pop off. 72px per cohort col matches behavioral.
-                const _cmpCols = _cmpLookups.map(() => '72px').join(' ');
+                // Gen Pop off. Per-cohort width via _cmpCohortColWidth
+                // so long labels ("Unprepared Underdogs", "Worried
+                // Warriors") get extra room.
+                const _cmpCols = _cmpLookups.map(lk => _cmpCohortColWidth(lk.label || '')).join(' ');
                 const _profileColTpl = _cmpHideCF ? '' : '70px ';
                 const _gpColTpl      = _cmpHideGP ? '' : ' 70px';
                 const _gridTpl       = (_cmpLookups.length > 0)
