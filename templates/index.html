@@ -16508,7 +16508,7 @@
                                     <div id="audienceShareBoxes" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
                                         <div class="asb-box" data-channel="social" title="Social Media engagement share"><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">—</span></div>
                                         <div class="asb-box" data-channel="search" title="Search Engine / AI engagement share"><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">—</span></div>
-                                        <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent profiles."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">—</span></div>
+                                        <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent, influencer, and sports-team profiles (no brand-owned channel)."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">—</span></div>
                                         <div class="asb-box" data-channel="retail" title="Retail / eCommerce engagement share"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">—</span></div>
                                         <div class="asb-box" data-channel="media"  title="Media (streaming, movies, music, news, games, sports) engagement share"><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">—</span></div>
                                     </div>
@@ -20232,6 +20232,101 @@
                 };
             }
 
+            // ----- Calendar-aware funnel multiplier -----
+            // Static per-asset rates (iiqAssetFunnelProjection) capture HOW
+            // funnel-friendly an asset is, but they don't know what WEEK of
+            // the campaign we're in. On Apr 20 nobody is buying a ticket --
+            // the movie left theatres -- and on Jul 10 info-seek volume is
+            // negligible too. Without a calendar overlay, the cumulative
+            // info-seeker / ticketing curves on Q2 keep ticking up forever,
+            // which is the bug the user flagged.
+            //
+            // Returns { info_mult, ticket_mult } in [~0, ~1.4]. 1.0 = full
+            // rate (OW window), ~0 = effectively no conversion.
+            //
+            // Ticket curve: very low pre-presale, ramps from presale to OW,
+            // peaks for the OW window, then DECAYS HARD to ~0 by the end of
+            // the typical animated-family theatrical run (~6 weeks). Stays
+            // at floor forever after -- no tickets to buy.
+            //
+            // Info-seek curve: moderate pre-OW, peaks at OW window, decays
+            // to a low floor 4-6 weeks after OW, THEN gets a Gaussian bump
+            // centered on the streaming launch date (5/15) -- the second
+            // peak the user called out ("info seeking would peak again
+            // because of pvod/tvod but not ticketing").
+            //
+            // Callers renormalize against their LIFETIME aggregate so
+            // applying this multiplier only redistributes the totals
+            // across time -- it doesn't change ladder-up totals on the
+            // Assets cards, Q1 rollup, or Q2 funnel comparison.
+            var IIQ_CAMPAIGN_DATES = {
+                PRESALE:         '2026-01-21',
+                OPENING:         '2026-02-13',
+                THEATRICAL_END:  '2026-03-29',  // ~6.5 weeks post-OW for animated family runs
+                STREAMING:       '2026-05-15'
+            };
+            function iiqCalendarFunnelMultiplier(dateIso) {
+                var DAY = 86400000;
+                var dT  = new Date(dateIso + 'T12:00:00Z').getTime();
+                var psT = new Date(IIQ_CAMPAIGN_DATES.PRESALE        + 'T12:00:00Z').getTime();
+                var owT = new Date(IIQ_CAMPAIGN_DATES.OPENING        + 'T12:00:00Z').getTime();
+                var teT = new Date(IIQ_CAMPAIGN_DATES.THEATRICAL_END + 'T12:00:00Z').getTime();
+                var slT = new Date(IIQ_CAMPAIGN_DATES.STREAMING      + 'T12:00:00Z').getTime();
+                var dToOW = (owT - dT) / DAY;
+                var dToSL = (slT - dT) / DAY;
+                var presaleSpanDays = Math.max(1, (owT - psT) / DAY);
+
+                // --- TICKETING ---
+                var tk;
+                if (dT < psT) {
+                    tk = 0.03;
+                } else if (dToOW > 0) {
+                    var prog = 1 - (dToOW / presaleSpanDays);
+                    tk = 0.35 + 0.65 * prog;
+                } else if (dToOW >= -7) {
+                    tk = 1.0;
+                } else if (dT < teT) {
+                    var postOwDays  = -dToOW - 7;
+                    var theatrSpan  = Math.max(1, (teT - (owT + 7 * DAY)) / DAY);
+                    var prog2       = Math.min(1, postOwDays / theatrSpan);
+                    tk = 1.0 - 0.95 * prog2;
+                } else {
+                    tk = 0.02;
+                }
+
+                // --- INFO-SEEK ---
+                var info;
+                if (dT < psT) {
+                    info = 0.45;
+                } else if (dToOW > 14) {
+                    var prog3 = (presaleSpanDays - dToOW) / Math.max(1, presaleSpanDays - 14);
+                    info = 0.55 + 0.30 * Math.max(0, Math.min(1, prog3));
+                } else if (dToOW > 0) {
+                    info = 0.85 + 0.15 * (1 - dToOW / 14);
+                } else if (dToOW >= -14) {
+                    info = 1.0;
+                } else if (dToOW >= -42) {
+                    var decayProg = (-dToOW - 14) / 28;
+                    info = 1.0 - 0.75 * decayProg;
+                } else {
+                    info = 0.18;
+                }
+
+                // Streaming-launch info bump (Gaussian centered on 5/15).
+                // Suppress during theatrical campaign so we don't double-
+                // count audiences who were focused on tickets, not "where
+                // to stream". sigma=25d gives a ~10-week window.
+                var sigma = 25;
+                var bump  = 0.55 * Math.exp(-(dToSL * dToSL) / (2 * sigma * sigma));
+                if (dToOW > -14) bump *= 0.10;
+                info = Math.min(1.40, info + bump);
+
+                return {
+                    info_mult:   Math.max(0.04, info),
+                    ticket_mult: Math.max(0.01, tk)
+                };
+            }
+
             // ----- Synthesize a daily progression for one asset -----
             // Used by the asset-detail modal when the backend returns no rows
             // from asset_engagement_daily (most assets in the GOAT pull don't
@@ -20241,8 +20336,9 @@
             // observed shape of social-content view accrual. Per-day jitter is
             // seeded by asset_id so the same asset always renders identically.
             // Also writes daily info_seekers + ticket_visits using the same
-            // iiqAssetFunnelProjection() rates that power the cards, so the
-            // line chart numbers ladder up to the rest of Intent IQ.
+            // iiqAssetFunnelProjection() rates that power the cards, MULTIPLIED
+            // BY the calendar funnel multiplier and then RE-NORMALIZED so the
+            // per-asset lifetime totals still ladder up to the card values.
             function iiqSynthAssetDailySeries(asset, totalViews, totalEng) {
                 if (!asset) return [];
                 var posted = asset.posted_date;
@@ -20271,23 +20367,52 @@
                 var proj = iiqAssetFunnelProjection(asset);
                 var engRate = totalViews > 0 ? (totalEng / totalViews) : 0;
 
-                var out = [];
-                var allocated = 0;
-                for (var d = 0; d < nDays; d++) {
-                    var jit = 0.78 + rand(d) * 0.44;
-                    var dayShare = (raw[d] / sum) * jit;
+                // First pass: lay out daily views + raw (pre-calendar) info /
+                // tk counts. We also accumulate the calendar-weighted raw
+                // totals so the second pass can renormalize -- this is what
+                // preserves ladder-up to the per-asset card totals.
+                var draftViews = [];
+                var dateStrs   = [];
+                var allocated  = 0;
+                for (var d0 = 0; d0 < nDays; d0++) {
+                    var jit0 = 0.78 + rand(d0) * 0.44;
+                    var dayShare = (raw[d0] / sum) * jit0;
                     var dayViews;
-                    if (d === nDays - 1) {
+                    if (d0 === nDays - 1) {
                         dayViews = Math.max(0, totalViews - allocated);
                     } else {
                         dayViews = Math.round(totalViews * dayShare);
                         allocated += dayViews;
                     }
-                    var dayEng  = Math.round(dayViews * engRate);
-                    var dayInfo = Math.round(dayViews * proj.info_pct   / 100);
-                    var dayTk   = Math.round(dayViews * proj.ticket_pct / 100);
-                    var dateStr = new Date(startMs + d * 86400000).toISOString().slice(0, 10);
-                    out.push({ date: dateStr, views: dayViews, engagement: dayEng, info_seekers: dayInfo, ticket_visits: dayTk });
+                    draftViews.push(dayViews);
+                    dateStrs.push(new Date(startMs + d0 * 86400000).toISOString().slice(0, 10));
+                }
+
+                var targetInfo = totalViews * proj.info_pct   / 100;
+                var targetTk   = totalViews * proj.ticket_pct / 100;
+                var rawInfoSum = 0, rawTkSum = 0;
+                var rawInfoArr = [], rawTkArr = [];
+                for (var d1 = 0; d1 < nDays; d1++) {
+                    var mult = iiqCalendarFunnelMultiplier(dateStrs[d1]);
+                    var rInfo = draftViews[d1] * proj.info_pct   / 100 * mult.info_mult;
+                    var rTk   = draftViews[d1] * proj.ticket_pct / 100 * mult.ticket_mult;
+                    rawInfoArr.push(rInfo);
+                    rawTkArr.push(rTk);
+                    rawInfoSum += rInfo;
+                    rawTkSum   += rTk;
+                }
+                var infoScale = rawInfoSum > 0 ? (targetInfo / rawInfoSum) : 1;
+                var tkScale   = rawTkSum   > 0 ? (targetTk   / rawTkSum)   : 1;
+
+                var out = [];
+                for (var d2 = 0; d2 < nDays; d2++) {
+                    out.push({
+                        date:          dateStrs[d2],
+                        views:         draftViews[d2],
+                        engagement:    Math.round(draftViews[d2] * engRate),
+                        info_seekers:  Math.round(rawInfoArr[d2] * infoScale),
+                        ticket_visits: Math.round(rawTkArr[d2]   * tkScale)
+                    });
                 }
                 return out;
             }
@@ -21174,18 +21299,41 @@
                     if (k === 'organic' || k === 'natural')              return kind === 'info' ? orgInfoRate  : orgTkRate;
                     return kind === 'info' ? blendedInfoRate : blendedTkRate;
                 }
-                var infoCumPts = [];
-                var tkCumPts   = [];
-                var runInfo = 0, runTk = 0;
+                // Two-pass cumulative: pass 1 computes raw daily contributions
+                // weighted by the calendar funnel multiplier (so ticketing
+                // goes ~flat after theatrical ends and info-seek has a
+                // second bump around streaming launch). Pass 2 renormalizes
+                // so the FINAL cumulative totals equal the static aggregate
+                // (agg.{paid,organic}.{info_seekers,ticket_visits}) -- this
+                // preserves ladder-up with the Q2 funnel comparison card
+                // and the Assets page totals. The chart shape changes, but
+                // the totals do not.
+                var rawInfoDaily = [];
+                var rawTkDaily   = [];
+                var rawInfoSum = 0, rawTkSum = 0;
                 dates.forEach(function(dDay) {
+                    var mult = iiqCalendarFunnelMultiplier(dDay);
                     var infoToday = 0, tkToday = 0;
                     keys.forEach(function(k) {
                         var v = (dayMapByKey[k][dDay] || 0);
-                        infoToday += v * _rateFor(k, 'info');
-                        tkToday   += v * _rateFor(k, 'tk');
+                        infoToday += v * _rateFor(k, 'info') * mult.info_mult;
+                        tkToday   += v * _rateFor(k, 'tk')   * mult.ticket_mult;
                     });
-                    runInfo += infoToday;
-                    runTk   += tkToday;
+                    rawInfoDaily.push(infoToday);
+                    rawTkDaily.push(tkToday);
+                    rawInfoSum += infoToday;
+                    rawTkSum   += tkToday;
+                });
+                var targetInfo = agg.paid.info_seekers  + agg.organic.info_seekers;
+                var targetTk   = agg.paid.ticket_visits + agg.organic.ticket_visits;
+                var infoScale  = rawInfoSum > 0 ? (targetInfo / rawInfoSum) : 1;
+                var tkScale    = rawTkSum   > 0 ? (targetTk   / rawTkSum)   : 1;
+                var infoCumPts = [];
+                var tkCumPts   = [];
+                var runInfo = 0, runTk = 0;
+                dates.forEach(function(dDay, i) {
+                    runInfo += rawInfoDaily[i] * infoScale;
+                    runTk   += rawTkDaily[i]   * tkScale;
                     infoCumPts.push({ x: dDay, y: runInfo });
                     tkCumPts.push({ x: dDay, y: runTk   });
                 });
@@ -62194,25 +62342,46 @@
         // engagement across the 5 Crosswalk Engager touchpoints, summing to
         // 100%. Mapping aligns with the Crosswalk Audience Vetting Framework.
         //
-        // Algorithm (Strategy C — max-BP per category, picked 2026-06-18 over
-        // sum-of-BPs because the latter over-weights Media: it has 10+
-        // categories with hundreds of rows each, while Social has only one
-        // category, so a raw sum drowns Social/Search down to <2%):
-        //   1. For each behavioral category, compute the MAX BP across its
-        //      rows (= the top brand's reach).
-        //   2. Bucket each category to one of social/search/retail/media or
-        //      drop it (demographics, sub-cohort cuts, persona cols are
-        //      excluded).
-        //   3. Sum the max-BPs per bucket.
-        //   4. Add Owned = subject_self_pin_bp * 5 (only for non-talent
-        //      profiles). The 5x boost makes Owned visually meaningful
-        //      against the multi-category buckets — empirically lands brands
-        //      around 10-18% Owned which matches digital-bank/retail
-        //      panel reality.
-        //   5. Normalize the 5 buckets to sum to 100%.
-        //   6. For TALENT profiles, Owned = 0 (talent doesn't have a
-        //      .com / app channel the way brands do) and the remaining 4
-        //      buckets normalize to 100%.
+        // Algorithm (Strategy D — archetype-anchored + data nudge, picked
+        // 2026-06-18 over pure max-BP-per-category because that strategy
+        // produced wildly archetype-wrong results on profiles with sparse
+        // category data: Mark Rober (a YouTube creator) showed up as 85%
+        // retail because his SEARCH ENGINE / SOCIAL MEDIA rows were all 0
+        // while his BANKING / CREDIT / TECH rows had inflated baseline
+        // values, even though the audience that engages with him is
+        // overwhelmingly search-driven).
+        //
+        // User rule 2026-06-18: "if it is a retail brand things like retail
+        // and owned and operated would be big, if it's an influencer search
+        // would be huge, talent would be social and media, etc. basically
+        // it's saying the breakdown of how people digitally engage with
+        // this person online."
+        //
+        // Pipeline:
+        //   1. Detect ARCHETYPE from BRAND CATEGORY (CREATOR/INFLUENCER,
+        //      TALENT, SPORTS_TEAM, RETAIL_BRAND, SERVICE_BRAND,
+        //      MEDIA_BRAND, SEARCH_BRAND, SOCIAL_BRAND, TRAVEL_BRAND, or
+        //      GENERIC fallback).
+        //   2. Look up the archetype's base 5-bucket distribution (sums to
+        //      100). These templates encode the user's general-rule — e.g.
+        //      INFLUENCER = search-heavy (42%), RETAIL_BRAND = retail/owned
+        //      heavy (42 + 24%), TALENT = media-heavy (50%) + social (22%).
+        //   3. Compute per-bucket data signals from the actual profile
+        //      (max-BP per behavioral category, summed within bucket).
+        //      Normalize to a 4-bucket data distribution.
+        //   4. Blend 75% archetype + 25% data on the four non-owned buckets,
+        //      so the boxes still REFLECT the subject's specific data
+        //      patterns but the archetype anchors when data is sparse.
+        //   5. Owned is taken directly from the archetype (no data nudge,
+        //      because there's no clean "owned" signal in the panel
+        //      categories — it represents the share of digital engagement
+        //      that lands on the brand's own .com/app, which the panel
+        //      doesn't separately tag).
+        //   6. Final pass: re-normalize all 5 buckets to sum to 100.
+        //   7. For TALENT / INFLUENCER / SPORTS_TEAM archetypes, Owned is
+        //      forced to 0 and rendered as "—" (these subjects don't have
+        //      a brand-owned channel the way commerce brands do; the
+        //      remaining 4 buckets normalize to 100).
         const _AUDIENCE_SHARE_BUCKETS = {
             social: new Set(['SOCIAL MEDIA']),
             search: new Set(['SEARCH ENGINE/AI', 'SEARCH ENGINE', 'SEARCH']),
@@ -62259,13 +62428,90 @@
             'ATLANTIC DIVISION', 'METROPOLITAN DIVISION',
             'CENTRAL DIVISION', 'PACIFIC DIVISION'
         ]);
-        // Talent categories (subject IS a person). Owned is forced to 0
-        // for these because there's no brand-owned .com / app to count.
-        const _AUDIENCE_SHARE_TALENT_CATS = new Set([
-            'TALENT', 'ACTOR', 'MUSICIAN/BAND', 'MUSICIAN-BAND', 'ATHLETE',
-            'HOST/PERSONALITY', 'COMEDIAN'
-        ]);
-        const _AUDIENCE_SHARE_OWNED_BOOST = 5;
+        // Archetype templates — base 5-bucket distribution (each row sums
+        // to 100). Each row encodes the prior expectation for how digital
+        // engagement with that kind of subject is split across the 5
+        // Crosswalk Engager touchpoints, BEFORE any data nudge is applied.
+        // Tuned to the user's general rule (2026-06-18) and Crosswalk
+        // panel-reality numbers — see PROFILE_AUDIT_RECIPE.md Rule #3 and
+        // the Crosswalk Audience Vetting Framework.
+        const _AUDIENCE_SHARE_ARCHETYPES = {
+            INFLUENCER:    { social: 22, search: 42, owned:  8, retail:  8, media: 20 },
+            TALENT:        { social: 22, search: 14, owned:  4, retail: 10, media: 50 },
+            SPORTS_TEAM:   { social: 20, search: 15, owned: 12, retail:  8, media: 45 },
+            RETAIL_BRAND:  { social: 10, search: 14, owned: 24, retail: 42, media: 10 },
+            SERVICE_BRAND: { social:  8, search: 18, owned: 40, retail: 14, media: 20 },
+            MEDIA_BRAND:   { social: 10, search: 12, owned: 18, retail:  6, media: 54 },
+            SEARCH_BRAND:  { social: 10, search: 55, owned: 18, retail:  5, media: 12 },
+            SOCIAL_BRAND:  { social: 55, search: 15, owned: 20, retail:  5, media:  5 },
+            TRAVEL_BRAND:  { social: 12, search: 22, owned: 26, retail: 30, media: 10 },
+            GENERIC:       { social: 15, search: 15, owned: 20, retail: 25, media: 25 }
+        };
+        // Archetypes for which there is no brand-owned .com / app channel:
+        // talent, influencers, and sports teams. Owned is forced to 0 and
+        // rendered as "—" (the remaining 4 buckets normalize to 100).
+        const _AUDIENCE_SHARE_NO_OWNED = new Set(['TALENT', 'INFLUENCER', 'SPORTS_TEAM']);
+        // Archetype detection — keyed off BRAND CATEGORY (preferred) with
+        // _currentProfileCategory() as a fallback. Conservative: anything
+        // unrecognized falls through to GENERIC.
+        function _detectAudienceShareArchetype(brandCategory, profileCategory) {
+            const cat = String(brandCategory || profileCategory || '').trim().toUpperCase();
+            if (!cat) return 'GENERIC';
+            // Creator / influencer / digital-native talent — caught by
+            // substring so 'CREATOR/INFLUENCER', 'INFLUENCER', 'CREATOR',
+            // 'YOUTUBER', 'STREAMER', 'PODCASTER' all map here.
+            if (/CREATOR|INFLUENCER|YOUTUBER|STREAMER|PODCASTER/.test(cat)) return 'INFLUENCER';
+            // Traditional talent (actors, musicians, athletes, etc.)
+            if ([
+                'TALENT', 'ACTOR', 'MUSICIAN/BAND', 'MUSICIAN-BAND',
+                'ATHLETE', 'HOST/PERSONALITY', 'COMEDIAN',
+                'WRITER/DIRECTOR/AUTHOR/ARTIST', 'POLITICS/ACTIVIST',
+                'MLB ATHLETE', 'NBA ATHLETE', 'NFL ATHLETE',
+                'NHL ATHLETE', 'WNBA ATHLETE', 'SOCCER ATHLETE'
+            ].includes(cat)) return 'TALENT';
+            // Sports team / league / school
+            if ([
+                'SPORTS TEAM', 'SPORTS ORGANIZATIONS', 'COLLEGE/UNIVERSITY',
+                'MLB', 'NBA', 'NFL', 'NHL', 'MLS', 'WNBA', 'NWSL', 'EPL',
+                'PREMIER LEAGUE', 'LA LIGA', 'SERIE A', 'LIGUE 1',
+                'BUNDESLIGA', 'CFB', 'SOCCER', 'GOLF', 'TENNIS', 'RUGBY',
+                'HORSE RACING', 'VOLLEYBALL'
+            ].includes(cat)) return 'SPORTS_TEAM';
+            // Retail / commerce brand (what they sell drives engagement)
+            if ([
+                'RETAIL', 'QSR', 'APPAREL/FOOTWEAR', 'GROCERY', 'CPG',
+                'BEAUTY/WELLNESS', 'HOME/OUTDOOR', 'PHARMACY', 'PETS',
+                'AUTOMOBILE', 'ACCESSORIES', 'TOYS', 'WHERE THEY SHOP',
+                'WHERE THEY DINE', 'MOST PURCHASED BRANDS',
+                'MOST PURCHASED CATEGORIES', 'RESTAURANT', 'HEAVY MACHINERY'
+            ].includes(cat)) return 'RETAIL_BRAND';
+            // Service brand (subscription / login / account)
+            if ([
+                'BANKING', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'INSURANCE',
+                'INVESTMENTS', 'TELECOM', 'TECHNOLOGY/DEVICE',
+                'TECHNOLOGY BRAND', 'HEALTH & WELLNESS',
+                'EDUCATION & LEARNING', 'BETTING', 'WORKOUT FACILITY',
+                'TICKETING', 'VENUE', 'NON PROFIT/CHARITY',
+                'ORGANIZATIONAL MEMBERSHIPS'
+            ].includes(cat)) return 'SERVICE_BRAND';
+            // Media / streaming / content brand
+            if ([
+                'STREAMING/PLATFORM', 'STREAMING/MUSIC', 'VMVPD',
+                'VIRTUAL MVPD FAST', 'FAST', 'BROADCAST/CABLE', 'MEDIA',
+                'PORN MEDIA', 'PODCAST', 'MOVIE', 'MOVIES', 'MOVIE GENRES',
+                'CONTENT', 'GAMES', 'GAMING PLATFORMS', 'FRANCHISE',
+                'MOVIE THEATER', 'MUSIC', 'MUSIC GENRES', 'NEWS',
+                'MAGAZINE', 'BOOK'
+            ].includes(cat)) return 'MEDIA_BRAND';
+            // Search / discovery
+            if (['SEARCH ENGINE/AI', 'SEARCH ENGINE', 'SEARCH',
+                 'APP/PLATFORM USAGE'].includes(cat)) return 'SEARCH_BRAND';
+            // Social-first
+            if (cat === 'SOCIAL MEDIA') return 'SOCIAL_BRAND';
+            // Travel / experience
+            if (['TRAVEL', 'AMUSEMENT PARKS', 'EVENTS'].includes(cat)) return 'TRAVEL_BRAND';
+            return 'GENERIC';
+        }
 
         function _audienceShareBucketFor(col) {
             const c = String(col || '').trim().toUpperCase();
@@ -62281,12 +62527,16 @@
             const beh = parsed.behavioral;
             const brandCat = String(parsed.brandCategory || '').trim().toUpperCase();
             const profileCat = _currentProfileCategory();
-            const isTalent = _AUDIENCE_SHARE_TALENT_CATS.has(profileCat)
-                          || _AUDIENCE_SHARE_TALENT_CATS.has(brandCat);
+            const archetype = _detectAudienceShareArchetype(brandCat, profileCat);
+            const noOwned = _AUDIENCE_SHARE_NO_OWNED.has(archetype);
 
-            const sums = { social: 0, search: 0, retail: 0, media: 0, owned: 0 };
-            let subjectBP = 0;
+            // (a) Archetype base — clone so we can mutate.
+            const base = Object.assign({}, _AUDIENCE_SHARE_ARCHETYPES[archetype] || _AUDIENCE_SHARE_ARCHETYPES.GENERIC);
 
+            // (b) Data signals — max-BP per category, summed within the
+            // four non-owned buckets. Used to nudge the archetype baseline
+            // toward what's actually present in this profile's data.
+            const dataSums = { social: 0, search: 0, retail: 0, media: 0 };
             for (const cat of Object.keys(beh)) {
                 const items = beh[cat];
                 let arr = [];
@@ -62301,29 +62551,50 @@
                     const p = (typeof it.pct === 'number') ? it.pct : parseFloat(it.pct || it.percentage || 0) || 0;
                     if (p > maxBP) maxBP = p;
                 }
-                // Capture subject's self-pin BP from the matching brand-category
-                // column (used to seed Owned for non-talent profiles).
-                if (cat.toUpperCase() === brandCat && maxBP > subjectBP) {
-                    subjectBP = maxBP;
-                }
-                // For non-talent, exclude the brand-category row from any
-                // other bucket — it's already represented in Owned.
-                if (!isTalent && cat.toUpperCase() === brandCat) continue;
+                if (maxBP <= 0) continue;
                 const bucket = _audienceShareBucketFor(cat);
-                if (bucket) sums[bucket] += maxBP;
+                if (bucket && bucket !== 'owned') dataSums[bucket] += maxBP;
             }
 
-            sums.owned = isTalent ? 0 : subjectBP * _AUDIENCE_SHARE_OWNED_BOOST;
+            // (c) Resolve Owned: 0 for talent/influencer/sports (rendered
+            // as "—" by _renderAudienceShareBoxes), archetype default
+            // otherwise. We don't nudge Owned with data because the panel
+            // categories don't separately tag "engagement that went to
+            // the brand's own .com / app" — that's an archetype-level
+            // estimate by construction.
+            const ownedPct = noOwned ? 0 : base.owned;
 
-            const total = sums.social + sums.search + sums.retail + sums.media + sums.owned;
-            if (!total || !isFinite(total)) return { social: 0, search: 0, retail: 0, media: 0, owned: 0, isTalent };
+            // (d) Blend archetype + data on the four non-owned buckets,
+            // scaled to (100 - owned). Weights are 75/25 — heavy on
+            // archetype so a sparse-data profile (e.g. Mark Rober) still
+            // gets the right shape, but data still moves the needle when
+            // signals are present (e.g. a retail brand whose social BPs
+            // are unusually high will push social above the template).
+            const W_ARCH = 0.75, W_DATA = 0.25;
+            const archRestSum = base.social + base.search + base.retail + base.media || 1;
+            const dataRestSum = dataSums.social + dataSums.search + dataSums.retail + dataSums.media;
+            const restPct = 100 - ownedPct;
+            const blended = { owned: ownedPct, social: 0, search: 0, retail: 0, media: 0 };
+            ['social', 'search', 'retail', 'media'].forEach(b => {
+                const archShare = (base[b] / archRestSum); // archetype share within the 4 non-owned
+                const dataShare = dataRestSum > 0 ? (dataSums[b] / dataRestSum) : archShare;
+                blended[b] = restPct * (W_ARCH * archShare + W_DATA * dataShare);
+            });
+
+            // (e) Final renormalize so total is exactly 100 (floating-point
+            // safety + guard against archetype rows that don't sum to 100).
+            const total = blended.social + blended.search + blended.retail + blended.media + blended.owned;
+            if (!total || !isFinite(total)) {
+                return { social: 0, search: 0, retail: 0, media: 0, owned: 0, archetype, noOwned };
+            }
             return {
-                social: sums.social / total * 100,
-                search: sums.search / total * 100,
-                retail: sums.retail / total * 100,
-                media:  sums.media  / total * 100,
-                owned:  sums.owned  / total * 100,
-                isTalent: isTalent
+                social: blended.social / total * 100,
+                search: blended.search / total * 100,
+                retail: blended.retail / total * 100,
+                media:  blended.media  / total * 100,
+                owned:  blended.owned  / total * 100,
+                archetype: archetype,
+                noOwned:   noOwned
             };
         }
 
@@ -62350,9 +62621,17 @@
             };
             apply('asbSocial', share.social, false);
             apply('asbSearch', share.search, false);
-            apply('asbOwned',  share.owned,  share.isTalent);
+            apply('asbOwned',  share.owned,  share.noOwned);
             apply('asbRetail', share.retail, false);
             apply('asbMedia',  share.media,  false);
+            // Expose archetype on the container so dev tools (and the
+            // hover tooltip below) can show which template drove the
+            // numbers. Useful when debugging "why does Mark Rober look
+            // like a search-heavy profile?" — answer: detected
+            // archetype = INFLUENCER.
+            container.setAttribute('data-archetype', share.archetype || '');
+            container.title = 'Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%). Detected archetype: '
+                + (share.archetype || 'GENERIC').replace(/_/g, ' ');
             container.style.display = 'inline-flex';
         }
 

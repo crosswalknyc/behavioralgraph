@@ -44,7 +44,7 @@ from html import escape
 from datetime import datetime, timedelta, date
 from functools import wraps
 from zoneinfo import ZoneInfo
-from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session, make_response
+from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session
 from flask_cors import CORS
 
 try:
@@ -7078,7 +7078,7 @@ def index():
     if not profile_picture:
         profile_picture = load_default_profile_photo() or ''
     _, effective_credits = check_user_credits(session.get('username')) if session.get('username') else (False, 0)
-    resp = make_response(render_template('index.html', 
+    return render_template('index.html', 
                            username=session.get('username'),
                            insights_quick_snapshot_icon=insights_quick_snapshot_icon,
                            insights_quick_snapshot_title=insights_quick_snapshot_title,
@@ -7124,11 +7124,7 @@ def index():
                            company=company,
                            user_email=email,
                            cloaked_from=session.get('cloaked_from'),
-                           is_dev_env=IS_DEV_ENV))
-    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    resp.headers['Pragma'] = 'no-cache'
-    resp.headers['Expires'] = '0'
-    return resp
+                           is_dev_env=IS_DEV_ENV)
 
 
 @app.route('/api/request-credits', methods=['POST'])
