@@ -17009,7 +17009,7 @@
             <!-- Behavioral Tab -->
             <div id="tab-behavioral" class="tab-content">
                 <div class="metric-legend" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(90, 154, 217, 0.1); border-radius: 8px; font-size: 0.75rem;">
-                    <span class="has-tooltip" data-tooltip="The percentage of this specific audience that engages with each item."><strong style="color: var(--accent-blue);">Profile %</strong> — Audience penetration</span>
+                    <span class="has-tooltip" data-tooltip="The percentage of this specific audience that engages with each item."><strong style="color: var(--accent-blue);">Total Universe %</strong> — Audience penetration</span>
                     <span class="has-tooltip" data-tooltip="The percentage of the general US population that engages with each item."><strong style="color: var(--text-secondary);">GP: X%</strong> — Gen Pop penetration</span>
                     <span class="has-tooltip" data-tooltip="Index shows how much more/less likely this audience is to engage vs. Gen Pop. 2.0x = twice as likely, 0.5x = half as likely."><strong style="color: #10b981;">Index (X.xxx)</strong> — Over/under-index multiplier</span>
                     <span class="has-tooltip" data-tooltip="N/A indicates that data is not available for this metric."><strong style="color: var(--text-secondary);">N/A</strong> — Data not available</span>
@@ -17124,7 +17124,7 @@
                         <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="text-align: left;">Rank</span>
                         <span>Location</span>
                         <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
-                        <span class="profile-col has-tooltip" data-tooltip="Profile percentage">Profile</span>
+                        <span class="profile-col has-tooltip" data-tooltip="Total Universe percentage">Total Universe</span>
                         <span class="cw-gp-col has-tooltip" data-tooltip="Gen Pop % from CrossWalk panel data">CW Gen Pop</span>
                         <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Census/Nielsen)">GP Census</span>
                         <span class="index-col has-tooltip" data-tooltip="CrossWalk Gen Pop Index">CW GP Index</span>
@@ -17192,7 +17192,7 @@
                             <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="text-align: left;">Rank</span>
                             <span>Location</span>
                             <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
-                            <span class="profile-col has-tooltip" data-tooltip="Profile percentage">Profile</span>
+                            <span class="profile-col has-tooltip" data-tooltip="Total Universe percentage">Total Universe</span>
                             <span class="index-col">Index</span>
                         </div>
                         <div id="locationList" style="max-height: 500px; overflow-y: auto;"></div>
@@ -17226,7 +17226,7 @@
                             <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="text-align: left;">Rank</span>
                             <span>Location</span>
                             <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
-                            <span class="profile-col has-tooltip" data-tooltip="Profile percentage">Profile</span>
+                            <span class="profile-col has-tooltip" data-tooltip="Total Universe percentage">Total Universe</span>
                             <span class="index-col">Index</span>
                         </div>
                         <div id="locationListBottom" style="max-height: 500px; overflow-y: auto;"></div>
@@ -21766,16 +21766,28 @@
                 // Per-day funnel model + SVOD search model, computed
                 // client-side so the lines line up exactly with the
                 // daily trailer-view curve already on the chart.
+                // IMPORTANT: we plot ABSOLUTE daily counts (people, not
+                // %). This makes info-seekers and ticketing visits drop
+                // to zero on days with no trailer views (where they
+                // belong), instead of showing the modeled conversion %
+                // floating high during the dead zone where there are no
+                // viewers to convert. SVOD searches join the same chart
+                // on the same right axis since they're also counts.
                 var infoSeries   = [];
                 var ticketSeries = [];
                 var svodSeries   = [];
                 var wInfo = 0, wTk = 0, wTotal = 0;
+                var totalInfoCount = 0, totalTkCount = 0;
                 curve.forEach(function(r) {
-                    var v = Number(r.trailer_views) || 0;
+                    var v  = Number(r.trailer_views) || 0;
                     var fm = iiqQ5DailyFunnelModel(r.date);
-                    infoSeries.push  ({ x: r.date, y: fm.info_pct   });
-                    ticketSeries.push({ x: r.date, y: fm.ticket_pct });
+                    var infoCount = Math.round(v * fm.info_pct   / 100);
+                    var tkCount   = Math.round(v * fm.ticket_pct / 100);
+                    infoSeries.push  ({ x: r.date, y: infoCount });
+                    ticketSeries.push({ x: r.date, y: tkCount   });
                     svodSeries.push  ({ x: r.date, y: iiqQ5SvodSearchModel(r.date) });
+                    totalInfoCount += infoCount;
+                    totalTkCount   += tkCount;
                     if (v > 0) {
                         wInfo  += v * fm.info_pct;
                         wTk    += v * fm.ticket_pct;
@@ -21795,7 +21807,16 @@
                     + iiqSummaryTile('Blended ticketing', blendTk.toFixed(1) + '%',   'view-weighted \u2014 trailer viewers who visited a ticketing site within 7d')
                     + '</div>';
 
-                // Chart 1: trailer views (left axis, cyan area) + 2 conversion % overlays (right axis).
+                // Single combined chart: trailer views on the LEFT axis
+                // (cyan area), and 3 absolute-count series on the RIGHT
+                // axis -- info-seekers, ticketing visits, and PVOD/SVOD
+                // searches. All right-axis lines are PEOPLE/SEARCH counts
+                // (not %), so they naturally collapse to ~0 on days with
+                // no trailer activity (fixing the visual disconnect where
+                // info-seek % used to read ~25% even when the trailer
+                // line was flat at zero). SVOD searches share the same
+                // right axis since they sit in a comparable magnitude
+                // range and the user wanted one consolidated chart.
                 var leftSeries1 = [{
                     name: 'Daily trailer views (all trailer assets)',
                     color: '#22d3ee',
@@ -21803,33 +21824,23 @@
                     points: curve.map(function(r){ return { x: r.date, y: Number(r.trailer_views)||0 }; }),
                 }];
                 var rightSeries1 = [
-                    { name: 'Info-seek % (searched the title within 7d)', color: '#a5b4fc', points: infoSeries },
-                    { name: 'Ticketing % (visited a ticketing site within 7d)', color: '#fbbf24', points: ticketSeries },
+                    { name: 'Daily info-seekers (trailer viewers who searched the title within 7d)', color: '#a5b4fc', points: infoSeries   },
+                    { name: 'Daily ticketing visits (trailer viewers who visited a ticketing site within 7d)', color: '#fbbf24', points: ticketSeries },
+                    { name: 'Daily PVOD / SVOD searches ("where to watch GOAT", "GOAT streaming", "GOAT Netflix")', color: '#c084fc', points: svodSeries   }
                 ];
                 html += '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.85rem;">';
-                html +=   '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Daily trailer views with funnel-conversion overlay \u2014 does info-seek and ticketing intent build along with the trailer?</div>';
-                html +=   iiqLineChartDual(leftSeries1, rightSeries1, {
-                            height: 300,
-                            leftLabel:  'Trailer views',
-                            rightLabel: 'Conversion %',
-                            rightMax:   35,
-                            rightSuffix:'%',
-                          });
-                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.5rem; line-height:1.5;">Conversion lines (right axis) use the same per-viewer projection model as the In-Flight Assets page. Note how ticketing % stays near zero in the fall (no tickets on sale yet), jumps when pre-sales open on Jan 21, peaks the opening-weekend window (Feb 13\u201316), then collapses. Info-seek % climbs more gradually and starts decaying earlier as audience awareness saturates.</div>';
-                html += '</div>';
-
-                // Chart 2: PVOD / SVOD search tail.
-                html += '<div class="iiq-card" style="padding:0.85rem;">';
                 html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.45rem; gap:1rem;">';
-                html +=     '<div style="font-size:0.78rem; color: var(--text-secondary);">PVOD / SVOD search interest \u2014 the tail after theatrical, peaking at streaming launch (5/15)</div>';
-                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">' + fmtCompact(svodTotal) + ' modeled searches \u00b7 peak ' + (svodPeak ? svodPeak.x : '\u2014') + '</div>';
+                html +=     '<div style="font-size:0.78rem; color: var(--text-secondary);">Daily trailer views, downstream funnel, and PVOD / SVOD search tail \u2014 all on one chart</div>';
+                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">~' + fmtCompact(totalInfoCount) + ' info-seekers \u00b7 ~' + fmtCompact(totalTkCount) + ' ticketing visits \u00b7 ' + fmtCompact(svodTotal) + ' SVOD searches</div>';
                 html +=   '</div>';
-                html +=   iiqLineChart([{
-                            name: 'Daily PVOD / SVOD searches ("where to watch GOAT", "GOAT streaming", "GOAT Netflix")',
-                            color: '#c084fc',
-                            points: svodSeries,
-                          }], { height: 220 });
-                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.5rem; line-height:1.5;">Models panel-derived daily search counts for streaming-availability queries. Near zero during the theatrical campaign because audiences are focused on seeing it in theatres. Starts climbing roughly 4\u20136 weeks before the streaming launch as speculation builds, spikes around the 5/15 launch, then settles into a 2\u20133 month elevated tail of catalog-discovery searches.</div>';
+                html +=   iiqLineChartDual(leftSeries1, rightSeries1, {
+                            height: 340,
+                            leftLabel:      'Trailer views',
+                            rightLabel:     'Daily people / searches',
+                            rightFormatter: fmtCompact,
+                          });
+                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.5rem; line-height:1.5;">Info-seekers and ticketing visits are absolute counts (daily trailer views \u00d7 the per-viewer funnel rate from the In-Flight Assets model), so they collapse to zero on days with no trailer activity and spike alongside the trailer drops. Pre-sales open Jan 21, opening weekend lands Feb 13\u201316, then both lines decay.</div>';
+                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.35rem; line-height:1.5;">Panel-derived daily search counts for streaming-availability queries. Near zero during the theatrical campaign because audiences are focused on seeing it in theatres. Starts climbing roughly 4\u20136 weeks before the streaming launch as speculation builds, spikes around the 5/15 launch, then settles into a 2\u20133 month elevated tail of catalog-discovery searches.</div>';
                 html += '</div>';
 
                 return html;
@@ -26541,7 +26552,7 @@
                 var cat = pill.getAttribute('data-beh-cat');
                 if (!cat) return;
                 var lines = [];
-                var _baseLbl = (typeof _baseCohortLabel === 'function') ? _baseCohortLabel() : 'Casual';
+                var _baseLbl = (typeof _baseCohortLabel === 'function') ? _baseCohortLabel() : 'Total Universe';
                 var currentLabel = _baseLbl;
                 try {
                     var info = typeof getProfileSuffixInfo === 'function' && typeof currentProfileData !== 'undefined' && currentProfileData
@@ -62044,18 +62055,17 @@
             return '';
         }
 
-        // User rule (2026-06-17): "if a profile is not in the talent
-        // section it should refer to casual as Core everywhere".
-        // TALENT profiles keep "Casual" (fan-base language: Casual
-        // Fan vs Avid Fan). Every other category — BRAND, SPORTS TEAM,
-        // CONTENT, MUSICIAN-BAND, MOVIE, etc. — uses "Core" instead,
-        // because "casual fan" doesn't fit the brand-audience framing.
-        // Single chokepoint so every column header, chip, popover row,
-        // chart legend, hover tooltip, and median callout stays
-        // consistent.
+        // User rule (2026-06-18): the unsuffixed BASE / Casual Fan run
+        // is now labeled "Total Universe" EVERYWHERE — TALENT and
+        // non-TALENT alike. Replaces the prior split labeling ("Casual"
+        // for TALENT, "Core" for every other category) at the user's
+        // request: "instead of saying casual or profile anywhere let's
+        // just say Total Universe". Single chokepoint so every column
+        // header, chip, popover row, chart legend, hover tooltip,
+        // median callout, sort dropdown, and comparison-mode label
+        // stays consistent.
         function _baseCohortLabel() {
-            const cat = _currentProfileCategory();
-            return cat === 'TALENT' ? 'Casual' : 'Core';
+            return 'Total Universe';
         }
 
         // ===================================================================
@@ -62973,7 +62983,7 @@
             // render owns the Profile column).
             const cfRow = document.createElement('label');
             cfRow.style.cssText = 'display:grid;grid-template-columns:18px 1fr;column-gap:0.55rem;align-items:center;padding:0.4rem 0.5rem;border-radius:6px;cursor:pointer;font-size:0.82rem;line-height:1.25;margin-bottom:0.45rem;background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.22);';
-            cfRow.title = 'The ' + _baseCohortLabel().toUpperCase() + (_baseCohortLabel() === 'Casual' ? ' FAN' : '') + ' audience is composed of panelists who have 1 or more digital touchpoints to ' + (_comparisonRunsState.subject || 'this profile').toUpperCase() + ' within the stated timeframe.';
+            cfRow.title = 'The ' + _baseCohortLabel().toUpperCase() + ' audience is composed of panelists who have 1 or more digital touchpoints to ' + (_comparisonRunsState.subject || 'this profile').toUpperCase() + ' within the stated timeframe.';
             const cfCb = document.createElement('input');
             cfCb.type = 'checkbox';
             cfCb.id = 'cmpIncludeCasualFanCb';
