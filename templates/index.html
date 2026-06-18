@@ -20039,8 +20039,8 @@
             // measures ticket-buying intent for the subject (panel signals)
             // alongside comparable titles' realized opening-weekend buyers.
             var IIQ_QMETA = {
-                q1: { short: 'Eng x Category',   title: 'Content Engagement by Category',                                   intro: 'Mean 7-day views per asset, grouped by asset type and paid/organic. Higher = posts of that type tend to pull more eyeballs in their first week.' },
-                q2: { short: 'Paid vs. Organic', title: 'Q2. How do paid and organic content interact?',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
+                q1: { short: 'Q1 · Content',     title: 'Content Engagement by Category',                                   intro: 'Mean 7-day views per asset, grouped by asset type and paid/organic. Higher = posts of that type tend to pull more eyeballs in their first week.' },
+                q2: { short: 'Q2 · Paid×Organic', title: 'Q2. How do paid and organic content interact?',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
                 q3: { short: 'Q3 · Intent to Buy', title: 'Q3. How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date — pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement — scaled by industry conversion rates. Nothing here is a forecast.' },
                 q4: { short: 'Q4 · Talent',       title: 'Q4. How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Q5 · Trailer',      title: 'Q5. How crucial is trailer viewership across the campaign life?', intro: 'Daily trailer views (across all trailer assets). Spikes mark trailer launches and refreshes.' },
@@ -20315,17 +20315,134 @@
                 html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Cumulative view growth, paid vs organic</div>' + iiqLineChart(series, {height: 240}) + '</div>';
                 html += '</div>';
                 if (best.length) {
+                    var slug = window.__intentIQ && window.__intentIQ.currentSlug;
+                    // Cache the row payloads so the click handler can pick the
+                    // right asset object without round-tripping huge JSON
+                    // through HTML attributes.
+                    window.__intentIQQ2Best = best;
                     var maxBV = Math.max.apply(null, best.map(function(b){ return Number(b.views_total)||0; }).concat([1]));
-                    html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Top 10 in-flight assets (' + escapeHtml(bestLabel) + ')</div>';
-                    html += best.slice(0,10).map(function(b) {
+                    html += '<div class="iiq-card" style="padding:0.85rem;">';
+                    html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.45rem;">';
+                    html +=     '<div style="font-size:0.78rem; color: var(--text-secondary);">Top 10 in-flight assets (' + escapeHtml(bestLabel) + ')</div>';
+                    html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">click any row for daily performance \u00b7 info-seek % &amp; ticketing % match the Assets page</div>';
+                    html +=   '</div>';
+                    html +=   '<div style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; padding:0.3rem 0 0.4rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.7rem; color: var(--text-secondary);">'
+                        +       '<div>Asset</div><div>Views</div>'
+                        +       '<div style="text-align:right;">Views</div>'
+                        +       '<div style="text-align:right;">Eng</div>'
+                        +       '<div style="text-align:right; color:#a5b4fc;">Info-seek %</div>'
+                        +       '<div style="text-align:right; color:#fbbf24;">Ticketing %</div>'
+                        +     '</div>';
+                    html += best.slice(0,10).map(function(b, idx) {
                         var label = (b.action_label || b.asset_type || 'Asset #' + b.asset_id);
                         var color = IIQ_QPALETTE[b.paid_or_organic] || IIQ_QPALETTE.unknown;
-                        return iiqBarRow(label, Number(b.views_total)||0, maxBV, color, '', 'eng ' + fmtCompact(b.engagement_total||0));
+                        var pct   = maxBV > 0 ? Math.min(100, (Number(b.views_total)||0) / maxBV * 100) : 0;
+                        var proj  = iiqAssetFunnelProjection(b);
+                        var onclick = 'window.iiqShowAssetDetail(\'' + escapeHtml(slug || '') + '\', ' + idx + ')';
+                        return '<div onclick="' + onclick + '" style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; align-items:center; padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; transition: background 0.15s;" onmouseenter="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseleave="this.style.background=\'transparent\'">'
+                            +   '<div style="font-size:0.78rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</div>'
+                            +   '<div style="background: rgba(255,255,255,0.06); height: 16px; border-radius: 4px; overflow:hidden;"><div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + color + ';"></div></div>'
+                            +   '<div style="font-size:0.82rem; font-weight:600; color:#fff; text-align:right;">' + fmtCompact(b.views_total||0) + '</div>'
+                            +   '<div style="font-size:0.78rem; color:#cbd5e1; text-align:right;">' + fmtCompact(b.engagement_total||0) + '</div>'
+                            +   '<div style="font-size:0.78rem; font-weight:600; color:#a5b4fc; text-align:right;">' + proj.info_pct.toFixed(1) + '%</div>'
+                            +   '<div style="font-size:0.78rem; font-weight:600; color:#fbbf24; text-align:right;">' + proj.ticket_pct.toFixed(1) + '%</div>'
+                            + '</div>';
                     }).join('');
                     html += '</div>';
                 }
                 return html;
             }
+
+            // ===== Per-asset detail modal (Performance page Top-10 + Assets page) =====
+            // Renders a centered overlay with the asset's metadata, modeled
+            // funnel projections (info-seek % + ticketing %), and a daily
+            // views+engagement line chart fetched from
+            // /api/intent/<slug>/asset/<id>/timeseries. Defaults to YTD per
+            // the standing 'do YTD unless otherwise specified' rule.
+            window.iiqShowAssetDetail = function(slug, idxOrAsset) {
+                if (!slug) return;
+                var asset = (typeof idxOrAsset === 'number')
+                    ? (window.__intentIQQ2Best || [])[idxOrAsset]
+                    : idxOrAsset;
+                if (!asset) return;
+                var overlay = document.getElementById('iiqAssetModal');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.id = 'iiqAssetModal';
+                    overlay.style.cssText = 'position:fixed; inset:0; background: rgba(0,0,0,0.7); z-index:9999; display:flex; align-items:center; justify-content:center; padding:2rem;';
+                    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+                    document.body.appendChild(overlay);
+                } else {
+                    overlay.innerHTML = '';
+                    overlay.style.display = 'flex';
+                }
+                var proj = iiqAssetFunnelProjection(asset);
+                var color = IIQ_QPALETTE[asset.paid_or_organic] || IIQ_QPALETTE.unknown;
+                var label = (asset.action_label || asset.asset_type || 'Asset #' + asset.asset_id);
+                var views = Number(asset.views_total != null ? asset.views_total : asset.ext_view_count) || 0;
+                var eng   = Number(asset.engagement_total != null ? asset.engagement_total : asset.ext_engagement_count) || 0;
+                var infoCount = Math.round(views * proj.info_pct / 100);
+                var tkCount   = Math.round(views * proj.ticket_pct / 100);
+                var engRate = views > 0 ? (eng / views * 100) : 0;
+
+                var panel = document.createElement('div');
+                panel.style.cssText = 'background: #0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:10px; max-width:920px; width:100%; max-height:90vh; overflow:auto; padding:1.25rem 1.5rem; box-shadow: 0 24px 64px rgba(0,0,0,0.5);';
+                panel.innerHTML =
+                    '<div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:0.85rem; gap:1rem;">'
+                  +   '<div>'
+                  +     '<div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.25rem;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:' + color + ';"></span><h3 style="margin:0; color:#fff; font-size:1.05rem;">' + escapeHtml(label) + '</h3></div>'
+                  +     '<div style="font-size:0.74rem; color: var(--text-secondary);">'
+                  +       escapeHtml(asset.asset_type || '') + ' \u00b7 ' + escapeHtml(asset.channel || '\u2014')
+                  +       ' \u00b7 ' + escapeHtml(asset.paid_or_organic || 'unknown')
+                  +       ' \u00b7 ' + escapeHtml(asset.phase_name || '\u2014')
+                  +       ' \u00b7 posted ' + escapeHtml(asset.posted_date || '\u2014')
+                  +       (asset.url ? ' \u00b7 <a href="' + escapeHtml(asset.url) + '" target="_blank" rel="noopener" style="color:#60a5fa;">open asset \u2197</a>' : '')
+                  +     '</div>'
+                  +   '</div>'
+                  +   '<button type="button" onclick="document.getElementById(\'iiqAssetModal\').remove()" style="background: rgba(255,255,255,0.06); color:#fff; border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:0.35rem 0.7rem; cursor:pointer; font-size:0.85rem;">Close \u2715</button>'
+                  + '</div>'
+                  + '<div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:0.5rem; margin-bottom:0.9rem;">'
+                  +   iiqSummaryTile('Views (' + (asset.window_label || 'YTD') + ')', fmtCompact(views), '')
+                  +   iiqSummaryTile('Engagement', fmtCompact(eng), 'likes + comments + shares')
+                  +   iiqSummaryTile('Eng. rate', engRate.toFixed(2) + '%', 'engagement / views')
+                  +   iiqSummaryTile('Info-seek %', proj.info_pct.toFixed(1) + '%', '~' + fmtCompact(infoCount) + ' viewers within 7d')
+                  +   iiqSummaryTile('Ticketing %', proj.ticket_pct.toFixed(1) + '%', '~' + fmtCompact(tkCount) + ' viewers within 7d')
+                  + '</div>'
+                  + '<div id="iiqAssetModalChart" class="iiq-card" style="padding:0.85rem;">'
+                  +   '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (loading\u2026)</div>'
+                  +   '<div class="iiq-empty">Fetching daily timeline\u2026</div>'
+                  + '</div>'
+                  + '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.6rem;">Info-seek % and Ticketing % use the same iiqAssetFunnelProjection() model that powers the In-Flight Assets cards and the Performance Q1 rollup, so the values ladder up across all three views.</div>';
+                overlay.appendChild(panel);
+
+                var aid = asset.asset_id;
+                fetch('/api/intent/' + slug + '/asset/' + aid + '/timeseries?window=ytd', { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        var chartHost = document.getElementById('iiqAssetModalChart');
+                        if (!chartHost) return;
+                        if (d.success === false) {
+                            chartHost.innerHTML = '<div class="iiq-empty">' + escapeHtml(d.error || 'Failed to load timeseries') + '</div>';
+                            return;
+                        }
+                        var s = d.series || [];
+                        if (!s.length) {
+                            chartHost.innerHTML = '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (' + escapeHtml(d.window_label || 'YTD') + ')</div><div class="iiq-empty">No daily rows in asset_engagement_daily for this asset in the selected window. Window totals: views ' + fmtCompact(views) + ' \u00b7 engagement ' + fmtCompact(eng) + '.</div>';
+                            return;
+                        }
+                        var viewsPts = s.map(function(p) { return { x: p.date, y: Number(p.views) || 0 }; });
+                        var engPts   = s.map(function(p) { return { x: p.date, y: Number(p.engagement) || 0 }; });
+                        var series = [
+                            { name: 'Daily views',      color: '#60a5fa', points: viewsPts },
+                            { name: 'Daily engagement', color: '#fbbf24', points: engPts }
+                        ];
+                        chartHost.innerHTML = '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (' + escapeHtml(d.window_label || 'YTD') + ')</div>' + iiqLineChart(series, { height: 260 });
+                    })
+                    .catch(function(e) {
+                        var chartHost = document.getElementById('iiqAssetModalChart');
+                        if (chartHost) chartHost.innerHTML = '<div class="iiq-empty">Failed: ' + escapeHtml(e.message || e) + '</div>';
+                    });
+            };
 
             function iiqRenderQ3(d) {
                 // Q3 = ticket-buying intent (measurement, no forecasting).
@@ -20425,23 +20542,134 @@
                 return html;
             }
 
+            // Per-talent rollup of the same per-asset funnel projection used
+            // by Q1 + the In-Flight Assets page. For each asset we credit
+            // every talent listed in talent_tags (an asset starring two cast
+            // members contributes its views/engagement/info/ticket signal
+            // to BOTH). Real engagement % is computed from the asset's
+            // own ext_engagement_count / ext_view_count (capped per asset
+            // at 60% to suppress junk-bot ratios), then view-weighted up
+            // to the talent level — same approach as Q1's Info-seek % column.
+            function iiqQ4TalentRollupFromAssets(assets) {
+                var by = {};
+                (assets || []).forEach(function(c) {
+                    var v = Number(c.ext_view_count) || 0;
+                    if (v <= 0) return;
+                    var tags = c.talent_tags;
+                    if (!tags || !tags.length) return;
+                    var e = Number(c.ext_engagement_count) || 0;
+                    var p = iiqAssetFunnelProjection(c);
+                    var info  = v * (p.info_pct   / 100);
+                    var ticket = v * (p.ticket_pct / 100);
+                    // Per-asset real engagement rate, capped at 60% to drop
+                    // obviously-bot ratios before the view-weighted rollup.
+                    var rawRate = v > 0 ? Math.min(0.60, e / v) : 0;
+                    var ewEng = v * rawRate; // view-weighted engagement
+                    tags.forEach(function(t) {
+                        var key = String(t || '').trim();
+                        if (!key) return;
+                        if (!by[key]) by[key] = {
+                            talent: key, views: 0, eng_weighted: 0,
+                            info_seekers: 0, ticket_visits: 0, asset_count: 0
+                        };
+                        var b = by[key];
+                        b.views        += v;
+                        b.eng_weighted += ewEng;
+                        b.info_seekers += info;
+                        b.ticket_visits+= ticket;
+                        b.asset_count  += 1;
+                    });
+                });
+                return Object.keys(by).map(function(k) {
+                    var b = by[k];
+                    b.eng_pct    = b.views > 0 ? b.eng_weighted / b.views * 100 : 0;
+                    b.info_pct   = b.views > 0 ? b.info_seekers  / b.views * 100 : 0;
+                    b.ticket_pct = b.views > 0 ? b.ticket_visits / b.views * 100 : 0;
+                    return b;
+                });
+            }
+
             function iiqRenderQ4(d) {
-                if (!d.rows || !d.rows.length) return '<div class="iiq-empty">Q4 has no talent attribution yet. Run scripts/intent_attribution.py --apply.</div>';
-                var rows = d.rows.slice().sort(function(a,b){ return (Number(b.views_total)||0) - (Number(a.views_total)||0); });
-                var maxV = Math.max.apply(null, rows.map(function(r){ return Number(r.views_total)||0; }).concat([1]));
-                var totalV = rows.reduce(function(s,r){ return s + (Number(r.views_total)||0); }, 0);
-                var totalE = rows.reduce(function(s,r){ return s + (Number(r.engagement_total)||0); }, 0);
+                // Preferred path: per-asset rollup from /api/intent/<slug>/assets
+                // (matches Assets page and Q1 funnel exactly).
+                var rolled = iiqQ4TalentRollupFromAssets(d._assets || []);
+                var usingAssets = rolled.length > 0;
+                var rows;
+                if (usingAssets) {
+                    rows = rolled.slice().sort(function(a,b){ return b.views - a.views; });
+                } else if (d.rows && d.rows.length) {
+                    // Fallback to legacy attribution payload (views only).
+                    rows = d.rows.slice()
+                        .sort(function(a,b){ return (Number(b.views_total)||0) - (Number(a.views_total)||0); })
+                        .map(function(r) {
+                            return {
+                                talent: r.talent, views: Number(r.views_total)||0,
+                                eng_pct: null, info_seekers: null, ticket_visits: null,
+                                info_pct: null, ticket_pct: null,
+                                asset_count: Number(r.asset_count)||0
+                            };
+                        });
+                } else {
+                    return '<div class="iiq-empty">Q4 has no talent-tagged assets yet. Run scripts/backfill_intent_talent_tags.py.</div>';
+                }
+
+                var maxV = Math.max.apply(null, rows.map(function(r){ return r.views||0; }).concat([1]));
+                var totalV = rows.reduce(function(s,r){ return s + (r.views||0); }, 0);
+                var totalInfo = rows.reduce(function(s,r){ return s + (r.info_seekers||0); }, 0);
+                var totalTk   = rows.reduce(function(s,r){ return s + (r.ticket_visits||0); }, 0);
+                var blendedInfo = totalV > 0 ? totalInfo / totalV * 100 : 0;
+                var blendedTk   = totalV > 0 ? totalTk   / totalV * 100 : 0;
                 var top = rows[0];
-                var html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
+
+                var html = '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
                     + iiqSummaryTile('Cast members surfaced', String(rows.length), 'in tagged campaign assets')
                     + iiqSummaryTile('Talent-driven views', fmtCompact(totalV), 'across all cast-tagged assets')
-                    + iiqSummaryTile('Top contributor', top ? top.talent : '—', top ? fmtCompact(top.views_total) + ' views · ' + top.asset_count + ' assets' : '')
+                    + iiqSummaryTile('Top contributor', top ? top.talent : '—', top ? fmtCompact(top.views) + ' views · ' + top.asset_count + ' assets' : '')
+                    + iiqSummaryTile('Info-seekers', fmtCompact(totalInfo), usingAssets ? blendedInfo.toFixed(1) + '% of viewers — same model as Assets page' : 'requires asset feed')
+                    + iiqSummaryTile('Ticketing visits', fmtCompact(totalTk),   usingAssets ? blendedTk.toFixed(1)   + '% of viewers — same model as Assets page' : 'requires asset feed')
                     + '</div>';
-                html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Cast members ranked by total measured views</div>';
-                html += rows.map(function(r) {
-                    return iiqBarRow(r.talent, Number(r.views_total)||0, maxV, '#f59e0b', '', 'eng ' + fmtCompact(r.engagement_total||0));
-                }).join('');
+
+                html += '<div class="iiq-card" style="padding:0.85rem;">';
+                html += '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.55rem;">';
+                html +=   '<div style="font-size:0.78rem; color: var(--text-secondary);">Cast members ranked by total measured views, with funnel-stage rollup</div>';
+                html +=   '<div style="font-size:0.7rem; color: var(--text-secondary);" title="View-weighted means of the per-asset modeled projections shown on the In-Flight Assets page. An asset starring multiple cast members contributes to each of their rollups.">numbers match per-asset values on Assets page</div>';
                 html += '</div>';
+                html += '<table style="width:100%; border-collapse: collapse; font-size:0.78rem;">';
+                html += '<thead><tr style="color: var(--text-secondary); text-align:left;">'
+                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08);">Cast member</th>'
+                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right;">Assets</th>'
+                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right;">Views</th>'
+                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right; color:#fb923c;" title="View-weighted average per-asset engagement rate (likes+comments+shares ÷ views), per-asset capped at 60% to suppress junk-bot ratios.">Eng %</th>'
+                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right; color:#a5b4fc;" title="View-weighted mean per-asset info-seek %, then total info-seekers. Same formula as Assets page.">Info-seek %</th>'
+                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right; color:#fbbf24;" title="View-weighted mean per-asset ticketing %, then total ticket visits. Same formula as Assets page.">Ticketing %</th>'
+                    + '</tr></thead><tbody>';
+
+                rows.forEach(function(r) {
+                    var v = r.views || 0;
+                    var barPct = maxV > 0 ? v / maxV * 100 : 0;
+                    var engCell = r.eng_pct == null ? '<span style="opacity:0.4;">—</span>'
+                        : r.eng_pct.toFixed(1) + '%';
+                    var infoCell = r.info_pct == null ? '<span style="opacity:0.4;">—</span>'
+                        : r.info_pct.toFixed(1) + '% · ' + fmtCompact(r.info_seekers||0);
+                    var tkCell = r.ticket_pct == null ? '<span style="opacity:0.4;">—</span>'
+                        : r.ticket_pct.toFixed(1) + '% · ' + fmtCompact(r.ticket_visits||0);
+                    html += '<tr>'
+                        +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04);">' + escapeHtml(r.talent) + '</td>'
+                        +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color: var(--text-secondary);">' + r.asset_count + '</td>'
+                        +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right;">'
+                        +     '<div style="display:flex; align-items:center; gap:0.5rem; justify-content:flex-end;">'
+                        +       '<div style="flex:1; max-width:160px; height:6px; background: rgba(255,255,255,0.06); border-radius:3px; overflow:hidden;">'
+                        +         '<div style="width:' + barPct.toFixed(1) + '%; height:100%; background:#f59e0b;"></div>'
+                        +       '</div>'
+                        +       '<span style="font-variant-numeric: tabular-nums; min-width:60px; text-align:right;">' + fmtCompact(v) + '</span>'
+                        +     '</div>'
+                        +   '</td>'
+                        +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#fb923c; font-variant-numeric: tabular-nums;">' + engCell + '</td>'
+                        +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#a5b4fc; font-variant-numeric: tabular-nums;">' + infoCell + '</td>'
+                        +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#fbbf24; font-variant-numeric: tabular-nums;">' + tkCell + '</td>'
+                        + '</tr>';
+                });
+                html += '</tbody></table></div>';
                 if (d.note) html += '<p style="color: var(--text-secondary); font-size: 0.72rem; margin-top:0.6rem;">' + escapeHtml(d.note) + '</p>';
                 return html;
             }
@@ -20735,11 +20963,11 @@
                                 body.innerHTML = '<div class="iiq-empty">Render error: ' + escapeHtml(err.message || err) + '</div><pre>' + escapeHtml(JSON.stringify(dataObj, null, 2)) + '</pre>';
                             }
                         };
-                        // Q1 rolls up the per-asset funnel projections, so it
-                        // also needs the assets payload. We piggyback that
-                        // fetch through the cache so subsequent Q1 opens are
+                        // Q1 + Q4 both roll up per-asset funnel projections,
+                        // so they need the assets payload. We piggyback that
+                        // fetch through the cache so subsequent opens are
                         // instant and the rollup matches the Assets page.
-                        if (qid === 'q1') {
+                        if (qid === 'q1' || qid === 'q4') {
                             iiqLoadAssetsForFunnel(slug, function(assets) {
                                 d._assets = assets;
                                 renderAndCache(d);
@@ -24789,7 +25017,7 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', helmIQ: 'helmIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', helmIQ: 'helmIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
@@ -44116,7 +44344,20 @@
             // SOT form now lives in Analysis IQ — keep top-level panel hidden
         }
 
-        window.showShareOfTimeIQ = function() { return; };
+        window.showShareOfTimeIQ = function() {
+            var dd = document.getElementById('viewNavDropdown');
+            var opt = dd?.querySelector('option[value="shareOfTimeIQ"]');
+            if (opt?.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('shareOfTimeIQ');
+            if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
+            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','sfConversionView','flywheelConversionView','talentFitIQView'].forEach(function(id) {
+                var el = document.getElementById(id); if (el) el.style.display = 'none';
+            });
+            if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
+            var sv = document.getElementById('shareOfTimeIQView'); if (sv) sv.style.display = 'flex';
+            sotApplyRunAccessVisibility();
+            sotLoadRuns();
+        };
 
         function iqSotRunAnalysis() {
             var start = document.getElementById('iqSotStartDate')?.value;
