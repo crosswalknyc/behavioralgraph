@@ -20525,6 +20525,44 @@
                     });
             };
 
+            // ===== Per-comp modeled signal breakdown (Q3) =====
+            // For each already-released comp we don't have asset-level data,
+            // so we model the same 3 high-intent signals the subject (GOAT)
+            // measures - using GOAT's measured shape as the prior (trailer
+            // ~94%, pre-sale ~4%, cast/talent ~2%), with seeded per-comp
+            // jitter so each card has a slightly different distribution.
+            // Conversion rates (85% / 25% / 8%) match the rates the backend
+            // uses for the subject in _measure_subject_ticket_intent(), so a
+            // modeled comp bar is directly comparable to GOAT's measured bar.
+            function iiqQ3ModelCompSignals(comp) {
+                var total = Number(comp && comp.opening_weekend_buyers) || 0;
+                if (total <= 0) return [];
+                var SIGNALS = [
+                    { signal: 'Pre-sale ticketing-page engagement', share: 0.04, conv_pct: 85 },
+                    { signal: 'Deep trailer engagement',            share: 0.94, conv_pct: 25 },
+                    { signal: 'Cast / talent social engagement',    share: 0.02, conv_pct: 8 }
+                ];
+                function _h(s) { var h=0; for (var i=0;i<s.length;i++) h=((h<<5)-h+s.charCodeAt(i))|0; return h; }
+                var seed = Math.abs(_h(String(comp.title_slug || comp.display_name || '')));
+                function rand(salt) { var x = Math.sin((seed + 1) * (salt + 1.7)) * 10000; return x - Math.floor(x); }
+                var jittered = SIGNALS.map(function(s, i) {
+                    var j = 0.78 + rand(i) * 0.44;
+                    return { signal: s.signal, share: s.share * j, conv_pct: s.conv_pct };
+                });
+                var sumShare = jittered.reduce(function(a, s) { return a + s.share; }, 0) || 1;
+                jittered.forEach(function(s) { s.share = s.share / sumShare; });
+                return jittered.map(function(s) {
+                    var people = Math.round(total * s.share);
+                    var raw_engagement = Math.round(people / (s.conv_pct / 100));
+                    return {
+                        signal: s.signal,
+                        people: people,
+                        raw_engagement: raw_engagement,
+                        conversion_pct: s.conv_pct
+                    };
+                });
+            }
+
             function iiqRenderQ3(d) {
                 // Q3 = ticket-buying intent (measurement, no forecasting).
                 // d.subject  -> { display_name, opening_date, opening_weekend_buyers_projected, signals: [...], implied_opening_gross_usd, source }
@@ -20580,29 +20618,63 @@
                     html += '</div>';
                 }
 
-                // === COMPS card: opening-weekend buyers ===
+                // === MODELED per-comp signal breakdowns ===
+                // For each comp we project the same 3 high-intent signals
+                // GOAT measures (pre-sale ticketing engagement, deep trailer
+                // engagement, cast / talent engagement), using GOAT's shape as
+                // a prior with per-comp seeded jitter. Each card uses the
+                // same conversion rates (85% / 25% / 8%) so a comp's modeled
+                // bars are directly comparable to GOAT's measured bars above.
                 if (comps.length) {
-                    var sortedComps = comps.sort(function(a,b){
+                    var sortedCompsForSig = comps.slice().sort(function(a,b){
                         return (Number(b.opening_weekend_buyers)||0) - (Number(a.opening_weekend_buyers)||0);
                     });
-                    // Use the larger of (top comp, projected subject) so the subject bar is visible against big comps.
-                    var maxCBuyers = Math.max.apply(null, sortedComps.map(function(c){ return Number(c.opening_weekend_buyers)||0; }).concat([projected||1]));
-                    html += '<div class="iiq-card" style="padding:1rem;">';
-                    html += '<div style="font-size:0.85rem; font-weight:600; color:#e2e8f0; margin-bottom:0.45rem;">Comparable family-animated titles — realized opening-weekend ticket-buyers</div>';
-                    html += '<div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.55rem;">Source: Box Office Mojo (opening 4-day gross) ÷ $' + avgTicket.toFixed(2) + ' avg US ticket (NATO 2024)</div>';
+                    html += '<div style="margin: 0 0 0.45rem; font-size:0.78rem; color: var(--text-secondary);">'
+                         + 'Modeled high-intent signal breakdown for each comparable title \u2014 same 3 conversion paths and rates ' + escapeHtml(subj.display_name || 'subject') + ' uses above; per-comp shape derived from realized opening-weekend buyers + seeded jitter.'
+                         + '</div>';
+                    html += '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap:0.65rem; margin-bottom:0.85rem;">';
+                    sortedCompsForSig.forEach(function(c) {
+                        var modeled = iiqQ3ModelCompSignals(c);
+                        if (!modeled.length) return;
+                        var maxP = Math.max.apply(null, modeled.map(function(m){ return m.people; }).concat([1]));
+                        var totalBuyers = Number(c.opening_weekend_buyers)||0;
+                        html += '<div class="iiq-card" style="padding:0.85rem; border-left: 3px solid #a855f7;">';
+                        html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; margin-bottom:0.5rem;">';
+                        html +=     '<div style="min-width:0;">'
+                            +        '<div style="font-size:0.85rem; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(c.display_name) + '">' + escapeHtml(c.display_name) + '</div>'
+                            +        '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.1rem;">opened ' + escapeHtml(c.opening_date || '\u2014') + ' \u00b7 ' + fmtCompact(totalBuyers) + ' opening-weekend buyers</div>'
+                            +      '</div>';
+                        html +=     '<span style="font-size:0.58rem; padding:0.15rem 0.4rem; border-radius:8px; background: rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.4); color:#c4b5fd; white-space:nowrap; align-self:center;">MODELED</span>';
+                        html +=   '</div>';
+                        html += modeled.map(function(m) {
+                            var pct = maxP > 0 ? Math.min(100, m.people / maxP * 100) : 0;
+                            return '<div style="display:grid; grid-template-columns: 1fr 60px; gap:0.5rem; align-items:center; padding:0.25rem 0;">'
+                                +    '<div>'
+                                +      '<div style="font-size:0.72rem; color:#e2e8f0; margin-bottom:0.18rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(m.signal) + '">' + escapeHtml(m.signal) + '</div>'
+                                +      '<div style="background: rgba(255,255,255,0.06); height: 12px; border-radius: 3px; overflow:hidden;"><div style="height:100%; width:' + pct.toFixed(1) + '%; background:#a855f7;"></div></div>'
+                                +      '<div style="font-size:0.62rem; color: var(--text-secondary); margin-top:0.18rem;">' + m.conversion_pct + '% of ' + fmtCompact(m.raw_engagement) + ' engagements</div>'
+                                +    '</div>'
+                                +    '<div style="text-align:right; font-size:0.85rem; font-weight:700; color:#c4b5fd;">' + fmtCompact(m.people) + '</div>'
+                                +  '</div>';
+                        }).join('');
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                }
 
-                    // First, the subject row inline at the top so the user can read it against the comps.
-                    if (projected > 0) {
-                        html += iiqBarRow(
-                            (subj.display_name || 'Subject') + ' (' + (subj.opening_date || 'pre-release') + ', projected)',
-                            projected, maxCBuyers, '#22d3ee', '',
-                            'panel-measured intent · in-flight'
-                        );
-                    }
+                // === COMPS card: opening-weekend buyers (comps only, no subject) ===
+                if (comps.length) {
+                    var sortedComps = comps.slice().sort(function(a,b){
+                        return (Number(b.opening_weekend_buyers)||0) - (Number(a.opening_weekend_buyers)||0);
+                    });
+                    var maxCBuyers = Math.max.apply(null, sortedComps.map(function(c){ return Number(c.opening_weekend_buyers)||0; }).concat([1]));
+                    html += '<div class="iiq-card" style="padding:1rem;">';
+                    html += '<div style="font-size:0.85rem; font-weight:600; color:#e2e8f0; margin-bottom:0.45rem;">Comparable family-animated titles \u2014 realized opening-weekend ticket-buyers</div>';
+                    html += '<div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.55rem;">Source: Box Office Mojo (opening 4-day gross) \u00f7 $' + avgTicket.toFixed(2) + ' avg US ticket (NATO 2024). ' + escapeHtml(subj.display_name || 'Subject') + ' is shown above in its own measured signal card and per-comp modeled breakdowns \u2014 not duplicated here.</div>';
                     html += sortedComps.map(function(c) {
                         var label = c.display_name;
-                        var sub   = '(opened ' + (c.opening_date || '—') + ')';
-                        var tail  = 'total ' + fmtCompact(c.total_buyers || 0) + ' · ' + fmtUSD(c.opening_4day_usd || 0) + ' gross';
+                        var sub   = '(opened ' + (c.opening_date || '\u2014') + ')';
+                        var tail  = 'total ' + fmtCompact(c.total_buyers || 0) + ' \u00b7 ' + fmtUSD(c.opening_4day_usd || 0) + ' gross';
                         return iiqBarRow(label, Number(c.opening_weekend_buyers)||0, maxCBuyers, '#a855f7', sub, tail);
                     }).join('');
                     html += '</div>';
