@@ -1161,9 +1161,25 @@ def get_in_flight(title_slug: str, as_of: Optional[str] = None,
     try:
         def _query_window(window_key: str):
             lower_bound, label = _resolve_window(window_key, as_of)
+            # Additional asset-level fields (ext_view_count,
+            # ext_engagement_count, channel, phase_name) are pulled so the
+            # frontend can call iiqAssetFunnelProjection() on these cards and
+            # render the same info-seek % / ticketing % that the In-Flight
+            # Assets page and Performance Q1/Q2 use. We greatest()-coalesce
+            # the daily-sum totals with ext_view_count / ext_engagement_count
+            # so the numbers ladder up to the Assets page even when the daily
+            # join is sparse.
             sql = f"""
             SELECT a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
-                   a.url, a.posted_date, sum(e.views) AS views_total
+                   a.url, a.posted_date,
+                   greatest(ifNull(sum(e.views), 0),
+                            toUInt64(any(a.ext_view_count))) AS views_total,
+                   greatest(ifNull(sum(e.likes + e.comments + e.shares), 0),
+                            toUInt64(any(a.ext_engagement_count))) AS engagement_total,
+                   any(a.ext_view_count)       AS ext_view_count,
+                   any(a.ext_engagement_count) AS ext_engagement_count,
+                   any(a.channel)              AS channel,
+                   any(a.phase_name)           AS phase_name
             FROM intent.campaign_assets a
             LEFT JOIN intent.asset_engagement_daily e ON e.asset_id = a.asset_id
             WHERE a.title_slug = '{title_slug}'
@@ -1176,7 +1192,9 @@ def get_in_flight(title_slug: str, as_of: Optional[str] = None,
             rows = ch.query(sql).result_rows
             cards = _rows_to_dicts(rows, ["asset_id", "action_label", "asset_type",
                                              "paid_or_organic", "url", "posted_date",
-                                             "views_total"])
+                                             "views_total", "engagement_total",
+                                             "ext_view_count", "ext_engagement_count",
+                                             "channel", "phase_name"])
             for c in cards:
                 c["posted_date"] = _safe_iso_date(c["posted_date"])
             return cards, label

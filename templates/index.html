@@ -21422,12 +21422,40 @@
                         function pickCard(label, edgeColor, c) {
                             if (!c) return '<div class="iiq-card" style="border-left: 3px solid #64748b;"><div class="iiq-card-title">' + label + '</div><div class="iiq-empty">No asset in ' + escapeHtml(winLabel) + ' window.</div></div>';
                             var v = Number(c.views_total) || 0;
+                            var e = Number(c.engagement_total) || 0;
+                            var engRate = v > 0 ? (e / v * 100) : 0;
+                            // iiqAssetFunnelProjection() prefers ext_view_count /
+                            // ext_engagement_count - the backend already coalesces
+                            // those with the daily-sum totals, so pass through.
+                            var proj = iiqAssetFunnelProjection({
+                                asset_id:             c.asset_id,
+                                asset_type:           c.asset_type,
+                                paid_or_organic:      c.paid_or_organic,
+                                channel:              c.channel,
+                                phase_name:           c.phase_name,
+                                url:                  c.url,
+                                action_label:         c.action_label,
+                                ext_view_count:       v,
+                                ext_engagement_count: e,
+                            });
+                            function pill(lbl, val, color) {
+                                return '<div style="background: rgba(255,255,255,0.04); border-radius:5px; padding:0.4rem 0.55rem; min-width:0;">'
+                                    +    '<div style="font-size:0.6rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">' + lbl + '</div>'
+                                    +    '<div style="font-size:0.95rem; font-weight:700; color:' + color + '; margin-top:0.1rem;">' + val + '</div>'
+                                    +  '</div>';
+                            }
                             return '<div class="iiq-card" style="border-left: 3px solid ' + edgeColor + ';">'
                                 + '<div class="iiq-card-title">' + label + '</div>'
-                                + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.action_label || c.asset_type || '') + ' · ' + escapeHtml(c.asset_type || '') + '</div>'
+                                + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.action_label || c.asset_type || '') + ' \u00b7 ' + escapeHtml(c.asset_type || '') + (c.channel ? ' \u00b7 ' + escapeHtml(c.channel) : '') + '</div>'
                                 + '<div style="margin-top:0.55rem;">'
                                     + '<div style="font-size:1.45rem; font-weight:700; color:#fff; line-height:1;">' + fmtCompact(v) + '</div>'
                                     + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7; margin-top:0.15rem;">views (' + escapeHtml(winLabel) + ')</div>'
+                                + '</div>'
+                                + '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:0.4rem; margin-top:0.65rem;">'
+                                    + pill('Engagement',  fmtCompact(e),              '#fff')
+                                    + pill('Eng. rate',   engRate.toFixed(2) + '%',   '#fff')
+                                    + pill('Info-seek %', proj.info_pct.toFixed(1) + '%', '#a5b4fc')
+                                    + pill('Ticketing %', proj.ticket_pct.toFixed(1) + '%', '#fbbf24')
                                 + '</div>'
                                 + '<div class="iiq-card-meta" style="margin-top:0.55rem; font-size:0.72rem; opacity:0.7;">Posted ' + escapeHtml(c.posted_date) + '</div>'
                                 + (c.url ? '<div style="margin-top:0.35rem;"><a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener" style="color: var(--accent-cyan, #5a9ad9); font-size:0.78rem;">Open asset</a></div>' : '')
