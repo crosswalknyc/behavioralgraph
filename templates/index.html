@@ -21663,11 +21663,35 @@
                 });
             }
 
+            // Q3 high-intent-signal matrix column-sort state. Click a header
+            // to sort by that column; click the same header again to flip
+            // direction. Default sort is Total box office, descending.
+            // The subject row (cyan) is ALWAYS pinned at the top regardless
+            // of sort so the GOAT baseline stays visible. Same UX pattern as
+            // the Q1 / Q2 / Q4 sortable header rows.
+            window._iiqQ3Sig = window._iiqQ3Sig || { key: 'box_office', dir: 'desc', payload: null };
+            window.iiqQ3SigSort = function(key) {
+                var s = window._iiqQ3Sig;
+                if (s.key === key) {
+                    s.dir = (s.dir === 'desc') ? 'asc' : 'desc';
+                } else {
+                    s.key = key;
+                    s.dir = (key === 'title') ? 'asc' : 'desc';
+                }
+                if (s.payload) {
+                    var host = document.getElementById('iiqQBody');
+                    if (host) host.innerHTML = iiqRenderQ3(s.payload);
+                }
+            };
+
             function iiqRenderQ3(d) {
                 // Q3 = ticket-buying intent (measurement, no forecasting).
                 // d.subject  -> { display_name, opening_date, opening_weekend_buyers_projected, signals: [...], implied_opening_gross_usd, source }
                 // d.comps    -> [ { display_name, opening_date, opening_weekend_buyers, total_buyers, source } ]
                 // d.avg_ticket_price_usd, d.note
+                window._iiqQ3Sig.payload = d;
+                var sigSortKey = window._iiqQ3Sig.key;
+                var sigSortDir = window._iiqQ3Sig.dir;
                 var subj  = d.subject || {};
                 var comps = (d.comps || []).slice();
                 var signals = subj.signals || [];
@@ -41539,10 +41563,8 @@
             var subEl  = document.getElementById('jiqAudienceHypSubtitle');
             var metaEl = document.getElementById('jiqAudienceHypMeta');
             if (subEl) subEl.innerHTML = isBkAh
-                ? ('Sizing 5 banking-research cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is application-rate lift vs. the gen-pop researcher baseline. Each card also shows the cohort\'s <strong>digital-vs-traditional opening split</strong> so you can see at-a-glance where the steal-share already exists.')
-                : (isTvAh
-                    ? 'Estimated viewer cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is projected viewer-conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(2) + '% gen-pop 30-day streaming baseline. Predicted, not measured.'
-                    : 'Testing client-stated audience theses against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(1) + '% gen-pop opening-weekend baseline.');
+                ? ('Sizing 5 banking-research cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each card also shows the cohort\'s <strong>digital-vs-traditional opening split</strong> so you can see at-a-glance where the steal-share already exists.')
+                : '';
             if (metaEl) metaEl.textContent = isBkAh
                 ? (ah.hypotheses.length + ' cohorts · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline new-account opens')
                 : (isTvAh
@@ -41557,14 +41579,9 @@
                 tilesEl.style.gridTemplateColumns = '1fr';
 
                 // ── Expand-all / Collapse-all controls above the stack ──
-                var hypControls = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;">'
-                    + '<div style="font-size:0.72rem;color:var(--text-secondary);">'
-                    +   'Each row is one estimated cohort. % chip = share of potential consumers represented. Click any row to expand for engagement surfaces, DMA concentration, and the cohort note.'
-                    + '</div>'
-                    + '<div style="display:flex;gap:6px;">'
+                var hypControls = '<div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:0.5rem;flex-wrap:wrap;">'
                     +   '<button id="jiqHypExpandAll" type="button" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 11px;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;">Expand all</button>'
                     +   '<button id="jiqHypCollapseAll" type="button" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 11px;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;">Collapse all</button>'
-                    + '</div>'
                     + '</div>';
 
                 // Resolve "% of potential consumers" for the pill. For
