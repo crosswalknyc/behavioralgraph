@@ -20549,7 +20549,10 @@
                     var rVal = rMax - rMax * (i / 4);
                     grid += '<line x1="' + P.l + '" x2="' + (W - P.r) + '" y1="' + gy + '" y2="' + gy + '" stroke="rgba(255,255,255,0.06)" />';
                     leftLabels  += '<text x="' + (P.l - 6)       + '" y="' + (gy + 4) + '" font-size="10" fill="' + (opts.leftLabelColor  || 'rgba(34,211,238,0.75)')   + '" text-anchor="end">'   + fmtCompact(lVal) + '</text>';
-                    rightLabels += '<text x="' + (W - P.r + 6)   + '" y="' + (gy + 4) + '" font-size="10" fill="' + (opts.rightLabelColor || 'rgba(251,191,36,0.75)')  + '" text-anchor="start">' + rVal.toFixed(0) + (opts.rightSuffix || '%') + '</text>';
+                    var rText = (typeof opts.rightFormatter === 'function')
+                        ? opts.rightFormatter(rVal)
+                        : (rVal.toFixed(0) + (opts.rightSuffix || '%'));
+                    rightLabels += '<text x="' + (W - P.r + 6)   + '" y="' + (gy + 4) + '" font-size="10" fill="' + (opts.rightLabelColor || 'rgba(251,191,36,0.75)')  + '" text-anchor="start">' + rText + '</text>';
                 }
 
                 var dateLabels = '';
@@ -20863,10 +20866,12 @@
                 // Convert daily drops to a running cumulative for the line chart
                 var dates = Array.from(new Set(cum.map(function(r){ return r.date; }))).sort();
                 var keys = Object.keys(byKey);
+                var dayMapByKey = {};
                 var series = keys.map(function(k) {
                     var pts = [], run = 0;
                     var dayMap = {};
                     byKey[k].forEach(function(p) { dayMap[p.x] = (dayMap[p.x] || 0) + p.y; });
+                    dayMapByKey[k] = dayMap;
                     dates.forEach(function(d) {
                         run += (dayMap[d] || 0);
                         pts.push({ x: d, y: run });
@@ -20877,6 +20882,47 @@
                 // comparison on the right. Cumulative line chart drops below
                 // to its own full-width card so both top cards stay slim.
                 var agg = iiqQ2PaidOrganicFunnel(d._assets || []);
+                // Build cumulative info-seekers + ticketing series on a
+                // RIGHT Y-axis so they're visible alongside cumulative views
+                // (which is ~20x larger). Per-day funnel = sum over series of
+                // (that series' daily views × that series' blended funnel
+                // rate from iiqQ2PaidOrganicFunnel). When a series has no
+                // funnel data (e.g. 'unknown' bucket), fall back to a
+                // weighted average of paid+organic rates so we don't drop
+                // that series' contribution.
+                var paidV = agg.paid.views    || 0;
+                var orgV  = agg.organic.views || 0;
+                var paidInfoRate    = paidV > 0 ? (agg.paid.info_seekers  / paidV) : 0;
+                var paidTkRate      = paidV > 0 ? (agg.paid.ticket_visits / paidV) : 0;
+                var orgInfoRate     = orgV  > 0 ? (agg.organic.info_seekers  / orgV) : 0;
+                var orgTkRate       = orgV  > 0 ? (agg.organic.ticket_visits / orgV) : 0;
+                var blendedInfoRate = (paidV + orgV) > 0 ? (agg.paid.info_seekers + agg.organic.info_seekers) / (paidV + orgV) : 0;
+                var blendedTkRate   = (paidV + orgV) > 0 ? (agg.paid.ticket_visits + agg.organic.ticket_visits) / (paidV + orgV) : 0;
+                function _rateFor(k, kind) {
+                    if (k === 'paid')                                    return kind === 'info' ? paidInfoRate : paidTkRate;
+                    if (k === 'organic' || k === 'natural')              return kind === 'info' ? orgInfoRate  : orgTkRate;
+                    return kind === 'info' ? blendedInfoRate : blendedTkRate;
+                }
+                var infoCumPts = [];
+                var tkCumPts   = [];
+                var runInfo = 0, runTk = 0;
+                dates.forEach(function(dDay) {
+                    var infoToday = 0, tkToday = 0;
+                    keys.forEach(function(k) {
+                        var v = (dayMapByKey[k][dDay] || 0);
+                        infoToday += v * _rateFor(k, 'info');
+                        tkToday   += v * _rateFor(k, 'tk');
+                    });
+                    runInfo += infoToday;
+                    runTk   += tkToday;
+                    infoCumPts.push({ x: dDay, y: runInfo });
+                    tkCumPts.push({ x: dDay, y: runTk   });
+                });
+                var hasFunnelSeries = (runInfo + runTk) > 0;
+                var rightSeries = hasFunnelSeries ? [
+                    { name: 'Cumulative info-seekers',    color: '#a5b4fc', points: infoCumPts },
+                    { name: 'Cumulative ticketing visits', color: '#fbbf24', points: tkCumPts   }
+                ] : [];
                 var paidColor    = IIQ_QPALETTE.paid;
                 var organicColor = IIQ_QPALETTE.organic;
                 function _q2WhoWonRow(label, paidVal, organicVal) {
@@ -20925,9 +20971,20 @@
                     +       '</div>'
                     +       funnelCardBody
                     +     '</div>';
+                var chartHtml = hasFunnelSeries
+                    ? iiqLineChartDual(series, rightSeries, {
+                        height: 200,
+                        rightFormatter: fmtCompact,
+                        rightLabelColor: 'rgba(251,191,36,0.85)'
+                      })
+                    : iiqLineChart(series, {height: 200});
+                var chartCaption = hasFunnelSeries
+                    ? 'Left axis: cumulative views (paid vs organic). Right axis: cumulative info-seekers &amp; ticketing visits derived from the same iiqAssetFunnelProjection() helper \u2014 ladders up to the Assets cards.'
+                    : '';
                 html +=   '<div class="iiq-card" style="padding:0.75rem 0.85rem; min-width:0;">'
-                    +       '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Cumulative view growth, paid vs organic</div>'
-                    +       iiqLineChart(series, {height: 200})
+                    +       '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Cumulative view growth + downstream funnel</div>'
+                    +       chartHtml
+                    +       (chartCaption ? '<div style="font-size:0.65rem; color: var(--text-secondary); margin-top:0.35rem; line-height:1.35;">' + chartCaption + '</div>' : '')
                     +     '</div>';
                 html += '</div>';
                 if (best.length) {
