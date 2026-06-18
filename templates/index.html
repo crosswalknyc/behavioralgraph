@@ -24322,8 +24322,7 @@
             </div>
         </div><!-- End talentTheaterIQView -->
 
-        <!-- HELM IQ VIEW (Super Admin only) -->
-        {% if has_helm_iq_access %}
+        <!-- HELM IQ VIEW (Super Admin only — access gated via dropdown visibility + API decorators) -->
         <div id="helmIQView" style="display:none;">
             <div class="helm-tabs">
                 <button class="helm-tab-btn active" onclick="showHelmTab('build')">⚓ Build Project</button>
@@ -24441,7 +24440,6 @@
                 </div>
             </div>
         </div><!-- End helmIQView -->
-        {% endif %}
 
     </div>
 
