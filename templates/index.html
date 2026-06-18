@@ -19916,12 +19916,19 @@
                             return '<div class="iiq-card" style="border-left: 3px solid ' + edgeColor + ';">'
                                 + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '—') + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
-                                + '<div style="margin-top:0.55rem; display:flex; align-items:baseline; gap:0.55rem; flex-wrap:wrap;">'
-                                    + '<div title="Total impressions - how many times the asset was seen"><div style="font-size:1.25rem; font-weight:700; color:#fff; line-height:1;">' + fmtCompact(v) + '</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">views</div></div>'
-                                    + '<div title="Likes + comments + shares - how many people did something with the asset, not just saw it"><div style="font-size:0.95rem; font-weight:600; color:#cbd5e1; line-height:1;">' + fmtCompact(e) + '</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">engagement</div></div>'
-                                    + (v > 0 ? '<div title="Engagement rate = engagement / views. Higher = more participatory audience."><div style="font-size:0.95rem; font-weight:600; color:#94a3b8; line-height:1;">' + (e/v*100).toFixed(2) + '%</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">eng. rate</div></div>' : '')
-                                    + (proj ? '<div title="' + escapeHtml(infoTip) + '"><div style="font-size:0.95rem; font-weight:600; color:#a5b4fc; line-height:1;">' + proj.info_pct.toFixed(1) + '%</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">info-seek</div></div>' : '')
-                                    + (proj ? '<div title="' + escapeHtml(tkTip)   + '"><div style="font-size:0.95rem; font-weight:600; color:#fbbf24; line-height:1;">' + proj.ticket_pct.toFixed(1) + '%</div><div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7;">ticketing</div></div>' : '')
+                                // Views on its own row (full-width hero number),
+                                // then the 4 secondary metrics on a single row
+                                // beneath it (engagement / eng. rate / info-seek
+                                // / ticketing).
+                                + '<div style="margin-top:0.55rem;" title="Total impressions - how many times the asset was seen">'
+                                    + '<div style="font-size:1.4rem; font-weight:700; color:#fff; line-height:1;">' + fmtCompact(v) + '</div>'
+                                    + '<div class="iiq-card-meta" style="font-size:0.65rem; opacity:0.7; margin-top:0.1rem;">views</div>'
+                                + '</div>'
+                                + '<div style="margin-top:0.5rem; display:flex; align-items:baseline; justify-content:space-between; gap:0.4rem;">'
+                                    + '<div title="Likes + comments + shares - how many people did something with the asset, not just saw it"><div style="font-size:0.9rem; font-weight:600; color:#cbd5e1; line-height:1;">' + fmtCompact(e) + '</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">engagement</div></div>'
+                                    + (v > 0 ? '<div title="Engagement rate = engagement / views. Higher = more participatory audience."><div style="font-size:0.9rem; font-weight:600; color:#94a3b8; line-height:1;">' + (e/v*100).toFixed(2) + '%</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">eng. rate</div></div>' : '')
+                                    + (proj ? '<div title="' + escapeHtml(infoTip) + '"><div style="font-size:0.9rem; font-weight:600; color:#a5b4fc; line-height:1;">' + proj.info_pct.toFixed(1) + '%</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">info-seek</div></div>' : '')
+                                    + (proj ? '<div title="' + escapeHtml(tkTip)   + '"><div style="font-size:0.9rem; font-weight:600; color:#fbbf24; line-height:1;">' + proj.ticket_pct.toFixed(1) + '%</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">ticketing</div></div>' : '')
                                 + '</div>'
                                 + '<div style="margin-top:0.45rem; background: rgba(255,255,255,0.06); height:4px; border-radius: 2px; overflow:hidden;" title="' + barPct.toFixed(1) + '% of top performer">'
                                     + '<div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + edgeColor + ';"></div>'
