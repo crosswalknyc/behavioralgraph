@@ -12609,6 +12609,7 @@ def api_intent_assets(title_slug):
             phase=request.args.get('phase'),
             asset_type=request.args.get('asset_type'),
             paid_or_organic=request.args.get('paid_or_organic'),
+            window=request.args.get('window'),
         ))
     except Exception as e:
         traceback.print_exc()
@@ -12663,7 +12664,8 @@ def api_intent_in_flight(title_slug):
         return err
     try:
         return jsonify(_intent_iq.get_in_flight(title_slug,
-                                                  as_of=request.args.get('as_of')))
+                                                  as_of=request.args.get('as_of'),
+                                                  window=request.args.get('window')))
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -21881,6 +21883,33 @@ def process_s3_file_metadata(key, obj):
                         return cat
         return None
 
+    def _brand_input_starts_with_movie(text: str) -> bool:
+        """Return True iff this CSV's BRAND INPUT value starts with
+        'MOVIE - '. The pipeline encodes movie profiles as
+        BRAND INPUT = 'MOVIE - <title>' (e.g. 'MOVIE - INCEPTION'),
+        so any file matching this prefix is forced into
+        category='MOVIE' (a valid CONTENT subcategory in the
+        frontend MASTER_CATEGORIES map). Per-user request 2026-06-17:
+        profiles like this should always land under CONTENT > MOVIE
+        in the profile selector, regardless of what BRAND CATEGORY
+        says (or doesn't say)."""
+        for line in text.split('\n'):
+            line_upper = line.strip().upper()
+            if (line_upper.startswith('BRAND INPUT,')
+                    or line_upper.startswith('BRAND INPUT ')
+                    or line_upper.startswith('"BRAND INPUT"')):
+                # split on first comma only — BRAND INPUT often holds
+                # a comma-separated URL-variant seed list as its value
+                # (METADATA_COLS rule #4c), and we only care about the
+                # first token's prefix.
+                parts = line.split(',', 2)
+                if len(parts) >= 2:
+                    val = parts[1].strip().strip('"').upper()
+                    if val.startswith('MOVIE - ') or val.startswith('MOVIE -,'):
+                        return True
+                return False
+        return False
+
     try:
         # Fast path: head-of-file read covers the canonical row-2
         # placement (99%+ of profiles).
@@ -21913,6 +21942,15 @@ def process_s3_file_metadata(key, obj):
 
         if found:
             category = found
+
+        # MOVIE - <title> BRAND INPUT prefix overrides BRAND CATEGORY.
+        # BRAND INPUT is canonical row 1, so the head_text read above
+        # always contains it — no extra S3 GETs needed.
+        try:
+            if _brand_input_starts_with_movie(head_text):
+                category = 'MOVIE'
+        except Exception as movie_err:
+            print(f"⚠️ MOVIE BRAND INPUT probe failed for {key}: {movie_err}")
     except Exception as e:
         print(f"Error reading category from {key}: {e}")
     

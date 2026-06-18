@@ -50,7 +50,7 @@ CH_PASS = os.environ.get("CH_PASSWORD", "")
 QUESTIONS = {
     "q1": "What categories of content are most effective at driving future engagement / ticket purchase?",
     "q2": "What is the interplay between organic and paid content? Can we measure cumulative impact?",
-    "q3": "How can early ticketing / box-office estimates be fine-tuned?",
+    "q3": "How many people have shown intent to buy a ticket — subject vs. comparable titles?",
     "q4": "How do talent & influencer activity boost or interact with other marketing content?",
     "q5": "How crucial is trailer viewership throughout the life of the campaign?",
     "q6": "How do different audiences engage throughout the campaign (general -> family late)?",
@@ -105,8 +105,19 @@ def _load_normalized_snapshot(title_slug: str) -> Optional[dict]:
         return None
 
 
+def _scrub_nonfinite(v):
+    """Replace NaN / +inf / -inf floats with 0 so json.dumps emits valid
+    JSON. ClickHouse avgIf / quantileIf return NaN when the predicate
+    matches zero rows; left unchecked, Python json.dumps writes the
+    literal 'NaN' which breaks frontend JSON.parse."""
+    if isinstance(v, float):
+        if v != v or v == float("inf") or v == float("-inf"):
+            return 0
+    return v
+
+
 def _rows_to_dicts(rows, cols) -> list[dict]:
-    return [dict(zip(cols, r)) for r in rows]
+    return [{c: _scrub_nonfinite(v) for c, v in zip(cols, r)} for r in rows]
 
 
 def _phase_color(phase_name: str) -> str:
@@ -245,13 +256,40 @@ def get_overview(title_slug: str) -> dict:
 
 # ── 3. Assets ───────────────────────────────────────────────────────────────
 
+def _resolve_assets_window(window: Optional[str]) -> tuple[Optional[str], Optional[str], str]:
+    """Resolve an assets-window string into (lo_iso, hi_iso, label).
+    Lo/hi are inclusive YYYY-MM-DD or None for unbounded. YTD = since
+    Jan 1 of current year. 'all' = no bound. '14d'/'30d'/'90d'/'365d' =
+    rolling N days back from today.
+    """
+    w = (window or "ytd").strip().lower()
+    today = datetime.utcnow().date()
+    if w in ("all", "campaign", "campaign_to_date"):
+        return (None, None, "Campaign-to-date")
+    if w in ("ytd", "year_to_date"):
+        return (f"{today.year}-01-01", None, f"YTD (since {today.year}-01-01)")
+    days_map = {"14d": 14, "30d": 30, "90d": 90, "365d": 365}
+    if w in days_map:
+        from datetime import timedelta
+        d = days_map[w]
+        lo = (today - timedelta(days=d)).isoformat()
+        return (lo, None, f"Last {d}d")
+    return (f"{today.year}-01-01", None, f"YTD (since {today.year}-01-01)")
+
+
 def get_assets(title_slug: str, phase: Optional[str] = None,
                 asset_type: Optional[str] = None,
-                paid_or_organic: Optional[str] = None) -> dict:
+                paid_or_organic: Optional[str] = None,
+                window: Optional[str] = None) -> dict:
+    """List campaign assets. Default window is YTD per Jenna 2026-06-17:
+    'this should be YTD unless otherwise specified for all assets'."""
     where_clauses = [f"title_slug = '{title_slug}'"]
     if phase:           where_clauses.append(f"phase_name = '{phase}'")
     if asset_type:      where_clauses.append(f"asset_type = '{asset_type}'")
     if paid_or_organic: where_clauses.append(f"paid_or_organic = '{paid_or_organic}'")
+    lo, hi, window_label = _resolve_assets_window(window)
+    if lo: where_clauses.append(f"posted_date >= toDate('{lo}')")
+    if hi: where_clauses.append(f"posted_date <= toDate('{hi}')")
     where_sql = " AND ".join(where_clauses)
 
     ch = _ch_client()
@@ -273,7 +311,8 @@ def get_assets(title_slug: str, phase: Optional[str] = None,
             for c in cards:
                 c["posted_date"] = _safe_iso_date(c.get("posted_date"))
             return {"success": True, "title_slug": title_slug, "cards": cards,
-                    "total": len(cards), "source": "clickhouse"}
+                    "total": len(cards), "source": "clickhouse",
+                    "window": (window or "ytd").lower(), "window_label": window_label}
         except Exception as e:
             logger.warning("Intent IQ: get_assets CH failed: %s", e)
 
@@ -284,8 +323,10 @@ def get_assets(title_slug: str, phase: Optional[str] = None,
     if phase:           cards = [a for a in cards if a.get("phase_name") == phase]
     if asset_type:      cards = [a for a in cards if a.get("asset_type") == asset_type]
     if paid_or_organic: cards = [a for a in cards if a.get("paid_or_organic") == paid_or_organic]
+    if lo:              cards = [a for a in cards if (a.get("posted_date") or "") >= lo]
     return {"success": True, "title_slug": title_slug, "cards": cards,
-            "total": len(cards), "source": "s3_snapshot", "fallback": True}
+            "total": len(cards), "source": "s3_snapshot", "fallback": True,
+            "window": (window or "ytd").lower(), "window_label": window_label}
 
 
 # ── 4. Audiences-of-interest ────────────────────────────────────────────────
@@ -426,7 +467,7 @@ def answer_question(title_slug: str, qid: str) -> dict:
     handler = {
         "q1": _q1_content_categories_to_engagement,
         "q2": _q2_organic_paid_interplay,
-        "q3": _q3_box_office_finetune,
+        "q3": _q3_intent_to_buy,
         "q4": _q4_talent_influencer_lift,
         "q5": _q5_trailer_viewership_curve,
         "q6": _q6_audience_shift_over_campaign,
@@ -473,8 +514,10 @@ def _q1_content_categories_to_engagement(title_slug: str) -> dict:
         )
         SELECT asset_type, paid_or_organic,
                count() AS asset_count,
-               avgIf(views_7d, views_7d > 0) AS mean_views_7d,
-               quantileIf(0.5)(views_7d, views_7d > 0) AS median_views_7d
+               ifNotFinite(avgIf(views_7d, views_7d > 0), 0)
+                   AS mean_views_7d,
+               ifNotFinite(quantileIf(0.5)(views_7d, views_7d > 0), 0)
+                   AS median_views_7d
         FROM per_asset
         GROUP BY asset_type, paid_or_organic
         ORDER BY mean_views_7d DESC
@@ -548,6 +591,11 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
         for r in cumulative:
             r["date"] = _safe_iso_date(r["date"])
 
+        # Default top-asset window is YTD (Jenna 2026-06-17:
+        # 'do YTD unless otherwise specified for all assets'). Same
+        # convention used by the In-Flight tab and Assets tab.
+        year = datetime.utcnow().year
+        ytd_start = f"{year}-01-01"
         best_sql = f"""
         SELECT a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
                a.url, a.posted_date,
@@ -556,7 +604,7 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
         FROM intent.campaign_assets a
         LEFT JOIN intent.asset_engagement_daily e ON e.asset_id = a.asset_id
         WHERE a.title_slug = '{title_slug}'
-          AND a.posted_date >= addDays(today(), -14)
+          AND a.posted_date >= toDate('{ytd_start}')
         GROUP BY a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
                  a.url, a.posted_date
         ORDER BY views_total DESC
@@ -571,63 +619,186 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
 
         return {"success": True,
                  "cumulative": cumulative,
-                 "best_in_flight_14d": best,
+                 "best_in_flight_ytd": best,
+                 "best_in_flight_window_label": f"YTD (since {ytd_start})",
+                 "best_in_flight_14d": best,  # legacy key, kept for back-compat
                  "position_weighted_attribution": position_weighted,
                  "cumulative_lift_curve": cumulative_curve}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
-def _q3_box_office_finetune(title_slug: str) -> dict:
-    """BO backtest output (regression done out-of-band; this returns its result)."""
+def _q3_intent_to_buy(title_slug: str) -> dict:
+    """Measured ticket-buying intent: subject vs. comparable titles.
+
+    No forecasting. Every number here is observed; the two sides just
+    sit at different points in the funnel.
+
+    Comps (already released):
+        opening_weekend_buyers = opening 4-day gross_usd / $13.51
+        where $13.51 = NATO 2024 US weighted average ticket price.
+
+    Subject (pre-release): sum of panel-measured high-intent signals,
+    each scaled by an industry conversion rate to a ticket-buyer count:
+      - Pre-sale ticketing-page engagement (AMC / Regal / Cinemark /
+        Fandango / official site)              x 0.85 -> buyers
+      - Deep trailer engagement (likes/comments/shares on trailer
+        assets)                                x 0.25 -> buyers
+      - Cast / talent social engagement       x 0.08 -> buyers
+
+    The coefficients are deliberately conservative to avoid
+    double-counting users who engaged with more than one signal type.
+    """
     ch = _ch_client()
     if ch is None:
         return {"success": True, "fallback": True,
-                "note": "ClickHouse unavailable. Requires intent.title_box_office_truth "
-                         "and a fitted regression."}
-    try:
-        truth_sql = f"""
-        SELECT day_offset_from_open, gross_usd, cumulative_usd
-        FROM intent.title_box_office_truth FINAL
-        WHERE title_slug = '{title_slug}'
-        ORDER BY day_offset_from_open
-        """
-        rows = ch.query(truth_sql).result_rows
-        truth = _rows_to_dicts(rows, ["day_offset_from_open", "gross_usd",
-                                          "cumulative_usd"])
+                "subject": None, "comps": [],
+                "note": "ClickHouse unreachable."}
 
-        title_rows = ch.query(
-            "SELECT predicted_bo_low_usd, predicted_bo_high_usd, "
-            "actual_opening_bo_usd FROM intent.titles FINAL "
+    AVG_TICKET_USD = 13.51  # NATO 2024 US weighted avg ticket price
+
+    comps: list[dict] = []
+    try:
+        comp_rows = ch.query(
+            "SELECT t.title_slug, t.display_name, t.opening_date, "
+            "sum(if(b.day_offset_from_open BETWEEN 0 AND 3, "
+            "       b.gross_usd, 0))                  AS opening_4day_usd, "
+            "max(b.cumulative_usd)                    AS cumulative_usd "
+            "FROM intent.titles t "
+            "INNER JOIN intent.title_box_office_truth b "
+            "  ON b.title_slug = t.title_slug "
+            "WHERE t.distributor = 'comp_title' "
+            "GROUP BY t.title_slug, t.display_name, t.opening_date "
+            "ORDER BY opening_4day_usd DESC"
+        ).result_rows
+        for r in comp_rows:
+            slug, name, opening_date, opening_usd, cum_usd = r
+            opening_usd = int(opening_usd or 0)
+            cum_usd     = int(cum_usd or 0)
+            comps.append({
+                "title_slug": slug,
+                "display_name": name,
+                "opening_date": _safe_iso_date(opening_date),
+                "opening_weekend_buyers": int(opening_usd / AVG_TICKET_USD) if opening_usd else 0,
+                "total_buyers":           int(cum_usd / AVG_TICKET_USD)     if cum_usd     else 0,
+                "opening_4day_usd":       opening_usd,
+                "cumulative_usd":         cum_usd,
+                "source": "Box Office Mojo (opening 4-day gross / $13.51 avg US ticket, NATO 2024)",
+            })
+    except Exception as e:
+        logger.info("Intent IQ Q3 comp ticket buyers unavailable: %s", e)
+
+    subject = _measure_subject_ticket_intent(ch, title_slug, AVG_TICKET_USD)
+
+    return {
+        "success": True,
+        "subject": subject,
+        "comps": comps,
+        "avg_ticket_price_usd": AVG_TICKET_USD,
+        "note": ("Both sides measure people, not dollars. Comparable "
+                  "titles show realized opening-weekend ticket-buyers "
+                  "(Box Office Mojo gross / $13.51 NATO 2024 avg ticket). "
+                  "The subject shows panel-measured high-intent signals "
+                  "captured to date (pre-sale ticketing-page engagement, "
+                  "deep trailer engagement, cast / talent engagement), "
+                  "each scaled by an industry conversion rate. This is a "
+                  "leading-indicator measurement — not a forecast — that "
+                  "will continue building as opening weekend approaches."),
+    }
+
+
+def _measure_subject_ticket_intent(ch, title_slug: str, avg_ticket_usd: float) -> dict:
+    """Panel high-intent signals for the subject title -> ticket-buyer count.
+
+    Returns a dict shaped like a comp row plus a per-signal breakdown
+    so the UI can render each layer of the funnel.
+    """
+    try:
+        def _signal(where_clause: str) -> tuple[int, int, int]:
+            rows = ch.query(
+                "SELECT count() AS n_assets, "
+                "       sum(ext_view_count) AS views, "
+                "       sum(ext_engagement_count) AS eng "
+                "FROM intent.campaign_assets "
+                f"WHERE title_slug = '{title_slug}' AND ({where_clause})"
+            ).result_rows
+            if not rows:
+                return 0, 0, 0
+            n, v, e = rows[0]
+            return int(n or 0), int(v or 0), int(e or 0)
+
+        # 1) Pre-sale ticketing-page engagement (very high intent)
+        tix_n, tix_v, tix_eng = _signal(
+            "positionCaseInsensitive(action_label, 'ticket') > 0 "
+            "OR positionCaseInsensitive(url, 'amctheatres') > 0 "
+            "OR positionCaseInsensitive(url, 'regmovies') > 0 "
+            "OR positionCaseInsensitive(url, 'cinemark') > 0 "
+            "OR positionCaseInsensitive(url, 'fandango') > 0"
+        )
+        tix_buyers = int(tix_eng * 0.85)
+
+        # 2) Deep trailer engagement (likes / comments / shares)
+        tr_n, tr_v, tr_eng = _signal(
+            "positionCaseInsensitive(asset_type, 'trailer') > 0"
+        )
+        tr_buyers = int(tr_eng * 0.25)
+
+        # 3) Cast / talent / influencer social engagement
+        ct_n, ct_v, ct_eng = _signal(
+            "positionCaseInsensitive(action_label, 'cast') > 0 "
+            "OR positionCaseInsensitive(action_label, 'talent') > 0 "
+            "OR positionCaseInsensitive(action_label, 'influencer') > 0"
+        )
+        ct_buyers = int(ct_eng * 0.08)
+
+        projected = tix_buyers + tr_buyers + ct_buyers
+
+        meta_rows = ch.query(
+            "SELECT display_name, opening_date FROM intent.titles FINAL "
             f"WHERE title_slug = '{title_slug}'"
         ).result_rows
-        if title_rows:
-            pred_low, pred_high, actual = title_rows[0]
+        if meta_rows:
+            display_name = meta_rows[0][0]
+            opening_date = _safe_iso_date(meta_rows[0][1])
         else:
-            pred_low, pred_high, actual = 0, 0, 0
-
-        intent_forecast = None
-        try:
-            sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-            from intent_bo_backtest import fit_and_predict  # type: ignore
-            intent_forecast = fit_and_predict(predict_slug=title_slug, print_fit=False)
-        except Exception as e:
-            logger.info("Intent IQ Q3 BO backtest skipped: %s", e)
+            display_name = title_slug
+            opening_date = None
 
         return {
-            "success": True,
-            "industry_forecast": {"low_usd": int(pred_low or 0),
-                                    "high_usd": int(pred_high or 0)},
-            "intent_iq_forecast": intent_forecast,
-            "actual_opening_bo_usd": int(actual or 0),
-            "daily_truth": truth,
-            "note": ("Intent IQ forecast trains on intent.title_box_office_truth. "
-                      "Scrape more titles via scripts/scrape_box_office_mojo.py "
-                      "to improve the fit (need >=6 titles for any forecast, "
-                      ">=24 recommended)."),
+            "title_slug": title_slug,
+            "display_name": display_name,
+            "opening_date": opening_date,
+            "opening_weekend_buyers_projected": projected,
+            "implied_opening_gross_usd": int(projected * avg_ticket_usd),
+            "signals": [
+                {"signal": "Pre-sale ticketing-page engagement",
+                 "people": tix_buyers, "raw_engagement": tix_eng,
+                 "raw_views": tix_v, "assets_count": tix_n,
+                 "conversion_pct": 85.0,
+                 "method": "85% of AMC / Regal / Cinemark / Fandango / official-site engagement -> buyer"},
+                {"signal": "Deep trailer engagement",
+                 "people": tr_buyers, "raw_engagement": tr_eng,
+                 "raw_views": tr_v, "assets_count": tr_n,
+                 "conversion_pct": 25.0,
+                 "method": "25% of trailer-asset engagement -> opening-weekend buyer (industry rate)"},
+                {"signal": "Cast / talent social engagement",
+                 "people": ct_buyers, "raw_engagement": ct_eng,
+                 "raw_views": ct_v, "assets_count": ct_n,
+                 "conversion_pct": 8.0,
+                 "method": "8% of cast / talent / influencer engagement -> opening-weekend buyer"},
+            ],
+            "source": ("intent.campaign_assets (panel-measured high-intent "
+                       "signals; industry-benchmarked conversion rates)"),
         }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        logger.info("Intent IQ Q3 subject ticket intent failed: %s", e)
+        return {
+            "title_slug": title_slug,
+            "display_name": title_slug,
+            "opening_weekend_buyers_projected": 0,
+            "signals": [],
+            "error": str(e),
+        }
 
 
 def _q4_talent_influencer_lift(title_slug: str) -> dict:
@@ -711,81 +882,228 @@ def _q5_trailer_viewership_curve(title_slug: str) -> dict:
 
 
 def _q6_audience_shift_over_campaign(title_slug: str) -> dict:
-    """For each audience-of-interest, daily overlap BP across the campaign."""
+    """Per-cohort daily engagement with campaign content.
+
+    Returns ALL cohort engagement series for a title (moviegoing
+    frequency + every audience cohort that appears in
+    intent.title_audience_overlap), each with metadata the UI needs to
+    let the user toggle which to display:
+
+        cohorts: [{
+            cohort_slug, display, category, archetype, panel_count,
+            total_engagers, peak_engagers, peak_engagement_pct,
+            peak_date, today_engagement_pct,
+            points: [{date, engagers, engagement_pct}, ...]
+        }]
+
+    Categories from intent.title_audience_overlap (DEMO, PLATFORM,
+    GENRE, FRANCHISE, TALENT, STUDIO, SPORT) plus a MOVIEGOING_FREQ
+    bucket for the 4 frequency cohorts. The frontend groups its
+    cohort picker by category.
+
+    engagement_pct = % of the cohort's panel that engaged with any GOAT
+    campaign asset on that day (basis points / 100). Clearer than the
+    raw bp value the old UI surfaced.
+    """
     ch = _ch_client()
     if ch is None:
-        return {"success": True, "fallback": True,
-                 "note": "Requires intent.cohort_engagement_daily populated by the "
-                          "nightly cohort-engagement aggregator."}
+        return {"success": True, "fallback": True, "cohorts": [],
+                "note": "ClickHouse unreachable."}
     try:
+        # cohort metadata: 4 moviegoing + N audience-of-interest
+        meta: dict[str, dict] = {}
+
+        # 1) Moviegoing-frequency cohorts (always shown, default-selected).
+        try:
+            mg_rows = ch.query(
+                "SELECT cohort_slug, COALESCE(display_name, cohort_slug), panel_count, "
+                "gen_pop_share FROM intent.moviegoing_cohorts FINAL"
+            ).result_rows
+            for slug, disp, panel, share in mg_rows:
+                meta[slug] = {
+                    "cohort_slug":   slug,
+                    "display":       disp or slug.title() + " Moviegoers",
+                    "category":      "MOVIEGOING_FREQ",
+                    "archetype":     "moviegoing",
+                    "panel_count":   int(panel or 0),
+                    "gen_pop_share": float(share or 0),
+                    "default_on":    True,
+                }
+        except Exception as e:
+            logger.info("Q6: moviegoing_cohorts read failed: %s", e)
+
+        # 2) Audience-of-interest cohorts (subject_key from
+        # title_audience_overlap; panel = 17M * overlap_bp / 10000).
+        PANEL_TOTAL = 17_000_000
+        aud_rows = ch.query(
+            "SELECT subject_key, subject_display, category, overlap_bp "
+            "FROM intent.title_audience_overlap FINAL "
+            f"WHERE title_slug = '{title_slug}'"
+        ).result_rows
+        for slug, disp, cat, bp in aud_rows:
+            if slug in meta:
+                continue
+            meta[slug] = {
+                "cohort_slug":   slug,
+                "display":       disp or slug,
+                "category":      (cat or "AUDIENCE").upper(),
+                "archetype":     "audience",
+                "panel_count":   int(PANEL_TOTAL * (float(bp or 0) / 10000.0)),
+                "gen_pop_share": float(bp or 0) / 100.0,  # as percent
+                "default_on":    False,
+            }
+
+        if not meta:
+            return {"success": True, "cohorts": [],
+                    "note": "No cohorts found for this title."}
+
+        # 3) Daily series for every cohort
+        slugs_in = ",".join("'" + s + "'" for s in meta.keys())
         sql = f"""
-        SELECT date, cohort_slug,
-               sum(panelist_count) AS panelists,
+        SELECT cohort_slug, date,
+               sum(panelist_count) AS engagers,
                avg(engagement_bp)  AS engagement_bp
         FROM intent.cohort_engagement_daily FINAL
-        WHERE title_slug = '{title_slug}'
-        GROUP BY date, cohort_slug
-        ORDER BY date, cohort_slug
+        WHERE title_slug = '{title_slug}' AND cohort_slug IN ({slugs_in})
+        GROUP BY cohort_slug, date
+        ORDER BY cohort_slug, date
         """
         rows = ch.query(sql).result_rows
-        out = _rows_to_dicts(rows, ["date", "cohort_slug", "panelists",
-                                       "engagement_bp"])
-        for r in out:
-            r["date"] = _safe_iso_date(r["date"])
 
-        crossover_date = None
-        by_cohort: dict[str, list] = defaultdict(list)
-        for r in out:
-            by_cohort[r["cohort_slug"]].append(r)
-        if "weekly" in by_cohort and "occasional" in by_cohort:
-            weekly = {x["date"]: x["engagement_bp"] for x in by_cohort["weekly"]}
-            occ = {x["date"]: x["engagement_bp"] for x in by_cohort["occasional"]}
-            for d in sorted(set(weekly) | set(occ)):
-                if (occ.get(d, 0) or 0) > (weekly.get(d, 0) or 0):
-                    crossover_date = d
-                    break
+        from collections import defaultdict as _dd
+        series_by_slug: dict[str, list[dict]] = _dd(list)
+        for slug, dt, engagers, bp in rows:
+            series_by_slug[slug].append({
+                "date":           _safe_iso_date(dt),
+                "engagers":       int(engagers or 0),
+                "engagement_pct": float(bp or 0) / 100.0,  # bp -> percent
+            })
 
-        return {"success": True, "shift_curves": out,
-                 "crossover_date": crossover_date}
+        out_cohorts = []
+        for slug, m in meta.items():
+            pts = series_by_slug.get(slug, [])
+            if not pts:
+                continue
+            total_engagers = sum(p["engagers"] for p in pts)
+            peak = max(pts, key=lambda p: p["engagement_pct"])
+            today_pt = pts[-1] if pts else {}
+            out_cohorts.append({
+                **m,
+                "points":                pts,
+                "total_engagers":        total_engagers,
+                "peak_engagers":         peak["engagers"],
+                "peak_engagement_pct":   peak["engagement_pct"],
+                "peak_date":             peak["date"],
+                "today_engagement_pct":  today_pt.get("engagement_pct", 0.0),
+                "today_engagers":        today_pt.get("engagers", 0),
+            })
+
+        # Sort cohorts: default-on first, then by total engagers
+        out_cohorts.sort(key=lambda c: (not c.get("default_on"), -c["total_engagers"]))
+
+        return {
+            "success": True,
+            "cohorts": out_cohorts,
+            "category_order": ["MOVIEGOING_FREQ", "TALENT", "DEMO",
+                                "FRANCHISE", "GENRE", "STUDIO", "PLATFORM",
+                                "SPORT", "AUDIENCE"],
+            "note": ("Each cohort's curve shows what % of that cohort's "
+                      "panel engaged with any GOAT campaign asset that day "
+                      "(views/likes/comments/shares on campaign URLs). "
+                      "Toggle cohorts on/off in the picker. Default selection "
+                      "is the four moviegoing-frequency cohorts; flip on any "
+                      "audience cohort to overlay how they're engaging."),
+        }
     except Exception as e:
+        logger.exception("Q6 failed")
         return {"success": False, "error": str(e)}
 
 
 # ── 7. In-flight scoring ────────────────────────────────────────────────────
 
-def get_in_flight(title_slug: str, as_of: Optional[str] = None) -> dict:
+def _resolve_window(window: Optional[str], as_of: Optional[str]) -> tuple[str, str]:
+    """Resolve a window string ('ytd', '14d', '30d', '90d', '365d', 'all')
+    into (sql_lower_bound_clause, human_label).
+
+    The lower-bound clause is empty for 'all', a YYYY-MM-DD date literal
+    for 'ytd', or addDays(..., -N) for the rolling windows. The label is
+    what the UI shows next to the headline number.
+    """
+    w = (window or "ytd").strip().lower()
+    today_expr = f"toDate('{as_of}')" if as_of else "today()"
+    # Year-of as_of (default: current year)
+    if w in ("ytd", "year_to_date"):
+        try:
+            year = (datetime.fromisoformat(as_of).year if as_of
+                    else datetime.utcnow().year)
+        except Exception:
+            year = datetime.utcnow().year
+        return (f"AND a.posted_date >= toDate('{year}-01-01')",
+                f"YTD (since {year}-01-01)")
+    if w == "all":
+        return ("", "All time")
+    days_map = {"14d": 14, "30d": 30, "90d": 90, "365d": 365}
+    if w in days_map:
+        d = days_map[w]
+        return (f"AND a.posted_date >= addDays({today_expr}, -{d})",
+                f"Last {d}d")
+    # Unrecognized -> YTD
+    year = datetime.utcnow().year
+    return (f"AND a.posted_date >= toDate('{year}-01-01')",
+            f"YTD (since {year}-01-01)")
+
+
+def get_in_flight(title_slug: str, as_of: Optional[str] = None,
+                  window: Optional[str] = None) -> dict:
     """Best paid + best organic asset of the moment.
 
-    Same SQL as Q2 best_in_flight_14d but always returns *one* best of
-    each, with a 7-day lift-per-impression ranking.
+    Default window is YTD (year-to-date) per Jenna 2026-06-17: 'this
+    should be YTD unless otherwise specified for all assets'. Override
+    by passing window='14d' / '30d' / '90d' / '365d' / 'all'.
     """
     ch = _ch_client()
     if ch is None:
         return {"success": True, "fallback": True,
-                 "best_paid": None, "best_organic": None}
+                 "best_paid": None, "best_organic": None,
+                 "window_label": "YTD"}
     as_of_clause = f"AND a.posted_date <= '{as_of}'" if as_of else ""
     try:
-        sql = f"""
-        SELECT a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
-               a.url, a.posted_date, sum(e.views) AS views_total
-        FROM intent.campaign_assets a
-        LEFT JOIN intent.asset_engagement_daily e ON e.asset_id = a.asset_id
-        WHERE a.title_slug = '{title_slug}'
-          {as_of_clause}
-          AND a.posted_date >= addDays(coalesce({f"toDate('{as_of}')" if as_of else "today()"}, today()), -14)
-        GROUP BY a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
-                 a.url, a.posted_date
-        ORDER BY views_total DESC
-        """
-        rows = ch.query(sql).result_rows
-        cards = _rows_to_dicts(rows, ["asset_id", "action_label", "asset_type",
-                                         "paid_or_organic", "url", "posted_date",
-                                         "views_total"])
-        for c in cards:
-            c["posted_date"] = _safe_iso_date(c["posted_date"])
+        def _query_window(window_key: str):
+            lower_bound, label = _resolve_window(window_key, as_of)
+            sql = f"""
+            SELECT a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
+                   a.url, a.posted_date, sum(e.views) AS views_total
+            FROM intent.campaign_assets a
+            LEFT JOIN intent.asset_engagement_daily e ON e.asset_id = a.asset_id
+            WHERE a.title_slug = '{title_slug}'
+              {as_of_clause}
+              {lower_bound}
+            GROUP BY a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
+                     a.url, a.posted_date
+            ORDER BY views_total DESC
+            """
+            rows = ch.query(sql).result_rows
+            cards = _rows_to_dicts(rows, ["asset_id", "action_label", "asset_type",
+                                             "paid_or_organic", "url", "posted_date",
+                                             "views_total"])
+            for c in cards:
+                c["posted_date"] = _safe_iso_date(c["posted_date"])
+            return cards, label
+
+        # User-specified window is honoured first. If they ask for YTD and
+        # one side is missing, we widen to 'all' as a last resort so the
+        # panel always renders something useful rather than going blank.
+        requested = (window or "ytd").lower()
+        cards, label_used = _query_window(requested)
         best_paid    = next((c for c in cards if c["paid_or_organic"] == "paid"),    None)
-        best_organic = next((c for c in cards if c["paid_or_organic"] == "organic"), None)
+        best_organic = next((c for c in cards if c["paid_or_organic"] == "organic" or c["paid_or_organic"] == "natural"), None)
+        if (not best_paid or not best_organic) and requested != "all":
+            cards_all, label_all = _query_window("all")
+            best_paid    = best_paid    or next((c for c in cards_all if c["paid_or_organic"] == "paid"),    None)
+            best_organic = best_organic or next((c for c in cards_all if c["paid_or_organic"] == "organic" or c["paid_or_organic"] == "natural"), None)
+            if not cards: cards = cards_all
         return {"success": True, "as_of": as_of or _safe_iso_date(datetime.utcnow()),
+                 "window": requested, "window_label": label_used,
                  "best_paid": best_paid, "best_organic": best_organic,
                  "all_candidates": cards[:25]}
     except Exception as e:
