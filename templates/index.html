@@ -20548,12 +20548,7 @@
                 })();
 
                 var html = '';
-                html += '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
-                html += iiqSummaryTile(
-                    (subj.display_name || 'Subject') + ' — projected opening-weekend buyers',
-                    fmtCompact(projected),
-                    'from panel-measured high-intent signals to date'
-                );
+                html += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
                 html += iiqSummaryTile(
                     'Top comparable',
                     topComp ? fmtCompact(topComp.opening_weekend_buyers) : '—',
