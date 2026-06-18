@@ -1217,13 +1217,13 @@
             color: var(--text-secondary);
         }
         /* All product views: take remaining height when shown (flex: 1 1 0%, min-height: 0) */
-        #helmIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow-y: auto; }
+        #helmIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 500px; overflow-y: auto; position: relative; z-index: 50; }
         #helmIQView .helm-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-color); padding: 0.5rem 1.25rem 0; background: var(--bg-secondary); position: sticky; top: 0; z-index: 10; }
         #helmIQView .helm-tab-btn { padding: 0.7rem 1.25rem; background: none; border: none; border-bottom: 3px solid transparent; color: var(--text-secondary); font-size: 0.82rem; font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em; transition: all 0.15s; }
         #helmIQView .helm-tab-btn:hover { color: var(--text-primary); }
         #helmIQView .helm-tab-btn.active { color: var(--accent-lime); border-bottom-color: var(--accent-lime); }
-        #helmIQView .helm-tab-content { display: none; padding: 1.5rem; flex: 1 1 auto; }
-        #helmIQView .helm-tab-content.active { display: block !important; }
+        #helmIQView .helm-tab-content { padding: 1.5rem; flex: 1 1 auto; }
+        #helmIQView .helm-tab-content.helm-tab-hidden { display: none !important; }
         #helmIQView .helm-build-form { max-width: 680px; width: 100%; padding: 0.5rem 0; }
         #helmIQView .helm-field { margin-bottom: 1.25rem; }
         #helmIQView .helm-field label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.4rem; }
@@ -25062,7 +25062,7 @@
             </div>
 
             <!-- FINANCIALS TAB -->
-            <div id="helm-tab-financials" class="helm-tab-content">
+            <div id="helm-tab-financials" class="helm-tab-content helm-tab-hidden" style="display:none;">
                 <div class="helm-fin-layout">
                     <div class="helm-fin-sidebar">
                         <h4>Movies</h4>
@@ -26157,7 +26157,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, helmIQ: function() { var c = document.querySelector('.container'); if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } } var v = document.getElementById('helmIQView'); if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 0%; min-height:0; overflow-y:auto; visibility:visible;'); var bt = document.getElementById('helm-tab-build'); if (bt) bt.setAttribute('style', 'display:block; padding:1.5rem;'); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, helmIQ: function() { var c = document.querySelector('.container'); if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } } var v = document.getElementById('helmIQView'); if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 auto; min-height:500px; height:calc(100vh - 80px); overflow-y:auto; visibility:visible; position:relative; z-index:50;'); var bt = document.getElementById('helm-tab-build'); if (bt) bt.setAttribute('style', 'display:block; padding:1.5rem;'); var ft = document.getElementById('helm-tab-financials'); if (ft) ft.setAttribute('style', 'display:none;'); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -26218,9 +26218,11 @@
                     var c = document.querySelector('.container');
                     if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } }
                     var v = document.getElementById('helmIQView');
-                    if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 0%; min-height:0; overflow-y:auto; visibility:visible;');
+                    if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 auto; min-height:500px; height:calc(100vh - 80px); overflow-y:auto; visibility:visible; position:relative; z-index:50;');
                     var bt = document.getElementById('helm-tab-build');
                     if (bt) bt.setAttribute('style', 'display:block; padding:1.5rem;');
+                    var ft = document.getElementById('helm-tab-financials');
+                    if (ft) ft.setAttribute('style', 'display:none;');
                     if (typeof helmLoadProfileDropdowns === 'function') helmLoadProfileDropdowns();
                 },
                 admin: function() { window.location.href = '/admin'; },
@@ -27835,9 +27837,13 @@
                 });
                 document.querySelectorAll('#helmIQView .helm-tab-content').forEach(function(p) {
                     var isActive = (p.id === 'helm-tab-' + tab);
-                    p.classList.toggle('active', isActive);
-                    p.style.display = isActive ? 'block' : 'none';
-                    p.style.padding = isActive ? '1.5rem' : '';
+                    if (isActive) {
+                        p.classList.remove('helm-tab-hidden');
+                        p.setAttribute('style', 'display:block; padding:1.5rem;');
+                    } else {
+                        p.classList.add('helm-tab-hidden');
+                        p.setAttribute('style', 'display:none;');
+                    }
                 });
                 if (tab === 'financials') helmLoadMovies();
             };
