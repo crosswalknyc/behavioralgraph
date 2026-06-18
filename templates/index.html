@@ -2444,6 +2444,60 @@
         #dashProfileRunsRow select { background-color: var(--bg-input); padding-right: 1.75rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238892b0' d='M6 9L1 4h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 12px; }
         #dashViewDeltasBtn { background: #7c3aed; color: #a8b2c1; border-color: #7c3aed; white-space: nowrap; font-family: 'Space Mono', monospace; }
         #dashViewDeltasBtn:hover { background: #6d28d9; border-color: #6d28d9; color: #c5c7d4; }
+        /* Audience-share boxes (next to Data Cuts on Profile IQ dashboard).
+         * Each box represents the share of audience digital engagement
+         * that lives in one of the 5 Crosswalk Engager touchpoints:
+         * Social / Search / Owned / Retail / Media. Values sum to 100%.
+         * Computed via max-BP per category, summed into buckets, with a
+         * 5x weight on the subject's self-pin BP for the Owned slice.
+         * For talent profiles, Owned renders as "—" (talent doesn't have
+         * a brand .com / app channel). */
+        #audienceShareBoxes {
+            display: none;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            gap: 0.35rem;
+            align-items: stretch;
+            margin-left: 0.5rem;
+        }
+        .asb-box {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 3.5rem;
+            height: 2rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid transparent;
+            background: var(--bg-input);
+            font-family: 'Space Mono', monospace;
+            line-height: 1.1;
+            cursor: help;
+        }
+        .asb-box .asb-label {
+            font-size: 0.55rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+        .asb-box .asb-pct {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .asb-box[data-channel="social"]  { border-color: #f92672; }
+        .asb-box[data-channel="search"]  { border-color: #66d9ef; }
+        .asb-box[data-channel="owned"]   { border-color: #a6e22e; }
+        .asb-box[data-channel="retail"]  { border-color: #fd971f; }
+        .asb-box[data-channel="media"]   { border-color: #ae81ff; }
+        .asb-box[data-channel="social"]  .asb-label { color: #f92672; }
+        .asb-box[data-channel="search"]  .asb-label { color: #66d9ef; }
+        .asb-box[data-channel="owned"]   .asb-label { color: #a6e22e; }
+        .asb-box[data-channel="retail"]  .asb-label { color: #fd971f; }
+        .asb-box[data-channel="media"]   .asb-label { color: #ae81ff; }
+        .asb-box.asb-na .asb-pct { color: var(--text-secondary); font-weight: 500; }
         .btn-run-analysis {
             border-radius: 9999px; background: #4a8ac9; color: white;
             padding: 0.75rem 1.5rem; font-weight: 700; text-transform: uppercase;
@@ -16447,6 +16501,17 @@
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
                                 <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 0.5rem;">
                                     <button type="button" class="btn btn-small" id="dashViewDeltasBtn" style="font-size: 0.8rem;">Data Cuts</button>
+                                    <!-- Audience-share boxes: Social / Search / Owned / Retail / Media.
+                                         Populated by _renderAudienceShareBoxes() after the profile
+                                         CSV finishes parsing. Hidden by default; revealed once
+                                         data is available. -->
+                                    <div id="audienceShareBoxes" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
+                                        <div class="asb-box" data-channel="social" title="Social Media engagement share"><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">—</span></div>
+                                        <div class="asb-box" data-channel="search" title="Search Engine / AI engagement share"><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">—</span></div>
+                                        <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent profiles."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">—</span></div>
+                                        <div class="asb-box" data-channel="retail" title="Retail / eCommerce engagement share"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">—</span></div>
+                                        <div class="asb-box" data-channel="media"  title="Media (streaming, movies, music, news, games, sports) engagement share"><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">—</span></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -20190,6 +20255,15 @@
             };
 
             function iiqRenderAssetScatter(cards) {
+                // Asset performance chart: sort assets by reach (views) desc,
+                // then plot 3 percent metrics as lines so the trend across
+                // the portfolio is visible at a glance. Each per-asset point
+                // remains clickable (jumps to that asset's card below).
+                //   X axis: asset rank (1 = highest reach, N = lowest)
+                //   Y axis: percent (engagement rate, info-seek %, ticketing %)
+                //   3 lines: eng rate (cyan), info-seek (indigo), ticketing (amber)
+                // A rolling-average overlay (window = 7) cuts through the
+                // per-asset noise so you can read the underlying trend.
                 var host = document.getElementById('iiqAssetChart');
                 if (!host) return;
                 var pts = (cards || []).filter(function(c) {
@@ -20197,130 +20271,150 @@
                 });
                 if (!pts.length) { host.innerHTML = ''; return; }
 
+                // Sort by views desc and compute per-asset values
+                var sorted = pts.slice().sort(function(a, b) {
+                    return (Number(b.ext_view_count)||0) - (Number(a.ext_view_count)||0);
+                });
+                var rows = sorted.map(function(c, idx) {
+                    var v = Number(c.ext_view_count) || 0;
+                    var e = Number(c.ext_engagement_count) || 0;
+                    var r = v > 0 ? (e / v * 100) : 0;
+                    var p = c._proj || (typeof iiqAssetFunnelProjection === 'function' ? iiqAssetFunnelProjection(c) : null);
+                    return {
+                        c: c,
+                        rank: idx + 1,
+                        views: v,
+                        eng_rate: r,
+                        info_pct: p ? p.info_pct : 0,
+                        ticket_pct: p ? p.ticket_pct : 0
+                    };
+                });
+
+                var N = rows.length;
                 var W = 1000, H = 360;
-                var padL = 64, padR = 24, padT = 28, padB = 52;
+                var padL = 56, padR = 32, padT = 28, padB = 56;
                 var plotW = W - padL - padR;
                 var plotH = H - padT - padB;
 
-                // X: log10(views) from 1K to dataset max (snapped up)
-                var vals = pts.map(function(c) { return Number(c.ext_view_count) || 1; });
-                var xMin = 1000;
-                var xMaxRaw = Math.max.apply(null, vals);
-                // Snap up to next power of 10 for clean tick marks
-                var xMax = Math.pow(10, Math.ceil(Math.log10(Math.max(xMaxRaw, xMin * 10))));
-                var lxMin = Math.log10(xMin), lxMax = Math.log10(xMax);
-                function xScale(v) {
-                    var lv = Math.log10(Math.max(v, xMin));
-                    return padL + ((lv - lxMin) / (lxMax - lxMin)) * plotW;
-                }
-                // Y: 0% .. dataset-max engagement rate (capped, snapped to nice number)
-                var rates = pts.map(function(c) {
-                    var v = Number(c.ext_view_count) || 0;
-                    var e = Number(c.ext_engagement_count) || 0;
-                    return v > 0 ? (e / v * 100) : 0;
+                // Y max: nice ceil of largest percent across all 3 series
+                var yMaxRaw = 0;
+                rows.forEach(function(r) {
+                    if (r.eng_rate   > yMaxRaw) yMaxRaw = r.eng_rate;
+                    if (r.info_pct   > yMaxRaw) yMaxRaw = r.info_pct;
+                    if (r.ticket_pct > yMaxRaw) yMaxRaw = r.ticket_pct;
                 });
-                var yMaxRaw = Math.max.apply(null, rates.concat([1]));
                 var yMax = yMaxRaw <= 2 ? 2 : yMaxRaw <= 5 ? 5 : yMaxRaw <= 10 ? 10 : yMaxRaw <= 15 ? 15 : Math.ceil(yMaxRaw / 5) * 5;
-                function yScale(r) {
-                    return padT + plotH - (r / yMax) * plotH;
+
+                function xScale(rank) {
+                    if (N <= 1) return padL + plotW / 2;
+                    return padL + ((rank - 1) / (N - 1)) * plotW;
                 }
-                // Bubble radius scales with ticketing %; floor so even 0% is visible
-                var tickets = pts.map(function(c) {
-                    var p = c._proj;
-                    return p ? p.ticket_pct : 0;
-                });
-                var tkMax = Math.max.apply(null, tickets.concat([1]));
-                function rScale(t) {
-                    return 4 + Math.sqrt(Math.max(0, t) / Math.max(tkMax, 0.01)) * 14;
-                }
-                function colorFor(c) {
-                    if (c.paid_or_organic === 'paid') return '#22d3ee';
-                    if (c.paid_or_organic === 'organic' || c.paid_or_organic === 'natural') return '#22c55e';
-                    return '#94a3b8';
+                function yScale(pct) {
+                    return padT + plotH - (Math.min(pct, yMax) / yMax) * plotH;
                 }
 
-                // Reference: median engagement rate + median views
-                function median(arr) {
-                    var a = arr.slice().sort(function(x, y) { return x - y; });
-                    if (!a.length) return 0;
-                    var m = Math.floor(a.length / 2);
-                    return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+                // Rolling-average smoother so the trend cuts through noise
+                function rolling(arr, win) {
+                    win = win || 7;
+                    var half = Math.floor(win / 2);
+                    return arr.map(function(_, i) {
+                        var s = Math.max(0, i - half), e = Math.min(arr.length, i + half + 1);
+                        var sum = 0, n = 0;
+                        for (var k = s; k < e; k++) { sum += arr[k]; n++; }
+                        return n ? sum / n : 0;
+                    });
                 }
-                var medX = median(vals);
-                var medY = median(rates);
+                var engArr = rows.map(function(r){ return r.eng_rate; });
+                var infArr = rows.map(function(r){ return r.info_pct; });
+                var tkArr  = rows.map(function(r){ return r.ticket_pct; });
+                var engSmooth = rolling(engArr, 7);
+                var infSmooth = rolling(infArr, 7);
+                var tkSmooth  = rolling(tkArr,  7);
 
-                // X grid: every order of magnitude
-                var xTicks = [];
-                for (var lx = Math.ceil(lxMin); lx <= lxMax; lx++) xTicks.push(Math.pow(10, lx));
+                // Y ticks
                 var yTicks = [];
                 var ySteps = yMax <= 5 ? 5 : yMax <= 10 ? 5 : yMax <= 20 ? 4 : 5;
-                for (var i = 0; i <= ySteps; i++) yTicks.push((yMax * i / ySteps));
+                for (var i = 0; i <= ySteps; i++) yTicks.push(yMax * i / ySteps);
 
-                function fmtTickX(v) {
-                    if (v >= 1e6) return (v / 1e6) + 'M';
-                    if (v >= 1e3) return (v / 1e3) + 'K';
-                    return String(v);
+                // X ticks: 5 reference rank marks
+                var xTicks = [];
+                var nTicks = Math.min(5, N);
+                for (var j = 0; j < nTicks; j++) {
+                    var rk = Math.round(1 + (N - 1) * (j / (nTicks - 1 || 1)));
+                    xTicks.push(rk);
                 }
 
+                var ENG_COLOR  = '#22d3ee';
+                var INFO_COLOR = '#a5b4fc';
+                var TK_COLOR   = '#fbbf24';
+
                 var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%; height: 360px; display:block;">';
-                // Background
                 svg += '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="rgba(15,23,42,0.45)" rx="8" ry="8" />';
+
                 // Y gridlines + labels
                 yTicks.forEach(function(t) {
                     var y = yScale(t);
                     svg += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="rgba(255,255,255,0.06)" />';
                     svg += '<text x="' + (padL - 8) + '" y="' + (y + 3.5) + '" fill="#94a3b8" font-size="10" text-anchor="end">' + t.toFixed(t < 10 ? 1 : 0) + '%</text>';
                 });
-                // X gridlines + labels
-                xTicks.forEach(function(t) {
-                    var x = xScale(t);
-                    svg += '<line x1="' + x + '" y1="' + padT + '" x2="' + x + '" y2="' + (H - padB) + '" stroke="rgba(255,255,255,0.06)" />';
-                    svg += '<text x="' + x + '" y="' + (H - padB + 14) + '" fill="#94a3b8" font-size="10" text-anchor="middle">' + fmtTickX(t) + '</text>';
-                });
-                // Median crosshair (dashed)
-                var medXpx = xScale(medX), medYpx = yScale(medY);
-                svg += '<line x1="' + medXpx + '" y1="' + padT + '" x2="' + medXpx + '" y2="' + (H - padB) + '" stroke="rgba(251,191,36,0.35)" stroke-dasharray="4,4" />';
-                svg += '<line x1="' + padL + '" y1="' + medYpx + '" x2="' + (W - padR) + '" y2="' + medYpx + '" stroke="rgba(251,191,36,0.35)" stroke-dasharray="4,4" />';
-                // Quadrant labels (in muted tint at the four corners)
-                svg += '<text x="' + (W - padR - 6) + '" y="' + (padT + 14) + '" fill="rgba(34,197,94,0.55)" font-size="10" text-anchor="end" font-weight="600">★ STARS — high reach + high engagement</text>';
-                svg += '<text x="' + (padL + 6) + '" y="' + (padT + 14) + '" fill="rgba(168,85,247,0.55)" font-size="10" text-anchor="start" font-weight="600">niche but engaged</text>';
-                svg += '<text x="' + (W - padR - 6) + '" y="' + (H - padB - 6) + '" fill="rgba(245,158,11,0.55)" font-size="10" text-anchor="end" font-weight="600">broad reach · passive</text>';
-                svg += '<text x="' + (padL + 6) + '" y="' + (H - padB - 6) + '" fill="rgba(148,163,184,0.45)" font-size="10" text-anchor="start" font-weight="600">underperformers</text>';
-                // Axis titles
-                svg += '<text x="' + (padL + plotW / 2) + '" y="' + (H - 8) + '" fill="#cbd5e1" font-size="11" text-anchor="middle" font-weight="600">Views (log scale, ' + fmtTickX(xMin) + ' → ' + fmtTickX(xMax) + ')</text>';
-                svg += '<text x="14" y="' + (padT + plotH / 2) + '" fill="#cbd5e1" font-size="11" text-anchor="middle" font-weight="600" transform="rotate(-90, 14, ' + (padT + plotH / 2) + ')">Engagement rate %</text>';
-                // Bubbles (paint largest first so small bubbles stay clickable on top)
-                var enriched = pts.map(function(c, idx) {
-                    var v = Number(c.ext_view_count) || 0;
-                    var e = Number(c.ext_engagement_count) || 0;
-                    var r = v > 0 ? (e / v * 100) : 0;
-                    var tk = (c._proj ? c._proj.ticket_pct : 0);
-                    return { c: c, v: v, e: e, r: r, tk: tk, idx: idx };
-                });
-                enriched.sort(function(a, b) { return b.tk - a.tk; });
-                enriched.forEach(function(p) {
-                    var cx = xScale(p.v);
-                    var cy = yScale(p.r);
-                    var rr = rScale(p.tk);
-                    var color = colorFor(p.c);
-                    var label = (p.c.action_label || p.c.asset_type || '—')
-                        + '  ·  ' + (p.c.channel || '')
-                        + '\n' + fmtCompact(p.v) + ' views  ·  ' + p.r.toFixed(2) + '% eng rate'
-                        + '\n' + (p._proj ? p._proj.ticket_pct.toFixed(1) + '% ticketing' : (p.tk ? p.tk.toFixed(1) + '% ticketing' : 'no ticketing model'))
-                        + '\nClick to jump to card';
-                    var assetId = (p.c.asset_id || '').replace(/'/g, "\\'");
-                    svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + rr + '" fill="' + color + '" fill-opacity="0.42" stroke="' + color + '" stroke-width="1.5" style="cursor:pointer;" onclick="iiqScrollToAssetCard(\'' + assetId + '\')"><title>' + escapeHtml(label) + '</title></circle>';
+
+                // X tick labels (rank N + matching views value so the user
+                // knows what "rank 50" means in terms of reach)
+                xTicks.forEach(function(rk) {
+                    var x = xScale(rk);
+                    var v = rows[rk - 1] ? rows[rk - 1].views : 0;
+                    svg += '<line x1="' + x + '" y1="' + padT + '" x2="' + x + '" y2="' + (H - padB) + '" stroke="rgba(255,255,255,0.04)" />';
+                    svg += '<text x="' + x + '" y="' + (H - padB + 14) + '" fill="#94a3b8" font-size="10" text-anchor="middle">#' + rk + '</text>';
+                    svg += '<text x="' + x + '" y="' + (H - padB + 27) + '" fill="#64748b" font-size="9" text-anchor="middle">' + fmtCompact(v) + ' views</text>';
                 });
 
-                // Legend strip below chart
+                // Axis titles
+                svg += '<text x="' + (padL + plotW / 2) + '" y="' + (H - 6) + '" fill="#cbd5e1" font-size="11" text-anchor="middle" font-weight="600">Asset rank (sorted by views, highest \u2192 lowest)</text>';
+                svg += '<text x="14" y="' + (padT + plotH / 2) + '" fill="#cbd5e1" font-size="11" text-anchor="middle" font-weight="600" transform="rotate(-90, 14, ' + (padT + plotH / 2) + ')">% of viewers</text>';
+
+                // Path builder
+                function buildPath(values, scaler) {
+                    if (!values.length) return '';
+                    return values.map(function(v, i) {
+                        return (i === 0 ? 'M' : 'L') + xScale(i + 1).toFixed(1) + ',' + scaler(v).toFixed(1);
+                    }).join(' ');
+                }
+
+                // Faint raw lines (per-asset jitter)
+                svg += '<path d="' + buildPath(engArr, yScale) + '" fill="none" stroke="' + ENG_COLOR  + '" stroke-width="1"   stroke-opacity="0.18" />';
+                svg += '<path d="' + buildPath(infArr, yScale) + '" fill="none" stroke="' + INFO_COLOR + '" stroke-width="1"   stroke-opacity="0.18" />';
+                svg += '<path d="' + buildPath(tkArr,  yScale) + '" fill="none" stroke="' + TK_COLOR   + '" stroke-width="1"   stroke-opacity="0.18" />';
+
+                // Bold smoothed lines (the eye-readable trend)
+                svg += '<path d="' + buildPath(engSmooth, yScale) + '" fill="none" stroke="' + ENG_COLOR  + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />';
+                svg += '<path d="' + buildPath(infSmooth, yScale) + '" fill="none" stroke="' + INFO_COLOR + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />';
+                svg += '<path d="' + buildPath(tkSmooth,  yScale) + '" fill="none" stroke="' + TK_COLOR   + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />';
+
+                // Clickable per-asset markers (small, so 94 of them stay readable)
+                rows.forEach(function(r) {
+                    var x = xScale(r.rank);
+                    var assetId = (r.c.asset_id || '').replace(/'/g, "\\'");
+                    var label = (r.c.action_label || r.c.asset_type || '\u2014')
+                        + '  \u00b7  rank #' + r.rank + ' (' + fmtCompact(r.views) + ' views)'
+                        + '\nEng rate: '  + r.eng_rate.toFixed(2)  + '%'
+                        + '\nInfo-seek: ' + r.info_pct.toFixed(2)  + '%'
+                        + '\nTicketing: ' + r.ticket_pct.toFixed(2) + '%'
+                        + '\nClick to jump to card';
+                    var titleEsc = escapeHtml(label);
+                    svg += '<circle cx="' + x + '" cy="' + yScale(r.eng_rate)   + '" r="2.5" fill="' + ENG_COLOR  + '" style="cursor:pointer;" onclick="iiqScrollToAssetCard(\'' + assetId + '\')"><title>' + titleEsc + '</title></circle>';
+                    svg += '<circle cx="' + x + '" cy="' + yScale(r.info_pct)   + '" r="2.5" fill="' + INFO_COLOR + '" style="cursor:pointer;" onclick="iiqScrollToAssetCard(\'' + assetId + '\')"><title>' + titleEsc + '</title></circle>';
+                    svg += '<circle cx="' + x + '" cy="' + yScale(r.ticket_pct) + '" r="2.5" fill="' + TK_COLOR   + '" style="cursor:pointer;" onclick="iiqScrollToAssetCard(\'' + assetId + '\')"><title>' + titleEsc + '</title></circle>';
+                });
+
+                svg += '</svg>';
+
                 var legend = '<div style="display:flex; flex-wrap:wrap; gap:1.1rem; align-items:center; margin-top:0.45rem; font-size:0.72rem; color:var(--text-secondary);">'
-                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:10px; height:10px; border-radius:50%; background:#22d3ee;"></span> Paid</span>'
-                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:10px; height:10px; border-radius:50%; background:#22c55e;"></span> Organic</span>'
-                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:6px; height:6px; border-radius:50%; background:#94a3b8;"></span><span style="width:10px; height:10px; border-radius:50%; background:#94a3b8;"></span><span style="width:14px; height:14px; border-radius:50%; background:#94a3b8;"></span> Bubble size = ticketing % (bigger = more viewers visited a ticketing site)</span>'
-                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:1.5px dashed #fbbf24;"></span> Median (split the field into 4 quadrants)</span>'
-                    + '<span style="opacity:0.6;">Tip: click any bubble to jump to its card</span>'
+                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.5px solid ' + ENG_COLOR  + ';"></span> Engagement rate</span>'
+                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.5px solid ' + INFO_COLOR + ';"></span> Info-seek %</span>'
+                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.5px solid ' + TK_COLOR   + ';"></span> Ticketing %</span>'
+                    + '<span style="opacity:0.6;">Bold lines = 7-asset rolling average \u00b7 faint lines = raw per-asset values \u00b7 click any dot to jump to its card</span>'
                     + '</div>';
-                host.innerHTML = svg + '</svg>' + legend;
+                host.innerHTML = svg + legend;
             }
 
             window.reloadIntentIQAssets = function() {
@@ -60227,6 +60321,9 @@
             
             // Render top insights for this profile
             renderTopInsights(parsed);
+
+            // Populate audience-share boxes (Social/Search/Owned/Retail/Media)
+            try { _renderAudienceShareBoxes(parsed); } catch (e) { console.warn('[audience-share] render failed', e); }
         }
 
         function parseAllData(csvData) {
@@ -61768,6 +61865,176 @@
         function _baseCohortLabel() {
             const cat = _currentProfileCategory();
             return cat === 'TALENT' ? 'Casual' : 'Core';
+        }
+
+        // ===================================================================
+        // Audience Share Boxes (Social / Search / Owned / Retail / Media)
+        // ===================================================================
+        // Five colored boxes that sit next to the "Data Cuts" button on the
+        // Profile IQ dashboard. They show the breakdown of audience digital
+        // engagement across the 5 Crosswalk Engager touchpoints, summing to
+        // 100%. Mapping aligns with the Crosswalk Audience Vetting Framework.
+        //
+        // Algorithm (Strategy C — max-BP per category, picked 2026-06-18 over
+        // sum-of-BPs because the latter over-weights Media: it has 10+
+        // categories with hundreds of rows each, while Social has only one
+        // category, so a raw sum drowns Social/Search down to <2%):
+        //   1. For each behavioral category, compute the MAX BP across its
+        //      rows (= the top brand's reach).
+        //   2. Bucket each category to one of social/search/retail/media or
+        //      drop it (demographics, sub-cohort cuts, persona cols are
+        //      excluded).
+        //   3. Sum the max-BPs per bucket.
+        //   4. Add Owned = subject_self_pin_bp * 5 (only for non-talent
+        //      profiles). The 5x boost makes Owned visually meaningful
+        //      against the multi-category buckets — empirically lands brands
+        //      around 10-18% Owned which matches digital-bank/retail
+        //      panel reality.
+        //   5. Normalize the 5 buckets to sum to 100%.
+        //   6. For TALENT profiles, Owned = 0 (talent doesn't have a
+        //      .com / app channel the way brands do) and the remaining 4
+        //      buckets normalize to 100%.
+        const _AUDIENCE_SHARE_BUCKETS = {
+            social: new Set(['SOCIAL MEDIA']),
+            search: new Set(['SEARCH ENGINE/AI', 'SEARCH ENGINE', 'SEARCH']),
+            retail: new Set([
+                'QSR', 'RETAIL', 'APPAREL/FOOTWEAR', 'GROCERY', 'CPG',
+                'MOST PURCHASED BRANDS', 'MOST PURCHASED CATEGORIES',
+                'ACCESSORIES', 'BEAUTY/WELLNESS', 'HOME/OUTDOOR', 'AUTOMOBILE',
+                'PHARMACY', 'AMUSEMENT PARKS', 'MOVIE THEATER', 'PETS',
+                'TRAVEL', 'RESTAURANT', 'BANKING', 'CREDIT PROVIDER',
+                'DIGITAL BANKING', 'INSURANCE', 'INVESTMENTS',
+                'HEALTH & WELLNESS', 'EDUCATION & LEARNING', 'HEAVY MACHINERY',
+                'EVENTS'
+            ]),
+            media: new Set([
+                'STREAMING/PLATFORM', 'VMVPD', 'FAST', 'BROADCAST/CABLE',
+                'MEDIA', 'PODCAST', 'MUSIC', 'MUSIC GENRES', 'MUSICIAN/BAND',
+                'NEWS', 'MAGAZINE', 'BOOK', 'MOVIE', 'MOVIES', 'MOVIE GENRES',
+                'CONTENT', 'GAMES', 'GAMING PLATFORMS', 'FRANCHISE', 'TALENT',
+                'ACTOR', 'ATHLETE', 'HOST/PERSONALITY', 'INTEREST',
+                'APP/PLATFORM USAGE', 'SPORTS TEAM', 'SPORTS', 'SPORT',
+                'BETTING', 'GOLF', 'COLLEGE/UNIVERSITY',
+                'MLB', 'NBA', 'NFL', 'NHL', 'MLS', 'WNBA', 'EPL', 'LA LIGA',
+                'SERIE A', 'LIGUE 1', 'BUNDESLIGA', 'CFB', 'SOCCER',
+                'AL', 'NL', 'AFC', 'NFC', 'WESTERN CONFERENCE',
+                'EASTERN CONFERENCE',
+                'MLB ATHLETE', 'NBA ATHLETE', 'NFL ATHLETE', 'NHL ATHLETE',
+                'HORSE RACING'
+            ])
+        };
+        // Categories that should never count toward any bucket (demos,
+        // cohort cuts, persona meta, conf/division roll-ups already counted
+        // via their league row).
+        const _AUDIENCE_SHARE_EXCLUDE = new Set([
+            'BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY', 'AVID FAN',
+            'CASUAL FAN', 'AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION',
+            'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'SEXUAL ORIENTATION',
+            'PARENTAL_STATUS', 'PARENTAL STATUS', 'OCCUPATION', 'LOCATION',
+            // Sports conference/division roll-ups (the underlying team
+            // already lives in the league row -> bucketed once into Media).
+            'AFC EAST', 'AFC WEST', 'AFC NORTH', 'AFC SOUTH',
+            'NFC EAST', 'NFC WEST', 'NFC NORTH', 'NFC SOUTH',
+            'AL EAST', 'AL WEST', 'AL CENTRAL',
+            'NL EAST', 'NL WEST', 'NL CENTRAL',
+            'ATLANTIC DIVISION', 'METROPOLITAN DIVISION',
+            'CENTRAL DIVISION', 'PACIFIC DIVISION'
+        ]);
+        // Talent categories (subject IS a person). Owned is forced to 0
+        // for these because there's no brand-owned .com / app to count.
+        const _AUDIENCE_SHARE_TALENT_CATS = new Set([
+            'TALENT', 'ACTOR', 'MUSICIAN/BAND', 'MUSICIAN-BAND', 'ATHLETE',
+            'HOST/PERSONALITY', 'COMEDIAN'
+        ]);
+        const _AUDIENCE_SHARE_OWNED_BOOST = 5;
+
+        function _audienceShareBucketFor(col) {
+            const c = String(col || '').trim().toUpperCase();
+            if (!c || _AUDIENCE_SHARE_EXCLUDE.has(c)) return null;
+            for (const [bucket, members] of Object.entries(_AUDIENCE_SHARE_BUCKETS)) {
+                if (members.has(c)) return bucket;
+            }
+            return null;
+        }
+
+        function _computeAudienceShare(parsed) {
+            if (!parsed || !parsed.behavioral) return null;
+            const beh = parsed.behavioral;
+            const brandCat = String(parsed.brandCategory || '').trim().toUpperCase();
+            const profileCat = _currentProfileCategory();
+            const isTalent = _AUDIENCE_SHARE_TALENT_CATS.has(profileCat)
+                          || _AUDIENCE_SHARE_TALENT_CATS.has(brandCat);
+
+            const sums = { social: 0, search: 0, retail: 0, media: 0, owned: 0 };
+            let subjectBP = 0;
+
+            for (const cat of Object.keys(beh)) {
+                const items = beh[cat];
+                let arr = [];
+                if (Array.isArray(items)) {
+                    arr = items;
+                } else if (items && typeof items === 'object') {
+                    arr = Object.entries(items).map(([n, p]) => ({ name: n, pct: parseFloat(p) || 0 }));
+                }
+                if (arr.length === 0) continue;
+                let maxBP = 0;
+                for (const it of arr) {
+                    const p = (typeof it.pct === 'number') ? it.pct : parseFloat(it.pct || it.percentage || 0) || 0;
+                    if (p > maxBP) maxBP = p;
+                }
+                // Capture subject's self-pin BP from the matching brand-category
+                // column (used to seed Owned for non-talent profiles).
+                if (cat.toUpperCase() === brandCat && maxBP > subjectBP) {
+                    subjectBP = maxBP;
+                }
+                // For non-talent, exclude the brand-category row from any
+                // other bucket — it's already represented in Owned.
+                if (!isTalent && cat.toUpperCase() === brandCat) continue;
+                const bucket = _audienceShareBucketFor(cat);
+                if (bucket) sums[bucket] += maxBP;
+            }
+
+            sums.owned = isTalent ? 0 : subjectBP * _AUDIENCE_SHARE_OWNED_BOOST;
+
+            const total = sums.social + sums.search + sums.retail + sums.media + sums.owned;
+            if (!total || !isFinite(total)) return { social: 0, search: 0, retail: 0, media: 0, owned: 0, isTalent };
+            return {
+                social: sums.social / total * 100,
+                search: sums.search / total * 100,
+                retail: sums.retail / total * 100,
+                media:  sums.media  / total * 100,
+                owned:  sums.owned  / total * 100,
+                isTalent: isTalent
+            };
+        }
+
+        function _renderAudienceShareBoxes(parsed) {
+            const container = document.getElementById('audienceShareBoxes');
+            if (!container) return;
+            const share = _computeAudienceShare(parsed);
+            if (!share) {
+                container.style.display = 'none';
+                return;
+            }
+            const fmt = (v) => (v >= 0.5 ? Math.round(v) : (v > 0 ? v.toFixed(1) : 0)) + '%';
+            const apply = (id, val, isOwnedTalent) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const box = el.closest('.asb-box');
+                if (isOwnedTalent) {
+                    el.textContent = '—';
+                    if (box) box.classList.add('asb-na');
+                } else {
+                    el.textContent = fmt(val);
+                    if (box) box.classList.remove('asb-na');
+                }
+            };
+            apply('asbSocial', share.social, false);
+            apply('asbSearch', share.search, false);
+            apply('asbOwned',  share.owned,  share.isTalent);
+            apply('asbRetail', share.retail, false);
+            apply('asbMedia',  share.media,  false);
+            container.style.display = 'inline-flex';
         }
 
         async function _fetchCategoryNorm() {
@@ -64365,21 +64632,15 @@
                     }
                     return [currentProfile];
                 })();
-                if (runsRow && sameSubjectRuns.length > 1) {
-                    runsRow.style.display = 'flex';
-                    // The Run dropdown was removed; users navigate between
-                    // sibling runs from the sidebar tree. The Data Cuts
-                    // button is the only control left on this row and only
-                    // shows when there's more than one sibling to compare
-                    // against.
-                    // Inline comparison-series popover replaces the legacy
-                    // "Compare date ranges" modal. Selected runs are layered
-                    // into the demographic charts (see applyComparisonRunsToDashboardCharts).
+                // Always show the runs row so the Audience-Share boxes
+                // (Social / Search / Owned / Retail / Media) are visible
+                // for every profile, even when there are no sibling runs
+                // to compare. The Data Cuts button itself is conditionally
+                // hidden when there's no second sibling to diff against.
+                if (runsRow) runsRow.style.display = 'flex';
+                if (sameSubjectRuns.length > 1) {
+                    if (deltasBtn) deltasBtn.style.display = '';
                     if (typeof _setupComparisonForCurrentProfile === 'function') {
-                        // Use the canonical group key as the comparison
-                        // state subject so navigating between sibling runs
-                        // (Dwayne Johnson 2024 -> Dwayne Johnson 4+) doesn't
-                        // reset the user's selected comparisons.
                         const canonicalSubj = (typeof getProfileGroupKey === 'function' && currentProfile)
                             ? getProfileGroupKey(currentProfile) : subject;
                         _setupComparisonForCurrentProfile(canonicalSubj, profileId, sameSubjectRuns);
@@ -64392,12 +64653,15 @@
                             }
                         };
                     }
-                } else if (runsRow) {
-                    runsRow.style.display = 'none';
+                } else {
+                    if (deltasBtn) deltasBtn.style.display = 'none';
                     if (typeof _resetComparisonRunsState === 'function') {
                         _resetComparisonRunsState('', profileId, []);
                     }
                 }
+                // Always populate the audience-share boxes — they sit on
+                // every profile, not just multi-sibling ones.
+                try { _renderAudienceShareBoxes(parsed); } catch (e) { console.warn('[audience-share] render failed', e); }
                 // Fetch profile image (custom uploads only)
                 fetchProfileImage(brandName);
             }
