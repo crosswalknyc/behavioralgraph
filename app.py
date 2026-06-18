@@ -7057,6 +7057,7 @@ def index():
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
     has_blue_iq = _acc.get('has_blue_iq_access', False)
     has_intent_iq = _acc.get('has_intent_iq_access', True)
+    has_helm_iq = _acc.get('has_helm_iq_access', False)
 
     # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
@@ -7115,6 +7116,7 @@ def index():
                            has_share_of_time_run_access=has_share_of_time_run,
                            has_blue_iq_access=has_blue_iq,
                            has_intent_iq_access=has_intent_iq,
+                           has_helm_iq_access=has_helm_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -36903,6 +36905,107 @@ def share_of_time_analyze():
     except Exception as e:
         import traceback
         return jsonify({'success': False, 'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+# ============================================================================
+# HELM IQ (Super Admin only)
+# ============================================================================
+
+@app.route('/api/helm-iq/pros-cons', methods=['POST'])
+@requires_super_admin
+def api_helm_iq_pros_cons():
+    """AI-driven pros & cons analysis of genre + profile selections."""
+    try:
+        payload = request.get_json(force=True) or {}
+        genre = payload.get('genre', '')
+        profiles = payload.get('profiles', [])
+        if not genre or not profiles:
+            return jsonify({'success': False, 'error': 'Genre and at least one profile required'}), 400
+
+        # Build analysis prompt
+        profile_list = ', '.join(profiles)
+        prompt = (
+            f"You are a Hollywood project-packaging strategist. Analyze the following combination:\n\n"
+            f"Genre: {genre}\n"
+            f"Attached Talent/Brands: {profile_list}\n\n"
+            f"Provide a concise Pros & Cons analysis evaluating audience fit, "
+            f"brand synergy, commercial viability, and potential risks. "
+            f"Format as PROS (bullet points) then CONS (bullet points), max 5 each."
+        )
+
+        # Attempt OpenAI call if key is available
+        openai_key = os.environ.get('OPENAI_API_KEY', '')
+        if openai_key:
+            import openai
+            client = openai.OpenAI(api_key=openai_key)
+            resp = client.chat.completions.create(
+                model='gpt-4o-mini',
+                messages=[{'role': 'user', 'content': prompt}],
+                max_tokens=800,
+                temperature=0.7,
+            )
+            analysis = resp.choices[0].message.content
+            return jsonify({'success': True, 'analysis': analysis})
+        else:
+            return jsonify({'success': True, 'analysis': None, 'message': 'AI key not configured. Analysis will be available soon.'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/helm-iq/movies', methods=['GET'])
+@requires_super_admin
+def api_helm_iq_movies():
+    """List movies available in the helm-iq S3 bucket/prefix."""
+    try:
+        bucket = 'helm-iq-financials'
+        movies = []
+        try:
+            resp = s3.list_objects_v2(Bucket=bucket, Prefix='', Delimiter='/')
+            for obj in resp.get('Contents', []):
+                key = obj['Key']
+                if key.endswith('.csv'):
+                    name = key.rsplit('.', 1)[0].replace('_', ' ').replace('-', ' ').title()
+                    movies.append({'key': key, 'name': name})
+        except Exception:
+            # Bucket may not exist yet — Jenna will create it
+            pass
+        movies.sort(key=lambda m: m['name'])
+        return jsonify({'success': True, 'movies': movies})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/helm-iq/financials/<path:key>', methods=['GET'])
+@requires_super_admin
+def api_helm_iq_financials(key):
+    """Fetch financial data for a specific movie."""
+    try:
+        bucket = 'helm-iq-financials'
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        import io
+        df = pd.read_csv(io.BytesIO(obj['Body'].read()))
+        # Parse into revenue + platforms structure
+        revenue = {'total_revenue': '—', 'box_office': '—', 'streaming_revenue': '—', 'breakdown': []}
+        platforms = []
+        for _, row in df.iterrows():
+            rtype = str(row.get('type', '')).lower()
+            if rtype == 'revenue_summary':
+                revenue['total_revenue'] = row.get('total_revenue', '—')
+                revenue['box_office'] = row.get('box_office', '—')
+                revenue['streaming_revenue'] = row.get('streaming_revenue', '—')
+            elif rtype == 'revenue_breakdown':
+                revenue['breakdown'].append({'source': row.get('source', ''), 'amount': row.get('amount', '')})
+            elif rtype == 'platform':
+                platforms.append({
+                    'platform': row.get('platform', ''),
+                    'subscribers': row.get('subscribers', '—'),
+                    'revenue': row.get('revenue', '—'),
+                })
+        return jsonify({'success': True, 'revenue': revenue, 'platforms': platforms})
+    except s3.exceptions.NoSuchKey:
+        return jsonify({'success': False, 'error': 'Movie not found'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # ============================================================================

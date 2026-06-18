@@ -24490,7 +24490,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, helmIQ: function() { if (typeof showHelmIQ === 'function') showHelmIQ(); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -24628,7 +24628,8 @@
                         ['shareOfTimeIQ', d.has_share_of_time_access !== false],
                         ['workspace', d.has_workspace_access !== false],
                         ['blueIQ', !!d.has_blue_iq_access],
-                        ['intentIQ', d.has_intent_iq_access !== false]
+                        ['intentIQ', d.has_intent_iq_access !== false],
+                        ['helmIQ', !!d.has_helm_iq_access]
                     ];
                     pairs.forEach(function (pv) {
                         var opt = viewDropdown.querySelector('option[value="' + pv[0] + '"]');
@@ -25840,6 +25841,8 @@
             const journeyIQViewEl = document.getElementById('journeyIQView');
             if (journeyIQViewEl) journeyIQViewEl.style.display = 'none';
             hideLLMOIQView();
+            var helmV = document.getElementById('helmIQView');
+            if (helmV) helmV.style.display = 'none';
             
             // Load profiles
             loadDashboardProfiles();
@@ -25883,6 +25886,8 @@
             const ecomIQViewEl = document.getElementById('ecommerceIQView');
             if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
             hideLLMOIQView();
+            var helmV = document.getElementById('helmIQView');
+            if (helmV) helmV.style.display = 'none';
             
             // Load subscriber profiles
             loadSubscriberProfiles();
@@ -26111,13 +26116,361 @@
             }
         });
 
+        // ============================================================================
+        // HELM IQ
+        // ============================================================================
+        (function() {
+            var _helmAllViews = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
+                'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
+                'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
+                'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
+                'shareOfTimeIQView','flywheelConversionView','talentFitIQView','journeyIQView',
+                'intentIQView','blueIQView'];
+
+            function helmHideAllViews() {
+                _helmAllViews.forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
+            }
+
+            window.showHelmIQ = function() {
+                var dd = document.getElementById('viewNavDropdown');
+                var opt = dd && dd.querySelector('option[value="helmIQ"]');
+                if (opt && opt.disabled) return;
+                if (typeof setViewNavDropdown === 'function') setViewNavDropdown('helmIQ');
+                helmHideAllViews();
+                var view = document.getElementById('helmIQView');
+                if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
+                helmLoadProfileDropdowns();
+            };
+
+            window.showHelmTab = function(tab) {
+                document.querySelectorAll('#helmIQView .helm-tab-btn').forEach(function(b) {
+                    b.classList.toggle('active', b.textContent.toLowerCase().indexOf(tab) !== -1);
+                });
+                document.querySelectorAll('#helmIQView .helm-tab-content').forEach(function(p) {
+                    p.classList.toggle('active', p.id === 'helm-tab-' + tab);
+                });
+                if (tab === 'financials') helmLoadMovies();
+            };
+
+            window.showHelmFinTab = function(tab) {
+                document.querySelectorAll('#helmIQView .helm-fin-tab-btn').forEach(function(b) {
+                    b.classList.toggle('active', b.textContent.toLowerCase().indexOf(tab) !== -1);
+                });
+                document.querySelectorAll('#helmIQView .helm-fin-panel').forEach(function(p) {
+                    p.classList.toggle('active', p.id === 'helmFin' + tab.charAt(0).toUpperCase() + tab.slice(1));
+                });
+            };
+
+            var _helmProfiles = { actors: [], creators: [], brands: [] };
+            var _helmProfilesLoaded = false;
+
+            function helmLoadProfileDropdowns() {
+                if (_helmProfilesLoaded) return;
+                fetch('/api/jobs?refresh=0', { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (!d || !d.jobs) return;
+                        var actors = [], creators = [], brands = [];
+                        d.jobs.forEach(function(j) {
+                            var cat = (j.category || '').toUpperCase();
+                            var name = j.display_name || j.name || j.s3_key || '';
+                            if (!name) return;
+                            var entry = { name: name, key: j.s3_key || name };
+                            if (cat === 'ACTOR') actors.push(entry);
+                            else if (cat === 'CREATOR/INFLUENCER' || cat === 'INFLUENCER/CREATOR') creators.push(entry);
+                            else if (j.master_category === 'BRAND' || cat === 'BRAND') brands.push(entry);
+                        });
+                        actors.sort(function(a,b) { return a.name.localeCompare(b.name); });
+                        creators.sort(function(a,b) { return a.name.localeCompare(b.name); });
+                        brands.sort(function(a,b) { return a.name.localeCompare(b.name); });
+                        _helmProfiles = { actors: actors, creators: creators, brands: brands };
+                        _helmProfilesLoaded = true;
+                        _populateHelmSelects();
+                    })
+                    .catch(function(e) { console.error('Helm IQ: failed to load profiles', e); });
+            }
+
+            function _populateHelmSelects() {
+                var actorIds = ['helmActor1','helmActor2'];
+                var creatorIds = ['helmCreator1','helmCreator2'];
+                var brandIds = ['helmBrand1','helmBrand2'];
+                actorIds.forEach(function(id) { _fillSelect(id, _helmProfiles.actors); });
+                creatorIds.forEach(function(id) { _fillSelect(id, _helmProfiles.creators); });
+                brandIds.forEach(function(id) { _fillSelect(id, _helmProfiles.brands); });
+            }
+
+            function _fillSelect(id, items) {
+                var sel = document.getElementById(id);
+                if (!sel) return;
+                sel.innerHTML = '<option value="">None</option>';
+                items.forEach(function(it) {
+                    var opt = document.createElement('option');
+                    opt.value = it.key;
+                    opt.textContent = it.name;
+                    sel.appendChild(opt);
+                });
+            }
+
+            window.helmIQIt = function() {
+                var genre = document.getElementById('helmGenre').value;
+                if (!genre) { alert('Please select a genre.'); return; }
+
+                var selections = [];
+                selections.push({ type: 'genre', key: genre, name: genre });
+
+                ['helmActor1','helmActor2','helmCreator1','helmCreator2','helmBrand1','helmBrand2'].forEach(function(id) {
+                    var sel = document.getElementById(id);
+                    if (sel && sel.value) {
+                        var name = sel.options[sel.selectedIndex].textContent;
+                        selections.push({ type: id.replace(/[0-9]/g,''), key: sel.value, name: name });
+                    }
+                });
+
+                if (selections.length < 2) { alert('Please select at least one profile in addition to genre.'); return; }
+
+                document.getElementById('helmBuildForm').style.display = 'none';
+                document.getElementById('helmResults').style.display = 'block';
+                _buildHelmGrid(selections);
+                _runHelmProsConsAnalysis(selections);
+            };
+
+            function _buildHelmGrid(selections) {
+                var container = document.getElementById('helmGrid');
+                var headerRow = '<tr><th class="helm-pinned-col">Category</th>';
+                var changeOutRow = '<tr class="helm-changeout-row"><td class="helm-pinned-col" style="font-size:0.72rem;color:var(--text-secondary);">CHANGE OUT</td>';
+
+                selections.forEach(function(s, i) {
+                    var cls = i === 0 ? ' class="helm-pinned-col"' : '';
+                    headerRow += '<th' + cls + '>' + _escH(s.name) + '</th>';
+                    if (i === 0) {
+                        changeOutRow += '<td class="helm-pinned-col"></td>';
+                    } else {
+                        var listKey = s.type.indexOf('Actor') !== -1 ? 'actors' : s.type.indexOf('Creator') !== -1 ? 'creators' : 'brands';
+                        changeOutRow += '<td><select onchange="helmChangeOut(this,' + i + ')" data-col="' + i + '">';
+                        changeOutRow += '<option value="' + _escH(s.key) + '">' + _escH(s.name) + '</option>';
+                        _helmProfiles[listKey].forEach(function(p) {
+                            if (p.key !== s.key) changeOutRow += '<option value="' + _escH(p.key) + '">' + _escH(p.name) + '</option>';
+                        });
+                        changeOutRow += '</select></td>';
+                    }
+                });
+                headerRow += '</tr>';
+                changeOutRow += '</tr>';
+
+                var categories = ['Demographics: Age 18-34','Demographics: Gender Female','Demographics: HHI $100K+',
+                    'Top Interests','Top Social Platforms','Top Streaming','Top Retail','Behavioral: Search Index'];
+                var bodyRows = '';
+                categories.forEach(function(cat) {
+                    bodyRows += '<tr><td class="helm-pinned-col">' + cat + '</td>';
+                    selections.forEach(function(s, i) {
+                        var cls = i === 0 ? ' class="helm-pinned-col"' : '';
+                        bodyRows += '<td' + cls + '><span style="color:var(--text-secondary);font-size:0.78rem;">Loading...</span></td>';
+                    });
+                    bodyRows += '</tr>';
+                });
+
+                container.innerHTML = '<table><thead>' + changeOutRow + headerRow + '</thead><tbody>' + bodyRows + '</tbody></table>';
+                _loadHelmGridData(selections);
+            }
+
+            function _loadHelmGridData(selections) {
+                selections.forEach(function(s, colIdx) {
+                    if (s.type === 'genre') return;
+                    fetch('/api/get-csv-data/' + encodeURIComponent(s.key), { credentials: 'same-origin' })
+                        .then(function(r) { return r.json(); })
+                        .then(function(d) {
+                            _fillHelmColumn(colIdx, d);
+                        })
+                        .catch(function() {});
+                });
+            }
+
+            function _fillHelmColumn(colIdx, data) {
+                var table = document.querySelector('#helmGrid table');
+                if (!table) return;
+                var rows = table.querySelectorAll('tbody tr');
+                var summaries = _extractHelmSummaries(data);
+                rows.forEach(function(row, ri) {
+                    var cells = row.querySelectorAll('td');
+                    var cell = cells[colIdx + 1];
+                    if (cell) cell.textContent = summaries[ri] || '—';
+                });
+            }
+
+            function _extractHelmSummaries(data) {
+                if (!data || !data.rows) return ['—','—','—','—','—','—','—','—'];
+                var rows = data.rows || [];
+                var age1834 = '—', female = '—', hhi100 = '—', interests = '—', social = '—', streaming = '—', retail = '—', search = '—';
+                rows.forEach(function(r) {
+                    var key = (r.key || r.metric || r.Key || '').toUpperCase();
+                    var val = r.value || r.Value || r.pct || '';
+                    if (key.indexOf('18-34') !== -1 || key.indexOf('18_34') !== -1) age1834 = val;
+                    if (key.indexOf('FEMALE') !== -1 && !female.match(/\d/)) female = val;
+                    if (key.indexOf('100K') !== -1 || key.indexOf('$100') !== -1) hhi100 = val;
+                });
+                return [age1834, female, hhi100, interests, social, streaming, retail, search];
+            }
+
+            window.helmChangeOut = function(selectEl, colIdx) {
+                var newKey = selectEl.value;
+                var newName = selectEl.options[selectEl.selectedIndex].textContent;
+                var table = document.querySelector('#helmGrid table');
+                if (!table) return;
+                var ths = table.querySelectorAll('thead tr:nth-child(2) th');
+                if (ths[colIdx]) ths[colIdx].textContent = newName;
+                fetch('/api/get-csv-data/' + encodeURIComponent(newKey), { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) { _fillHelmColumn(colIdx, d); })
+                    .catch(function() {});
+            };
+
+            function _runHelmProsConsAnalysis(selections) {
+                var content = document.getElementById('helmProsConsContent');
+                content.innerHTML = '<p style="color:var(--text-secondary);">🤖 Analyzing your selections...</p>';
+                var genre = selections[0].name;
+                var profiles = selections.slice(1).map(function(s) { return s.name; });
+                fetch('/api/helm-iq/pros-cons', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ genre: genre, profiles: profiles })
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d && d.analysis) {
+                        content.innerHTML = '<div style="white-space:pre-wrap;line-height:1.6;font-size:0.85rem;">' + _escH(d.analysis) + '</div>';
+                    } else {
+                        content.innerHTML = '<p style="color:var(--text-secondary);">Analysis not available yet. Jenna is still processing genre profiles.</p>';
+                    }
+                })
+                .catch(function() {
+                    content.innerHTML = '<p style="color:var(--text-secondary);">Analysis will be available once genre profiles are processed.</p>';
+                });
+            }
+
+            // Financials tab
+            var _helmMovies = [];
+            var _helmMoviesLoaded = false;
+
+            window.helmLoadMovies = function() {
+                if (_helmMoviesLoaded) return;
+                fetch('/api/helm-iq/movies', { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        _helmMovies = (d && d.movies) || [];
+                        _helmMoviesLoaded = true;
+                        _renderHelmMovieList();
+                    })
+                    .catch(function() {
+                        document.getElementById('helmFinMovieList').innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:0.8rem;">No movies available yet.</div>';
+                    });
+            };
+
+            function _renderHelmMovieList() {
+                var list = document.getElementById('helmFinMovieList');
+                if (!_helmMovies.length) {
+                    list.innerHTML = '<div style="padding:0.75rem;color:var(--text-secondary);font-size:0.8rem;">No movies uploaded yet. Jenna will upload movies here.</div>';
+                    return;
+                }
+                var html = '';
+                _helmMovies.forEach(function(m) {
+                    html += '<div class="helm-movie-item" onclick="helmSelectMovie(\'' + _escH(m.key) + '\')" data-key="' + _escH(m.key) + '">' + _escH(m.name || m.key) + '</div>';
+                });
+                list.innerHTML = html;
+            }
+
+            window.filterHelmMovies = function() {
+                var q = (document.getElementById('helmFinMovieSearch').value || '').toLowerCase();
+                document.querySelectorAll('#helmFinMovieList .helm-movie-item').forEach(function(el) {
+                    el.style.display = el.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+                });
+            };
+
+            window.helmSelectMovie = function(key) {
+                document.querySelectorAll('#helmFinMovieList .helm-movie-item').forEach(function(el) {
+                    el.classList.toggle('active', el.getAttribute('data-key') === key);
+                });
+                document.getElementById('helmFinEmptyState').style.display = 'none';
+                document.getElementById('helmFinDataArea').style.display = 'block';
+                _loadHelmFinancialData(key);
+            };
+
+            function _loadHelmFinancialData(key) {
+                var revEl = document.getElementById('helmFinRevenueContent');
+                var platEl = document.getElementById('helmFinPlatformsContent');
+                revEl.innerHTML = '<p style="color:var(--text-secondary);">Loading revenue data...</p>';
+                platEl.innerHTML = '<p style="color:var(--text-secondary);">Loading platform data...</p>';
+                fetch('/api/helm-iq/financials/' + encodeURIComponent(key), { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (d && d.revenue) {
+                            _renderHelmRevenue(d.revenue);
+                        } else {
+                            revEl.innerHTML = '<p style="color:var(--text-secondary);">Revenue data not available for this title.</p>';
+                        }
+                        if (d && d.platforms) {
+                            _renderHelmPlatforms(d.platforms);
+                        } else {
+                            platEl.innerHTML = '<p style="color:var(--text-secondary);">Platform data not available for this title.</p>';
+                        }
+                    })
+                    .catch(function() {
+                        revEl.innerHTML = '<p style="color:var(--text-secondary);">Could not load financial data.</p>';
+                        platEl.innerHTML = '';
+                    });
+            }
+
+            function _renderHelmRevenue(rev) {
+                var el = document.getElementById('helmFinRevenueContent');
+                var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;">';
+                var metrics = [
+                    { label: 'Total Revenue', value: rev.total_revenue || '—' },
+                    { label: 'Box Office', value: rev.box_office || '—' },
+                    { label: 'Streaming Revenue', value: rev.streaming_revenue || '—' }
+                ];
+                metrics.forEach(function(m) {
+                    html += '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:1rem;text-align:center;">';
+                    html += '<div style="font-size:0.72rem;text-transform:uppercase;color:var(--text-secondary);letter-spacing:0.05em;">' + m.label + '</div>';
+                    html += '<div style="font-size:1.4rem;font-weight:700;margin-top:4px;color:var(--accent-lime);">' + m.value + '</div>';
+                    html += '</div>';
+                });
+                html += '</div>';
+                if (rev.breakdown && rev.breakdown.length) {
+                    html += '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
+                    html += '<thead><tr><th style="text-align:left;padding:0.5rem;border-bottom:1px solid var(--border-color);color:var(--text-secondary);font-size:0.72rem;text-transform:uppercase;">Source</th><th style="text-align:right;padding:0.5rem;border-bottom:1px solid var(--border-color);color:var(--text-secondary);font-size:0.72rem;text-transform:uppercase;">Amount</th></tr></thead><tbody>';
+                    rev.breakdown.forEach(function(row) {
+                        html += '<tr><td style="padding:0.5rem;border-bottom:1px solid var(--border-color);">' + _escH(row.source) + '</td><td style="padding:0.5rem;border-bottom:1px solid var(--border-color);text-align:right;">' + _escH(row.amount) + '</td></tr>';
+                    });
+                    html += '</tbody></table>';
+                }
+                el.innerHTML = html;
+            }
+
+            function _renderHelmPlatforms(plats) {
+                var el = document.getElementById('helmFinPlatformsContent');
+                if (!plats || !plats.length) { el.innerHTML = '<p style="color:var(--text-secondary);">No platform data.</p>'; return; }
+                var html = '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
+                html += '<thead><tr><th style="text-align:left;padding:0.5rem;border-bottom:1px solid var(--border-color);color:var(--text-secondary);font-size:0.72rem;text-transform:uppercase;">Platform</th><th style="text-align:right;padding:0.5rem;border-bottom:1px solid var(--border-color);color:var(--text-secondary);font-size:0.72rem;text-transform:uppercase;">Subscribers</th><th style="text-align:right;padding:0.5rem;border-bottom:1px solid var(--border-color);color:var(--text-secondary);font-size:0.72rem;text-transform:uppercase;">Revenue</th></tr></thead><tbody>';
+                plats.forEach(function(p) {
+                    html += '<tr><td style="padding:0.5rem;border-bottom:1px solid var(--border-color);">' + _escH(p.platform) + '</td><td style="padding:0.5rem;border-bottom:1px solid var(--border-color);text-align:right;">' + _escH(p.subscribers || '—') + '</td><td style="padding:0.5rem;border-bottom:1px solid var(--border-color);text-align:right;">' + _escH(p.revenue || '—') + '</td></tr>';
+                });
+                html += '</tbody></table>';
+                el.innerHTML = html;
+            }
+
+            function _escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+        })();
+
         function _blueIQHideAllOtherViews() {
             var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
                        'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
                        'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
                        'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
                        'shareOfTimeIQView','flywheelConversionView','talentFitIQView','journeyIQView',
-                       'intentIQView'];
+                       'intentIQView','helmIQView'];
             ids.forEach(function(id) {
                 var el = document.getElementById(id);
                 if (el) el.style.display = 'none';
