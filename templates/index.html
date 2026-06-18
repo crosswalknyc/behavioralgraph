@@ -21085,6 +21085,11 @@
             // module-scoped selection state so cohort picker toggles persist
             // across re-renders (e.g. when chart is redrawn after a toggle).
             window._iiqQ6Selection = window._iiqQ6Selection || null;
+            // module-scoped expand/collapse state for each category section
+            // in the cohort picker. Default: only MOVIEGOING_FREQ is open
+            // (its 4 cohorts are the default chart selection); every other
+            // category starts collapsed and is opened on click.
+            window._iiqQ6Expanded = window._iiqQ6Expanded || null;
 
             function iiqRenderQ6(d) {
                 var cohorts = d.cohorts || [];
@@ -21162,31 +21167,66 @@
                     SPORT:           'Sport',
                     AUDIENCE:        'Other Audiences',
                 };
+
+                // Initialize the expand/collapse state on first render for
+                // this title: only MOVIEGOING_FREQ is open; every other
+                // category is collapsed. Users open whichever they need.
+                if (!window._iiqQ6Expanded) {
+                    window._iiqQ6Expanded = {};
+                    catOrder.forEach(function(cat) {
+                        window._iiqQ6Expanded[cat] = (cat === 'MOVIEGOING_FREQ');
+                    });
+                }
+                catOrder.forEach(function(cat) {
+                    if (window._iiqQ6Expanded[cat] === undefined) {
+                        window._iiqQ6Expanded[cat] = (cat === 'MOVIEGOING_FREQ');
+                    }
+                });
+
                 catOrder.forEach(function(cat) {
                     var list = byCat[cat];
                     if (!list || !list.length) return;
-                    html += '<div style="margin-top:0.55rem;">';
-                    html +=   '<div style="font-size:0.7rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.3rem;">' + escapeHtml(CAT_LABELS[cat] || cat) + '</div>';
-                    html +=   '<div style="display:flex; flex-wrap:wrap; gap:0.4rem;">';
-                    list.forEach(function(c) {
-                        var checked = !!window._iiqQ6Selection[c.cohort_slug];
-                        var bgFill = checked ? (c._color + '33') : 'rgba(255,255,255,0.03)';
-                        var border = checked ? c._color : 'rgba(255,255,255,0.1)';
-                        var textC  = checked ? '#fff' : '#94a3b8';
-                        var slugEsc = c.cohort_slug.replace(/'/g, "\\'");
-                        var amer = iiqProjAmericans(c);
-                        var amerFmt = '~' + fmtCompact(amer);
-                        html += '<label onclick="iiqQ6Toggle(\'' + slugEsc + '\')" '
-                            + 'style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; '
-                            + 'background:' + bgFill + '; border:1px solid ' + border + '; '
-                            + 'border-radius:6px; padding:0.3rem 0.55rem; font-size:0.75rem; color:' + textC + ';" '
-                            + 'title="' + escapeHtml(c.display) + ' \u00b7 ' + amerFmt + ' Americans \u00b7 peak ' + c.peak_engagement_pct.toFixed(1) + '% on ' + c.peak_date + '">'
-                            + '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:' + c._color + ';"></span>'
-                            + escapeHtml(c.display)
-                            + ' <span style="opacity:0.6; font-size:0.68rem;">(' + amerFmt + ')</span>'
-                            + '</label>';
-                    });
+                    var nSel = list.reduce(function(s, c){ return s + (window._iiqQ6Selection[c.cohort_slug] ? 1 : 0); }, 0);
+                    var nTot = list.length;
+                    var expanded = !!window._iiqQ6Expanded[cat];
+                    var chev = expanded ? '\u25BE' : '\u25B8';
+                    var catEsc = cat.replace(/'/g, "\\'");
+                    var hasSel = nSel > 0;
+                    var headerColor = hasSel ? '#e2e8f0' : 'var(--text-secondary)';
+                    var countBadge = '<span style="font-size:0.65rem; padding:0.1rem 0.4rem; border-radius:10px; background:' + (hasSel ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.05)') + '; color:' + (hasSel ? '#67e8f9' : '#94a3b8') + '; margin-left:0.45rem;">' + nSel + ' of ' + nTot + ' selected</span>';
+
+                    html += '<div style="margin-top:0.45rem; border-top:1px solid rgba(255,255,255,0.05); padding-top:0.45rem;">';
+                    html +=   '<div onclick="iiqQ6ToggleCategory(\'' + catEsc + '\')" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none; padding:0.15rem 0;">';
+                    html +=     '<div style="font-size:0.72rem; color:' + headerColor + '; text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center;">'
+                            +       '<span style="display:inline-block; width:0.85rem; color:var(--text-secondary); font-size:0.85rem;">' + chev + '</span>'
+                            +       escapeHtml(CAT_LABELS[cat] || cat)
+                            +       countBadge
+                            +     '</div>';
+                    html +=     '<div style="font-size:0.65rem; color: var(--text-secondary);">' + (expanded ? 'click to collapse' : 'click to expand') + '</div>';
                     html +=   '</div>';
+
+                    if (expanded) {
+                        html += '<div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.45rem;">';
+                        list.forEach(function(c) {
+                            var checked = !!window._iiqQ6Selection[c.cohort_slug];
+                            var bgFill = checked ? (c._color + '33') : 'rgba(255,255,255,0.03)';
+                            var border = checked ? c._color : 'rgba(255,255,255,0.1)';
+                            var textC  = checked ? '#fff' : '#94a3b8';
+                            var slugEsc = c.cohort_slug.replace(/'/g, "\\'");
+                            var amer = iiqProjAmericans(c);
+                            var amerFmt = '~' + fmtCompact(amer);
+                            html += '<label onclick="iiqQ6Toggle(\'' + slugEsc + '\')" '
+                                + 'style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; '
+                                + 'background:' + bgFill + '; border:1px solid ' + border + '; '
+                                + 'border-radius:6px; padding:0.3rem 0.55rem; font-size:0.75rem; color:' + textC + ';" '
+                                + 'title="' + escapeHtml(c.display) + ' \u00b7 ' + amerFmt + ' Americans \u00b7 peak ' + c.peak_engagement_pct.toFixed(1) + '% on ' + c.peak_date + '">'
+                                + '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:' + c._color + ';"></span>'
+                                + escapeHtml(c.display)
+                                + ' <span style="opacity:0.6; font-size:0.68rem;">(' + amerFmt + ')</span>'
+                                + '</label>';
+                        });
+                        html += '</div>';
+                    }
                     html += '</div>';
                 });
                 html += '</div>';
@@ -21255,16 +21295,33 @@
                 window._iiqQ6Selection[slug] = !window._iiqQ6Selection[slug];
                 _iiqQ6Rerender();
             };
+            window.iiqQ6ToggleCategory = function(cat) {
+                window._iiqQ6Expanded = window._iiqQ6Expanded || {};
+                window._iiqQ6Expanded[cat] = !window._iiqQ6Expanded[cat];
+                _iiqQ6Rerender();
+            };
             window.iiqQ6SelectGroup = function(mode) {
                 var cached = IIQ_QCACHE.q6;
                 if (!cached) return;
                 var cohorts = cached.cohorts || [];
                 window._iiqQ6Selection = window._iiqQ6Selection || {};
+                window._iiqQ6Expanded  = window._iiqQ6Expanded  || {};
+                var catsTouched = {};
                 cohorts.forEach(function(c) {
                     if (mode === 'all')          window._iiqQ6Selection[c.cohort_slug] = true;
                     else if (mode === 'none')    window._iiqQ6Selection[c.cohort_slug] = false;
                     else if (mode === 'default') window._iiqQ6Selection[c.cohort_slug] = !!c.default_on;
+                    catsTouched[c.category] = true;
                 });
+                // 'Select all' auto-expands every category so the user can
+                // see all the chips they just turned on. 'Reset to default'
+                // collapses everything back except MOVIEGOING_FREQ. 'Clear'
+                // leaves the expand/collapse state untouched.
+                if (mode === 'all') {
+                    Object.keys(catsTouched).forEach(function(cat) { window._iiqQ6Expanded[cat] = true; });
+                } else if (mode === 'default') {
+                    Object.keys(catsTouched).forEach(function(cat) { window._iiqQ6Expanded[cat] = (cat === 'MOVIEGOING_FREQ'); });
+                }
                 _iiqQ6Rerender();
             };
             function _iiqQ6Rerender() {
@@ -21282,6 +21339,7 @@
                 if (!slug) return;
                 IIQ_QCACHE = {}; // reset cache when title changes
                 window._iiqQ6Selection = null; // reset Q6 cohort picks for new title
+                window._iiqQ6Expanded  = null; // reset Q6 category expand state for new title
                 if (window.__intentIQAssetCache) {
                     delete window.__intentIQAssetCache[slug]; // force re-fetch on title switch
                 }
