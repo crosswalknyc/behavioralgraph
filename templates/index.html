@@ -19368,7 +19368,6 @@
                 <button class="iiq-subtab" data-iiq-subtab="assets" onclick="showIntentIQSubtab('assets')">🎞️ ASSETS</button>
                 <button class="iiq-subtab" data-iiq-subtab="questions" onclick="showIntentIQSubtab('questions')">❓ PERFORMANCE</button>
                 <button class="iiq-subtab" data-iiq-subtab="inflight" onclick="showIntentIQSubtab('inflight')">⚡ IN-FLIGHT</button>
-                <button class="iiq-subtab" data-iiq-subtab="compare" onclick="showIntentIQSubtab('compare')">⚖️ COMPARE</button>
             </div>
 
             <div class="iiq-panel active" id="iiqPanel-overview">
@@ -19449,15 +19448,6 @@
                 </div>
                 <div id="iiqInFlightBody"></div>
             </div>
-
-            <div class="iiq-panel" id="iiqPanel-compare">
-                <div style="margin-bottom: 0.85rem;">
-                    <label style="font-size: 0.78rem; color: var(--text-secondary);">Pick titles to compare (Ctrl/Cmd-click for multiple)</label>
-                    <select id="iiqCompareSelect" multiple style="display:block; width: 100%; min-height: 110px; background: rgba(0,0,0,0.4); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 0.4rem;"></select>
-                    <button class="blue-iq-apply-btn" style="margin-top: 0.5rem;" onclick="runIntentIQCompare()">Compare</button>
-                </div>
-                <div id="iiqCompareResult"></div>
-            </div>
         </div>
 
         <script>
@@ -19496,8 +19486,7 @@
                     if (!d.success) throw new Error(d.error || 'Failed');
                     window.__intentIQ.titles = d.titles || [];
                     var sel = document.getElementById('iiqTitleSelect');
-                    var cmp = document.getElementById('iiqCompareSelect');
-                    sel.innerHTML = ''; cmp.innerHTML = '';
+                    sel.innerHTML = '';
                     if (!window.__intentIQ.titles.length) {
                         sel.innerHTML = '<option value="">(no titles ingested yet — run scripts/ingest_intent_campaign.py)</option>';
                         document.getElementById('iiqStatus').textContent = 'No titles. Ingest one with scripts/ingest_intent_campaign.py.';
@@ -19506,7 +19495,6 @@
                     window.__intentIQ.titles.forEach(function(t) {
                         var opt = new Option((t.display_name || t.title_slug) + (t.opening_date ? ' (' + t.opening_date + ')' : ''), t.title_slug);
                         sel.appendChild(opt);
-                        cmp.appendChild(new Option(t.display_name || t.title_slug, t.title_slug));
                     });
                     sel.value = window.__intentIQ.titles[0].title_slug;
                     onIntentIQTitleChange();
@@ -21470,23 +21458,6 @@
                     })
                     .catch(function(e) {
                         document.getElementById('iiqInFlightBody').innerHTML = 'Failed: ' + escapeHtml(e.message || e);
-                    });
-            };
-
-            window.runIntentIQCompare = function() {
-                var sel = document.getElementById('iiqCompareSelect');
-                var slugs = Array.from(sel.selectedOptions).map(function(o) { return o.value; });
-                if (!slugs.length) { document.getElementById('iiqCompareResult').innerHTML = '<div class="iiq-empty">Pick at least one title above.</div>'; return; }
-                fetch('/api/intent/compare?titles=' + encodeURIComponent(slugs.join(',')), { credentials: 'same-origin' })
-                    .then(function(r) { return r.json(); })
-                    .then(function(d) {
-                        if (!d.success) { document.getElementById('iiqCompareResult').innerHTML = escapeHtml(d.error || 'Failed'); return; }
-                        document.getElementById('iiqCompareResult').innerHTML = (d.titles || []).map(function(t) {
-                            return '<div class="iiq-card" style="margin-bottom:0.5rem;">'
-                                + '<div class="iiq-card-title">' + escapeHtml(t.display_name || t.title_slug) + '</div>'
-                                + '<div class="iiq-card-meta">Open: ' + escapeHtml(t.opening_date) + ' / Assets: ' + fmtInt(t.asset_count) + '</div>'
-                                + '</div>';
-                        }).join('') || '<div class="iiq-empty">No data.</div>';
                     });
             };
 
