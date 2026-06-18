@@ -14025,7 +14025,7 @@
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
-                            <option value="shareOfTimeIQ" disabled>⏱️ Share of Time (Coming Soon)</option>
+                            <option value="shareOfTimeIQ" {% if role != 'super_admin' and role != 'admin' %}disabled{% endif %}>⏱️ Share of Time{% if role != 'super_admin' and role != 'admin' %} (Coming Soon){% endif %}</option>
                             <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
@@ -14050,6 +14050,9 @@
                                so this can be re-enabled by uncommenting the row below.
                             <option value="talentFitIQ">🎭 Talent Fit IQ</option>
                             #}
+                        {% if has_helm_iq_access %}
+                        <option value="helmIQ">⚓ Helm IQ</option>
+                        {% endif %}
                         {% if role == 'super_admin' or role == 'admin' %}
                         <option value="admin">🔐 Admin</option>
                         {% endif %}
@@ -14488,9 +14491,13 @@
                         🔄 Flywheel Conversion <span style="font-size: 0.7em; opacity: 0.9;">(25 credits)</span>
                     </button>
                     {% endif %}
-                    {% if has_share_of_time_access or role == 'super_admin' %}
+                    {% if role == 'super_admin' or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('share-of-time')" id="customAnalysisTabShareOfTime">
                         ⏱️ Share of Time
+                    </button>
+                    {% else %}
+                    <button class="custom-analysis-tab" id="customAnalysisTabShareOfTime" disabled style="opacity: 0.4; cursor: not-allowed; pointer-events: none;">
+                        ⏱️ Share of Time (Coming Soon)
                     </button>
                     {% endif %}
                     {% if 'profile_analysis' in analysis_iq_modules or role == 'super_admin' %}
@@ -25144,7 +25151,7 @@
                         ['sentimentIQ', !!d.has_sentiment_iq_access],
                         ['roasIQ', !!d.has_roas_iq_access],
                         ['ecommerceIQ', !!d.has_ecommerce_iq_access],
-                        ['shareOfTimeIQ', false],
+                        ['shareOfTimeIQ', isAdmin && (d.has_share_of_time_access !== false)],
                         ['workspace', d.has_workspace_access !== false],
                         ['blueIQ', !!d.has_blue_iq_access],
                         ['intentIQ', d.has_intent_iq_access !== false],
