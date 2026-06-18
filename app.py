@@ -12700,21 +12700,6 @@ def api_intent_in_flight(title_slug):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/intent/compare', methods=['GET'])
-@requires_auth
-def api_intent_compare():
-    ok, err = _require_intent_iq()
-    if not ok:
-        return err
-    try:
-        raw = request.args.get('titles', '')
-        slugs = [s.strip() for s in raw.split(',') if s.strip()]
-        return jsonify(_intent_iq.compare_titles(slugs))
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
 @app.route('/api/subscriber-iq/list')
 @requires_auth
 def list_subscriber_iq_files():

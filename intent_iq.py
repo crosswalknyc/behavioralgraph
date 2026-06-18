@@ -9,7 +9,6 @@ Public API (mirrors the surface conventions of `blue_iq.py`):
     get_cohorts(title_slug=None)                 -> dict[{cohorts: [...]}]
     answer_question(title_slug, qid)             -> dict
     get_in_flight(title_slug, as_of)             -> dict
-    compare_titles(slugs: list[str])             -> dict
 
 Storage:
     - ClickHouse: `intent.*` tables (Hetzner 168.119.215.48 by default)
@@ -1219,30 +1218,8 @@ def get_in_flight(title_slug: str, as_of: Optional[str] = None,
         return {"success": False, "error": str(e)}
 
 
-# ── 8. Cross-title COMPARE ──────────────────────────────────────────────────
-
-def compare_titles(slugs: list[str]) -> dict:
-    if not slugs:
-        return {"success": False, "error": "no titles specified"}
-    out = {"success": True, "titles": []}
-    for s in slugs:
-        ov = get_overview(s)
-        if ov.get("success"):
-            out["titles"].append({
-                "title_slug": s,
-                "display_name": ov.get("display_name"),
-                "opening_date": ov.get("opening_date"),
-                "asset_count":  ov.get("asset_count"),
-                "phases":       ov.get("phases", []),
-                "predicted_bo_low_usd":  ov.get("predicted_bo_low_usd"),
-                "predicted_bo_high_usd": ov.get("predicted_bo_high_usd"),
-                "actual_opening_bo_usd": ov.get("actual_opening_bo_usd"),
-            })
-    return out
-
-
 __all__ = [
     "list_titles", "get_overview", "get_assets", "get_audiences",
-    "get_cohorts", "answer_question", "get_in_flight", "compare_titles",
+    "get_cohorts", "answer_question", "get_in_flight",
     "QUESTIONS",
 ]
