@@ -20709,6 +20709,25 @@
                 return agg;
             }
 
+            // Q1 column-sort state. Click a header to sort by that column;
+            // click the same header again to flip direction. Default sort is
+            // Share of YTD views, descending.
+            window._iiqQ1 = window._iiqQ1 || { sortKey: 'share_pct', sortDir: 'desc', data: null };
+
+            window.iiqQ1Sort = function(key) {
+                var s = window._iiqQ1;
+                if (s.sortKey === key) {
+                    s.sortDir = (s.sortDir === 'desc') ? 'asc' : 'desc';
+                } else {
+                    s.sortKey = key;
+                    // Strings default ascending; numerics default descending
+                    s.sortDir = (key === 'label') ? 'asc' : 'desc';
+                }
+                if (s.data) {
+                    document.getElementById('iiqQBody').innerHTML = iiqRenderQ1(s.data);
+                }
+            };
+
             function iiqRenderQ1(d) {
                 // Q1 is computed entirely from the asset cache d._assets so
                 // the % values are direct YTD shares (not Mean-7d-views).
@@ -20718,6 +20737,10 @@
                 //   3. Ticketing %               (amber)  - bottom-funnel
                 // All three bars are scaled to their column max so visual
                 // length is comparable across rows within each column.
+                window._iiqQ1.data = d; // cache for column-sort re-renders
+                var sortKey = window._iiqQ1.sortKey;
+                var sortDir = window._iiqQ1.sortDir;
+
                 var funnelGroups = iiqQ1FunnelRollup(d._assets || []);
                 var groupList = Object.keys(funnelGroups).map(function(k) { return funnelGroups[k]; });
                 if (!groupList.length) {
@@ -20733,14 +20756,37 @@
                 });
                 groupList.forEach(function(g) {
                     g.share_pct = grandViews > 0 ? g.views / grandViews * 100 : 0;
+                    g.label     = g.asset_type || '(none)';
                 });
-                groupList.sort(function(a, b) { return b.share_pct - a.share_pct; });
+                groupList.sort(function(a, b) {
+                    var av = a[sortKey], bv = b[sortKey];
+                    if (typeof av === 'string' || typeof bv === 'string') {
+                        var cmp = String(av || '').localeCompare(String(bv || ''));
+                        return sortDir === 'asc' ? cmp : -cmp;
+                    }
+                    var na = Number(av) || 0, nb = Number(bv) || 0;
+                    return sortDir === 'asc' ? (na - nb) : (nb - na);
+                });
 
                 var maxShare = Math.max.apply(null, groupList.map(function(g){ return g.share_pct; }).concat([1]));
                 var maxInfo  = Math.max.apply(null, groupList.map(function(g){ return g.info_pct;   }).concat([1]));
                 var maxTk    = Math.max.apply(null, groupList.map(function(g){ return g.ticket_pct; }).concat([1]));
                 var blendedInfo = grandViews > 0 ? grandInfo / grandViews * 100 : 0;
                 var blendedTk   = grandViews > 0 ? grandTk   / grandViews * 100 : 0;
+
+                // Header click target builder w/ sort arrow + hover affordance
+                function sortHdr(key, baseColor, mainLabel, subLabel) {
+                    var active = (sortKey === key);
+                    var arrow = active ? (sortDir === 'desc' ? ' \u25BC' : ' \u25B2') : ' \u2195';
+                    var arrowOp = active ? '1' : '0.35';
+                    return '<div onclick="iiqQ1Sort(\'' + key + '\')" '
+                        + 'style="cursor:pointer; user-select:none; color:' + baseColor + ';" '
+                        + 'title="Click to sort by this column. Click again to flip direction.">'
+                        +   escapeHtml(mainLabel)
+                        +   (subLabel ? ' <span style="color: var(--text-secondary); font-weight:400;">\u2014 ' + escapeHtml(subLabel) + '</span>' : '')
+                        +   '<span style="opacity:' + arrowOp + '; font-size:0.78rem; margin-left:0.25rem;">' + arrow + '</span>'
+                        + '</div>';
+                }
 
                 var html = '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
                     + iiqSummaryTile('Categories ranked', String(groupList.length), 'asset_type \u00d7 paid/organic')
@@ -20750,17 +20796,20 @@
                     + iiqSummaryTile('Blended ticketing', blendedTk.toFixed(1) + '%', fmtCompact(grandTk) + ' viewers \u2014 same model as Assets page')
                     + '</div>';
 
+                var sortLabelMap = { share_pct: 'share of YTD views', info_pct: 'info-seek %', ticket_pct: 'ticketing %', label: 'category name' };
+                var sortLabel = (sortLabelMap[sortKey] || sortKey) + ' (' + sortDir + ')';
+
                 html += '<div class="iiq-card" style="padding:0.85rem;">';
                 html += '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.55rem; gap:1rem;">';
-                html +=   '<div style="font-size:0.78rem; color: var(--text-secondary);">Each category shown across 3 metrics \u00b7 sorted by share of YTD views</div>';
+                html +=   '<div style="font-size:0.78rem; color: var(--text-secondary);">Each category shown across 3 metrics \u00b7 sorted by ' + escapeHtml(sortLabel) + ' \u00b7 <span style="opacity:0.7;">click any header to re-sort</span></div>';
                 html +=   '<div style="font-size:0.7rem; color: var(--text-secondary);" title="View-weighted means of the per-asset modeled projections shown on the In-Flight Assets page. An asset\'s % on the Assets page is the same value contributing to its category here.">numbers ladder up to the Assets page</div>';
                 html += '</div>';
 
-                html += '<div style="display:grid; grid-template-columns: 230px 1fr 1fr 1fr; gap:0.85rem; padding:0.3rem 0.25rem 0.45rem; border-bottom:1px solid rgba(255,255,255,0.08); font-size:0.7rem; color: var(--text-secondary); align-items:end;">'
-                    +   '<div>Category</div>'
-                    +   '<div style="color:#c4b5fd;">Share of YTD views <span style="color: var(--text-secondary); font-weight:400;">\u2014 reach</span></div>'
-                    +   '<div style="color:#a5b4fc;">Info-seek % <span style="color: var(--text-secondary); font-weight:400;">\u2014 mid-funnel</span></div>'
-                    +   '<div style="color:#fbbf24;">Ticketing % <span style="color: var(--text-secondary); font-weight:400;">\u2014 bottom-funnel</span></div>'
+                html += '<div style="display:grid; grid-template-columns: 230px 1fr 1fr 1fr; gap:0.85rem; padding:0.3rem 0.25rem 0.45rem; border-bottom:1px solid rgba(255,255,255,0.08); font-size:0.7rem; align-items:end;">'
+                    +   sortHdr('label',      'var(--text-secondary)', 'Category', '')
+                    +   sortHdr('share_pct',  '#c4b5fd', 'Share of YTD views', 'reach')
+                    +   sortHdr('info_pct',   '#a5b4fc', 'Info-seek %',        'mid-funnel')
+                    +   sortHdr('ticket_pct', '#fbbf24', 'Ticketing %',        'bottom-funnel')
                     + '</div>';
 
                 function _miniBar(val, max, color, suffix) {
