@@ -20570,10 +20570,6 @@
                     html +=     '<div style="font-size:0.95rem; font-weight:700; color:#e2e8f0;">' + escapeHtml(subj.display_name || 'Subject') + ' — high-intent signals (panel-measured)</div>';
                     html +=     '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Opens ' + escapeHtml(subj.opening_date || '—') + ' · each signal is observed engagement count × industry conversion rate</div>';
                     html +=   '</div>';
-                    html +=   '<div style="text-align:right;">';
-                    html +=     '<div style="font-size:1.4rem; font-weight:700; color:#22d3ee;">' + fmtCompact(projected) + '</div>';
-                    html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">projected opening-weekend buyers</div>';
-                    html +=   '</div>';
                     html += '</div>';
                     html += signals.map(function(s) {
                         var people = Number(s.people)||0;
