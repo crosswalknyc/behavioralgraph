@@ -28371,7 +28371,7 @@
             var _helmProfiles = { actors: [], directors: [], creators: [], brands: [] };
             var _helmProfilesLoaded = false;
 
-            function helmLoadProfileDropdowns() {
+            window.helmLoadProfileDropdowns = function helmLoadProfileDropdowns() {
                 if (_helmProfilesLoaded) return;
                 var brandCats = ['ACCESSORIES','ACTIVEWEAR','AMUSEMENT PARKS','APPAREL','AUTOMOBILE','B2B','BANKS','BEAUTY','BETTING','BEVERAGE','CASUAL DINING','CPG','CREDIT PROVIDERS','CREDIT PROVIDER','DIGITAL BANKING','EVENTS','FOOTWEAR','FRANCHISE','GROCERY','INTIMATES','JEWELRY','LOYALTY PROGRAMS','MEMBERSHIP','NON PROFIT/CHARITY','PHARMA','QSR','RETAILERS','SECURITY','TELECOM','TICKETING','TOY','TRAVEL','VENUE','WORKOUT FACILITY'];
                 fetch('/api/jobs?refresh=0', { credentials: 'same-origin' })
@@ -28398,7 +28398,7 @@
                         _populateHelmSelects();
                     })
                     .catch(function(e) { console.error('Helm IQ: failed to load profiles', e); });
-            }
+            };
 
             function _populateHelmSelects() {
                 _fillSelect('helmDirector', _helmProfiles.directors);
