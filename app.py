@@ -6916,6 +6916,7 @@ def compute_product_access_flags(user, role):
             'has_share_of_time_run_access': True,
             'has_blue_iq_access': True,
             'has_intent_iq_access': True,
+            'has_helm_iq_access': True,
         }
     u = user or {}
     has_sot_view = bool(u.get('has_share_of_time_access', True))
@@ -6949,6 +6950,7 @@ def compute_product_access_flags(user, role):
         'has_share_of_time_run_access': has_sot_run,
         'has_blue_iq_access': bool(u.get('has_blue_iq_access', False)),
         'has_intent_iq_access': bool(u.get('has_intent_iq_access', True)),
+        'has_helm_iq_access': role == 'super_admin',
     }
 
 

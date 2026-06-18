@@ -23313,6 +23313,122 @@
             </div>
         </div><!-- End talentTheaterIQView -->
 
+        <!-- HELM IQ VIEW (Super Admin only) -->
+        {% if has_helm_iq_access %}
+        <div id="helmIQView">
+            <div class="helm-tabs">
+                <button class="helm-tab-btn active" onclick="showHelmTab('build')"><span>⚓</span> Build Project</button>
+                <button class="helm-tab-btn" onclick="showHelmTab('financials')"><span>💰</span> Financials</button>
+            </div>
+
+            <!-- BUILD PROJECT TAB -->
+            <div id="helm-tab-build" class="helm-tab-content active">
+                <div class="helm-build-form" id="helmBuildForm">
+                    <h2 style="margin: 0 0 0.25rem 0; font-size: 1.3rem;">⚓ Build Project</h2>
+                    <p style="margin: 0 0 1.5rem 0; font-size: 0.82rem; color: var(--text-secondary);">Configure your project's genre, talent, creators, and brand partnerships, then let Helm IQ analyze the combination.</p>
+
+                    <div class="helm-field">
+                        <label for="helmGenre">Genre</label>
+                        <select id="helmGenre">
+                            <option value="" disabled selected>Select genre...</option>
+                            <option value="Action / Thriller">Action / Thriller</option>
+                            <option value="Sci-Fi / Fantasy">Sci-Fi / Fantasy</option>
+                            <option value="Elevated Horror">Elevated Horror</option>
+                            <option value="Pop / Camp Horror">Pop / Camp Horror</option>
+                            <option value="Family Animation">Family Animation</option>
+                            <option value="Family Live Action">Family Live Action</option>
+                            <option value="Female Ensemble Comedy">Female Ensemble Comedy</option>
+                            <option value="Bro Comedy">Bro Comedy</option>
+                            <option value="Romantic Comedy">Romantic Comedy</option>
+                            <option value="Prestige / Awards Drama">Prestige / Awards Drama</option>
+                            <option value="Adult Animation">Adult Animation</option>
+                        </select>
+                    </div>
+
+                    <div class="helm-field-row">
+                        <div class="helm-field">
+                            <label for="helmActor1">Principal Actor</label>
+                            <select id="helmActor1"><option value="">None</option></select>
+                        </div>
+                        <div class="helm-field">
+                            <label for="helmActor2">Principal Actor</label>
+                            <select id="helmActor2"><option value="">None</option></select>
+                        </div>
+                    </div>
+
+                    <div class="helm-field-row">
+                        <div class="helm-field">
+                            <label for="helmCreator1">Creator/Influencer</label>
+                            <select id="helmCreator1"><option value="">None</option></select>
+                        </div>
+                        <div class="helm-field">
+                            <label for="helmCreator2">Creator/Influencer</label>
+                            <select id="helmCreator2"><option value="">None</option></select>
+                        </div>
+                    </div>
+
+                    <div class="helm-field-row">
+                        <div class="helm-field">
+                            <label for="helmBrand1">Brand Partnerships</label>
+                            <select id="helmBrand1"><option value="">None</option></select>
+                        </div>
+                        <div class="helm-field">
+                            <label for="helmBrand2">Brand Partnerships</label>
+                            <select id="helmBrand2"><option value="">None</option></select>
+                        </div>
+                    </div>
+
+                    <button type="button" class="helm-submit-btn" id="helmSubmitBtn" onclick="helmIQIt()">Helm IQ It</button>
+                </div>
+
+                <!-- Results area (hidden until submission) -->
+                <div class="helm-results" id="helmResults">
+                    <div class="helm-pros-cons" id="helmProsCons">
+                        <h3>🤖 Pros &amp; Cons Analysis</h3>
+                        <div id="helmProsConsContent"><p style="color: var(--text-secondary);">Analyzing...</p></div>
+                    </div>
+                    <div class="helm-grid" id="helmGrid">
+                        <!-- Compare-style grid populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- FINANCIALS TAB -->
+            <div id="helm-tab-financials" class="helm-tab-content">
+                <div class="helm-fin-layout">
+                    <div class="helm-fin-sidebar">
+                        <h4>Movies</h4>
+                        <input type="search" id="helmFinMovieSearch" placeholder="Search movies..." style="width: 100%; padding: 0.45rem 0.6rem; margin-bottom: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.8rem;" oninput="filterHelmMovies()">
+                        <div id="helmFinMovieList" style="flex: 1; overflow-y: auto;">
+                            <div style="padding: 0.75rem; color: var(--text-secondary); font-size: 0.8rem;">Loading movies...</div>
+                        </div>
+                    </div>
+                    <div class="helm-fin-content">
+                        <div id="helmFinEmptyState" style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary);">
+                            <div style="text-align: center;">
+                                <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🎬</div>
+                                <h3 style="margin: 0 0 0.25rem 0;">Select a Movie</h3>
+                                <p style="font-size: 0.82rem;">Choose a movie from the sidebar to view financial data.</p>
+                            </div>
+                        </div>
+                        <div id="helmFinDataArea" style="display: none;">
+                            <div class="helm-fin-tabs">
+                                <button class="helm-fin-tab-btn active" onclick="showHelmFinTab('revenue')">💰 Revenue</button>
+                                <button class="helm-fin-tab-btn" onclick="showHelmFinTab('platforms')">📱 SVOD Platforms</button>
+                            </div>
+                            <div id="helmFinRevenue" class="helm-fin-panel active">
+                                <div id="helmFinRevenueContent"></div>
+                            </div>
+                            <div id="helmFinPlatforms" class="helm-fin-panel">
+                                <div id="helmFinPlatformsContent"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- End helmIQView -->
+        {% endif %}
+
     </div>
 
     <!-- Modals are placed at the end of body (after </script>) -->
@@ -24431,6 +24547,7 @@
                 talentFitIQ: showTalentFitIQ,
                 blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); },
                 intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); },
+                helmIQ: function() { if (typeof showHelmIQ === 'function') showHelmIQ(); },
                 admin: function() { window.location.href = '/admin'; },
                 purgatory: function() { window.location.href = '/admin#purgatory'; }
             };
