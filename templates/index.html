@@ -1217,17 +1217,17 @@
             color: var(--text-secondary);
         }
         /* All product views: take remaining height when shown (flex: 1 1 0%, min-height: 0) */
-        #helmIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
+        #helmIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         #helmIQView .helm-layout { display: flex; flex: 1; min-height: 0; overflow: hidden; }
         #helmIQView .helm-sidebar { width: 280px; min-width: 280px; background: var(--bg-secondary); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; overflow-y: auto; padding: 1rem; }
         #helmIQView .helm-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-        #helmIQView .helm-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-color); padding: 0 1.25rem; flex-shrink: 0; }
-        #helmIQView .helm-tab-btn { padding: 0.7rem 1.25rem; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-secondary); font-size: 0.82rem; font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em; transition: all 0.15s; }
+        #helmIQView .helm-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-color); padding: 0.5rem 1.25rem 0; flex-shrink: 0; background: var(--bg-secondary); }
+        #helmIQView .helm-tab-btn { padding: 0.7rem 1.25rem; background: none; border: none; border-bottom: 3px solid transparent; color: var(--text-secondary); font-size: 0.82rem; font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em; transition: all 0.15s; }
         #helmIQView .helm-tab-btn:hover { color: var(--text-primary); }
         #helmIQView .helm-tab-btn.active { color: var(--accent-lime); border-bottom-color: var(--accent-lime); }
-        #helmIQView .helm-tab-content { flex: 1; overflow-y: auto; padding: 1.5rem; display: none; }
-        #helmIQView .helm-tab-content.active { display: block; }
-        #helmIQView .helm-build-form { max-width: 680px; }
+        #helmIQView .helm-tab-content { flex: 1 1 0%; min-height: 0; overflow-y: auto; padding: 1.5rem; display: none; }
+        #helmIQView .helm-tab-content.active { display: flex; flex-direction: column; }
+        #helmIQView .helm-build-form { max-width: 680px; width: 100%; }
         #helmIQView .helm-field { margin-bottom: 1.25rem; }
         #helmIQView .helm-field label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.4rem; }
         #helmIQView .helm-field select { width: 100%; padding: 0.55rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 0.85rem; }
@@ -24812,7 +24812,7 @@
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView', 'intentIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView', 'intentIQView', 'helmIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
