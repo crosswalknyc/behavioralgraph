@@ -19407,6 +19407,7 @@
                     <div><label title="Engagement = likes + comments + shares per asset">Sort by</label><select id="iiqAssetSort" onchange="reloadIntentIQAssets()"><option value="engagement" selected>Engagement (high → low)</option><option value="views">Views (high → low)</option><option value="date_desc">Date (newest first)</option><option value="date_asc">Date (oldest first)</option></select></div>
                     <div style="flex:1; text-align:right;"><span id="iiqAssetMeta" style="color: var(--text-secondary); font-size: 0.8rem;"></span></div>
                 </div>
+                <div id="iiqAssetChart" style="margin-bottom: 1rem;"></div>
                 <div class="iiq-cards-grid" id="iiqAssetGrid"></div>
             </div>
 
@@ -19900,6 +19901,162 @@
                 };
             }
 
+            // ----- Asset performance scatter -----
+            // X = views (log10 scale, since asset reach spans 4-5 orders of
+            // magnitude). Y = engagement rate %. Bubble area = ticketing %
+            // (bottom-funnel signal, the metric a theatrical campaign
+            // ultimately cares about). Color = paid (cyan) vs organic (green).
+            // Click a bubble -> scroll to + briefly highlight that card.
+            window.iiqScrollToAssetCard = function(assetId) {
+                if (!assetId) return;
+                var grid = document.getElementById('iiqAssetGrid');
+                if (!grid) return;
+                var card = grid.querySelector('[data-asset-id="' + (window.CSS && CSS.escape ? CSS.escape(assetId) : assetId.replace(/"/g, '\\"')) + '"]');
+                if (!card) return;
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                var prev = card.style.boxShadow;
+                card.style.boxShadow = '0 0 0 2px #fbbf24, 0 0 22px rgba(251,191,36,0.6)';
+                card.style.transform = 'scale(1.015)';
+                setTimeout(function() {
+                    card.style.boxShadow = prev || '';
+                    card.style.transform = '';
+                }, 1800);
+            };
+
+            function iiqRenderAssetScatter(cards) {
+                var host = document.getElementById('iiqAssetChart');
+                if (!host) return;
+                var pts = (cards || []).filter(function(c) {
+                    return (Number(c.ext_view_count) || 0) > 0;
+                });
+                if (!pts.length) { host.innerHTML = ''; return; }
+
+                var W = 1000, H = 360;
+                var padL = 64, padR = 24, padT = 28, padB = 52;
+                var plotW = W - padL - padR;
+                var plotH = H - padT - padB;
+
+                // X: log10(views) from 1K to dataset max (snapped up)
+                var vals = pts.map(function(c) { return Number(c.ext_view_count) || 1; });
+                var xMin = 1000;
+                var xMaxRaw = Math.max.apply(null, vals);
+                // Snap up to next power of 10 for clean tick marks
+                var xMax = Math.pow(10, Math.ceil(Math.log10(Math.max(xMaxRaw, xMin * 10))));
+                var lxMin = Math.log10(xMin), lxMax = Math.log10(xMax);
+                function xScale(v) {
+                    var lv = Math.log10(Math.max(v, xMin));
+                    return padL + ((lv - lxMin) / (lxMax - lxMin)) * plotW;
+                }
+                // Y: 0% .. dataset-max engagement rate (capped, snapped to nice number)
+                var rates = pts.map(function(c) {
+                    var v = Number(c.ext_view_count) || 0;
+                    var e = Number(c.ext_engagement_count) || 0;
+                    return v > 0 ? (e / v * 100) : 0;
+                });
+                var yMaxRaw = Math.max.apply(null, rates.concat([1]));
+                var yMax = yMaxRaw <= 2 ? 2 : yMaxRaw <= 5 ? 5 : yMaxRaw <= 10 ? 10 : yMaxRaw <= 15 ? 15 : Math.ceil(yMaxRaw / 5) * 5;
+                function yScale(r) {
+                    return padT + plotH - (r / yMax) * plotH;
+                }
+                // Bubble radius scales with ticketing %; floor so even 0% is visible
+                var tickets = pts.map(function(c) {
+                    var p = c._proj;
+                    return p ? p.ticket_pct : 0;
+                });
+                var tkMax = Math.max.apply(null, tickets.concat([1]));
+                function rScale(t) {
+                    return 4 + Math.sqrt(Math.max(0, t) / Math.max(tkMax, 0.01)) * 14;
+                }
+                function colorFor(c) {
+                    if (c.paid_or_organic === 'paid') return '#22d3ee';
+                    if (c.paid_or_organic === 'organic' || c.paid_or_organic === 'natural') return '#22c55e';
+                    return '#94a3b8';
+                }
+
+                // Reference: median engagement rate + median views
+                function median(arr) {
+                    var a = arr.slice().sort(function(x, y) { return x - y; });
+                    if (!a.length) return 0;
+                    var m = Math.floor(a.length / 2);
+                    return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+                }
+                var medX = median(vals);
+                var medY = median(rates);
+
+                // X grid: every order of magnitude
+                var xTicks = [];
+                for (var lx = Math.ceil(lxMin); lx <= lxMax; lx++) xTicks.push(Math.pow(10, lx));
+                var yTicks = [];
+                var ySteps = yMax <= 5 ? 5 : yMax <= 10 ? 5 : yMax <= 20 ? 4 : 5;
+                for (var i = 0; i <= ySteps; i++) yTicks.push((yMax * i / ySteps));
+
+                function fmtTickX(v) {
+                    if (v >= 1e6) return (v / 1e6) + 'M';
+                    if (v >= 1e3) return (v / 1e3) + 'K';
+                    return String(v);
+                }
+
+                var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%; height: 360px; display:block;">';
+                // Background
+                svg += '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="rgba(15,23,42,0.45)" rx="8" ry="8" />';
+                // Y gridlines + labels
+                yTicks.forEach(function(t) {
+                    var y = yScale(t);
+                    svg += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="rgba(255,255,255,0.06)" />';
+                    svg += '<text x="' + (padL - 8) + '" y="' + (y + 3.5) + '" fill="#94a3b8" font-size="10" text-anchor="end">' + t.toFixed(t < 10 ? 1 : 0) + '%</text>';
+                });
+                // X gridlines + labels
+                xTicks.forEach(function(t) {
+                    var x = xScale(t);
+                    svg += '<line x1="' + x + '" y1="' + padT + '" x2="' + x + '" y2="' + (H - padB) + '" stroke="rgba(255,255,255,0.06)" />';
+                    svg += '<text x="' + x + '" y="' + (H - padB + 14) + '" fill="#94a3b8" font-size="10" text-anchor="middle">' + fmtTickX(t) + '</text>';
+                });
+                // Median crosshair (dashed)
+                var medXpx = xScale(medX), medYpx = yScale(medY);
+                svg += '<line x1="' + medXpx + '" y1="' + padT + '" x2="' + medXpx + '" y2="' + (H - padB) + '" stroke="rgba(251,191,36,0.35)" stroke-dasharray="4,4" />';
+                svg += '<line x1="' + padL + '" y1="' + medYpx + '" x2="' + (W - padR) + '" y2="' + medYpx + '" stroke="rgba(251,191,36,0.35)" stroke-dasharray="4,4" />';
+                // Quadrant labels (in muted tint at the four corners)
+                svg += '<text x="' + (W - padR - 6) + '" y="' + (padT + 14) + '" fill="rgba(34,197,94,0.55)" font-size="10" text-anchor="end" font-weight="600">★ STARS — high reach + high engagement</text>';
+                svg += '<text x="' + (padL + 6) + '" y="' + (padT + 14) + '" fill="rgba(168,85,247,0.55)" font-size="10" text-anchor="start" font-weight="600">niche but engaged</text>';
+                svg += '<text x="' + (W - padR - 6) + '" y="' + (H - padB - 6) + '" fill="rgba(245,158,11,0.55)" font-size="10" text-anchor="end" font-weight="600">broad reach · passive</text>';
+                svg += '<text x="' + (padL + 6) + '" y="' + (H - padB - 6) + '" fill="rgba(148,163,184,0.45)" font-size="10" text-anchor="start" font-weight="600">underperformers</text>';
+                // Axis titles
+                svg += '<text x="' + (padL + plotW / 2) + '" y="' + (H - 8) + '" fill="#cbd5e1" font-size="11" text-anchor="middle" font-weight="600">Views (log scale, ' + fmtTickX(xMin) + ' → ' + fmtTickX(xMax) + ')</text>';
+                svg += '<text x="14" y="' + (padT + plotH / 2) + '" fill="#cbd5e1" font-size="11" text-anchor="middle" font-weight="600" transform="rotate(-90, 14, ' + (padT + plotH / 2) + ')">Engagement rate %</text>';
+                // Bubbles (paint largest first so small bubbles stay clickable on top)
+                var enriched = pts.map(function(c, idx) {
+                    var v = Number(c.ext_view_count) || 0;
+                    var e = Number(c.ext_engagement_count) || 0;
+                    var r = v > 0 ? (e / v * 100) : 0;
+                    var tk = (c._proj ? c._proj.ticket_pct : 0);
+                    return { c: c, v: v, e: e, r: r, tk: tk, idx: idx };
+                });
+                enriched.sort(function(a, b) { return b.tk - a.tk; });
+                enriched.forEach(function(p) {
+                    var cx = xScale(p.v);
+                    var cy = yScale(p.r);
+                    var rr = rScale(p.tk);
+                    var color = colorFor(p.c);
+                    var label = (p.c.action_label || p.c.asset_type || '—')
+                        + '  ·  ' + (p.c.channel || '')
+                        + '\n' + fmtCompact(p.v) + ' views  ·  ' + p.r.toFixed(2) + '% eng rate'
+                        + '\n' + (p._proj ? p._proj.ticket_pct.toFixed(1) + '% ticketing' : (p.tk ? p.tk.toFixed(1) + '% ticketing' : 'no ticketing model'))
+                        + '\nClick to jump to card';
+                    var assetId = (p.c.asset_id || '').replace(/'/g, "\\'");
+                    svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + rr + '" fill="' + color + '" fill-opacity="0.42" stroke="' + color + '" stroke-width="1.5" style="cursor:pointer;" onclick="iiqScrollToAssetCard(\'' + assetId + '\')"><title>' + escapeHtml(label) + '</title></circle>';
+                });
+
+                // Legend strip below chart
+                var legend = '<div style="display:flex; flex-wrap:wrap; gap:1.1rem; align-items:center; margin-top:0.45rem; font-size:0.72rem; color:var(--text-secondary);">'
+                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:10px; height:10px; border-radius:50%; background:#22d3ee;"></span> Paid</span>'
+                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:10px; height:10px; border-radius:50%; background:#22c55e;"></span> Organic</span>'
+                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:6px; height:6px; border-radius:50%; background:#94a3b8;"></span><span style="width:10px; height:10px; border-radius:50%; background:#94a3b8;"></span><span style="width:14px; height:14px; border-radius:50%; background:#94a3b8;"></span> Bubble size = ticketing % (bigger = more viewers visited a ticketing site)</span>'
+                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:1.5px dashed #fbbf24;"></span> Median (split the field into 4 quadrants)</span>'
+                    + '<span style="opacity:0.6;">Tip: click any bubble to jump to its card</span>'
+                    + '</div>';
+                host.innerHTML = svg + '</svg>' + legend;
+            }
+
             window.reloadIntentIQAssets = function() {
                 var slug = window.__intentIQ.currentSlug;
                 if (!slug) return;
@@ -19956,6 +20113,7 @@
                         var tkBlendedPct    = totalViews > 0 ? (totalTicketVisits / totalViews * 100) : 0;
 
                         document.getElementById('iiqAssetMeta').textContent = totalAssets + ' asset' + (totalAssets === 1 ? '' : 's') + ' · ' + winLabel;
+                        iiqRenderAssetScatter(cards);
                         document.getElementById('iiqAssetSummary').innerHTML = [
                             iiqSummaryTile('Total assets', fmtCompact(totalAssets), withViews + ' with measured views · ' + winLabel),
                             iiqSummaryTile('Total views', fmtCompact(totalViews), 'across measured assets in window'),
@@ -19984,7 +20142,7 @@
                             var ticketVisits = proj ? Math.round(v * proj.ticket_pct / 100) : 0;
                             var infoTip = 'Modeled \u2014 % of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people. Calibrated from post-trailer Google Trends + IMDB Pro spike benchmarks for family-animation tentpoles; tilted per asset by phase, channel, paid/organic, and engagement rate.';
                             var tkTip   = 'Modeled \u2014 % of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people. Calibrated from NATO + Comscore ticketing-page conversion norms; peaks during opening-weekend window (T-0), ramps with tickets-on-sale (1/21), near zero after the 5/15 streaming launch.';
-                            return '<div class="iiq-card" style="border-left: 3px solid ' + edgeColor + ';">'
+                            return '<div class="iiq-card" data-asset-id="' + escapeHtml(c.asset_id || '') + '" style="border-left: 3px solid ' + edgeColor + '; transition: box-shadow 0.4s ease, transform 0.2s ease;">'
                                 + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '—') + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
                                 // Views on its own row (full-width hero number),
