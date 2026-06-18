@@ -2676,6 +2676,235 @@ def _viewers_from_minutes_bracket(viewing_minutes_us, minutes_per_episode, episo
     return {'lower': lower, 'point': point, 'upper': upper}
 
 
+def _research_engagement_metrics(*, show_name, platform_name, genre, content_cadence,
+                                 episode_count, is_movie, runtime_minutes=None,
+                                 release_date=None):
+    """Per-title Claude research for two engagement KPIs:
+
+      1) Completion Rate — what share of viewers watched the FULL piece of
+         content on average. For movies this is a single number (start →
+         credits). For series it's the per-episode completion rate averaged
+         across all episodes (so a 10-ep season with eps individually at
+         90/88/85/82/80/78/76/74/72/70 % completion has a series average
+         of 79.5 %).
+
+      2) Second Screen Activity — what share of viewers were on a second
+         device (phone, tablet, laptop) at the same time, i.e. partially
+         distracted viewers. This is the % of the total viewer base that
+         was NOT fully attentive for the majority of the runtime.
+
+    PER-TITLE RESEARCH ONLY. The caller has been explicit that they do NOT
+    want a "platform tier × genre" multiplier producing identical numbers
+    across disparate titles. The prompt below forbids generic answers and
+    requires Claude to consider the SPECIFIC title's:
+        - attention demand (puzzle-box drama vs background reality)
+        - format (theatrical action movie vs binge dating reality)
+        - audience profile (committed fanbase vs casual catalog browsers)
+        - runtime / episode count (long runtimes lose more completers)
+        - release context (Netflix Original event vs licensed catalog)
+        - known viewing patterns (Nielsen Streaming Top 10 completion data,
+          Parrot Analytics demand, JustWatch streaming engagement reports,
+          public statements about completion / second-screen behavior)
+
+    Returns dict or None if Claude is unavailable / call fails:
+        {
+            'completion_rate_pct':           float (0-100),
+            'completion_rate_reasoning':     str,
+            'per_episode_completion_pct':    list[float] | None,   # series only
+            'second_screen_pct':             float (0-100),
+            'second_screen_reasoning':       str,
+            'sources_cited':                 list[str],
+            'confidence':                    'high' | 'medium' | 'low',
+            'model':                         str,
+        }
+    """
+    try:
+        from claude_client import is_claude_reasoning_enabled, claude_reason_json
+    except Exception:
+        return None
+    if not is_claude_reasoning_enabled():
+        return None
+
+    raw_terms = [t.strip() for t in (show_name or '').replace('_', ' ').replace('-', ' ').split(',') if t.strip()]
+    clean_name = max(raw_terms, key=len).title() if raw_terms else (show_name or '').replace('_', ' ').strip().title()
+
+    runtime_hint = ""
+    if runtime_minutes:
+        runtime_hint = f"\nRuntime: ~{int(runtime_minutes)} minutes per " + ("piece." if is_movie else "episode.")
+
+    format_hint = (
+        f"This is a FEATURE FILM (single piece of content, ~90-150 min runtime). "
+        f"Completion rate = % of viewers who watched start → end credits."
+        if is_movie else
+        f"This is a SERIES with {episode_count or 'unknown'} episode(s) released on a "
+        f"'{content_cadence or 'unknown'}' cadence. Completion rate is the AVERAGE "
+        f"per-episode completion across the season — i.e. of the people who pressed "
+        f"play on each episode, what % watched to its end. Also estimate completion "
+        f"PER EPISODE (drop-off curve typically declines from ep 1 → ep N for binge "
+        f"releases, sometimes flat or rising for prestige weekly drops as casuals "
+        f"churn out and only fans remain)."
+    )
+
+    system = (
+        "You are a senior streaming engagement analyst. Your job is to model "
+        "how attentively viewers consumed a SPECIFIC piece of content — not "
+        "the platform average, not the genre average, but the SPECIFIC title.\n\n"
+        "TWO KPIs:\n"
+        "  (1) Completion Rate — share of viewers who watched the full piece.\n"
+        "  (2) Second Screen Activity — share of viewers who were on a phone, "
+        "tablet, or other secondary device for the majority of the runtime.\n\n"
+        "GROUND YOUR ESTIMATES IN THE SPECIFIC TITLE:\n"
+        "  • Attention demand: puzzle-box dramas (Severance, Westworld) need "
+        "your full attention → high completion (80-92%), low second-screen "
+        "(20-35%). Procedural / case-of-the-week (NCIS, Law & Order spinoffs) "
+        "moderate completion (~70%), moderate second-screen (~50%). Reality "
+        "/ dating / cooking competition (Love is Blind, The Bachelor) low "
+        "completion (50-65%), very high second-screen (65-85%) because they "
+        "function as ambient TV.\n"
+        "  • Format: theatrical action movies on streaming (John Wick on "
+        "HBO Max, Trap House on Netflix) tend to ~55-70% completion (people "
+        "drift out of a 110-min commitment more than a 22-min sitcom), and "
+        "55-70% second-screen (action beats don't require continuous "
+        "attention, viewers check phones in dialog scenes). Limited series / "
+        "prestige drama (The Queen's Gambit, Adolescence) tend to ~80-90% "
+        "completion, ~35-50% second-screen.\n"
+        "  • Audience profile: a fanbase franchise sequel (John Wick 4, "
+        "Mission Impossible) shows higher completion than a catalog browse-"
+        "and-sample title (random Bautista B-movie on Netflix). New-fan "
+        "Netflix Original event movies (The Rip, Glass Onion) have committed "
+        "watchers from launch → high completion. Licensed catalog titles "
+        "that show up months after theatrical are sampled by casual "
+        "browsers → lower completion.\n"
+        "  • Runtime: a 90-min movie gets meaningfully higher completion "
+        "than a 150-min one. A 6-ep limited series gets higher completion "
+        "than a 13-ep first season. Factor this in.\n"
+        "  • Cadence: weekly drops trend to higher per-episode completion "
+        "(viewers tune in specifically that night and watch the whole ep), "
+        "binge drops show a steeper drop-off curve (eps 1-3 high, eps 8-10 "
+        "much lower as casual watchers fall off).\n"
+        "  • Real-world data: cite Nielsen Streaming Top 10 / 'minute-by-"
+        "minute' completion data when public, Netflix Top 10 weekly hours "
+        "viewing patterns, Parrot Analytics demand-vs-completion findings, "
+        "Samba TV / iSpot.tv attention reports, JustWatch streaming data, "
+        "industry trade reporting (Variety, THR, Bloomberg) on this specific "
+        "title or its closest comparable. Cite the SOURCE when known.\n\n"
+        "FORBIDDEN:\n"
+        "  • Do NOT return generic 'industry average' or 'platform tier "
+        "default' numbers. Two different action movies on the same platform "
+        "should NOT have identical completion or second-screen percentages.\n"
+        "  • Do NOT make up sources. If you cannot cite a specific source for "
+        "this title, base your estimate on the closest comparable title you "
+        "CAN cite and note which comparable you used.\n"
+        "  • Do NOT collapse to the midpoint of a range. Pick a specific "
+        "number (e.g. 67.3, not 65-70).\n\n"
+        "Output JSON only. No prose preamble, no markdown fences."
+    )
+
+    user = (
+        f'TITLE: "{clean_name}"\n'
+        f'PLATFORM: {platform_name or "unknown"}\n'
+        f'GENRE: {genre or "unknown"}\n'
+        f'CONTENT CADENCE: {content_cadence or "unknown"}\n'
+        f'IS MOVIE: {is_movie}\n'
+        f'EPISODE COUNT: {episode_count if not is_movie else "n/a (single film)"}\n'
+        f'RELEASE DATE: {release_date or "unknown"}'
+        f'{runtime_hint}\n\n'
+        f'FORMAT GUIDANCE FOR THIS TITLE:\n{format_hint}\n\n'
+        f'Return JSON only:\n'
+        f'{{\n'
+        f'  "completion_rate_pct":         <float 30-95, e.g. 67.3>,\n'
+        f'  "completion_rate_reasoning":   "<2-3 sentences citing specific '
+        f'attributes of this title and at least one source or comparable>",\n'
+        f'  "per_episode_completion_pct":  '
+        f'{"null" if is_movie else f"[<{episode_count or 1} floats>]"},\n'
+        f'  "second_screen_pct":           <float 15-85, e.g. 58.2>,\n'
+        f'  "second_screen_reasoning":     "<2-3 sentences explaining the '
+        f'attention demand of this specific title>",\n'
+        f'  "sources_cited":               ["<Nielsen / Variety / Parrot / '
+        f'JustWatch / etc. with date>", "<comparable title if no direct data>"],\n'
+        f'  "confidence":                  "high" | "medium" | "low"\n'
+        f'}}'
+    )
+
+    print(f"   🧠 Asking Claude to research engagement KPIs "
+          f"(completion rate + second-screen) for '{clean_name}'…")
+    raw = claude_reason_json(
+        system=system, user=user,
+        max_tokens=900, temperature=0.2,
+    )
+    if not raw:
+        print(f"   ⚠️  Claude returned no engagement metrics; skipping rows")
+        return None
+
+    try:
+        s = raw.strip()
+        if s.startswith('```'):
+            s = s.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
+        start = s.find('{')
+        if start < 0:
+            return None
+        depth, end = 0, start
+        for i in range(start, len(s)):
+            if s[i] == '{':
+                depth += 1
+            elif s[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        result = json.loads(s[start:end])
+    except Exception as e:
+        print(f"   ⚠️  Engagement metrics JSON parse failed: {e}")
+        return None
+
+    def _coerce_pct(val, fallback=None):
+        if val is None:
+            return fallback
+        try:
+            v = float(val)
+        except (TypeError, ValueError):
+            return fallback
+        if v <= 1.0:
+            v *= 100.0
+        return max(0.0, min(100.0, v))
+
+    completion = _coerce_pct(result.get('completion_rate_pct'))
+    second_screen = _coerce_pct(result.get('second_screen_pct'))
+    if completion is None and second_screen is None:
+        return None
+
+    per_ep_raw = result.get('per_episode_completion_pct') or None
+    per_ep = None
+    if isinstance(per_ep_raw, list) and per_ep_raw:
+        per_ep = []
+        for v in per_ep_raw:
+            cv = _coerce_pct(v)
+            if cv is not None:
+                per_ep.append(round(cv, 1))
+        if not per_ep:
+            per_ep = None
+        elif completion is None:
+            completion = round(sum(per_ep) / len(per_ep), 1)
+
+    out = {
+        'completion_rate_pct':        round(completion, 1) if completion is not None else None,
+        'completion_rate_reasoning':  (result.get('completion_rate_reasoning') or '').strip(),
+        'per_episode_completion_pct': per_ep,
+        'second_screen_pct':          round(second_screen, 1) if second_screen is not None else None,
+        'second_screen_reasoning':    (result.get('second_screen_reasoning') or '').strip(),
+        'sources_cited':              result.get('sources_cited') or [],
+        'confidence':                 result.get('confidence') or 'low',
+        'model':                      'claude-sonnet-4-5',
+    }
+    if out['completion_rate_pct'] is not None:
+        print(f"      🎬 Completion rate: {out['completion_rate_pct']}% "
+              f"({out['confidence']} confidence)")
+    if out['second_screen_pct'] is not None:
+        print(f"      📱 Second-screen activity: {out['second_screen_pct']}% "
+              f"({out['confidence']} confidence)")
+    return out
+
+
 def _reason_viewer_bracket_with_claude(*, show_name, platform_name, genre, date_range,
                                        episode_count, gpt_search_result, platform_info,
                                        max_plausible_us):
@@ -4735,6 +4964,33 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
     _new_only_conv = round((_new_only_signups * 100.0) / clean_sample, 2) if clean_sample > 0 else 0.0
     print(f"   🔄 Reactivation split: {_react_pct_final*100:.1f}% → {_reactivated_count:,} reactivated, {_new_only_signups:,} new")
 
+    # ── Engagement KPI research (per-title Claude call) ─────────────────
+    # Two new metrics surfaced on the dashboard home page:
+    #   • Completion Rate  — share of viewers who watched the full content
+    #   • Second Screen    — share of viewers who were on phone/tablet
+    # User requirement (2026-06-18): research these PER-TITLE, no platform/
+    # genre fallback multiplier. If Claude is unavailable, we skip the rows
+    # rather than emit a default (the dashboard hides the tile).
+    _genre_lc_eng = (p.get('genre') or '').lower()
+    _ep_count_eng = len(p.get('episode_dates', []) or [])
+    _is_movie_eng = ('movie' in _genre_lc_eng) or ('film' in _genre_lc_eng) or (_ep_count_eng <= 1)
+    engagement_research = _research_engagement_metrics(
+        show_name=", ".join(p.get('show_search_terms', [])),
+        platform_name=p.get('platform_name', ''),
+        genre=p.get('genre', ''),
+        content_cadence=p.get('content_cadence', ''),
+        episode_count=_ep_count_eng,
+        is_movie=_is_movie_eng,
+        runtime_minutes=p.get('episode_runtime_minutes') or p.get('runtime_minutes'),
+        release_date=(p['campaign_start'].date().isoformat()
+                      if hasattr(p.get('campaign_start'), 'date') else None),
+    )
+    # Persist into the research sidecar via the params dict so the caller
+    # (run_synthetic_attribution) can fold this into the .research.json
+    # audit file alongside demographics, conversion reasoning, etc.
+    if engagement_research:
+        p['_engagement_research'] = engagement_research
+
     # For new shows, clean sample = all show watchers (no pre-existing viewers to exclude)
 
     # Get tracking mode and create lookup for display labels and episode dates (used for episode/date attribution)
@@ -4819,6 +5075,23 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         ("Total Show Conversion Rate", "", "", "", "", "", "", "", f"{total_show_conversion:.2f}%", ""),
         ("Average Days from Show Available to Signup", "", "", "", avg_days, "days", "", "", "", ""),
     ])
+
+    # Engagement KPIs (per-title Claude research) — only emit when present.
+    # The dashboard parser keys on the exact category label; matching tiles
+    # render on the home-page Performance Metrics grid. If research returned
+    # None for a metric (parse failure or Claude disabled), skip that row so
+    # the dashboard hides the tile rather than showing "0.0%".
+    if engagement_research:
+        if engagement_research.get('completion_rate_pct') is not None:
+            rows.append((
+                "Completion Rate", "", "", "", "", "", "", "",
+                f"{engagement_research['completion_rate_pct']:.1f}%", "",
+            ))
+        if engagement_research.get('second_screen_pct') is not None:
+            rows.append((
+                "Second Screen Activity", "", "", "", "", "", "", "",
+                f"{engagement_research['second_screen_pct']:.1f}%", "",
+            ))
 
     # Add per-episode/date attribution (Landman: Category, Episode Date, Count, Count Label, Secondary Count, Secondary Label, Tertiary Count, Tertiary Label, Percentage, Gen Pop Projection)
     if not df_episode_attribution.empty:
@@ -7074,6 +7347,15 @@ def run_synthetic_attribution(config: dict) -> dict:
     # is the "show your work" trail — the headline reach number in the CSV
     # is only as defensible as the math in this file.
     try:
+        # Merge any post-panel research outputs into the audit dict so the
+        # sidecar reflects EVERY Claude call made for this CSV (not just the
+        # initial external research). Engagement KPIs (completion rate +
+        # second-screen) are generated inside write_output, after research
+        # was assembled, so we splice them in here.
+        if isinstance(research, dict) and p.get('_engagement_research'):
+            research = {**research, 'engagement_metrics': p.get('_engagement_research')}
+        elif p.get('_engagement_research') and not research:
+            research = {'engagement_metrics': p.get('_engagement_research')}
         if research:
             research_path = output_path.with_suffix('.research.json')
             with open(research_path, 'w') as f:
