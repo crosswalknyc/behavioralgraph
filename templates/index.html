@@ -21222,7 +21222,7 @@
                         return (Number(b.opening_weekend_buyers)||0) - (Number(a.opening_weekend_buyers)||0);
                     });
                     html += '<div style="margin: 0 0 0.45rem; font-size:0.78rem; color: var(--text-secondary);">'
-                         + 'Modeled high-intent signal breakdown for each comparable title \u2014 same 3 conversion paths and rates ' + escapeHtml(subj.display_name || 'subject') + ' uses above; per-comp shape derived from realized opening-weekend buyers + seeded jitter.'
+                         + 'High-intent signal breakdown for each comparable title \u2014 same 3 conversion paths and rates ' + escapeHtml(subj.display_name || 'subject') + ' uses above; per-comp shape derived from realized opening-weekend buyers'
                          + '</div>';
                     html += '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap:0.65rem; margin-bottom:0.85rem;">';
                     sortedCompsForSig.forEach(function(c) {
@@ -21236,7 +21236,6 @@
                             +        '<div style="font-size:0.85rem; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(c.display_name) + '">' + escapeHtml(c.display_name) + '</div>'
                             +        '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.1rem;">opened ' + escapeHtml(c.opening_date || '\u2014') + ' \u00b7 ' + fmtCompact(totalBuyers) + ' opening-weekend buyers</div>'
                             +      '</div>';
-                        html +=     '<span style="font-size:0.58rem; padding:0.15rem 0.4rem; border-radius:8px; background: rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.4); color:#c4b5fd; white-space:nowrap; align-self:center;">MODELED</span>';
                         html +=   '</div>';
                         html += modeled.map(function(m) {
                             var pct = maxP > 0 ? Math.min(100, m.people / maxP * 100) : 0;
