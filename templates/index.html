@@ -27037,9 +27037,17 @@
                 var opt = dd && dd.querySelector('option[value="helmIQ"]');
                 if (opt && opt.disabled) return;
                 if (typeof setViewNavDropdown === 'function') setViewNavDropdown('helmIQ');
-                helmHideAllViews();
+                // Hide every sibling view inside .container
+                var container = document.querySelector('.container');
+                if (container) {
+                    var allViews = container.querySelectorAll('[id$="View"], [id$="IQView"], #formView, #customAnalysisView');
+                    allViews.forEach(function(el) { if (el.id !== 'helmIQView') el.style.display = 'none'; });
+                }
+                if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
                 var view = document.getElementById('helmIQView');
-                if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
+                if (view) {
+                    view.style.cssText = 'display:flex !important; flex-direction:column; flex:1 1 0%; min-height:0; overflow:hidden; visibility:visible;';
+                }
                 helmLoadProfileDropdowns();
             };
 
