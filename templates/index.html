@@ -23442,6 +23442,11 @@
                         </select>
                     </div>
 
+                    <div class="helm-field">
+                        <label for="helmDirector">Director</label>
+                        <select id="helmDirector"><option value="">None</option></select>
+                    </div>
+
                     <div class="helm-field-row">
                         <div class="helm-field">
                             <label for="helmActor1">Principal Actor</label>
@@ -24722,7 +24727,7 @@
                         ['sentimentIQ', !!d.has_sentiment_iq_access],
                         ['roasIQ', !!d.has_roas_iq_access],
                         ['ecommerceIQ', !!d.has_ecommerce_iq_access],
-                        ['shareOfTimeIQ', d.has_share_of_time_access !== false],
+                        ['shareOfTimeIQ', false],
                         ['workspace', d.has_workspace_access !== false],
                         ['blueIQ', !!d.has_blue_iq_access],
                         ['intentIQ', d.has_intent_iq_access !== false],
@@ -26261,7 +26266,7 @@
                 });
             };
 
-            var _helmProfiles = { actors: [], creators: [], brands: [] };
+            var _helmProfiles = { actors: [], directors: [], creators: [], brands: [] };
             var _helmProfilesLoaded = false;
 
             function helmLoadProfileDropdowns() {
@@ -26270,20 +26275,22 @@
                     .then(function(r) { return r.json(); })
                     .then(function(d) {
                         if (!d || !d.jobs) return;
-                        var actors = [], creators = [], brands = [];
+                        var actors = [], directors = [], creators = [], brands = [];
                         d.jobs.forEach(function(j) {
                             var cat = (j.category || '').toUpperCase();
                             var name = j.display_name || j.name || j.s3_key || '';
                             if (!name) return;
                             var entry = { name: name, key: j.s3_key || name };
                             if (cat === 'ACTOR') actors.push(entry);
+                            else if (cat === 'WRITER/DIRECTOR/AUTHOR/ARTIST' || cat === 'DIRECTOR') directors.push(entry);
                             else if (cat === 'CREATOR/INFLUENCER' || cat === 'INFLUENCER/CREATOR') creators.push(entry);
                             else if (j.master_category === 'BRAND' || cat === 'BRAND') brands.push(entry);
                         });
                         actors.sort(function(a,b) { return a.name.localeCompare(b.name); });
+                        directors.sort(function(a,b) { return a.name.localeCompare(b.name); });
                         creators.sort(function(a,b) { return a.name.localeCompare(b.name); });
                         brands.sort(function(a,b) { return a.name.localeCompare(b.name); });
-                        _helmProfiles = { actors: actors, creators: creators, brands: brands };
+                        _helmProfiles = { actors: actors, directors: directors, creators: creators, brands: brands };
                         _helmProfilesLoaded = true;
                         _populateHelmSelects();
                     })
@@ -26291,6 +26298,7 @@
             }
 
             function _populateHelmSelects() {
+                _fillSelect('helmDirector', _helmProfiles.directors);
                 var actorIds = ['helmActor1','helmActor2'];
                 var creatorIds = ['helmCreator1','helmCreator2'];
                 var brandIds = ['helmBrand1','helmBrand2'];
@@ -26318,7 +26326,7 @@
                 var selections = [];
                 selections.push({ type: 'genre', key: genre, name: genre });
 
-                ['helmActor1','helmActor2','helmCreator1','helmCreator2','helmBrand1','helmBrand2'].forEach(function(id) {
+                ['helmDirector','helmActor1','helmActor2','helmCreator1','helmCreator2','helmBrand1','helmBrand2'].forEach(function(id) {
                     var sel = document.getElementById(id);
                     if (sel && sel.value) {
                         var name = sel.options[sel.selectedIndex].textContent;
@@ -26345,7 +26353,7 @@
                     if (i === 0) {
                         changeOutRow += '<td class="helm-pinned-col"></td>';
                     } else {
-                        var listKey = s.type.indexOf('Actor') !== -1 ? 'actors' : s.type.indexOf('Creator') !== -1 ? 'creators' : 'brands';
+                        var listKey = s.type.indexOf('Actor') !== -1 ? 'actors' : s.type.indexOf('Director') !== -1 ? 'directors' : s.type.indexOf('Creator') !== -1 ? 'creators' : 'brands';
                         changeOutRow += '<td><select onchange="helmChangeOut(this,' + i + ')" data-col="' + i + '">';
                         changeOutRow += '<option value="' + _escH(s.key) + '">' + _escH(s.name) + '</option>';
                         _helmProfiles[listKey].forEach(function(p) {
