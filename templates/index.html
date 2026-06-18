@@ -15961,7 +15961,7 @@
                                         <small style="color: var(--text-secondary); font-size: 0.7rem;">Cumulative US viewers (Nielsen, Samba TV, Luminate, Parrot Analytics). Same lookup engine SubscriberIQ uses for show-viewership validation.</small>
                                     </div>
 
-                                    <small id="jiqTypeHelp" style="display: none; margin-top: 0.6rem; color: var(--text-secondary); font-size: 0.7rem;"><strong>What this turns on:</strong> the dashboard will show a Panel / Modeled / Scaled / Blended toggle. <em>Panel</em> = raw counts our panel saw. <em>Scaled</em> = panel × (implied audience / panel converters) so reach matches reality. <em>Modeled</em> = AI-estimated journey for a target of this scale (used when the panel is too sparse). <em>Blended</em> (default) shows real metrics where the panel cohort is &ge;25 converters and modeled where it&apos;s sparser.</small>
+                                    <small id="jiqTypeHelp" style="display: none; margin-top: 0.6rem; color: var(--text-secondary); font-size: 0.7rem;"><strong>What this turns on:</strong> the dashboard will show a Panel / Estimated / Scaled / Blended toggle. <em>Panel</em> = raw counts our panel saw. <em>Scaled</em> = panel × (implied audience / panel converters) so reach matches reality. <em>Estimated</em> = AI-derived journey for a target of this scale (used when the panel is too sparse). <em>Blended</em> (default) shows real metrics where the panel cohort is &ge;25 converters and estimated where it&apos;s sparser.</small>
                                 </div>
                                 <div id="jiqConvModeBlock" style="display: none; margin-bottom: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--accent-primary); border-radius: 8px; background: rgba(99,102,241,0.05);">
                                     <div style="margin-bottom: 0.75rem;">
@@ -16506,11 +16506,11 @@
                                          CSV finishes parsing. Hidden by default; revealed once
                                          data is available. -->
                                     <div id="audienceShareBoxes" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
-                                        <div class="asb-box" data-channel="social" title="Social Media engagement share"><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">—</span></div>
-                                        <div class="asb-box" data-channel="search" title="Search Engine / AI engagement share"><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">—</span></div>
-                                        <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent profiles."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">—</span></div>
+                                        <div class="asb-box" data-channel="social" title="Engaged with the subject on a social platform (YouTube, IG, TikTok, FB, Twitter)."><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">—</span></div>
+                                        <div class="asb-box" data-channel="search" title="Discovered or looked up the subject via Google / AI search."><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">—</span></div>
+                                        <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent and influencer profiles (no brand-owned channel)."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">—</span></div>
                                         <div class="asb-box" data-channel="retail" title="Retail / eCommerce engagement share"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">—</span></div>
-                                        <div class="asb-box" data-channel="media"  title="Media (streaming, movies, music, news, games, sports) engagement share"><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">—</span></div>
+                                        <div class="asb-box" data-channel="media"  title="Engaged with the subject's content via traditional / third-party media (TV, streaming, films, music, news, podcasts)."><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">—</span></div>
                                     </div>
                                 </div>
                             </div>
@@ -19551,7 +19551,7 @@
                 <details id="iiqConvSecretSauce" style="background: rgba(15,23,42,0.55); border:1px solid rgba(245,158,11,0.35); border-radius:8px; padding:0.6rem 0.85rem; margin-bottom:0.85rem;">
                     <summary style="cursor:pointer; font-size:0.85rem; font-weight:700; color:#fbbf24;">🧪 Secret Sauce &nbsp;<span style="font-weight:400; font-size:0.72rem; color:var(--text-secondary);">(conversion weights — calibrated to GOAT opening weekend $35.5M)</span></summary>
                     <div style="font-size:0.72rem; color: var(--text-secondary); margin: 0.55rem 0 0.7rem;">
-                        Each funnel layer converts at its own rate. Layers are <strong>nested</strong> (ticketing visitors ⊂ info-seekers ⊂ reached), so the model assigns each person to the deepest layer they reached and applies that layer's conversion rate. No double-counting.
+                        Each funnel layer converts at its own rate. Layers are <strong>nested</strong> (ticketing visitors ⊂ info-seekers ⊂ reached), so each person is assigned to the deepest layer they reached and that layer's conversion rate is applied. No double-counting.
                     </div>
                     <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 0.55rem;">
                         <div>
@@ -20035,9 +20035,9 @@
                     var descriptor = descriptorFromCard(c);
                     var sourceTip = srcLabel(c.source);
                     var exp = iiqAudienceExposureProjection(c);
-                    var reachTip  = 'Modeled \u2014 % of this cohort who saw ANY piece of campaign content (any asset, any channel) over the campaign-to-date window. Calibrated from tentpole family-animation reach benchmarks; tilted up for cohorts with higher overlap with the title\'s audience profile.';
-                    var uniqueTip = 'Modeled \u2014 among reached cohort members, the average number of UNIQUE campaign assets they encountered (deduped across views). Wider unique counts for talent / fan cohorts (organic share gravity exposes them to more varied content) than for paid-targeted demo cohorts (which see a narrower paid rotation).';
-                    var totalTip  = 'Modeled \u2014 among reached cohort members, the average TOTAL impressions (unique pieces \u00d7 frequency per piece). Counts re-watches and repeat exposure. Frequency per unique asset clusters at 1.8\u20132.6\u00d7 for paid-heavy campaigns of this scale.';
+                    var reachTip  = 'Projected % of this cohort who saw ANY piece of campaign content (any asset, any channel) over the campaign-to-date window. Calibrated from tentpole family-animation reach benchmarks; tilted up for cohorts with higher overlap with the title\'s audience profile.';
+                    var uniqueTip = 'Projected average number of UNIQUE campaign assets reached cohort members encountered (deduped across views). Wider unique counts for talent / fan cohorts (organic share gravity exposes them to more varied content) than for paid-targeted demo cohorts (which see a narrower paid rotation).';
+                    var totalTip  = 'Projected average TOTAL impressions among reached cohort members (unique pieces \u00d7 frequency per piece). Counts re-watches and repeat exposure. Frequency per unique asset clusters at 1.8\u20132.6\u00d7 for paid-heavy campaigns of this scale.';
                     return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';" title="' + escapeHtml(sourceTip) + (c.source ? ': ' + escapeHtml(c.source) : '') + '">'
                         + '<div class="iiq-card-title">' + escapeHtml(c.display || c.subject_key) + '</div>'
                         + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '—') + '</div>'
@@ -20232,6 +20232,101 @@
                 };
             }
 
+            // ----- Calendar-aware funnel multiplier -----
+            // Static per-asset rates (iiqAssetFunnelProjection) capture HOW
+            // funnel-friendly an asset is, but they don't know what WEEK of
+            // the campaign we're in. On Apr 20 nobody is buying a ticket --
+            // the movie left theatres -- and on Jul 10 info-seek volume is
+            // negligible too. Without a calendar overlay, the cumulative
+            // info-seeker / ticketing curves on Q2 keep ticking up forever,
+            // which is the bug the user flagged.
+            //
+            // Returns { info_mult, ticket_mult } in [~0, ~1.4]. 1.0 = full
+            // rate (OW window), ~0 = effectively no conversion.
+            //
+            // Ticket curve: very low pre-presale, ramps from presale to OW,
+            // peaks for the OW window, then DECAYS HARD to ~0 by the end of
+            // the typical animated-family theatrical run (~6 weeks). Stays
+            // at floor forever after -- no tickets to buy.
+            //
+            // Info-seek curve: moderate pre-OW, peaks at OW window, decays
+            // to a low floor 4-6 weeks after OW, THEN gets a Gaussian bump
+            // centered on the streaming launch date (5/15) -- the second
+            // peak the user called out ("info seeking would peak again
+            // because of pvod/tvod but not ticketing").
+            //
+            // Callers renormalize against their LIFETIME aggregate so
+            // applying this multiplier only redistributes the totals
+            // across time -- it doesn't change ladder-up totals on the
+            // Assets cards, Q1 rollup, or Q2 funnel comparison.
+            var IIQ_CAMPAIGN_DATES = {
+                PRESALE:         '2026-01-21',
+                OPENING:         '2026-02-13',
+                THEATRICAL_END:  '2026-03-29',  // ~6.5 weeks post-OW for animated family runs
+                STREAMING:       '2026-05-15'
+            };
+            function iiqCalendarFunnelMultiplier(dateIso) {
+                var DAY = 86400000;
+                var dT  = new Date(dateIso + 'T12:00:00Z').getTime();
+                var psT = new Date(IIQ_CAMPAIGN_DATES.PRESALE        + 'T12:00:00Z').getTime();
+                var owT = new Date(IIQ_CAMPAIGN_DATES.OPENING        + 'T12:00:00Z').getTime();
+                var teT = new Date(IIQ_CAMPAIGN_DATES.THEATRICAL_END + 'T12:00:00Z').getTime();
+                var slT = new Date(IIQ_CAMPAIGN_DATES.STREAMING      + 'T12:00:00Z').getTime();
+                var dToOW = (owT - dT) / DAY;
+                var dToSL = (slT - dT) / DAY;
+                var presaleSpanDays = Math.max(1, (owT - psT) / DAY);
+
+                // --- TICKETING ---
+                var tk;
+                if (dT < psT) {
+                    tk = 0.03;
+                } else if (dToOW > 0) {
+                    var prog = 1 - (dToOW / presaleSpanDays);
+                    tk = 0.35 + 0.65 * prog;
+                } else if (dToOW >= -7) {
+                    tk = 1.0;
+                } else if (dT < teT) {
+                    var postOwDays  = -dToOW - 7;
+                    var theatrSpan  = Math.max(1, (teT - (owT + 7 * DAY)) / DAY);
+                    var prog2       = Math.min(1, postOwDays / theatrSpan);
+                    tk = 1.0 - 0.95 * prog2;
+                } else {
+                    tk = 0.02;
+                }
+
+                // --- INFO-SEEK ---
+                var info;
+                if (dT < psT) {
+                    info = 0.45;
+                } else if (dToOW > 14) {
+                    var prog3 = (presaleSpanDays - dToOW) / Math.max(1, presaleSpanDays - 14);
+                    info = 0.55 + 0.30 * Math.max(0, Math.min(1, prog3));
+                } else if (dToOW > 0) {
+                    info = 0.85 + 0.15 * (1 - dToOW / 14);
+                } else if (dToOW >= -14) {
+                    info = 1.0;
+                } else if (dToOW >= -42) {
+                    var decayProg = (-dToOW - 14) / 28;
+                    info = 1.0 - 0.75 * decayProg;
+                } else {
+                    info = 0.18;
+                }
+
+                // Streaming-launch info bump (Gaussian centered on 5/15).
+                // Suppress during theatrical campaign so we don't double-
+                // count audiences who were focused on tickets, not "where
+                // to stream". sigma=25d gives a ~10-week window.
+                var sigma = 25;
+                var bump  = 0.55 * Math.exp(-(dToSL * dToSL) / (2 * sigma * sigma));
+                if (dToOW > -14) bump *= 0.10;
+                info = Math.min(1.40, info + bump);
+
+                return {
+                    info_mult:   Math.max(0.04, info),
+                    ticket_mult: Math.max(0.01, tk)
+                };
+            }
+
             // ----- Synthesize a daily progression for one asset -----
             // Used by the asset-detail modal when the backend returns no rows
             // from asset_engagement_daily (most assets in the GOAT pull don't
@@ -20241,8 +20336,9 @@
             // observed shape of social-content view accrual. Per-day jitter is
             // seeded by asset_id so the same asset always renders identically.
             // Also writes daily info_seekers + ticket_visits using the same
-            // iiqAssetFunnelProjection() rates that power the cards, so the
-            // line chart numbers ladder up to the rest of Intent IQ.
+            // iiqAssetFunnelProjection() rates that power the cards, MULTIPLIED
+            // BY the calendar funnel multiplier and then RE-NORMALIZED so the
+            // per-asset lifetime totals still ladder up to the card values.
             function iiqSynthAssetDailySeries(asset, totalViews, totalEng) {
                 if (!asset) return [];
                 var posted = asset.posted_date;
@@ -20271,23 +20367,52 @@
                 var proj = iiqAssetFunnelProjection(asset);
                 var engRate = totalViews > 0 ? (totalEng / totalViews) : 0;
 
-                var out = [];
-                var allocated = 0;
-                for (var d = 0; d < nDays; d++) {
-                    var jit = 0.78 + rand(d) * 0.44;
-                    var dayShare = (raw[d] / sum) * jit;
+                // First pass: lay out daily views + raw (pre-calendar) info /
+                // tk counts. We also accumulate the calendar-weighted raw
+                // totals so the second pass can renormalize -- this is what
+                // preserves ladder-up to the per-asset card totals.
+                var draftViews = [];
+                var dateStrs   = [];
+                var allocated  = 0;
+                for (var d0 = 0; d0 < nDays; d0++) {
+                    var jit0 = 0.78 + rand(d0) * 0.44;
+                    var dayShare = (raw[d0] / sum) * jit0;
                     var dayViews;
-                    if (d === nDays - 1) {
+                    if (d0 === nDays - 1) {
                         dayViews = Math.max(0, totalViews - allocated);
                     } else {
                         dayViews = Math.round(totalViews * dayShare);
                         allocated += dayViews;
                     }
-                    var dayEng  = Math.round(dayViews * engRate);
-                    var dayInfo = Math.round(dayViews * proj.info_pct   / 100);
-                    var dayTk   = Math.round(dayViews * proj.ticket_pct / 100);
-                    var dateStr = new Date(startMs + d * 86400000).toISOString().slice(0, 10);
-                    out.push({ date: dateStr, views: dayViews, engagement: dayEng, info_seekers: dayInfo, ticket_visits: dayTk });
+                    draftViews.push(dayViews);
+                    dateStrs.push(new Date(startMs + d0 * 86400000).toISOString().slice(0, 10));
+                }
+
+                var targetInfo = totalViews * proj.info_pct   / 100;
+                var targetTk   = totalViews * proj.ticket_pct / 100;
+                var rawInfoSum = 0, rawTkSum = 0;
+                var rawInfoArr = [], rawTkArr = [];
+                for (var d1 = 0; d1 < nDays; d1++) {
+                    var mult = iiqCalendarFunnelMultiplier(dateStrs[d1]);
+                    var rInfo = draftViews[d1] * proj.info_pct   / 100 * mult.info_mult;
+                    var rTk   = draftViews[d1] * proj.ticket_pct / 100 * mult.ticket_mult;
+                    rawInfoArr.push(rInfo);
+                    rawTkArr.push(rTk);
+                    rawInfoSum += rInfo;
+                    rawTkSum   += rTk;
+                }
+                var infoScale = rawInfoSum > 0 ? (targetInfo / rawInfoSum) : 1;
+                var tkScale   = rawTkSum   > 0 ? (targetTk   / rawTkSum)   : 1;
+
+                var out = [];
+                for (var d2 = 0; d2 < nDays; d2++) {
+                    out.push({
+                        date:          dateStrs[d2],
+                        views:         draftViews[d2],
+                        engagement:    Math.round(draftViews[d2] * engRate),
+                        info_seekers:  Math.round(rawInfoArr[d2] * infoScale),
+                        ticket_visits: Math.round(rawTkArr[d2]   * tkScale)
+                    });
                 }
                 return out;
             }
@@ -20315,15 +20440,24 @@
             };
 
             function iiqRenderAssetScatter(cards) {
-                // Asset performance chart: sort assets by reach (views) desc,
-                // then plot 3 percent metrics as lines so the trend across
-                // the portfolio is visible at a glance. Each per-asset point
-                // remains clickable (jumps to that asset's card below).
-                //   X axis: asset rank (1 = highest reach, N = lowest)
-                //   Y axis: percent (engagement rate, info-seek %, ticketing %)
-                //   3 lines: eng rate (cyan), info-seek (indigo), ticketing (amber)
-                // A rolling-average overlay (window = 7) cuts through the
-                // per-asset noise so you can read the underlying trend.
+                // Asset portfolio performance chart. Each asset is one
+                // position on the X axis (sorted by views desc), and we
+                // plot 3 smoothed % trend lines across the portfolio:
+                //   - Engagement rate (cyan)
+                //   - Info-seek % (indigo)
+                //   - Ticketing % (amber)
+                // We drop the faint raw per-asset lines that made the
+                // chart look noisy / "skewed" -- they were just visual
+                // jitter that competed with the trend lines. The dots
+                // remain but only render on the SMOOTHED curve so the
+                // visual reads as 3 clean trend bands with click/hover
+                // affordances on every asset.
+                //
+                // Hover: a custom HTML tooltip follows the cursor and
+                // shows the asset name, rank, views, and all 3 metric
+                // values (with the raw per-asset eng-rate, NOT the
+                // smoothed value, so the user sees real numbers).
+                // Click: jumps to that asset's card below.
                 var host = document.getElementById('iiqAssetChart');
                 if (!host) return;
                 var pts = (cards || []).filter(function(c) {
@@ -20331,7 +20465,6 @@
                 });
                 if (!pts.length) { host.innerHTML = ''; return; }
 
-                // Sort by views desc and compute per-asset values
                 var sorted = pts.slice().sort(function(a, b) {
                     return (Number(b.ext_view_count)||0) - (Number(a.ext_view_count)||0);
                 });
@@ -20356,26 +20489,13 @@
                 var plotW = W - padL - padR;
                 var plotH = H - padT - padB;
 
-                // Y max: nice ceil of largest percent across all 3 series
-                var yMaxRaw = 0;
-                rows.forEach(function(r) {
-                    if (r.eng_rate   > yMaxRaw) yMaxRaw = r.eng_rate;
-                    if (r.info_pct   > yMaxRaw) yMaxRaw = r.info_pct;
-                    if (r.ticket_pct > yMaxRaw) yMaxRaw = r.ticket_pct;
-                });
-                var yMax = yMaxRaw <= 2 ? 2 : yMaxRaw <= 5 ? 5 : yMaxRaw <= 10 ? 10 : yMaxRaw <= 15 ? 15 : Math.ceil(yMaxRaw / 5) * 5;
+                // Adaptive smoothing window: ~15% of N so the trend
+                // bands actually read as bands on portfolios of any size
+                // (was fixed-7, which is too narrow on a 94-asset set
+                // and made the bold lines look bumpy).
+                var smoothWin = Math.max(7, Math.min(21, Math.round(N * 0.15)));
 
-                function xScale(rank) {
-                    if (N <= 1) return padL + plotW / 2;
-                    return padL + ((rank - 1) / (N - 1)) * plotW;
-                }
-                function yScale(pct) {
-                    return padT + plotH - (Math.min(pct, yMax) / yMax) * plotH;
-                }
-
-                // Rolling-average smoother so the trend cuts through noise
                 function rolling(arr, win) {
-                    win = win || 7;
                     var half = Math.floor(win / 2);
                     return arr.map(function(_, i) {
                         var s = Math.max(0, i - half), e = Math.min(arr.length, i + half + 1);
@@ -20387,16 +20507,31 @@
                 var engArr = rows.map(function(r){ return r.eng_rate; });
                 var infArr = rows.map(function(r){ return r.info_pct; });
                 var tkArr  = rows.map(function(r){ return r.ticket_pct; });
-                var engSmooth = rolling(engArr, 7);
-                var infSmooth = rolling(infArr, 7);
-                var tkSmooth  = rolling(tkArr,  7);
+                var engSmooth = rolling(engArr, smoothWin);
+                var infSmooth = rolling(infArr, smoothWin);
+                var tkSmooth  = rolling(tkArr,  smoothWin);
 
-                // Y ticks
+                // Y max: ceiling based on SMOOTHED max (with a small
+                // headroom) so the trend lines fill the panel and the
+                // chart doesn't get vertically squashed by outliers in
+                // the raw data (which we no longer plot anyway).
+                var yMaxRaw = 0;
+                engSmooth.concat(infSmooth, tkSmooth).forEach(function(v){ if (v > yMaxRaw) yMaxRaw = v; });
+                yMaxRaw *= 1.35;
+                var yMax = yMaxRaw <= 2 ? 2 : yMaxRaw <= 5 ? 5 : yMaxRaw <= 10 ? 10 : yMaxRaw <= 15 ? 15 : Math.ceil(yMaxRaw / 5) * 5;
+
+                function xScale(rank) {
+                    if (N <= 1) return padL + plotW / 2;
+                    return padL + ((rank - 1) / (N - 1)) * plotW;
+                }
+                function yScale(pct) {
+                    return padT + plotH - (Math.min(pct, yMax) / yMax) * plotH;
+                }
+
                 var yTicks = [];
                 var ySteps = yMax <= 5 ? 5 : yMax <= 10 ? 5 : yMax <= 20 ? 4 : 5;
                 for (var i = 0; i <= ySteps; i++) yTicks.push(yMax * i / ySteps);
 
-                // X ticks: 5 reference rank marks
                 var xTicks = [];
                 var nTicks = Math.min(5, N);
                 for (var j = 0; j < nTicks; j++) {
@@ -20408,18 +20543,25 @@
                 var INFO_COLOR = '#a5b4fc';
                 var TK_COLOR   = '#fbbf24';
 
-                var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%; height: 360px; display:block;">';
+                // SVG <defs> for the soft area gradients under each
+                // smoothed line. Plus a faint glow filter so the bold
+                // trend lines pop a bit against the dark background.
+                var defs = '<defs>'
+                    + '<linearGradient id="iiqAssetGrad_eng" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + ENG_COLOR  + '" stop-opacity="0.35"/><stop offset="100%" stop-color="' + ENG_COLOR  + '" stop-opacity="0"/></linearGradient>'
+                    + '<linearGradient id="iiqAssetGrad_inf" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + INFO_COLOR + '" stop-opacity="0.30"/><stop offset="100%" stop-color="' + INFO_COLOR + '" stop-opacity="0"/></linearGradient>'
+                    + '<linearGradient id="iiqAssetGrad_tk"  x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + TK_COLOR   + '" stop-opacity="0.30"/><stop offset="100%" stop-color="' + TK_COLOR   + '" stop-opacity="0"/></linearGradient>'
+                    + '</defs>';
+
+                var svg = '<svg id="iiqAssetChartSvg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%; height: 360px; display:block;">';
+                svg += defs;
                 svg += '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="rgba(15,23,42,0.45)" rx="8" ry="8" />';
 
-                // Y gridlines + labels
                 yTicks.forEach(function(t) {
                     var y = yScale(t);
                     svg += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="rgba(255,255,255,0.06)" />';
                     svg += '<text x="' + (padL - 8) + '" y="' + (y + 3.5) + '" fill="#94a3b8" font-size="10" text-anchor="end">' + t.toFixed(t < 10 ? 1 : 0) + '%</text>';
                 });
 
-                // X tick labels (rank N + matching views value so the user
-                // knows what "rank 50" means in terms of reach)
                 xTicks.forEach(function(rk) {
                     var x = xScale(rk);
                     var v = rows[rk - 1] ? rows[rk - 1].views : 0;
@@ -20428,53 +20570,154 @@
                     svg += '<text x="' + x + '" y="' + (H - padB + 27) + '" fill="#64748b" font-size="9" text-anchor="middle">' + fmtCompact(v) + ' views</text>';
                 });
 
-                // Axis titles
                 svg += '<text x="' + (padL + plotW / 2) + '" y="' + (H - 6) + '" fill="#cbd5e1" font-size="11" text-anchor="middle" font-weight="600">Asset rank (sorted by views, highest \u2192 lowest)</text>';
                 svg += '<text x="14" y="' + (padT + plotH / 2) + '" fill="#cbd5e1" font-size="11" text-anchor="middle" font-weight="600" transform="rotate(-90, 14, ' + (padT + plotH / 2) + ')">% of viewers</text>';
 
-                // Path builder
                 function buildPath(values, scaler) {
                     if (!values.length) return '';
                     return values.map(function(v, i) {
                         return (i === 0 ? 'M' : 'L') + xScale(i + 1).toFixed(1) + ',' + scaler(v).toFixed(1);
                     }).join(' ');
                 }
+                function buildAreaPath(values, scaler) {
+                    if (!values.length) return '';
+                    var line = buildPath(values, scaler);
+                    var lastX = xScale(values.length).toFixed(1);
+                    var firstX = xScale(1).toFixed(1);
+                    var baseY = (padT + plotH).toFixed(1);
+                    return line + ' L ' + lastX + ',' + baseY + ' L ' + firstX + ',' + baseY + ' Z';
+                }
 
-                // Faint raw lines (per-asset jitter)
-                svg += '<path d="' + buildPath(engArr, yScale) + '" fill="none" stroke="' + ENG_COLOR  + '" stroke-width="1"   stroke-opacity="0.18" />';
-                svg += '<path d="' + buildPath(infArr, yScale) + '" fill="none" stroke="' + INFO_COLOR + '" stroke-width="1"   stroke-opacity="0.18" />';
-                svg += '<path d="' + buildPath(tkArr,  yScale) + '" fill="none" stroke="' + TK_COLOR   + '" stroke-width="1"   stroke-opacity="0.18" />';
+                // Soft area fills under each smoothed trend line
+                svg += '<path d="' + buildAreaPath(engSmooth, yScale) + '" fill="url(#iiqAssetGrad_eng)" stroke="none" />';
+                svg += '<path d="' + buildAreaPath(infSmooth, yScale) + '" fill="url(#iiqAssetGrad_inf)" stroke="none" />';
+                svg += '<path d="' + buildAreaPath(tkSmooth,  yScale) + '" fill="url(#iiqAssetGrad_tk)"  stroke="none" />';
 
-                // Bold smoothed lines (the eye-readable trend)
-                svg += '<path d="' + buildPath(engSmooth, yScale) + '" fill="none" stroke="' + ENG_COLOR  + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />';
-                svg += '<path d="' + buildPath(infSmooth, yScale) + '" fill="none" stroke="' + INFO_COLOR + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />';
-                svg += '<path d="' + buildPath(tkSmooth,  yScale) + '" fill="none" stroke="' + TK_COLOR   + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />';
+                // Bold smoothed trend lines
+                svg += '<path d="' + buildPath(engSmooth, yScale) + '" fill="none" stroke="' + ENG_COLOR  + '" stroke-width="2.75" stroke-linejoin="round" stroke-linecap="round" />';
+                svg += '<path d="' + buildPath(infSmooth, yScale) + '" fill="none" stroke="' + INFO_COLOR + '" stroke-width="2.75" stroke-linejoin="round" stroke-linecap="round" />';
+                svg += '<path d="' + buildPath(tkSmooth,  yScale) + '" fill="none" stroke="' + TK_COLOR   + '" stroke-width="2.75" stroke-linejoin="round" stroke-linecap="round" />';
 
-                // Clickable per-asset markers (small, so 94 of them stay readable)
-                rows.forEach(function(r) {
+                // Per-asset hit zones: one transparent wide vertical
+                // strip per asset. Hovering anywhere in the strip
+                // surfaces the tooltip, and a vertical guide line +
+                // 3 highlighted dots (one per series at the smoothed
+                // values) appear. Click jumps to the card.
+                var stripW = N > 1 ? (plotW / (N - 1)) : plotW;
+                rows.forEach(function(r, i) {
                     var x = xScale(r.rank);
-                    var assetId = (r.c.asset_id || '').replace(/'/g, "\\'");
-                    var label = (r.c.action_label || r.c.asset_type || '\u2014')
-                        + '  \u00b7  rank #' + r.rank + ' (' + fmtCompact(r.views) + ' views)'
-                        + '\nEng rate: '  + r.eng_rate.toFixed(2)  + '%'
-                        + '\nInfo-seek: ' + r.info_pct.toFixed(2)  + '%'
-                        + '\nTicketing: ' + r.ticket_pct.toFixed(2) + '%'
-                        + '\nClick to jump to card';
-                    var titleEsc = escapeHtml(label);
-                    svg += '<circle cx="' + x + '" cy="' + yScale(r.eng_rate)   + '" r="2.5" fill="' + ENG_COLOR  + '" style="cursor:pointer;" onclick="iiqScrollToAssetCard(\'' + assetId + '\')"><title>' + titleEsc + '</title></circle>';
-                    svg += '<circle cx="' + x + '" cy="' + yScale(r.info_pct)   + '" r="2.5" fill="' + INFO_COLOR + '" style="cursor:pointer;" onclick="iiqScrollToAssetCard(\'' + assetId + '\')"><title>' + titleEsc + '</title></circle>';
-                    svg += '<circle cx="' + x + '" cy="' + yScale(r.ticket_pct) + '" r="2.5" fill="' + TK_COLOR   + '" style="cursor:pointer;" onclick="iiqScrollToAssetCard(\'' + assetId + '\')"><title>' + titleEsc + '</title></circle>';
+                    var assetId = String(r.c.asset_id || '');
+                    var idx = i;
+                    svg += '<rect x="' + (x - stripW/2).toFixed(1) + '" y="' + padT + '" width="' + stripW.toFixed(1) + '" height="' + plotH + '" fill="rgba(0,0,0,0)" data-iiq-asset-idx="' + idx + '" data-iiq-asset-id="' + escapeHtml(assetId) + '" style="cursor:pointer;" />';
                 });
+
+                // Static (always visible) small dots on the smoothed
+                // lines so the user sees where each asset sits, but
+                // they're tiny and translucent so they don't compete
+                // visually with the trend lines.
+                rows.forEach(function(r, i) {
+                    var x = xScale(r.rank);
+                    svg += '<circle cx="' + x.toFixed(1) + '" cy="' + yScale(engSmooth[i]).toFixed(1) + '" r="1.6" fill="' + ENG_COLOR  + '" fill-opacity="0.55" pointer-events="none" />';
+                    svg += '<circle cx="' + x.toFixed(1) + '" cy="' + yScale(infSmooth[i]).toFixed(1) + '" r="1.6" fill="' + INFO_COLOR + '" fill-opacity="0.55" pointer-events="none" />';
+                    svg += '<circle cx="' + x.toFixed(1) + '" cy="' + yScale(tkSmooth[i]).toFixed(1)  + '" r="1.6" fill="' + TK_COLOR   + '" fill-opacity="0.55" pointer-events="none" />';
+                });
+
+                // Hover overlay layer (guide line + 3 highlighted dots).
+                // Hidden by default; positioned via JS on mouseenter.
+                svg += '<g id="iiqAssetHoverLayer" style="display:none; pointer-events:none;">'
+                     +   '<line id="iiqAssetHoverGuide" x1="0" y1="' + padT + '" x2="0" y2="' + (padT + plotH) + '" stroke="rgba(255,255,255,0.25)" stroke-width="1" stroke-dasharray="3,3" />'
+                     +   '<circle id="iiqAssetHoverEng" cx="0" cy="0" r="5" fill="' + ENG_COLOR  + '" stroke="#0f172a" stroke-width="1.5" />'
+                     +   '<circle id="iiqAssetHoverInf" cx="0" cy="0" r="5" fill="' + INFO_COLOR + '" stroke="#0f172a" stroke-width="1.5" />'
+                     +   '<circle id="iiqAssetHoverTk"  cx="0" cy="0" r="5" fill="' + TK_COLOR   + '" stroke="#0f172a" stroke-width="1.5" />'
+                     + '</g>';
 
                 svg += '</svg>';
 
                 var legend = '<div style="display:flex; flex-wrap:wrap; gap:1.1rem; align-items:center; margin-top:0.45rem; font-size:0.72rem; color:var(--text-secondary);">'
-                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.5px solid ' + ENG_COLOR  + ';"></span> Engagement rate</span>'
-                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.5px solid ' + INFO_COLOR + ';"></span> Info-seek %</span>'
-                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.5px solid ' + TK_COLOR   + ';"></span> Ticketing %</span>'
-                    + '<span style="opacity:0.6;">Bold lines = 7-asset rolling average \u00b7 faint lines = raw per-asset values \u00b7 click any dot to jump to its card</span>'
+                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.75px solid ' + ENG_COLOR  + ';"></span> Engagement rate</span>'
+                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.75px solid ' + INFO_COLOR + ';"></span> Info-seek %</span>'
+                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.75px solid ' + TK_COLOR   + ';"></span> Ticketing %</span>'
+                    + '<span style="opacity:0.6;">Smoothed portfolio trend (' + smoothWin + '-asset rolling avg) \u00b7 hover any column for asset details \u00b7 click to jump to its card</span>'
                     + '</div>';
-                host.innerHTML = svg + legend;
+
+                // Wrap the SVG in a relatively-positioned container so
+                // we can absolutely-position the hover tooltip on top.
+                host.innerHTML = '<div id="iiqAssetChartWrap" style="position:relative;">'
+                              +   svg
+                              +   '<div id="iiqAssetTooltip" style="position:absolute; display:none; pointer-events:none; background:rgba(15,23,42,0.96); border:1px solid rgba(148,163,184,0.4); border-radius:6px; padding:0.55rem 0.7rem; font-size:0.72rem; color:#e2e8f0; box-shadow:0 8px 24px rgba(0,0,0,0.5); z-index:10; min-width:200px; max-width:280px; line-height:1.45;"></div>'
+                              + '</div>'
+                              + legend;
+
+                // Bind hover + click on the per-asset strip rects.
+                var chartWrap = document.getElementById('iiqAssetChartWrap');
+                var svgEl     = document.getElementById('iiqAssetChartSvg');
+                var tooltip   = document.getElementById('iiqAssetTooltip');
+                var hoverLayer= document.getElementById('iiqAssetHoverLayer');
+                var hoverGuide= document.getElementById('iiqAssetHoverGuide');
+                var hoverEng  = document.getElementById('iiqAssetHoverEng');
+                var hoverInf  = document.getElementById('iiqAssetHoverInf');
+                var hoverTk   = document.getElementById('iiqAssetHoverTk');
+                if (!chartWrap || !svgEl) return;
+
+                function showHover(idx, clientX, clientY) {
+                    var r = rows[idx];
+                    if (!r) return;
+                    var x = xScale(r.rank);
+                    var yEng = yScale(engSmooth[idx]);
+                    var yInf = yScale(infSmooth[idx]);
+                    var yTk  = yScale(tkSmooth[idx]);
+                    hoverGuide.setAttribute('x1', x);
+                    hoverGuide.setAttribute('x2', x);
+                    hoverEng.setAttribute('cx', x); hoverEng.setAttribute('cy', yEng);
+                    hoverInf.setAttribute('cx', x); hoverInf.setAttribute('cy', yInf);
+                    hoverTk.setAttribute('cx',  x); hoverTk.setAttribute('cy',  yTk);
+                    hoverLayer.style.display = '';
+
+                    var name = r.c.action_label || r.c.asset_type || 'Untitled asset';
+                    var phase = r.c.phase ? '<span style="opacity:0.65;"> \u00b7 ' + escapeHtml(String(r.c.phase)) + '</span>' : '';
+                    var paid  = r.c.paid_or_organic ? '<span style="opacity:0.65;"> \u00b7 ' + escapeHtml(String(r.c.paid_or_organic)) + '</span>' : '';
+                    var posted = r.c.posted_date ? '<div style="opacity:0.65; font-size:0.68rem; margin-top:0.15rem;">Posted ' + escapeHtml(String(r.c.posted_date)) + '</div>' : '';
+                    tooltip.innerHTML =
+                        '<div style="font-weight:600; color:#f1f5f9; margin-bottom:0.25rem;">' + escapeHtml(String(name)) + '</div>'
+                      + '<div style="font-size:0.68rem; color:#94a3b8; margin-bottom:0.45rem;">Rank #' + r.rank + ' of ' + N + ' \u00b7 ' + fmtCompact(r.views) + ' views' + phase + paid + '</div>'
+                      + '<div style="display:grid; grid-template-columns: 1fr auto; gap:0.15rem 0.6rem;">'
+                      +   '<span><span style="display:inline-block; width:8px; height:8px; background:' + ENG_COLOR  + '; border-radius:50%; margin-right:0.35rem;"></span>Engagement rate</span><span style="text-align:right; font-variant-numeric:tabular-nums;">' + r.eng_rate.toFixed(2)   + '%</span>'
+                      +   '<span><span style="display:inline-block; width:8px; height:8px; background:' + INFO_COLOR + '; border-radius:50%; margin-right:0.35rem;"></span>Info-seek</span><span style="text-align:right; font-variant-numeric:tabular-nums;">'      + r.info_pct.toFixed(2)   + '%</span>'
+                      +   '<span><span style="display:inline-block; width:8px; height:8px; background:' + TK_COLOR   + '; border-radius:50%; margin-right:0.35rem;"></span>Ticketing</span><span style="text-align:right; font-variant-numeric:tabular-nums;">'      + r.ticket_pct.toFixed(2) + '%</span>'
+                      + '</div>'
+                      + posted
+                      + '<div style="margin-top:0.4rem; font-size:0.66rem; color:#64748b;">Click to jump to asset card \u2193</div>';
+
+                    var wrapRect = chartWrap.getBoundingClientRect();
+                    var tx = clientX - wrapRect.left + 14;
+                    var ty = clientY - wrapRect.top  + 14;
+                    var ttRect = tooltip.getBoundingClientRect();
+                    var ttW = ttRect.width  || 220;
+                    var ttH = ttRect.height || 110;
+                    if (tx + ttW > wrapRect.width)  tx = clientX - wrapRect.left - ttW - 14;
+                    if (ty + ttH > wrapRect.height) ty = wrapRect.height - ttH - 6;
+                    if (tx < 4) tx = 4;
+                    if (ty < 4) ty = 4;
+                    tooltip.style.left = tx + 'px';
+                    tooltip.style.top  = ty + 'px';
+                    tooltip.style.display = 'block';
+                }
+                function hideHover() {
+                    hoverLayer.style.display = 'none';
+                    tooltip.style.display = 'none';
+                }
+
+                svgEl.querySelectorAll('rect[data-iiq-asset-idx]').forEach(function(rect) {
+                    rect.addEventListener('mousemove', function(ev) {
+                        var idx = parseInt(rect.getAttribute('data-iiq-asset-idx'), 10);
+                        showHover(idx, ev.clientX, ev.clientY);
+                    });
+                    rect.addEventListener('mouseleave', hideHover);
+                    rect.addEventListener('click', function() {
+                        var aid = rect.getAttribute('data-iiq-asset-id') || '';
+                        if (aid && typeof iiqScrollToAssetCard === 'function') iiqScrollToAssetCard(aid);
+                    });
+                });
             }
 
             window.reloadIntentIQAssets = function() {
@@ -20560,8 +20803,8 @@
                             var proj = c._proj || (v > 0 ? iiqAssetFunnelProjection(c) : null);
                             var infoSeekers = proj ? Math.round(v * proj.info_pct / 100) : 0;
                             var ticketVisits = proj ? Math.round(v * proj.ticket_pct / 100) : 0;
-                            var infoTip = 'Modeled \u2014 % of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people. Calibrated from post-trailer Google Trends + IMDB Pro spike benchmarks for family-animation tentpoles; tilted per asset by phase, channel, paid/organic, and engagement rate.';
-                            var tkTip   = 'Modeled \u2014 % of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people. Calibrated from NATO + Comscore ticketing-page conversion norms; peaks during opening-weekend window (T-0), ramps with tickets-on-sale (1/21), near zero after the 5/15 streaming launch.';
+                            var infoTip = 'Projected % of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people. Calibrated from post-trailer Google Trends + IMDB Pro spike benchmarks for family-animation tentpoles; tilted per asset by phase, channel, paid/organic, and engagement rate.';
+                            var tkTip   = 'Projected % of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people. Calibrated from NATO + Comscore ticketing-page conversion norms; peaks during opening-weekend window (T-0), ramps with tickets-on-sale (1/21), near zero after the 5/15 streaming launch.';
                             return '<div class="iiq-card" data-asset-id="' + escapeHtml(c.asset_id || '') + '" style="border-left: 3px solid ' + edgeColor + '; transition: box-shadow 0.4s ease, transform 0.2s ease;">'
                                 + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '—') + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
@@ -20949,8 +21192,8 @@
                     + iiqSummaryTile('Categories ranked', String(groupList.length), 'asset_type \u00d7 paid/organic')
                     + iiqSummaryTile('Total assets (YTD)', String(grandAssets), '')
                     + iiqSummaryTile('Total YTD views', fmtCompact(grandViews), 'sum of ext_view_count across all assets')
-                    + iiqSummaryTile('Blended info-seek', blendedInfo.toFixed(1) + '%', fmtCompact(grandInfo) + ' viewers \u2014 same model as Assets page')
-                    + iiqSummaryTile('Blended ticketing', blendedTk.toFixed(1) + '%', fmtCompact(grandTk) + ' viewers \u2014 same model as Assets page')
+                    + iiqSummaryTile('Blended info-seek', blendedInfo.toFixed(1) + '%', fmtCompact(grandInfo) + ' viewers \u2014 matches Assets page')
+                    + iiqSummaryTile('Blended ticketing', blendedTk.toFixed(1) + '%', fmtCompact(grandTk) + ' viewers \u2014 matches Assets page')
                     + '</div>';
 
                 var sortLabelMap = { share_pct: 'share of YTD views', info_pct: 'info-seek %', ticket_pct: 'ticketing %', label: 'category name' };
@@ -20992,7 +21235,7 @@
                         +   '</div>';
                 });
 
-                html += '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.6rem; line-height:1.5;">Reach (purple) = each category\'s share of total YTD views across all assets. Mid-funnel (indigo) and bottom-funnel (amber) are view-weighted means of per-asset modeled rates, identical to the values shown on the In-Flight Assets page. Bars within a column are scaled to that column\'s maximum so you can scan vertically: a category long in purple but short in amber is high reach / low ticketing intent, and vice versa.</div>';
+                html += '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.6rem; line-height:1.5;">Reach (purple) = each category\'s share of total YTD views across all assets. Mid-funnel (indigo) and bottom-funnel (amber) are view-weighted means of per-asset projection rates, identical to the values shown on the In-Flight Assets page. Bars within a column are scaled to that column\'s maximum so you can scan vertically: a category long in purple but short in amber is high reach / low ticketing intent, and vice versa.</div>';
                 html += '</div>';
                 return html;
             }
@@ -21056,18 +21299,41 @@
                     if (k === 'organic' || k === 'natural')              return kind === 'info' ? orgInfoRate  : orgTkRate;
                     return kind === 'info' ? blendedInfoRate : blendedTkRate;
                 }
-                var infoCumPts = [];
-                var tkCumPts   = [];
-                var runInfo = 0, runTk = 0;
+                // Two-pass cumulative: pass 1 computes raw daily contributions
+                // weighted by the calendar funnel multiplier (so ticketing
+                // goes ~flat after theatrical ends and info-seek has a
+                // second bump around streaming launch). Pass 2 renormalizes
+                // so the FINAL cumulative totals equal the static aggregate
+                // (agg.{paid,organic}.{info_seekers,ticket_visits}) -- this
+                // preserves ladder-up with the Q2 funnel comparison card
+                // and the Assets page totals. The chart shape changes, but
+                // the totals do not.
+                var rawInfoDaily = [];
+                var rawTkDaily   = [];
+                var rawInfoSum = 0, rawTkSum = 0;
                 dates.forEach(function(dDay) {
+                    var mult = iiqCalendarFunnelMultiplier(dDay);
                     var infoToday = 0, tkToday = 0;
                     keys.forEach(function(k) {
                         var v = (dayMapByKey[k][dDay] || 0);
-                        infoToday += v * _rateFor(k, 'info');
-                        tkToday   += v * _rateFor(k, 'tk');
+                        infoToday += v * _rateFor(k, 'info') * mult.info_mult;
+                        tkToday   += v * _rateFor(k, 'tk')   * mult.ticket_mult;
                     });
-                    runInfo += infoToday;
-                    runTk   += tkToday;
+                    rawInfoDaily.push(infoToday);
+                    rawTkDaily.push(tkToday);
+                    rawInfoSum += infoToday;
+                    rawTkSum   += tkToday;
+                });
+                var targetInfo = agg.paid.info_seekers  + agg.organic.info_seekers;
+                var targetTk   = agg.paid.ticket_visits + agg.organic.ticket_visits;
+                var infoScale  = rawInfoSum > 0 ? (targetInfo / rawInfoSum) : 1;
+                var tkScale    = rawTkSum   > 0 ? (targetTk   / rawTkSum)   : 1;
+                var infoCumPts = [];
+                var tkCumPts   = [];
+                var runInfo = 0, runTk = 0;
+                dates.forEach(function(dDay, i) {
+                    runInfo += rawInfoDaily[i] * infoScale;
+                    runTk   += rawTkDaily[i]   * tkScale;
                     infoCumPts.push({ x: dDay, y: runInfo });
                     tkCumPts.push({ x: dDay, y: runTk   });
                 });
@@ -21106,7 +21372,7 @@
                 } else {
                     funnelCardBody = _q2WhoWonRow('Info-seekers', agg.paid.info_seekers, agg.organic.info_seekers)
                                    + _q2WhoWonRow('Ticketing visits', agg.paid.ticket_visits, agg.organic.ticket_visits)
-                                   + '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.45rem;">Modeled with the same iiqAssetFunnelProjection() helper used by the Assets cards, Performance Q1 rollup, and asset detail modal \u2014 numbers ladder up.</div>';
+                                   + '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.45rem;">Uses the same projection helper as the Assets cards, Performance Q1 rollup, and asset detail view \u2014 numbers ladder up.</div>';
                 }
 
                 // Single 3-column row: donut (share) + funnel comparison (who-won)
@@ -21142,38 +21408,104 @@
                 html += '</div>';
                 if (best.length) {
                     var slug = window.__intentIQ && window.__intentIQ.currentSlug;
-                    // Cache the row payloads so the click handler can pick the
-                    // right asset object without round-tripping huge JSON
-                    // through HTML attributes.
+                    // Cache the row payloads + slug so the click handler can
+                    // pick the right asset object (by ORIGINAL index, not
+                    // sorted display index) without round-tripping huge
+                    // JSON through HTML attributes.
                     window.__intentIQQ2Best = best;
-                    var maxBV = Math.max.apply(null, best.map(function(b){ return Number(b.views_total)||0; }).concat([1]));
+                    window.__intentIQQ2Slug = slug || '';
+
+                    // Sort state survives re-renders of the whole Q2 view
+                    // so that toggling another filter doesn't reset the
+                    // user's column choice. Default: views desc (matches
+                    // the previous static order).
+                    window._iiqQ2AssetsSort = window._iiqQ2AssetsSort
+                        || { key: 'views', dir: 'desc' };
+
+                    // Re-renderable inner table. Toggling a header calls
+                    // window.iiqQ2AssetsSortBy which rewrites this block
+                    // in place (no full Q2 re-render needed).
+                    window._iiqRenderQ2AssetTable = function() {
+                        var rowsAll = window.__intentIQQ2Best || [];
+                        var slugLocal = window.__intentIQQ2Slug || '';
+                        var s = window._iiqQ2AssetsSort;
+                        function _val(b, k) {
+                            if (k === 'asset')  return String(b.action_label || b.asset_type || ('Asset #' + b.asset_id)).toLowerCase();
+                            if (k === 'views')  return Number(b.views_total)      || 0;
+                            if (k === 'eng')    return Number(b.engagement_total) || 0;
+                            if (k === 'info')   return iiqAssetFunnelProjection(b).info_pct;
+                            if (k === 'ticket') return iiqAssetFunnelProjection(b).ticket_pct;
+                            return 0;
+                        }
+                        var indexed = rowsAll.map(function(b, i){ return { b: b, i: i }; });
+                        var sign = (s.dir === 'asc') ? 1 : -1;
+                        indexed.sort(function(a, b) {
+                            var av = _val(a.b, s.key), bv = _val(b.b, s.key);
+                            if (typeof av === 'string') return av.localeCompare(bv) * sign;
+                            return (av - bv) * sign;
+                        });
+                        var top = indexed.slice(0, 10);
+                        var maxBV2 = Math.max.apply(null, rowsAll.map(function(b){ return Number(b.views_total)||0; }).concat([1]));
+                        function _hdr(key, label, align, color) {
+                            var st = window._iiqQ2AssetsSort;
+                            var active = (st.key === key);
+                            var arrow  = active ? (st.dir === 'asc' ? '\u25B2' : '\u25BC') : '\u21C5';
+                            var arrowOp= active ? '0.85' : '0.35';
+                            var alignS = (align === 'right') ? 'text-align:right;' : '';
+                            var colorS = color ? ('color:' + color + ';') : '';
+                            return '<div data-iiq-q2sort="' + key + '" onclick="window.iiqQ2AssetsSortBy(\'' + key + '\')" style="cursor:pointer; user-select:none; ' + alignS + colorS + '" title="Click to sort">'
+                                +    label
+                                +    ' <span style="opacity:' + arrowOp + '; font-size:0.8em;">' + arrow + '</span>'
+                                +  '</div>';
+                        }
+                        var headerHtml = '<div style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; padding:0.3rem 0 0.4rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.7rem; color: var(--text-secondary);">'
+                            + _hdr('asset',  'Asset', 'left',  null)
+                            + '<div>Views</div>'
+                            + _hdr('views',  'Views',       'right', null)
+                            + _hdr('eng',    'Eng',         'right', null)
+                            + _hdr('info',   'Info-seek %', 'right', '#a5b4fc')
+                            + _hdr('ticket', 'Ticketing %', 'right', '#fbbf24')
+                            + '</div>';
+                        var rowsHtml = top.map(function(o) {
+                            var b = o.b;
+                            var origIdx = o.i;
+                            var label = (b.action_label || b.asset_type || 'Asset #' + b.asset_id);
+                            var color = IIQ_QPALETTE[b.paid_or_organic] || IIQ_QPALETTE.unknown;
+                            var pct   = maxBV2 > 0 ? Math.min(100, (Number(b.views_total)||0) / maxBV2 * 100) : 0;
+                            var proj  = iiqAssetFunnelProjection(b);
+                            var onclick = 'window.iiqShowAssetDetail(\'' + escapeHtml(slugLocal) + '\', ' + origIdx + ')';
+                            return '<div onclick="' + onclick + '" style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; align-items:center; padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; transition: background 0.15s;" onmouseenter="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseleave="this.style.background=\'transparent\'">'
+                                +   '<div style="font-size:0.78rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</div>'
+                                +   '<div style="background: rgba(255,255,255,0.06); height: 16px; border-radius: 4px; overflow:hidden;"><div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + color + ';"></div></div>'
+                                +   '<div style="font-size:0.82rem; font-weight:600; color:#fff; text-align:right;">' + fmtCompact(b.views_total||0) + '</div>'
+                                +   '<div style="font-size:0.78rem; color:#cbd5e1; text-align:right;">' + fmtCompact(b.engagement_total||0) + '</div>'
+                                +   '<div style="font-size:0.78rem; font-weight:600; color:#a5b4fc; text-align:right;">' + proj.info_pct.toFixed(1) + '%</div>'
+                                +   '<div style="font-size:0.78rem; font-weight:600; color:#fbbf24; text-align:right;">' + proj.ticket_pct.toFixed(1) + '%</div>'
+                                + '</div>';
+                        }).join('');
+                        return headerHtml + rowsHtml;
+                    };
+                    window.iiqQ2AssetsSortBy = function(key) {
+                        var s = window._iiqQ2AssetsSort;
+                        if (s.key === key) {
+                            s.dir = (s.dir === 'asc') ? 'desc' : 'asc';
+                        } else {
+                            s.key = key;
+                            // Asset (text) defaults to asc; numerics to desc
+                            s.dir = (key === 'asset') ? 'asc' : 'desc';
+                        }
+                        var tbl = document.getElementById('iiqQ2AssetTable');
+                        if (tbl && typeof window._iiqRenderQ2AssetTable === 'function') {
+                            tbl.innerHTML = window._iiqRenderQ2AssetTable();
+                        }
+                    };
+
                     html += '<div class="iiq-card" style="padding:0.85rem;">';
                     html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.45rem;">';
                     html +=     '<div style="font-size:0.78rem; color: var(--text-secondary);">Top 10 in-flight assets (' + escapeHtml(bestLabel) + ')</div>';
-                    html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">click any row for daily performance</div>';
+                    html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">click any row for daily performance \u00b7 click a column header to sort</div>';
                     html +=   '</div>';
-                    html +=   '<div style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; padding:0.3rem 0 0.4rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.7rem; color: var(--text-secondary);">'
-                        +       '<div>Asset</div><div>Views</div>'
-                        +       '<div style="text-align:right;">Views</div>'
-                        +       '<div style="text-align:right;">Eng</div>'
-                        +       '<div style="text-align:right; color:#a5b4fc;">Info-seek %</div>'
-                        +       '<div style="text-align:right; color:#fbbf24;">Ticketing %</div>'
-                        +     '</div>';
-                    html += best.slice(0,10).map(function(b, idx) {
-                        var label = (b.action_label || b.asset_type || 'Asset #' + b.asset_id);
-                        var color = IIQ_QPALETTE[b.paid_or_organic] || IIQ_QPALETTE.unknown;
-                        var pct   = maxBV > 0 ? Math.min(100, (Number(b.views_total)||0) / maxBV * 100) : 0;
-                        var proj  = iiqAssetFunnelProjection(b);
-                        var onclick = 'window.iiqShowAssetDetail(\'' + escapeHtml(slug || '') + '\', ' + idx + ')';
-                        return '<div onclick="' + onclick + '" style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; align-items:center; padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; transition: background 0.15s;" onmouseenter="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseleave="this.style.background=\'transparent\'">'
-                            +   '<div style="font-size:0.78rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</div>'
-                            +   '<div style="background: rgba(255,255,255,0.06); height: 16px; border-radius: 4px; overflow:hidden;"><div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + color + ';"></div></div>'
-                            +   '<div style="font-size:0.82rem; font-weight:600; color:#fff; text-align:right;">' + fmtCompact(b.views_total||0) + '</div>'
-                            +   '<div style="font-size:0.78rem; color:#cbd5e1; text-align:right;">' + fmtCompact(b.engagement_total||0) + '</div>'
-                            +   '<div style="font-size:0.78rem; font-weight:600; color:#a5b4fc; text-align:right;">' + proj.info_pct.toFixed(1) + '%</div>'
-                            +   '<div style="font-size:0.78rem; font-weight:600; color:#fbbf24; text-align:right;">' + proj.ticket_pct.toFixed(1) + '%</div>'
-                            + '</div>';
-                    }).join('');
+                    html +=   '<div id="iiqQ2AssetTable">' + window._iiqRenderQ2AssetTable() + '</div>';
                     html += '</div>';
                 }
                 return html;
@@ -21331,11 +21663,35 @@
                 });
             }
 
+            // Q3 high-intent-signal matrix column-sort state. Click a header
+            // to sort by that column; click the same header again to flip
+            // direction. Default sort is Total box office, descending.
+            // The subject row (cyan) is ALWAYS pinned at the top regardless
+            // of sort so the GOAT baseline stays visible. Same UX pattern as
+            // the Q1 / Q2 / Q4 sortable header rows.
+            window._iiqQ3Sig = window._iiqQ3Sig || { key: 'box_office', dir: 'desc', payload: null };
+            window.iiqQ3SigSort = function(key) {
+                var s = window._iiqQ3Sig;
+                if (s.key === key) {
+                    s.dir = (s.dir === 'desc') ? 'asc' : 'desc';
+                } else {
+                    s.key = key;
+                    s.dir = (key === 'title') ? 'asc' : 'desc';
+                }
+                if (s.payload) {
+                    var host = document.getElementById('iiqQBody');
+                    if (host) host.innerHTML = iiqRenderQ3(s.payload);
+                }
+            };
+
             function iiqRenderQ3(d) {
                 // Q3 = ticket-buying intent (measurement, no forecasting).
                 // d.subject  -> { display_name, opening_date, opening_weekend_buyers_projected, signals: [...], implied_opening_gross_usd, source }
                 // d.comps    -> [ { display_name, opening_date, opening_weekend_buyers, total_buyers, source } ]
                 // d.avg_ticket_price_usd, d.note
+                window._iiqQ3Sig.payload = d;
+                var sigSortKey = window._iiqQ3Sig.key;
+                var sigSortDir = window._iiqQ3Sig.dir;
                 var subj  = d.subject || {};
                 var comps = (d.comps || []).slice();
                 var signals = subj.signals || [];
@@ -21403,6 +21759,7 @@
                         display_name: subj.display_name || 'Subject',
                         subtitle: 'Subject \u00b7 panel-measured \u00b7 opens ' + (subj.opening_date || '\u2014'),
                         bySig: goatBySig,
+                        box_office: null,
                         barColor: '#22d3ee',
                         textColor: '#22d3ee'
                     });
@@ -21420,6 +21777,7 @@
                         display_name: c.display_name,
                         subtitle: 'opened ' + (c.opening_date || '\u2014') + ' \u00b7 ' + fmtCompact(Number(c.opening_weekend_buyers)||0) + ' OW buyers',
                         bySig: bySig,
+                        box_office: Number(c.cumulative_usd) || 0,
                         barColor: '#a855f7',
                         textColor: '#c4b5fd'
                     });
@@ -21431,23 +21789,71 @@
                             return Number(r.bySig[s.signal] && r.bySig[s.signal].people) || 0;
                         }).concat([1]));
                     });
+                    // Sort: subject is always pinned at index 0; comps sort
+                    // by the active key/direction. Sortable keys map to:
+                    //   'title'       -> r.display_name (alpha)
+                    //   'pre-sale'    -> r.bySig['Pre-sale ticketing-page engagement'].people
+                    //   'trailer'     -> r.bySig['Deep trailer engagement'].people
+                    //   'cast'        -> r.bySig['Cast / talent social engagement'].people
+                    //   'box_office'  -> r.box_office
+                    var _sigSortMap = {
+                        'pre-sale': 'Pre-sale ticketing-page engagement',
+                        'trailer':  'Deep trailer engagement',
+                        'cast':     'Cast / talent social engagement'
+                    };
+                    combinedRows.sort(function(a, b) {
+                        if (a.isSubject && !b.isSubject) return -1;
+                        if (b.isSubject && !a.isSubject) return 1;
+                        if (a.isSubject && b.isSubject)  return 0;
+                        var av, bv;
+                        if (sigSortKey === 'title') {
+                            var cmp = String(a.display_name || '').localeCompare(String(b.display_name || ''));
+                            return sigSortDir === 'asc' ? cmp : -cmp;
+                        }
+                        if (sigSortKey === 'box_office') {
+                            av = Number(a.box_office) || 0;
+                            bv = Number(b.box_office) || 0;
+                        } else {
+                            var sigName = _sigSortMap[sigSortKey];
+                            av = (a.bySig[sigName] && Number(a.bySig[sigName].people)) || 0;
+                            bv = (b.bySig[sigName] && Number(b.bySig[sigName].people)) || 0;
+                        }
+                        return sigSortDir === 'asc' ? (av - bv) : (bv - av);
+                    });
+                    function _q3SigHdr(key, label, suffix, tip) {
+                        var active = (sigSortKey === key);
+                        var arrow = active ? (sigSortDir === 'desc' ? ' \u25BC' : ' \u25B2') : ' \u2195';
+                        var arrowOp = active ? '1' : '0.35';
+                        var tipAttr = ' title="' + escapeHtml(tip || 'Click to sort by this column. Click again to flip direction.') + '"';
+                        var suffixHtml = suffix
+                            ? ' <span style="text-transform:none; letter-spacing:0; opacity:0.65;">' + escapeHtml(suffix) + '</span>'
+                            : '';
+                        return '<div onclick="iiqQ3SigSort(\'' + key + '\')" style="cursor:pointer; user-select:none;"' + tipAttr + '>'
+                            + escapeHtml(label)
+                            + suffixHtml
+                            + '<span style="opacity:' + arrowOp + '; font-size:0.8em; margin-left:0.25rem;">' + arrow + '</span>'
+                            + '</div>';
+                    }
                     html += '<div class="iiq-card" style="padding:0.95rem 1rem; margin-bottom:0.85rem;">';
                     html +=   '<div style="margin-bottom:0.55rem;">';
                     html +=     '<div style="font-size:0.95rem; font-weight:700; color:#e2e8f0;">High-intent signals \u2014 ' + escapeHtml(subj.display_name || 'subject') + ' vs comparable titles</div>';
-                    html +=     '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every title broken down across the same 3 ticket-buying signals. Bars normalized within each column so smaller signals stay readable.</div>';
+                    html +=     '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every title broken down across the same 3 ticket-buying signals. Bars normalized within each column so smaller signals stay readable. Click a column header to sort \u2014 subject row stays pinned at the top.</div>';
                     html +=   '</div>';
-                    html +=   '<div style="display:grid; grid-template-columns: minmax(190px, 1.3fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; padding:0 0 0.55rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.68rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">';
-                    html +=     '<div>Title</div>';
+                    html +=   '<div style="display:grid; grid-template-columns: minmax(190px, 1.3fr) repeat(3, minmax(0, 1fr)) minmax(0, 0.85fr); gap:0.85rem; padding:0 0 0.55rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.68rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">';
+                    html +=     _q3SigHdr('title', 'Title', '', 'Sort alphabetically by title (subject stays pinned).');
                     SIG_ORDER.forEach(function(s) {
-                        html += '<div>' + escapeHtml(s.header) + ' <span style="text-transform:none; letter-spacing:0; opacity:0.65;">(' + s.conv_pct + '% conv)</span></div>';
+                        var key = (s.short === 'pre-sale') ? 'pre-sale' : s.short;
+                        html += _q3SigHdr(key, s.header, '(' + s.conv_pct + '% conv)',
+                            'Sort by ' + s.header.toLowerCase() + ' people-count.');
                     });
+                    html +=     _q3SigHdr('box_office', 'Total box office', '', 'Sort by cumulative US domestic gross. Subject (pre-release) shows N/A.');
                     html +=   '</div>';
                     combinedRows.forEach(function(r, idx) {
                         var rowBg = r.isSubject
                             ? 'rgba(34,211,238,0.06)'
                             : (idx % 2 === 1 ? 'rgba(255,255,255,0.015)' : 'transparent');
                         var rowBorder = r.isSubject ? 'border-left: 2px solid #22d3ee;' : '';
-                        html += '<div style="display:grid; grid-template-columns: minmax(190px, 1.3fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; align-items:center; padding:0.55rem 0.4rem; background:' + rowBg + '; ' + rowBorder + ' border-radius:4px;">';
+                        html += '<div style="display:grid; grid-template-columns: minmax(190px, 1.3fr) repeat(3, minmax(0, 1fr)) minmax(0, 0.85fr); gap:0.85rem; align-items:center; padding:0.55rem 0.4rem; background:' + rowBg + '; ' + rowBorder + ' border-radius:4px;">';
                         html +=   '<div style="min-width:0;">'
                             +        '<div style="font-size:0.8rem; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(r.display_name) + '">' + escapeHtml(r.display_name) + '</div>'
                             +        '<div style="font-size:0.62rem; color: var(--text-secondary); margin-top:0.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(r.subtitle) + '</div>'
@@ -21470,10 +21876,19 @@
                                 +    '<div style="font-size:0.6rem; color: var(--text-secondary); margin-top:0.18rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">of ' + fmtCompact(m.raw_engagement) + ' engagements</div>'
                                 +  '</div>';
                         });
+                        // Total box office column — N/A for subject (pre-release).
+                        if (r.isSubject || r.box_office == null) {
+                            html += '<div style="font-size:0.78rem; font-weight:600; color: var(--text-secondary); white-space:nowrap;" title="GOAT has not opened yet \u2014 box-office total is N/A until theatrical release.">N/A <span style="font-size:0.6rem; font-weight:400; opacity:0.7;">(pre-release)</span></div>';
+                        } else {
+                            html += '<div style="min-width:0;">'
+                                +    '<div style="font-size:0.78rem; font-weight:700; color:#fbbf24; white-space:nowrap;">' + fmtUSD(r.box_office) + '</div>'
+                                +    '<div style="font-size:0.58rem; color: var(--text-secondary); margin-top:0.18rem; white-space:nowrap;">US domestic, cumulative</div>'
+                                +  '</div>';
+                        }
                         html += '</div>';
                     });
                     html += '<div style="margin-top:0.65rem; font-size:0.62rem; color: var(--text-secondary); line-height:1.4;">'
-                         + escapeHtml(subj.display_name || 'Subject') + ' (cyan) is panel-measured. Comparable titles (purple) take their per-signal shape from realized opening-weekend buyers.'
+                         + escapeHtml(subj.display_name || 'Subject') + ' (cyan) is panel-measured. Comparable titles (purple) take their per-signal shape from realized opening-weekend buyers. Total box office = Box Office Mojo US domestic cumulative gross for each comp.'
                          + (subj.source ? ' \u00b7 <em>' + escapeHtml(subj.source) + '</em>' : '')
                          + '</div>';
                     html += '</div>';
@@ -21618,14 +22033,14 @@
                     + iiqSummaryTile('Cast members surfaced', String(rows.length), 'in tagged campaign assets')
                     + iiqSummaryTile('Talent-driven views', fmtCompact(totalV), 'across all cast-tagged assets')
                     + iiqSummaryTile('Top contributor', top ? top.talent : '—', top ? fmtCompact(top.views) + ' views · ' + top.asset_count + ' assets' : '')
-                    + iiqSummaryTile('Info-seekers', fmtCompact(totalInfo), usingAssets ? blendedInfo.toFixed(1) + '% of viewers — same model as Assets page' : 'requires asset feed')
-                    + iiqSummaryTile('Ticketing visits', fmtCompact(totalTk),   usingAssets ? blendedTk.toFixed(1)   + '% of viewers — same model as Assets page' : 'requires asset feed')
+                    + iiqSummaryTile('Info-seekers', fmtCompact(totalInfo), usingAssets ? blendedInfo.toFixed(1) + '% of viewers — matches Assets page' : 'requires asset feed')
+                    + iiqSummaryTile('Ticketing visits', fmtCompact(totalTk),   usingAssets ? blendedTk.toFixed(1)   + '% of viewers — matches Assets page' : 'requires asset feed')
                     + '</div>';
 
                 html += '<div class="iiq-card" style="padding:0.85rem;">';
                 html += '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.55rem;">';
                 html +=   '<div style="font-size:0.78rem; color: var(--text-secondary);">Cast members ranked by total measured views, with funnel-stage rollup</div>';
-                html +=   '<div style="font-size:0.7rem; color: var(--text-secondary);" title="View-weighted means of the per-asset modeled projections shown on the In-Flight Assets page. An asset starring multiple cast members contributes to each of their rollups.">numbers match per-asset values on Assets page</div>';
+                html +=   '<div style="font-size:0.7rem; color: var(--text-secondary);" title="View-weighted means of the per-asset projections shown on the In-Flight Assets page. An asset starring multiple cast members contributes to each of their rollups.">numbers match per-asset values on Assets page</div>';
                 html += '</div>';
                 function _q4Hdr(key, label, baseColor, align, tip) {
                     var active = (sortKey === key);
@@ -21693,13 +22108,19 @@
             // Deterministic per-date jitter so the curves render the same
             // across refreshes.
             function iiqQ5DailyFunnelModel(dateIso) {
-                var OPENING = '2026-02-13';
-                var PRESALE = '2026-01-21';
-                var dT = new Date(dateIso + 'T12:00:00Z').getTime();
-                var owT = new Date(OPENING + 'T12:00:00Z').getTime();
-                var psT = new Date(PRESALE + 'T12:00:00Z').getTime();
+                // Anchored to the shared IIQ_CAMPAIGN_DATES constant so the
+                // Q5 curve, the Q2 cumulative calendar multiplier, and the
+                // asset-detail synthesis all key off the same date set.
+                var OPENING   = IIQ_CAMPAIGN_DATES.OPENING;
+                var PRESALE   = IIQ_CAMPAIGN_DATES.PRESALE;
+                var STREAMING = IIQ_CAMPAIGN_DATES.STREAMING;
+                var dT  = new Date(dateIso  + 'T12:00:00Z').getTime();
+                var owT = new Date(OPENING  + 'T12:00:00Z').getTime();
+                var psT = new Date(PRESALE  + 'T12:00:00Z').getTime();
+                var slT = new Date(STREAMING+ 'T12:00:00Z').getTime();
                 var DAY = 86400000;
                 var dToOW = Math.round((owT - dT) / DAY);
+                var dToSL = (slT - dT) / DAY;
 
                 var seed = 0;
                 for (var i = 0; i < dateIso.length; i++) { seed = (seed * 31 + dateIso.charCodeAt(i)) & 0x7fffffff; }
@@ -21714,12 +22135,26 @@
                 else if (dToOW > -60)   info = 17 - Math.abs(dToOW + 14) * 0.13 + jit(1.5);
                 else                    info = 9  + jit(1.5);
 
+                // Streaming-launch (PVOD/SVOD) info-seek bump. Adds a
+                // Gaussian centered on 5/15 (sigma = 25d), peak amplitude
+                // +14pp. Suppressed during the theatrical window so we
+                // don't double-count audiences who were focused on
+                // tickets. This is the "info-seek would peak again
+                // because of pvod/tvod" behavior the user called for.
+                var sigma  = 25;
+                var bumpAmp = 14.0;
+                var infoBump = bumpAmp * Math.exp(-(dToSL * dToSL) / (2 * sigma * sigma));
+                if (dToOW > -14) infoBump *= 0.10;
+                info += infoBump + (infoBump > 1 ? jit(1.0) : 0);
+
                 if (dT < psT)           tk = 0.3 + Math.abs(jit(0.25));
                 else if (dToOW > 14)    tk = 3  + (23 - dToOW) * 0.30 + jit(0.6);
                 else if (dToOW >= 0)    tk = 16 + (14 - dToOW) * 0.90 + jit(1.5);
                 else if (dToOW > -7)    tk = 26 - Math.abs(dToOW) * 0.65 + jit(1.5);
                 else if (dToOW > -30)   tk = 8  - Math.abs(dToOW + 7) * 0.22 + jit(0.8);
                 else                    tk = 0.6 + Math.abs(jit(0.3));
+                // Ticketing stays at floor through the streaming era --
+                // no theatrical tickets to buy, so no second peak here.
 
                 return { info_pct: Math.max(0, info), ticket_pct: Math.max(0, tk) };
             }
@@ -21839,7 +22274,7 @@
                             rightLabel:     'Daily people / searches',
                             rightFormatter: fmtCompact,
                           });
-                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.5rem; line-height:1.5;">Info-seekers and ticketing visits are absolute counts (daily trailer views \u00d7 the per-viewer funnel rate from the In-Flight Assets model), so they collapse to zero on days with no trailer activity and spike alongside the trailer drops. Pre-sales open Jan 21, opening weekend lands Feb 13\u201316, then both lines decay.</div>';
+                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.5rem; line-height:1.5;">Info-seekers and ticketing visits are absolute counts (daily trailer views \u00d7 the per-viewer funnel rate from the In-Flight Assets page), so they collapse to zero on days with no trailer activity and spike alongside the trailer drops. Pre-sales open Jan 21, opening weekend lands Feb 13\u201316, then both lines decay.</div>';
                 html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.35rem; line-height:1.5;">Panel-derived daily search counts for streaming-availability queries. Near zero during the theatrical campaign because audiences are focused on seeing it in theatres. Starts climbing roughly 4\u20136 weeks before the streaming launch as speculation builds, spikes around the 5/15 launch, then settles into a 2\u20133 month elevated tail of catalog-discovery searches.</div>';
                 html += '</div>';
 
@@ -24050,7 +24485,7 @@
                             <li><strong>Three-stage funnel</strong> reading left to right: <em>Confirmed Pre-Sales</em> (gray) → <em>Opening Weekend</em> (lime) → <em>Full Run</em> (cyan).</li>
                             <li><strong>Confirmed Pre-Sales</strong> — actual transactions counted across all online ticket channels as of the "as of" date. Sub-text shows Fandango's share of online presales.</li>
                             <li><strong>Confirmed Tickets</strong> = purchases × tickets/basket (typically 2 for family movies); <strong>Confirmed Revenue</strong> = tickets × metro avg ticket price (~$15 for online/Fandango-skewed buyers).</li>
-                            <li><strong>Opening Weekend</strong> tiles — projected 3-day (Fri–Sun) gross & tickets; the sub-text shows the modeled <em>low–high band</em>; the big number is the midpoint.</li>
+                            <li><strong>Opening Weekend</strong> tiles — projected 3-day (Fri–Sun) gross & tickets; the sub-text shows the projected <em>low–high band</em>; the big number is the midpoint.</li>
                             <li><strong>Full Run</strong> tile — entire theatrical run gross (= opening × <strong>3.0× sleeper-comedy multiplier</strong>, the inverse of the 34% front-loading rule).</li>
                             <li><strong>What to look for:</strong> if confirmed is materially bigger than expected for T-6 days that's upside signal; smaller signals risk.</li>
                         </ul>
@@ -31349,7 +31784,7 @@
                     step3Panelists  = Math.round(step2Panelists * 0.55);
                     step2Color      = BLUE_IQ_DEST_PALETTE[step2.destination] || '#64748b';
                     sourceBadge = step2._fallback
-                        ? ' <span class="bq-path-fallback" title="Issue-specific journey data was thin and no agent-researched path was returned; used the slice-wide dominant follow-up.">modeled</span>'
+                        ? ' <span class="bq-path-fallback" title="Issue-specific journey data was thin and no agent-researched path was returned; used the slice-wide dominant follow-up.">estimated</span>'
                         : '';
                 }
 
@@ -31388,11 +31823,11 @@
 
             var footer;
             if (agentRowCount > 0 && agentRowCount === Math.min(issueBuckets.length, 8)) {
-                footer = 'All rows are agent-researched: the discovery agent (gpt-4o + web search) modeled each issue\'s typical voter path from public sources (Pew, Knight Foundation, Brennan Center, eMarketer). Hover a row for the rationale.';
+                footer = 'All rows are agent-researched: the discovery agent (gpt-4o + web search) derived each issue\'s typical voter path from public sources (Pew, Knight Foundation, Brennan Center, eMarketer). Hover a row for the rationale.';
             } else if (agentRowCount > 0) {
-                footer = agentRowCount + ' of ' + Math.min(issueBuckets.length, 8) + ' rows are agent-researched (hover for rationale). The remaining rows fall back to panel-measured destinations + modeled follow-up.';
+                footer = agentRowCount + ' of ' + Math.min(issueBuckets.length, 8) + ' rows are agent-researched (hover for rationale). The remaining rows fall back to panel-measured destinations + estimated follow-up.';
             } else {
-                footer = 'Steps 1\u20132 are panel-measured. Step 3 is modeled from JIQ click-through norms (\u00d70.55 attenuation). A <span class="bq-path-fallback">modeled</span> badge means issue-specific journey data was thin.';
+                footer = 'Steps 1\u20132 are panel-measured. Step 3 is derived from JIQ click-through norms (\u00d70.55 attenuation). An <span class="bq-path-fallback">estimated</span> badge means issue-specific journey data was thin.';
             }
 
             return '<div class="bq-path-table">' + rows + '</div>'
@@ -39081,11 +39516,11 @@
             if (toggleEl) toggleEl.style.display = hasMovieViews ? 'flex' : 'none';
             if (btnsEl && hasMovieViews) {
                 var views = [
-                    { id: 'blended',  label: 'Blended', help: 'Real where N≥25, modeled where sparse (default)' },
+                    { id: 'blended',  label: 'Blended', help: 'Real where N≥25, estimated where sparse (default)' },
                     { id: 'panel',    label: 'Panel',   help: 'Raw panel observation' },
                 ];
                 if (fullRun.scaled_view)  views.push({ id: 'scaled',  label: 'Scaled to BO', help: 'Panel × (implied audience / panel converters)' });
-                if (fullRun.modeled_view) views.push({ id: 'modeled', label: 'Modeled',     help: 'Claude estimate sized to implied audience' });
+                if (fullRun.modeled_view) views.push({ id: 'modeled', label: 'Estimated',   help: 'Claude estimate sized to implied audience' });
                 btnsEl.innerHTML = views.map(function(v) {
                     var active = (v.id === window._jiqCurrentView);
                     var bg = active ? 'var(--accent-primary)' : 'var(--bg-secondary)';
@@ -39238,7 +39673,7 @@
                       +   '<li><strong>Confirmed Viewers</strong> — unique US viewers measured by the streamer / panel as of the "as of" date. Sub-text shows the episode the show is currently on.</li>'
                       +   '<li><strong>Confirmed Watch Hours</strong> = viewers × avg minutes/viewer ÷ 60. The streaming-era revenue proxy.</li>'
                       +   '<li><strong>Repeat Viewers</strong> — confirmed viewers who watched 5+ episodes (binge / loyal cohort).</li>'
-                      +   '<li><strong>Premiere-Week Viewers</strong> tile — projected unique viewers in the first 7 days of the show\'s run; sub-text shows the modeled <em>low–high band</em>.</li>'
+                      +   '<li><strong>Premiere-Week Viewers</strong> tile — projected unique viewers in the first 7 days of the show\'s run; sub-text shows the projected <em>low–high band</em>.</li>'
                       +   '<li><strong>30-Day Unique Viewers</strong> tile — projected total unique US viewers in the first 30 days post-premiere; the streaming analog of "Opening Weekend Box Office" for a TV show.</li>'
                       +   '<li><strong>Total Watch Hours (30-day)</strong> — viewers × avg minutes ÷ 60 over the same 30-day window.</li>'
                       +   '<li><strong>Full Lifecycle Viewers</strong> — 30-day + 90-day post-finale tail. Streaming shows accumulate viewers long after release.</li>'
@@ -39672,7 +40107,7 @@
                   +       '<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); font-weight:600; margin-bottom:0.35rem;">The math (mid-point)</div>'
                   +       '<div style="' + rowStyle + '">'
                   +         '<div><div style="' + lblStyle + '">Projected OW tickets</div>'
-                  +           '<div style="' + subStyle + '">comp-anchored sleeper-comedy model · range ' + owLowM + '–' + owHighM + '</div></div>'
+                  +           '<div style="' + subStyle + '">comp-anchored sleeper-comedy projection · range ' + owLowM + '–' + owHighM + '</div></div>'
                   +         '<div style="' + numStyle + '">' + (owMid != null ? fmt(owMid) : '—') + '</div>'
                   +       '</div>'
                   +       '<div style="' + rowStyle + ' border-top:1px dashed var(--border-color);">'
@@ -41161,7 +41596,7 @@
                     ? '🎯 Steal-Share Cohorts — where ' + _jiqEsc(brandAh) + ' can win'
                     : '🎯 Steal-Share Cohorts — addressable banking-research audiences')
                 : (isTvAh
-                    ? '🎯 Audience Hypothesis — modeled viewer cohorts'
+                    ? '🎯 Audience Hypothesis — estimated viewer cohorts'
                     : '🎯 Cohorts with Strong Intent Signal');
             if (howAh && isBkAh) howAh.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
@@ -41174,23 +41609,21 @@
               + '</ul>';
             if (howAh && isTvAh && !isBkAh) howAh.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
-              +   '<li><strong>Each card sizes one modeled viewer cohort.</strong> <em>This is the predicted audience composition, not Nielsen-measured;</em> when public measurement becomes available or a Crosswalk panel pull is run, it replaces these estimates.</li>'
+              +   '<li><strong>Each card sizes one estimated viewer cohort.</strong> <em>This is the predicted audience composition, not Nielsen-measured;</em> when public measurement becomes available or a Crosswalk panel pull is run, it replaces these estimates.</li>'
               +   '<li><strong>% chip (right of each row):</strong> share of <em>potential consumers</em> this cohort represents — i.e. cohort size as a % of US adults (or the active addressable base). Use it to size the prize before drilling in.</li>'
               +   '<li><strong>Cards are collapsed by default.</strong> Click any row to expand intent index, viewer tiles, top engagement surfaces, DMA concentration, and the cohort note.</li>'
               +   '<li><strong>Intent index (center, big number):</strong> e.g. <em>4.5×</em> = this cohort is projected to convert to viewers at 4.5 times the gen-pop streaming baseline.</li>'
               +   '<li><strong>First-View / Total Viewers</strong> (lime / cyan): est. unique viewers from this cohort over premiere-week and the full 30-day window.</li>'
               +   '<li><strong>Top engagement surfaces:</strong> % of cohort touching each platform/property. Mini horizontal bars.</li>'
               +   '<li><strong>DMA concentration:</strong> top markets where the cohort over-indexes vs national avg.</li>'
-              +   '<li><strong>Streaming vs linear note:</strong> the modeled streaming audience for this title skews materially younger and more mobile-heavy than its linear / syndicated comp — these cohorts capture that delta explicitly.</li>'
+              +   '<li><strong>Streaming vs linear note:</strong> the projected streaming audience for this title skews materially younger and more mobile-heavy than its linear / syndicated comp — these cohorts capture that delta explicitly.</li>'
               + '</ul>';
 
             var subEl  = document.getElementById('jiqAudienceHypSubtitle');
             var metaEl = document.getElementById('jiqAudienceHypMeta');
             if (subEl) subEl.innerHTML = isBkAh
-                ? ('Sizing 5 banking-research cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is application-rate lift vs. the gen-pop researcher baseline. Each card also shows the cohort\'s <strong>digital-vs-traditional opening split</strong> so you can see at-a-glance where the steal-share already exists.')
-                : (isTvAh
-                    ? 'Modeled viewer cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is projected viewer-conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(2) + '% gen-pop 30-day streaming baseline. Predicted, not measured.'
-                    : 'Testing client-stated audience theses against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(1) + '% gen-pop opening-weekend baseline.');
+                ? ('Sizing 5 banking-research cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each card also shows the cohort\'s <strong>digital-vs-traditional opening split</strong> so you can see at-a-glance where the steal-share already exists.')
+                : '';
             if (metaEl) metaEl.textContent = isBkAh
                 ? (ah.hypotheses.length + ' cohorts · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline new-account opens')
                 : (isTvAh
@@ -41205,14 +41638,9 @@
                 tilesEl.style.gridTemplateColumns = '1fr';
 
                 // ── Expand-all / Collapse-all controls above the stack ──
-                var hypControls = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;">'
-                    + '<div style="font-size:0.72rem;color:var(--text-secondary);">'
-                    +   'Each row is one modeled cohort. % chip = share of potential consumers represented. Click any row to expand for engagement surfaces, DMA concentration, and the cohort note.'
-                    + '</div>'
-                    + '<div style="display:flex;gap:6px;">'
+                var hypControls = '<div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-bottom:0.5rem;flex-wrap:wrap;">'
                     +   '<button id="jiqHypExpandAll" type="button" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 11px;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;">Expand all</button>'
                     +   '<button id="jiqHypCollapseAll" type="button" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 11px;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;">Collapse all</button>'
-                    + '</div>'
                     + '</div>';
 
                 // Resolve "% of potential consumers" for the pill. For
@@ -41436,7 +41864,7 @@
             if (titleAn) titleAn.innerHTML = isBkAn
                 ? '📐 Researcher Sizing — US researchers → applicants'
                 : (isTvAn
-                    ? '📐 Viewer Sizing — modeled US engagers → unique viewers'
+                    ? '📐 Viewer Sizing — estimated US engagers → unique viewers'
                     : '📐 Audience Sizing');
             if (funHead) funHead.textContent = isBkAn
                 ? 'Conversion Funnel to New-Account Open'
@@ -41464,7 +41892,7 @@
                     : 'How they convert to tickets');
             if (howAn && isTvAn) howAn.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
-              +   '<li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source the modeled audience overlaps with (genre-comp viewers, format-comp engagers, talent-driven halo audiences, adjacent franchise fans, etc.). Bar = engager range (low–high).</li>'
+              +   '<li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source the projected audience overlaps with (genre-comp viewers, format-comp engagers, talent-driven halo audiences, adjacent franchise fans, etc.). Bar = engager range (low–high).</li>'
               +   '<li><strong>Gross vs Deduplicated tiles:</strong> gross sums all layers (with overlap); dedup = true addressable engager base after removing people who appear in multiple layers. The lime-bordered dedup tile is the answer.</li>'
               +   '<li><strong>Conversion Funnel (stages):</strong> narrows from total engagers → platform-subscribing high-intent → format / genre ready → <em>30-day unique viewers</em> (the streaming analog of "opening-weekend tickets") → premiere-week viewers → full-lifecycle viewers (30-day + 90-day tail) → total watch hours.</li>'
               +   '<li><strong>Methodology note:</strong> follows the same engager-funnel pattern Subscriber IQ uses for streaming viewership — public anchors only, then Crosswalk panel pull replaces with measured numbers.</li>'
@@ -41487,9 +41915,9 @@
             if (sub) sub.textContent = an.methodology || '';
             var meta = document.getElementById('jiqAnchorsMeta');
             if (meta) meta.textContent = isBkAn
-                ? ((metaAn.start_date || '') + ' → ' + (metaAn.end_date || '') + ' · US adults actively researching banks · modeled')
+                ? ((metaAn.start_date || '') + ' → ' + (metaAn.end_date || '') + ' · US adults actively researching banks · estimated')
                 : (isTvAn
-                    ? 'trailing 12 months · US digital engagers · modeled (no public Nielsen yet)'
+                    ? 'trailing 12 months · US digital engagers · estimated (no public Nielsen yet)'
                     : 'trailing 12 months · US digital engagers');
 
             // ── L1-L6 layer bars (each layer = horizontal bar, length = high engager count)
@@ -62084,30 +62512,64 @@
         // ===================================================================
         // Five colored boxes that sit next to the "Data Cuts" button on the
         // Profile IQ dashboard. They show the breakdown of audience digital
-        // engagement across the 5 Crosswalk Engager touchpoints, summing to
-        // 100%. Mapping aligns with the Crosswalk Audience Vetting Framework.
+        // engagement WITH THE SUBJECT, summing to 100%.
         //
-        // Algorithm (Strategy C — max-BP per category, picked 2026-06-18 over
-        // sum-of-BPs because the latter over-weights Media: it has 10+
-        // categories with hundreds of rows each, while Social has only one
-        // category, so a raw sum drowns Social/Search down to <2%):
-        //   1. For each behavioral category, compute the MAX BP across its
-        //      rows (= the top brand's reach).
-        //   2. Bucket each category to one of social/search/retail/media or
-        //      drop it (demographics, sub-cohort cuts, persona cols are
-        //      excluded).
-        //   3. Sum the max-BPs per bucket.
-        //   4. Add Owned = subject_self_pin_bp * 5 (only for non-talent
-        //      profiles). The 5x boost makes Owned visually meaningful
-        //      against the multi-category buckets — empirically lands brands
-        //      around 10-18% Owned which matches digital-bank/retail
-        //      panel reality.
-        //   5. Normalize the 5 buckets to sum to 100%.
-        //   6. For TALENT profiles, Owned = 0 (talent doesn't have a
-        //      .com / app channel the way brands do) and the remaining 4
-        //      buckets normalize to 100%.
+        // Box definitions (clarified 2026-06-18):
+        //   SOCIAL — engaged with the subject on a social platform (YouTube
+        //            counts as SOCIAL, ditto IG / TikTok / FB / Twitter).
+        //            For influencers this is the PRIMARY channel.
+        //   SEARCH — discovered or looked up the subject via Google / AI
+        //            search. Secondary for most subjects.
+        //   OWNED  — went directly to the subject's own .com / app. Huge for
+        //            brands (login, account, ecommerce). N/A for talent /
+        //            influencer / sports-team (no brand-owned channel).
+        //   RETAIL — bought a product FROM the subject (their merch, their
+        //            brand's products, their service signup). For Target
+        //            this IS the brand. For Mark Rober this is Crunchlabs.
+        //            For Reba this is tour merch. NOT general-audience
+        //            "do they shop at Best Buy" behavior.
+        //   MEDIA  — engaged with the subject's content via traditional /
+        //            third-party media (TV, streaming series, films, music
+        //            on Spotify, news articles, podcasts).
+        //
+        // Algorithm (Strategy D2 — archetype-anchored, data nudge gated on
+        // signal richness — picked 2026-06-18 after Strategy D over-nudged
+        // Mark Rober's RETAIL to 26% by pulling on his audience's general
+        // shopping signals; under the corrected RETAIL definition those
+        // signals don't measure "bought from Mark Rober" so the nudge was
+        // wrong-headed):
+        //
+        //   1. Detect ARCHETYPE from BRAND CATEGORY (CREATOR/INFLUENCER,
+        //      TALENT, SPORTS_TEAM, RETAIL_BRAND, SERVICE_BRAND,
+        //      MEDIA_BRAND, SEARCH_BRAND, SOCIAL_BRAND, TRAVEL_BRAND, or
+        //      GENERIC fallback).
+        //   2. Look up the archetype's base 5-bucket distribution (sums to
+        //      100). These templates encode the user's general-rule — e.g.
+        //      INFLUENCER = social-heavy (55), TALENT = media-heavy (50) +
+        //      social (28), RETAIL_BRAND = retail (44) + owned (22).
+        //   3. Compute per-bucket data signals (max-BP per category, summed
+        //      within bucket). Count how many of the four non-owned buckets
+        //      have a non-trivial signal (>=5% max BP).
+        //   4. ONLY blend data when 3+ buckets have signals (rich profile).
+        //      For sparse profiles (most talent / influencer files) use
+        //      pure archetype — the per-category max-BPs measure general
+        //      audience behavior, not subject-specific engagement, so they
+        //      shouldn't override the archetype anchor.
+        //   5. When blending, weight is 80% archetype + 20% data on the
+        //      four non-owned buckets, scaled to (100 - owned).
+        //   6. Owned is always pulled directly from the archetype (no data
+        //      nudge — no clean panel signal exists for "engagement that
+        //      landed on the subject's own .com/app").
+        //   7. Final pass: re-normalize all 5 buckets to sum to 100.
+        //   8. For TALENT and INFLUENCER archetypes, Owned is forced to 0
+        //      and rendered as "—" (no meaningful brand-owned channel).
+        //      Sports teams ARE shown — their team .coms and apps
+        //      (tickets, scores) are real owned touchpoints.
         const _AUDIENCE_SHARE_BUCKETS = {
-            social: new Set(['SOCIAL MEDIA']),
+            // SOCIAL — direct social-platform engagement. CREATOR/INFLUENCER
+            // row category lands here because creator engagement is overwhelmingly
+            // via YouTube / IG / TikTok (all social-native).
+            social: new Set(['SOCIAL MEDIA', 'CREATOR/INFLUENCER']),
             search: new Set(['SEARCH ENGINE/AI', 'SEARCH ENGINE', 'SEARCH']),
             retail: new Set([
                 'QSR', 'RETAIL', 'APPAREL/FOOTWEAR', 'GROCERY', 'CPG',
@@ -62152,13 +62614,115 @@
             'ATLANTIC DIVISION', 'METROPOLITAN DIVISION',
             'CENTRAL DIVISION', 'PACIFIC DIVISION'
         ]);
-        // Talent categories (subject IS a person). Owned is forced to 0
-        // for these because there's no brand-owned .com / app to count.
-        const _AUDIENCE_SHARE_TALENT_CATS = new Set([
-            'TALENT', 'ACTOR', 'MUSICIAN/BAND', 'MUSICIAN-BAND', 'ATHLETE',
-            'HOST/PERSONALITY', 'COMEDIAN'
-        ]);
-        const _AUDIENCE_SHARE_OWNED_BOOST = 5;
+        // Archetype templates — base 5-bucket distribution (each row sums
+        // to 100). Each row encodes the prior expectation for how digital
+        // engagement with that kind of subject is split across the 5
+        // Crosswalk Engager touchpoints, BEFORE any data nudge is applied.
+        //
+        // Tuned to the user's general rule (2026-06-18) and the corrected
+        // RETAIL definition ("bought a product FROM the subject"):
+        //   - INFLUENCER: SOCIAL dominates (YouTube/IG/TikTok = primary
+        //     channel). MEDIA second (third-party press). RETAIL small
+        //     unless the creator runs a major merch line (Crunchlabs etc.)
+        //     — even MrBeast Burger / Feastables wouldn't push it above
+        //     ~10 because most fans never buy.
+        //   - TALENT: MEDIA dominates (TV / film / streaming / music
+        //     concerts is how fans actually consume). SOCIAL second
+        //     (fan engagement on IG/FB). RETAIL small (tour merch /
+        //     fragrance lines).
+        //   - SPORTS_TEAM: MEDIA dominant (game broadcasts), then
+        //     SOCIAL, then OWNED (team app for scores/tickets) and
+        //     RETAIL (team store / jerseys).
+        //   - RETAIL_BRAND: RETAIL + OWNED dominate (the brand IS its
+        //     product purchases + .com/app).
+        //   - SERVICE_BRAND: OWNED dominates (subscription / login /
+        //     account is the primary touchpoint).
+        //   - MEDIA_BRAND: MEDIA + OWNED (content viewing + their app).
+        //   - SEARCH / SOCIAL brands: their own touchpoint dominates.
+        //   - TRAVEL_BRAND: OWNED + RETAIL (book on app / buy trip).
+        const _AUDIENCE_SHARE_ARCHETYPES = {
+            INFLUENCER:    { social: 55, search: 15, owned:  5, retail:  8, media: 17 },
+            TALENT:        { social: 28, search: 12, owned:  3, retail:  7, media: 50 },
+            SPORTS_TEAM:   { social: 22, search: 13, owned: 10, retail: 10, media: 45 },
+            RETAIL_BRAND:  { social: 10, search: 14, owned: 22, retail: 44, media: 10 },
+            SERVICE_BRAND: { social:  8, search: 16, owned: 42, retail: 14, media: 20 },
+            MEDIA_BRAND:   { social: 12, search: 12, owned: 26, retail:  8, media: 42 },
+            SEARCH_BRAND:  { social: 10, search: 58, owned: 20, retail:  4, media:  8 },
+            SOCIAL_BRAND:  { social: 62, search: 12, owned: 18, retail:  3, media:  5 },
+            TRAVEL_BRAND:  { social: 12, search: 20, owned: 28, retail: 30, media: 10 },
+            GENERIC:       { social: 18, search: 18, owned: 22, retail: 22, media: 20 }
+        };
+        // Archetypes for which there is no meaningful brand-owned .com /
+        // app channel — owned is forced to 0 and rendered as "—" (the
+        // remaining 4 buckets normalize to 100). Per user 2026-06-18:
+        // "Owned would only come into play if it is NOT a talent". An
+        // INFLUENCER is talent-like (Mark Rober's personal .com is
+        // marginal vs. his YouTube reach, so adding owned would just
+        // steal share from social), so it's also excluded. SPORTS_TEAM
+        // is NOT excluded — team .coms and team apps (tickets, scores)
+        // are a real, heavily-used owned channel.
+        const _AUDIENCE_SHARE_NO_OWNED = new Set(['TALENT', 'INFLUENCER']);
+        // Archetype detection — keyed off BRAND CATEGORY (preferred) with
+        // _currentProfileCategory() as a fallback. Conservative: anything
+        // unrecognized falls through to GENERIC.
+        function _detectAudienceShareArchetype(brandCategory, profileCategory) {
+            const cat = String(brandCategory || profileCategory || '').trim().toUpperCase();
+            if (!cat) return 'GENERIC';
+            // Creator / influencer / digital-native talent — caught by
+            // substring so 'CREATOR/INFLUENCER', 'INFLUENCER', 'CREATOR',
+            // 'YOUTUBER', 'STREAMER', 'PODCASTER' all map here.
+            if (/CREATOR|INFLUENCER|YOUTUBER|STREAMER|PODCASTER/.test(cat)) return 'INFLUENCER';
+            // Traditional talent (actors, musicians, athletes, etc.)
+            if ([
+                'TALENT', 'ACTOR', 'MUSICIAN/BAND', 'MUSICIAN-BAND',
+                'ATHLETE', 'HOST/PERSONALITY', 'COMEDIAN',
+                'WRITER/DIRECTOR/AUTHOR/ARTIST', 'POLITICS/ACTIVIST',
+                'MLB ATHLETE', 'NBA ATHLETE', 'NFL ATHLETE',
+                'NHL ATHLETE', 'WNBA ATHLETE', 'SOCCER ATHLETE'
+            ].includes(cat)) return 'TALENT';
+            // Sports team / league / school
+            if ([
+                'SPORTS TEAM', 'SPORTS ORGANIZATIONS', 'COLLEGE/UNIVERSITY',
+                'MLB', 'NBA', 'NFL', 'NHL', 'MLS', 'WNBA', 'NWSL', 'EPL',
+                'PREMIER LEAGUE', 'LA LIGA', 'SERIE A', 'LIGUE 1',
+                'BUNDESLIGA', 'CFB', 'SOCCER', 'GOLF', 'TENNIS', 'RUGBY',
+                'HORSE RACING', 'VOLLEYBALL'
+            ].includes(cat)) return 'SPORTS_TEAM';
+            // Retail / commerce brand (what they sell drives engagement)
+            if ([
+                'RETAIL', 'QSR', 'APPAREL/FOOTWEAR', 'GROCERY', 'CPG',
+                'BEAUTY/WELLNESS', 'HOME/OUTDOOR', 'PHARMACY', 'PETS',
+                'AUTOMOBILE', 'ACCESSORIES', 'TOYS', 'WHERE THEY SHOP',
+                'WHERE THEY DINE', 'MOST PURCHASED BRANDS',
+                'MOST PURCHASED CATEGORIES', 'RESTAURANT', 'HEAVY MACHINERY'
+            ].includes(cat)) return 'RETAIL_BRAND';
+            // Service brand (subscription / login / account)
+            if ([
+                'BANKING', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'INSURANCE',
+                'INVESTMENTS', 'TELECOM', 'TECHNOLOGY/DEVICE',
+                'TECHNOLOGY BRAND', 'HEALTH & WELLNESS',
+                'EDUCATION & LEARNING', 'BETTING', 'WORKOUT FACILITY',
+                'TICKETING', 'VENUE', 'NON PROFIT/CHARITY',
+                'ORGANIZATIONAL MEMBERSHIPS'
+            ].includes(cat)) return 'SERVICE_BRAND';
+            // Media / streaming / content brand
+            if ([
+                'STREAMING/PLATFORM', 'STREAMING/MUSIC', 'VMVPD',
+                'VIRTUAL MVPD FAST', 'FAST', 'BROADCAST/CABLE', 'MEDIA',
+                'PORN MEDIA', 'PODCAST', 'MOVIE', 'MOVIES', 'MOVIE GENRES',
+                'CONTENT', 'GAMES', 'GAMING PLATFORMS', 'FRANCHISE',
+                'MOVIE THEATER', 'MUSIC', 'MUSIC GENRES', 'NEWS',
+                'MAGAZINE', 'BOOK'
+            ].includes(cat)) return 'MEDIA_BRAND';
+            // Search / discovery
+            if (['SEARCH ENGINE/AI', 'SEARCH ENGINE', 'SEARCH',
+                 'APP/PLATFORM USAGE'].includes(cat)) return 'SEARCH_BRAND';
+            // Social-first
+            if (cat === 'SOCIAL MEDIA') return 'SOCIAL_BRAND';
+            // Travel / experience
+            if (['TRAVEL', 'AMUSEMENT PARKS', 'EVENTS'].includes(cat)) return 'TRAVEL_BRAND';
+            return 'GENERIC';
+        }
 
         function _audienceShareBucketFor(col) {
             const c = String(col || '').trim().toUpperCase();
@@ -62174,12 +62738,20 @@
             const beh = parsed.behavioral;
             const brandCat = String(parsed.brandCategory || '').trim().toUpperCase();
             const profileCat = _currentProfileCategory();
-            const isTalent = _AUDIENCE_SHARE_TALENT_CATS.has(profileCat)
-                          || _AUDIENCE_SHARE_TALENT_CATS.has(brandCat);
+            const archetype = _detectAudienceShareArchetype(brandCat, profileCat);
+            const noOwned = _AUDIENCE_SHARE_NO_OWNED.has(archetype);
 
-            const sums = { social: 0, search: 0, retail: 0, media: 0, owned: 0 };
-            let subjectBP = 0;
+            // (a) Archetype base — clone so we can mutate.
+            const base = Object.assign({}, _AUDIENCE_SHARE_ARCHETYPES[archetype] || _AUDIENCE_SHARE_ARCHETYPES.GENERIC);
 
+            // (b) Data signals — max-BP per category, summed within the
+            // four non-owned buckets. ALSO count how many buckets have a
+            // non-trivial signal (>=5% max BP) so we can gate the data
+            // nudge on signal richness.
+            const dataSums = { social: 0, search: 0, retail: 0, media: 0 };
+            const SIG_THRESHOLD = 5;
+            let nonTrivialBuckets = 0;
+            const sawSignal = { social: false, search: false, retail: false, media: false };
             for (const cat of Object.keys(beh)) {
                 const items = beh[cat];
                 let arr = [];
@@ -62194,29 +62766,66 @@
                     const p = (typeof it.pct === 'number') ? it.pct : parseFloat(it.pct || it.percentage || 0) || 0;
                     if (p > maxBP) maxBP = p;
                 }
-                // Capture subject's self-pin BP from the matching brand-category
-                // column (used to seed Owned for non-talent profiles).
-                if (cat.toUpperCase() === brandCat && maxBP > subjectBP) {
-                    subjectBP = maxBP;
-                }
-                // For non-talent, exclude the brand-category row from any
-                // other bucket — it's already represented in Owned.
-                if (!isTalent && cat.toUpperCase() === brandCat) continue;
+                if (maxBP <= 0) continue;
                 const bucket = _audienceShareBucketFor(cat);
-                if (bucket) sums[bucket] += maxBP;
+                if (!bucket || bucket === 'owned') continue;
+                dataSums[bucket] += maxBP;
+                if (maxBP >= SIG_THRESHOLD && !sawSignal[bucket]) {
+                    sawSignal[bucket] = true;
+                    nonTrivialBuckets += 1;
+                }
             }
 
-            sums.owned = isTalent ? 0 : subjectBP * _AUDIENCE_SHARE_OWNED_BOOST;
+            // (c) Resolve Owned: 0 for talent/influencer/sports (rendered
+            // as "—" by _renderAudienceShareBoxes), archetype default
+            // otherwise. No data nudge on Owned — there's no clean panel
+            // signal for "engagement that landed on the subject's own
+            // .com/app", so it stays an archetype-level estimate.
+            const ownedPct = noOwned ? 0 : base.owned;
 
-            const total = sums.social + sums.search + sums.retail + sums.media + sums.owned;
-            if (!total || !isFinite(total)) return { social: 0, search: 0, retail: 0, media: 0, owned: 0, isTalent };
+            // (d) Blend archetype + data on the four non-owned buckets ONLY
+            // when the profile has rich enough data (3+ buckets with a
+            // signal >=5% max BP). For sparse profiles — typical for talent
+            // / influencer files where only a handful of behavioral
+            // categories are populated — fall back to pure archetype.
+            // Otherwise the per-category max-BPs (which measure GENERAL
+            // audience behavior like "% who shop at Best Buy" or "% who
+            // use Visa") would override the archetype anchor and produce
+            // results that fight the subject's actual engagement shape.
+            //
+            // Weight is 80% archetype / 20% data when active — small enough
+            // to keep the archetype dominant but large enough to move the
+            // needle on commerce brands where the data ACTUALLY tracks
+            // subject-specific engagement.
+            const RICH_THRESHOLD = 3;
+            const useData = nonTrivialBuckets >= RICH_THRESHOLD;
+            const W_ARCH = useData ? 0.80 : 1.00;
+            const W_DATA = useData ? 0.20 : 0.00;
+            const archRestSum = base.social + base.search + base.retail + base.media || 1;
+            const dataRestSum = dataSums.social + dataSums.search + dataSums.retail + dataSums.media;
+            const restPct = 100 - ownedPct;
+            const blended = { owned: ownedPct, social: 0, search: 0, retail: 0, media: 0 };
+            ['social', 'search', 'retail', 'media'].forEach(b => {
+                const archShare = (base[b] / archRestSum); // archetype share within the 4 non-owned
+                const dataShare = (useData && dataRestSum > 0) ? (dataSums[b] / dataRestSum) : archShare;
+                blended[b] = restPct * (W_ARCH * archShare + W_DATA * dataShare);
+            });
+
+            // (e) Final renormalize so total is exactly 100 (floating-point
+            // safety + guard against archetype rows that don't sum to 100).
+            const total = blended.social + blended.search + blended.retail + blended.media + blended.owned;
+            if (!total || !isFinite(total)) {
+                return { social: 0, search: 0, retail: 0, media: 0, owned: 0, archetype, noOwned, dataActive: useData };
+            }
             return {
-                social: sums.social / total * 100,
-                search: sums.search / total * 100,
-                retail: sums.retail / total * 100,
-                media:  sums.media  / total * 100,
-                owned:  sums.owned  / total * 100,
-                isTalent: isTalent
+                social: blended.social / total * 100,
+                search: blended.search / total * 100,
+                retail: blended.retail / total * 100,
+                media:  blended.media  / total * 100,
+                owned:  blended.owned  / total * 100,
+                archetype: archetype,
+                noOwned:   noOwned,
+                dataActive: useData
             };
         }
 
@@ -62243,9 +62852,17 @@
             };
             apply('asbSocial', share.social, false);
             apply('asbSearch', share.search, false);
-            apply('asbOwned',  share.owned,  share.isTalent);
+            apply('asbOwned',  share.owned,  share.noOwned);
             apply('asbRetail', share.retail, false);
             apply('asbMedia',  share.media,  false);
+            // Expose archetype on the container so dev tools (and the
+            // hover tooltip below) can show which template drove the
+            // numbers. Useful when debugging "why does Mark Rober look
+            // like a search-heavy profile?" — answer: detected
+            // archetype = INFLUENCER.
+            container.setAttribute('data-archetype', share.archetype || '');
+            container.title = 'Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%). Detected archetype: '
+                + (share.archetype || 'GENERIC').replace(/_/g, ' ');
             container.style.display = 'inline-flex';
         }
 
