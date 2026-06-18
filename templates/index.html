@@ -20315,15 +20315,24 @@
             };
 
             function iiqRenderAssetScatter(cards) {
-                // Asset performance chart: sort assets by reach (views) desc,
-                // then plot 3 percent metrics as lines so the trend across
-                // the portfolio is visible at a glance. Each per-asset point
-                // remains clickable (jumps to that asset's card below).
-                //   X axis: asset rank (1 = highest reach, N = lowest)
-                //   Y axis: percent (engagement rate, info-seek %, ticketing %)
-                //   3 lines: eng rate (cyan), info-seek (indigo), ticketing (amber)
-                // A rolling-average overlay (window = 7) cuts through the
-                // per-asset noise so you can read the underlying trend.
+                // Asset portfolio performance chart. Each asset is one
+                // position on the X axis (sorted by views desc), and we
+                // plot 3 smoothed % trend lines across the portfolio:
+                //   - Engagement rate (cyan)
+                //   - Info-seek % (indigo)
+                //   - Ticketing % (amber)
+                // We drop the faint raw per-asset lines that made the
+                // chart look noisy / "skewed" -- they were just visual
+                // jitter that competed with the trend lines. The dots
+                // remain but only render on the SMOOTHED curve so the
+                // visual reads as 3 clean trend bands with click/hover
+                // affordances on every asset.
+                //
+                // Hover: a custom HTML tooltip follows the cursor and
+                // shows the asset name, rank, views, and all 3 metric
+                // values (with the raw per-asset eng-rate, NOT the
+                // smoothed value, so the user sees real numbers).
+                // Click: jumps to that asset's card below.
                 var host = document.getElementById('iiqAssetChart');
                 if (!host) return;
                 var pts = (cards || []).filter(function(c) {
@@ -20331,7 +20340,6 @@
                 });
                 if (!pts.length) { host.innerHTML = ''; return; }
 
-                // Sort by views desc and compute per-asset values
                 var sorted = pts.slice().sort(function(a, b) {
                     return (Number(b.ext_view_count)||0) - (Number(a.ext_view_count)||0);
                 });
@@ -20356,26 +20364,13 @@
                 var plotW = W - padL - padR;
                 var plotH = H - padT - padB;
 
-                // Y max: nice ceil of largest percent across all 3 series
-                var yMaxRaw = 0;
-                rows.forEach(function(r) {
-                    if (r.eng_rate   > yMaxRaw) yMaxRaw = r.eng_rate;
-                    if (r.info_pct   > yMaxRaw) yMaxRaw = r.info_pct;
-                    if (r.ticket_pct > yMaxRaw) yMaxRaw = r.ticket_pct;
-                });
-                var yMax = yMaxRaw <= 2 ? 2 : yMaxRaw <= 5 ? 5 : yMaxRaw <= 10 ? 10 : yMaxRaw <= 15 ? 15 : Math.ceil(yMaxRaw / 5) * 5;
+                // Adaptive smoothing window: ~15% of N so the trend
+                // bands actually read as bands on portfolios of any size
+                // (was fixed-7, which is too narrow on a 94-asset set
+                // and made the bold lines look bumpy).
+                var smoothWin = Math.max(7, Math.min(21, Math.round(N * 0.15)));
 
-                function xScale(rank) {
-                    if (N <= 1) return padL + plotW / 2;
-                    return padL + ((rank - 1) / (N - 1)) * plotW;
-                }
-                function yScale(pct) {
-                    return padT + plotH - (Math.min(pct, yMax) / yMax) * plotH;
-                }
-
-                // Rolling-average smoother so the trend cuts through noise
                 function rolling(arr, win) {
-                    win = win || 7;
                     var half = Math.floor(win / 2);
                     return arr.map(function(_, i) {
                         var s = Math.max(0, i - half), e = Math.min(arr.length, i + half + 1);
@@ -20387,16 +20382,31 @@
                 var engArr = rows.map(function(r){ return r.eng_rate; });
                 var infArr = rows.map(function(r){ return r.info_pct; });
                 var tkArr  = rows.map(function(r){ return r.ticket_pct; });
-                var engSmooth = rolling(engArr, 7);
-                var infSmooth = rolling(infArr, 7);
-                var tkSmooth  = rolling(tkArr,  7);
+                var engSmooth = rolling(engArr, smoothWin);
+                var infSmooth = rolling(infArr, smoothWin);
+                var tkSmooth  = rolling(tkArr,  smoothWin);
 
-                // Y ticks
+                // Y max: ceiling based on SMOOTHED max (with a small
+                // headroom) so the trend lines fill the panel and the
+                // chart doesn't get vertically squashed by outliers in
+                // the raw data (which we no longer plot anyway).
+                var yMaxRaw = 0;
+                engSmooth.concat(infSmooth, tkSmooth).forEach(function(v){ if (v > yMaxRaw) yMaxRaw = v; });
+                yMaxRaw *= 1.35;
+                var yMax = yMaxRaw <= 2 ? 2 : yMaxRaw <= 5 ? 5 : yMaxRaw <= 10 ? 10 : yMaxRaw <= 15 ? 15 : Math.ceil(yMaxRaw / 5) * 5;
+
+                function xScale(rank) {
+                    if (N <= 1) return padL + plotW / 2;
+                    return padL + ((rank - 1) / (N - 1)) * plotW;
+                }
+                function yScale(pct) {
+                    return padT + plotH - (Math.min(pct, yMax) / yMax) * plotH;
+                }
+
                 var yTicks = [];
                 var ySteps = yMax <= 5 ? 5 : yMax <= 10 ? 5 : yMax <= 20 ? 4 : 5;
                 for (var i = 0; i <= ySteps; i++) yTicks.push(yMax * i / ySteps);
 
-                // X ticks: 5 reference rank marks
                 var xTicks = [];
                 var nTicks = Math.min(5, N);
                 for (var j = 0; j < nTicks; j++) {
@@ -20408,18 +20418,25 @@
                 var INFO_COLOR = '#a5b4fc';
                 var TK_COLOR   = '#fbbf24';
 
-                var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%; height: 360px; display:block;">';
+                // SVG <defs> for the soft area gradients under each
+                // smoothed line. Plus a faint glow filter so the bold
+                // trend lines pop a bit against the dark background.
+                var defs = '<defs>'
+                    + '<linearGradient id="iiqAssetGrad_eng" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + ENG_COLOR  + '" stop-opacity="0.35"/><stop offset="100%" stop-color="' + ENG_COLOR  + '" stop-opacity="0"/></linearGradient>'
+                    + '<linearGradient id="iiqAssetGrad_inf" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + INFO_COLOR + '" stop-opacity="0.30"/><stop offset="100%" stop-color="' + INFO_COLOR + '" stop-opacity="0"/></linearGradient>'
+                    + '<linearGradient id="iiqAssetGrad_tk"  x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="' + TK_COLOR   + '" stop-opacity="0.30"/><stop offset="100%" stop-color="' + TK_COLOR   + '" stop-opacity="0"/></linearGradient>'
+                    + '</defs>';
+
+                var svg = '<svg id="iiqAssetChartSvg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%; height: 360px; display:block;">';
+                svg += defs;
                 svg += '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="rgba(15,23,42,0.45)" rx="8" ry="8" />';
 
-                // Y gridlines + labels
                 yTicks.forEach(function(t) {
                     var y = yScale(t);
                     svg += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="rgba(255,255,255,0.06)" />';
                     svg += '<text x="' + (padL - 8) + '" y="' + (y + 3.5) + '" fill="#94a3b8" font-size="10" text-anchor="end">' + t.toFixed(t < 10 ? 1 : 0) + '%</text>';
                 });
 
-                // X tick labels (rank N + matching views value so the user
-                // knows what "rank 50" means in terms of reach)
                 xTicks.forEach(function(rk) {
                     var x = xScale(rk);
                     var v = rows[rk - 1] ? rows[rk - 1].views : 0;
@@ -20428,53 +20445,154 @@
                     svg += '<text x="' + x + '" y="' + (H - padB + 27) + '" fill="#64748b" font-size="9" text-anchor="middle">' + fmtCompact(v) + ' views</text>';
                 });
 
-                // Axis titles
                 svg += '<text x="' + (padL + plotW / 2) + '" y="' + (H - 6) + '" fill="#cbd5e1" font-size="11" text-anchor="middle" font-weight="600">Asset rank (sorted by views, highest \u2192 lowest)</text>';
                 svg += '<text x="14" y="' + (padT + plotH / 2) + '" fill="#cbd5e1" font-size="11" text-anchor="middle" font-weight="600" transform="rotate(-90, 14, ' + (padT + plotH / 2) + ')">% of viewers</text>';
 
-                // Path builder
                 function buildPath(values, scaler) {
                     if (!values.length) return '';
                     return values.map(function(v, i) {
                         return (i === 0 ? 'M' : 'L') + xScale(i + 1).toFixed(1) + ',' + scaler(v).toFixed(1);
                     }).join(' ');
                 }
+                function buildAreaPath(values, scaler) {
+                    if (!values.length) return '';
+                    var line = buildPath(values, scaler);
+                    var lastX = xScale(values.length).toFixed(1);
+                    var firstX = xScale(1).toFixed(1);
+                    var baseY = (padT + plotH).toFixed(1);
+                    return line + ' L ' + lastX + ',' + baseY + ' L ' + firstX + ',' + baseY + ' Z';
+                }
 
-                // Faint raw lines (per-asset jitter)
-                svg += '<path d="' + buildPath(engArr, yScale) + '" fill="none" stroke="' + ENG_COLOR  + '" stroke-width="1"   stroke-opacity="0.18" />';
-                svg += '<path d="' + buildPath(infArr, yScale) + '" fill="none" stroke="' + INFO_COLOR + '" stroke-width="1"   stroke-opacity="0.18" />';
-                svg += '<path d="' + buildPath(tkArr,  yScale) + '" fill="none" stroke="' + TK_COLOR   + '" stroke-width="1"   stroke-opacity="0.18" />';
+                // Soft area fills under each smoothed trend line
+                svg += '<path d="' + buildAreaPath(engSmooth, yScale) + '" fill="url(#iiqAssetGrad_eng)" stroke="none" />';
+                svg += '<path d="' + buildAreaPath(infSmooth, yScale) + '" fill="url(#iiqAssetGrad_inf)" stroke="none" />';
+                svg += '<path d="' + buildAreaPath(tkSmooth,  yScale) + '" fill="url(#iiqAssetGrad_tk)"  stroke="none" />';
 
-                // Bold smoothed lines (the eye-readable trend)
-                svg += '<path d="' + buildPath(engSmooth, yScale) + '" fill="none" stroke="' + ENG_COLOR  + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />';
-                svg += '<path d="' + buildPath(infSmooth, yScale) + '" fill="none" stroke="' + INFO_COLOR + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />';
-                svg += '<path d="' + buildPath(tkSmooth,  yScale) + '" fill="none" stroke="' + TK_COLOR   + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />';
+                // Bold smoothed trend lines
+                svg += '<path d="' + buildPath(engSmooth, yScale) + '" fill="none" stroke="' + ENG_COLOR  + '" stroke-width="2.75" stroke-linejoin="round" stroke-linecap="round" />';
+                svg += '<path d="' + buildPath(infSmooth, yScale) + '" fill="none" stroke="' + INFO_COLOR + '" stroke-width="2.75" stroke-linejoin="round" stroke-linecap="round" />';
+                svg += '<path d="' + buildPath(tkSmooth,  yScale) + '" fill="none" stroke="' + TK_COLOR   + '" stroke-width="2.75" stroke-linejoin="round" stroke-linecap="round" />';
 
-                // Clickable per-asset markers (small, so 94 of them stay readable)
-                rows.forEach(function(r) {
+                // Per-asset hit zones: one transparent wide vertical
+                // strip per asset. Hovering anywhere in the strip
+                // surfaces the tooltip, and a vertical guide line +
+                // 3 highlighted dots (one per series at the smoothed
+                // values) appear. Click jumps to the card.
+                var stripW = N > 1 ? (plotW / (N - 1)) : plotW;
+                rows.forEach(function(r, i) {
                     var x = xScale(r.rank);
-                    var assetId = (r.c.asset_id || '').replace(/'/g, "\\'");
-                    var label = (r.c.action_label || r.c.asset_type || '\u2014')
-                        + '  \u00b7  rank #' + r.rank + ' (' + fmtCompact(r.views) + ' views)'
-                        + '\nEng rate: '  + r.eng_rate.toFixed(2)  + '%'
-                        + '\nInfo-seek: ' + r.info_pct.toFixed(2)  + '%'
-                        + '\nTicketing: ' + r.ticket_pct.toFixed(2) + '%'
-                        + '\nClick to jump to card';
-                    var titleEsc = escapeHtml(label);
-                    svg += '<circle cx="' + x + '" cy="' + yScale(r.eng_rate)   + '" r="2.5" fill="' + ENG_COLOR  + '" style="cursor:pointer;" onclick="iiqScrollToAssetCard(\'' + assetId + '\')"><title>' + titleEsc + '</title></circle>';
-                    svg += '<circle cx="' + x + '" cy="' + yScale(r.info_pct)   + '" r="2.5" fill="' + INFO_COLOR + '" style="cursor:pointer;" onclick="iiqScrollToAssetCard(\'' + assetId + '\')"><title>' + titleEsc + '</title></circle>';
-                    svg += '<circle cx="' + x + '" cy="' + yScale(r.ticket_pct) + '" r="2.5" fill="' + TK_COLOR   + '" style="cursor:pointer;" onclick="iiqScrollToAssetCard(\'' + assetId + '\')"><title>' + titleEsc + '</title></circle>';
+                    var assetId = String(r.c.asset_id || '');
+                    var idx = i;
+                    svg += '<rect x="' + (x - stripW/2).toFixed(1) + '" y="' + padT + '" width="' + stripW.toFixed(1) + '" height="' + plotH + '" fill="rgba(0,0,0,0)" data-iiq-asset-idx="' + idx + '" data-iiq-asset-id="' + escapeHtml(assetId) + '" style="cursor:pointer;" />';
                 });
+
+                // Static (always visible) small dots on the smoothed
+                // lines so the user sees where each asset sits, but
+                // they're tiny and translucent so they don't compete
+                // visually with the trend lines.
+                rows.forEach(function(r, i) {
+                    var x = xScale(r.rank);
+                    svg += '<circle cx="' + x.toFixed(1) + '" cy="' + yScale(engSmooth[i]).toFixed(1) + '" r="1.6" fill="' + ENG_COLOR  + '" fill-opacity="0.55" pointer-events="none" />';
+                    svg += '<circle cx="' + x.toFixed(1) + '" cy="' + yScale(infSmooth[i]).toFixed(1) + '" r="1.6" fill="' + INFO_COLOR + '" fill-opacity="0.55" pointer-events="none" />';
+                    svg += '<circle cx="' + x.toFixed(1) + '" cy="' + yScale(tkSmooth[i]).toFixed(1)  + '" r="1.6" fill="' + TK_COLOR   + '" fill-opacity="0.55" pointer-events="none" />';
+                });
+
+                // Hover overlay layer (guide line + 3 highlighted dots).
+                // Hidden by default; positioned via JS on mouseenter.
+                svg += '<g id="iiqAssetHoverLayer" style="display:none; pointer-events:none;">'
+                     +   '<line id="iiqAssetHoverGuide" x1="0" y1="' + padT + '" x2="0" y2="' + (padT + plotH) + '" stroke="rgba(255,255,255,0.25)" stroke-width="1" stroke-dasharray="3,3" />'
+                     +   '<circle id="iiqAssetHoverEng" cx="0" cy="0" r="5" fill="' + ENG_COLOR  + '" stroke="#0f172a" stroke-width="1.5" />'
+                     +   '<circle id="iiqAssetHoverInf" cx="0" cy="0" r="5" fill="' + INFO_COLOR + '" stroke="#0f172a" stroke-width="1.5" />'
+                     +   '<circle id="iiqAssetHoverTk"  cx="0" cy="0" r="5" fill="' + TK_COLOR   + '" stroke="#0f172a" stroke-width="1.5" />'
+                     + '</g>';
 
                 svg += '</svg>';
 
                 var legend = '<div style="display:flex; flex-wrap:wrap; gap:1.1rem; align-items:center; margin-top:0.45rem; font-size:0.72rem; color:var(--text-secondary);">'
-                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.5px solid ' + ENG_COLOR  + ';"></span> Engagement rate</span>'
-                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.5px solid ' + INFO_COLOR + ';"></span> Info-seek %</span>'
-                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.5px solid ' + TK_COLOR   + ';"></span> Ticketing %</span>'
-                    + '<span style="opacity:0.6;">Bold lines = 7-asset rolling average \u00b7 faint lines = raw per-asset values \u00b7 click any dot to jump to its card</span>'
+                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.75px solid ' + ENG_COLOR  + ';"></span> Engagement rate</span>'
+                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.75px solid ' + INFO_COLOR + ';"></span> Info-seek %</span>'
+                    + '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:18px; height:0; border-top:2.75px solid ' + TK_COLOR   + ';"></span> Ticketing %</span>'
+                    + '<span style="opacity:0.6;">Smoothed portfolio trend (' + smoothWin + '-asset rolling avg) \u00b7 hover any column for asset details \u00b7 click to jump to its card</span>'
                     + '</div>';
-                host.innerHTML = svg + legend;
+
+                // Wrap the SVG in a relatively-positioned container so
+                // we can absolutely-position the hover tooltip on top.
+                host.innerHTML = '<div id="iiqAssetChartWrap" style="position:relative;">'
+                              +   svg
+                              +   '<div id="iiqAssetTooltip" style="position:absolute; display:none; pointer-events:none; background:rgba(15,23,42,0.96); border:1px solid rgba(148,163,184,0.4); border-radius:6px; padding:0.55rem 0.7rem; font-size:0.72rem; color:#e2e8f0; box-shadow:0 8px 24px rgba(0,0,0,0.5); z-index:10; min-width:200px; max-width:280px; line-height:1.45;"></div>'
+                              + '</div>'
+                              + legend;
+
+                // Bind hover + click on the per-asset strip rects.
+                var chartWrap = document.getElementById('iiqAssetChartWrap');
+                var svgEl     = document.getElementById('iiqAssetChartSvg');
+                var tooltip   = document.getElementById('iiqAssetTooltip');
+                var hoverLayer= document.getElementById('iiqAssetHoverLayer');
+                var hoverGuide= document.getElementById('iiqAssetHoverGuide');
+                var hoverEng  = document.getElementById('iiqAssetHoverEng');
+                var hoverInf  = document.getElementById('iiqAssetHoverInf');
+                var hoverTk   = document.getElementById('iiqAssetHoverTk');
+                if (!chartWrap || !svgEl) return;
+
+                function showHover(idx, clientX, clientY) {
+                    var r = rows[idx];
+                    if (!r) return;
+                    var x = xScale(r.rank);
+                    var yEng = yScale(engSmooth[idx]);
+                    var yInf = yScale(infSmooth[idx]);
+                    var yTk  = yScale(tkSmooth[idx]);
+                    hoverGuide.setAttribute('x1', x);
+                    hoverGuide.setAttribute('x2', x);
+                    hoverEng.setAttribute('cx', x); hoverEng.setAttribute('cy', yEng);
+                    hoverInf.setAttribute('cx', x); hoverInf.setAttribute('cy', yInf);
+                    hoverTk.setAttribute('cx',  x); hoverTk.setAttribute('cy',  yTk);
+                    hoverLayer.style.display = '';
+
+                    var name = r.c.action_label || r.c.asset_type || 'Untitled asset';
+                    var phase = r.c.phase ? '<span style="opacity:0.65;"> \u00b7 ' + escapeHtml(String(r.c.phase)) + '</span>' : '';
+                    var paid  = r.c.paid_or_organic ? '<span style="opacity:0.65;"> \u00b7 ' + escapeHtml(String(r.c.paid_or_organic)) + '</span>' : '';
+                    var posted = r.c.posted_date ? '<div style="opacity:0.65; font-size:0.68rem; margin-top:0.15rem;">Posted ' + escapeHtml(String(r.c.posted_date)) + '</div>' : '';
+                    tooltip.innerHTML =
+                        '<div style="font-weight:600; color:#f1f5f9; margin-bottom:0.25rem;">' + escapeHtml(String(name)) + '</div>'
+                      + '<div style="font-size:0.68rem; color:#94a3b8; margin-bottom:0.45rem;">Rank #' + r.rank + ' of ' + N + ' \u00b7 ' + fmtCompact(r.views) + ' views' + phase + paid + '</div>'
+                      + '<div style="display:grid; grid-template-columns: 1fr auto; gap:0.15rem 0.6rem;">'
+                      +   '<span><span style="display:inline-block; width:8px; height:8px; background:' + ENG_COLOR  + '; border-radius:50%; margin-right:0.35rem;"></span>Engagement rate</span><span style="text-align:right; font-variant-numeric:tabular-nums;">' + r.eng_rate.toFixed(2)   + '%</span>'
+                      +   '<span><span style="display:inline-block; width:8px; height:8px; background:' + INFO_COLOR + '; border-radius:50%; margin-right:0.35rem;"></span>Info-seek</span><span style="text-align:right; font-variant-numeric:tabular-nums;">'      + r.info_pct.toFixed(2)   + '%</span>'
+                      +   '<span><span style="display:inline-block; width:8px; height:8px; background:' + TK_COLOR   + '; border-radius:50%; margin-right:0.35rem;"></span>Ticketing</span><span style="text-align:right; font-variant-numeric:tabular-nums;">'      + r.ticket_pct.toFixed(2) + '%</span>'
+                      + '</div>'
+                      + posted
+                      + '<div style="margin-top:0.4rem; font-size:0.66rem; color:#64748b;">Click to jump to asset card \u2193</div>';
+
+                    var wrapRect = chartWrap.getBoundingClientRect();
+                    var tx = clientX - wrapRect.left + 14;
+                    var ty = clientY - wrapRect.top  + 14;
+                    var ttRect = tooltip.getBoundingClientRect();
+                    var ttW = ttRect.width  || 220;
+                    var ttH = ttRect.height || 110;
+                    if (tx + ttW > wrapRect.width)  tx = clientX - wrapRect.left - ttW - 14;
+                    if (ty + ttH > wrapRect.height) ty = wrapRect.height - ttH - 6;
+                    if (tx < 4) tx = 4;
+                    if (ty < 4) ty = 4;
+                    tooltip.style.left = tx + 'px';
+                    tooltip.style.top  = ty + 'px';
+                    tooltip.style.display = 'block';
+                }
+                function hideHover() {
+                    hoverLayer.style.display = 'none';
+                    tooltip.style.display = 'none';
+                }
+
+                svgEl.querySelectorAll('rect[data-iiq-asset-idx]').forEach(function(rect) {
+                    rect.addEventListener('mousemove', function(ev) {
+                        var idx = parseInt(rect.getAttribute('data-iiq-asset-idx'), 10);
+                        showHover(idx, ev.clientX, ev.clientY);
+                    });
+                    rect.addEventListener('mouseleave', hideHover);
+                    rect.addEventListener('click', function() {
+                        var aid = rect.getAttribute('data-iiq-asset-id') || '';
+                        if (aid && typeof iiqScrollToAssetCard === 'function') iiqScrollToAssetCard(aid);
+                    });
+                });
             }
 
             window.reloadIntentIQAssets = function() {
