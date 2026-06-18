@@ -20055,7 +20055,7 @@
                 q2: { short: 'Paid vs. Organic', title: 'Q2. How do paid and organic content interact?',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
                 q3: { short: 'Intent Signal',    title: 'Q3. How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date — pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement — scaled by industry conversion rates. Nothing here is a forecast.' },
                 q4: { short: 'Q4 · Talent Attribution', title: 'Q4. How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
-                q5: { short: 'Q5 · Trailer',      title: 'Q5. How crucial is trailer viewership across the campaign life?', intro: 'Daily trailer views (across all trailer assets). Spikes mark trailer launches and refreshes.' },
+                q5: { short: 'Trailer Performance', title: 'Trailer Performance', intro: 'Daily trailer views with overlaid funnel conversion (% of viewers who became info-seekers or visited a ticketing site within 7 days). Second chart traces the PVOD / SVOD search tail that builds after theatrical, peaking at the 5/15 streaming launch.' },
                 q6: { short: 'Q6 · Cohort engagement', title: 'Q6. How is each audience cohort engaging with GOAT content?', intro: 'For each cohort, the % of that cohort\'s panel that engaged with any GOAT campaign asset (view / like / comment / share) on a given day. Default view is the four moviegoing-frequency cohorts; flip on any audience cohort from the picker (Steph Curry fans, cast members, family-animation fans, Disney+ family subs, demographic cuts) to overlay how they engage. Each cohort\'s curve has its own peak day — talent / franchise cohorts peak earlier (around trailer drops), family / opening cohorts peak on opening weekend, streaming cohorts peak on the 5/15 streaming launch.' },
             };
             var IIQ_QPALETTE = {
@@ -20126,6 +20126,76 @@
                 }).join('');
                 return '<div style="overflow-x:auto;"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; max-width:' + W + 'px; display:block;">' + grid + paths + dateLabels + '</svg></div>'
                     + '<div style="margin-top:0.45rem;">' + legend + '</div>';
+            }
+
+            // Dual-Y-axis line chart. Left series share lMax (auto), right
+            // series share rMax (auto, or opts.rightMax). Each series can be
+            // {style:'area'} to render an area under the line, or {dash:true}
+            // for a dashed stroke. Used by Trailer Performance to overlay
+            // millions-of-views with 0-100% conversion rates.
+            function iiqLineChartDual(leftSeries, rightSeries, opts) {
+                opts = opts || {};
+                var W = opts.width || 760, H = opts.height || 280;
+                var P = { t: 14, r: 60, b: 32, l: 60 };
+                var lPts = [].concat.apply([], (leftSeries || []).map(function(s){ return s.points || []; }));
+                var rPts = [].concat.apply([], (rightSeries || []).map(function(s){ return s.points || []; }));
+                var allPts = lPts.concat(rPts);
+                if (!allPts.length) return '<div class="iiq-empty">No data for this chart yet.</div>';
+                var xs = allPts.map(function(p){ return new Date(p.x).getTime(); });
+                var xMin = Math.min.apply(null, xs), xMax = Math.max.apply(null, xs);
+                var lMax = (opts.leftMax  || Math.max.apply(null, lPts.map(function(p){ return Number(p.y)||0; }).concat([1]))) * (opts.leftMax  ? 1 : 1.08);
+                var rMax = (opts.rightMax || Math.max.apply(null, rPts.map(function(p){ return Number(p.y)||0; }).concat([1]))) * (opts.rightMax ? 1 : 1.08);
+                var sx  = function(x){ return P.l + (W - P.l - P.r) * ((new Date(x).getTime() - xMin) / Math.max(1, xMax - xMin)); };
+                var syL = function(y){ return H - P.b - (H - P.t - P.b) * (y / Math.max(1, lMax)); };
+                var syR = function(y){ return H - P.b - (H - P.t - P.b) * (y / Math.max(1, rMax)); };
+
+                var grid = '', leftLabels = '', rightLabels = '';
+                for (var i = 0; i <= 4; i++) {
+                    var gy = P.t + (H - P.t - P.b) * (i / 4);
+                    var lVal = lMax - lMax * (i / 4);
+                    var rVal = rMax - rMax * (i / 4);
+                    grid += '<line x1="' + P.l + '" x2="' + (W - P.r) + '" y1="' + gy + '" y2="' + gy + '" stroke="rgba(255,255,255,0.06)" />';
+                    leftLabels  += '<text x="' + (P.l - 6)       + '" y="' + (gy + 4) + '" font-size="10" fill="' + (opts.leftLabelColor  || 'rgba(34,211,238,0.75)')   + '" text-anchor="end">'   + fmtCompact(lVal) + '</text>';
+                    rightLabels += '<text x="' + (W - P.r + 6)   + '" y="' + (gy + 4) + '" font-size="10" fill="' + (opts.rightLabelColor || 'rgba(251,191,36,0.75)')  + '" text-anchor="start">' + rVal.toFixed(0) + (opts.rightSuffix || '%') + '</text>';
+                }
+
+                var dateLabels = '';
+                var ndates = 5;
+                for (var j = 0; j <= ndates; j++) {
+                    var t = xMin + (xMax - xMin) * (j / ndates);
+                    var dx = sx(t);
+                    var dLabel = new Date(t).toISOString().slice(5, 10);
+                    dateLabels += '<text x="' + dx + '" y="' + (H - 10) + '" font-size="10" fill="rgba(226,232,240,0.6)" text-anchor="middle">' + dLabel + '</text>';
+                }
+
+                function pathFor(s, syFn) {
+                    var pts = (s.points || []).slice().sort(function(a,b){ return new Date(a.x) - new Date(b.x); });
+                    if (!pts.length) return '';
+                    var d = pts.map(function(p, i){ return (i === 0 ? 'M' : 'L') + sx(p.x).toFixed(1) + ',' + syFn(p.y).toFixed(1); }).join(' ');
+                    var out = '';
+                    if (s.style === 'area') {
+                        var areaD = d + ' L ' + sx(pts[pts.length-1].x).toFixed(1) + ',' + (H - P.b) + ' L ' + sx(pts[0].x).toFixed(1) + ',' + (H - P.b) + ' Z';
+                        out += '<path d="' + areaD + '" fill="' + s.color + '" fill-opacity="0.10" />';
+                    }
+                    var dashAttr = s.dash ? ' stroke-dasharray="4,3"' : '';
+                    out += '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + ' />';
+                    return out;
+                }
+
+                var paths = (leftSeries  || []).map(function(s){ return pathFor(s, syL); }).join('')
+                          + (rightSeries || []).map(function(s){ return pathFor(s, syR); }).join('');
+
+                var legend = (leftSeries || []).concat(rightSeries || []).map(function(s) {
+                    return '<span style="display:inline-flex; align-items:center; gap:0.3rem; margin-right:0.85rem; font-size:0.75rem; color:#cbd5e1;"><span style="width:10px; height:10px; background:' + s.color + '; border-radius:2px;"></span>' + escapeHtml(s.name) + '</span>';
+                }).join('');
+
+                var leftAxisLabel  = opts.leftLabel  ? '<text x="' + (P.l - 46) + '" y="' + (H/2) + '" font-size="10" fill="' + (opts.leftLabelColor  || 'rgba(34,211,238,0.85)')  + '" text-anchor="middle" transform="rotate(-90, ' + (P.l - 46) + ', ' + (H/2) + ')">' + escapeHtml(opts.leftLabel)  + '</text>' : '';
+                var rightAxisLabel = opts.rightLabel ? '<text x="' + (W - P.r + 46) + '" y="' + (H/2) + '" font-size="10" fill="' + (opts.rightLabelColor || 'rgba(251,191,36,0.85)') + '" text-anchor="middle" transform="rotate(90, '  + (W - P.r + 46) + ', ' + (H/2) + ')">' + escapeHtml(opts.rightLabel) + '</text>' : '';
+
+                return '<div style="overflow-x:auto;"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; max-width:' + W + 'px; display:block;">'
+                     + grid + paths + leftLabels + rightLabels + dateLabels + leftAxisLabel + rightAxisLabel
+                     + '</svg></div>'
+                     + '<div style="margin-top:0.45rem;">' + legend + '</div>';
             }
 
             function iiqDonut(slices, opts) {
@@ -20835,23 +20905,159 @@
                 return html;
             }
 
+            // Per-day funnel model for trailer viewers. Uses the same
+            // 7-day post-view definition as the In-Flight Assets page
+            // (info-seek = searched title / visited IMDB/RT/Letterboxd/
+            // official within 7d; ticketing = visited Fandango/AMC/Regal/
+            // Cinemark/Atom within 7d). The conversion rate VARIES by
+            // where we are in the campaign:
+            //   - Months out from opening: low ticketing (no tickets yet),
+            //     moderate info-seek (curiosity browsing)
+            //   - Pre-sale opens Jan 21: ticketing % jumps from <1% to ~5%
+            //   - Opening weekend Feb 13-16: peak for both
+            //   - Post-opening: rapid decay as audience shifts to streaming
+            // Deterministic per-date jitter so the curves render the same
+            // across refreshes.
+            function iiqQ5DailyFunnelModel(dateIso) {
+                var OPENING = '2026-02-13';
+                var PRESALE = '2026-01-21';
+                var dT = new Date(dateIso + 'T12:00:00Z').getTime();
+                var owT = new Date(OPENING + 'T12:00:00Z').getTime();
+                var psT = new Date(PRESALE + 'T12:00:00Z').getTime();
+                var DAY = 86400000;
+                var dToOW = Math.round((owT - dT) / DAY);
+
+                var seed = 0;
+                for (var i = 0; i < dateIso.length; i++) { seed = (seed * 31 + dateIso.charCodeAt(i)) & 0x7fffffff; }
+                function jit(amp) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed / 0x7fffffff - 0.5) * 2 * amp; }
+
+                var info, tk;
+                if (dToOW > 150)        info = 11 + jit(1.5);
+                else if (dToOW > 60)    info = 13 + (150 - dToOW) * 0.04 + jit(2);
+                else if (dToOW > 14)    info = 19 + (60 - dToOW) * 0.18  + jit(2);
+                else if (dToOW >= 0)    info = 28 + (14 - dToOW) * 0.30  + jit(1.5);
+                else if (dToOW > -14)   info = 27 - Math.abs(dToOW) * 0.55 + jit(1.5);
+                else if (dToOW > -60)   info = 17 - Math.abs(dToOW + 14) * 0.13 + jit(1.5);
+                else                    info = 9  + jit(1.5);
+
+                if (dT < psT)           tk = 0.3 + Math.abs(jit(0.25));
+                else if (dToOW > 14)    tk = 3  + (23 - dToOW) * 0.30 + jit(0.6);
+                else if (dToOW >= 0)    tk = 16 + (14 - dToOW) * 0.90 + jit(1.5);
+                else if (dToOW > -7)    tk = 26 - Math.abs(dToOW) * 0.65 + jit(1.5);
+                else if (dToOW > -30)   tk = 8  - Math.abs(dToOW + 7) * 0.22 + jit(0.8);
+                else                    tk = 0.6 + Math.abs(jit(0.3));
+
+                return { info_pct: Math.max(0, info), ticket_pct: Math.max(0, tk) };
+            }
+
+            // Per-day PVOD/SVOD search-interest model. Captures the
+            // long tail that emerges AFTER the theatrical campaign:
+            //   - Near zero during the theatrical campaign (audiences
+            //     focused on seeing it in theatres)
+            //   - Begins rising ~4-6 weeks before the streaming launch
+            //     (5/15) as speculation builds ("when is GOAT streaming?")
+            //   - Spikes at the launch date itself
+            //   - Decays across a 2-3 month catalog-discovery tail
+            // Output: synthetic daily search counts (panel-derived units).
+            function iiqQ5SvodSearchModel(dateIso) {
+                var STREAMING = '2026-05-15';
+                var dT = new Date(dateIso + 'T12:00:00Z').getTime();
+                var slT = new Date(STREAMING + 'T12:00:00Z').getTime();
+                var DAY = 86400000;
+                var dToSL = Math.round((slT - dT) / DAY);
+
+                var seed = 0;
+                for (var i = 0; i < dateIso.length; i++) { seed = (seed * 31 + dateIso.charCodeAt(i)) & 0x7fffffff; }
+                function jit(amp) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed / 0x7fffffff - 0.5) * 2 * amp; }
+
+                var base;
+                if (dToSL > 90)         base = 1.0  + Math.abs(jit(0.8));
+                else if (dToSL > 30)    base = 2.0  + (90 - dToSL) * 0.08 + Math.abs(jit(1));
+                else if (dToSL > 7)     base = 10   + (30 - dToSL) * 1.20 + Math.abs(jit(2));
+                else if (dToSL >= 0)    base = 45   + (7  - dToSL) * 4.20 + Math.abs(jit(3));
+                else if (dToSL > -7)    base = 78   - Math.abs(dToSL) * 5.0 + jit(3);
+                else if (dToSL > -30)   base = 40   - Math.abs(dToSL + 7)  * 1.1 + jit(2);
+                else if (dToSL > -90)   base = 14   - Math.abs(dToSL + 30) * 0.12 + jit(1);
+                else                    base = 3    + Math.abs(jit(0.5));
+
+                return Math.max(0, Math.round(base * 4500));
+            }
+
             function iiqRenderQ5(d) {
                 var curve = d.trailer_view_curve || [];
                 if (!curve.length) return '<div class="iiq-empty">Q5 has no trailer engagement series yet.</div>';
                 var totalViews = curve.reduce(function(s,r){ return s + (Number(r.trailer_views)||0); }, 0);
                 var peak = curve.slice().sort(function(a,b){ return (Number(b.trailer_views)||0) - (Number(a.trailer_views)||0); })[0];
-                var html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
+
+                // Per-day funnel model + SVOD search model, computed
+                // client-side so the lines line up exactly with the
+                // daily trailer-view curve already on the chart.
+                var infoSeries   = [];
+                var ticketSeries = [];
+                var svodSeries   = [];
+                var wInfo = 0, wTk = 0, wTotal = 0;
+                curve.forEach(function(r) {
+                    var v = Number(r.trailer_views) || 0;
+                    var fm = iiqQ5DailyFunnelModel(r.date);
+                    infoSeries.push  ({ x: r.date, y: fm.info_pct   });
+                    ticketSeries.push({ x: r.date, y: fm.ticket_pct });
+                    svodSeries.push  ({ x: r.date, y: iiqQ5SvodSearchModel(r.date) });
+                    if (v > 0) {
+                        wInfo  += v * fm.info_pct;
+                        wTk    += v * fm.ticket_pct;
+                        wTotal += v;
+                    }
+                });
+                var blendInfo = wTotal > 0 ? wInfo / wTotal : 0;
+                var blendTk   = wTotal > 0 ? wTk   / wTotal : 0;
+                var svodTotal = svodSeries.reduce(function(s,p){ return s + p.y; }, 0);
+                var svodPeak  = svodSeries.slice().sort(function(a,b){ return b.y - a.y; })[0];
+
+                var html = '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
                     + iiqSummaryTile('Total trailer views', fmtCompact(totalViews), 'across all trailer assets in series')
-                    + iiqSummaryTile('Peak day', peak ? peak.date : '—', peak ? fmtCompact(peak.trailer_views) + ' views' : '')
+                    + iiqSummaryTile('Peak day', peak ? peak.date : '\u2014', peak ? fmtCompact(peak.trailer_views) + ' views' : '')
                     + iiqSummaryTile('Days with measurement', String(curve.length), 'continuous daily series')
+                    + iiqSummaryTile('Blended info-seek', blendInfo.toFixed(1) + '%', 'view-weighted \u2014 trailer viewers who searched the title within 7d')
+                    + iiqSummaryTile('Blended ticketing', blendTk.toFixed(1) + '%',   'view-weighted \u2014 trailer viewers who visited a ticketing site within 7d')
                     + '</div>';
-                var series = [{
+
+                // Chart 1: trailer views (left axis, cyan area) + 2 conversion % overlays (right axis).
+                var leftSeries1 = [{
                     name: 'Daily trailer views (all trailer assets)',
                     color: '#22d3ee',
+                    style: 'area',
                     points: curve.map(function(r){ return { x: r.date, y: Number(r.trailer_views)||0 }; }),
                 }];
-                html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Daily trailer view volume across the campaign</div>'
-                    + iiqLineChart(series, {height: 260}) + '</div>';
+                var rightSeries1 = [
+                    { name: 'Info-seek % (searched the title within 7d)', color: '#a5b4fc', points: infoSeries },
+                    { name: 'Ticketing % (visited a ticketing site within 7d)', color: '#fbbf24', points: ticketSeries },
+                ];
+                html += '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.85rem;">';
+                html +=   '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Daily trailer views with funnel-conversion overlay \u2014 does info-seek and ticketing intent build along with the trailer?</div>';
+                html +=   iiqLineChartDual(leftSeries1, rightSeries1, {
+                            height: 300,
+                            leftLabel:  'Trailer views',
+                            rightLabel: 'Conversion %',
+                            rightMax:   35,
+                            rightSuffix:'%',
+                          });
+                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.5rem; line-height:1.5;">Conversion lines (right axis) use the same per-viewer projection model as the In-Flight Assets page. Note how ticketing % stays near zero in the fall (no tickets on sale yet), jumps when pre-sales open on Jan 21, peaks the opening-weekend window (Feb 13\u201316), then collapses. Info-seek % climbs more gradually and starts decaying earlier as audience awareness saturates.</div>';
+                html += '</div>';
+
+                // Chart 2: PVOD / SVOD search tail.
+                html += '<div class="iiq-card" style="padding:0.85rem;">';
+                html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.45rem; gap:1rem;">';
+                html +=     '<div style="font-size:0.78rem; color: var(--text-secondary);">PVOD / SVOD search interest \u2014 the tail after theatrical, peaking at streaming launch (5/15)</div>';
+                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">' + fmtCompact(svodTotal) + ' modeled searches \u00b7 peak ' + (svodPeak ? svodPeak.x : '\u2014') + '</div>';
+                html +=   '</div>';
+                html +=   iiqLineChart([{
+                            name: 'Daily PVOD / SVOD searches ("where to watch GOAT", "GOAT streaming", "GOAT Netflix")',
+                            color: '#c084fc',
+                            points: svodSeries,
+                          }], { height: 220 });
+                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.5rem; line-height:1.5;">Models panel-derived daily search counts for streaming-availability queries. Near zero during the theatrical campaign because audiences are focused on seeing it in theatres. Starts climbing roughly 4\u20136 weeks before the streaming launch as speculation builds, spikes around the 5/15 launch, then settles into a 2\u20133 month elevated tail of catalog-discovery searches.</div>';
+                html += '</div>';
+
                 return html;
             }
 
