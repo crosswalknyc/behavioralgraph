@@ -40223,7 +40223,7 @@
                             return '<tr style="border-bottom:1px solid var(--border-color);">'
                                  + '<td style="padding:6px 4px;">' + _jiqEsc(h.host) + '</td>'
                                  + '<td style="padding:6px 4px;text-align:right;">' + _jiqFmt(h.users) + '</td>'
-                                 + '<td style="padding:6px 4px;text-align:right;">' + (h.users_pct != null ? h.users_pct + '%' : '—') + '</td>'
+                                 + '<td style="padding:6px 4px;text-align:right;">' + _jiqPct(h.users_pct, 1) + '</td>'
                                  + '</tr>';
                         }).join('') + '</tbody></table>';
                 }
@@ -44194,7 +44194,7 @@
                          +   '<div style="padding: 6px 4px; ' + headerStyle + ' border: 1px solid var(--border-color); border-top: 0; '
                          +      'border-radius: 0 0 6px 6px; text-align: center; min-width: 0; overflow-wrap: anywhere;">'
                          +     '<div style="font-size: 11px; font-weight: 700; line-height: 1.2;">' + _jiqEsc(col.label) + '</div>'
-                         +     '<div style="font-size: 10px; opacity: 0.8;">' + _jiqFmt(col.users) + ' users · ' + (col.users_pct || 0) + '%</div>'
+                         +     '<div style="font-size: 10px; opacity: 0.8;">' + _jiqFmt(col.users) + ' users · ' + ((+col.users_pct || 0) === 0 ? '—' : ((col.users_pct || 0) + '%')) + '</div>'
                          +   '</div>'
                          + '</div>';
                 }).join('')
@@ -44417,7 +44417,7 @@
                                        : (p.pct != null)       ? p.pct
                                        : (cohortN > 0 && p.users != null) ? Math.round(p.users / cohortN * 1000) / 10
                                        : 0;
-                            var pctDisplay = (pctVal != null && !isNaN(pctVal))
+                            var pctDisplay = (pctVal != null && !isNaN(pctVal) && Number(pctVal) !== 0)
                                 ? (Number(pctVal).toFixed(1).replace(/\.0$/, '')) + '%'
                                 : '—';
                             var daysVal = (p.avg_days != null) ? p.avg_days : p.days;
@@ -45989,11 +45989,13 @@
                 return;
             }
             if (fMeta) {
+                var _cuPct = _jiqPct(cluster.users_pct, 1);
+                var _ccPct = _jiqPct(cluster.conversion_pct, 1);
                 fMeta.textContent = 'Inception: ' + (cluster.inception || '—')
                     + '  ·  ' + _jiqFmt(cluster.users) + ' users'
-                    + (cluster.users_pct != null ? (' (' + cluster.users_pct + '% of cohort)') : '')
+                    + (cluster.users_pct != null && _cuPct !== '—' ? (' (' + _cuPct + ' of cohort)') : '')
                     + '  ·  ' + _jiqFmt(cluster.converted) + ' converted'
-                    + (cluster.conversion_pct != null ? (' (' + cluster.conversion_pct + '%)') : '');
+                    + (cluster.conversion_pct != null && _ccPct !== '—' ? (' (' + _ccPct + ')') : '');
             }
 
             var funnel = cluster.funnel || [];
@@ -46041,7 +46043,7 @@
                             return '<tr style="border-bottom:1px solid var(--border-color);">'
                                  + '<td style="padding:6px 4px;">' + _jiqEsc(h.host) + '</td>'
                                  + '<td style="padding:6px 4px;text-align:right;">' + _jiqFmt(h.users) + '</td>'
-                                 + '<td style="padding:6px 4px;text-align:right;">' + (h.users_pct != null ? h.users_pct + '%' : '—') + '</td>'
+                                 + '<td style="padding:6px 4px;text-align:right;">' + _jiqPct(h.users_pct, 1) + '</td>'
                                  + '</tr>';
                         }).join('') + '</tbody></table>';
                 }
