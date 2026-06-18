@@ -19572,7 +19572,7 @@
                 </div>
 
                 <details id="iiqConvSecretSauce" style="background: rgba(15,23,42,0.55); border:1px solid rgba(245,158,11,0.35); border-radius:8px; padding:0.6rem 0.85rem; margin-bottom:0.85rem;">
-                    <summary style="cursor:pointer; font-size:0.85rem; font-weight:700; color:#fbbf24;">🧪 Secret Sauce &nbsp;<span style="font-weight:400; font-size:0.72rem; color:var(--text-secondary);">(conversion weights — calibrated to GOAT opening weekend $35.5M)</span></summary>
+                    <summary style="cursor:pointer; font-size:0.85rem; font-weight:700; color:#fbbf24;">🧪 Secret Sauce &nbsp;<span style="font-weight:400; font-size:0.72rem; color:var(--text-secondary);">(conversion weights)</span></summary>
                     <div style="font-size:0.72rem; color: var(--text-secondary); margin: 0.55rem 0 0.7rem;">
                         Each funnel layer converts at its own rate. Layers are <strong>nested</strong> (ticketing visitors ⊂ info-seekers ⊂ reached), so each person is assigned to the deepest layer they reached and that layer's conversion rate is applied. No double-counting.
                     </div>
@@ -41768,6 +41768,7 @@
                     // Engagement surfaces — mini horizontal bars
                     var surfaces = (h.top_engagement_surfaces || []).slice(0, 5).map(function(s) {
                         var pct = +s.reach_pct_of_cohort || 0;
+                        var pctTxt = (pct === 0) ? '—' : (pct + '%');
                         return '<div style="display:grid;grid-template-columns:1fr 36px;gap:8px;align-items:center;font-size:0.72rem;margin-bottom:3px;">'
                              + '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
                              +   '<div style="background:var(--bg-secondary);border-radius:4px;height:14px;position:relative;overflow:hidden;margin-bottom:2px;">'
@@ -41775,7 +41776,7 @@
                              +     '<div style="position:absolute;top:0;left:6px;line-height:14px;color:var(--text-primary);font-size:0.7rem;font-weight:600;">' + _jiqEsc(s.surface) + '</div>'
                              +   '</div>'
                              + '</div>'
-                             + '<div style="font-weight:700;color:' + color + ';text-align:right;font-variant-numeric:tabular-nums;">' + pct + '%</div>'
+                             + '<div style="font-weight:700;color:' + color + ';text-align:right;font-variant-numeric:tabular-nums;">' + pctTxt + '</div>'
                              + '</div>';
                     }).join('');
                     // DMA heatstrip — top 8 by index
@@ -41802,7 +41803,7 @@
                         +     '</div>'
                         +   '</div>'
                         +   '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">'
-                        +     '<div title="Share of potential consumers this cohort represents" style="background:' + color + ';color:#0a0a0a;font-weight:800;font-size:0.78rem;padding:5px 11px;border-radius:14px;letter-spacing:0.02em;white-space:nowrap;">' + sharePct.toFixed(1) + '% ' + shareLabel + '</div>'
+                        +     '<div title="Share of potential consumers this cohort represents" style="background:' + color + ';color:#0a0a0a;font-weight:800;font-size:0.78rem;padding:5px 11px;border-radius:14px;letter-spacing:0.02em;white-space:nowrap;">' + (_jiqPct(sharePct, 1) === '—' ? '— ' : (sharePct.toFixed(1) + '% ')) + shareLabel + '</div>'
                         +     '<div class="jiq-hyp-chev" style="font-size:0.78rem;color:var(--text-secondary);width:14px;text-align:center;transition:transform 0.15s;">▸</div>'
                         +   '</div>'
                         + '</summary>';
