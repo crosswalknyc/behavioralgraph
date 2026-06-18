@@ -21284,7 +21284,7 @@
                             series.push({ name: 'Daily ticketing visits', color: '#f472b6', points: tkPts   });
                         }
                         var captionTitle = 'Daily performance (' + escapeHtml(winLabel) + ')'
-                            + (isSynthesized ? ' \u00b7 <span style="color: var(--text-secondary); font-weight:normal; font-size:0.72rem;">modeled daily distribution from window total + posted_date</span>' : '');
+                            + (isSynthesized ? ' \u00b7 <span style="color: var(--text-secondary); font-weight:normal; font-size:0.72rem;">estimated daily distribution from window total + posted_date</span>' : '');
                         chartHost.innerHTML = '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">' + captionTitle + '</div>' + iiqLineChart(series, { height: 260 });
                     })
                     .catch(function(e) {
@@ -21367,108 +21367,116 @@
                 );
                 html += '</div>';
 
-                // === SUBJECT card: signal breakdown ===
-                if (signals.length) {
-                    var maxSigPeople = Math.max.apply(null, signals.map(function(s){ return Number(s.people)||0; }).concat([1]));
-                    html += '<div class="iiq-card" style="padding:1rem; margin-bottom:0.85rem; border-left: 3px solid #22d3ee;">';
-                    html += '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.55rem;">';
-                    html +=   '<div>';
-                    html +=     '<div style="font-size:0.95rem; font-weight:700; color:#e2e8f0;">' + escapeHtml(subj.display_name || 'Subject') + ' — high-intent signals (panel-measured)</div>';
-                    html +=     '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Opens ' + escapeHtml(subj.opening_date || '—') + ' · each signal is observed engagement count × industry conversion rate</div>';
-                    html +=   '</div>';
-                    html += '</div>';
-                    html += signals.map(function(s) {
-                        var people = Number(s.people)||0;
-                        var sub    = (s.conversion_pct ? s.conversion_pct + '% of ' : '') + fmtCompact(s.raw_engagement||0) + ' engagements · ' + (s.assets_count||0) + ' assets';
-                        return iiqBarRow(s.signal, people, maxSigPeople, '#22d3ee', '', sub);
-                    }).join('');
-                    html += '<div style="margin-top:0.5rem; font-size:0.7rem; color: var(--text-secondary); font-style: italic;">' + escapeHtml(subj.source || '') + '</div>';
-                    html += '</div>';
+                // === COMBINED high-intent signals: subject + every comp in
+                // a single matrix chart. Replaces the prior split between a
+                // subject-only signal card and a separate per-comp matrix
+                // so the user can scan the whole field in one view. Subject
+                // sits at the top in cyan (panel-measured); comps follow in
+                // purple, sorted by realized opening-weekend buyers desc.
+                // Bar widths normalize within each column so the smaller
+                // signals (pre-sale, cast/talent) stay readable next to
+                // deep-trailer engagement, which is ~20x larger.
+                var SIG_ORDER = [
+                    { signal: 'Pre-sale ticketing-page engagement', conv_pct: 85, header: 'Pre-sale ticketing-page',  short: 'pre-sale' },
+                    { signal: 'Deep trailer engagement',            conv_pct: 25, header: 'Deep trailer',              short: 'trailer'  },
+                    { signal: 'Cast / talent social engagement',    conv_pct: 8,  header: 'Cast / talent social',      short: 'cast'     }
+                ];
+                function _q3MatchSig(name) {
+                    var sig = SIG_ORDER.find(function(o){ return o.signal === name; });
+                    if (sig) return sig;
+                    var lc = String(name || '').toLowerCase();
+                    return SIG_ORDER.find(function(o){ return lc.indexOf(o.short) >= 0; });
                 }
-
-                // === MODELED per-comp signal breakdowns ===
-                // For each comp we project the same 3 high-intent signals
-                // GOAT measures (pre-sale ticketing engagement, deep trailer
-                // engagement, cast / talent engagement), using GOAT's shape as
-                // a prior with per-comp seeded jitter. Each card uses the
-                // same conversion rates (85% / 25% / 8%) so a comp's modeled
-                // bars are directly comparable to GOAT's measured bars above.
-                if (comps.length) {
-                    var sortedCompsForSig = comps.slice().sort(function(a,b){
-                        return (Number(b.opening_weekend_buyers)||0) - (Number(a.opening_weekend_buyers)||0);
+                var combinedRows = [];
+                if (signals.length) {
+                    var goatBySig = {};
+                    signals.forEach(function(s) {
+                        var sig = _q3MatchSig(s.signal);
+                        if (sig) goatBySig[sig.signal] = {
+                            people: Number(s.people) || 0,
+                            raw_engagement: Number(s.raw_engagement) || 0,
+                            conversion_pct: s.conversion_pct
+                        };
                     });
-                    html += '<div style="margin: 0 0 0.45rem; font-size:0.78rem; color: var(--text-secondary);">'
-                         + 'High-intent signal breakdown for each comparable title \u2014 same 3 conversion paths and rates ' + escapeHtml(subj.display_name || 'subject') + ' uses above; per-comp shape derived from realized opening-weekend buyers'
-                         + '</div>';
-                    // Consolidated matrix: rows = comp titles (sorted by
-                    // opening-weekend buyers desc), 3 columns of bars (one
-                    // per signal). Each column auto-scales to its OWN max
-                    // so the smaller signals (pre-sale, cast/talent) stay
-                    // visible even though deep trailer is ~20x larger.
-                    var SIG_ORDER = [
-                        { signal: 'Pre-sale ticketing-page engagement', conv_pct: 85, header: 'Pre-sale ticketing-page',  short: 'pre-sale' },
-                        { signal: 'Deep trailer engagement',            conv_pct: 25, header: 'Deep trailer',              short: 'trailer'  },
-                        { signal: 'Cast / talent social engagement',    conv_pct: 8,  header: 'Cast / talent social',      short: 'cast'     }
-                    ];
-                    var compRows = sortedCompsForSig.map(function(c) {
-                        var modeled = iiqQ3ModelCompSignals(c);
-                        if (!modeled.length) return null;
-                        var bySig = {};
-                        modeled.forEach(function(m) { bySig[m.signal] = m; });
-                        return { comp: c, bySig: bySig };
-                    }).filter(function(r){ return r; });
-                    if (compRows.length) {
-                        var maxBySig = {};
+                    combinedRows.push({
+                        isSubject: true,
+                        display_name: subj.display_name || 'Subject',
+                        subtitle: 'Subject \u00b7 panel-measured \u00b7 opens ' + (subj.opening_date || '\u2014'),
+                        bySig: goatBySig,
+                        barColor: '#22d3ee',
+                        textColor: '#22d3ee'
+                    });
+                }
+                var sortedCompsForSig = comps.slice().sort(function(a,b){
+                    return (Number(b.opening_weekend_buyers)||0) - (Number(a.opening_weekend_buyers)||0);
+                });
+                sortedCompsForSig.forEach(function(c) {
+                    var derived = iiqQ3ModelCompSignals(c);
+                    if (!derived.length) return;
+                    var bySig = {};
+                    derived.forEach(function(m) { bySig[m.signal] = m; });
+                    combinedRows.push({
+                        isSubject: false,
+                        display_name: c.display_name,
+                        subtitle: 'opened ' + (c.opening_date || '\u2014') + ' \u00b7 ' + fmtCompact(Number(c.opening_weekend_buyers)||0) + ' OW buyers',
+                        bySig: bySig,
+                        barColor: '#a855f7',
+                        textColor: '#c4b5fd'
+                    });
+                });
+                if (combinedRows.length) {
+                    var maxBySig = {};
+                    SIG_ORDER.forEach(function(s) {
+                        maxBySig[s.signal] = Math.max.apply(null, combinedRows.map(function(r){
+                            return Number(r.bySig[s.signal] && r.bySig[s.signal].people) || 0;
+                        }).concat([1]));
+                    });
+                    html += '<div class="iiq-card" style="padding:0.95rem 1rem; margin-bottom:0.85rem;">';
+                    html +=   '<div style="margin-bottom:0.55rem;">';
+                    html +=     '<div style="font-size:0.95rem; font-weight:700; color:#e2e8f0;">High-intent signals \u2014 ' + escapeHtml(subj.display_name || 'subject') + ' vs comparable titles</div>';
+                    html +=     '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every title broken down across the same 3 ticket-buying signals. Bars normalized within each column so smaller signals stay readable.</div>';
+                    html +=   '</div>';
+                    html +=   '<div style="display:grid; grid-template-columns: minmax(190px, 1.3fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; padding:0 0 0.55rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.68rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">';
+                    html +=     '<div>Title</div>';
+                    SIG_ORDER.forEach(function(s) {
+                        html += '<div>' + escapeHtml(s.header) + ' <span style="text-transform:none; letter-spacing:0; opacity:0.65;">(' + s.conv_pct + '% conv)</span></div>';
+                    });
+                    html +=   '</div>';
+                    combinedRows.forEach(function(r, idx) {
+                        var rowBg = r.isSubject
+                            ? 'rgba(34,211,238,0.06)'
+                            : (idx % 2 === 1 ? 'rgba(255,255,255,0.015)' : 'transparent');
+                        var rowBorder = r.isSubject ? 'border-left: 2px solid #22d3ee;' : '';
+                        html += '<div style="display:grid; grid-template-columns: minmax(190px, 1.3fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; align-items:center; padding:0.55rem 0.4rem; background:' + rowBg + '; ' + rowBorder + ' border-radius:4px;">';
+                        html +=   '<div style="min-width:0;">'
+                            +        '<div style="font-size:0.8rem; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(r.display_name) + '">' + escapeHtml(r.display_name) + '</div>'
+                            +        '<div style="font-size:0.62rem; color: var(--text-secondary); margin-top:0.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(r.subtitle) + '</div>'
+                            +      '</div>';
                         SIG_ORDER.forEach(function(s) {
-                            maxBySig[s.signal] = Math.max.apply(null, compRows.map(function(r){
-                                return Number(r.bySig[s.signal] && r.bySig[s.signal].people) || 0;
-                            }).concat([1]));
+                            var m = r.bySig[s.signal];
+                            if (!m) {
+                                html += '<div style="font-size:0.7rem; color: var(--text-secondary);">\u2014</div>';
+                                return;
+                            }
+                            var sigMax = maxBySig[s.signal] || 1;
+                            var pct = Math.min(100, m.people / sigMax * 100);
+                            html += '<div style="min-width:0;">'
+                                +    '<div style="display:flex; align-items:center; gap:0.5rem;">'
+                                +      '<div style="flex:1; min-width:0; background: rgba(255,255,255,0.06); height: 12px; border-radius: 3px; overflow:hidden;">'
+                                +        '<div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + r.barColor + ';"></div>'
+                                +      '</div>'
+                                +      '<div style="font-size:0.78rem; font-weight:700; color:' + r.textColor + '; white-space:nowrap;">' + fmtCompact(m.people) + '</div>'
+                                +    '</div>'
+                                +    '<div style="font-size:0.6rem; color: var(--text-secondary); margin-top:0.18rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">of ' + fmtCompact(m.raw_engagement) + ' engagements</div>'
+                                +  '</div>';
                         });
-                        html += '<div class="iiq-card" style="padding:0.95rem 1rem; margin-bottom:0.85rem; border-left: 3px solid #a855f7;">';
-                        // Column header row
-                        html +=   '<div style="display:grid; grid-template-columns: minmax(170px, 1.2fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; padding:0 0 0.55rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.68rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">';
-                        html +=     '<div>Comparable title</div>';
-                        SIG_ORDER.forEach(function(s) {
-                            html += '<div>' + escapeHtml(s.header) + ' <span style="text-transform:none; letter-spacing:0; color: var(--text-secondary); opacity:0.65;">(' + s.conv_pct + '% conv)</span></div>';
-                        });
-                        html +=   '</div>';
-                        // One row per comp title
-                        compRows.forEach(function(r, idx) {
-                            var c = r.comp;
-                            var totalBuyers = Number(c.opening_weekend_buyers)||0;
-                            var rowBg = idx % 2 === 0 ? 'rgba(255,255,255,0.015)' : 'transparent';
-                            html += '<div style="display:grid; grid-template-columns: minmax(170px, 1.2fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; align-items:center; padding:0.5rem 0.25rem; background:' + rowBg + '; border-radius:4px;">';
-                            // Title cell
-                            html +=   '<div style="min-width:0;">'
-                                +        '<div style="font-size:0.78rem; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(c.display_name) + '">' + escapeHtml(c.display_name) + '</div>'
-                                +        '<div style="font-size:0.62rem; color: var(--text-secondary); margin-top:0.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">opened ' + escapeHtml(c.opening_date || '\u2014') + ' \u00b7 ' + fmtCompact(totalBuyers) + ' OW buyers</div>'
-                                +      '</div>';
-                            // 3 signal cells
-                            SIG_ORDER.forEach(function(s) {
-                                var m = r.bySig[s.signal];
-                                if (!m) {
-                                    html += '<div style="font-size:0.7rem; color: var(--text-secondary);">\u2014</div>';
-                                    return;
-                                }
-                                var sigMax = maxBySig[s.signal] || 1;
-                                var pct = Math.min(100, m.people / sigMax * 100);
-                                html += '<div style="min-width:0;">'
-                                    +    '<div style="display:flex; align-items:center; gap:0.5rem;">'
-                                    +      '<div style="flex:1; min-width:0; background: rgba(255,255,255,0.06); height: 12px; border-radius: 3px; overflow:hidden;">'
-                                    +        '<div style="height:100%; width:' + pct.toFixed(1) + '%; background:#a855f7;"></div>'
-                                    +      '</div>'
-                                    +      '<div style="font-size:0.78rem; font-weight:700; color:#c4b5fd; white-space:nowrap;">' + fmtCompact(m.people) + '</div>'
-                                    +    '</div>'
-                                    +    '<div style="font-size:0.6rem; color: var(--text-secondary); margin-top:0.18rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">of ' + fmtCompact(m.raw_engagement) + ' engagements</div>'
-                                    +  '</div>';
-                            });
-                            html += '</div>';
-                        });
-                        html += '<div style="margin-top:0.6rem; font-size:0.62rem; color: var(--text-secondary); line-height:1.4;">'
-                             + 'Bar width is normalized within each column (each signal scales to its own max) so smaller signals stay visible alongside deep-trailer engagement, which is ~20x larger. Numbers on the right are the modeled people count for that (title, signal) pair.'
-                             + '</div>';
                         html += '</div>';
-                    }
+                    });
+                    html += '<div style="margin-top:0.65rem; font-size:0.62rem; color: var(--text-secondary); line-height:1.4;">'
+                         + escapeHtml(subj.display_name || 'Subject') + ' (cyan) is panel-measured. Comparable titles (purple) take their per-signal shape from realized opening-weekend buyers.'
+                         + (subj.source ? ' \u00b7 <em>' + escapeHtml(subj.source) + '</em>' : '')
+                         + '</div>';
+                    html += '</div>';
                 }
 
                 // === COMPS card: opening-weekend buyers (comps only, no subject) ===
@@ -21479,7 +21487,7 @@
                     var maxCBuyers = Math.max.apply(null, sortedComps.map(function(c){ return Number(c.opening_weekend_buyers)||0; }).concat([1]));
                     html += '<div class="iiq-card" style="padding:1rem;">';
                     html += '<div style="font-size:0.85rem; font-weight:600; color:#e2e8f0; margin-bottom:0.45rem;">Comparable family-animated titles \u2014 realized opening-weekend ticket-buyers</div>';
-                    html += '<div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.55rem;">Source: Box Office Mojo (opening 4-day gross) \u00f7 $' + avgTicket.toFixed(2) + ' avg US ticket (NATO 2024). ' + escapeHtml(subj.display_name || 'Subject') + ' is shown above in its own measured signal card and per-comp modeled breakdowns \u2014 not duplicated here.</div>';
+                    html += '<div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.55rem;">Source: Box Office Mojo (opening 4-day gross) \u00f7 $' + avgTicket.toFixed(2) + ' avg US ticket (NATO 2024). ' + escapeHtml(subj.display_name || 'Subject') + ' appears in the combined high-intent signals chart above \u2014 only comparable titles are shown here to avoid double-listing.</div>';
                     html += sortedComps.map(function(c) {
                         var label = c.display_name;
                         var sub   = '(opened ' + (c.opening_date || '\u2014') + ')';
@@ -61607,18 +61615,75 @@
                             bySubject[subj].push(p);
                         });
                         mergeStubGroupsIntoCanonical(bySubject, displayNames);
-                        let itemsHtml = '';
-                        Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
+
+                        // MOVIE sub-bucket by genre (per user request
+                        // 2026-06-18). Backend extracts genre from the
+                        // 'MOVIE - <Genre>' prefix on BRAND INPUT and
+                        // surfaces it as `movie_genre` on each profile.
+                        // We group the subject-level rows by genre and
+                        // render genre as an intermediate, collapsible
+                        // tree node. A subject with multiple runs uses
+                        // its base run's genre (all cohorts of the same
+                        // movie share genre). Subjects without a genre
+                        // fall into 'OTHER' so nothing disappears.
+                        const _isMovieCat = (cat || '').toUpperCase() === 'MOVIE';
+                        const _renderSubjectRow = (subj) => {
                             const runs = bySubject[subj];
                             const first = runs[0];
                             if (runs.length === 1) {
-                                itemsHtml += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
-                            } else {
-                                const displayNameAttr = escapeAttr(displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first));
-                                const base = _pickBaseRun(runs) || first;
-                                itemsHtml += _profileItemHtml(base, displayNameAttr);
+                                return _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                             }
-                        });
+                            const displayNameAttr = escapeAttr(displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first));
+                            const base = _pickBaseRun(runs) || first;
+                            return _profileItemHtml(base, displayNameAttr);
+                        };
+
+                        let itemsHtml = '';
+                        if (_isMovieCat) {
+                            // Group subjects by upper-cased genre key
+                            // (display in caps to match the rest of
+                            // the selector — user rule 2026-06-17:
+                            // "display should be all caps all the
+                            // time"). Track an original-cased label
+                            // for display niceness if all profiles in
+                            // a bucket agreed on casing.
+                            const byGenre = {};
+                            Object.keys(bySubject).forEach(subj => {
+                                const runs = bySubject[subj];
+                                const base = _pickBaseRun(runs) || runs[0];
+                                const rawGenre = (base && (base.movie_genre || '')) || '';
+                                const key = rawGenre.trim().toUpperCase() || 'OTHER';
+                                if (!byGenre[key]) byGenre[key] = [];
+                                byGenre[key].push(subj);
+                            });
+                            const genreKeys = Object.keys(byGenre).sort((a, b) => {
+                                // 'OTHER' sinks to the bottom
+                                if (a === 'OTHER' && b !== 'OTHER') return 1;
+                                if (b === 'OTHER' && a !== 'OTHER') return -1;
+                                return a.localeCompare(b);
+                            });
+                            genreKeys.forEach(gKey => {
+                                const subjsInGenre = byGenre[gKey].sort((a, b) => a.localeCompare(b));
+                                const genreId = 'dash_MOVIE_GENRE_' + gKey.replace(/[^a-zA-Z0-9]/g, '_');
+                                const isGenreExpanded = expandedDashCategories.has(genreId);
+                                let genreItemsHtml = '';
+                                subjsInGenre.forEach(subj => { genreItemsHtml += _renderSubjectRow(subj); });
+                                itemsHtml += `
+                                    <div class="profile-cat-item ${isGenreExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleDashCategory('${genreId}')" style="padding-left: 0.6rem;">
+                                        <span class="cat-arrow">▸</span>
+                                        <span class="profile-cat-label">${escapeAttr(gKey)}</span>
+                                        <span class="profile-cat-count">(${subjsInGenre.length})</span>
+                                    </div>
+                                    <div class="profile-cat-children ${isGenreExpanded ? 'open' : ''}" id="cat-${genreId}" style="padding-left: 0.5rem;">
+                                        ${genreItemsHtml}
+                                    </div>
+                                `;
+                            });
+                        } else {
+                            Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
+                                itemsHtml += _renderSubjectRow(subj);
+                            });
+                        }
                         // Subcat count = distinct subjects shown in the
                         // tree (post-mergeStubGroupsIntoCanonical), not
                         // file count. Matches the per-row grouping.
