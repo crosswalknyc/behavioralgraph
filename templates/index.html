@@ -21759,6 +21759,7 @@
                         display_name: subj.display_name || 'Subject',
                         subtitle: 'Subject \u00b7 panel-measured \u00b7 opens ' + (subj.opening_date || '\u2014'),
                         bySig: goatBySig,
+                        box_office: null,
                         barColor: '#22d3ee',
                         textColor: '#22d3ee'
                     });
@@ -21776,6 +21777,7 @@
                         display_name: c.display_name,
                         subtitle: 'opened ' + (c.opening_date || '\u2014') + ' \u00b7 ' + fmtCompact(Number(c.opening_weekend_buyers)||0) + ' OW buyers',
                         bySig: bySig,
+                        box_office: Number(c.cumulative_usd) || 0,
                         barColor: '#a855f7',
                         textColor: '#c4b5fd'
                     });
@@ -21787,23 +21789,71 @@
                             return Number(r.bySig[s.signal] && r.bySig[s.signal].people) || 0;
                         }).concat([1]));
                     });
+                    // Sort: subject is always pinned at index 0; comps sort
+                    // by the active key/direction. Sortable keys map to:
+                    //   'title'       -> r.display_name (alpha)
+                    //   'pre-sale'    -> r.bySig['Pre-sale ticketing-page engagement'].people
+                    //   'trailer'     -> r.bySig['Deep trailer engagement'].people
+                    //   'cast'        -> r.bySig['Cast / talent social engagement'].people
+                    //   'box_office'  -> r.box_office
+                    var _sigSortMap = {
+                        'pre-sale': 'Pre-sale ticketing-page engagement',
+                        'trailer':  'Deep trailer engagement',
+                        'cast':     'Cast / talent social engagement'
+                    };
+                    combinedRows.sort(function(a, b) {
+                        if (a.isSubject && !b.isSubject) return -1;
+                        if (b.isSubject && !a.isSubject) return 1;
+                        if (a.isSubject && b.isSubject)  return 0;
+                        var av, bv;
+                        if (sigSortKey === 'title') {
+                            var cmp = String(a.display_name || '').localeCompare(String(b.display_name || ''));
+                            return sigSortDir === 'asc' ? cmp : -cmp;
+                        }
+                        if (sigSortKey === 'box_office') {
+                            av = Number(a.box_office) || 0;
+                            bv = Number(b.box_office) || 0;
+                        } else {
+                            var sigName = _sigSortMap[sigSortKey];
+                            av = (a.bySig[sigName] && Number(a.bySig[sigName].people)) || 0;
+                            bv = (b.bySig[sigName] && Number(b.bySig[sigName].people)) || 0;
+                        }
+                        return sigSortDir === 'asc' ? (av - bv) : (bv - av);
+                    });
+                    function _q3SigHdr(key, label, suffix, tip) {
+                        var active = (sigSortKey === key);
+                        var arrow = active ? (sigSortDir === 'desc' ? ' \u25BC' : ' \u25B2') : ' \u2195';
+                        var arrowOp = active ? '1' : '0.35';
+                        var tipAttr = ' title="' + escapeHtml(tip || 'Click to sort by this column. Click again to flip direction.') + '"';
+                        var suffixHtml = suffix
+                            ? ' <span style="text-transform:none; letter-spacing:0; opacity:0.65;">' + escapeHtml(suffix) + '</span>'
+                            : '';
+                        return '<div onclick="iiqQ3SigSort(\'' + key + '\')" style="cursor:pointer; user-select:none;"' + tipAttr + '>'
+                            + escapeHtml(label)
+                            + suffixHtml
+                            + '<span style="opacity:' + arrowOp + '; font-size:0.8em; margin-left:0.25rem;">' + arrow + '</span>'
+                            + '</div>';
+                    }
                     html += '<div class="iiq-card" style="padding:0.95rem 1rem; margin-bottom:0.85rem;">';
                     html +=   '<div style="margin-bottom:0.55rem;">';
                     html +=     '<div style="font-size:0.95rem; font-weight:700; color:#e2e8f0;">High-intent signals \u2014 ' + escapeHtml(subj.display_name || 'subject') + ' vs comparable titles</div>';
-                    html +=     '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every title broken down across the same 3 ticket-buying signals. Bars normalized within each column so smaller signals stay readable.</div>';
+                    html +=     '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every title broken down across the same 3 ticket-buying signals. Bars normalized within each column so smaller signals stay readable. Click a column header to sort \u2014 subject row stays pinned at the top.</div>';
                     html +=   '</div>';
-                    html +=   '<div style="display:grid; grid-template-columns: minmax(190px, 1.3fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; padding:0 0 0.55rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.68rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">';
-                    html +=     '<div>Title</div>';
+                    html +=   '<div style="display:grid; grid-template-columns: minmax(190px, 1.3fr) repeat(3, minmax(0, 1fr)) minmax(0, 0.85fr); gap:0.85rem; padding:0 0 0.55rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.68rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">';
+                    html +=     _q3SigHdr('title', 'Title', '', 'Sort alphabetically by title (subject stays pinned).');
                     SIG_ORDER.forEach(function(s) {
-                        html += '<div>' + escapeHtml(s.header) + ' <span style="text-transform:none; letter-spacing:0; opacity:0.65;">(' + s.conv_pct + '% conv)</span></div>';
+                        var key = (s.short === 'pre-sale') ? 'pre-sale' : s.short;
+                        html += _q3SigHdr(key, s.header, '(' + s.conv_pct + '% conv)',
+                            'Sort by ' + s.header.toLowerCase() + ' people-count.');
                     });
+                    html +=     _q3SigHdr('box_office', 'Total box office', '', 'Sort by cumulative US domestic gross. Subject (pre-release) shows N/A.');
                     html +=   '</div>';
                     combinedRows.forEach(function(r, idx) {
                         var rowBg = r.isSubject
                             ? 'rgba(34,211,238,0.06)'
                             : (idx % 2 === 1 ? 'rgba(255,255,255,0.015)' : 'transparent');
                         var rowBorder = r.isSubject ? 'border-left: 2px solid #22d3ee;' : '';
-                        html += '<div style="display:grid; grid-template-columns: minmax(190px, 1.3fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; align-items:center; padding:0.55rem 0.4rem; background:' + rowBg + '; ' + rowBorder + ' border-radius:4px;">';
+                        html += '<div style="display:grid; grid-template-columns: minmax(190px, 1.3fr) repeat(3, minmax(0, 1fr)) minmax(0, 0.85fr); gap:0.85rem; align-items:center; padding:0.55rem 0.4rem; background:' + rowBg + '; ' + rowBorder + ' border-radius:4px;">';
                         html +=   '<div style="min-width:0;">'
                             +        '<div style="font-size:0.8rem; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(r.display_name) + '">' + escapeHtml(r.display_name) + '</div>'
                             +        '<div style="font-size:0.62rem; color: var(--text-secondary); margin-top:0.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(r.subtitle) + '</div>'
@@ -21826,10 +21876,19 @@
                                 +    '<div style="font-size:0.6rem; color: var(--text-secondary); margin-top:0.18rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">of ' + fmtCompact(m.raw_engagement) + ' engagements</div>'
                                 +  '</div>';
                         });
+                        // Total box office column — N/A for subject (pre-release).
+                        if (r.isSubject || r.box_office == null) {
+                            html += '<div style="font-size:0.78rem; font-weight:600; color: var(--text-secondary); white-space:nowrap;" title="GOAT has not opened yet \u2014 box-office total is N/A until theatrical release.">N/A <span style="font-size:0.6rem; font-weight:400; opacity:0.7;">(pre-release)</span></div>';
+                        } else {
+                            html += '<div style="min-width:0;">'
+                                +    '<div style="font-size:0.78rem; font-weight:700; color:#fbbf24; white-space:nowrap;">' + fmtUSD(r.box_office) + '</div>'
+                                +    '<div style="font-size:0.58rem; color: var(--text-secondary); margin-top:0.18rem; white-space:nowrap;">US domestic, cumulative</div>'
+                                +  '</div>';
+                        }
                         html += '</div>';
                     });
                     html += '<div style="margin-top:0.65rem; font-size:0.62rem; color: var(--text-secondary); line-height:1.4;">'
-                         + escapeHtml(subj.display_name || 'Subject') + ' (cyan) is panel-measured. Comparable titles (purple) take their per-signal shape from realized opening-weekend buyers.'
+                         + escapeHtml(subj.display_name || 'Subject') + ' (cyan) is panel-measured. Comparable titles (purple) take their per-signal shape from realized opening-weekend buyers. Total box office = Box Office Mojo US domestic cumulative gross for each comp.'
                          + (subj.source ? ' \u00b7 <em>' + escapeHtml(subj.source) + '</em>' : '')
                          + '</div>';
                     html += '</div>';
