@@ -19558,20 +19558,21 @@
                         <input id="iiqConvTicketsPerBuyer" type="number" step="0.1" min="1" value="2.5" style="width:100%; background: rgba(0,0,0,0.4); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.45rem 0.55rem; font-size:1.1rem; font-weight:600;">
                     </div>
                     <div class="iiq-card" style="padding:0.7rem;">
-                        <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:0.25rem;" title="Project either the 3-day opening weekend only, or the full theatrical run (default 90 days).">Projection window</div>
+                        <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:0.25rem;" title="Project the 3-day opening weekend only, the full theatrical run (default 90 days), or both side-by-side.">Projection window</div>
                         <select id="iiqConvRunWindow" onchange="iiqConvToggleRunDays()" style="width:100%; background: rgba(0,0,0,0.4); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.45rem 0.55rem; font-size:1rem; font-weight:600;">
                             <option value="opening" selected>Opening Weekend</option>
                             <option value="full">Full Theatrical Run</option>
+                            <option value="both">Both (side-by-side)</option>
                         </select>
                     </div>
                     <div class="iiq-card" id="iiqConvRunDaysWrap" style="padding:0.7rem; opacity:0.4; pointer-events:none;">
-                        <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:0.25rem;" title="Days in the theatrical run (industry standard family animation = 90 days). Only active when Projection window = Full Theatrical Run.">Run length (days)</div>
+                        <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:0.25rem;" title="Days in the theatrical run (industry standard family animation = 90 days). Active when Projection window = Full Theatrical Run or Both.">Run length (days)</div>
                         <input id="iiqConvRunDays" type="number" step="1" min="3" max="180" value="90" style="width:100%; background: rgba(0,0,0,0.4); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.45rem 0.55rem; font-size:1.1rem; font-weight:600;">
                     </div>
                 </div>
 
                 <details id="iiqConvSecretSauce" style="background: rgba(15,23,42,0.55); border:1px solid rgba(245,158,11,0.35); border-radius:8px; padding:0.6rem 0.85rem; margin-bottom:0.85rem;">
-                    <summary style="cursor:pointer; font-size:0.85rem; font-weight:700; color:#fbbf24;">🧪 Secret Sauce &nbsp;<span style="font-weight:400; font-size:0.72rem; color:var(--text-secondary);">(conversion weights — calibrated to GOAT opening weekend $35.5M)</span></summary>
+                    <summary style="cursor:pointer; font-size:0.85rem; font-weight:700; color:#fbbf24;">🧪 Secret Sauce &nbsp;<span style="font-weight:400; font-size:0.72rem; color:var(--text-secondary);">(conversion weights)</span></summary>
                     <div style="font-size:0.72rem; color: var(--text-secondary); margin: 0.55rem 0 0.7rem;">
                         Each funnel layer converts at its own rate. Layers are <strong>nested</strong> (ticketing visitors ⊂ info-seekers ⊂ reached), so each person is assigned to the deepest layer they reached and that layer's conversion rate is applied. No double-counting.
                     </div>
@@ -19796,26 +19797,18 @@
                     });
             };
 
-            window.iiqProjectConversion = function() {
-                var t = window.__iiqConv && window.__iiqConv.totals;
-                if (!t) { iiqRenderConversionMetrics(); return; }
-                var price       = Number(document.getElementById('iiqConvTicketPrice').value) || 0;
-                var perBuyer    = Number(document.getElementById('iiqConvTicketsPerBuyer').value) || 1;
-                var wAware      = (Number(document.getElementById('iiqConvWtAware').value) || 0) / 100;
-                var wInfo       = (Number(document.getElementById('iiqConvWtInfo').value)  || 0) / 100;
-                var wTicketing  = (Number(document.getElementById('iiqConvWtTicketing').value) || 0) / 100;
-                var runMode     = document.getElementById('iiqConvRunWindow').value;
-                var runDays     = Number(document.getElementById('iiqConvRunDays').value) || 90;
-                var fullMult    = Number(document.getElementById('iiqConvFullRunMult').value) || 1;
-
-                // Layer sizes (nested cohorts, smaller subtracted from larger)
+            // Pure math: given the cohort totals + tunable weights + run-mode
+            // settings, returns every number the renderer needs. Extracted so
+            // "both" mode can call it twice (opening + full) without
+            // duplicating logic.
+            function _iiqConvCompute(t, w, runMode, runDays, fullMult, perBuyer, price) {
                 var lAware = Math.max(0, t.reached_uniq - t.info_uniq);
                 var lInfo  = Math.max(0, t.info_uniq    - t.tick_uniq);
                 var lTick  = Math.max(0, t.tick_uniq);
 
-                var buyersAware = lAware * wAware;
-                var buyersInfo  = lInfo  * wInfo;
-                var buyersTick  = lTick  * wTicketing;
+                var buyersAware = lAware * w.aware;
+                var buyersInfo  = lInfo  * w.info;
+                var buyersTick  = lTick  * w.ticket;
                 var buyersOW    = buyersAware + buyersInfo + buyersTick;
 
                 // Full-run multiplier scales the opening-weekend buyer count.
@@ -19825,16 +19818,34 @@
                 if (runMode === 'full') {
                     dayScale = Math.max(0.4, Math.min(1.4, runDays / 90));
                 }
-                var buyers = runMode === 'full' ? buyersOW * fullMult * dayScale : buyersOW;
-                var tickets = buyers * perBuyer;
+                var buyers  = (runMode === 'full') ? buyersOW * fullMult * dayScale : buyersOW;
+                var tickets = buyers  * perBuyer;
                 var gross   = tickets * price;
 
-                // Per-layer contribution table
+                return {
+                    runMode: runMode, runDays: runDays, fullMult: fullMult, dayScale: dayScale,
+                    perBuyer: perBuyer, price: price, weights: w,
+                    lAware: lAware, lInfo: lInfo, lTick: lTick,
+                    buyersAware: buyersAware, buyersInfo: buyersInfo, buyersTick: buyersTick,
+                    buyers: buyers, tickets: tickets, gross: gross
+                };
+            }
+
+            function _iiqConvRunLabel(p) {
+                if (p.runMode === 'full') {
+                    return 'Full Theatrical Run (' + p.runDays + 'd, ×'
+                        + p.fullMult.toFixed(2) + ' opening, day-scale '
+                        + p.dayScale.toFixed(2) + '×)';
+                }
+                return 'Opening Weekend (3-day)';
+            }
+
+            function _iiqConvRenderCard(p, t) {
                 function layerRow(label, sz, conv, color) {
                     var b  = sz * conv;
-                    var rb = runMode === 'full' ? b * fullMult * dayScale : b;
-                    var rt = rb * perBuyer;
-                    var rg = rt * price;
+                    var rb = (p.runMode === 'full') ? b * p.fullMult * p.dayScale : b;
+                    var rt = rb * p.perBuyer;
+                    var rg = rt * p.price;
                     return '<tr>'
                         + '<td style="padding:0.4rem 0.6rem; color:' + color + '; font-weight:600;">' + label + '</td>'
                         + '<td style="padding:0.4rem 0.6rem; text-align:right;">' + fmtCompact(sz) + '</td>'
@@ -19844,22 +19855,17 @@
                         + '<td style="padding:0.4rem 0.6rem; text-align:right; font-weight:600; color:#fff;">' + fmtUSD(rg) + '</td>'
                         + '</tr>';
                 }
-
-                var runLabel = runMode === 'full'
-                    ? 'Full Theatrical Run (' + runDays + 'd, ×' + fullMult.toFixed(2) + ' opening, day-scale ' + dayScale.toFixed(2) + '×)'
-                    : 'Opening Weekend (3-day)';
-
-                document.getElementById('iiqConvOutput').innerHTML =
-                    '<div class="iiq-card" style="padding:1.1rem; border-left:4px solid #fbbf24;">'
+                var borderColor = (p.runMode === 'full') ? '#22d3ee' : '#fbbf24';
+                return '<div class="iiq-card" style="padding:1.1rem; border-left:4px solid ' + borderColor + ';">'
                   +   '<div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.85rem;">'
-                  +     '<div><div style="font-size:0.75rem; color:var(--text-secondary);">Projection · ' + escapeHtml(runLabel) + '</div>'
-                  +       '<div style="font-size:0.7rem; color:var(--text-secondary); opacity:0.7; margin-top:0.1rem;">Source data: ' + escapeHtml(t.window_label) + '. Price = ' + fmtUSD(price) + ' / ticket · ' + perBuyer.toFixed(2) + ' tickets per buyer</div>'
+                  +     '<div><div style="font-size:0.75rem; color:var(--text-secondary);">Projection · ' + escapeHtml(_iiqConvRunLabel(p)) + '</div>'
+                  +       '<div style="font-size:0.7rem; color:var(--text-secondary); opacity:0.7; margin-top:0.1rem;">Source data: ' + escapeHtml(t.window_label) + '. Price = ' + fmtUSD(p.price) + ' / ticket · ' + p.perBuyer.toFixed(2) + ' tickets per buyer</div>'
                   +     '</div>'
                   +   '</div>'
                   +   '<div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:0.7rem; margin-bottom:1rem;">'
-                  +     '<div style="background:rgba(15,23,42,0.5); padding:0.85rem; border-radius:8px;"><div style="font-size:0.72rem; color:var(--text-secondary);">Projected unique buyers</div><div style="font-size:1.8rem; font-weight:700; color:#a5b4fc;">' + fmtCompact(buyers) + '</div></div>'
-                  +     '<div style="background:rgba(15,23,42,0.5); padding:0.85rem; border-radius:8px;"><div style="font-size:0.72rem; color:var(--text-secondary);">Projected tickets sold</div><div style="font-size:1.8rem; font-weight:700; color:#fbbf24;">' + fmtCompact(tickets) + '</div></div>'
-                  +     '<div style="background:rgba(15,23,42,0.5); padding:0.85rem; border-radius:8px;"><div style="font-size:0.72rem; color:var(--text-secondary);">Projected box office</div><div style="font-size:1.8rem; font-weight:700; color:#22c55e;">' + fmtUSD(gross) + '</div></div>'
+                  +     '<div style="background:rgba(15,23,42,0.5); padding:0.85rem; border-radius:8px;"><div style="font-size:0.72rem; color:var(--text-secondary);">Projected unique buyers</div><div style="font-size:1.8rem; font-weight:700; color:#a5b4fc;">' + fmtCompact(p.buyers) + '</div></div>'
+                  +     '<div style="background:rgba(15,23,42,0.5); padding:0.85rem; border-radius:8px;"><div style="font-size:0.72rem; color:var(--text-secondary);">Projected tickets sold</div><div style="font-size:1.8rem; font-weight:700; color:#fbbf24;">' + fmtCompact(p.tickets) + '</div></div>'
+                  +     '<div style="background:rgba(15,23,42,0.5); padding:0.85rem; border-radius:8px;"><div style="font-size:0.72rem; color:var(--text-secondary);">Projected box office</div><div style="font-size:1.8rem; font-weight:700; color:#22c55e;">' + fmtUSD(p.gross) + '</div></div>'
                   +   '</div>'
                   +   '<table style="width:100%; border-collapse:collapse; font-size:0.78rem;">'
                   +     '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1); color:var(--text-secondary); font-weight:600;">'
@@ -19871,20 +19877,67 @@
                   +       '<th style="text-align:right; padding:0.4rem 0.6rem;">$ contribution</th>'
                   +     '</tr></thead>'
                   +     '<tbody>'
-                  +       layerRow('Bottom-funnel (ticketing visitors)', lTick,  wTicketing, '#fbbf24')
-                  +       layerRow('Mid-funnel (info-seekers only)',     lInfo,  wInfo,      '#a5b4fc')
-                  +       layerRow('Awareness (reached only)',           lAware, wAware,     '#94a3b8')
+                  +       layerRow('Bottom-funnel (ticketing visitors)', p.lTick,  p.weights.ticket, '#fbbf24')
+                  +       layerRow('Mid-funnel (info-seekers only)',     p.lInfo,  p.weights.info,   '#a5b4fc')
+                  +       layerRow('Awareness (reached only)',           p.lAware, p.weights.aware,  '#94a3b8')
                   +     '</tbody>'
                   +     '<tfoot><tr style="border-top:1px solid rgba(255,255,255,0.15); font-weight:700; color:#fff;">'
                   +       '<td style="padding:0.5rem 0.6rem;">TOTAL</td>'
-                  +       '<td style="padding:0.5rem 0.6rem; text-align:right;">' + fmtCompact(lAware + lInfo + lTick) + '</td>'
+                  +       '<td style="padding:0.5rem 0.6rem; text-align:right;">' + fmtCompact(p.lAware + p.lInfo + p.lTick) + '</td>'
                   +       '<td style="padding:0.5rem 0.6rem; text-align:right;">—</td>'
-                  +       '<td style="padding:0.5rem 0.6rem; text-align:right;">' + fmtCompact(buyers) + '</td>'
-                  +       '<td style="padding:0.5rem 0.6rem; text-align:right;">' + fmtCompact(tickets) + '</td>'
-                  +       '<td style="padding:0.5rem 0.6rem; text-align:right; color:#22c55e;">' + fmtUSD(gross) + '</td>'
+                  +       '<td style="padding:0.5rem 0.6rem; text-align:right;">' + fmtCompact(p.buyers) + '</td>'
+                  +       '<td style="padding:0.5rem 0.6rem; text-align:right;">' + fmtCompact(p.tickets) + '</td>'
+                  +       '<td style="padding:0.5rem 0.6rem; text-align:right; color:#22c55e;">' + fmtUSD(p.gross) + '</td>'
                   +     '</tr></tfoot>'
                   +   '</table>'
                   + '</div>';
+            }
+
+            window.iiqProjectConversion = function() {
+                var t = window.__iiqConv && window.__iiqConv.totals;
+                if (!t) { iiqRenderConversionMetrics(); return; }
+                var price       = Number(document.getElementById('iiqConvTicketPrice').value) || 0;
+                var perBuyer    = Number(document.getElementById('iiqConvTicketsPerBuyer').value) || 1;
+                var wAware      = (Number(document.getElementById('iiqConvWtAware').value) || 0) / 100;
+                var wInfo       = (Number(document.getElementById('iiqConvWtInfo').value)  || 0) / 100;
+                var wTicketing  = (Number(document.getElementById('iiqConvWtTicketing').value) || 0) / 100;
+                var runMode     = document.getElementById('iiqConvRunWindow').value;
+                var runDays     = Number(document.getElementById('iiqConvRunDays').value) || 90;
+                var fullMult    = Number(document.getElementById('iiqConvFullRunMult').value) || 1;
+                var weights     = { aware: wAware, info: wInfo, ticket: wTicketing };
+
+                if (runMode === 'both') {
+                    var pOW   = _iiqConvCompute(t, weights, 'opening', runDays, fullMult, perBuyer, price);
+                    var pFull = _iiqConvCompute(t, weights, 'full',    runDays, fullMult, perBuyer, price);
+                    var legsRatio = pOW.gross > 0 ? (pFull.gross / pOW.gross) : 0;
+                    var compareTile = function(label, valOW, valFull, color, fmt) {
+                        var fmtFn = fmt || fmtCompact;
+                        return '<div style="background:rgba(15,23,42,0.5); padding:0.85rem; border-radius:8px;">'
+                            +    '<div style="font-size:0.72rem; color:var(--text-secondary);">' + label + '</div>'
+                            +    '<div style="display:flex; align-items:baseline; gap:0.65rem; margin-top:0.3rem; flex-wrap:wrap;">'
+                            +      '<div><div style="font-size:0.6rem; color:#fbbf24; text-transform:uppercase; letter-spacing:0.05em;">Opening Wknd</div><div style="font-size:1.35rem; font-weight:700; color:' + color + ';">' + fmtFn(valOW) + '</div></div>'
+                            +      '<div style="opacity:0.4; font-size:1.1rem;">\u2794</div>'
+                            +      '<div><div style="font-size:0.6rem; color:#22d3ee; text-transform:uppercase; letter-spacing:0.05em;">Full Run</div><div style="font-size:1.35rem; font-weight:700; color:' + color + ';">' + fmtFn(valFull) + '</div></div>'
+                            +    '</div>'
+                            +  '</div>';
+                    };
+                    document.getElementById('iiqConvOutput').innerHTML =
+                        '<div class="iiq-card" style="padding:1.0rem 1.1rem; border-left:4px solid #a855f7; margin-bottom:0.85rem;">'
+                      +   '<div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:0.65rem;">Side-by-side comparison \u2014 Full Run = ' + legsRatio.toFixed(2) + '\u00d7 Opening Weekend (multiplier ' + fullMult.toFixed(2) + ', day-scale ' + pFull.dayScale.toFixed(2) + '\u00d7 for ' + runDays + 'd)</div>'
+                      +   '<div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:0.7rem;">'
+                      +     compareTile('Projected unique buyers', pOW.buyers,  pFull.buyers,  '#a5b4fc', fmtCompact)
+                      +     compareTile('Projected tickets sold',  pOW.tickets, pFull.tickets, '#fbbf24', fmtCompact)
+                      +     compareTile('Projected box office',    pOW.gross,   pFull.gross,   '#22c55e', fmtUSD)
+                      +   '</div>'
+                      + '</div>'
+                      + _iiqConvRenderCard(pOW,   t)
+                      + '<div style="height:0.85rem;"></div>'
+                      + _iiqConvRenderCard(pFull, t);
+                    return;
+                }
+
+                var proj = _iiqConvCompute(t, weights, runMode, runDays, fullMult, perBuyer, price);
+                document.getElementById('iiqConvOutput').innerHTML = _iiqConvRenderCard(proj, t);
             };
 
             function fmtUSD(n) { if (!n) return ''; n = Number(n); if (!isFinite(n)) return ''; if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M'; if (n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K'; return '$' + n; }
@@ -39172,6 +39225,19 @@
             try { return Number(n).toLocaleString(); } catch (e) { return String(n); }
         }
 
+        // Percent formatter for JIQ. Returns "—" for null/undefined OR any
+        // value that rounds to zero at the requested precision. The user
+        // rule: never render "0%" — show "—" instead.
+        function _jiqPct(v, decimals) {
+            if (v == null) return '—';
+            var n = Number(v);
+            if (!isFinite(n)) return '—';
+            var d = (decimals == null ? 1 : decimals);
+            var s = n.toFixed(d);
+            if (parseFloat(s) === 0) return '—';
+            return s + '%';
+        }
+
         // Returns the brand / platform name to use in JIQ user-visible copy
         // for the current run. Lets us write "Lionsgate+ push / email"
         // instead of a hardcoded "Netflix push / email" for non-Netflix
@@ -39749,8 +39815,7 @@
                     // subs + family co-watch + commerce conversions. Pulls
                     // from `kpis.creator.*` so labels read clean.
                     var cr   = kpis.creator || {};
-                    var _crFmt = function(v) { return v != null ? _jiqFmt(v) : '—'; };
-                    var _crPct = function(v) { return v != null ? Number(v).toFixed(1) + '%' : '—'; };
+                    var _crFmt = function(v) { return (v != null && Number(v) !== 0) ? _jiqFmt(v) : '—'; };
                     var _crBrandLbl = cr.customer_brand || meta.customer_brand || 'Commerce';
                     var watchers      = cr.watchers_window || kpis.total_users;
                     var monthlyW      = cr.monthly_watchers;
@@ -39761,19 +39826,27 @@
                     var subRate       = (watchers && newSubs) ? (newSubs / watchers * 100) : null;
                     var familyPct     = (watchers && familyCowatch) ? (familyCowatch / watchers * 100) : null;
                     var commercePct   = (watchers && commerceSubs)  ? (commerceSubs  / watchers * 100) : null;
+                    // Sub-text builder: if the percent rounds to zero at the
+                    // displayed precision, drop the whole sub-text fragment
+                    // rather than render a meaningless "— of X · ...".
+                    var _crSub = function(rawPct, decimals, prefix, suffix) {
+                        var s = _jiqPct(rawPct, decimals);
+                        if (s === '—') return '';
+                        return (prefix || '') + s + (suffix || '');
+                    };
                     k = [
                         ['Unique watchers (window)', _crFmt(watchers),
                          (cr.avg_watch_minutes != null ? 'avg ' + cr.avg_watch_minutes + ' min/video · ' + (cr.avg_videos_in_window || '—') + ' videos / viewer' : '')],
                         ['Monthly avg watchers', _crFmt(monthlyW),
-                         (watchers ? (monthlyW / watchers * 100).toFixed(1) + '% of in-window reach' : '')],
+                         _crSub(watchers ? (monthlyW / watchers * 100) : null, 1, '', ' of in-window reach')],
                         ['Subscribers (US)', _crFmt(subs),
-                         (watchers ? (subs / watchers * 100).toFixed(1) + '% of watchers' : '')],
+                         _crSub(watchers ? (subs / watchers * 100) : null, 1, '', ' of watchers')],
                         ['New subs (window)', _crFmt(newSubs),
-                         (subRate != null ? 'sub rate ' + subRate.toFixed(2) + '%' : '')],
+                         _crSub(subRate, 2, 'sub rate ', '')],
                         ['Family co-watch watchers', _crFmt(familyCowatch),
-                         (familyPct != null ? familyPct.toFixed(1) + '% of watchers · highest-LTV slice' : '')],
+                         _crSub(familyPct, 1, '', ' of watchers · highest-LTV slice')],
                         [_crBrandLbl + ' subs attributed', _crFmt(commerceSubs),
-                         (commercePct != null ? commercePct.toFixed(3) + '% of watchers · 7-day post-watch attribution' : '')],
+                         _crSub(commercePct, 3, '', ' of watchers · 7-day post-watch attribution')],
                     ];
                 } else if (targetType === 'banking_research'
                            || (meta.category || '').toLowerCase() === 'banking_research') {
@@ -39783,8 +39856,15 @@
                     // tv_show_* / Hours / Episode fields. Each tile pulls
                     // a banking-named KPI directly so labels read clean.
                     var bk = kpis.banking || {};
-                    var fmt = function(v) { return v != null ? _jiqFmt(v) : '—'; };
-                    var pct = function(v) { return v != null ? Number(v).toFixed(1) + '%' : '—'; };
+                    var fmt = function(v) { return (v != null && Number(v) !== 0) ? _jiqFmt(v) : '—'; };
+                    var pct = function(v) { return _jiqPct(v, 1); };
+                    // Inline percent helper that drops the entire sub-text
+                    // fragment (prefix + suffix) when the percent rounds to 0.
+                    var bkPctSub = function(rawPct, decimals, prefix, suffix) {
+                        var s = _jiqPct(rawPct, decimals);
+                        if (s === '—') return '';
+                        return (prefix || '') + s + (suffix || '');
+                    };
                     var researchers   = bk.researchers_window || kpis.total_users;
                     var totalOpens    = bk.account_opens_window || kpis.converted_users;
                     var digitalOpens  = bk.digital_bank_opens || kpis.confirmed_fandango_purchases;
@@ -39806,9 +39886,10 @@
                     var brandName     = (meta.customer_brand || '').toString();
                     var brandShareTxt;
                     if (bk.customer_brand_share_pct_of_opens != null) {
+                        var _bs = _jiqPct(bk.customer_brand_share_pct_of_opens, 1);
                         brandShareTxt = brandName
-                            ? (brandName + ' = ' + Number(bk.customer_brand_share_pct_of_opens).toFixed(1) + '% exposed')
-                            : (Number(bk.customer_brand_share_pct_of_opens).toFixed(1) + '% exposed');
+                            ? (brandName + ' = ' + _bs + ' exposed')
+                            : (_bs + ' exposed');
                     }
                     k = [
                         ['Active researchers (window)',
@@ -39816,24 +39897,24 @@
                             'US adults who researched a bank product · ' + (avgDays ? avgDays + 'd avg journey' : '')],
                         ['New-account opens',
                             fmt(totalOpens),
-                            (openRate != null ? openRate.toFixed(1) + '% close rate · ' : '')
+                            bkPctSub(openRate, 1, '', ' close rate · ')
                                 + (avgTouches ? avgTouches + ' avg touches to open' : '')],
                         ['Digital-bank opens',
                             fmt(digitalOpens),
-                            (digSharePct != null ? digSharePct.toFixed(1) + '% of opens' : '')
+                            bkPctSub(digSharePct, 1, '', ' of opens')
                               + (bk.digital_bank_brands ? ' · ' + bk.digital_bank_brands : ''),
                             'lime'],
                         ['Traditional-bank opens',
                             fmt(tradOpens),
-                            (tradSharePct != null ? tradSharePct.toFixed(1) + '% of opens' : '')
+                            bkPctSub(tradSharePct, 1, '', ' of opens')
                               + (bk.traditional_bank_brands ? ' · ' + bk.traditional_bank_brands : ''),
                             'amber'],
                         ['Cross-shoppers (opened both)',
                             fmt(crossShoppers),
-                            (crossSharePct != null ? crossSharePct.toFixed(1) + '% of opens · soft-switchers' : ''),
+                            bkPctSub(crossSharePct, 1, '', ' of opens · soft-switchers'),
                             'cyan'],
                         ['Avg banks cross-shopped',
-                            (avgBanks != null ? Number(avgBanks).toFixed(1) : '—'),
+                            (avgBanks != null && Number(avgBanks) !== 0 ? Number(avgBanks).toFixed(1) : '—'),
                             'PDPs visited per researcher before applying'],
                     ];
                     if (mktTouchedPct != null) {
@@ -39844,7 +39925,7 @@
                     }
                     if (brandName && bk.customer_brand_share_pct_of_opens != null) {
                         k.push([brandName + ' exposed',
-                                Number(bk.customer_brand_share_pct_of_opens).toFixed(1) + '%',
+                                _jiqPct(bk.customer_brand_share_pct_of_opens, 1),
                                 (bk.customer_brand_addressable_pct != null
                                     ? 'addressable upside: ' + Number(bk.customer_brand_addressable_pct).toFixed(1) + 'pp · '
                                        + fmt(bk.customer_brand_addressable_opens) + ' exposed'
@@ -40223,7 +40304,7 @@
                             return '<tr style="border-bottom:1px solid var(--border-color);">'
                                  + '<td style="padding:6px 4px;">' + _jiqEsc(h.host) + '</td>'
                                  + '<td style="padding:6px 4px;text-align:right;">' + _jiqFmt(h.users) + '</td>'
-                                 + '<td style="padding:6px 4px;text-align:right;">' + (h.users_pct != null ? h.users_pct + '%' : '—') + '</td>'
+                                 + '<td style="padding:6px 4px;text-align:right;">' + _jiqPct(h.users_pct, 1) + '</td>'
                                  + '</tr>';
                         }).join('') + '</tbody></table>';
                 }
@@ -41366,7 +41447,7 @@
                     + '<div style="display:flex;align-items:center;gap:14px;">'
                     +   '<div style="text-align:right;min-width:120px;">'
                     +     '<div style="font-size:0.92rem;font-weight:800;color:var(--text-primary);font-variant-numeric:tabular-nums;line-height:1;">' + _jiqFmt(s.researchers_at_stop || 0) + '</div>'
-                    +     '<div style="font-size:0.58rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">' + (s.pct_researchers_hit || 0) + '% of researchers</div>'
+                    +     '<div style="font-size:0.58rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">' + ((+s.pct_researchers_hit || 0) === 0 ? '—' : ((s.pct_researchers_hit || 0) + '%')) + ' of researchers</div>'
                     +     '<div style="background:var(--bg-secondary);border-radius:3px;height:5px;margin-top:4px;overflow:hidden;">'
                     +       '<div style="width:' + survW + '%;height:100%;background:linear-gradient(90deg,#5b6cff,#a855f7);"></div>'
                     +     '</div>'
@@ -41387,7 +41468,7 @@
                      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.85rem;">'
                      +   '<div><strong style="color:var(--text-primary);">⏱ Dwell:</strong> ' + _jiqEsc(dwellLabel) + '</div>'
                      +   '<div><strong style="color:var(--text-primary);">📅 Day:</strong> ' + (s.avg_day_from_start || 0) + ' from journey start</div>'
-                     +   '<div><strong style="color:var(--text-primary);">👥 Reach:</strong> ' + _jiqFmt(s.researchers_at_stop || 0) + ' researchers · ' + (s.pct_researchers_hit || 0) + '%</div>'
+                     +   '<div><strong style="color:var(--text-primary);">👥 Reach:</strong> ' + _jiqFmt(s.researchers_at_stop || 0) + ' researchers · ' + ((+s.pct_researchers_hit || 0) === 0 ? '—' : ((s.pct_researchers_hit || 0) + '%')) + '</div>'
                      + '</div>'
 
                      // Two-column body
@@ -41426,14 +41507,14 @@
                      + '<div style="margin-top:0.85rem;padding-top:0.7rem;border-top:1px dashed var(--border-color);">'
                      +   '<div style="font-weight:600;font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px;">Where they go from here</div>'
                      +   '<div style="display:flex;gap:0;width:100%;height:22px;border-radius:6px;overflow:hidden;background:var(--bg-secondary);">'
-                     +     '<div style="width:' + advW + '%;background:#10b981;display:flex;align-items:center;justify-content:center;color:#0a0a0a;font-weight:800;font-size:0.7rem;">' + (advW > 14 ? ('▶ ' + advance.toFixed(0) + '%') : '') + '</div>'
-                     +     '<div style="width:' + parkW + '%;background:#fbbf24;display:flex;align-items:center;justify-content:center;color:#0a0a0a;font-weight:800;font-size:0.7rem;">' + (parkW > 14 ? ('⏸ ' + park.toFixed(0) + '%') : '') + '</div>'
-                     +     '<div style="width:' + abW + '%;background:#ef4444;display:flex;align-items:center;justify-content:center;color:#0a0a0a;font-weight:800;font-size:0.7rem;">' + (abW > 14 ? ('✕ ' + abandon.toFixed(0) + '%') : '') + '</div>'
+                     +     '<div style="width:' + advW + '%;background:#10b981;display:flex;align-items:center;justify-content:center;color:#0a0a0a;font-weight:800;font-size:0.7rem;">' + (advW > 14 ? ('▶ ' + (advance === 0 ? '—' : (advance.toFixed(0) + '%'))) : '') + '</div>'
+                     +     '<div style="width:' + parkW + '%;background:#fbbf24;display:flex;align-items:center;justify-content:center;color:#0a0a0a;font-weight:800;font-size:0.7rem;">' + (parkW > 14 ? ('⏸ ' + (park === 0 ? '—' : (park.toFixed(0) + '%'))) : '') + '</div>'
+                     +     '<div style="width:' + abW + '%;background:#ef4444;display:flex;align-items:center;justify-content:center;color:#0a0a0a;font-weight:800;font-size:0.7rem;">' + (abW > 14 ? ('✕ ' + (abandon === 0 ? '—' : (abandon.toFixed(0) + '%'))) : '') + '</div>'
                      +   '</div>'
                      +   '<div style="display:flex;gap:14px;font-size:0.68rem;color:var(--text-secondary);margin-top:4px;">'
-                     +     '<div><span style="color:#10b981;font-weight:800;">▶ ' + advance.toFixed(0) + '%</span> advance to next</div>'
-                     +     '<div><span style="color:#fbbf24;font-weight:800;">⏸ ' + park.toFixed(0) + '%</span> park / save for later</div>'
-                     +     '<div><span style="color:#ef4444;font-weight:800;">✕ ' + abandon.toFixed(0) + '%</span> abandon entirely</div>'
+                     +     '<div><span style="color:#10b981;font-weight:800;">▶ ' + (advance === 0 ? '—' : (advance.toFixed(0) + '%')) + '</span> advance to next</div>'
+                     +     '<div><span style="color:#fbbf24;font-weight:800;">⏸ ' + (park === 0 ? '—' : (park.toFixed(0) + '%')) + '</span> park / save for later</div>'
+                     +     '<div><span style="color:#ef4444;font-weight:800;">✕ ' + (abandon === 0 ? '—' : (abandon.toFixed(0) + '%')) + '</span> abandon entirely</div>'
                      +   '</div>'
                      + '</div>'
 
@@ -41504,7 +41585,9 @@
                     return '<li style="margin-bottom:4px;"><strong>' + _jiqEsc(c.channel) + '</strong> <span style="color:#10b981;font-weight:700;">(' + (c.lift_multiplier_x || 1) + '× lift)</span> — <span style="color:var(--text-secondary);">' + _jiqEsc(c.rationale) + '</span></li>';
                 }).join('');
                 var stealList = (p.top_steal_targets || []).map(function(t) {
-                    return '<li style="margin-bottom:4px;"><strong>' + _jiqEsc(t.bank) + '</strong> — defector pool ~<strong>' + _jiqFmt(t.defector_pool_window || 0) + '</strong>, capture target <strong>' + (t.chime_capture_target_pct || 0) + '%</strong>. <em style="color:var(--text-secondary);">' + _jiqEsc(t.creative_angle) + '</em></li>';
+                    var _capPct = +(t.chime_capture_target_pct || 0);
+                    var _capTxt = (_capPct === 0) ? '—' : (_capPct + '%');
+                    return '<li style="margin-bottom:4px;"><strong>' + _jiqEsc(t.bank) + '</strong> — defector pool ~<strong>' + _jiqFmt(t.defector_pool_window || 0) + '</strong>, capture target <strong>' + _capTxt + '</strong>. <em style="color:var(--text-secondary);">' + _jiqEsc(t.creative_angle) + '</em></li>';
                 }).join('');
                 var cohortList = (p.top_cohorts_target || []).map(function(c) {
                     return '<li style="margin-bottom:4px;"><strong>' + _jiqEsc(c.cohort) + '</strong> — addressable <strong>' + _jiqFmt(c.addressable_opens || 0) + '</strong> opens · appetite: <span style="color:#a855f7;font-weight:700;">' + _jiqEsc(c.chime_steal_appetite) + '</span><br><span style="color:var(--text-secondary);font-size:0.74rem;">↳ ' + _jiqEsc(c.play) + '</span></li>';
@@ -41685,6 +41768,7 @@
                     // Engagement surfaces — mini horizontal bars
                     var surfaces = (h.top_engagement_surfaces || []).slice(0, 5).map(function(s) {
                         var pct = +s.reach_pct_of_cohort || 0;
+                        var pctTxt = (pct === 0) ? '—' : (pct + '%');
                         return '<div style="display:grid;grid-template-columns:1fr 36px;gap:8px;align-items:center;font-size:0.72rem;margin-bottom:3px;">'
                              + '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
                              +   '<div style="background:var(--bg-secondary);border-radius:4px;height:14px;position:relative;overflow:hidden;margin-bottom:2px;">'
@@ -41692,7 +41776,7 @@
                              +     '<div style="position:absolute;top:0;left:6px;line-height:14px;color:var(--text-primary);font-size:0.7rem;font-weight:600;">' + _jiqEsc(s.surface) + '</div>'
                              +   '</div>'
                              + '</div>'
-                             + '<div style="font-weight:700;color:' + color + ';text-align:right;font-variant-numeric:tabular-nums;">' + pct + '%</div>'
+                             + '<div style="font-weight:700;color:' + color + ';text-align:right;font-variant-numeric:tabular-nums;">' + pctTxt + '</div>'
                              + '</div>';
                     }).join('');
                     // DMA heatstrip — top 8 by index
@@ -41719,7 +41803,7 @@
                         +     '</div>'
                         +   '</div>'
                         +   '<div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">'
-                        +     '<div title="Share of potential consumers this cohort represents" style="background:' + color + ';color:#0a0a0a;font-weight:800;font-size:0.78rem;padding:5px 11px;border-radius:14px;letter-spacing:0.02em;white-space:nowrap;">' + sharePct.toFixed(1) + '% ' + shareLabel + '</div>'
+                        +     '<div title="Share of potential consumers this cohort represents" style="background:' + color + ';color:#0a0a0a;font-weight:800;font-size:0.78rem;padding:5px 11px;border-radius:14px;letter-spacing:0.02em;white-space:nowrap;">' + (_jiqPct(sharePct, 1) === '—' ? '— ' : (sharePct.toFixed(1) + '% ')) + shareLabel + '</div>'
                         +     '<div class="jiq-hyp-chev" style="font-size:0.78rem;color:var(--text-secondary);width:14px;text-align:center;transition:transform 0.15s;">▸</div>'
                         +   '</div>'
                         + '</summary>';
@@ -41798,11 +41882,11 @@
                         '<div style="background:linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(16,185,129,0.02) 100%); border:2px solid #10b981; border-radius:12px; padding:0.9rem;">'
                       +     '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">'
                       +       '<div style="font-size:0.65rem;color:#10b981;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">⭐ ' + _jiqEsc(triple.label || 'Triple-likely core') + '</div>'
-                      +       '<div style="font-size:0.7rem;color:var(--text-secondary);">' + _jiqFmt(triple.size) + ' people · ' + ((triple.size||0)/260_000_000*100).toFixed(1) + '% of US</div>'
+                      +       '<div style="font-size:0.7rem;color:var(--text-secondary);">' + _jiqFmt(triple.size) + ' people · ' + _jiqPct((triple.size||0)/260_000_000*100, 1) + ' of US</div>'
                       +     '</div>'
                       +     '<div style="text-align:center;padding:4px 0 6px;border-top:1px solid var(--border-color);">'
                       +       '<div style="font-size:1.4rem;font-weight:800;color:#10b981;line-height:1;">' + ((triple.intent_index||24)).toFixed(1) + '×</div>'
-                      +       '<div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">intent vs gen-pop · ' + (triple.conversion_pct || 0).toFixed(1) + '% open-wknd CR</div>'
+                      +       '<div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">intent vs gen-pop · ' + _jiqPct(triple.conversion_pct || 0, 1) + ' open-wknd CR</div>'
                       +     '</div>'
                       +     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 0;border-top:1px solid var(--border-color);border-bottom:1px solid var(--border-color);margin-bottom:8px;">'
                       +       '<div style="text-align:center;border-right:1px solid var(--border-color);">'
@@ -42222,7 +42306,7 @@
                     // display string isn't hard-coded to 8,147
                     var liveTotal = ((window._jiqCurrentRun || {}).kpis || {}).confirmed_digital_purchases;
                     var totalStr  = liveTotal ? _jiqFmt(liveTotal) : '—';
-                    var fmtPct = function(v) { return (v == null) ? '—' : (+v).toFixed(1) + '%'; };
+                    var fmtPct = function(v) { return _jiqPct(v, 1); };
                     var pickShare = function(pa) {
                         return (pa.estimated_share_of_total_presales_pct != null)
                             ? pa.estimated_share_of_total_presales_pct
@@ -42738,6 +42822,7 @@
             function _fmtPct(p) {
                 if (p == null || isNaN(+p)) return '—';
                 p = +p;
+                if (p === 0) return '—';
                 if (p < 0.1) return '<0.1%';
                 if (p < 1)   return p.toFixed(2) + '%';
                 return p.toFixed(1) + '%';
@@ -44194,7 +44279,7 @@
                          +   '<div style="padding: 6px 4px; ' + headerStyle + ' border: 1px solid var(--border-color); border-top: 0; '
                          +      'border-radius: 0 0 6px 6px; text-align: center; min-width: 0; overflow-wrap: anywhere;">'
                          +     '<div style="font-size: 11px; font-weight: 700; line-height: 1.2;">' + _jiqEsc(col.label) + '</div>'
-                         +     '<div style="font-size: 10px; opacity: 0.8;">' + _jiqFmt(col.users) + ' users · ' + (col.users_pct || 0) + '%</div>'
+                         +     '<div style="font-size: 10px; opacity: 0.8;">' + _jiqFmt(col.users) + ' users · ' + ((+col.users_pct || 0) === 0 ? '—' : ((col.users_pct || 0) + '%')) + '</div>'
                          +   '</div>'
                          + '</div>';
                 }).join('')
@@ -44417,7 +44502,7 @@
                                        : (p.pct != null)       ? p.pct
                                        : (cohortN > 0 && p.users != null) ? Math.round(p.users / cohortN * 1000) / 10
                                        : 0;
-                            var pctDisplay = (pctVal != null && !isNaN(pctVal))
+                            var pctDisplay = (pctVal != null && !isNaN(pctVal) && Number(pctVal) !== 0)
                                 ? (Number(pctVal).toFixed(1).replace(/\.0$/, '')) + '%'
                                 : '—';
                             var daysVal = (p.avg_days != null) ? p.avg_days : p.days;
@@ -45241,7 +45326,7 @@
                 ));
                 tiles.push(_jiqSubIqTile(
                     'Acquired and<br>Reactivated Rate',
-                    (a.conversion_rate_pct != null ? a.conversion_rate_pct.toFixed(2) + '%' : '—'),
+                    _jiqPct(a.conversion_rate_pct, 2),
                     'NPS \u00f7 Total Show Watchers (Gen Pop)',
                     '#f59e0b'
                 ));
@@ -45373,7 +45458,7 @@
                 (t.buckets || []).forEach(function(b) {
                     bucketTiles.push(_jiqSubIqTile(
                         b.label || ('Days ' + (b.days_range || '?')),
-                        (b.pct != null ? b.pct.toFixed(1) + '%' : '—'),
+                        _jiqPct(b.pct, 1),
                         _jiqFmt(b.signups) + ' signups',
                         '#f59e0b'
                     ));
@@ -45519,7 +45604,7 @@
                     +     '<div style="background: linear-gradient(90deg, #a78bfa, #7c3aed); height: 100%; width: ' + width + '%; border-radius: 4px;"></div>'
                     +   '</div>'
                     +   '<div style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-align: right; font-variant-numeric: tabular-nums;">'
-                    +     (p.pct != null ? p.pct.toFixed(1) + '%' : '—') + '</div>'
+                    +     _jiqPct(p.pct, 1) + '</div>'
                     + '</div>';
             }
             html += '</div>';
@@ -45912,7 +45997,7 @@
             if (metaEl) {
                 metaEl.textContent = 'Cohort: ' + _jiqFmt(tp.cohort_size)
                                    + ' · Converters: ' + _jiqFmt(tp.converters)
-                                   + ' · Baseline conv: ' + (tp.baseline_conv_rate != null ? tp.baseline_conv_rate + '%' : '—');
+                                   + ' · Baseline conv: ' + _jiqPct(tp.baseline_conv_rate, 1);
             }
 
             // Touchpoints table
@@ -45929,10 +46014,10 @@
                 var body = tp.rows.map(function(r) {
                     return '<tr style="border-bottom:1px solid var(--border-color);">'
                          + '<td style="padding:6px 6px;font-weight:600;">' + _jiqEsc(r.label) + '</td>'
-                         + '<td style="padding:6px 6px;text-align:right;">' + (r.conv_rate_when_reached != null ? r.conv_rate_when_reached + '%' : '—') + '</td>'
-                         + (_tpIsFandango ? '' : '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + (r.conv_rate_when_not != null ? r.conv_rate_when_not + '%' : '—') + '</td>')
-                         + '<td style="padding:6px 6px;text-align:right;">' + (r.avg_days_to_conversion != null ? r.avg_days_to_conversion : '—') + '</td>'
-                         + '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + (r.avg_touches_per_user != null ? r.avg_touches_per_user : '—') + '</td>'
+                         + '<td style="padding:6px 6px;text-align:right;">' + _jiqPct(r.conv_rate_when_reached, 1) + '</td>'
+                         + (_tpIsFandango ? '' : '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + _jiqPct(r.conv_rate_when_not, 1) + '</td>')
+                         + '<td style="padding:6px 6px;text-align:right;">' + (r.avg_days_to_conversion != null && +r.avg_days_to_conversion !== 0 ? r.avg_days_to_conversion : '—') + '</td>'
+                         + '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + (r.avg_touches_per_user != null && +r.avg_touches_per_user !== 0 ? r.avg_touches_per_user : '—') + '</td>'
                          + '</tr>';
                 }).join('');
                 tableEl.innerHTML = head + body + '</tbody></table>';
@@ -45951,8 +46036,8 @@
                         return '<tr style="border-bottom:1px solid var(--border-color);">'
                              + '<td style="padding:5px 4px;">' + _jiqEsc(p.a) + ' <span style="color:var(--text-secondary);">×</span> ' + _jiqEsc(p.b) + '</td>'
                              + '<td style="padding:5px 4px;text-align:right;">' + _jiqFmt(p.users) + '</td>'
-                             + '<td style="padding:5px 4px;text-align:right;">' + (p.users_pct != null ? p.users_pct + '%' : '—') + '</td>'
-                             + '<td style="padding:5px 4px;text-align:right;font-weight:600;">' + (p.conv_rate != null ? p.conv_rate + '%' : '—') + '</td>'
+                             + '<td style="padding:5px 4px;text-align:right;">' + _jiqPct(p.users_pct, 1) + '</td>'
+                             + '<td style="padding:5px 4px;text-align:right;font-weight:600;">' + _jiqPct(p.conv_rate, 1) + '</td>'
                              + '</tr>';
                     }).join('') + '</tbody></table>';
             }
@@ -45972,7 +46057,7 @@
                              + '<td style="padding:5px 4px;font-weight:600;">' + _jiqEsc(b.bucket) + '</td>'
                              + '<td style="padding:5px 4px;text-align:right;">' + _jiqFmt(b.converters) + '</td>'
                              + (_tdIsFandango ? '' : '<td style="padding:5px 4px;text-align:right;color:var(--text-secondary);">' + _jiqFmt(b.non_converters) + '</td>')
-                             + '<td style="padding:5px 4px;text-align:right;font-weight:600;">' + (b.conv_pct != null ? b.conv_pct + '%' : '—') + '</td>'
+                             + '<td style="padding:5px 4px;text-align:right;font-weight:600;">' + _jiqPct(b.conv_pct, 1) + '</td>'
                              + '</tr>';
                     }).join('') + '</tbody></table>';
             }
@@ -45989,11 +46074,13 @@
                 return;
             }
             if (fMeta) {
+                var _cuPct = _jiqPct(cluster.users_pct, 1);
+                var _ccPct = _jiqPct(cluster.conversion_pct, 1);
                 fMeta.textContent = 'Inception: ' + (cluster.inception || '—')
                     + '  ·  ' + _jiqFmt(cluster.users) + ' users'
-                    + (cluster.users_pct != null ? (' (' + cluster.users_pct + '% of cohort)') : '')
+                    + (cluster.users_pct != null && _cuPct !== '—' ? (' (' + _cuPct + ' of cohort)') : '')
                     + '  ·  ' + _jiqFmt(cluster.converted) + ' converted'
-                    + (cluster.conversion_pct != null ? (' (' + cluster.conversion_pct + '%)') : '');
+                    + (cluster.conversion_pct != null && _ccPct !== '—' ? (' (' + _ccPct + ')') : '');
             }
 
             var funnel = cluster.funnel || [];
@@ -46041,7 +46128,7 @@
                             return '<tr style="border-bottom:1px solid var(--border-color);">'
                                  + '<td style="padding:6px 4px;">' + _jiqEsc(h.host) + '</td>'
                                  + '<td style="padding:6px 4px;text-align:right;">' + _jiqFmt(h.users) + '</td>'
-                                 + '<td style="padding:6px 4px;text-align:right;">' + (h.users_pct != null ? h.users_pct + '%' : '—') + '</td>'
+                                 + '<td style="padding:6px 4px;text-align:right;">' + _jiqPct(h.users_pct, 1) + '</td>'
                                  + '</tr>';
                         }).join('') + '</tbody></table>';
                 }
@@ -57880,7 +57967,17 @@
             const totalConversionRate = metrics.total_conversion_rate || '';
             const cleanConversionRate = metrics.clean_conversion_rate || '';
             const avgDaysToSignup = metrics.avg_days_to_signup || 'N/A';
-            
+            // Per-title engagement KPIs (researched by Claude, no defaults).
+            // Falls back to "—" if the CSV doesn't have them (legacy files).
+            const completionRateRaw = (metrics.completion_rate || '').toString().trim();
+            const secondScreenRaw = (metrics.second_screen_activity || '').toString().trim();
+            const completionRateDisplay = completionRateRaw
+                ? (completionRateRaw.endsWith('%') ? completionRateRaw : completionRateRaw + '%')
+                : '—';
+            const secondScreenDisplay = secondScreenRaw
+                ? (secondScreenRaw.endsWith('%') ? secondScreenRaw : secondScreenRaw + '%')
+                : '—';
+
             // Prefer rate from projected numbers so it always matches the two card values (Total Accounts Viewed, Accounts Acquired)
             const twProj = parseNumber(totalWatchersGenPop);
             const npsProj = parseNumber(newSignupsGenPop);
@@ -57964,6 +58061,14 @@
                         <div class="exec-summary-metric has-tooltip" data-tooltip="Total Show Conversion Rate: The percentage of Total Show Watchers who became New Platform Signups, using US projected (Gen Pop) numbers: (NPS projected ÷ Total Show Watchers projected) × 100.">
                             <div class="exec-metric-label">Acquired and<br>Reactivated Accounts</div>
                             <div class="exec-metric-value">${conversionPctDisplay}</div>
+                        </div>
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Completion Rate: Researched per-title by Claude. For movies, this is the share of viewers who watched start → end credits. For series, this is the average per-episode completion rate across the season — calculated by Claude estimating each episode's completion and then averaging.">
+                            <div class="exec-metric-label">Completion<br>Rate</div>
+                            <div class="exec-metric-value">${completionRateDisplay}</div>
+                        </div>
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Second Screen Activity: Researched per-title by Claude. Share of viewers who were on a phone, tablet, or other secondary device for the majority of the runtime — i.e. partially distracted / ambient-TV viewing. Higher percentages are typical for reality, sports, and procedurals; lower percentages for prestige drama and puzzle-box content.">
+                            <div class="exec-metric-label">Second Screen<br>Activity</div>
+                            <div class="exec-metric-value">${secondScreenDisplay}</div>
                         </div>
                     </div>
                     ${hasTimingData(data) ? `
