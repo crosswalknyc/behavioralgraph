@@ -62640,6 +62640,12 @@
         //   - MEDIA_BRAND: MEDIA + OWNED (content viewing + their app).
         //   - SEARCH / SOCIAL brands: their own touchpoint dominates.
         //   - TRAVEL_BRAND: OWNED + RETAIL (book on app / buy trip).
+        //   - CONTENT: 100% MEDIA. Per user 2026-06-18: any profile in the
+        //     CONTENT bucket on the profile selector (MOVIE, PODCAST, GAMES,
+        //     GAME PLAYERS, VERTICAL SHORTS, SERIES - *) qualifies by virtue
+        //     of HAVING WATCHED / PLAYED that piece of content during the
+        //     window, so by definition 100% of engagers are media engagers.
+        //     The other four buckets and Owned are forced to zero / "—".
         const _AUDIENCE_SHARE_ARCHETYPES = {
             INFLUENCER:    { social: 55, search: 15, owned:  5, retail:  8, media: 17 },
             TALENT:        { social: 28, search: 12, owned:  3, retail:  7, media: 50 },
@@ -62650,6 +62656,7 @@
             SEARCH_BRAND:  { social: 10, search: 58, owned: 20, retail:  4, media:  8 },
             SOCIAL_BRAND:  { social: 62, search: 12, owned: 18, retail:  3, media:  5 },
             TRAVEL_BRAND:  { social: 12, search: 20, owned: 28, retail: 30, media: 10 },
+            CONTENT:       { social:  0, search:  0, owned:  0, retail:  0, media: 100 },
             GENERIC:       { social: 18, search: 18, owned: 22, retail: 22, media: 20 }
         };
         // Archetypes for which there is no meaningful brand-owned .com /
@@ -62661,13 +62668,42 @@
         // steal share from social), so it's also excluded. SPORTS_TEAM
         // is NOT excluded — team .coms and team apps (tickets, scores)
         // are a real, heavily-used owned channel.
-        const _AUDIENCE_SHARE_NO_OWNED = new Set(['TALENT', 'INFLUENCER']);
+        const _AUDIENCE_SHARE_NO_OWNED = new Set(['TALENT', 'INFLUENCER', 'CONTENT']);
         // Archetype detection — keyed off BRAND CATEGORY (preferred) with
         // _currentProfileCategory() as a fallback. Conservative: anything
         // unrecognized falls through to GENERIC.
         function _detectAudienceShareArchetype(brandCategory, profileCategory) {
-            const cat = String(brandCategory || profileCategory || '').trim().toUpperCase();
+            const brand = String(brandCategory || '').trim().toUpperCase();
+            const prof  = String(profileCategory || '').trim().toUpperCase();
+            const cat = brand || prof;
             if (!cat) return 'GENERIC';
+            // CONTENT bucket (profile selector "Content" master) — takes
+            // priority over everything else because qualification = "they
+            // had to watch / play this piece of content during the window",
+            // so by definition every engager is a media engager. Forces
+            // 100% MEDIA and "—" on the other four boxes. Matches against
+            // BOTH the BRAND CATEGORY value and the profile-selector
+            // master category so genre-bucketed movies ("MOVIE - HORROR"),
+            // platform-bucketed series ("SERIES - NETFLIX"), podcasts,
+            // games, and vertical-shorts all land here.
+            const CONTENT_BRAND_CATS = new Set([
+                'MOVIE', 'MOVIES', 'PODCAST', 'PODCASTS',
+                'GAMES', 'GAME PLAYERS', 'GAMES - PLAYERS',
+                'VERTICAL SHORTS', 'VERTICAL SHORT', 'SERIES'
+            ]);
+            const isContentBrand = brand && (
+                CONTENT_BRAND_CATS.has(brand)
+                || brand.startsWith('SERIES')   // SERIES - NETFLIX, SERIES - HBO MAX, ...
+                || brand.startsWith('MOVIE -')  // MOVIE - HORROR, MOVIE - ROMANTIC COMEDY, ...
+                || brand.startsWith('MOVIE-')
+            );
+            const isContentProf = prof && (
+                CONTENT_BRAND_CATS.has(prof)
+                || prof.startsWith('SERIES')
+                || prof.startsWith('MOVIE -')
+                || prof.startsWith('MOVIE-')
+            );
+            if (isContentBrand || isContentProf) return 'CONTENT';
             // Creator / influencer / digital-native talent — caught by
             // substring so 'CREATOR/INFLUENCER', 'INFLUENCER', 'CREATOR',
             // 'YOUTUBER', 'STREAMER', 'PODCASTER' all map here.
@@ -62740,6 +62776,16 @@
             const profileCat = _currentProfileCategory();
             const archetype = _detectAudienceShareArchetype(brandCat, profileCat);
             const noOwned = _AUDIENCE_SHARE_NO_OWNED.has(archetype);
+
+            // CONTENT short-circuit (2026-06-18): movie / podcast / game /
+            // vertical-short / series profiles qualify by virtue of having
+            // CONSUMED the content during the window, so the audience-share
+            // breakdown is 100% MEDIA by definition. We skip the data nudge
+            // entirely so floating-point math can't drift it off 100.
+            if (archetype === 'CONTENT') {
+                return { social: 0, search: 0, retail: 0, media: 100, owned: 0,
+                         archetype, noOwned: true, dataActive: false };
+            }
 
             // (a) Archetype base — clone so we can mutate.
             const base = Object.assign({}, _AUDIENCE_SHARE_ARCHETYPES[archetype] || _AUDIENCE_SHARE_ARCHETYPES.GENERIC);
