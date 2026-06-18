@@ -1217,6 +1217,46 @@
             color: var(--text-secondary);
         }
         /* All product views: take remaining height when shown (flex: 1 1 0%, min-height: 0) */
+        #helmIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
+        #helmIQView .helm-layout { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+        #helmIQView .helm-sidebar { width: 280px; min-width: 280px; background: var(--bg-secondary); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; overflow-y: auto; padding: 1rem; }
+        #helmIQView .helm-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        #helmIQView .helm-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-color); padding: 0 1.25rem; flex-shrink: 0; }
+        #helmIQView .helm-tab-btn { padding: 0.7rem 1.25rem; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-secondary); font-size: 0.82rem; font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em; transition: all 0.15s; }
+        #helmIQView .helm-tab-btn:hover { color: var(--text-primary); }
+        #helmIQView .helm-tab-btn.active { color: var(--accent-lime); border-bottom-color: var(--accent-lime); }
+        #helmIQView .helm-tab-content { flex: 1; overflow-y: auto; padding: 1.5rem; display: none; }
+        #helmIQView .helm-tab-content.active { display: block; }
+        #helmIQView .helm-build-form { max-width: 680px; }
+        #helmIQView .helm-field { margin-bottom: 1.25rem; }
+        #helmIQView .helm-field label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.4rem; }
+        #helmIQView .helm-field select { width: 100%; padding: 0.55rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 0.85rem; }
+        #helmIQView .helm-field-row { display: flex; gap: 1rem; }
+        #helmIQView .helm-field-row .helm-field { flex: 1; }
+        #helmIQView .helm-submit-btn { padding: 0.75rem 2rem; background: var(--accent-lime); border: none; border-radius: 8px; color: #1a1a1a; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: opacity 0.2s; margin-top: 1rem; }
+        #helmIQView .helm-submit-btn:hover { opacity: 0.85; }
+        #helmIQView .helm-submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        #helmIQView .helm-results { display: none; margin-top: 1.5rem; }
+        #helmIQView .helm-pros-cons { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; }
+        #helmIQView .helm-pros-cons h3 { margin: 0 0 0.75rem 0; font-size: 1rem; }
+        #helmIQView .helm-grid { overflow-x: auto; border: 1px solid var(--border-color); border-radius: 12px; }
+        #helmIQView .helm-grid table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        #helmIQView .helm-grid th, #helmIQView .helm-grid td { padding: 0.6rem 0.85rem; border: 1px solid var(--border-color); text-align: left; vertical-align: top; }
+        #helmIQView .helm-grid th { background: var(--bg-secondary); font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.04em; color: var(--text-secondary); }
+        #helmIQView .helm-grid .helm-pinned-col { background: rgba(200, 255, 0, 0.06); border-right: 2px solid var(--accent-lime); }
+        #helmIQView .helm-grid .helm-changeout-row select { width: 100%; font-size: 0.78rem; padding: 0.3rem 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); }
+        #helmIQView .helm-fin-layout { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+        #helmIQView .helm-fin-sidebar { width: 260px; min-width: 260px; background: var(--bg-secondary); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; overflow-y: auto; padding: 1rem; }
+        #helmIQView .helm-fin-sidebar h4 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin: 0 0 0.75rem 0; }
+        #helmIQView .helm-fin-sidebar .helm-movie-item { padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.82rem; margin-bottom: 0.25rem; transition: background 0.15s; }
+        #helmIQView .helm-fin-sidebar .helm-movie-item:hover { background: var(--bg-input); }
+        #helmIQView .helm-fin-sidebar .helm-movie-item.active { background: rgba(200,255,0,0.12); border: 1px solid var(--accent-lime); }
+        #helmIQView .helm-fin-content { flex: 1; overflow-y: auto; padding: 1.5rem; }
+        #helmIQView .helm-fin-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border-color); margin-bottom: 1.25rem; }
+        #helmIQView .helm-fin-tab-btn { padding: 0.6rem 1rem; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em; }
+        #helmIQView .helm-fin-tab-btn.active { color: var(--accent-lime); border-bottom-color: var(--accent-lime); }
+        #helmIQView .helm-fin-panel { display: none; }
+        #helmIQView .helm-fin-panel.active { display: block; }
         #subscriberIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
         #rankerIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         #ticketSalesIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
@@ -13963,7 +14003,7 @@
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
-                            <option value="shareOfTimeIQ" {% if not has_share_of_time_access %}disabled{% endif %}>⏱️ Share of Time</option>
+                            <option value="shareOfTimeIQ" disabled>⏱️ Share of Time (Coming Soon)</option>
                             <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
