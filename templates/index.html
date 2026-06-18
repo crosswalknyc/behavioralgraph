@@ -14007,14 +14007,19 @@
                     <span class="view-nav-label">SELECT PRODUCT:</span>
                     <div class="view-nav-custom-wrap" id="viewNavCustomWrap">
                         <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate" aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;min-width:0;">
-                            {# Display order 2026-06-16 (flat — categorization
+                            {# Display order 2026-06-18 (flat — categorization
                                groups removed per user request):
-                                 Profile IQ, Subscriber IQ, Ranker,
-                                 Share of Time, Blue IQ, Fin IQ, LLMO IQ,
+                                 Profile IQ, Subscriber IQ, Digital Journey IQ,
+                                 Ranker, Blue IQ, Fin IQ, LLMO IQ,
                                  SF Conversion, Intent IQ, ROAS IQ,
-                                 Brand Partnership, Digital Journey IQ,
-                                 Flywheel Conversion, Analysis IQ,
-                                 Workspace, then tail (Admin).
+                                 Brand Partnership, Flywheel Conversion,
+                                 Analysis IQ, Share of Time, Workspace,
+                                 then tail (Admin).
+
+                               2026-06-18: moved Digital Journey IQ right
+                               under Subscriber IQ (subscriber-funnel
+                               adjacency) and moved Share of Time right
+                               above Workspace per user request.
 
                                Underlying nested-group CSS + JS
                                (.view-nav-group / data-group rebuilder)
@@ -14024,8 +14029,8 @@
                                option(s). #}
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
+                            <option value="journeyIQ" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
                             <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
-                            <option value="shareOfTimeIQ" disabled>⏱️ Share of Time (Coming Soon)</option>
                             <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
@@ -14033,11 +14038,11 @@
                             <option value="intentIQ" {% if not has_intent_iq_access %}disabled{% endif %}>🎬 Intent IQ</option>
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
                             <option value="brandPartnershipIQ" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
-                            <option value="journeyIQ" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
                             <option value="flywheelConversion" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
                             {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                             <option value="customAnalysis">🔧 Analysis IQ</option>
                             {% endif %}
+                            <option value="shareOfTimeIQ" disabled>⏱️ Share of Time (Coming Soon)</option>
                             <option value="workspace" {% if not has_workspace_access %}disabled{% endif %}>🗂️ Workspace</option>
                             <!-- Impact IQ + Ticket Sales Tracker hidden 2026-06-16 per user
                                  request. View divs, handlers, /api routes, and admin
