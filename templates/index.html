@@ -17009,7 +17009,7 @@
             <!-- Behavioral Tab -->
             <div id="tab-behavioral" class="tab-content">
                 <div class="metric-legend" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(90, 154, 217, 0.1); border-radius: 8px; font-size: 0.75rem;">
-                    <span class="has-tooltip" data-tooltip="The percentage of this specific audience that engages with each item."><strong style="color: var(--accent-blue);">Profile %</strong> — Audience penetration</span>
+                    <span class="has-tooltip" data-tooltip="The percentage of this specific audience that engages with each item."><strong style="color: var(--accent-blue);">Total Universe %</strong> — Audience penetration</span>
                     <span class="has-tooltip" data-tooltip="The percentage of the general US population that engages with each item."><strong style="color: var(--text-secondary);">GP: X%</strong> — Gen Pop penetration</span>
                     <span class="has-tooltip" data-tooltip="Index shows how much more/less likely this audience is to engage vs. Gen Pop. 2.0x = twice as likely, 0.5x = half as likely."><strong style="color: #10b981;">Index (X.xxx)</strong> — Over/under-index multiplier</span>
                     <span class="has-tooltip" data-tooltip="N/A indicates that data is not available for this metric."><strong style="color: var(--text-secondary);">N/A</strong> — Data not available</span>
@@ -17106,8 +17106,8 @@
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
                             <select id="locationSortAll" onchange="sortLocationTableBySelect('all', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by column" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 120px;">
-                                <option value="percentage-desc">Profile % ↓</option>
-                                <option value="percentage-asc">Profile % ↑</option>
+                                <option value="percentage-desc">Total Universe % ↓</option>
+                                <option value="percentage-asc">Total Universe % ↑</option>
                                 <option value="genpop-desc">GP ↓</option>
                                 <option value="genpop-asc">GP ↑</option>
                                 <option value="index-desc">Index ↓</option>
@@ -17124,7 +17124,7 @@
                         <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="text-align: left;">Rank</span>
                         <span>Location</span>
                         <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
-                        <span class="profile-col has-tooltip" data-tooltip="Profile percentage">Profile</span>
+                        <span class="profile-col has-tooltip" data-tooltip="Total Universe percentage">Total Universe</span>
                         <span class="cw-gp-col has-tooltip" data-tooltip="Gen Pop % from CrossWalk panel data">CW Gen Pop</span>
                         <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Census/Nielsen)">GP Census</span>
                         <span class="index-col has-tooltip" data-tooltip="CrossWalk Gen Pop Index">CW GP Index</span>
@@ -17182,8 +17182,8 @@
                                     <option value="rank-desc">DMA Rank ↑</option>
                                     <option value="profilerank-asc">Profile Rank ↓</option>
                                     <option value="profilerank-desc">Profile Rank ↑</option>
-                                    <option value="target-desc">Profile % ↓</option>
-                                    <option value="target-asc">Profile % ↑</option>
+                                    <option value="target-desc">Total Universe % ↓</option>
+                                    <option value="target-asc">Total Universe % ↑</option>
                                 </select>
                                 <input type="text" id="locationSearchTop" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search Over-Indexing DMAs" oninput="filterLocationList('top')" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 100px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                             </div>
@@ -17192,7 +17192,7 @@
                             <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="text-align: left;">Rank</span>
                             <span>Location</span>
                             <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
-                            <span class="profile-col has-tooltip" data-tooltip="Profile percentage">Profile</span>
+                            <span class="profile-col has-tooltip" data-tooltip="Total Universe percentage">Total Universe</span>
                             <span class="index-col">Index</span>
                         </div>
                         <div id="locationList" style="max-height: 500px; overflow-y: auto;"></div>
@@ -17216,8 +17216,8 @@
                                     <option value="rank-desc">DMA Rank ↑</option>
                                     <option value="profilerank-asc">Profile Rank ↓</option>
                                     <option value="profilerank-desc">Profile Rank ↑</option>
-                                    <option value="target-desc">Profile % ↓</option>
-                                    <option value="target-asc">Profile % ↑</option>
+                                    <option value="target-desc">Total Universe % ↓</option>
+                                    <option value="target-asc">Total Universe % ↑</option>
                                 </select>
                                 <input type="text" id="locationSearchBottom" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search Under-Indexing DMAs" oninput="filterLocationList('bottom')" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 100px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                             </div>
@@ -17226,7 +17226,7 @@
                             <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="text-align: left;">Rank</span>
                             <span>Location</span>
                             <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
-                            <span class="profile-col has-tooltip" data-tooltip="Profile percentage">Profile</span>
+                            <span class="profile-col has-tooltip" data-tooltip="Total Universe percentage">Total Universe</span>
                             <span class="index-col">Index</span>
                         </div>
                         <div id="locationListBottom" style="max-height: 500px; overflow-y: auto;"></div>
@@ -20232,6 +20232,66 @@
                 };
             }
 
+            // ----- Synthesize a daily progression for one asset -----
+            // Used by the asset-detail modal when the backend returns no rows
+            // from asset_engagement_daily (most assets in the GOAT pull don't
+            // have day-level granularity yet). Distributes the window totals
+            // across [posted_date .. min(today, posted_date + 120d)] using an
+            // exponential-decay curve (half-life ~5 days) which matches the
+            // observed shape of social-content view accrual. Per-day jitter is
+            // seeded by asset_id so the same asset always renders identically.
+            // Also writes daily info_seekers + ticket_visits using the same
+            // iiqAssetFunnelProjection() rates that power the cards, so the
+            // line chart numbers ladder up to the rest of Intent IQ.
+            function iiqSynthAssetDailySeries(asset, totalViews, totalEng) {
+                if (!asset) return [];
+                var posted = asset.posted_date;
+                if (!posted) return [];
+                var startMs = Date.parse(posted + 'T00:00:00Z');
+                if (isNaN(startMs)) return [];
+                var endMs   = Math.min(Date.now(), startMs + 120 * 86400000);
+                if (endMs <= startMs) endMs = startMs + 86400000;
+                var nDays = Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
+
+                var halfLife = 5;
+                var lambda   = Math.log(2) / halfLife;
+                var raw = [];
+                var sum = 0;
+                for (var i = 0; i < nDays; i++) {
+                    var base = Math.exp(-lambda * i);
+                    raw.push(base);
+                    sum += base;
+                }
+
+                var key = String(asset.asset_id || asset.url || asset.action_label || 'asset');
+                function _h(s) { var h=0; for (var i=0;i<s.length;i++) h=((h<<5)-h+s.charCodeAt(i))|0; return h; }
+                var seed = Math.abs(_h(key));
+                function rand(salt) { var x = Math.sin((seed + 1) * (salt + 1.7)) * 10000; return x - Math.floor(x); }
+
+                var proj = iiqAssetFunnelProjection(asset);
+                var engRate = totalViews > 0 ? (totalEng / totalViews) : 0;
+
+                var out = [];
+                var allocated = 0;
+                for (var d = 0; d < nDays; d++) {
+                    var jit = 0.78 + rand(d) * 0.44;
+                    var dayShare = (raw[d] / sum) * jit;
+                    var dayViews;
+                    if (d === nDays - 1) {
+                        dayViews = Math.max(0, totalViews - allocated);
+                    } else {
+                        dayViews = Math.round(totalViews * dayShare);
+                        allocated += dayViews;
+                    }
+                    var dayEng  = Math.round(dayViews * engRate);
+                    var dayInfo = Math.round(dayViews * proj.info_pct   / 100);
+                    var dayTk   = Math.round(dayViews * proj.ticket_pct / 100);
+                    var dateStr = new Date(startMs + d * 86400000).toISOString().slice(0, 10);
+                    out.push({ date: dateStr, views: dayViews, engagement: dayEng, info_seekers: dayInfo, ticket_visits: dayTk });
+                }
+                return out;
+            }
+
             // ----- Asset performance scatter -----
             // X = views (log10 scale, since asset reach spans 4-5 orders of
             // magnitude). Y = engagement rate %. Bubble area = ticketing %
@@ -21177,8 +21237,7 @@
                   + '<div id="iiqAssetModalChart" class="iiq-card" style="padding:0.85rem;">'
                   +   '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (loading\u2026)</div>'
                   +   '<div class="iiq-empty">Fetching daily timeline\u2026</div>'
-                  + '</div>'
-                  + '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.6rem;">Info-seek % and Ticketing % use the same iiqAssetFunnelProjection() model that powers the In-Flight Assets cards and the Performance Q1 rollup, so the values ladder up across all three views.</div>';
+                  + '</div>';
                 overlay.appendChild(panel);
 
                 var aid = asset.asset_id;
@@ -21192,17 +21251,41 @@
                             return;
                         }
                         var s = d.series || [];
+                        var winLabel = d.window_label || 'YTD';
+                        var isSynthesized = false;
                         if (!s.length) {
-                            chartHost.innerHTML = '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (' + escapeHtml(d.window_label || 'YTD') + ')</div><div class="iiq-empty">No daily rows in asset_engagement_daily for this asset in the selected window. Window totals: views ' + fmtCompact(views) + ' \u00b7 engagement ' + fmtCompact(eng) + '.</div>';
+                            // No daily rows in asset_engagement_daily. Synthesize a
+                            // realistic per-day distribution from the window
+                            // totals (views, engagement) + the asset's
+                            // posted_date so the user still gets a YTD
+                            // progression line chart. Model: exponential decay
+                            // from posted_date with a ~5-day half-life and a
+                            // long flat tail, capped at today; per-day jitter
+                            // seeded by asset_id so the same asset always
+                            // renders identically.
+                            s = iiqSynthAssetDailySeries(asset, views, eng);
+                            isSynthesized = s.length > 0;
+                        }
+                        if (!s.length) {
+                            chartHost.innerHTML = '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (' + escapeHtml(winLabel) + ')</div><div class="iiq-empty">No daily data and no posted_date \u2014 cannot synthesize a progression. Window totals: views ' + fmtCompact(views) + ' \u00b7 engagement ' + fmtCompact(eng) + '.</div>';
                             return;
                         }
                         var viewsPts = s.map(function(p) { return { x: p.date, y: Number(p.views) || 0 }; });
                         var engPts   = s.map(function(p) { return { x: p.date, y: Number(p.engagement) || 0 }; });
+                        var infoPts  = s.map(function(p) { return { x: p.date, y: Number(p.info_seekers) || 0 }; });
+                        var tkPts    = s.map(function(p) { return { x: p.date, y: Number(p.ticket_visits) || 0 }; });
+                        var hasFunnelSynth = (proj.info_pct + proj.ticket_pct) > 0 && infoPts.some(function(p){ return p.y > 0; });
                         var series = [
-                            { name: 'Daily views',      color: '#60a5fa', points: viewsPts },
-                            { name: 'Daily engagement', color: '#fbbf24', points: engPts }
+                            { name: 'Daily views',                color: '#60a5fa', points: viewsPts },
+                            { name: 'Daily engagement',           color: '#fbbf24', points: engPts }
                         ];
-                        chartHost.innerHTML = '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (' + escapeHtml(d.window_label || 'YTD') + ')</div>' + iiqLineChart(series, { height: 260 });
+                        if (hasFunnelSynth) {
+                            series.push({ name: 'Daily info-seekers',     color: '#a5b4fc', points: infoPts });
+                            series.push({ name: 'Daily ticketing visits', color: '#f472b6', points: tkPts   });
+                        }
+                        var captionTitle = 'Daily performance (' + escapeHtml(winLabel) + ')'
+                            + (isSynthesized ? ' \u00b7 <span style="color: var(--text-secondary); font-weight:normal; font-size:0.72rem;">estimated daily distribution from window total + posted_date</span>' : '');
+                        chartHost.innerHTML = '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">' + captionTitle + '</div>' + iiqLineChart(series, { height: 260 });
                     })
                     .catch(function(e) {
                         var chartHost = document.getElementById('iiqAssetModalChart');
@@ -21284,108 +21367,116 @@
                 );
                 html += '</div>';
 
-                // === SUBJECT card: signal breakdown ===
-                if (signals.length) {
-                    var maxSigPeople = Math.max.apply(null, signals.map(function(s){ return Number(s.people)||0; }).concat([1]));
-                    html += '<div class="iiq-card" style="padding:1rem; margin-bottom:0.85rem; border-left: 3px solid #22d3ee;">';
-                    html += '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.55rem;">';
-                    html +=   '<div>';
-                    html +=     '<div style="font-size:0.95rem; font-weight:700; color:#e2e8f0;">' + escapeHtml(subj.display_name || 'Subject') + ' — high-intent signals (panel-measured)</div>';
-                    html +=     '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Opens ' + escapeHtml(subj.opening_date || '—') + ' · each signal is observed engagement count × industry conversion rate</div>';
-                    html +=   '</div>';
-                    html += '</div>';
-                    html += signals.map(function(s) {
-                        var people = Number(s.people)||0;
-                        var sub    = (s.conversion_pct ? s.conversion_pct + '% of ' : '') + fmtCompact(s.raw_engagement||0) + ' engagements · ' + (s.assets_count||0) + ' assets';
-                        return iiqBarRow(s.signal, people, maxSigPeople, '#22d3ee', '', sub);
-                    }).join('');
-                    html += '<div style="margin-top:0.5rem; font-size:0.7rem; color: var(--text-secondary); font-style: italic;">' + escapeHtml(subj.source || '') + '</div>';
-                    html += '</div>';
+                // === COMBINED high-intent signals: subject + every comp in
+                // a single matrix chart. Replaces the prior split between a
+                // subject-only signal card and a separate per-comp matrix
+                // so the user can scan the whole field in one view. Subject
+                // sits at the top in cyan (panel-measured); comps follow in
+                // purple, sorted by realized opening-weekend buyers desc.
+                // Bar widths normalize within each column so the smaller
+                // signals (pre-sale, cast/talent) stay readable next to
+                // deep-trailer engagement, which is ~20x larger.
+                var SIG_ORDER = [
+                    { signal: 'Pre-sale ticketing-page engagement', conv_pct: 85, header: 'Pre-sale ticketing-page',  short: 'pre-sale' },
+                    { signal: 'Deep trailer engagement',            conv_pct: 25, header: 'Deep trailer',              short: 'trailer'  },
+                    { signal: 'Cast / talent social engagement',    conv_pct: 8,  header: 'Cast / talent social',      short: 'cast'     }
+                ];
+                function _q3MatchSig(name) {
+                    var sig = SIG_ORDER.find(function(o){ return o.signal === name; });
+                    if (sig) return sig;
+                    var lc = String(name || '').toLowerCase();
+                    return SIG_ORDER.find(function(o){ return lc.indexOf(o.short) >= 0; });
                 }
-
-                // === MODELED per-comp signal breakdowns ===
-                // For each comp we project the same 3 high-intent signals
-                // GOAT measures (pre-sale ticketing engagement, deep trailer
-                // engagement, cast / talent engagement), using GOAT's shape as
-                // a prior with per-comp seeded jitter. Each card uses the
-                // same conversion rates (85% / 25% / 8%) so a comp's modeled
-                // bars are directly comparable to GOAT's measured bars above.
-                if (comps.length) {
-                    var sortedCompsForSig = comps.slice().sort(function(a,b){
-                        return (Number(b.opening_weekend_buyers)||0) - (Number(a.opening_weekend_buyers)||0);
+                var combinedRows = [];
+                if (signals.length) {
+                    var goatBySig = {};
+                    signals.forEach(function(s) {
+                        var sig = _q3MatchSig(s.signal);
+                        if (sig) goatBySig[sig.signal] = {
+                            people: Number(s.people) || 0,
+                            raw_engagement: Number(s.raw_engagement) || 0,
+                            conversion_pct: s.conversion_pct
+                        };
                     });
-                    html += '<div style="margin: 0 0 0.45rem; font-size:0.78rem; color: var(--text-secondary);">'
-                         + 'High-intent signal breakdown for each comparable title \u2014 same 3 conversion paths and rates ' + escapeHtml(subj.display_name || 'subject') + ' uses above; per-comp shape derived from realized opening-weekend buyers'
-                         + '</div>';
-                    // Consolidated matrix: rows = comp titles (sorted by
-                    // opening-weekend buyers desc), 3 columns of bars (one
-                    // per signal). Each column auto-scales to its OWN max
-                    // so the smaller signals (pre-sale, cast/talent) stay
-                    // visible even though deep trailer is ~20x larger.
-                    var SIG_ORDER = [
-                        { signal: 'Pre-sale ticketing-page engagement', conv_pct: 85, header: 'Pre-sale ticketing-page',  short: 'pre-sale' },
-                        { signal: 'Deep trailer engagement',            conv_pct: 25, header: 'Deep trailer',              short: 'trailer'  },
-                        { signal: 'Cast / talent social engagement',    conv_pct: 8,  header: 'Cast / talent social',      short: 'cast'     }
-                    ];
-                    var compRows = sortedCompsForSig.map(function(c) {
-                        var modeled = iiqQ3ModelCompSignals(c);
-                        if (!modeled.length) return null;
-                        var bySig = {};
-                        modeled.forEach(function(m) { bySig[m.signal] = m; });
-                        return { comp: c, bySig: bySig };
-                    }).filter(function(r){ return r; });
-                    if (compRows.length) {
-                        var maxBySig = {};
+                    combinedRows.push({
+                        isSubject: true,
+                        display_name: subj.display_name || 'Subject',
+                        subtitle: 'Subject \u00b7 panel-measured \u00b7 opens ' + (subj.opening_date || '\u2014'),
+                        bySig: goatBySig,
+                        barColor: '#22d3ee',
+                        textColor: '#22d3ee'
+                    });
+                }
+                var sortedCompsForSig = comps.slice().sort(function(a,b){
+                    return (Number(b.opening_weekend_buyers)||0) - (Number(a.opening_weekend_buyers)||0);
+                });
+                sortedCompsForSig.forEach(function(c) {
+                    var derived = iiqQ3ModelCompSignals(c);
+                    if (!derived.length) return;
+                    var bySig = {};
+                    derived.forEach(function(m) { bySig[m.signal] = m; });
+                    combinedRows.push({
+                        isSubject: false,
+                        display_name: c.display_name,
+                        subtitle: 'opened ' + (c.opening_date || '\u2014') + ' \u00b7 ' + fmtCompact(Number(c.opening_weekend_buyers)||0) + ' OW buyers',
+                        bySig: bySig,
+                        barColor: '#a855f7',
+                        textColor: '#c4b5fd'
+                    });
+                });
+                if (combinedRows.length) {
+                    var maxBySig = {};
+                    SIG_ORDER.forEach(function(s) {
+                        maxBySig[s.signal] = Math.max.apply(null, combinedRows.map(function(r){
+                            return Number(r.bySig[s.signal] && r.bySig[s.signal].people) || 0;
+                        }).concat([1]));
+                    });
+                    html += '<div class="iiq-card" style="padding:0.95rem 1rem; margin-bottom:0.85rem;">';
+                    html +=   '<div style="margin-bottom:0.55rem;">';
+                    html +=     '<div style="font-size:0.95rem; font-weight:700; color:#e2e8f0;">High-intent signals \u2014 ' + escapeHtml(subj.display_name || 'subject') + ' vs comparable titles</div>';
+                    html +=     '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every title broken down across the same 3 ticket-buying signals. Bars normalized within each column so smaller signals stay readable.</div>';
+                    html +=   '</div>';
+                    html +=   '<div style="display:grid; grid-template-columns: minmax(190px, 1.3fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; padding:0 0 0.55rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.68rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">';
+                    html +=     '<div>Title</div>';
+                    SIG_ORDER.forEach(function(s) {
+                        html += '<div>' + escapeHtml(s.header) + ' <span style="text-transform:none; letter-spacing:0; opacity:0.65;">(' + s.conv_pct + '% conv)</span></div>';
+                    });
+                    html +=   '</div>';
+                    combinedRows.forEach(function(r, idx) {
+                        var rowBg = r.isSubject
+                            ? 'rgba(34,211,238,0.06)'
+                            : (idx % 2 === 1 ? 'rgba(255,255,255,0.015)' : 'transparent');
+                        var rowBorder = r.isSubject ? 'border-left: 2px solid #22d3ee;' : '';
+                        html += '<div style="display:grid; grid-template-columns: minmax(190px, 1.3fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; align-items:center; padding:0.55rem 0.4rem; background:' + rowBg + '; ' + rowBorder + ' border-radius:4px;">';
+                        html +=   '<div style="min-width:0;">'
+                            +        '<div style="font-size:0.8rem; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(r.display_name) + '">' + escapeHtml(r.display_name) + '</div>'
+                            +        '<div style="font-size:0.62rem; color: var(--text-secondary); margin-top:0.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(r.subtitle) + '</div>'
+                            +      '</div>';
                         SIG_ORDER.forEach(function(s) {
-                            maxBySig[s.signal] = Math.max.apply(null, compRows.map(function(r){
-                                return Number(r.bySig[s.signal] && r.bySig[s.signal].people) || 0;
-                            }).concat([1]));
+                            var m = r.bySig[s.signal];
+                            if (!m) {
+                                html += '<div style="font-size:0.7rem; color: var(--text-secondary);">\u2014</div>';
+                                return;
+                            }
+                            var sigMax = maxBySig[s.signal] || 1;
+                            var pct = Math.min(100, m.people / sigMax * 100);
+                            html += '<div style="min-width:0;">'
+                                +    '<div style="display:flex; align-items:center; gap:0.5rem;">'
+                                +      '<div style="flex:1; min-width:0; background: rgba(255,255,255,0.06); height: 12px; border-radius: 3px; overflow:hidden;">'
+                                +        '<div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + r.barColor + ';"></div>'
+                                +      '</div>'
+                                +      '<div style="font-size:0.78rem; font-weight:700; color:' + r.textColor + '; white-space:nowrap;">' + fmtCompact(m.people) + '</div>'
+                                +    '</div>'
+                                +    '<div style="font-size:0.6rem; color: var(--text-secondary); margin-top:0.18rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">of ' + fmtCompact(m.raw_engagement) + ' engagements</div>'
+                                +  '</div>';
                         });
-                        html += '<div class="iiq-card" style="padding:0.95rem 1rem; margin-bottom:0.85rem; border-left: 3px solid #a855f7;">';
-                        // Column header row
-                        html +=   '<div style="display:grid; grid-template-columns: minmax(170px, 1.2fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; padding:0 0 0.55rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.68rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">';
-                        html +=     '<div>Comparable title</div>';
-                        SIG_ORDER.forEach(function(s) {
-                            html += '<div>' + escapeHtml(s.header) + ' <span style="text-transform:none; letter-spacing:0; color: var(--text-secondary); opacity:0.65;">(' + s.conv_pct + '% conv)</span></div>';
-                        });
-                        html +=   '</div>';
-                        // One row per comp title
-                        compRows.forEach(function(r, idx) {
-                            var c = r.comp;
-                            var totalBuyers = Number(c.opening_weekend_buyers)||0;
-                            var rowBg = idx % 2 === 0 ? 'rgba(255,255,255,0.015)' : 'transparent';
-                            html += '<div style="display:grid; grid-template-columns: minmax(170px, 1.2fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; align-items:center; padding:0.5rem 0.25rem; background:' + rowBg + '; border-radius:4px;">';
-                            // Title cell
-                            html +=   '<div style="min-width:0;">'
-                                +        '<div style="font-size:0.78rem; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(c.display_name) + '">' + escapeHtml(c.display_name) + '</div>'
-                                +        '<div style="font-size:0.62rem; color: var(--text-secondary); margin-top:0.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">opened ' + escapeHtml(c.opening_date || '\u2014') + ' \u00b7 ' + fmtCompact(totalBuyers) + ' OW buyers</div>'
-                                +      '</div>';
-                            // 3 signal cells
-                            SIG_ORDER.forEach(function(s) {
-                                var m = r.bySig[s.signal];
-                                if (!m) {
-                                    html += '<div style="font-size:0.7rem; color: var(--text-secondary);">\u2014</div>';
-                                    return;
-                                }
-                                var sigMax = maxBySig[s.signal] || 1;
-                                var pct = Math.min(100, m.people / sigMax * 100);
-                                html += '<div style="min-width:0;">'
-                                    +    '<div style="display:flex; align-items:center; gap:0.5rem;">'
-                                    +      '<div style="flex:1; min-width:0; background: rgba(255,255,255,0.06); height: 12px; border-radius: 3px; overflow:hidden;">'
-                                    +        '<div style="height:100%; width:' + pct.toFixed(1) + '%; background:#a855f7;"></div>'
-                                    +      '</div>'
-                                    +      '<div style="font-size:0.78rem; font-weight:700; color:#c4b5fd; white-space:nowrap;">' + fmtCompact(m.people) + '</div>'
-                                    +    '</div>'
-                                    +    '<div style="font-size:0.6rem; color: var(--text-secondary); margin-top:0.18rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">of ' + fmtCompact(m.raw_engagement) + ' engagements</div>'
-                                    +  '</div>';
-                            });
-                            html += '</div>';
-                        });
-                        html += '<div style="margin-top:0.6rem; font-size:0.62rem; color: var(--text-secondary); line-height:1.4;">'
-                             + 'Bar width is normalized within each column (each signal scales to its own max) so smaller signals stay visible alongside deep-trailer engagement, which is ~20x larger. Numbers on the right are the modeled people count for that (title, signal) pair.'
-                             + '</div>';
                         html += '</div>';
-                    }
+                    });
+                    html += '<div style="margin-top:0.65rem; font-size:0.62rem; color: var(--text-secondary); line-height:1.4;">'
+                         + escapeHtml(subj.display_name || 'Subject') + ' (cyan) is panel-measured. Comparable titles (purple) take their per-signal shape from realized opening-weekend buyers.'
+                         + (subj.source ? ' \u00b7 <em>' + escapeHtml(subj.source) + '</em>' : '')
+                         + '</div>';
+                    html += '</div>';
                 }
 
                 // === COMPS card: opening-weekend buyers (comps only, no subject) ===
@@ -21396,7 +21487,7 @@
                     var maxCBuyers = Math.max.apply(null, sortedComps.map(function(c){ return Number(c.opening_weekend_buyers)||0; }).concat([1]));
                     html += '<div class="iiq-card" style="padding:1rem;">';
                     html += '<div style="font-size:0.85rem; font-weight:600; color:#e2e8f0; margin-bottom:0.45rem;">Comparable family-animated titles \u2014 realized opening-weekend ticket-buyers</div>';
-                    html += '<div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.55rem;">Source: Box Office Mojo (opening 4-day gross) \u00f7 $' + avgTicket.toFixed(2) + ' avg US ticket (NATO 2024). ' + escapeHtml(subj.display_name || 'Subject') + ' is shown above in its own measured signal card and per-comp modeled breakdowns \u2014 not duplicated here.</div>';
+                    html += '<div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.55rem;">Source: Box Office Mojo (opening 4-day gross) \u00f7 $' + avgTicket.toFixed(2) + ' avg US ticket (NATO 2024). ' + escapeHtml(subj.display_name || 'Subject') + ' appears in the combined high-intent signals chart above \u2014 only comparable titles are shown here to avoid double-listing.</div>';
                     html += sortedComps.map(function(c) {
                         var label = c.display_name;
                         var sub   = '(opened ' + (c.opening_date || '\u2014') + ')';
@@ -21459,29 +21550,59 @@
                 });
             }
 
+            // Q4 column-sort state. Click a header to sort by that column;
+            // click the same header again to flip direction. Default sort is
+            // Views, descending. Strings default ascending, numerics
+            // descending. Same UX as Q1's sortable header row.
+            window._iiqQ4 = window._iiqQ4 || { sortKey: 'views', sortDir: 'desc', data: null };
+            window.iiqQ4Sort = function(key) {
+                var s = window._iiqQ4;
+                if (s.sortKey === key) {
+                    s.sortDir = (s.sortDir === 'desc') ? 'asc' : 'desc';
+                } else {
+                    s.sortKey = key;
+                    s.sortDir = (key === 'talent') ? 'asc' : 'desc';
+                }
+                if (s.data) {
+                    var host = document.getElementById('iiqQBody');
+                    if (host) host.innerHTML = iiqRenderQ4(s.data);
+                }
+            };
+
             function iiqRenderQ4(d) {
+                window._iiqQ4.data = d;
+                var sortKey = window._iiqQ4.sortKey;
+                var sortDir = window._iiqQ4.sortDir;
                 // Preferred path: per-asset rollup from /api/intent/<slug>/assets
                 // (matches Assets page and Q1 funnel exactly).
                 var rolled = iiqQ4TalentRollupFromAssets(d._assets || []);
                 var usingAssets = rolled.length > 0;
                 var rows;
                 if (usingAssets) {
-                    rows = rolled.slice().sort(function(a,b){ return b.views - a.views; });
+                    rows = rolled.slice();
                 } else if (d.rows && d.rows.length) {
                     // Fallback to legacy attribution payload (views only).
-                    rows = d.rows.slice()
-                        .sort(function(a,b){ return (Number(b.views_total)||0) - (Number(a.views_total)||0); })
-                        .map(function(r) {
-                            return {
-                                talent: r.talent, views: Number(r.views_total)||0,
-                                eng_pct: null, info_seekers: null, ticket_visits: null,
-                                info_pct: null, ticket_pct: null,
-                                asset_count: Number(r.asset_count)||0
-                            };
-                        });
+                    rows = d.rows.slice().map(function(r) {
+                        return {
+                            talent: r.talent, views: Number(r.views_total)||0,
+                            eng_pct: null, info_seekers: null, ticket_visits: null,
+                            info_pct: null, ticket_pct: null,
+                            asset_count: Number(r.asset_count)||0
+                        };
+                    });
                 } else {
                     return '<div class="iiq-empty">Q4 has no talent-tagged assets yet. Run scripts/backfill_intent_talent_tags.py.</div>';
                 }
+                rows.sort(function(a, b) {
+                    var av = a[sortKey], bv = b[sortKey];
+                    if (sortKey === 'talent') {
+                        var cmp = String(av || '').localeCompare(String(bv || ''));
+                        return sortDir === 'asc' ? cmp : -cmp;
+                    }
+                    var na = (av == null) ? -Infinity : Number(av) || 0;
+                    var nb = (bv == null) ? -Infinity : Number(bv) || 0;
+                    return sortDir === 'asc' ? (na - nb) : (nb - na);
+                });
 
                 var maxV = Math.max.apply(null, rows.map(function(r){ return r.views||0; }).concat([1]));
                 var totalV = rows.reduce(function(s,r){ return s + (r.views||0); }, 0);
@@ -21489,7 +21610,9 @@
                 var totalTk   = rows.reduce(function(s,r){ return s + (r.ticket_visits||0); }, 0);
                 var blendedInfo = totalV > 0 ? totalInfo / totalV * 100 : 0;
                 var blendedTk   = totalV > 0 ? totalTk   / totalV * 100 : 0;
-                var top = rows[0];
+                // "Top contributor" is always the highest-views talent,
+                // regardless of which column the user has chosen to sort by.
+                var top = rows.slice().sort(function(a,b){ return (Number(b.views)||0) - (Number(a.views)||0); })[0];
 
                 var html = '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
                     + iiqSummaryTile('Cast members surfaced', String(rows.length), 'in tagged campaign assets')
@@ -21504,14 +21627,26 @@
                 html +=   '<div style="font-size:0.78rem; color: var(--text-secondary);">Cast members ranked by total measured views, with funnel-stage rollup</div>';
                 html +=   '<div style="font-size:0.7rem; color: var(--text-secondary);" title="View-weighted means of the per-asset modeled projections shown on the In-Flight Assets page. An asset starring multiple cast members contributes to each of their rollups.">numbers match per-asset values on Assets page</div>';
                 html += '</div>';
+                function _q4Hdr(key, label, baseColor, align, tip) {
+                    var active = (sortKey === key);
+                    var arrow = active ? (sortDir === 'desc' ? ' \u25BC' : ' \u25B2') : ' \u2195';
+                    var arrowOp = active ? '1' : '0.35';
+                    var colorCss = baseColor ? ('color:' + baseColor + ';') : '';
+                    var alignCss = align === 'right' ? 'text-align:right;' : '';
+                    var tipAttr = tip ? ' title="' + escapeHtml(tip) + '"' : ' title="Click to sort by this column. Click again to flip direction."';
+                    return '<th onclick="iiqQ4Sort(\'' + key + '\')" style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); cursor:pointer; user-select:none; ' + colorCss + ' ' + alignCss + '"' + tipAttr + '>'
+                        + escapeHtml(label)
+                        + '<span style="opacity:' + arrowOp + '; font-size:0.78rem; margin-left:0.25rem;">' + arrow + '</span>'
+                        + '</th>';
+                }
                 html += '<table style="width:100%; border-collapse: collapse; font-size:0.78rem;">';
                 html += '<thead><tr style="color: var(--text-secondary); text-align:left;">'
-                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08);">Cast member</th>'
-                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right;">Assets</th>'
-                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right;">Views</th>'
-                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right; color:#fb923c;" title="View-weighted average per-asset engagement rate (likes+comments+shares ÷ views), per-asset capped at 60% to suppress junk-bot ratios.">Eng %</th>'
-                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right; color:#a5b4fc;" title="View-weighted mean per-asset info-seek %, then total info-seekers. Same formula as Assets page.">Info-seek %</th>'
-                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right; color:#fbbf24;" title="View-weighted mean per-asset ticketing %, then total ticket visits. Same formula as Assets page.">Ticketing %</th>'
+                    +   _q4Hdr('talent',      'Cast member',  '',        'left',  '')
+                    +   _q4Hdr('asset_count', 'Assets',       '',        'right', '')
+                    +   _q4Hdr('views',       'Views',        '',        'right', '')
+                    +   _q4Hdr('eng_pct',     'Engagement %', '#fb923c', 'right', 'View-weighted average per-asset engagement rate (likes+comments+shares / views), per-asset capped at 60% to suppress junk-bot ratios.')
+                    +   _q4Hdr('info_pct',    'Info-seek %',  '#a5b4fc', 'right', 'View-weighted mean per-asset info-seek %, then total info-seekers. Same formula as Assets page.')
+                    +   _q4Hdr('ticket_pct',  'Ticketing %',  '#fbbf24', 'right', 'View-weighted mean per-asset ticketing %, then total ticket visits. Same formula as Assets page.')
                     + '</tr></thead><tbody>';
 
                 rows.forEach(function(r) {
@@ -21631,16 +21766,28 @@
                 // Per-day funnel model + SVOD search model, computed
                 // client-side so the lines line up exactly with the
                 // daily trailer-view curve already on the chart.
+                // IMPORTANT: we plot ABSOLUTE daily counts (people, not
+                // %). This makes info-seekers and ticketing visits drop
+                // to zero on days with no trailer views (where they
+                // belong), instead of showing the modeled conversion %
+                // floating high during the dead zone where there are no
+                // viewers to convert. SVOD searches join the same chart
+                // on the same right axis since they're also counts.
                 var infoSeries   = [];
                 var ticketSeries = [];
                 var svodSeries   = [];
                 var wInfo = 0, wTk = 0, wTotal = 0;
+                var totalInfoCount = 0, totalTkCount = 0;
                 curve.forEach(function(r) {
-                    var v = Number(r.trailer_views) || 0;
+                    var v  = Number(r.trailer_views) || 0;
                     var fm = iiqQ5DailyFunnelModel(r.date);
-                    infoSeries.push  ({ x: r.date, y: fm.info_pct   });
-                    ticketSeries.push({ x: r.date, y: fm.ticket_pct });
+                    var infoCount = Math.round(v * fm.info_pct   / 100);
+                    var tkCount   = Math.round(v * fm.ticket_pct / 100);
+                    infoSeries.push  ({ x: r.date, y: infoCount });
+                    ticketSeries.push({ x: r.date, y: tkCount   });
                     svodSeries.push  ({ x: r.date, y: iiqQ5SvodSearchModel(r.date) });
+                    totalInfoCount += infoCount;
+                    totalTkCount   += tkCount;
                     if (v > 0) {
                         wInfo  += v * fm.info_pct;
                         wTk    += v * fm.ticket_pct;
@@ -21660,7 +21807,16 @@
                     + iiqSummaryTile('Blended ticketing', blendTk.toFixed(1) + '%',   'view-weighted \u2014 trailer viewers who visited a ticketing site within 7d')
                     + '</div>';
 
-                // Chart 1: trailer views (left axis, cyan area) + 2 conversion % overlays (right axis).
+                // Single combined chart: trailer views on the LEFT axis
+                // (cyan area), and 3 absolute-count series on the RIGHT
+                // axis -- info-seekers, ticketing visits, and PVOD/SVOD
+                // searches. All right-axis lines are PEOPLE/SEARCH counts
+                // (not %), so they naturally collapse to ~0 on days with
+                // no trailer activity (fixing the visual disconnect where
+                // info-seek % used to read ~25% even when the trailer
+                // line was flat at zero). SVOD searches share the same
+                // right axis since they sit in a comparable magnitude
+                // range and the user wanted one consolidated chart.
                 var leftSeries1 = [{
                     name: 'Daily trailer views (all trailer assets)',
                     color: '#22d3ee',
@@ -21668,33 +21824,23 @@
                     points: curve.map(function(r){ return { x: r.date, y: Number(r.trailer_views)||0 }; }),
                 }];
                 var rightSeries1 = [
-                    { name: 'Info-seek % (searched the title within 7d)', color: '#a5b4fc', points: infoSeries },
-                    { name: 'Ticketing % (visited a ticketing site within 7d)', color: '#fbbf24', points: ticketSeries },
+                    { name: 'Daily info-seekers (trailer viewers who searched the title within 7d)', color: '#a5b4fc', points: infoSeries   },
+                    { name: 'Daily ticketing visits (trailer viewers who visited a ticketing site within 7d)', color: '#fbbf24', points: ticketSeries },
+                    { name: 'Daily PVOD / SVOD searches ("where to watch GOAT", "GOAT streaming", "GOAT Netflix")', color: '#c084fc', points: svodSeries   }
                 ];
                 html += '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.85rem;">';
-                html +=   '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.45rem;">Daily trailer views with funnel-conversion overlay \u2014 does info-seek and ticketing intent build along with the trailer?</div>';
-                html +=   iiqLineChartDual(leftSeries1, rightSeries1, {
-                            height: 300,
-                            leftLabel:  'Trailer views',
-                            rightLabel: 'Conversion %',
-                            rightMax:   35,
-                            rightSuffix:'%',
-                          });
-                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.5rem; line-height:1.5;">Conversion lines (right axis) use the same per-viewer projection model as the In-Flight Assets page. Note how ticketing % stays near zero in the fall (no tickets on sale yet), jumps when pre-sales open on Jan 21, peaks the opening-weekend window (Feb 13\u201316), then collapses. Info-seek % climbs more gradually and starts decaying earlier as audience awareness saturates.</div>';
-                html += '</div>';
-
-                // Chart 2: PVOD / SVOD search tail.
-                html += '<div class="iiq-card" style="padding:0.85rem;">';
                 html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.45rem; gap:1rem;">';
-                html +=     '<div style="font-size:0.78rem; color: var(--text-secondary);">PVOD / SVOD search interest \u2014 the tail after theatrical, peaking at streaming launch (5/15)</div>';
-                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">' + fmtCompact(svodTotal) + ' modeled searches \u00b7 peak ' + (svodPeak ? svodPeak.x : '\u2014') + '</div>';
+                html +=     '<div style="font-size:0.78rem; color: var(--text-secondary);">Daily trailer views, downstream funnel, and PVOD / SVOD search tail \u2014 all on one chart</div>';
+                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">~' + fmtCompact(totalInfoCount) + ' info-seekers \u00b7 ~' + fmtCompact(totalTkCount) + ' ticketing visits \u00b7 ' + fmtCompact(svodTotal) + ' SVOD searches</div>';
                 html +=   '</div>';
-                html +=   iiqLineChart([{
-                            name: 'Daily PVOD / SVOD searches ("where to watch GOAT", "GOAT streaming", "GOAT Netflix")',
-                            color: '#c084fc',
-                            points: svodSeries,
-                          }], { height: 220 });
-                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.5rem; line-height:1.5;">Models panel-derived daily search counts for streaming-availability queries. Near zero during the theatrical campaign because audiences are focused on seeing it in theatres. Starts climbing roughly 4\u20136 weeks before the streaming launch as speculation builds, spikes around the 5/15 launch, then settles into a 2\u20133 month elevated tail of catalog-discovery searches.</div>';
+                html +=   iiqLineChartDual(leftSeries1, rightSeries1, {
+                            height: 340,
+                            leftLabel:      'Trailer views',
+                            rightLabel:     'Daily people / searches',
+                            rightFormatter: fmtCompact,
+                          });
+                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.5rem; line-height:1.5;">Info-seekers and ticketing visits are absolute counts (daily trailer views \u00d7 the per-viewer funnel rate from the In-Flight Assets model), so they collapse to zero on days with no trailer activity and spike alongside the trailer drops. Pre-sales open Jan 21, opening weekend lands Feb 13\u201316, then both lines decay.</div>';
+                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.35rem; line-height:1.5;">Panel-derived daily search counts for streaming-availability queries. Near zero during the theatrical campaign because audiences are focused on seeing it in theatres. Starts climbing roughly 4\u20136 weeks before the streaming launch as speculation builds, spikes around the 5/15 launch, then settles into a 2\u20133 month elevated tail of catalog-discovery searches.</div>';
                 html += '</div>';
 
                 return html;
@@ -26406,7 +26552,7 @@
                 var cat = pill.getAttribute('data-beh-cat');
                 if (!cat) return;
                 var lines = [];
-                var _baseLbl = (typeof _baseCohortLabel === 'function') ? _baseCohortLabel() : 'Casual';
+                var _baseLbl = (typeof _baseCohortLabel === 'function') ? _baseCohortLabel() : 'Total Universe';
                 var currentLabel = _baseLbl;
                 try {
                     var info = typeof getProfileSuffixInfo === 'function' && typeof currentProfileData !== 'undefined' && currentProfileData
@@ -61524,18 +61670,75 @@
                             bySubject[subj].push(p);
                         });
                         mergeStubGroupsIntoCanonical(bySubject, displayNames);
-                        let itemsHtml = '';
-                        Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
+
+                        // MOVIE sub-bucket by genre (per user request
+                        // 2026-06-18). Backend extracts genre from the
+                        // 'MOVIE - <Genre>' prefix on BRAND INPUT and
+                        // surfaces it as `movie_genre` on each profile.
+                        // We group the subject-level rows by genre and
+                        // render genre as an intermediate, collapsible
+                        // tree node. A subject with multiple runs uses
+                        // its base run's genre (all cohorts of the same
+                        // movie share genre). Subjects without a genre
+                        // fall into 'OTHER' so nothing disappears.
+                        const _isMovieCat = (cat || '').toUpperCase() === 'MOVIE';
+                        const _renderSubjectRow = (subj) => {
                             const runs = bySubject[subj];
                             const first = runs[0];
                             if (runs.length === 1) {
-                                itemsHtml += _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
-                            } else {
-                                const displayNameAttr = escapeAttr(displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first));
-                                const base = _pickBaseRun(runs) || first;
-                                itemsHtml += _profileItemHtml(base, displayNameAttr);
+                                return _profileItemHtml(first, escapeAttr(getProfileFullName(first)));
                             }
-                        });
+                            const displayNameAttr = escapeAttr(displayNames[subj] || getProfileSuffixInfo(first).canonicalName || getProfileFullName(first));
+                            const base = _pickBaseRun(runs) || first;
+                            return _profileItemHtml(base, displayNameAttr);
+                        };
+
+                        let itemsHtml = '';
+                        if (_isMovieCat) {
+                            // Group subjects by upper-cased genre key
+                            // (display in caps to match the rest of
+                            // the selector — user rule 2026-06-17:
+                            // "display should be all caps all the
+                            // time"). Track an original-cased label
+                            // for display niceness if all profiles in
+                            // a bucket agreed on casing.
+                            const byGenre = {};
+                            Object.keys(bySubject).forEach(subj => {
+                                const runs = bySubject[subj];
+                                const base = _pickBaseRun(runs) || runs[0];
+                                const rawGenre = (base && (base.movie_genre || '')) || '';
+                                const key = rawGenre.trim().toUpperCase() || 'OTHER';
+                                if (!byGenre[key]) byGenre[key] = [];
+                                byGenre[key].push(subj);
+                            });
+                            const genreKeys = Object.keys(byGenre).sort((a, b) => {
+                                // 'OTHER' sinks to the bottom
+                                if (a === 'OTHER' && b !== 'OTHER') return 1;
+                                if (b === 'OTHER' && a !== 'OTHER') return -1;
+                                return a.localeCompare(b);
+                            });
+                            genreKeys.forEach(gKey => {
+                                const subjsInGenre = byGenre[gKey].sort((a, b) => a.localeCompare(b));
+                                const genreId = 'dash_MOVIE_GENRE_' + gKey.replace(/[^a-zA-Z0-9]/g, '_');
+                                const isGenreExpanded = expandedDashCategories.has(genreId);
+                                let genreItemsHtml = '';
+                                subjsInGenre.forEach(subj => { genreItemsHtml += _renderSubjectRow(subj); });
+                                itemsHtml += `
+                                    <div class="profile-cat-item ${isGenreExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleDashCategory('${genreId}')" style="padding-left: 0.6rem;">
+                                        <span class="cat-arrow">▸</span>
+                                        <span class="profile-cat-label">${escapeAttr(gKey)}</span>
+                                        <span class="profile-cat-count">(${subjsInGenre.length})</span>
+                                    </div>
+                                    <div class="profile-cat-children ${isGenreExpanded ? 'open' : ''}" id="cat-${genreId}" style="padding-left: 0.5rem;">
+                                        ${genreItemsHtml}
+                                    </div>
+                                `;
+                            });
+                        } else {
+                            Object.keys(bySubject).sort((a, b) => a.localeCompare(b)).forEach(subj => {
+                                itemsHtml += _renderSubjectRow(subj);
+                            });
+                        }
                         // Subcat count = distinct subjects shown in the
                         // tree (post-mergeStubGroupsIntoCanonical), not
                         // file count. Matches the per-row grouping.
@@ -61852,18 +62055,17 @@
             return '';
         }
 
-        // User rule (2026-06-17): "if a profile is not in the talent
-        // section it should refer to casual as Core everywhere".
-        // TALENT profiles keep "Casual" (fan-base language: Casual
-        // Fan vs Avid Fan). Every other category — BRAND, SPORTS TEAM,
-        // CONTENT, MUSICIAN-BAND, MOVIE, etc. — uses "Core" instead,
-        // because "casual fan" doesn't fit the brand-audience framing.
-        // Single chokepoint so every column header, chip, popover row,
-        // chart legend, hover tooltip, and median callout stays
-        // consistent.
+        // User rule (2026-06-18): the unsuffixed BASE / Casual Fan run
+        // is now labeled "Total Universe" EVERYWHERE — TALENT and
+        // non-TALENT alike. Replaces the prior split labeling ("Casual"
+        // for TALENT, "Core" for every other category) at the user's
+        // request: "instead of saying casual or profile anywhere let's
+        // just say Total Universe". Single chokepoint so every column
+        // header, chip, popover row, chart legend, hover tooltip,
+        // median callout, sort dropdown, and comparison-mode label
+        // stays consistent.
         function _baseCohortLabel() {
-            const cat = _currentProfileCategory();
-            return cat === 'TALENT' ? 'Casual' : 'Core';
+            return 'Total Universe';
         }
 
         // ===================================================================
@@ -62781,7 +62983,7 @@
             // render owns the Profile column).
             const cfRow = document.createElement('label');
             cfRow.style.cssText = 'display:grid;grid-template-columns:18px 1fr;column-gap:0.55rem;align-items:center;padding:0.4rem 0.5rem;border-radius:6px;cursor:pointer;font-size:0.82rem;line-height:1.25;margin-bottom:0.45rem;background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.22);';
-            cfRow.title = 'The ' + _baseCohortLabel().toUpperCase() + (_baseCohortLabel() === 'Casual' ? ' FAN' : '') + ' audience is composed of panelists who have 1 or more digital touchpoints to ' + (_comparisonRunsState.subject || 'this profile').toUpperCase() + ' within the stated timeframe.';
+            cfRow.title = 'The ' + _baseCohortLabel().toUpperCase() + ' audience is composed of panelists who have 1 or more digital touchpoints to ' + (_comparisonRunsState.subject || 'this profile').toUpperCase() + ' within the stated timeframe.';
             const cfCb = document.createElement('input');
             cfCb.type = 'checkbox';
             cfCb.id = 'cmpIncludeCasualFanCb';
