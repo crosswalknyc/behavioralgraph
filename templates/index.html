@@ -24674,7 +24674,7 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', helmIQ: 'helmIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', helmIQ: 'helmIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
@@ -44001,20 +44001,7 @@
             // SOT form now lives in Analysis IQ — keep top-level panel hidden
         }
 
-        window.showShareOfTimeIQ = function() {
-            var dd = document.getElementById('viewNavDropdown');
-            var opt = dd?.querySelector('option[value="shareOfTimeIQ"]');
-            if (opt?.disabled) return;
-            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('shareOfTimeIQ');
-            if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
-            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','sfConversionView','flywheelConversionView','talentFitIQView'].forEach(function(id) {
-                var el = document.getElementById(id); if (el) el.style.display = 'none';
-            });
-            if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
-            var sv = document.getElementById('shareOfTimeIQView'); if (sv) sv.style.display = 'flex';
-            sotApplyRunAccessVisibility();
-            sotLoadRuns();
-        };
+        window.showShareOfTimeIQ = function() { return; };
 
         function iqSotRunAnalysis() {
             var start = document.getElementById('iqSotStartDate')?.value;
