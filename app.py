@@ -11701,6 +11701,14 @@ def parse_subscriber_iq_csv(csv_content):
                 parsed['key_metrics']['clean_conversion_rate'] = (row[8].strip() if len(row) > 8 else '') or (row[1].strip() if len(row) > 1 else '')
             elif 'Total Show Conversion Rate' in first_col:
                 parsed['key_metrics']['total_conversion_rate'] = (row[8].strip() if len(row) > 8 else '') or (row[1].strip() if len(row) > 1 else '')
+            elif first_col.strip() == 'Completion Rate':
+                # Per-title engagement KPI: % of viewers who watched the full
+                # piece of content (for series = avg across episodes).
+                parsed['key_metrics']['completion_rate'] = (row[8].strip() if len(row) > 8 else '') or (row[1].strip() if len(row) > 1 else '')
+            elif first_col.strip() == 'Second Screen Activity':
+                # Per-title engagement KPI: % of viewers on phone/tablet while
+                # watching (distracted / ambient-TV viewers).
+                parsed['key_metrics']['second_screen_activity'] = (row[8].strip() if len(row) > 8 else '') or (row[1].strip() if len(row) > 1 else '')
             elif 'Average Days' in first_col:
                 # Value can be in col 2, 3, or 4 (SVOD CSV: "Average Days from Show Available to Signup", "", "", "", "7.2", "days")
                 val = (row[4].strip() if len(row) > 4 else '') or (row[3].strip() if len(row) > 3 else '') or (row[2].strip() if len(row) > 2 else '')
