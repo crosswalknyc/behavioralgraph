@@ -1222,8 +1222,8 @@
         #helmIQView .helm-tab-btn { padding: 0.7rem 1.25rem; background: none; border: none; border-bottom: 3px solid transparent; color: var(--text-secondary); font-size: 0.82rem; font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em; transition: all 0.15s; }
         #helmIQView .helm-tab-btn:hover { color: var(--text-primary); }
         #helmIQView .helm-tab-btn.active { color: var(--accent-lime); border-bottom-color: var(--accent-lime); }
-        #helmIQView .helm-tab-content { display: none; padding: 1.5rem; }
-        #helmIQView .helm-tab-content.active { display: block; }
+        #helmIQView .helm-tab-content { display: none; padding: 1.5rem; flex: 1 1 auto; }
+        #helmIQView .helm-tab-content.active { display: block !important; }
         #helmIQView .helm-build-form { max-width: 680px; width: 100%; padding: 0.5rem 0; }
         #helmIQView .helm-field { margin-bottom: 1.25rem; }
         #helmIQView .helm-field label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.4rem; }
@@ -24985,7 +24985,7 @@
             </div>
 
             <!-- BUILD PROJECT TAB -->
-            <div id="helm-tab-build" class="helm-tab-content active">
+            <div id="helm-tab-build" class="helm-tab-content active" style="display:block; padding:1.5rem;">
                 <div class="helm-build-form" id="helmBuildForm">
                     <h2 style="margin: 0 0 0.25rem 0; font-size: 1.3rem;">⚓ Build Project</h2>
                     <p style="margin: 0 0 1.5rem 0; font-size: 0.82rem; color: var(--text-secondary);">Configure your project's genre, talent, creators, and brand partnerships, then let Helm IQ analyze the combination.</p>
