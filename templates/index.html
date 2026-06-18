@@ -20042,7 +20042,7 @@
                 q1: { short: 'Q1 · Content',     title: 'Content Engagement by Category',                                   intro: 'Mean 7-day views per asset, grouped by asset type and paid/organic. Higher = posts of that type tend to pull more eyeballs in their first week.' },
                 q2: { short: 'Q2 · Paid×Organic', title: 'Q2. How do paid and organic content interact?',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
                 q3: { short: 'Q3 · Intent to Buy', title: 'Q3. How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date — pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement — scaled by industry conversion rates. Nothing here is a forecast.' },
-                q4: { short: 'Q4 · Talent',       title: 'Q4. How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
+                q4: { short: 'Q4 · Talent Attribution', title: 'Q4. How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Q5 · Trailer',      title: 'Q5. How crucial is trailer viewership across the campaign life?', intro: 'Daily trailer views (across all trailer assets). Spikes mark trailer launches and refreshes.' },
                 q6: { short: 'Q6 · Cohort engagement', title: 'Q6. How is each audience cohort engaging with GOAT content?', intro: 'For each cohort, the % of that cohort\'s panel that engaged with any GOAT campaign asset (view / like / comment / share) on a given day. Default view is the four moviegoing-frequency cohorts; flip on any audience cohort from the picker (Steph Curry fans, cast members, family-animation fans, Disney+ family subs, demographic cuts) to overlay how they engage. Each cohort\'s curve has its own peak day — talent / franchise cohorts peak earlier (around trailer drops), family / opening cohorts peak on opening weekend, streaming cohorts peak on the 5/15 streaming launch.' },
             };
@@ -20207,6 +20207,33 @@
                 return groups;
             }
 
+            // ===== Paid vs Organic funnel rollup (Q2 comparison card) =====
+            // Aggregates per-asset info-seekers + ticketing visits split by
+            // paid vs organic. Uses the same iiqAssetFunnelProjection() helper
+            // as the Assets page cards, Performance Q1 category rollup, and
+            // the Top-10 asset detail modal - so the totals ladder up.
+            function iiqQ2PaidOrganicFunnel(assets) {
+                var agg = {
+                    paid:    { views: 0, info_seekers: 0, ticket_visits: 0, n: 0 },
+                    organic: { views: 0, info_seekers: 0, ticket_visits: 0, n: 0 }
+                };
+                (assets || []).forEach(function(c) {
+                    var po = (c.paid_or_organic || '').toLowerCase();
+                    var bucket = po === 'paid' ? 'paid'
+                                : (po === 'organic' || po === 'natural') ? 'organic'
+                                : null;
+                    if (!bucket) return;
+                    var v = Number(c.ext_view_count) || 0;
+                    if (v <= 0) return;
+                    var p = iiqAssetFunnelProjection(c);
+                    agg[bucket].n += 1;
+                    agg[bucket].views         += v;
+                    agg[bucket].info_seekers  += v * p.info_pct   / 100;
+                    agg[bucket].ticket_visits += v * p.ticket_pct / 100;
+                });
+                return agg;
+            }
+
             function iiqRenderQ1(d) {
                 if (!d.rows || !d.rows.length) return '<div class="iiq-empty">Q1 has no asset-engagement data yet. Run scripts/refresh_intent_youtube_engagement.py.</div>';
                 var rows = d.rows.slice().sort(function(a,b){ return (Number(b.mean_views_7d)||0) - (Number(a.mean_views_7d)||0); });
@@ -20310,10 +20337,57 @@
                     });
                     return { name: k.charAt(0).toUpperCase() + k.slice(1) + ' (cumulative views)', color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown, points: pts };
                 });
-                var html = '<div style="display: grid; grid-template-columns: 1.05fr 1fr; gap: 1rem; margin-bottom: 0.85rem;">';
-                html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Share of total measured views</div>' + iiqDonut(donutSlices) + '</div>';
-                html += '<div class="iiq-card" style="padding:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Cumulative view growth, paid vs organic</div>' + iiqLineChart(series, {height: 240}) + '</div>';
+                // Top row: slim donut on the left, paid-vs-organic funnel
+                // comparison on the right. Cumulative line chart drops below
+                // to its own full-width card so both top cards stay slim.
+                var agg = iiqQ2PaidOrganicFunnel(d._assets || []);
+                var paidColor    = IIQ_QPALETTE.paid;
+                var organicColor = IIQ_QPALETTE.organic;
+                function _q2WhoWonRow(label, paidVal, organicVal) {
+                    var tot = paidVal + organicVal;
+                    if (tot <= 0) {
+                        return '<div style="font-size:0.78rem; color: var(--text-secondary); padding:0.5rem 0;">' + label + ': no data</div>';
+                    }
+                    var pPct = paidVal / tot * 100;
+                    var oPct = 100 - pPct;
+                    var winner = paidVal > organicVal ? 'Paid' : 'Organic';
+                    var diffPp = Math.abs(pPct - oPct);
+                    var winnerColor = paidVal > organicVal ? paidColor : organicColor;
+                    return '<div style="margin:0.55rem 0;">'
+                        +   '<div style="display:flex; justify-content:space-between; align-items:baseline; font-size:0.78rem; margin-bottom:0.3rem;">'
+                        +     '<span style="color:#e2e8f0; font-weight:600;">' + label + '</span>'
+                        +     '<span style="color: var(--text-secondary); font-size:0.72rem;"><span style="color:' + winnerColor + '; font-weight:600;">' + winner + '</span> drove ' + diffPp.toFixed(1) + 'pp more \u00b7 total ' + fmtCompact(tot) + '</span>'
+                        +   '</div>'
+                        +   '<div style="display:flex; height:24px; border-radius:5px; overflow:hidden; background: rgba(255,255,255,0.06);">'
+                        +     '<div style="width:' + oPct.toFixed(1) + '%; background:' + organicColor + '; display:flex; align-items:center; padding:0 0.55rem; color:#0b132b; font-size:0.72rem; font-weight:700; white-space:nowrap; min-width:0; overflow:hidden;" title="Organic: ' + fmtCompact(organicVal) + ' (' + oPct.toFixed(1) + '%)">Organic ' + fmtCompact(organicVal) + '</div>'
+                        +     '<div style="width:' + pPct.toFixed(1) + '%; background:' + paidColor + '; display:flex; align-items:center; justify-content:flex-end; padding:0 0.55rem; color:#0b132b; font-size:0.72rem; font-weight:700; white-space:nowrap; min-width:0; overflow:hidden;" title="Paid: ' + fmtCompact(paidVal) + ' (' + pPct.toFixed(1) + '%)">' + fmtCompact(paidVal) + ' Paid</div>'
+                        +   '</div>'
+                        + '</div>';
+                }
+                var hasFunnelData = (agg.paid.info_seekers + agg.organic.info_seekers + agg.paid.ticket_visits + agg.organic.ticket_visits) > 0;
+                var funnelCardBody;
+                if (!hasFunnelData) {
+                    funnelCardBody = '<div class="iiq-empty">Loading asset-level projections\u2026</div>';
+                } else {
+                    funnelCardBody = _q2WhoWonRow('Info-seekers', agg.paid.info_seekers, agg.organic.info_seekers)
+                                   + _q2WhoWonRow('Ticketing visits', agg.paid.ticket_visits, agg.organic.ticket_visits)
+                                   + '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.45rem;">Modeled with the same iiqAssetFunnelProjection() helper used by the Assets cards, Performance Q1 rollup, and asset detail modal \u2014 numbers ladder up.</div>';
+                }
+
+                var html = '<div style="display: grid; grid-template-columns: 320px 1fr; gap: 1rem; margin-bottom: 0.85rem;">';
+                html +=   '<div class="iiq-card" style="padding:0.75rem 0.85rem;">'
+                    +       '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.35rem;">Share of total measured views</div>'
+                    +       iiqDonut(donutSlices, { size: 120 })
+                    +     '</div>';
+                html +=   '<div class="iiq-card" style="padding:0.75rem 0.95rem;">'
+                    +       '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.35rem;">'
+                    +         '<div style="font-size:0.78rem; color: var(--text-secondary);">Paid vs. Organic: who drove more downstream actions?</div>'
+                    +         '<div style="font-size:0.68rem; color: var(--text-secondary);">view-weighted across all assets (YTD)</div>'
+                    +       '</div>'
+                    +       funnelCardBody
+                    +     '</div>';
                 html += '</div>';
+                html += '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Cumulative view growth, paid vs organic</div>' + iiqLineChart(series, {height: 220}) + '</div>';
                 if (best.length) {
                     var slug = window.__intentIQ && window.__intentIQ.currentSlug;
                     // Cache the row payloads so the click handler can pick the
@@ -20967,7 +21041,7 @@
                         // so they need the assets payload. We piggyback that
                         // fetch through the cache so subsequent opens are
                         // instant and the rollup matches the Assets page.
-                        if (qid === 'q1' || qid === 'q4') {
+                        if (qid === 'q1' || qid === 'q2' || qid === 'q4') {
                             iiqLoadAssetsForFunnel(slug, function(assets) {
                                 d._assets = assets;
                                 renderAndCache(d);
