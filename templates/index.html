@@ -28370,6 +28370,7 @@
 
             function helmLoadProfileDropdowns() {
                 if (_helmProfilesLoaded) return;
+                var brandCats = ['ACCESSORIES','ACTIVEWEAR','AMUSEMENT PARKS','APPAREL','AUTOMOBILE','B2B','BANKS','BEAUTY','BETTING','BEVERAGE','CASUAL DINING','CPG','CREDIT PROVIDERS','CREDIT PROVIDER','DIGITAL BANKING','EVENTS','FOOTWEAR','FRANCHISE','GROCERY','INTIMATES','JEWELRY','LOYALTY PROGRAMS','MEMBERSHIP','NON PROFIT/CHARITY','PHARMA','QSR','RETAILERS','SECURITY','TELECOM','TICKETING','TOY','TRAVEL','VENUE','WORKOUT FACILITY'];
                 fetch('/api/jobs?refresh=0', { credentials: 'same-origin' })
                     .then(function(r) { return r.json(); })
                     .then(function(d) {
@@ -28383,7 +28384,7 @@
                             if (cat === 'ACTOR') actors.push(entry);
                             else if (cat === 'WRITER/DIRECTOR/AUTHOR/ARTIST' || cat === 'DIRECTOR') directors.push(entry);
                             else if (cat === 'CREATOR/INFLUENCER' || cat === 'INFLUENCER/CREATOR') creators.push(entry);
-                            else if (j.master_category === 'BRAND' || cat === 'BRAND') brands.push(entry);
+                            else if (brandCats.indexOf(cat) !== -1) brands.push(entry);
                         });
                         actors.sort(function(a,b) { return a.name.localeCompare(b.name); });
                         directors.sort(function(a,b) { return a.name.localeCompare(b.name); });
