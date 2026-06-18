@@ -62896,10 +62896,16 @@
                     if (box) box.classList.remove('asb-na');
                 }
             };
-            apply('asbSocial', share.social, false);
-            apply('asbSearch', share.search, false);
+            // For CONTENT-bucket profiles (movies, podcasts, games, series,
+            // vertical shorts) the qualification gate is "consumed the
+            // content," so MEDIA = 100% and the other four channels are
+            // not-applicable rather than literally zero. Render them as
+            // "—" instead of "0%" to make that distinction visible.
+            const isContent = share.archetype === 'CONTENT';
+            apply('asbSocial', share.social, isContent);
+            apply('asbSearch', share.search, isContent);
             apply('asbOwned',  share.owned,  share.noOwned);
-            apply('asbRetail', share.retail, false);
+            apply('asbRetail', share.retail, isContent);
             apply('asbMedia',  share.media,  false);
             // Expose archetype on the container so dev tools (and the
             // hover tooltip below) can show which template drove the
