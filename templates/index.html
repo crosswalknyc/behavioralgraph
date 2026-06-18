@@ -20232,6 +20232,66 @@
                 };
             }
 
+            // ----- Synthesize a daily progression for one asset -----
+            // Used by the asset-detail modal when the backend returns no rows
+            // from asset_engagement_daily (most assets in the GOAT pull don't
+            // have day-level granularity yet). Distributes the window totals
+            // across [posted_date .. min(today, posted_date + 120d)] using an
+            // exponential-decay curve (half-life ~5 days) which matches the
+            // observed shape of social-content view accrual. Per-day jitter is
+            // seeded by asset_id so the same asset always renders identically.
+            // Also writes daily info_seekers + ticket_visits using the same
+            // iiqAssetFunnelProjection() rates that power the cards, so the
+            // line chart numbers ladder up to the rest of Intent IQ.
+            function iiqSynthAssetDailySeries(asset, totalViews, totalEng) {
+                if (!asset) return [];
+                var posted = asset.posted_date;
+                if (!posted) return [];
+                var startMs = Date.parse(posted + 'T00:00:00Z');
+                if (isNaN(startMs)) return [];
+                var endMs   = Math.min(Date.now(), startMs + 120 * 86400000);
+                if (endMs <= startMs) endMs = startMs + 86400000;
+                var nDays = Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
+
+                var halfLife = 5;
+                var lambda   = Math.log(2) / halfLife;
+                var raw = [];
+                var sum = 0;
+                for (var i = 0; i < nDays; i++) {
+                    var base = Math.exp(-lambda * i);
+                    raw.push(base);
+                    sum += base;
+                }
+
+                var key = String(asset.asset_id || asset.url || asset.action_label || 'asset');
+                function _h(s) { var h=0; for (var i=0;i<s.length;i++) h=((h<<5)-h+s.charCodeAt(i))|0; return h; }
+                var seed = Math.abs(_h(key));
+                function rand(salt) { var x = Math.sin((seed + 1) * (salt + 1.7)) * 10000; return x - Math.floor(x); }
+
+                var proj = iiqAssetFunnelProjection(asset);
+                var engRate = totalViews > 0 ? (totalEng / totalViews) : 0;
+
+                var out = [];
+                var allocated = 0;
+                for (var d = 0; d < nDays; d++) {
+                    var jit = 0.78 + rand(d) * 0.44;
+                    var dayShare = (raw[d] / sum) * jit;
+                    var dayViews;
+                    if (d === nDays - 1) {
+                        dayViews = Math.max(0, totalViews - allocated);
+                    } else {
+                        dayViews = Math.round(totalViews * dayShare);
+                        allocated += dayViews;
+                    }
+                    var dayEng  = Math.round(dayViews * engRate);
+                    var dayInfo = Math.round(dayViews * proj.info_pct   / 100);
+                    var dayTk   = Math.round(dayViews * proj.ticket_pct / 100);
+                    var dateStr = new Date(startMs + d * 86400000).toISOString().slice(0, 10);
+                    out.push({ date: dateStr, views: dayViews, engagement: dayEng, info_seekers: dayInfo, ticket_visits: dayTk });
+                }
+                return out;
+            }
+
             // ----- Asset performance scatter -----
             // X = views (log10 scale, since asset reach spans 4-5 orders of
             // magnitude). Y = engagement rate %. Bubble area = ticketing %
@@ -21177,8 +21237,7 @@
                   + '<div id="iiqAssetModalChart" class="iiq-card" style="padding:0.85rem;">'
                   +   '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (loading\u2026)</div>'
                   +   '<div class="iiq-empty">Fetching daily timeline\u2026</div>'
-                  + '</div>'
-                  + '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.6rem;">Info-seek % and Ticketing % use the same iiqAssetFunnelProjection() model that powers the In-Flight Assets cards and the Performance Q1 rollup, so the values ladder up across all three views.</div>';
+                  + '</div>';
                 overlay.appendChild(panel);
 
                 var aid = asset.asset_id;
@@ -21192,17 +21251,41 @@
                             return;
                         }
                         var s = d.series || [];
+                        var winLabel = d.window_label || 'YTD';
+                        var isSynthesized = false;
                         if (!s.length) {
-                            chartHost.innerHTML = '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (' + escapeHtml(d.window_label || 'YTD') + ')</div><div class="iiq-empty">No daily rows in asset_engagement_daily for this asset in the selected window. Window totals: views ' + fmtCompact(views) + ' \u00b7 engagement ' + fmtCompact(eng) + '.</div>';
+                            // No daily rows in asset_engagement_daily. Synthesize a
+                            // realistic per-day distribution from the window
+                            // totals (views, engagement) + the asset's
+                            // posted_date so the user still gets a YTD
+                            // progression line chart. Model: exponential decay
+                            // from posted_date with a ~5-day half-life and a
+                            // long flat tail, capped at today; per-day jitter
+                            // seeded by asset_id so the same asset always
+                            // renders identically.
+                            s = iiqSynthAssetDailySeries(asset, views, eng);
+                            isSynthesized = s.length > 0;
+                        }
+                        if (!s.length) {
+                            chartHost.innerHTML = '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (' + escapeHtml(winLabel) + ')</div><div class="iiq-empty">No daily data and no posted_date \u2014 cannot synthesize a progression. Window totals: views ' + fmtCompact(views) + ' \u00b7 engagement ' + fmtCompact(eng) + '.</div>';
                             return;
                         }
                         var viewsPts = s.map(function(p) { return { x: p.date, y: Number(p.views) || 0 }; });
                         var engPts   = s.map(function(p) { return { x: p.date, y: Number(p.engagement) || 0 }; });
+                        var infoPts  = s.map(function(p) { return { x: p.date, y: Number(p.info_seekers) || 0 }; });
+                        var tkPts    = s.map(function(p) { return { x: p.date, y: Number(p.ticket_visits) || 0 }; });
+                        var hasFunnelSynth = (proj.info_pct + proj.ticket_pct) > 0 && infoPts.some(function(p){ return p.y > 0; });
                         var series = [
-                            { name: 'Daily views',      color: '#60a5fa', points: viewsPts },
-                            { name: 'Daily engagement', color: '#fbbf24', points: engPts }
+                            { name: 'Daily views',                color: '#60a5fa', points: viewsPts },
+                            { name: 'Daily engagement',           color: '#fbbf24', points: engPts }
                         ];
-                        chartHost.innerHTML = '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (' + escapeHtml(d.window_label || 'YTD') + ')</div>' + iiqLineChart(series, { height: 260 });
+                        if (hasFunnelSynth) {
+                            series.push({ name: 'Daily info-seekers',     color: '#a5b4fc', points: infoPts });
+                            series.push({ name: 'Daily ticketing visits', color: '#f472b6', points: tkPts   });
+                        }
+                        var captionTitle = 'Daily performance (' + escapeHtml(winLabel) + ')'
+                            + (isSynthesized ? ' \u00b7 <span style="color: var(--text-secondary); font-weight:normal; font-size:0.72rem;">modeled daily distribution from window total + posted_date</span>' : '');
+                        chartHost.innerHTML = '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">' + captionTitle + '</div>' + iiqLineChart(series, { height: 260 });
                     })
                     .catch(function(e) {
                         var chartHost = document.getElementById('iiqAssetModalChart');
