@@ -20897,9 +20897,8 @@
                 var sortLabel = (sortLabelMap[sortKey] || sortKey) + ' (' + sortDir + ')';
 
                 html += '<div class="iiq-card" style="padding:0.85rem;">';
-                html += '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.55rem; gap:1rem;">';
+                html += '<div style="margin-bottom:0.55rem;">';
                 html +=   '<div style="font-size:0.78rem; color: var(--text-secondary);">Each category shown across 3 metrics \u00b7 sorted by ' + escapeHtml(sortLabel) + ' \u00b7 <span style="opacity:0.7;">click any header to re-sort</span></div>';
-                html +=   '<div style="font-size:0.7rem; color: var(--text-secondary);" title="View-weighted means of the per-asset modeled projections shown on the In-Flight Assets page. An asset\'s % on the Assets page is the same value contributing to its category here.">numbers ladder up to the Assets page</div>';
                 html += '</div>';
 
                 html += '<div style="display:grid; grid-template-columns: 230px 1fr 1fr 1fr; gap:0.85rem; padding:0.3rem 0.25rem 0.45rem; border-bottom:1px solid rgba(255,255,255,0.08); font-size:0.7rem; align-items:end;">'
