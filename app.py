@@ -21192,6 +21192,12 @@ def list_jobs():
                     entry['is_svod'] = j['is_svod']
                 if j.get('secondary_category'):
                     entry['secondary_category'] = j['secondary_category']
+                # Forward MOVIE - <Genre> sub-bucket so the profile
+                # selector can group movie profiles by genre under the
+                # MOVIE node (per user request 2026-06-18). Backfilled
+                # by get_job_from_s3_key() during cache rebuild.
+                if j.get('movie_genre'):
+                    entry['movie_genre'] = j['movie_genre']
                 # Pass IMDB enrichment through to the frontend so the Profile IQ
                 # dashboard can render a clickable "IMDB: nm0000123" pill under
                 # the date range header. Backfilled by migration/scrape_imdb_ids.py
@@ -21877,6 +21883,11 @@ def process_s3_file_metadata(key, obj):
     #     prior head+tail design (~190MB) but now correct for any
     #     row placement / file size.
     category = 'UNCATEGORIZED'
+    # Movie genre (extracted from BRAND INPUT 'MOVIE - <Genre>' prefix).
+    # Stays None for non-movie profiles; populated only when the prefix
+    # is detected. Surfaced as 'movie_genre' on the returned profile dict
+    # so the frontend can sub-bucket MOVIE in the profile selector.
+    movie_genre = None
 
     def _extract_brand_category(text: str):
         for line in text.split('\n'):
@@ -21900,13 +21911,13 @@ def process_s3_file_metadata(key, obj):
     def _brand_input_starts_with_movie(text: str) -> bool:
         """Return True iff this CSV's BRAND INPUT value starts with
         'MOVIE - '. The pipeline encodes movie profiles as
-        BRAND INPUT = 'MOVIE - <title>' (e.g. 'MOVIE - INCEPTION'),
-        so any file matching this prefix is forced into
-        category='MOVIE' (a valid CONTENT subcategory in the
-        frontend MASTER_CATEGORIES map). Per-user request 2026-06-17:
-        profiles like this should always land under CONTENT > MOVIE
-        in the profile selector, regardless of what BRAND CATEGORY
-        says (or doesn't say)."""
+        BRAND INPUT = 'MOVIE - <genre>' (e.g.
+        'MOVIE - Romantic Comedy'), so any file matching this prefix
+        is forced into category='MOVIE' (a valid CONTENT subcategory
+        in the frontend MASTER_CATEGORIES map). Per-user request
+        2026-06-17: profiles like this should always land under
+        CONTENT > MOVIE in the profile selector, regardless of what
+        BRAND CATEGORY says (or doesn't say)."""
         for line in text.split('\n'):
             line_upper = line.strip().upper()
             if (line_upper.startswith('BRAND INPUT,')
@@ -21923,6 +21934,33 @@ def process_s3_file_metadata(key, obj):
                         return True
                 return False
         return False
+
+    def _extract_movie_genre(text: str):
+        """For movie profiles (BRAND INPUT starts with 'MOVIE - '),
+        return the genre string (everything after 'MOVIE - '). Used
+        by the frontend to sub-bucket the MOVIE category by genre
+        in the profile selector (e.g. MOVIE > 'Romantic Comedy' >
+        Always Be My Maybe).
+
+        Preserves original casing from the CSV so the tree displays
+        'Romantic Comedy' instead of 'ROMANTIC COMEDY'.
+
+        Returns None if BRAND INPUT is missing, doesn't start with
+        'MOVIE - ', or the post-prefix value is empty."""
+        for line in text.split('\n'):
+            line_upper = line.strip().upper()
+            if (line_upper.startswith('BRAND INPUT,')
+                    or line_upper.startswith('BRAND INPUT ')
+                    or line_upper.startswith('"BRAND INPUT"')):
+                parts = line.split(',', 2)
+                if len(parts) >= 2:
+                    val_raw = parts[1].strip().strip('"')
+                    val_upper = val_raw.upper()
+                    if val_upper.startswith('MOVIE - '):
+                        genre = val_raw[len('MOVIE - '):].strip()
+                        return genre or None
+                return None
+        return None
 
     try:
         # Fast path: head-of-file read covers the canonical row-2
@@ -21957,12 +21995,20 @@ def process_s3_file_metadata(key, obj):
         if found:
             category = found
 
-        # MOVIE - <title> BRAND INPUT prefix overrides BRAND CATEGORY.
+        # MOVIE - <genre> BRAND INPUT prefix overrides BRAND CATEGORY.
         # BRAND INPUT is canonical row 1, so the head_text read above
         # always contains it — no extra S3 GETs needed.
         try:
             if _brand_input_starts_with_movie(head_text):
                 category = 'MOVIE'
+                # Also surface the genre so the frontend can sub-bucket
+                # MOVIE in the profile selector (per user request
+                # 2026-06-18: "the movies in the movie category on
+                # profile selector should be bucketed into their
+                # genres which I believe are within brand category" —
+                # genre actually lives in BRAND INPUT after the
+                # 'MOVIE - ' prefix, not in BRAND CATEGORY).
+                movie_genre = _extract_movie_genre(head_text)
         except Exception as movie_err:
             print(f"⚠️ MOVIE BRAND INPUT probe failed for {key}: {movie_err}")
     except Exception as e:
@@ -21984,6 +22030,7 @@ def process_s3_file_metadata(key, obj):
         'source': 's3',
         's3_key': key,
         'category': category,
+        'movie_genre': movie_genre,
         'profile_subject': get_profile_subject_from_s3_key(key)
     }
 
