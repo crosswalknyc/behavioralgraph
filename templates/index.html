@@ -21959,13 +21959,19 @@
             // Deterministic per-date jitter so the curves render the same
             // across refreshes.
             function iiqQ5DailyFunnelModel(dateIso) {
-                var OPENING = '2026-02-13';
-                var PRESALE = '2026-01-21';
-                var dT = new Date(dateIso + 'T12:00:00Z').getTime();
-                var owT = new Date(OPENING + 'T12:00:00Z').getTime();
-                var psT = new Date(PRESALE + 'T12:00:00Z').getTime();
+                // Anchored to the shared IIQ_CAMPAIGN_DATES constant so the
+                // Q5 curve, the Q2 cumulative calendar multiplier, and the
+                // asset-detail synthesis all key off the same date set.
+                var OPENING   = IIQ_CAMPAIGN_DATES.OPENING;
+                var PRESALE   = IIQ_CAMPAIGN_DATES.PRESALE;
+                var STREAMING = IIQ_CAMPAIGN_DATES.STREAMING;
+                var dT  = new Date(dateIso  + 'T12:00:00Z').getTime();
+                var owT = new Date(OPENING  + 'T12:00:00Z').getTime();
+                var psT = new Date(PRESALE  + 'T12:00:00Z').getTime();
+                var slT = new Date(STREAMING+ 'T12:00:00Z').getTime();
                 var DAY = 86400000;
                 var dToOW = Math.round((owT - dT) / DAY);
+                var dToSL = (slT - dT) / DAY;
 
                 var seed = 0;
                 for (var i = 0; i < dateIso.length; i++) { seed = (seed * 31 + dateIso.charCodeAt(i)) & 0x7fffffff; }
@@ -21980,12 +21986,26 @@
                 else if (dToOW > -60)   info = 17 - Math.abs(dToOW + 14) * 0.13 + jit(1.5);
                 else                    info = 9  + jit(1.5);
 
+                // Streaming-launch (PVOD/SVOD) info-seek bump. Adds a
+                // Gaussian centered on 5/15 (sigma = 25d), peak amplitude
+                // +14pp. Suppressed during the theatrical window so we
+                // don't double-count audiences who were focused on
+                // tickets. This is the "info-seek would peak again
+                // because of pvod/tvod" behavior the user called for.
+                var sigma  = 25;
+                var bumpAmp = 14.0;
+                var infoBump = bumpAmp * Math.exp(-(dToSL * dToSL) / (2 * sigma * sigma));
+                if (dToOW > -14) infoBump *= 0.10;
+                info += infoBump + (infoBump > 1 ? jit(1.0) : 0);
+
                 if (dT < psT)           tk = 0.3 + Math.abs(jit(0.25));
                 else if (dToOW > 14)    tk = 3  + (23 - dToOW) * 0.30 + jit(0.6);
                 else if (dToOW >= 0)    tk = 16 + (14 - dToOW) * 0.90 + jit(1.5);
                 else if (dToOW > -7)    tk = 26 - Math.abs(dToOW) * 0.65 + jit(1.5);
                 else if (dToOW > -30)   tk = 8  - Math.abs(dToOW + 7) * 0.22 + jit(0.8);
                 else                    tk = 0.6 + Math.abs(jit(0.3));
+                // Ticketing stays at floor through the streaming era --
+                // no theatrical tickets to buy, so no second peak here.
 
                 return { info_pct: Math.max(0, info), ticket_pct: Math.max(0, tk) };
             }
