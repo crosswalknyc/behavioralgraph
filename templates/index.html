@@ -21550,29 +21550,59 @@
                 });
             }
 
+            // Q4 column-sort state. Click a header to sort by that column;
+            // click the same header again to flip direction. Default sort is
+            // Views, descending. Strings default ascending, numerics
+            // descending. Same UX as Q1's sortable header row.
+            window._iiqQ4 = window._iiqQ4 || { sortKey: 'views', sortDir: 'desc', data: null };
+            window.iiqQ4Sort = function(key) {
+                var s = window._iiqQ4;
+                if (s.sortKey === key) {
+                    s.sortDir = (s.sortDir === 'desc') ? 'asc' : 'desc';
+                } else {
+                    s.sortKey = key;
+                    s.sortDir = (key === 'talent') ? 'asc' : 'desc';
+                }
+                if (s.data) {
+                    var host = document.getElementById('iiqQBody');
+                    if (host) host.innerHTML = iiqRenderQ4(s.data);
+                }
+            };
+
             function iiqRenderQ4(d) {
+                window._iiqQ4.data = d;
+                var sortKey = window._iiqQ4.sortKey;
+                var sortDir = window._iiqQ4.sortDir;
                 // Preferred path: per-asset rollup from /api/intent/<slug>/assets
                 // (matches Assets page and Q1 funnel exactly).
                 var rolled = iiqQ4TalentRollupFromAssets(d._assets || []);
                 var usingAssets = rolled.length > 0;
                 var rows;
                 if (usingAssets) {
-                    rows = rolled.slice().sort(function(a,b){ return b.views - a.views; });
+                    rows = rolled.slice();
                 } else if (d.rows && d.rows.length) {
                     // Fallback to legacy attribution payload (views only).
-                    rows = d.rows.slice()
-                        .sort(function(a,b){ return (Number(b.views_total)||0) - (Number(a.views_total)||0); })
-                        .map(function(r) {
-                            return {
-                                talent: r.talent, views: Number(r.views_total)||0,
-                                eng_pct: null, info_seekers: null, ticket_visits: null,
-                                info_pct: null, ticket_pct: null,
-                                asset_count: Number(r.asset_count)||0
-                            };
-                        });
+                    rows = d.rows.slice().map(function(r) {
+                        return {
+                            talent: r.talent, views: Number(r.views_total)||0,
+                            eng_pct: null, info_seekers: null, ticket_visits: null,
+                            info_pct: null, ticket_pct: null,
+                            asset_count: Number(r.asset_count)||0
+                        };
+                    });
                 } else {
                     return '<div class="iiq-empty">Q4 has no talent-tagged assets yet. Run scripts/backfill_intent_talent_tags.py.</div>';
                 }
+                rows.sort(function(a, b) {
+                    var av = a[sortKey], bv = b[sortKey];
+                    if (sortKey === 'talent') {
+                        var cmp = String(av || '').localeCompare(String(bv || ''));
+                        return sortDir === 'asc' ? cmp : -cmp;
+                    }
+                    var na = (av == null) ? -Infinity : Number(av) || 0;
+                    var nb = (bv == null) ? -Infinity : Number(bv) || 0;
+                    return sortDir === 'asc' ? (na - nb) : (nb - na);
+                });
 
                 var maxV = Math.max.apply(null, rows.map(function(r){ return r.views||0; }).concat([1]));
                 var totalV = rows.reduce(function(s,r){ return s + (r.views||0); }, 0);
@@ -21580,7 +21610,9 @@
                 var totalTk   = rows.reduce(function(s,r){ return s + (r.ticket_visits||0); }, 0);
                 var blendedInfo = totalV > 0 ? totalInfo / totalV * 100 : 0;
                 var blendedTk   = totalV > 0 ? totalTk   / totalV * 100 : 0;
-                var top = rows[0];
+                // "Top contributor" is always the highest-views talent,
+                // regardless of which column the user has chosen to sort by.
+                var top = rows.slice().sort(function(a,b){ return (Number(b.views)||0) - (Number(a.views)||0); })[0];
 
                 var html = '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
                     + iiqSummaryTile('Cast members surfaced', String(rows.length), 'in tagged campaign assets')
@@ -21595,14 +21627,26 @@
                 html +=   '<div style="font-size:0.78rem; color: var(--text-secondary);">Cast members ranked by total measured views, with funnel-stage rollup</div>';
                 html +=   '<div style="font-size:0.7rem; color: var(--text-secondary);" title="View-weighted means of the per-asset modeled projections shown on the In-Flight Assets page. An asset starring multiple cast members contributes to each of their rollups.">numbers match per-asset values on Assets page</div>';
                 html += '</div>';
+                function _q4Hdr(key, label, baseColor, align, tip) {
+                    var active = (sortKey === key);
+                    var arrow = active ? (sortDir === 'desc' ? ' \u25BC' : ' \u25B2') : ' \u2195';
+                    var arrowOp = active ? '1' : '0.35';
+                    var colorCss = baseColor ? ('color:' + baseColor + ';') : '';
+                    var alignCss = align === 'right' ? 'text-align:right;' : '';
+                    var tipAttr = tip ? ' title="' + escapeHtml(tip) + '"' : ' title="Click to sort by this column. Click again to flip direction."';
+                    return '<th onclick="iiqQ4Sort(\'' + key + '\')" style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); cursor:pointer; user-select:none; ' + colorCss + ' ' + alignCss + '"' + tipAttr + '>'
+                        + escapeHtml(label)
+                        + '<span style="opacity:' + arrowOp + '; font-size:0.78rem; margin-left:0.25rem;">' + arrow + '</span>'
+                        + '</th>';
+                }
                 html += '<table style="width:100%; border-collapse: collapse; font-size:0.78rem;">';
                 html += '<thead><tr style="color: var(--text-secondary); text-align:left;">'
-                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08);">Cast member</th>'
-                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right;">Assets</th>'
-                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right;">Views</th>'
-                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right; color:#fb923c;" title="View-weighted average per-asset engagement rate (likes+comments+shares ÷ views), per-asset capped at 60% to suppress junk-bot ratios.">Eng %</th>'
-                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right; color:#a5b4fc;" title="View-weighted mean per-asset info-seek %, then total info-seekers. Same formula as Assets page.">Info-seek %</th>'
-                    +   '<th style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); text-align:right; color:#fbbf24;" title="View-weighted mean per-asset ticketing %, then total ticket visits. Same formula as Assets page.">Ticketing %</th>'
+                    +   _q4Hdr('talent',      'Cast member',  '',        'left',  '')
+                    +   _q4Hdr('asset_count', 'Assets',       '',        'right', '')
+                    +   _q4Hdr('views',       'Views',        '',        'right', '')
+                    +   _q4Hdr('eng_pct',     'Engagement %', '#fb923c', 'right', 'View-weighted average per-asset engagement rate (likes+comments+shares / views), per-asset capped at 60% to suppress junk-bot ratios.')
+                    +   _q4Hdr('info_pct',    'Info-seek %',  '#a5b4fc', 'right', 'View-weighted mean per-asset info-seek %, then total info-seekers. Same formula as Assets page.')
+                    +   _q4Hdr('ticket_pct',  'Ticketing %',  '#fbbf24', 'right', 'View-weighted mean per-asset ticketing %, then total ticket visits. Same formula as Assets page.')
                     + '</tr></thead><tbody>';
 
                 rows.forEach(function(r) {
