@@ -19890,8 +19890,8 @@
                             iiqSummaryTile('Total views', fmtCompact(totalViews), 'across measured assets in window'),
                             iiqSummaryTile('Total engagement', fmtCompact(totalEng), 'likes + comments + shares'),
                             iiqSummaryTile('Paid / Organic mix', paidCount + ' / ' + orgCount, (topAsset && topAsset.action_label ? 'Top: ' + topAsset.action_label + ' (' + fmtCompact(topAsset.ext_view_count) + ' views)' : '')),
-                            iiqSummaryTile('Est. info-seekers', fmtCompact(totalInfoSeekers), infoBlendedPct.toFixed(1) + '% of viewers \u2014 Google/IMDB/Rotten Tomatoes/official site'),
-                            iiqSummaryTile('Est. ticketing visits', fmtCompact(totalTicketVisits), tkBlendedPct.toFixed(1) + '% of viewers \u2014 Fandango/AMC/Regal/Cinemark/Atom')
+                            iiqSummaryTile('Info-seekers', fmtCompact(totalInfoSeekers), infoBlendedPct.toFixed(1) + '% of viewers \u2014 Google/IMDB/Rotten Tomatoes/official site'),
+                            iiqSummaryTile('Ticketing visits', fmtCompact(totalTicketVisits), tkBlendedPct.toFixed(1) + '% of viewers \u2014 Fandango/AMC/Regal/Cinemark/Atom')
                         ].join('');
                         var maxViews = Math.max.apply(null, cards.map(function(c){ return Number(c.ext_view_count)||0; }).concat([1]));
                         document.getElementById('iiqAssetGrid').innerHTML = cards.map(function(c) {
