@@ -12631,6 +12631,20 @@ def api_intent_assets(title_slug):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/intent/<title_slug>/asset/<int:asset_id>/timeseries', methods=['GET'])
+@requires_auth
+def api_intent_asset_timeseries(title_slug, asset_id):
+    ok, err = _require_intent_iq()
+    if not ok:
+        return err
+    try:
+        return jsonify(_intent_iq.get_asset_timeseries(
+            title_slug, asset_id, window=request.args.get('window')))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/intent/<title_slug>/audiences', methods=['GET'])
 @requires_auth
 def api_intent_audiences(title_slug):

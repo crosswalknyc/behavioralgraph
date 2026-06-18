@@ -329,6 +329,80 @@ def get_assets(title_slug: str, phase: Optional[str] = None,
             "window": (window or "ytd").lower(), "window_label": window_label}
 
 
+def get_asset_timeseries(title_slug: str, asset_id: int,
+                          window: Optional[str] = None) -> dict:
+    """Daily views + engagement timeseries for one asset, plus its metadata.
+
+    Powers the click-to-drill modal on the Performance page Top-10 list and
+    on the In-Flight Assets cards. Defaults to YTD per Jenna 2026-06-17.
+    """
+    ch = _ch_client()
+    if ch is None:
+        return {"success": False, "error": "ClickHouse unavailable"}
+    try:
+        asset_id_int = int(asset_id)
+    except (TypeError, ValueError):
+        return {"success": False, "error": f"Invalid asset_id: {asset_id!r}"}
+
+    lo, hi, window_label = _resolve_assets_window(window)
+
+    meta: dict = {}
+    try:
+        m_rows = ch.query(
+            "SELECT asset_id, action_label, asset_type, channel, paid_or_organic, "
+            "phase_name, url, posted_date, "
+            "toUInt64(ext_view_count) AS ext_view_count, "
+            "toUInt64(ext_engagement_count) AS ext_engagement_count "
+            "FROM intent.campaign_assets FINAL "
+            f"WHERE title_slug = '{title_slug}' AND asset_id = {asset_id_int} "
+            "LIMIT 1"
+        ).result_rows
+        if m_rows:
+            meta = _rows_to_dicts(m_rows, [
+                "asset_id", "action_label", "asset_type", "channel",
+                "paid_or_organic", "phase_name", "url", "posted_date",
+                "ext_view_count", "ext_engagement_count"
+            ])[0]
+            meta["posted_date"] = _safe_iso_date(meta.get("posted_date"))
+    except Exception as e:
+        logger.info("Intent IQ asset meta lookup failed: %s", e)
+
+    where = [f"e.asset_id = {asset_id_int}"]
+    if lo: where.append(f"e.date >= toDate('{lo}')")
+    if hi: where.append(f"e.date <= toDate('{hi}')")
+    where_sql = " AND ".join(where)
+
+    series: list[dict] = []
+    try:
+        rows = ch.query(
+            "SELECT toString(e.date) AS d, "
+            "sum(e.views) AS views, "
+            "sum(e.likes + e.comments + e.shares) AS engagement "
+            "FROM intent.asset_engagement_daily e "
+            f"WHERE {where_sql} "
+            "GROUP BY d ORDER BY d"
+        ).result_rows
+        series = _rows_to_dicts(rows, ["date", "views", "engagement"])
+    except Exception as e:
+        logger.info("Intent IQ asset timeseries query failed: %s", e)
+        return {"success": False, "error": str(e)}
+
+    totals = {
+        "views": sum(int(r.get("views") or 0) for r in series),
+        "engagement": sum(int(r.get("engagement") or 0) for r in series),
+    }
+    return {
+        "success": True,
+        "title_slug": title_slug,
+        "asset_id": asset_id_int,
+        "asset": meta,
+        "series": series,
+        "totals_in_window": totals,
+        "window": (window or "ytd").lower(),
+        "window_label": window_label,
+    }
+
+
 # ── 4. Audiences-of-interest ────────────────────────────────────────────────
 
 # Hard-coded audiences-of-interest catalog from David's brief. For each,
@@ -594,25 +668,42 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
         # Default top-asset window is YTD (Jenna 2026-06-17:
         # 'do YTD unless otherwise specified for all assets'). Same
         # convention used by the In-Flight tab and Assets tab.
+        #
+        # views_total / engagement_total are coalesced with the asset-level
+        # ext_view_count / ext_engagement_count so the numbers MATCH the
+        # In-Flight Assets page. Previously assets that had ext_engagement_count
+        # but no per-day rows in asset_engagement_daily showed "eng 0" here
+        # while the Assets page showed the real engagement (Jenna 2026-06-18).
+        #
+        # channel / phase_name / ext_view_count / ext_engagement_count are
+        # also surfaced so the frontend can run iiqAssetFunnelProjection() per
+        # row and ladder up info-seek % + ticketing % values that match the
+        # Assets page per-card and the Performance Q1 category rollup.
         year = datetime.utcnow().year
         ytd_start = f"{year}-01-01"
         best_sql = f"""
-        SELECT a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
-               a.url, a.posted_date,
-               sum(e.views) AS views_total,
-               sum(e.likes + e.comments + e.shares) AS engagement_total
+        SELECT a.asset_id, a.action_label, a.asset_type, a.channel,
+               a.phase_name, a.paid_or_organic, a.url, a.posted_date,
+               toUInt64(any(a.ext_view_count))       AS ext_view_count,
+               toUInt64(any(a.ext_engagement_count)) AS ext_engagement_count,
+               greatest(ifNull(sum(e.views), 0),
+                        toUInt64(any(a.ext_view_count)))       AS views_total,
+               greatest(ifNull(sum(e.likes + e.comments + e.shares), 0),
+                        toUInt64(any(a.ext_engagement_count))) AS engagement_total
         FROM intent.campaign_assets a
         LEFT JOIN intent.asset_engagement_daily e ON e.asset_id = a.asset_id
         WHERE a.title_slug = '{title_slug}'
           AND a.posted_date >= toDate('{ytd_start}')
-        GROUP BY a.asset_id, a.action_label, a.asset_type, a.paid_or_organic,
-                 a.url, a.posted_date
+        GROUP BY a.asset_id, a.action_label, a.asset_type, a.channel,
+                 a.phase_name, a.paid_or_organic, a.url, a.posted_date
         ORDER BY views_total DESC
         LIMIT 10
         """
         best_rows = ch.query(best_sql).result_rows
         best = _rows_to_dicts(best_rows, ["asset_id", "action_label", "asset_type",
-                                             "paid_or_organic", "url", "posted_date",
+                                             "channel", "phase_name", "paid_or_organic",
+                                             "url", "posted_date",
+                                             "ext_view_count", "ext_engagement_count",
                                              "views_total", "engagement_total"])
         for r in best:
             r["posted_date"] = _safe_iso_date(r["posted_date"])
