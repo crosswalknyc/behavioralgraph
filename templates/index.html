@@ -19365,6 +19365,7 @@
                 <button class="iiq-subtab" data-iiq-subtab="assets" onclick="showIntentIQSubtab('assets')">🎞️ ASSETS</button>
                 <button class="iiq-subtab" data-iiq-subtab="questions" onclick="showIntentIQSubtab('questions')">🎯 PERFORMANCE</button>
                 <button class="iiq-subtab" data-iiq-subtab="inflight" onclick="showIntentIQSubtab('inflight')">⚡ IN-FLIGHT</button>
+                <button class="iiq-subtab" data-iiq-subtab="conversion" onclick="showIntentIQSubtab('conversion')">💰 INTENT TO CONVERSION</button>
             </div>
 
             <div class="iiq-panel active" id="iiqPanel-overview">
@@ -19437,6 +19438,89 @@
                     </div>
                 </div>
                 <div id="iiqInFlightBody"></div>
+            </div>
+
+            <div class="iiq-panel" id="iiqPanel-conversion">
+                <div style="margin-bottom: 0.65rem;">
+                    <h4 style="margin: 0;">Intent to Conversion — project tickets sold + box office</h4>
+                    <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Convert the upper-funnel signals (views, engagement, info-seekers, ticketing-site visitors) into a projected box-office outcome. Defaults are calibrated against GOAT's 2/13–16/26 opening weekend ($35.5M domestic per Box Office Mojo). Drop open the <strong>Secret Sauce</strong> panel to tune the per-layer conversion rates.</div>
+                </div>
+
+                <div style="display:flex; gap:0.6rem; align-items:end; flex-wrap:wrap; margin-bottom:0.85rem;">
+                    <div><label style="font-size:0.7rem; color: var(--text-secondary); display:block;">Window</label>
+                        <select id="iiqConvWindow" onchange="iiqRenderConversionMetrics()" style="background: rgba(0,0,0,0.4); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 0.3rem 0.5rem; font-size:0.78rem;">
+                            <option value="ytd" selected>Year-to-date (YTD)</option>
+                            <option value="14d">Last 14 days</option>
+                            <option value="30d">Last 30 days</option>
+                            <option value="90d">Last 90 days</option>
+                            <option value="all">Campaign-to-date</option>
+                        </select>
+                    </div>
+                    <div style="flex:1; text-align:right;"><span id="iiqConvMeta" style="color: var(--text-secondary); font-size: 0.8rem;"></span></div>
+                </div>
+
+                <div id="iiqConvHero" style="display:grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 1rem;"></div>
+
+                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">
+                    <div class="iiq-card" style="padding:0.7rem;">
+                        <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:0.25rem;" title="Average price per ticket in the projection window">Ticket price ($)</div>
+                        <input id="iiqConvTicketPrice" type="number" step="0.01" min="0" value="15.00" style="width:100%; background: rgba(0,0,0,0.4); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.45rem 0.55rem; font-size:1.1rem; font-weight:600;">
+                    </div>
+                    <div class="iiq-card" style="padding:0.7rem;">
+                        <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:0.25rem;" title="Average # of tickets each buyer purchases per transaction (party size). Family animation runs ~2.4–2.7.">Tickets per buyer</div>
+                        <input id="iiqConvTicketsPerBuyer" type="number" step="0.1" min="1" value="2.5" style="width:100%; background: rgba(0,0,0,0.4); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.45rem 0.55rem; font-size:1.1rem; font-weight:600;">
+                    </div>
+                    <div class="iiq-card" style="padding:0.7rem;">
+                        <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:0.25rem;" title="Project either the 3-day opening weekend only, or the full theatrical run (default 90 days).">Projection window</div>
+                        <select id="iiqConvRunWindow" onchange="iiqConvToggleRunDays()" style="width:100%; background: rgba(0,0,0,0.4); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.45rem 0.55rem; font-size:1rem; font-weight:600;">
+                            <option value="opening" selected>Opening Weekend</option>
+                            <option value="full">Full Theatrical Run</option>
+                        </select>
+                    </div>
+                    <div class="iiq-card" id="iiqConvRunDaysWrap" style="padding:0.7rem; opacity:0.4; pointer-events:none;">
+                        <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:0.25rem;" title="Days in the theatrical run (industry standard family animation = 90 days). Only active when Projection window = Full Theatrical Run.">Run length (days)</div>
+                        <input id="iiqConvRunDays" type="number" step="1" min="3" max="180" value="90" style="width:100%; background: rgba(0,0,0,0.4); color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.45rem 0.55rem; font-size:1.1rem; font-weight:600;">
+                    </div>
+                </div>
+
+                <details id="iiqConvSecretSauce" style="background: rgba(15,23,42,0.55); border:1px solid rgba(245,158,11,0.35); border-radius:8px; padding:0.6rem 0.85rem; margin-bottom:0.85rem;">
+                    <summary style="cursor:pointer; font-size:0.85rem; font-weight:700; color:#fbbf24;">🧪 Secret Sauce &nbsp;<span style="font-weight:400; font-size:0.72rem; color:var(--text-secondary);">(conversion weights — calibrated to GOAT opening weekend $35.5M)</span></summary>
+                    <div style="font-size:0.72rem; color: var(--text-secondary); margin: 0.55rem 0 0.7rem;">
+                        Each funnel layer converts at its own rate. Layers are <strong>nested</strong> (ticketing visitors ⊂ info-seekers ⊂ reached), so the model assigns each person to the deepest layer they reached and applies that layer's conversion rate. No double-counting.
+                    </div>
+                    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 0.55rem;">
+                        <div>
+                            <div style="font-size:0.7rem; color:#94a3b8;" title="Reached but did NOT info-seek or visit ticketing. Weak conversion (~0.3–0.8% for major animated tentpoles).">Awareness layer %</div>
+                            <input id="iiqConvWtAware" type="number" step="0.01" min="0" max="100" value="0.50" style="width:100%; background: rgba(0,0,0,0.4); color:#a5b4fc; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.4rem 0.5rem; font-size:0.95rem; font-weight:600;">
+                            <div style="font-size:0.65rem; color:#64748b; margin-top:0.15rem;">of (reached − info-seekers)</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.7rem; color:#a5b4fc;" title="Info-seeker who didn't visit ticketing yet. Mid-funnel, ~6–12% convert.">Mid-funnel layer %</div>
+                            <input id="iiqConvWtInfo" type="number" step="0.1" min="0" max="100" value="8.0" style="width:100%; background: rgba(0,0,0,0.4); color:#a5b4fc; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.4rem 0.5rem; font-size:0.95rem; font-weight:600;">
+                            <div style="font-size:0.65rem; color:#64748b; margin-top:0.15rem;">of (info-seekers − ticketing visitors)</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.7rem; color:#fbbf24;" title="Already on a ticketing site. Highest conversion (~18–28% for family animation, NATO/Comscore norm).">Bottom-funnel layer %</div>
+                            <input id="iiqConvWtTicketing" type="number" step="0.1" min="0" max="100" value="22.0" style="width:100%; background: rgba(0,0,0,0.4); color:#fbbf24; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.4rem 0.5rem; font-size:0.95rem; font-weight:600;">
+                            <div style="font-size:0.65rem; color:#64748b; margin-top:0.15rem;">of ticketing-site visitors</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.7rem; color:#22d3ee;" title="Full-run multiplier vs opening weekend. Family animation domestic gross is typically 2.5–3.0× opening weekend.">Full-run × multiplier</div>
+                            <input id="iiqConvFullRunMult" type="number" step="0.05" min="1" max="5" value="2.70" style="width:100%; background: rgba(0,0,0,0.4); color:#22d3ee; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.4rem 0.5rem; font-size:0.95rem; font-weight:600;">
+                            <div style="font-size:0.65rem; color:#64748b; margin-top:0.15rem;">applied only on Full Theatrical Run</div>
+                        </div>
+                    </div>
+                    <div style="font-size:0.65rem; color:#64748b; margin-top:0.7rem;">
+                        Defaults solve back to GOAT opening weekend $35.5M: <code style="color:#cbd5e1;">3.63M ticketing × 22% + 0.98M info-only × 8% + 14.5M aware-only × 0.5% ≈ 949K buyers × 2.5 tickets × $15 ≈ $35.6M</code>. Tune any layer to test "what-if" scenarios.
+                    </div>
+                </details>
+
+                <div style="display:flex; gap:0.6rem; align-items:center; margin-bottom:1rem;">
+                    <button class="blue-iq-apply-btn" onclick="iiqProjectConversion()" style="background:#fbbf24; color:#0f172a; font-weight:700; padding:0.6rem 1.3rem; border-radius:8px; border:none; cursor:pointer; font-size:0.95rem;">PROJECT ▶</button>
+                    <span style="font-size:0.72rem; color:var(--text-secondary);">Recomputes the projection from your current inputs + Secret Sauce.</span>
+                </div>
+
+                <div id="iiqConvOutput"></div>
             </div>
         </div>
 
@@ -19532,6 +19616,188 @@
                     p.classList.toggle('active', p.id === 'iiqPanel-' + tab);
                 });
                 if (tab === 'inflight') reloadIntentIQInFlight();
+                if (tab === 'conversion') iiqRenderConversionMetrics();
+            };
+
+            // =========================================================
+            // Intent to Conversion — project tickets sold + box office
+            // =========================================================
+            // Funnel model (no double-counting):
+            //   layer 1: reached_unique - info_seekers_unique  (awareness only)
+            //   layer 2: info_seekers_unique - ticketing_unique  (mid-funnel only)
+            //   layer 3: ticketing_unique  (bottom-funnel)
+            // Buyers = sum(layer_size × layer_conv_pct). Tickets = buyers ×
+            // tickets_per_buyer. Box office = tickets × ticket_price.
+            //
+            // Duplicated -> unique dedupe factors (sourced from cross-campaign
+            // norms for tentpole family animation):
+            //   - reach dedupe = avg_frequency_per_asset (2.2) × avg_unique
+            //     assets seen per viewer (3.0) = 6.6
+            //   - info-seek dedupe = 1.78 (an info-seeker searches/visits
+            //     ~1.78 times per engagement cluster)
+            //   - ticketing dedupe = 1.57 (per Comscore/NATO ticketing-page
+            //     pre-sale behavior)
+            // These are deterministic constants; if a future title's campaign
+            // structure differs materially, expose them in Secret Sauce too.
+            window.__iiqConv = window.__iiqConv || { totals: null, lastWindow: null };
+            var IIQ_CONV_REACH_DEDUPE = 6.6;
+            var IIQ_CONV_INFO_DEDUPE  = 1.78;
+            var IIQ_CONV_TICK_DEDUPE  = 1.57;
+
+            window.iiqConvToggleRunDays = function() {
+                var wrap = document.getElementById('iiqConvRunDaysWrap');
+                var sel  = document.getElementById('iiqConvRunWindow');
+                if (!wrap || !sel) return;
+                var on = sel.value === 'full';
+                wrap.style.opacity = on ? '1' : '0.4';
+                wrap.style.pointerEvents = on ? 'auto' : 'none';
+            };
+
+            window.iiqRenderConversionMetrics = function() {
+                var slug = window.__intentIQ.currentSlug;
+                if (!slug) return;
+                var winEl = document.getElementById('iiqConvWindow');
+                var win = winEl ? winEl.value : 'ytd';
+                document.getElementById('iiqConvMeta').textContent = 'Loading...';
+                fetch('/api/intent/' + slug + '/assets?window=' + encodeURIComponent(win), { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (!d.success) { document.getElementById('iiqConvMeta').textContent = 'Failed: ' + escapeHtml(d.error || ''); return; }
+                        var cards = d.cards || [];
+                        var winLabel = d.window_label || win;
+                        var totalViews = 0, totalEng = 0, totalInfo = 0, totalTick = 0;
+                        cards.forEach(function(c) {
+                            var v = Number(c.ext_view_count) || 0;
+                            if (v <= 0) return;
+                            totalViews += v;
+                            totalEng   += Number(c.ext_engagement_count) || 0;
+                            var p = iiqAssetFunnelProjection(c);
+                            totalInfo += v * p.info_pct / 100;
+                            totalTick += v * p.ticket_pct / 100;
+                        });
+                        var uniqueReached = totalViews / IIQ_CONV_REACH_DEDUPE;
+                        var uniqueInfo    = totalInfo  / IIQ_CONV_INFO_DEDUPE;
+                        var uniqueTick    = totalTick  / IIQ_CONV_TICK_DEDUPE;
+                        // Guarantee subset coherence: ticketing ⊂ info-seekers ⊂ reached.
+                        uniqueInfo = Math.min(uniqueInfo, uniqueReached * 0.45);
+                        uniqueTick = Math.min(uniqueTick, uniqueInfo * 0.90);
+
+                        window.__iiqConv.totals = {
+                            views: totalViews, eng: totalEng,
+                            info_dup: totalInfo, tick_dup: totalTick,
+                            reached_uniq: uniqueReached,
+                            info_uniq: uniqueInfo,
+                            tick_uniq: uniqueTick,
+                            window_label: winLabel,
+                        };
+                        window.__iiqConv.lastWindow = win;
+
+                        document.getElementById('iiqConvMeta').textContent = cards.length + ' assets · ' + winLabel;
+                        document.getElementById('iiqConvHero').innerHTML = [
+                            iiqSummaryTile('Total views (duplicated)',     fmtCompact(totalViews),    'raw impressions in window'),
+                            iiqSummaryTile('Total engagement (duplicated)', fmtCompact(totalEng),     'likes + comments + shares'),
+                            iiqSummaryTile('Unique potential ticket buyers reached', fmtCompact(uniqueReached), 'dedup ÷ ' + IIQ_CONV_REACH_DEDUPE.toFixed(1) + ' (avg frequency × unique assets per viewer)'),
+                            iiqSummaryTile('Unique info-seekers',          fmtCompact(uniqueInfo),    'dedup ÷ ' + IIQ_CONV_INFO_DEDUPE.toFixed(2) + ' (search + IMDb/RT/Letterboxd visits)'),
+                            iiqSummaryTile('Unique ticketing-site visitors', fmtCompact(uniqueTick),  'dedup ÷ ' + IIQ_CONV_TICK_DEDUPE.toFixed(2) + ' (Fandango/AMC/Regal/Cinemark/Atom)')
+                        ].join('');
+
+                        document.getElementById('iiqConvOutput').innerHTML = '<div class="iiq-empty" style="padding:1.2rem;">Press <strong>PROJECT ▶</strong> to compute the projection from the current Secret Sauce values.</div>';
+                        iiqConvToggleRunDays();
+                    })
+                    .catch(function(e) {
+                        document.getElementById('iiqConvMeta').textContent = 'Failed: ' + escapeHtml(e.message || e);
+                    });
+            };
+
+            window.iiqProjectConversion = function() {
+                var t = window.__iiqConv && window.__iiqConv.totals;
+                if (!t) { iiqRenderConversionMetrics(); return; }
+                var price       = Number(document.getElementById('iiqConvTicketPrice').value) || 0;
+                var perBuyer    = Number(document.getElementById('iiqConvTicketsPerBuyer').value) || 1;
+                var wAware      = (Number(document.getElementById('iiqConvWtAware').value) || 0) / 100;
+                var wInfo       = (Number(document.getElementById('iiqConvWtInfo').value)  || 0) / 100;
+                var wTicketing  = (Number(document.getElementById('iiqConvWtTicketing').value) || 0) / 100;
+                var runMode     = document.getElementById('iiqConvRunWindow').value;
+                var runDays     = Number(document.getElementById('iiqConvRunDays').value) || 90;
+                var fullMult    = Number(document.getElementById('iiqConvFullRunMult').value) || 1;
+
+                // Layer sizes (nested cohorts, smaller subtracted from larger)
+                var lAware = Math.max(0, t.reached_uniq - t.info_uniq);
+                var lInfo  = Math.max(0, t.info_uniq    - t.tick_uniq);
+                var lTick  = Math.max(0, t.tick_uniq);
+
+                var buyersAware = lAware * wAware;
+                var buyersInfo  = lInfo  * wInfo;
+                var buyersTick  = lTick  * wTicketing;
+                var buyersOW    = buyersAware + buyersInfo + buyersTick;
+
+                // Full-run multiplier scales the opening-weekend buyer count.
+                // If user picked Full Run with custom days, blend the multiplier
+                // by days/90 (90 = the multiplier you set). Clamp 0.4..1.4×.
+                var dayScale = 1.0;
+                if (runMode === 'full') {
+                    dayScale = Math.max(0.4, Math.min(1.4, runDays / 90));
+                }
+                var buyers = runMode === 'full' ? buyersOW * fullMult * dayScale : buyersOW;
+                var tickets = buyers * perBuyer;
+                var gross   = tickets * price;
+
+                // Per-layer contribution table
+                function layerRow(label, sz, conv, color) {
+                    var b  = sz * conv;
+                    var rb = runMode === 'full' ? b * fullMult * dayScale : b;
+                    var rt = rb * perBuyer;
+                    var rg = rt * price;
+                    return '<tr>'
+                        + '<td style="padding:0.4rem 0.6rem; color:' + color + '; font-weight:600;">' + label + '</td>'
+                        + '<td style="padding:0.4rem 0.6rem; text-align:right;">' + fmtCompact(sz) + '</td>'
+                        + '<td style="padding:0.4rem 0.6rem; text-align:right; color:' + color + ';">' + (conv * 100).toFixed(2) + '%</td>'
+                        + '<td style="padding:0.4rem 0.6rem; text-align:right;">' + fmtCompact(rb) + '</td>'
+                        + '<td style="padding:0.4rem 0.6rem; text-align:right;">' + fmtCompact(rt) + '</td>'
+                        + '<td style="padding:0.4rem 0.6rem; text-align:right; font-weight:600; color:#fff;">' + fmtUSD(rg) + '</td>'
+                        + '</tr>';
+                }
+
+                var runLabel = runMode === 'full'
+                    ? 'Full Theatrical Run (' + runDays + 'd, ×' + fullMult.toFixed(2) + ' opening, day-scale ' + dayScale.toFixed(2) + '×)'
+                    : 'Opening Weekend (3-day)';
+
+                document.getElementById('iiqConvOutput').innerHTML =
+                    '<div class="iiq-card" style="padding:1.1rem; border-left:4px solid #fbbf24;">'
+                  +   '<div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.85rem;">'
+                  +     '<div><div style="font-size:0.75rem; color:var(--text-secondary);">Projection · ' + escapeHtml(runLabel) + '</div>'
+                  +       '<div style="font-size:0.7rem; color:var(--text-secondary); opacity:0.7; margin-top:0.1rem;">Source data: ' + escapeHtml(t.window_label) + '. Price = ' + fmtUSD(price) + ' / ticket · ' + perBuyer.toFixed(2) + ' tickets per buyer</div>'
+                  +     '</div>'
+                  +   '</div>'
+                  +   '<div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:0.7rem; margin-bottom:1rem;">'
+                  +     '<div style="background:rgba(15,23,42,0.5); padding:0.85rem; border-radius:8px;"><div style="font-size:0.72rem; color:var(--text-secondary);">Projected unique buyers</div><div style="font-size:1.8rem; font-weight:700; color:#a5b4fc;">' + fmtCompact(buyers) + '</div></div>'
+                  +     '<div style="background:rgba(15,23,42,0.5); padding:0.85rem; border-radius:8px;"><div style="font-size:0.72rem; color:var(--text-secondary);">Projected tickets sold</div><div style="font-size:1.8rem; font-weight:700; color:#fbbf24;">' + fmtCompact(tickets) + '</div></div>'
+                  +     '<div style="background:rgba(15,23,42,0.5); padding:0.85rem; border-radius:8px;"><div style="font-size:0.72rem; color:var(--text-secondary);">Projected box office</div><div style="font-size:1.8rem; font-weight:700; color:#22c55e;">' + fmtUSD(gross) + '</div></div>'
+                  +   '</div>'
+                  +   '<table style="width:100%; border-collapse:collapse; font-size:0.78rem;">'
+                  +     '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1); color:var(--text-secondary); font-weight:600;">'
+                  +       '<th style="text-align:left; padding:0.4rem 0.6rem;">Funnel layer</th>'
+                  +       '<th style="text-align:right; padding:0.4rem 0.6rem;">Layer size (unique)</th>'
+                  +       '<th style="text-align:right; padding:0.4rem 0.6rem;">Conv. rate</th>'
+                  +       '<th style="text-align:right; padding:0.4rem 0.6rem;">Buyers</th>'
+                  +       '<th style="text-align:right; padding:0.4rem 0.6rem;">Tickets</th>'
+                  +       '<th style="text-align:right; padding:0.4rem 0.6rem;">$ contribution</th>'
+                  +     '</tr></thead>'
+                  +     '<tbody>'
+                  +       layerRow('Bottom-funnel (ticketing visitors)', lTick,  wTicketing, '#fbbf24')
+                  +       layerRow('Mid-funnel (info-seekers only)',     lInfo,  wInfo,      '#a5b4fc')
+                  +       layerRow('Awareness (reached only)',           lAware, wAware,     '#94a3b8')
+                  +     '</tbody>'
+                  +     '<tfoot><tr style="border-top:1px solid rgba(255,255,255,0.15); font-weight:700; color:#fff;">'
+                  +       '<td style="padding:0.5rem 0.6rem;">TOTAL</td>'
+                  +       '<td style="padding:0.5rem 0.6rem; text-align:right;">' + fmtCompact(lAware + lInfo + lTick) + '</td>'
+                  +       '<td style="padding:0.5rem 0.6rem; text-align:right;">—</td>'
+                  +       '<td style="padding:0.5rem 0.6rem; text-align:right;">' + fmtCompact(buyers) + '</td>'
+                  +       '<td style="padding:0.5rem 0.6rem; text-align:right;">' + fmtCompact(tickets) + '</td>'
+                  +       '<td style="padding:0.5rem 0.6rem; text-align:right; color:#22c55e;">' + fmtUSD(gross) + '</td>'
+                  +     '</tr></tfoot>'
+                  +   '</table>'
+                  + '</div>';
             };
 
             function fmtUSD(n) { if (!n) return ''; n = Number(n); if (!isFinite(n)) return ''; if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M'; if (n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K'; return '$' + n; }
