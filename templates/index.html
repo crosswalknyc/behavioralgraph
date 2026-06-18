@@ -21224,33 +21224,75 @@
                     html += '<div style="margin: 0 0 0.45rem; font-size:0.78rem; color: var(--text-secondary);">'
                          + 'High-intent signal breakdown for each comparable title \u2014 same 3 conversion paths and rates ' + escapeHtml(subj.display_name || 'subject') + ' uses above; per-comp shape derived from realized opening-weekend buyers'
                          + '</div>';
-                    html += '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap:0.65rem; margin-bottom:0.85rem;">';
-                    sortedCompsForSig.forEach(function(c) {
+                    // Consolidated matrix: rows = comp titles (sorted by
+                    // opening-weekend buyers desc), 3 columns of bars (one
+                    // per signal). Each column auto-scales to its OWN max
+                    // so the smaller signals (pre-sale, cast/talent) stay
+                    // visible even though deep trailer is ~20x larger.
+                    var SIG_ORDER = [
+                        { signal: 'Pre-sale ticketing-page engagement', conv_pct: 85, header: 'Pre-sale ticketing-page',  short: 'pre-sale' },
+                        { signal: 'Deep trailer engagement',            conv_pct: 25, header: 'Deep trailer',              short: 'trailer'  },
+                        { signal: 'Cast / talent social engagement',    conv_pct: 8,  header: 'Cast / talent social',      short: 'cast'     }
+                    ];
+                    var compRows = sortedCompsForSig.map(function(c) {
                         var modeled = iiqQ3ModelCompSignals(c);
-                        if (!modeled.length) return;
-                        var maxP = Math.max.apply(null, modeled.map(function(m){ return m.people; }).concat([1]));
-                        var totalBuyers = Number(c.opening_weekend_buyers)||0;
-                        html += '<div class="iiq-card" style="padding:0.85rem; border-left: 3px solid #a855f7;">';
-                        html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; margin-bottom:0.5rem;">';
-                        html +=     '<div style="min-width:0;">'
-                            +        '<div style="font-size:0.85rem; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(c.display_name) + '">' + escapeHtml(c.display_name) + '</div>'
-                            +        '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.1rem;">opened ' + escapeHtml(c.opening_date || '\u2014') + ' \u00b7 ' + fmtCompact(totalBuyers) + ' opening-weekend buyers</div>'
-                            +      '</div>';
+                        if (!modeled.length) return null;
+                        var bySig = {};
+                        modeled.forEach(function(m) { bySig[m.signal] = m; });
+                        return { comp: c, bySig: bySig };
+                    }).filter(function(r){ return r; });
+                    if (compRows.length) {
+                        var maxBySig = {};
+                        SIG_ORDER.forEach(function(s) {
+                            maxBySig[s.signal] = Math.max.apply(null, compRows.map(function(r){
+                                return Number(r.bySig[s.signal] && r.bySig[s.signal].people) || 0;
+                            }).concat([1]));
+                        });
+                        html += '<div class="iiq-card" style="padding:0.95rem 1rem; margin-bottom:0.85rem; border-left: 3px solid #a855f7;">';
+                        // Column header row
+                        html +=   '<div style="display:grid; grid-template-columns: minmax(170px, 1.2fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; padding:0 0 0.55rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.68rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">';
+                        html +=     '<div>Comparable title</div>';
+                        SIG_ORDER.forEach(function(s) {
+                            html += '<div>' + escapeHtml(s.header) + ' <span style="text-transform:none; letter-spacing:0; color: var(--text-secondary); opacity:0.65;">(' + s.conv_pct + '% conv)</span></div>';
+                        });
                         html +=   '</div>';
-                        html += modeled.map(function(m) {
-                            var pct = maxP > 0 ? Math.min(100, m.people / maxP * 100) : 0;
-                            return '<div style="display:grid; grid-template-columns: 1fr 60px; gap:0.5rem; align-items:center; padding:0.25rem 0;">'
-                                +    '<div>'
-                                +      '<div style="font-size:0.72rem; color:#e2e8f0; margin-bottom:0.18rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(m.signal) + '">' + escapeHtml(m.signal) + '</div>'
-                                +      '<div style="background: rgba(255,255,255,0.06); height: 12px; border-radius: 3px; overflow:hidden;"><div style="height:100%; width:' + pct.toFixed(1) + '%; background:#a855f7;"></div></div>'
-                                +      '<div style="font-size:0.62rem; color: var(--text-secondary); margin-top:0.18rem;">' + m.conversion_pct + '% of ' + fmtCompact(m.raw_engagement) + ' engagements</div>'
-                                +    '</div>'
-                                +    '<div style="text-align:right; font-size:0.85rem; font-weight:700; color:#c4b5fd;">' + fmtCompact(m.people) + '</div>'
-                                +  '</div>';
-                        }).join('');
+                        // One row per comp title
+                        compRows.forEach(function(r, idx) {
+                            var c = r.comp;
+                            var totalBuyers = Number(c.opening_weekend_buyers)||0;
+                            var rowBg = idx % 2 === 0 ? 'rgba(255,255,255,0.015)' : 'transparent';
+                            html += '<div style="display:grid; grid-template-columns: minmax(170px, 1.2fr) repeat(3, minmax(0, 1fr)); gap:0.85rem; align-items:center; padding:0.5rem 0.25rem; background:' + rowBg + '; border-radius:4px;">';
+                            // Title cell
+                            html +=   '<div style="min-width:0;">'
+                                +        '<div style="font-size:0.78rem; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(c.display_name) + '">' + escapeHtml(c.display_name) + '</div>'
+                                +        '<div style="font-size:0.62rem; color: var(--text-secondary); margin-top:0.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">opened ' + escapeHtml(c.opening_date || '\u2014') + ' \u00b7 ' + fmtCompact(totalBuyers) + ' OW buyers</div>'
+                                +      '</div>';
+                            // 3 signal cells
+                            SIG_ORDER.forEach(function(s) {
+                                var m = r.bySig[s.signal];
+                                if (!m) {
+                                    html += '<div style="font-size:0.7rem; color: var(--text-secondary);">\u2014</div>';
+                                    return;
+                                }
+                                var sigMax = maxBySig[s.signal] || 1;
+                                var pct = Math.min(100, m.people / sigMax * 100);
+                                html += '<div style="min-width:0;">'
+                                    +    '<div style="display:flex; align-items:center; gap:0.5rem;">'
+                                    +      '<div style="flex:1; min-width:0; background: rgba(255,255,255,0.06); height: 12px; border-radius: 3px; overflow:hidden;">'
+                                    +        '<div style="height:100%; width:' + pct.toFixed(1) + '%; background:#a855f7;"></div>'
+                                    +      '</div>'
+                                    +      '<div style="font-size:0.78rem; font-weight:700; color:#c4b5fd; white-space:nowrap;">' + fmtCompact(m.people) + '</div>'
+                                    +    '</div>'
+                                    +    '<div style="font-size:0.6rem; color: var(--text-secondary); margin-top:0.18rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">of ' + fmtCompact(m.raw_engagement) + ' engagements</div>'
+                                    +  '</div>';
+                            });
+                            html += '</div>';
+                        });
+                        html += '<div style="margin-top:0.6rem; font-size:0.62rem; color: var(--text-secondary); line-height:1.4;">'
+                             + 'Bar width is normalized within each column (each signal scales to its own max) so smaller signals stay visible alongside deep-trailer engagement, which is ~20x larger. Numbers on the right are the modeled people count for that (title, signal) pair.'
+                             + '</div>';
                         html += '</div>';
-                    });
-                    html += '</div>';
+                    }
                 }
 
                 // === COMPS card: opening-weekend buyers (comps only, no subject) ===
