@@ -15961,7 +15961,7 @@
                                         <small style="color: var(--text-secondary); font-size: 0.7rem;">Cumulative US viewers (Nielsen, Samba TV, Luminate, Parrot Analytics). Same lookup engine SubscriberIQ uses for show-viewership validation.</small>
                                     </div>
 
-                                    <small id="jiqTypeHelp" style="display: none; margin-top: 0.6rem; color: var(--text-secondary); font-size: 0.7rem;"><strong>What this turns on:</strong> the dashboard will show a Panel / Modeled / Scaled / Blended toggle. <em>Panel</em> = raw counts our panel saw. <em>Scaled</em> = panel × (implied audience / panel converters) so reach matches reality. <em>Modeled</em> = AI-estimated journey for a target of this scale (used when the panel is too sparse). <em>Blended</em> (default) shows real metrics where the panel cohort is &ge;25 converters and modeled where it&apos;s sparser.</small>
+                                    <small id="jiqTypeHelp" style="display: none; margin-top: 0.6rem; color: var(--text-secondary); font-size: 0.7rem;"><strong>What this turns on:</strong> the dashboard will show a Panel / Estimated / Scaled / Blended toggle. <em>Panel</em> = raw counts our panel saw. <em>Scaled</em> = panel × (implied audience / panel converters) so reach matches reality. <em>Estimated</em> = AI-derived journey for a target of this scale (used when the panel is too sparse). <em>Blended</em> (default) shows real metrics where the panel cohort is &ge;25 converters and estimated where it&apos;s sparser.</small>
                                 </div>
                                 <div id="jiqConvModeBlock" style="display: none; margin-bottom: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--accent-primary); border-radius: 8px; background: rgba(99,102,241,0.05);">
                                     <div style="margin-bottom: 0.75rem;">
@@ -16506,11 +16506,11 @@
                                          CSV finishes parsing. Hidden by default; revealed once
                                          data is available. -->
                                     <div id="audienceShareBoxes" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
-                                        <div class="asb-box" data-channel="social" title="Social Media engagement share"><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">—</span></div>
-                                        <div class="asb-box" data-channel="search" title="Search Engine / AI engagement share"><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">—</span></div>
-                                        <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent, influencer, and sports-team profiles (no brand-owned channel)."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">—</span></div>
+                                        <div class="asb-box" data-channel="social" title="Engaged with the subject on a social platform (YouTube, IG, TikTok, FB, Twitter)."><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">—</span></div>
+                                        <div class="asb-box" data-channel="search" title="Discovered or looked up the subject via Google / AI search."><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">—</span></div>
+                                        <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent and influencer profiles (no brand-owned channel)."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">—</span></div>
                                         <div class="asb-box" data-channel="retail" title="Retail / eCommerce engagement share"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">—</span></div>
-                                        <div class="asb-box" data-channel="media"  title="Media (streaming, movies, music, news, games, sports) engagement share"><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">—</span></div>
+                                        <div class="asb-box" data-channel="media"  title="Engaged with the subject's content via traditional / third-party media (TV, streaming, films, music, news, podcasts)."><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">—</span></div>
                                     </div>
                                 </div>
                             </div>
@@ -19551,7 +19551,7 @@
                 <details id="iiqConvSecretSauce" style="background: rgba(15,23,42,0.55); border:1px solid rgba(245,158,11,0.35); border-radius:8px; padding:0.6rem 0.85rem; margin-bottom:0.85rem;">
                     <summary style="cursor:pointer; font-size:0.85rem; font-weight:700; color:#fbbf24;">🧪 Secret Sauce &nbsp;<span style="font-weight:400; font-size:0.72rem; color:var(--text-secondary);">(conversion weights — calibrated to GOAT opening weekend $35.5M)</span></summary>
                     <div style="font-size:0.72rem; color: var(--text-secondary); margin: 0.55rem 0 0.7rem;">
-                        Each funnel layer converts at its own rate. Layers are <strong>nested</strong> (ticketing visitors ⊂ info-seekers ⊂ reached), so the model assigns each person to the deepest layer they reached and applies that layer's conversion rate. No double-counting.
+                        Each funnel layer converts at its own rate. Layers are <strong>nested</strong> (ticketing visitors ⊂ info-seekers ⊂ reached), so each person is assigned to the deepest layer they reached and that layer's conversion rate is applied. No double-counting.
                     </div>
                     <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 0.55rem;">
                         <div>
@@ -20035,9 +20035,9 @@
                     var descriptor = descriptorFromCard(c);
                     var sourceTip = srcLabel(c.source);
                     var exp = iiqAudienceExposureProjection(c);
-                    var reachTip  = 'Modeled \u2014 % of this cohort who saw ANY piece of campaign content (any asset, any channel) over the campaign-to-date window. Calibrated from tentpole family-animation reach benchmarks; tilted up for cohorts with higher overlap with the title\'s audience profile.';
-                    var uniqueTip = 'Modeled \u2014 among reached cohort members, the average number of UNIQUE campaign assets they encountered (deduped across views). Wider unique counts for talent / fan cohorts (organic share gravity exposes them to more varied content) than for paid-targeted demo cohorts (which see a narrower paid rotation).';
-                    var totalTip  = 'Modeled \u2014 among reached cohort members, the average TOTAL impressions (unique pieces \u00d7 frequency per piece). Counts re-watches and repeat exposure. Frequency per unique asset clusters at 1.8\u20132.6\u00d7 for paid-heavy campaigns of this scale.';
+                    var reachTip  = 'Projected % of this cohort who saw ANY piece of campaign content (any asset, any channel) over the campaign-to-date window. Calibrated from tentpole family-animation reach benchmarks; tilted up for cohorts with higher overlap with the title\'s audience profile.';
+                    var uniqueTip = 'Projected average number of UNIQUE campaign assets reached cohort members encountered (deduped across views). Wider unique counts for talent / fan cohorts (organic share gravity exposes them to more varied content) than for paid-targeted demo cohorts (which see a narrower paid rotation).';
+                    var totalTip  = 'Projected average TOTAL impressions among reached cohort members (unique pieces \u00d7 frequency per piece). Counts re-watches and repeat exposure. Frequency per unique asset clusters at 1.8\u20132.6\u00d7 for paid-heavy campaigns of this scale.';
                     return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';" title="' + escapeHtml(sourceTip) + (c.source ? ': ' + escapeHtml(c.source) : '') + '">'
                         + '<div class="iiq-card-title">' + escapeHtml(c.display || c.subject_key) + '</div>'
                         + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '—') + '</div>'
@@ -20803,8 +20803,8 @@
                             var proj = c._proj || (v > 0 ? iiqAssetFunnelProjection(c) : null);
                             var infoSeekers = proj ? Math.round(v * proj.info_pct / 100) : 0;
                             var ticketVisits = proj ? Math.round(v * proj.ticket_pct / 100) : 0;
-                            var infoTip = 'Modeled \u2014 % of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people. Calibrated from post-trailer Google Trends + IMDB Pro spike benchmarks for family-animation tentpoles; tilted per asset by phase, channel, paid/organic, and engagement rate.';
-                            var tkTip   = 'Modeled \u2014 % of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people. Calibrated from NATO + Comscore ticketing-page conversion norms; peaks during opening-weekend window (T-0), ramps with tickets-on-sale (1/21), near zero after the 5/15 streaming launch.';
+                            var infoTip = 'Projected % of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people. Calibrated from post-trailer Google Trends + IMDB Pro spike benchmarks for family-animation tentpoles; tilted per asset by phase, channel, paid/organic, and engagement rate.';
+                            var tkTip   = 'Projected % of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people. Calibrated from NATO + Comscore ticketing-page conversion norms; peaks during opening-weekend window (T-0), ramps with tickets-on-sale (1/21), near zero after the 5/15 streaming launch.';
                             return '<div class="iiq-card" data-asset-id="' + escapeHtml(c.asset_id || '') + '" style="border-left: 3px solid ' + edgeColor + '; transition: box-shadow 0.4s ease, transform 0.2s ease;">'
                                 + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '—') + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
@@ -21192,8 +21192,8 @@
                     + iiqSummaryTile('Categories ranked', String(groupList.length), 'asset_type \u00d7 paid/organic')
                     + iiqSummaryTile('Total assets (YTD)', String(grandAssets), '')
                     + iiqSummaryTile('Total YTD views', fmtCompact(grandViews), 'sum of ext_view_count across all assets')
-                    + iiqSummaryTile('Blended info-seek', blendedInfo.toFixed(1) + '%', fmtCompact(grandInfo) + ' viewers \u2014 same model as Assets page')
-                    + iiqSummaryTile('Blended ticketing', blendedTk.toFixed(1) + '%', fmtCompact(grandTk) + ' viewers \u2014 same model as Assets page')
+                    + iiqSummaryTile('Blended info-seek', blendedInfo.toFixed(1) + '%', fmtCompact(grandInfo) + ' viewers \u2014 matches Assets page')
+                    + iiqSummaryTile('Blended ticketing', blendedTk.toFixed(1) + '%', fmtCompact(grandTk) + ' viewers \u2014 matches Assets page')
                     + '</div>';
 
                 var sortLabelMap = { share_pct: 'share of YTD views', info_pct: 'info-seek %', ticket_pct: 'ticketing %', label: 'category name' };
@@ -21235,7 +21235,7 @@
                         +   '</div>';
                 });
 
-                html += '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.6rem; line-height:1.5;">Reach (purple) = each category\'s share of total YTD views across all assets. Mid-funnel (indigo) and bottom-funnel (amber) are view-weighted means of per-asset modeled rates, identical to the values shown on the In-Flight Assets page. Bars within a column are scaled to that column\'s maximum so you can scan vertically: a category long in purple but short in amber is high reach / low ticketing intent, and vice versa.</div>';
+                html += '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.6rem; line-height:1.5;">Reach (purple) = each category\'s share of total YTD views across all assets. Mid-funnel (indigo) and bottom-funnel (amber) are view-weighted means of per-asset projection rates, identical to the values shown on the In-Flight Assets page. Bars within a column are scaled to that column\'s maximum so you can scan vertically: a category long in purple but short in amber is high reach / low ticketing intent, and vice versa.</div>';
                 html += '</div>';
                 return html;
             }
@@ -21372,7 +21372,7 @@
                 } else {
                     funnelCardBody = _q2WhoWonRow('Info-seekers', agg.paid.info_seekers, agg.organic.info_seekers)
                                    + _q2WhoWonRow('Ticketing visits', agg.paid.ticket_visits, agg.organic.ticket_visits)
-                                   + '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.45rem;">Modeled with the same iiqAssetFunnelProjection() helper used by the Assets cards, Performance Q1 rollup, and asset detail modal \u2014 numbers ladder up.</div>';
+                                   + '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.45rem;">Uses the same projection helper as the Assets cards, Performance Q1 rollup, and asset detail view \u2014 numbers ladder up.</div>';
                 }
 
                 // Single 3-column row: donut (share) + funnel comparison (who-won)
@@ -21884,14 +21884,14 @@
                     + iiqSummaryTile('Cast members surfaced', String(rows.length), 'in tagged campaign assets')
                     + iiqSummaryTile('Talent-driven views', fmtCompact(totalV), 'across all cast-tagged assets')
                     + iiqSummaryTile('Top contributor', top ? top.talent : '—', top ? fmtCompact(top.views) + ' views · ' + top.asset_count + ' assets' : '')
-                    + iiqSummaryTile('Info-seekers', fmtCompact(totalInfo), usingAssets ? blendedInfo.toFixed(1) + '% of viewers — same model as Assets page' : 'requires asset feed')
-                    + iiqSummaryTile('Ticketing visits', fmtCompact(totalTk),   usingAssets ? blendedTk.toFixed(1)   + '% of viewers — same model as Assets page' : 'requires asset feed')
+                    + iiqSummaryTile('Info-seekers', fmtCompact(totalInfo), usingAssets ? blendedInfo.toFixed(1) + '% of viewers — matches Assets page' : 'requires asset feed')
+                    + iiqSummaryTile('Ticketing visits', fmtCompact(totalTk),   usingAssets ? blendedTk.toFixed(1)   + '% of viewers — matches Assets page' : 'requires asset feed')
                     + '</div>';
 
                 html += '<div class="iiq-card" style="padding:0.85rem;">';
                 html += '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.55rem;">';
                 html +=   '<div style="font-size:0.78rem; color: var(--text-secondary);">Cast members ranked by total measured views, with funnel-stage rollup</div>';
-                html +=   '<div style="font-size:0.7rem; color: var(--text-secondary);" title="View-weighted means of the per-asset modeled projections shown on the In-Flight Assets page. An asset starring multiple cast members contributes to each of their rollups.">numbers match per-asset values on Assets page</div>';
+                html +=   '<div style="font-size:0.7rem; color: var(--text-secondary);" title="View-weighted means of the per-asset projections shown on the In-Flight Assets page. An asset starring multiple cast members contributes to each of their rollups.">numbers match per-asset values on Assets page</div>';
                 html += '</div>';
                 function _q4Hdr(key, label, baseColor, align, tip) {
                     var active = (sortKey === key);
@@ -22125,7 +22125,7 @@
                             rightLabel:     'Daily people / searches',
                             rightFormatter: fmtCompact,
                           });
-                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.5rem; line-height:1.5;">Info-seekers and ticketing visits are absolute counts (daily trailer views \u00d7 the per-viewer funnel rate from the In-Flight Assets model), so they collapse to zero on days with no trailer activity and spike alongside the trailer drops. Pre-sales open Jan 21, opening weekend lands Feb 13\u201316, then both lines decay.</div>';
+                html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.5rem; line-height:1.5;">Info-seekers and ticketing visits are absolute counts (daily trailer views \u00d7 the per-viewer funnel rate from the In-Flight Assets page), so they collapse to zero on days with no trailer activity and spike alongside the trailer drops. Pre-sales open Jan 21, opening weekend lands Feb 13\u201316, then both lines decay.</div>';
                 html +=   '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.35rem; line-height:1.5;">Panel-derived daily search counts for streaming-availability queries. Near zero during the theatrical campaign because audiences are focused on seeing it in theatres. Starts climbing roughly 4\u20136 weeks before the streaming launch as speculation builds, spikes around the 5/15 launch, then settles into a 2\u20133 month elevated tail of catalog-discovery searches.</div>';
                 html += '</div>';
 
@@ -24336,7 +24336,7 @@
                             <li><strong>Three-stage funnel</strong> reading left to right: <em>Confirmed Pre-Sales</em> (gray) → <em>Opening Weekend</em> (lime) → <em>Full Run</em> (cyan).</li>
                             <li><strong>Confirmed Pre-Sales</strong> — actual transactions counted across all online ticket channels as of the "as of" date. Sub-text shows Fandango's share of online presales.</li>
                             <li><strong>Confirmed Tickets</strong> = purchases × tickets/basket (typically 2 for family movies); <strong>Confirmed Revenue</strong> = tickets × metro avg ticket price (~$15 for online/Fandango-skewed buyers).</li>
-                            <li><strong>Opening Weekend</strong> tiles — projected 3-day (Fri–Sun) gross & tickets; the sub-text shows the modeled <em>low–high band</em>; the big number is the midpoint.</li>
+                            <li><strong>Opening Weekend</strong> tiles — projected 3-day (Fri–Sun) gross & tickets; the sub-text shows the projected <em>low–high band</em>; the big number is the midpoint.</li>
                             <li><strong>Full Run</strong> tile — entire theatrical run gross (= opening × <strong>3.0× sleeper-comedy multiplier</strong>, the inverse of the 34% front-loading rule).</li>
                             <li><strong>What to look for:</strong> if confirmed is materially bigger than expected for T-6 days that's upside signal; smaller signals risk.</li>
                         </ul>
@@ -31629,7 +31629,7 @@
                     step3Panelists  = Math.round(step2Panelists * 0.55);
                     step2Color      = BLUE_IQ_DEST_PALETTE[step2.destination] || '#64748b';
                     sourceBadge = step2._fallback
-                        ? ' <span class="bq-path-fallback" title="Issue-specific journey data was thin and no agent-researched path was returned; used the slice-wide dominant follow-up.">modeled</span>'
+                        ? ' <span class="bq-path-fallback" title="Issue-specific journey data was thin and no agent-researched path was returned; used the slice-wide dominant follow-up.">estimated</span>'
                         : '';
                 }
 
@@ -31668,11 +31668,11 @@
 
             var footer;
             if (agentRowCount > 0 && agentRowCount === Math.min(issueBuckets.length, 8)) {
-                footer = 'All rows are agent-researched: the discovery agent (gpt-4o + web search) modeled each issue\'s typical voter path from public sources (Pew, Knight Foundation, Brennan Center, eMarketer). Hover a row for the rationale.';
+                footer = 'All rows are agent-researched: the discovery agent (gpt-4o + web search) derived each issue\'s typical voter path from public sources (Pew, Knight Foundation, Brennan Center, eMarketer). Hover a row for the rationale.';
             } else if (agentRowCount > 0) {
-                footer = agentRowCount + ' of ' + Math.min(issueBuckets.length, 8) + ' rows are agent-researched (hover for rationale). The remaining rows fall back to panel-measured destinations + modeled follow-up.';
+                footer = agentRowCount + ' of ' + Math.min(issueBuckets.length, 8) + ' rows are agent-researched (hover for rationale). The remaining rows fall back to panel-measured destinations + estimated follow-up.';
             } else {
-                footer = 'Steps 1\u20132 are panel-measured. Step 3 is modeled from JIQ click-through norms (\u00d70.55 attenuation). A <span class="bq-path-fallback">modeled</span> badge means issue-specific journey data was thin.';
+                footer = 'Steps 1\u20132 are panel-measured. Step 3 is derived from JIQ click-through norms (\u00d70.55 attenuation). An <span class="bq-path-fallback">estimated</span> badge means issue-specific journey data was thin.';
             }
 
             return '<div class="bq-path-table">' + rows + '</div>'
@@ -39361,11 +39361,11 @@
             if (toggleEl) toggleEl.style.display = hasMovieViews ? 'flex' : 'none';
             if (btnsEl && hasMovieViews) {
                 var views = [
-                    { id: 'blended',  label: 'Blended', help: 'Real where N≥25, modeled where sparse (default)' },
+                    { id: 'blended',  label: 'Blended', help: 'Real where N≥25, estimated where sparse (default)' },
                     { id: 'panel',    label: 'Panel',   help: 'Raw panel observation' },
                 ];
                 if (fullRun.scaled_view)  views.push({ id: 'scaled',  label: 'Scaled to BO', help: 'Panel × (implied audience / panel converters)' });
-                if (fullRun.modeled_view) views.push({ id: 'modeled', label: 'Modeled',     help: 'Claude estimate sized to implied audience' });
+                if (fullRun.modeled_view) views.push({ id: 'modeled', label: 'Estimated',   help: 'Claude estimate sized to implied audience' });
                 btnsEl.innerHTML = views.map(function(v) {
                     var active = (v.id === window._jiqCurrentView);
                     var bg = active ? 'var(--accent-primary)' : 'var(--bg-secondary)';
@@ -39518,7 +39518,7 @@
                       +   '<li><strong>Confirmed Viewers</strong> — unique US viewers measured by the streamer / panel as of the "as of" date. Sub-text shows the episode the show is currently on.</li>'
                       +   '<li><strong>Confirmed Watch Hours</strong> = viewers × avg minutes/viewer ÷ 60. The streaming-era revenue proxy.</li>'
                       +   '<li><strong>Repeat Viewers</strong> — confirmed viewers who watched 5+ episodes (binge / loyal cohort).</li>'
-                      +   '<li><strong>Premiere-Week Viewers</strong> tile — projected unique viewers in the first 7 days of the show\'s run; sub-text shows the modeled <em>low–high band</em>.</li>'
+                      +   '<li><strong>Premiere-Week Viewers</strong> tile — projected unique viewers in the first 7 days of the show\'s run; sub-text shows the projected <em>low–high band</em>.</li>'
                       +   '<li><strong>30-Day Unique Viewers</strong> tile — projected total unique US viewers in the first 30 days post-premiere; the streaming analog of "Opening Weekend Box Office" for a TV show.</li>'
                       +   '<li><strong>Total Watch Hours (30-day)</strong> — viewers × avg minutes ÷ 60 over the same 30-day window.</li>'
                       +   '<li><strong>Full Lifecycle Viewers</strong> — 30-day + 90-day post-finale tail. Streaming shows accumulate viewers long after release.</li>'
@@ -39952,7 +39952,7 @@
                   +       '<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); font-weight:600; margin-bottom:0.35rem;">The math (mid-point)</div>'
                   +       '<div style="' + rowStyle + '">'
                   +         '<div><div style="' + lblStyle + '">Projected OW tickets</div>'
-                  +           '<div style="' + subStyle + '">comp-anchored sleeper-comedy model · range ' + owLowM + '–' + owHighM + '</div></div>'
+                  +           '<div style="' + subStyle + '">comp-anchored sleeper-comedy projection · range ' + owLowM + '–' + owHighM + '</div></div>'
                   +         '<div style="' + numStyle + '">' + (owMid != null ? fmt(owMid) : '—') + '</div>'
                   +       '</div>'
                   +       '<div style="' + rowStyle + ' border-top:1px dashed var(--border-color);">'
@@ -41441,7 +41441,7 @@
                     ? '🎯 Steal-Share Cohorts — where ' + _jiqEsc(brandAh) + ' can win'
                     : '🎯 Steal-Share Cohorts — addressable banking-research audiences')
                 : (isTvAh
-                    ? '🎯 Audience Hypothesis — modeled viewer cohorts'
+                    ? '🎯 Audience Hypothesis — estimated viewer cohorts'
                     : '🎯 Cohorts with Strong Intent Signal');
             if (howAh && isBkAh) howAh.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
@@ -41454,14 +41454,14 @@
               + '</ul>';
             if (howAh && isTvAh && !isBkAh) howAh.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
-              +   '<li><strong>Each card sizes one modeled viewer cohort.</strong> <em>This is the predicted audience composition, not Nielsen-measured;</em> when public measurement becomes available or a Crosswalk panel pull is run, it replaces these estimates.</li>'
+              +   '<li><strong>Each card sizes one estimated viewer cohort.</strong> <em>This is the predicted audience composition, not Nielsen-measured;</em> when public measurement becomes available or a Crosswalk panel pull is run, it replaces these estimates.</li>'
               +   '<li><strong>% chip (right of each row):</strong> share of <em>potential consumers</em> this cohort represents — i.e. cohort size as a % of US adults (or the active addressable base). Use it to size the prize before drilling in.</li>'
               +   '<li><strong>Cards are collapsed by default.</strong> Click any row to expand intent index, viewer tiles, top engagement surfaces, DMA concentration, and the cohort note.</li>'
               +   '<li><strong>Intent index (center, big number):</strong> e.g. <em>4.5×</em> = this cohort is projected to convert to viewers at 4.5 times the gen-pop streaming baseline.</li>'
               +   '<li><strong>First-View / Total Viewers</strong> (lime / cyan): est. unique viewers from this cohort over premiere-week and the full 30-day window.</li>'
               +   '<li><strong>Top engagement surfaces:</strong> % of cohort touching each platform/property. Mini horizontal bars.</li>'
               +   '<li><strong>DMA concentration:</strong> top markets where the cohort over-indexes vs national avg.</li>'
-              +   '<li><strong>Streaming vs linear note:</strong> the modeled streaming audience for this title skews materially younger and more mobile-heavy than its linear / syndicated comp — these cohorts capture that delta explicitly.</li>'
+              +   '<li><strong>Streaming vs linear note:</strong> the projected streaming audience for this title skews materially younger and more mobile-heavy than its linear / syndicated comp — these cohorts capture that delta explicitly.</li>'
               + '</ul>';
 
             var subEl  = document.getElementById('jiqAudienceHypSubtitle');
@@ -41469,7 +41469,7 @@
             if (subEl) subEl.innerHTML = isBkAh
                 ? ('Sizing 5 banking-research cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is application-rate lift vs. the gen-pop researcher baseline. Each card also shows the cohort\'s <strong>digital-vs-traditional opening split</strong> so you can see at-a-glance where the steal-share already exists.')
                 : (isTvAh
-                    ? 'Modeled viewer cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is projected viewer-conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(2) + '% gen-pop 30-day streaming baseline. Predicted, not measured.'
+                    ? 'Estimated viewer cohorts against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is projected viewer-conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(2) + '% gen-pop 30-day streaming baseline. Predicted, not measured.'
                     : 'Testing client-stated audience theses against a <strong>' + _jiqFmt(ah.baseline_size) + '</strong> ' + _jiqEsc(ah.baseline_label || 'baseline') + '. Each cohort\'s <strong>intent index</strong> is conversion lift vs. the ~' + (ah.baseline_conversion_pct || 0.5).toFixed(1) + '% gen-pop opening-weekend baseline.');
             if (metaEl) metaEl.textContent = isBkAh
                 ? (ah.hypotheses.length + ' cohorts · ~' + _jiqFmt(ah.baseline_opening_buyers || 0) + ' baseline new-account opens')
@@ -41487,7 +41487,7 @@
                 // ── Expand-all / Collapse-all controls above the stack ──
                 var hypControls = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:0.5rem;flex-wrap:wrap;">'
                     + '<div style="font-size:0.72rem;color:var(--text-secondary);">'
-                    +   'Each row is one modeled cohort. % chip = share of potential consumers represented. Click any row to expand for engagement surfaces, DMA concentration, and the cohort note.'
+                    +   'Each row is one estimated cohort. % chip = share of potential consumers represented. Click any row to expand for engagement surfaces, DMA concentration, and the cohort note.'
                     + '</div>'
                     + '<div style="display:flex;gap:6px;">'
                     +   '<button id="jiqHypExpandAll" type="button" style="background:var(--bg-secondary);border:1px solid var(--border-color);color:var(--text-primary);padding:5px 11px;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;">Expand all</button>'
@@ -41716,7 +41716,7 @@
             if (titleAn) titleAn.innerHTML = isBkAn
                 ? '📐 Researcher Sizing — US researchers → applicants'
                 : (isTvAn
-                    ? '📐 Viewer Sizing — modeled US engagers → unique viewers'
+                    ? '📐 Viewer Sizing — estimated US engagers → unique viewers'
                     : '📐 Audience Sizing');
             if (funHead) funHead.textContent = isBkAn
                 ? 'Conversion Funnel to New-Account Open'
@@ -41744,7 +41744,7 @@
                     : 'How they convert to tickets');
             if (howAn && isTvAn) howAn.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
-              +   '<li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source the modeled audience overlaps with (genre-comp viewers, format-comp engagers, talent-driven halo audiences, adjacent franchise fans, etc.). Bar = engager range (low–high).</li>'
+              +   '<li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source the projected audience overlaps with (genre-comp viewers, format-comp engagers, talent-driven halo audiences, adjacent franchise fans, etc.). Bar = engager range (low–high).</li>'
               +   '<li><strong>Gross vs Deduplicated tiles:</strong> gross sums all layers (with overlap); dedup = true addressable engager base after removing people who appear in multiple layers. The lime-bordered dedup tile is the answer.</li>'
               +   '<li><strong>Conversion Funnel (stages):</strong> narrows from total engagers → platform-subscribing high-intent → format / genre ready → <em>30-day unique viewers</em> (the streaming analog of "opening-weekend tickets") → premiere-week viewers → full-lifecycle viewers (30-day + 90-day tail) → total watch hours.</li>'
               +   '<li><strong>Methodology note:</strong> follows the same engager-funnel pattern Subscriber IQ uses for streaming viewership — public anchors only, then Crosswalk panel pull replaces with measured numbers.</li>'
@@ -41767,9 +41767,9 @@
             if (sub) sub.textContent = an.methodology || '';
             var meta = document.getElementById('jiqAnchorsMeta');
             if (meta) meta.textContent = isBkAn
-                ? ((metaAn.start_date || '') + ' → ' + (metaAn.end_date || '') + ' · US adults actively researching banks · modeled')
+                ? ((metaAn.start_date || '') + ' → ' + (metaAn.end_date || '') + ' · US adults actively researching banks · estimated')
                 : (isTvAn
-                    ? 'trailing 12 months · US digital engagers · modeled (no public Nielsen yet)'
+                    ? 'trailing 12 months · US digital engagers · estimated (no public Nielsen yet)'
                     : 'trailing 12 months · US digital engagers');
 
             // ── L1-L6 layer bars (each layer = horizontal bar, length = high engager count)
@@ -62364,51 +62364,64 @@
         // ===================================================================
         // Five colored boxes that sit next to the "Data Cuts" button on the
         // Profile IQ dashboard. They show the breakdown of audience digital
-        // engagement across the 5 Crosswalk Engager touchpoints, summing to
-        // 100%. Mapping aligns with the Crosswalk Audience Vetting Framework.
+        // engagement WITH THE SUBJECT, summing to 100%.
         //
-        // Algorithm (Strategy D — archetype-anchored + data nudge, picked
-        // 2026-06-18 over pure max-BP-per-category because that strategy
-        // produced wildly archetype-wrong results on profiles with sparse
-        // category data: Mark Rober (a YouTube creator) showed up as 85%
-        // retail because his SEARCH ENGINE / SOCIAL MEDIA rows were all 0
-        // while his BANKING / CREDIT / TECH rows had inflated baseline
-        // values, even though the audience that engages with him is
-        // overwhelmingly search-driven).
+        // Box definitions (clarified 2026-06-18):
+        //   SOCIAL — engaged with the subject on a social platform (YouTube
+        //            counts as SOCIAL, ditto IG / TikTok / FB / Twitter).
+        //            For influencers this is the PRIMARY channel.
+        //   SEARCH — discovered or looked up the subject via Google / AI
+        //            search. Secondary for most subjects.
+        //   OWNED  — went directly to the subject's own .com / app. Huge for
+        //            brands (login, account, ecommerce). N/A for talent /
+        //            influencer / sports-team (no brand-owned channel).
+        //   RETAIL — bought a product FROM the subject (their merch, their
+        //            brand's products, their service signup). For Target
+        //            this IS the brand. For Mark Rober this is Crunchlabs.
+        //            For Reba this is tour merch. NOT general-audience
+        //            "do they shop at Best Buy" behavior.
+        //   MEDIA  — engaged with the subject's content via traditional /
+        //            third-party media (TV, streaming series, films, music
+        //            on Spotify, news articles, podcasts).
         //
-        // User rule 2026-06-18: "if it is a retail brand things like retail
-        // and owned and operated would be big, if it's an influencer search
-        // would be huge, talent would be social and media, etc. basically
-        // it's saying the breakdown of how people digitally engage with
-        // this person online."
+        // Algorithm (Strategy D2 — archetype-anchored, data nudge gated on
+        // signal richness — picked 2026-06-18 after Strategy D over-nudged
+        // Mark Rober's RETAIL to 26% by pulling on his audience's general
+        // shopping signals; under the corrected RETAIL definition those
+        // signals don't measure "bought from Mark Rober" so the nudge was
+        // wrong-headed):
         //
-        // Pipeline:
         //   1. Detect ARCHETYPE from BRAND CATEGORY (CREATOR/INFLUENCER,
         //      TALENT, SPORTS_TEAM, RETAIL_BRAND, SERVICE_BRAND,
         //      MEDIA_BRAND, SEARCH_BRAND, SOCIAL_BRAND, TRAVEL_BRAND, or
         //      GENERIC fallback).
         //   2. Look up the archetype's base 5-bucket distribution (sums to
         //      100). These templates encode the user's general-rule — e.g.
-        //      INFLUENCER = search-heavy (42%), RETAIL_BRAND = retail/owned
-        //      heavy (42 + 24%), TALENT = media-heavy (50%) + social (22%).
-        //   3. Compute per-bucket data signals from the actual profile
-        //      (max-BP per behavioral category, summed within bucket).
-        //      Normalize to a 4-bucket data distribution.
-        //   4. Blend 75% archetype + 25% data on the four non-owned buckets,
-        //      so the boxes still REFLECT the subject's specific data
-        //      patterns but the archetype anchors when data is sparse.
-        //   5. Owned is taken directly from the archetype (no data nudge,
-        //      because there's no clean "owned" signal in the panel
-        //      categories — it represents the share of digital engagement
-        //      that lands on the brand's own .com/app, which the panel
-        //      doesn't separately tag).
-        //   6. Final pass: re-normalize all 5 buckets to sum to 100.
-        //   7. For TALENT / INFLUENCER / SPORTS_TEAM archetypes, Owned is
-        //      forced to 0 and rendered as "—" (these subjects don't have
-        //      a brand-owned channel the way commerce brands do; the
-        //      remaining 4 buckets normalize to 100).
+        //      INFLUENCER = social-heavy (55), TALENT = media-heavy (50) +
+        //      social (28), RETAIL_BRAND = retail (44) + owned (22).
+        //   3. Compute per-bucket data signals (max-BP per category, summed
+        //      within bucket). Count how many of the four non-owned buckets
+        //      have a non-trivial signal (>=5% max BP).
+        //   4. ONLY blend data when 3+ buckets have signals (rich profile).
+        //      For sparse profiles (most talent / influencer files) use
+        //      pure archetype — the per-category max-BPs measure general
+        //      audience behavior, not subject-specific engagement, so they
+        //      shouldn't override the archetype anchor.
+        //   5. When blending, weight is 80% archetype + 20% data on the
+        //      four non-owned buckets, scaled to (100 - owned).
+        //   6. Owned is always pulled directly from the archetype (no data
+        //      nudge — no clean panel signal exists for "engagement that
+        //      landed on the subject's own .com/app").
+        //   7. Final pass: re-normalize all 5 buckets to sum to 100.
+        //   8. For TALENT and INFLUENCER archetypes, Owned is forced to 0
+        //      and rendered as "—" (no meaningful brand-owned channel).
+        //      Sports teams ARE shown — their team .coms and apps
+        //      (tickets, scores) are real owned touchpoints.
         const _AUDIENCE_SHARE_BUCKETS = {
-            social: new Set(['SOCIAL MEDIA']),
+            // SOCIAL — direct social-platform engagement. CREATOR/INFLUENCER
+            // row category lands here because creator engagement is overwhelmingly
+            // via YouTube / IG / TikTok (all social-native).
+            social: new Set(['SOCIAL MEDIA', 'CREATOR/INFLUENCER']),
             search: new Set(['SEARCH ENGINE/AI', 'SEARCH ENGINE', 'SEARCH']),
             retail: new Set([
                 'QSR', 'RETAIL', 'APPAREL/FOOTWEAR', 'GROCERY', 'CPG',
@@ -62457,25 +62470,50 @@
         // to 100). Each row encodes the prior expectation for how digital
         // engagement with that kind of subject is split across the 5
         // Crosswalk Engager touchpoints, BEFORE any data nudge is applied.
-        // Tuned to the user's general rule (2026-06-18) and Crosswalk
-        // panel-reality numbers — see PROFILE_AUDIT_RECIPE.md Rule #3 and
-        // the Crosswalk Audience Vetting Framework.
+        //
+        // Tuned to the user's general rule (2026-06-18) and the corrected
+        // RETAIL definition ("bought a product FROM the subject"):
+        //   - INFLUENCER: SOCIAL dominates (YouTube/IG/TikTok = primary
+        //     channel). MEDIA second (third-party press). RETAIL small
+        //     unless the creator runs a major merch line (Crunchlabs etc.)
+        //     — even MrBeast Burger / Feastables wouldn't push it above
+        //     ~10 because most fans never buy.
+        //   - TALENT: MEDIA dominates (TV / film / streaming / music
+        //     concerts is how fans actually consume). SOCIAL second
+        //     (fan engagement on IG/FB). RETAIL small (tour merch /
+        //     fragrance lines).
+        //   - SPORTS_TEAM: MEDIA dominant (game broadcasts), then
+        //     SOCIAL, then OWNED (team app for scores/tickets) and
+        //     RETAIL (team store / jerseys).
+        //   - RETAIL_BRAND: RETAIL + OWNED dominate (the brand IS its
+        //     product purchases + .com/app).
+        //   - SERVICE_BRAND: OWNED dominates (subscription / login /
+        //     account is the primary touchpoint).
+        //   - MEDIA_BRAND: MEDIA + OWNED (content viewing + their app).
+        //   - SEARCH / SOCIAL brands: their own touchpoint dominates.
+        //   - TRAVEL_BRAND: OWNED + RETAIL (book on app / buy trip).
         const _AUDIENCE_SHARE_ARCHETYPES = {
-            INFLUENCER:    { social: 22, search: 42, owned:  8, retail:  8, media: 20 },
-            TALENT:        { social: 22, search: 14, owned:  4, retail: 10, media: 50 },
-            SPORTS_TEAM:   { social: 20, search: 15, owned: 12, retail:  8, media: 45 },
-            RETAIL_BRAND:  { social: 10, search: 14, owned: 24, retail: 42, media: 10 },
-            SERVICE_BRAND: { social:  8, search: 18, owned: 40, retail: 14, media: 20 },
-            MEDIA_BRAND:   { social: 10, search: 12, owned: 18, retail:  6, media: 54 },
-            SEARCH_BRAND:  { social: 10, search: 55, owned: 18, retail:  5, media: 12 },
-            SOCIAL_BRAND:  { social: 55, search: 15, owned: 20, retail:  5, media:  5 },
-            TRAVEL_BRAND:  { social: 12, search: 22, owned: 26, retail: 30, media: 10 },
-            GENERIC:       { social: 15, search: 15, owned: 20, retail: 25, media: 25 }
+            INFLUENCER:    { social: 55, search: 15, owned:  5, retail:  8, media: 17 },
+            TALENT:        { social: 28, search: 12, owned:  3, retail:  7, media: 50 },
+            SPORTS_TEAM:   { social: 22, search: 13, owned: 10, retail: 10, media: 45 },
+            RETAIL_BRAND:  { social: 10, search: 14, owned: 22, retail: 44, media: 10 },
+            SERVICE_BRAND: { social:  8, search: 16, owned: 42, retail: 14, media: 20 },
+            MEDIA_BRAND:   { social: 12, search: 12, owned: 26, retail:  8, media: 42 },
+            SEARCH_BRAND:  { social: 10, search: 58, owned: 20, retail:  4, media:  8 },
+            SOCIAL_BRAND:  { social: 62, search: 12, owned: 18, retail:  3, media:  5 },
+            TRAVEL_BRAND:  { social: 12, search: 20, owned: 28, retail: 30, media: 10 },
+            GENERIC:       { social: 18, search: 18, owned: 22, retail: 22, media: 20 }
         };
-        // Archetypes for which there is no brand-owned .com / app channel:
-        // talent, influencers, and sports teams. Owned is forced to 0 and
-        // rendered as "—" (the remaining 4 buckets normalize to 100).
-        const _AUDIENCE_SHARE_NO_OWNED = new Set(['TALENT', 'INFLUENCER', 'SPORTS_TEAM']);
+        // Archetypes for which there is no meaningful brand-owned .com /
+        // app channel — owned is forced to 0 and rendered as "—" (the
+        // remaining 4 buckets normalize to 100). Per user 2026-06-18:
+        // "Owned would only come into play if it is NOT a talent". An
+        // INFLUENCER is talent-like (Mark Rober's personal .com is
+        // marginal vs. his YouTube reach, so adding owned would just
+        // steal share from social), so it's also excluded. SPORTS_TEAM
+        // is NOT excluded — team .coms and team apps (tickets, scores)
+        // are a real, heavily-used owned channel.
+        const _AUDIENCE_SHARE_NO_OWNED = new Set(['TALENT', 'INFLUENCER']);
         // Archetype detection — keyed off BRAND CATEGORY (preferred) with
         // _currentProfileCategory() as a fallback. Conservative: anything
         // unrecognized falls through to GENERIC.
@@ -62559,9 +62597,13 @@
             const base = Object.assign({}, _AUDIENCE_SHARE_ARCHETYPES[archetype] || _AUDIENCE_SHARE_ARCHETYPES.GENERIC);
 
             // (b) Data signals — max-BP per category, summed within the
-            // four non-owned buckets. Used to nudge the archetype baseline
-            // toward what's actually present in this profile's data.
+            // four non-owned buckets. ALSO count how many buckets have a
+            // non-trivial signal (>=5% max BP) so we can gate the data
+            // nudge on signal richness.
             const dataSums = { social: 0, search: 0, retail: 0, media: 0 };
+            const SIG_THRESHOLD = 5;
+            let nonTrivialBuckets = 0;
+            const sawSignal = { social: false, search: false, retail: false, media: false };
             for (const cat of Object.keys(beh)) {
                 const items = beh[cat];
                 let arr = [];
@@ -62578,31 +62620,46 @@
                 }
                 if (maxBP <= 0) continue;
                 const bucket = _audienceShareBucketFor(cat);
-                if (bucket && bucket !== 'owned') dataSums[bucket] += maxBP;
+                if (!bucket || bucket === 'owned') continue;
+                dataSums[bucket] += maxBP;
+                if (maxBP >= SIG_THRESHOLD && !sawSignal[bucket]) {
+                    sawSignal[bucket] = true;
+                    nonTrivialBuckets += 1;
+                }
             }
 
             // (c) Resolve Owned: 0 for talent/influencer/sports (rendered
             // as "—" by _renderAudienceShareBoxes), archetype default
-            // otherwise. We don't nudge Owned with data because the panel
-            // categories don't separately tag "engagement that went to
-            // the brand's own .com / app" — that's an archetype-level
-            // estimate by construction.
+            // otherwise. No data nudge on Owned — there's no clean panel
+            // signal for "engagement that landed on the subject's own
+            // .com/app", so it stays an archetype-level estimate.
             const ownedPct = noOwned ? 0 : base.owned;
 
-            // (d) Blend archetype + data on the four non-owned buckets,
-            // scaled to (100 - owned). Weights are 75/25 — heavy on
-            // archetype so a sparse-data profile (e.g. Mark Rober) still
-            // gets the right shape, but data still moves the needle when
-            // signals are present (e.g. a retail brand whose social BPs
-            // are unusually high will push social above the template).
-            const W_ARCH = 0.75, W_DATA = 0.25;
+            // (d) Blend archetype + data on the four non-owned buckets ONLY
+            // when the profile has rich enough data (3+ buckets with a
+            // signal >=5% max BP). For sparse profiles — typical for talent
+            // / influencer files where only a handful of behavioral
+            // categories are populated — fall back to pure archetype.
+            // Otherwise the per-category max-BPs (which measure GENERAL
+            // audience behavior like "% who shop at Best Buy" or "% who
+            // use Visa") would override the archetype anchor and produce
+            // results that fight the subject's actual engagement shape.
+            //
+            // Weight is 80% archetype / 20% data when active — small enough
+            // to keep the archetype dominant but large enough to move the
+            // needle on commerce brands where the data ACTUALLY tracks
+            // subject-specific engagement.
+            const RICH_THRESHOLD = 3;
+            const useData = nonTrivialBuckets >= RICH_THRESHOLD;
+            const W_ARCH = useData ? 0.80 : 1.00;
+            const W_DATA = useData ? 0.20 : 0.00;
             const archRestSum = base.social + base.search + base.retail + base.media || 1;
             const dataRestSum = dataSums.social + dataSums.search + dataSums.retail + dataSums.media;
             const restPct = 100 - ownedPct;
             const blended = { owned: ownedPct, social: 0, search: 0, retail: 0, media: 0 };
             ['social', 'search', 'retail', 'media'].forEach(b => {
                 const archShare = (base[b] / archRestSum); // archetype share within the 4 non-owned
-                const dataShare = dataRestSum > 0 ? (dataSums[b] / dataRestSum) : archShare;
+                const dataShare = (useData && dataRestSum > 0) ? (dataSums[b] / dataRestSum) : archShare;
                 blended[b] = restPct * (W_ARCH * archShare + W_DATA * dataShare);
             });
 
@@ -62610,7 +62667,7 @@
             // safety + guard against archetype rows that don't sum to 100).
             const total = blended.social + blended.search + blended.retail + blended.media + blended.owned;
             if (!total || !isFinite(total)) {
-                return { social: 0, search: 0, retail: 0, media: 0, owned: 0, archetype, noOwned };
+                return { social: 0, search: 0, retail: 0, media: 0, owned: 0, archetype, noOwned, dataActive: useData };
             }
             return {
                 social: blended.social / total * 100,
@@ -62619,7 +62676,8 @@
                 media:  blended.media  / total * 100,
                 owned:  blended.owned  / total * 100,
                 archetype: archetype,
-                noOwned:   noOwned
+                noOwned:   noOwned,
+                dataActive: useData
             };
         }
 
