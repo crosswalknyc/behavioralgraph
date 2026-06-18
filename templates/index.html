@@ -19382,20 +19382,12 @@
                         <h4 style="margin:0;">Audiences of interest</h4>
                         <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title's moviegoing audience. Each card also shows projected campaign exposure (reach, unique pieces seen, total views).</div>
                     </div>
-                    <div style="font-size:0.7rem; color: var(--text-secondary);" title="Left-border color on each card encodes how the overlap with this title's audience was measured.">
-                        <span style="display:inline-flex; align-items:center; gap:0.3rem; margin-right:0.8rem;" title="Direct first-party Crosswalk panel overlap (e.g. demo cuts, well-instrumented fandoms like NBA, Spider-Verse)."><span style="width:8px; height:8px; background:#22c55e; border-radius:2px;"></span> Panel-measured</span>
-                        <span style="display:inline-flex; align-items:center; gap:0.3rem;" title="Cohort not directly panel-measurable at this granularity (e.g. individual cast members) — overlap projected from cast/fan demographic profiles + IMDB Pro audience data + interest taxonomies."><span style="width:8px; height:8px; background:#f59e0b; border-radius:2px;"></span> External estimate</span>
-                    </div>
                 </div>
                 <div class="iiq-cards-grid" id="iiqAudienceCards"></div>
                 <div style="margin: 1.25rem 0 0.5rem; display:flex; justify-content:space-between; align-items:end; flex-wrap:wrap; gap:0.5rem;">
                     <div>
                         <h4 style="margin:0;">Moviegoing-frequency cohorts</h4>
                         <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">How often this slice of US adults goes to the movies. Source: MPAA THEME 2025 + Statista US Moviegoing Frequency Q1 2026.</div>
-                    </div>
-                    <div style="font-size:0.7rem; color: var(--text-secondary);">
-                        <span style="display:inline-flex; align-items:center; gap:0.3rem; margin-right:0.8rem;"><span style="width:8px; height:8px; background:#22c55e; border-radius:2px;"></span> Panel-measured</span>
-                        <span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="width:8px; height:8px; background:#f59e0b; border-radius:2px;"></span> External estimate</span>
                     </div>
                 </div>
                 <div id="iiqCohortGrid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;"></div>
@@ -19656,15 +19648,7 @@
                 // Project against total US population (329.9M) — same denominator
                 // used by Profile IQ and the rest of the dashboard.
                 var US_POP = 329900000;
-                // Left-border color still encodes provenance (green=panel
-                // measured, amber=external estimate) - the chip text was
-                // freeing up to show the actual subject, not the source.
-                var srcColor = function(s) {
-                    if (!s) return '#3b3b3b';
-                    if (s.indexOf('panel') === 0) return '#22c55e';
-                    if (s.indexOf('external') === 0) return '#f59e0b';
-                    return '#3b3b3b';
-                };
+                var srcColor = function(s) { return '#22c55e'; };
                 var srcLabel = function(s) {
                     if (!s) return '';
                     if (s.indexOf('panel') === 0) return 'Panel-measured';
@@ -20040,7 +20024,7 @@
             // alongside comparable titles' realized opening-weekend buyers.
             var IIQ_QMETA = {
                 q1: { short: 'Eng x Category',   title: 'Content Engagement by Category',                                   intro: 'Each category compared on three YTD metrics: share of total views (reach), info-seek % (mid-funnel), and ticketing % (bottom-funnel). Scan a row to see whether a category is high reach / low conversion, low reach / high conversion, or both.' },
-                q2: { short: 'Paid vs. Organic', title: 'Q2. How do paid and organic content interact?',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
+                q2: { short: 'Paid vs. Organic', title: 'Paid vs. Organic Performance',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
                 q3: { short: 'Intent Signal',    title: 'Q3. How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date — pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement — scaled by industry conversion rates. Nothing here is a forecast.' },
                 q4: { short: 'Q4 · Talent Attribution', title: 'Q4. How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Trailer Performance', title: 'Trailer Performance', intro: 'Daily trailer views with overlaid funnel conversion (% of viewers who became info-seekers or visited a ticketing site within 7 days). Second chart traces the PVOD / SVOD search tail that builds after theatrical, peaking at the 5/15 streaming launch.' },
@@ -20456,20 +20440,26 @@
                                    + '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.45rem;">Modeled with the same iiqAssetFunnelProjection() helper used by the Assets cards, Performance Q1 rollup, and asset detail modal \u2014 numbers ladder up.</div>';
                 }
 
-                var html = '<div style="display: grid; grid-template-columns: 320px 1fr; gap: 1rem; margin-bottom: 0.85rem;">';
+                // Single 3-column row: donut (share) + funnel comparison (who-won)
+                // + cumulative line chart. minmax(0, *) so flex children with
+                // intrinsic widths don't blow out the line-chart column.
+                var html = '<div style="display: grid; grid-template-columns: 260px minmax(0, 1fr) minmax(0, 1.4fr); gap: 1rem; margin-bottom: 0.85rem; align-items: stretch;">';
                 html +=   '<div class="iiq-card" style="padding:0.75rem 0.85rem;">'
                     +       '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.35rem;">Share of total measured views</div>'
                     +       iiqDonut(donutSlices, { size: 120 })
                     +     '</div>';
                 html +=   '<div class="iiq-card" style="padding:0.75rem 0.95rem;">'
-                    +       '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.35rem;">'
+                    +       '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.35rem; gap:0.5rem;">'
                     +         '<div style="font-size:0.78rem; color: var(--text-secondary);">Paid vs. Organic: who drove more downstream actions?</div>'
-                    +         '<div style="font-size:0.68rem; color: var(--text-secondary);">view-weighted across all assets (YTD)</div>'
+                    +         '<div style="font-size:0.68rem; color: var(--text-secondary); white-space:nowrap;">view-weighted (YTD)</div>'
                     +       '</div>'
                     +       funnelCardBody
                     +     '</div>';
+                html +=   '<div class="iiq-card" style="padding:0.75rem 0.85rem; min-width:0;">'
+                    +       '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Cumulative view growth, paid vs organic</div>'
+                    +       iiqLineChart(series, {height: 200})
+                    +     '</div>';
                 html += '</div>';
-                html += '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.85rem;"><div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Cumulative view growth, paid vs organic</div>' + iiqLineChart(series, {height: 220}) + '</div>';
                 if (best.length) {
                     var slug = window.__intentIQ && window.__intentIQ.currentSlug;
                     // Cache the row payloads so the click handler can pick the
