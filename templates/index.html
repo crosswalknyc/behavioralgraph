@@ -24638,7 +24638,10 @@
         </div><!-- End talentTheaterIQView -->
 
         <!-- HELM IQ VIEW (Super Admin only — access gated via dropdown visibility + API decorators) -->
-        <div id="helmIQView" style="display:none;">
+        <div id="helmIQView" style="display:none; flex-direction:column; flex:1 1 0%; min-height:0;">
+            <div style="padding:1rem 1.5rem; background:rgba(200,255,0,0.08); border-bottom:1px solid rgba(200,255,0,0.3);">
+                <span style="font-size:1.1rem; font-weight:700; color:#c8ff00;">⚓ Helm IQ</span>
+            </div>
             <div class="helm-tabs">
                 <button class="helm-tab-btn active" onclick="showHelmTab('build')">⚓ Build Project</button>
                 <button class="helm-tab-btn" onclick="showHelmTab('financials')">💰 Financials</button>
@@ -27462,32 +27465,21 @@
             }
 
             window.showHelmIQ = function() {
-                var dd = document.getElementById('viewNavDropdown');
-                var opt = dd && dd.querySelector('option[value="helmIQ"]');
-                if (opt && opt.disabled) return;
                 if (typeof setViewNavDropdown === 'function') setViewNavDropdown('helmIQ');
-                // Hide every sibling view inside .container
+                // Hide EVERYTHING in .container except header and helmIQView
                 var container = document.querySelector('.container');
                 if (container) {
-                    ['dashboardView','formView','subscriberIQView','sfConversionView','rankerIQView',
-                     'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
-                     'talentSearchIQView','talentTheaterIQView','customAnalysisView',
-                     'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
-                     'shareOfTimeIQView','flywheelConversionView','talentFitIQView','journeyIQView',
-                     'intentIQView','blueIQView'].forEach(function(id) {
-                        var el = document.getElementById(id);
-                        if (el) el.style.display = 'none';
-                    });
+                    var kids = container.children;
+                    for (var i = 0; i < kids.length; i++) {
+                        var kid = kids[i];
+                        if (kid.id === 'helmIQView' || kid.tagName === 'HEADER') continue;
+                        kid.style.display = 'none';
+                    }
                 }
                 if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
                 var view = document.getElementById('helmIQView');
                 if (view) {
-                    view.style.display = 'flex';
-                    view.style.flexDirection = 'column';
-                    view.style.flex = '1 1 0%';
-                    view.style.minHeight = '0';
-                    view.style.overflowY = 'auto';
-                    view.style.visibility = 'visible';
+                    view.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 0%; min-height:0; overflow-y:auto; visibility:visible;');
                 }
                 helmLoadProfileDropdowns();
             };
