@@ -41882,11 +41882,11 @@
                         '<div style="background:linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(16,185,129,0.02) 100%); border:2px solid #10b981; border-radius:12px; padding:0.9rem;">'
                       +     '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">'
                       +       '<div style="font-size:0.65rem;color:#10b981;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">⭐ ' + _jiqEsc(triple.label || 'Triple-likely core') + '</div>'
-                      +       '<div style="font-size:0.7rem;color:var(--text-secondary);">' + _jiqFmt(triple.size) + ' people · ' + ((triple.size||0)/260_000_000*100).toFixed(1) + '% of US</div>'
+                      +       '<div style="font-size:0.7rem;color:var(--text-secondary);">' + _jiqFmt(triple.size) + ' people · ' + _jiqPct((triple.size||0)/260_000_000*100, 1) + ' of US</div>'
                       +     '</div>'
                       +     '<div style="text-align:center;padding:4px 0 6px;border-top:1px solid var(--border-color);">'
                       +       '<div style="font-size:1.4rem;font-weight:800;color:#10b981;line-height:1;">' + ((triple.intent_index||24)).toFixed(1) + '×</div>'
-                      +       '<div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">intent vs gen-pop · ' + (triple.conversion_pct || 0).toFixed(1) + '% open-wknd CR</div>'
+                      +       '<div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">intent vs gen-pop · ' + _jiqPct(triple.conversion_pct || 0, 1) + ' open-wknd CR</div>'
                       +     '</div>'
                       +     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px 0;border-top:1px solid var(--border-color);border-bottom:1px solid var(--border-color);margin-bottom:8px;">'
                       +       '<div style="text-align:center;border-right:1px solid var(--border-color);">'
@@ -42306,7 +42306,7 @@
                     // display string isn't hard-coded to 8,147
                     var liveTotal = ((window._jiqCurrentRun || {}).kpis || {}).confirmed_digital_purchases;
                     var totalStr  = liveTotal ? _jiqFmt(liveTotal) : '—';
-                    var fmtPct = function(v) { return (v == null) ? '—' : (+v).toFixed(1) + '%'; };
+                    var fmtPct = function(v) { return _jiqPct(v, 1); };
                     var pickShare = function(pa) {
                         return (pa.estimated_share_of_total_presales_pct != null)
                             ? pa.estimated_share_of_total_presales_pct
@@ -42822,6 +42822,7 @@
             function _fmtPct(p) {
                 if (p == null || isNaN(+p)) return '—';
                 p = +p;
+                if (p === 0) return '—';
                 if (p < 0.1) return '<0.1%';
                 if (p < 1)   return p.toFixed(2) + '%';
                 return p.toFixed(1) + '%';
@@ -45325,7 +45326,7 @@
                 ));
                 tiles.push(_jiqSubIqTile(
                     'Acquired and<br>Reactivated Rate',
-                    (a.conversion_rate_pct != null ? a.conversion_rate_pct.toFixed(2) + '%' : '—'),
+                    _jiqPct(a.conversion_rate_pct, 2),
                     'NPS \u00f7 Total Show Watchers (Gen Pop)',
                     '#f59e0b'
                 ));
@@ -45457,7 +45458,7 @@
                 (t.buckets || []).forEach(function(b) {
                     bucketTiles.push(_jiqSubIqTile(
                         b.label || ('Days ' + (b.days_range || '?')),
-                        (b.pct != null ? b.pct.toFixed(1) + '%' : '—'),
+                        _jiqPct(b.pct, 1),
                         _jiqFmt(b.signups) + ' signups',
                         '#f59e0b'
                     ));
@@ -45603,7 +45604,7 @@
                     +     '<div style="background: linear-gradient(90deg, #a78bfa, #7c3aed); height: 100%; width: ' + width + '%; border-radius: 4px;"></div>'
                     +   '</div>'
                     +   '<div style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-align: right; font-variant-numeric: tabular-nums;">'
-                    +     (p.pct != null ? p.pct.toFixed(1) + '%' : '—') + '</div>'
+                    +     _jiqPct(p.pct, 1) + '</div>'
                     + '</div>';
             }
             html += '</div>';
@@ -45996,7 +45997,7 @@
             if (metaEl) {
                 metaEl.textContent = 'Cohort: ' + _jiqFmt(tp.cohort_size)
                                    + ' · Converters: ' + _jiqFmt(tp.converters)
-                                   + ' · Baseline conv: ' + (tp.baseline_conv_rate != null ? tp.baseline_conv_rate + '%' : '—');
+                                   + ' · Baseline conv: ' + _jiqPct(tp.baseline_conv_rate, 1);
             }
 
             // Touchpoints table
@@ -46013,10 +46014,10 @@
                 var body = tp.rows.map(function(r) {
                     return '<tr style="border-bottom:1px solid var(--border-color);">'
                          + '<td style="padding:6px 6px;font-weight:600;">' + _jiqEsc(r.label) + '</td>'
-                         + '<td style="padding:6px 6px;text-align:right;">' + (r.conv_rate_when_reached != null ? r.conv_rate_when_reached + '%' : '—') + '</td>'
-                         + (_tpIsFandango ? '' : '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + (r.conv_rate_when_not != null ? r.conv_rate_when_not + '%' : '—') + '</td>')
-                         + '<td style="padding:6px 6px;text-align:right;">' + (r.avg_days_to_conversion != null ? r.avg_days_to_conversion : '—') + '</td>'
-                         + '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + (r.avg_touches_per_user != null ? r.avg_touches_per_user : '—') + '</td>'
+                         + '<td style="padding:6px 6px;text-align:right;">' + _jiqPct(r.conv_rate_when_reached, 1) + '</td>'
+                         + (_tpIsFandango ? '' : '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + _jiqPct(r.conv_rate_when_not, 1) + '</td>')
+                         + '<td style="padding:6px 6px;text-align:right;">' + (r.avg_days_to_conversion != null && +r.avg_days_to_conversion !== 0 ? r.avg_days_to_conversion : '—') + '</td>'
+                         + '<td style="padding:6px 6px;text-align:right;color:var(--text-secondary);">' + (r.avg_touches_per_user != null && +r.avg_touches_per_user !== 0 ? r.avg_touches_per_user : '—') + '</td>'
                          + '</tr>';
                 }).join('');
                 tableEl.innerHTML = head + body + '</tbody></table>';
@@ -46035,8 +46036,8 @@
                         return '<tr style="border-bottom:1px solid var(--border-color);">'
                              + '<td style="padding:5px 4px;">' + _jiqEsc(p.a) + ' <span style="color:var(--text-secondary);">×</span> ' + _jiqEsc(p.b) + '</td>'
                              + '<td style="padding:5px 4px;text-align:right;">' + _jiqFmt(p.users) + '</td>'
-                             + '<td style="padding:5px 4px;text-align:right;">' + (p.users_pct != null ? p.users_pct + '%' : '—') + '</td>'
-                             + '<td style="padding:5px 4px;text-align:right;font-weight:600;">' + (p.conv_rate != null ? p.conv_rate + '%' : '—') + '</td>'
+                             + '<td style="padding:5px 4px;text-align:right;">' + _jiqPct(p.users_pct, 1) + '</td>'
+                             + '<td style="padding:5px 4px;text-align:right;font-weight:600;">' + _jiqPct(p.conv_rate, 1) + '</td>'
                              + '</tr>';
                     }).join('') + '</tbody></table>';
             }
@@ -46056,7 +46057,7 @@
                              + '<td style="padding:5px 4px;font-weight:600;">' + _jiqEsc(b.bucket) + '</td>'
                              + '<td style="padding:5px 4px;text-align:right;">' + _jiqFmt(b.converters) + '</td>'
                              + (_tdIsFandango ? '' : '<td style="padding:5px 4px;text-align:right;color:var(--text-secondary);">' + _jiqFmt(b.non_converters) + '</td>')
-                             + '<td style="padding:5px 4px;text-align:right;font-weight:600;">' + (b.conv_pct != null ? b.conv_pct + '%' : '—') + '</td>'
+                             + '<td style="padding:5px 4px;text-align:right;font-weight:600;">' + _jiqPct(b.conv_pct, 1) + '</td>'
                              + '</tr>';
                     }).join('') + '</tbody></table>';
             }
@@ -57966,7 +57967,17 @@
             const totalConversionRate = metrics.total_conversion_rate || '';
             const cleanConversionRate = metrics.clean_conversion_rate || '';
             const avgDaysToSignup = metrics.avg_days_to_signup || 'N/A';
-            
+            // Per-title engagement KPIs (researched by Claude, no defaults).
+            // Falls back to "—" if the CSV doesn't have them (legacy files).
+            const completionRateRaw = (metrics.completion_rate || '').toString().trim();
+            const secondScreenRaw = (metrics.second_screen_activity || '').toString().trim();
+            const completionRateDisplay = completionRateRaw
+                ? (completionRateRaw.endsWith('%') ? completionRateRaw : completionRateRaw + '%')
+                : '—';
+            const secondScreenDisplay = secondScreenRaw
+                ? (secondScreenRaw.endsWith('%') ? secondScreenRaw : secondScreenRaw + '%')
+                : '—';
+
             // Prefer rate from projected numbers so it always matches the two card values (Total Accounts Viewed, Accounts Acquired)
             const twProj = parseNumber(totalWatchersGenPop);
             const npsProj = parseNumber(newSignupsGenPop);
@@ -58050,6 +58061,14 @@
                         <div class="exec-summary-metric has-tooltip" data-tooltip="Total Show Conversion Rate: The percentage of Total Show Watchers who became New Platform Signups, using US projected (Gen Pop) numbers: (NPS projected ÷ Total Show Watchers projected) × 100.">
                             <div class="exec-metric-label">Acquired and<br>Reactivated Accounts</div>
                             <div class="exec-metric-value">${conversionPctDisplay}</div>
+                        </div>
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Completion Rate: Researched per-title by Claude. For movies, this is the share of viewers who watched start → end credits. For series, this is the average per-episode completion rate across the season — calculated by Claude estimating each episode's completion and then averaging.">
+                            <div class="exec-metric-label">Completion<br>Rate</div>
+                            <div class="exec-metric-value">${completionRateDisplay}</div>
+                        </div>
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Second Screen Activity: Researched per-title by Claude. Share of viewers who were on a phone, tablet, or other secondary device for the majority of the runtime — i.e. partially distracted / ambient-TV viewing. Higher percentages are typical for reality, sports, and procedurals; lower percentages for prestige drama and puzzle-box content.">
+                            <div class="exec-metric-label">Second Screen<br>Activity</div>
+                            <div class="exec-metric-value">${secondScreenDisplay}</div>
                         </div>
                     </div>
                     ${hasTimingData(data) ? `
