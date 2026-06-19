@@ -3138,8 +3138,18 @@
             max-height: none;
         }
         .profile-and-toolbar-row .toolbar-row {
-            flex: 1 1 auto;
-            min-width: 0;
+            /* Tabs need room: INSIGHTS / DEMOGRAPHICS / BEHAVIORAL /
+               INTERESTS / LOCATION + COMPARE / SEGMENT / EXEC SUMMARY /
+               WORKSPACE. If the profile title is long ("THE PERKS OF
+               BEING A WALLFLOWER - AVID FAN - NETFLIX - IQ MINI") and
+               we let min-width:0 win, the tabs get squeezed to a 60px
+               column on the right and clip mid-word. flex-basis:100%
+               with flex-grow:1 + a reasonable min-width forces the
+               .dash-header-row wrap to actually fire — the toolbar
+               drops onto its own row below the title instead of fighting
+               for slivers of horizontal space next to it. */
+            flex: 1 1 100%;
+            min-width: 640px;
             margin-bottom: 0;
         }
         .profile-title-and-toolbar-wrap {
