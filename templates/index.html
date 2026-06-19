@@ -3138,8 +3138,18 @@
             max-height: none;
         }
         .profile-and-toolbar-row .toolbar-row {
-            flex: 1 1 auto;
-            min-width: 0;
+            /* Tabs need room: INSIGHTS / DEMOGRAPHICS / BEHAVIORAL /
+               INTERESTS / LOCATION + COMPARE / SEGMENT / EXEC SUMMARY /
+               WORKSPACE. If the profile title is long ("THE PERKS OF
+               BEING A WALLFLOWER - AVID FAN - NETFLIX - IQ MINI") and
+               we let min-width:0 win, the tabs get squeezed to a 60px
+               column on the right and clip mid-word. flex-basis:100%
+               with flex-grow:1 + a reasonable min-width forces the
+               .dash-header-row wrap to actually fire — the toolbar
+               drops onto its own row below the title instead of fighting
+               for slivers of horizontal space next to it. */
+            flex: 1 1 100%;
+            min-width: 640px;
             margin-bottom: 0;
         }
         .profile-title-and-toolbar-wrap {
@@ -19451,7 +19461,6 @@
                 <button class="iiq-subtab" data-iiq-subtab="audiences" onclick="showIntentIQSubtab('audiences')">👥 AUDIENCES</button>
                 <button class="iiq-subtab" data-iiq-subtab="assets" onclick="showIntentIQSubtab('assets')">🎞️ ASSETS</button>
                 <button class="iiq-subtab" data-iiq-subtab="questions" onclick="showIntentIQSubtab('questions')">🎯 PERFORMANCE</button>
-                <button class="iiq-subtab" data-iiq-subtab="inflight" onclick="showIntentIQSubtab('inflight')">⚡ IN-FLIGHT</button>
                 <button class="iiq-subtab" data-iiq-subtab="conversion" onclick="showIntentIQSubtab('conversion')">💰 INTENT TO CONVERSION</button>
             </div>
 
@@ -19495,6 +19504,7 @@
                     <div><label title="Engagement = likes + comments + shares per asset">Sort by</label><select id="iiqAssetSort" onchange="reloadIntentIQAssets()"><option value="engagement" selected>Engagement (high → low)</option><option value="views">Views (high → low)</option><option value="date_desc">Date (newest first)</option><option value="date_asc">Date (oldest first)</option></select></div>
                     <div style="flex:1; text-align:right;"><span id="iiqAssetMeta" style="color: var(--text-secondary); font-size: 0.8rem;"></span></div>
                 </div>
+                <div id="iiqAssetsBestInFlight" style="margin-bottom: 1rem;"></div>
                 <div id="iiqAssetChart" style="margin-bottom: 1rem;"></div>
                 <div class="iiq-cards-grid" id="iiqAssetGrid"></div>
             </div>
@@ -19503,28 +19513,6 @@
                 <div id="iiqQNav" style="display:flex; flex-wrap:wrap; gap:0.35rem; margin-bottom:0.85rem; padding-bottom:0.55rem; border-bottom: 1px solid rgba(255,255,255,0.08);"></div>
                 <div id="iiqQTitle" style="margin-bottom:0.65rem;"></div>
                 <div id="iiqQBody"><div class="iiq-empty">Loading...</div></div>
-            </div>
-
-            <div class="iiq-panel" id="iiqPanel-inflight">
-                <div style="margin-bottom: 0.65rem; display:flex; justify-content:space-between; align-items:end; flex-wrap:wrap; gap:0.5rem;">
-                    <div>
-                        <h4 style="margin: 0;">Best assets in-flight</h4>
-                        <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Top-performing paid + organic asset in the selected window. Defaults to year-to-date.</div>
-                    </div>
-                    <div style="display:flex; gap:0.4rem; align-items:end;">
-                        <div><label style="font-size:0.72rem; color: var(--text-secondary);">Window</label>
-                            <select id="iiqInFlightWindow" onchange="reloadIntentIQInFlight()" style="display:block; background: rgba(0,0,0,0.4); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 0.3rem 0.5rem; font-size:0.78rem;">
-                                <option value="ytd" selected>Year-to-date (YTD)</option>
-                                <option value="14d">Last 14 days</option>
-                                <option value="30d">Last 30 days</option>
-                                <option value="90d">Last 90 days</option>
-                                <option value="365d">Last 365 days</option>
-                                <option value="all">Campaign-to-date</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                <div id="iiqInFlightBody"></div>
             </div>
 
             <div class="iiq-panel" id="iiqPanel-conversion">
@@ -19605,7 +19593,6 @@
 
                 <div style="display:flex; gap:0.6rem; align-items:center; margin-bottom:1rem;">
                     <button class="blue-iq-apply-btn" onclick="iiqProjectConversion()" style="background:#fbbf24; color:#0f172a; font-weight:700; padding:0.6rem 1.3rem; border-radius:8px; border:none; cursor:pointer; font-size:0.95rem;">PROJECT ▶</button>
-                    <span style="font-size:0.72rem; color:var(--text-secondary);">Recomputes the projection from your current inputs + Secret Sauce.</span>
                 </div>
 
                 <div id="iiqConvOutput"></div>
@@ -19703,7 +19690,7 @@
                 document.querySelectorAll('#intentIQView .iiq-panel').forEach(function(p) {
                     p.classList.toggle('active', p.id === 'iiqPanel-' + tab);
                 });
-                if (tab === 'inflight') reloadIntentIQInFlight();
+                if (tab === 'assets') reloadIntentIQInFlight();
                 if (tab === 'conversion') iiqRenderConversionMetrics();
             };
 
@@ -20904,6 +20891,12 @@
                                 + '<div style="margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.25rem;">' + paidChip + phaseChip + talentBadges + '</div>'
                                 + '</div>';
                         }).join('') || '<div class="iiq-empty">No assets match filters.</div>';
+                        // Refresh the embedded "Best assets in-flight" cards
+                        // so they stay in lockstep with the active Assets
+                        // window / filter selection.
+                        if (typeof reloadIntentIQInFlight === 'function') {
+                            try { reloadIntentIQInFlight(); } catch (_) {}
+                        }
                     })
                     .catch(function(e) {
                         document.getElementById('iiqAssetMeta').textContent = 'Failed: ' + (e.message || e);
@@ -22702,17 +22695,25 @@
             window.reloadIntentIQInFlight = function() {
                 var slug = window.__intentIQ.currentSlug;
                 if (!slug) return;
-                var asOf = document.getElementById('iiqAsOf').value;
-                var winSel = document.getElementById('iiqInFlightWindow');
+                // Best PAID / ORGANIC now lives inside the Assets tab and
+                // shares the Assets window selector. Fall back to the old
+                // standalone selector if present (legacy markup), then YTD.
+                var host = document.getElementById('iiqAssetsBestInFlight')
+                        || document.getElementById('iiqInFlightBody');
+                if (!host) return;
+                var asOfEl = document.getElementById('iiqAsOf');
+                var asOf = asOfEl ? asOfEl.value : '';
+                var winSel = document.getElementById('iiqAssetWindow')
+                          || document.getElementById('iiqInFlightWindow');
                 var win = winSel ? winSel.value : 'ytd';
                 var params = new URLSearchParams();
                 params.set('window', win);
                 if (asOf) params.set('as_of', asOf);
                 var url = '/api/intent/' + slug + '/in_flight?' + params.toString();
-                document.getElementById('iiqInFlightBody').innerHTML = 'Loading...';
+                host.innerHTML = 'Loading...';
                 fetch(url, { credentials: 'same-origin' }).then(function(r) { return r.json(); })
                     .then(function(d) {
-                        if (!d.success) { document.getElementById('iiqInFlightBody').innerHTML = escapeHtml(d.error || 'Failed'); return; }
+                        if (!d.success) { host.innerHTML = escapeHtml(d.error || 'Failed'); return; }
                         var winLabel = d.window_label || 'YTD';
                         function pickCard(label, edgeColor, c) {
                             if (!c) return '<div class="iiq-card" style="border-left: 3px solid #64748b;"><div class="iiq-card-title">' + label + '</div><div class="iiq-empty">No asset in ' + escapeHtml(winLabel) + ' window.</div></div>';
@@ -22756,15 +22757,21 @@
                                 + (c.url ? '<div style="margin-top:0.35rem;"><a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener" style="color: var(--accent-cyan, #5a9ad9); font-size:0.78rem;">Open asset</a></div>' : '')
                                 + '</div>';
                         }
-                        document.getElementById('iiqInFlightBody').innerHTML =
-                            '<p style="color: var(--text-secondary); font-size: 0.78rem; margin-bottom: 0.75rem;">Window: <strong>' + escapeHtml(winLabel) + '</strong> · As-of: ' + escapeHtml(d.as_of) + (d.fallback ? ' (fallback — ClickHouse unreachable)' : '') + '</p>'
-                            + '<div class="iiq-cards-grid">'
-                            + pickCard('🏆 Best PAID', '#22d3ee', d.best_paid)
-                            + pickCard('🌱 Best ORGANIC', '#22c55e', d.best_organic)
-                            + '</div>';
+                        host.innerHTML =
+                            '<div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.6rem;">'
+                          +   '<div>'
+                          +     '<h4 style="margin:0; font-size:0.92rem;">⚡ Best assets in-flight</h4>'
+                          +     '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.1rem;">Top paid + organic asset in the current Assets window / filter set. Same per-asset funnel projection as the cards below.</div>'
+                          +   '</div>'
+                          +   '<div style="font-size:0.72rem; color: var(--text-secondary);">Window: <strong>' + escapeHtml(winLabel) + '</strong> · As-of: ' + escapeHtml(d.as_of) + (d.fallback ? ' (fallback — ClickHouse unreachable)' : '') + '</div>'
+                          + '</div>'
+                          + '<div class="iiq-cards-grid">'
+                          + pickCard('🏆 Best PAID', '#22d3ee', d.best_paid)
+                          + pickCard('🌱 Best ORGANIC', '#22c55e', d.best_organic)
+                          + '</div>';
                     })
                     .catch(function(e) {
-                        document.getElementById('iiqInFlightBody').innerHTML = 'Failed: ' + escapeHtml(e.message || e);
+                        host.innerHTML = 'Failed: ' + escapeHtml(e.message || e);
                     });
             };
 
