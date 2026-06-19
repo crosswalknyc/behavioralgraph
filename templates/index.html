@@ -28373,7 +28373,7 @@
 
             window.helmLoadProfileDropdowns = function helmLoadProfileDropdowns() {
                 if (_helmProfilesLoaded) return;
-                var brandCats = ['ACCESSORIES','ACTIVEWEAR','AMUSEMENT PARKS','APPAREL','AUTOMOBILE','B2B','BANKS','BEAUTY','BETTING','BEVERAGE','CASUAL DINING','CPG','CREDIT PROVIDERS','CREDIT PROVIDER','DIGITAL BANKING','EVENTS','FOOTWEAR','FRANCHISE','GROCERY','INTIMATES','JEWELRY','LOYALTY PROGRAMS','MEMBERSHIP','NON PROFIT/CHARITY','PHARMA','QSR','RETAILERS','SECURITY','TELECOM','TICKETING','TOY','TRAVEL','VENUE','WORKOUT FACILITY'];
+                var brandCats = ['ACCESSORIES','ACTIVEWEAR','AMUSEMENT PARKS','APPAREL','AUTOMOBILE','B2B','BANK','BANKS','BANKING','BEAUTY','BETTING','BEVERAGE','CASUAL DINING','CPG','CREDIT PROVIDERS','CREDIT PROVIDER','DIGITAL BANKING','EVENTS','FOOTWEAR','FRANCHISE','GROCERY','INTIMATES','JEWELRY','LOYALTY PROGRAMS','MEMBERSHIP','NON PROFIT/CHARITY','PHARMA','QSR','RETAILERS','SECURITY','TELECOM','TICKETING','TOY','TRAVEL','VENUE','WORKOUT FACILITY'];
                 fetch('/api/jobs?refresh=0', { credentials: 'same-origin' })
                     .then(function(r) { return r.json(); })
                     .then(function(d) {
@@ -84578,7 +84578,14 @@
         
         // Master category mapping for organized display
         const MASTER_CATEGORIES = {
-            'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANKS', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FOOTWEAR', 'FRANCHISE', 'GROCERY', 'INTIMATES', 'JEWELRY', 'LOYALTY PROGRAMS', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'SECURITY', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
+            // 'BANK' (singular) is the value the Profile-IQ pipeline writes
+            // into the BRAND CATEGORY row for traditional retail banks (Bank
+            // of America, Citibank, Wells Fargo, BMO, Bread Financial, ...).
+            // Older `BANKS` (plural) is kept for any legacy file still
+            // stamped that way. Without 'BANK' here, those profiles fall
+            // through to the 'OTHER' master and get hidden because OTHER
+            // isn't in masterOrder.
+            'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANK', 'BANKS', 'BANKING', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FOOTWEAR', 'FRANCHISE', 'GROCERY', 'INTIMATES', 'JEWELRY', 'LOYALTY PROGRAMS', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'SECURITY', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
             'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE', 'PODCAST', 'VERTICAL SHORTS', 'VERTICAL SHORT', 'SERIES - AMAZON / MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - 20TH CENTURY', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
             'GEN POP': ['GEN POP'],
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'STREAMING/PLATFORM', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
@@ -84607,7 +84614,12 @@
         const CATEGORY_DISPLAY_LABELS = {
             'PLATFORMS': 'STREAMING/PLATFORM',
             'STREAMING VIDEO': 'STREAMING/PLATFORM',
-            'STREAMING/PLATFORM': 'STREAMING/PLATFORM'
+            'STREAMING/PLATFORM': 'STREAMING/PLATFORM',
+            // Pipeline stamps BRAND CATEGORY = 'BANK' for traditional retail
+            // banks. Render the sub-bucket as 'BANKING' so it reads as a
+            // proper sibling of 'DIGITAL BANKING' in the BRAND tree.
+            'BANK': 'BANKING',
+            'BANKS': 'BANKING'
         };
         function getCategoryDisplayLabel(cat) {
             return CATEGORY_DISPLAY_LABELS[(cat || '').toUpperCase()] || cat;
