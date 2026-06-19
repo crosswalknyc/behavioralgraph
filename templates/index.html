@@ -5405,12 +5405,16 @@
             text-transform: uppercase;
         }
         
+        /* Rank (#) + Item stay left. Total Universe / Gen Pop / Index
+           headers right-align to match their data cells. Per user rule
+           2026-06-18: "headers and data are always right justified". */
         .interest-header-row span:nth-child(1),
-        .interest-header-row span:nth-child(2),
-        .interest-header-row span:nth-child(3),
-        .interest-header-row span:nth-child(4),
-        .interest-header-row span:nth-child(5) {
+        .interest-header-row span:nth-child(2) {
             text-align: left;
+        }
+        .interest-header-row span:nth-child(n+3) {
+            text-align: right !important;
+            justify-self: end;
         }
         
         .interest-rank {
@@ -5489,7 +5493,7 @@
         .interest-pct {
             font-size: 0.75rem;
             min-width: 55px;
-            text-align: left;
+            text-align: right !important;
             flex-shrink: 0;
         }
         
@@ -6218,31 +6222,49 @@
         .behavioral-table .behavioral-header-row span:first-child {
             padding-left: 0.35rem;
         }
+        /* User rule (2026-06-18): numeric column headers + data are ALWAYS
+           right-aligned across every behavioral / interests / location
+           table — Total Universe, cohort cuts (2023, 2024, AVID), Gen Pop,
+           and Index. The rank + name columns stay left. Reverses the
+           earlier all-left header experiment which made it hard to scan
+           percentages against the column edge. Sort arrows live inside
+           an inline-flex .behavioral-sortable so they stay immediately
+           left of the header text even though the cell text-aligns right. */
         .behavioral-table .behavioral-header-row span.profile-col,
         .behavioral-table .behavioral-header-row span.genpop-col,
         .behavioral-table .behavioral-header-row span.index-col {
-            text-align: left !important;
-            justify-self: start !important;
+            text-align: right !important;
+            justify-self: end !important;
             padding-left: 0.2rem;
             padding-right: 0.1rem;
         }
         .behavioral-table .behavioral-header-row span.index-col {
             padding-right: 0.35rem;
         }
-        /* Cohort header cells injected by compare-mode also flip to
-           left-aligned + wrappable. The corresponding data cells inside
-           .behavioral-item rows keep their inline right-align/
-           justify-self:end + nowrap so the actual numbers stay
-           right-aligned single-line for legibility. */
+        /* Cohort header cells injected by compare-mode (cmp-col-cell) also
+           right-align so headers line up with the numbers below them.
+           Wrapping is preserved so long cohort labels (e.g. "Worried
+           Warriors", "Unprepared Underdogs") still flow within the column
+           rather than overflow into a neighbor. */
         .behavioral-table .behavioral-header-row .cmp-col-cell {
-            text-align: left !important;
-            justify-self: start !important;
+            text-align: right !important;
+            justify-self: end !important;
             white-space: normal !important;
             overflow: visible !important;
             text-overflow: clip !important;
             overflow-wrap: break-word;
             word-break: normal;
             line-height: 1.15;
+        }
+        /* Belt-and-suspenders right-align for the cohort DATA cells inside
+           each .behavioral-item row. Most renderers already stamp inline
+           text-align:right on these via JS, but if any code path emits a
+           cmp-col-cell without that inline style the CSS still wins so
+           numbers never accidentally render left or center. */
+        .behavioral-table .behavioral-item .cmp-col-cell {
+            text-align: right !important;
+            justify-self: end !important;
+            font-variant-numeric: tabular-nums;
         }
         /* Hide GP column when in projection mode */
         .behavioral-card.hide-gp .behavioral-table {
