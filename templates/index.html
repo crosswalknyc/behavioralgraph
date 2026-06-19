@@ -64603,10 +64603,23 @@
             // numbers used to read as tiny grey caption text; now they
             // sit at near-body-copy size and bold so the cohort scale
             // is immediately legible.
-            const buildList = (which, baseValue) => {
+            const buildList = (which, baseValue, listOpts) => {
                 const wrap = document.createElement('div');
                 wrap.className = 'cmp-stat-list';
                 wrap.style.cssText = 'margin-top:0.65rem;display:flex;flex-direction:column;gap:0.4rem;padding-top:0.55rem;border-top:1px solid var(--border-color, rgba(255,255,255,0.14));';
+
+                // 2026-06-19: when many-cuts mode is active (big number +
+                // label hidden because they get truncated to "2,8..."
+                // "Cross..." per user screenshot), prepend a header row
+                // ("📊 Crosswalk Panelists" for sample, "🇺🇸 US" for
+                // projection) so the breakdown list isn't unlabeled.
+                if (listOpts && listOpts.showHeader) {
+                    const hdr = document.createElement('div');
+                    hdr.className = 'cmp-stat-list-header';
+                    hdr.textContent = (which === 'sample') ? '📊 Crosswalk Panelists' : '🇺🇸 US';
+                    hdr.style.cssText = 'font-size:0.78rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-secondary, #9ca3af);margin-bottom:0.35rem;line-height:1.2;';
+                    wrap.appendChild(hdr);
+                }
 
                 const appendRow = (labelText, labelColor, value, opts) => {
                     const row = document.createElement('div');
@@ -64638,6 +64651,33 @@
                 return wrap;
             };
 
+            // 2026-06-19: one-time stylesheet for the "many cuts" mode
+            // toggled below. When 2+ data cuts are selected the big
+            // headline number ("2,894,130 / Crosswalk Respondents") and
+            // its sibling label visually compete with the breakdown
+            // rows for space and get truncated to "2,8..." "Cross..."
+            // on narrow viewports (user screenshot 2026-06-19). In that
+            // mode we drop the big number + label entirely and let the
+            // cmp-stat-list breakdown (Total Universe / Avid / etc.) own
+            // the card. A header row inside the breakdown carries the
+            // card's identity ("📊 Crosswalk Panelists" / "🇺🇸 US")
+            // so the breakdown isn't unlabeled.
+            if (!document.getElementById('cmpManyCutsStyle')) {
+                const s = document.createElement('style');
+                s.id = 'cmpManyCutsStyle';
+                s.textContent =
+                      '.stat-card.cmp-many-cuts .stat-label,'
+                    + '.stat-card.cmp-many-cuts .stat-value,'
+                    + '.metric-card.cmp-many-cuts .metric-icon,'
+                    + '.metric-card.cmp-many-cuts .metric-content { display: none !important; }'
+                    + '.stat-card.cmp-many-cuts .cmp-stat-list,'
+                    + '.metric-card.cmp-many-cuts .cmp-stat-list { margin-top: 0 !important; padding-top: 0 !important; border-top: none !important; }';
+                document.head.appendChild(s);
+            }
+
+            const manyCuts = series.length >= 2;
+            const listOpts = manyCuts ? { showHeader: true } : null;
+
             targets.forEach(t => {
                 const sampleEl = document.getElementById(t.sampleId);
                 const projEl = document.getElementById(t.projId);
@@ -64645,11 +64685,13 @@
                 const projCard = projEl && projEl.closest(t.cardSel);
                 if (sampleCard) sampleCard.querySelectorAll(':scope > .cmp-stat-list').forEach(n => n.remove());
                 if (projCard) projCard.querySelectorAll(':scope > .cmp-stat-list').forEach(n => n.remove());
+                if (sampleCard) sampleCard.classList.toggle('cmp-many-cuts', manyCuts);
+                if (projCard) projCard.classList.toggle('cmp-many-cuts', manyCuts);
                 if (series.length === 0) return;
                 const baseSample = _baseValueFromEl(t.sampleId);
                 const baseProj   = _baseValueFromEl(t.projId);
-                if (sampleCard) sampleCard.appendChild(buildList('sample', baseSample));
-                if (projCard) projCard.appendChild(buildList('proj', baseProj));
+                if (sampleCard) sampleCard.appendChild(buildList('sample', baseSample, listOpts));
+                if (projCard) projCard.appendChild(buildList('proj', baseProj, listOpts));
             });
         }
 
