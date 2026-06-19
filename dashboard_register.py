@@ -4,7 +4,7 @@ Every script that writes a profile CSV to s3://dashboard-inputs/<root>/ MUST
 call `register_profile_in_dashboard(s3_key, ...)` after the upload so the
 profile appears in the dashboard's "Select Profile" dropdown immediately.
 
-There are TWO files the dashboard reads from, both in the same bucket:
+There are THREE files the dashboard reads from, all in the same bucket:
 
   1. system/s3_cache.json
        Persisted profile-selector cache. The Flask app loads this at boot
@@ -20,6 +20,15 @@ There are TWO files the dashboard reads from, both in the same bucket:
        automatically for files uploaded via the app, but files written
        directly to S3 (via boto3 from a script) bypass that path — so
        this helper does it explicitly.
+
+  3. system/users.json -> users[*].allowed_runs
+       Per-user run-access list. Users with allowed_runs=['*'] see
+       everything; users with explicit lists need each new key appended
+       (gated by the user's allowed_categories — '*' or matching cat).
+       The webapp's auto_add_runs_to_all_users() does this automatically
+       for files uploaded via the app; direct-to-S3 scripts bypass that
+       path. This was the gap that hid the Bridesmaids-Casual /
+       Perks-of-Being-a-Wallflower-TU pair from 40 users on 2026-06-18.
 
   NOT system/quick_selects.json — that's an orphan path some old code
   writes to; the dashboard never reads it. Don't write there.
@@ -53,11 +62,60 @@ import boto3
 BUCKET = "dashboard-inputs"
 S3_CACHE_KEY = "system/s3_cache.json"
 QUICK_SELECTS_KEY = "metadata/admin_quick_selects.json"
+USERS_KEY = "system/users.json"
 
 
 def _norm_subject(s: str) -> str:
     s = re.sub(r"\.csv$", "", str(s), flags=re.IGNORECASE)
     return re.sub(r"[^A-Z0-9]+", "_", s.upper()).strip("_")
+
+
+def _add_to_users_allowed_runs(s3, s3_key: str, category: Optional[str]) -> dict:
+    """Mirror of bg-webapp/app.py:auto_add_runs_to_all_users for direct-to-S3
+    scripts. Adds `s3_key` to every user whose allowed_runs is an explicit
+    list (not '*') AND whose allowed_categories matches the profile's category
+    (or is '*'). Idempotent. Failures are logged-and-swallowed because the
+    upload itself should still succeed.
+    """
+    try:
+        resp = s3.get_object(Bucket=BUCKET, Key=USERS_KEY)
+        doc = json.loads(resp["Body"].read().decode("utf-8"))
+    except Exception as e:
+        return {"users_updated": 0, "users_skipped": 0, "error": f"load: {e}"}
+
+    users = doc.get("users", {})
+    cat_upper = (category or "").strip().upper()
+    n_updated = 0
+    n_explicit_skipped_by_cat = 0
+    for uname, u in users.items():
+        runs = u.get("allowed_runs", ["*"])
+        if not isinstance(runs, list) or "*" in runs:
+            continue  # sees everything already
+        cats = u.get("allowed_categories", ["*"])
+        if isinstance(cats, list) and "*" not in cats:
+            cats_upper = {str(c).strip().upper() for c in cats}
+            if cat_upper and cat_upper not in cats_upper:
+                n_explicit_skipped_by_cat += 1
+                continue
+        if s3_key in runs:
+            continue
+        u["allowed_runs"] = list(set(runs) | {s3_key})
+        n_updated += 1
+
+    if n_updated == 0:
+        return {"users_updated": 0, "users_skipped": n_explicit_skipped_by_cat}
+
+    try:
+        s3.put_object(
+            Bucket=BUCKET, Key=USERS_KEY,
+            Body=json.dumps(doc, indent=2).encode("utf-8"),
+            ContentType="application/json",
+            CacheControl="no-cache, max-age=0",
+        )
+    except Exception as e:
+        return {"users_updated": 0, "users_skipped": n_explicit_skipped_by_cat,
+                "error": f"save: {e}"}
+    return {"users_updated": n_updated, "users_skipped": n_explicit_skipped_by_cat}
 
 
 def register_profile_in_dashboard(
@@ -155,12 +213,17 @@ def register_profile_in_dashboard(
             CacheControl="no-cache, max-age=0",
         )
 
+    users_result = _add_to_users_allowed_runs(s3, s3_key, new_entry.get("category"))
+
     return {
         "s3_key": s3_key,
         "cache_added": cache_added,
         "cache_updated": not cache_added,
         "quick_select_added": quick_select_added,
         "quick_select_already_present": not quick_select_added,
+        "users_updated": users_result.get("users_updated", 0),
+        "users_skipped_by_category": users_result.get("users_skipped", 0),
+        "users_error": users_result.get("error"),
     }
 
 
