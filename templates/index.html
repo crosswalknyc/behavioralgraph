@@ -63205,6 +63205,18 @@
         // rewrite its text using the picker's chosen numerator and
         // denominator. Each row carries data attributes (data-cmp-pct-*)
         // written by _cmpStampRowPcts() during column injection.
+        //
+        // 2026-06-19: also rewrites the Index COLUMN HEADERS across the
+        // behavioral cards, interests table, and location tables so the
+        // header reads "Index (Avid ÷ GP)" instead of the unchanging
+        // "Index" — that way the user has positive visible confirmation
+        // the picker is taking effect, even if the numerical delta
+        // between e.g. Avid and Total Universe is small for a given row.
+        // User report: "when I select avid vs gen pop in the index drop
+        // down on profile Iq it isnt changing the index, it still just
+        // shows TU vs GP" — root cause was lack of header feedback
+        // (values DID change but were ~indistinguishable from the
+        // default Total Universe ÷ Gen Pop for Avid-heavy profiles).
         function _cmpApplyIndexSourcePicker() {
             const numKey = _comparisonRunsState.indexNumKey;
             const denKey = _comparisonRunsState.indexDenKey;
@@ -63212,6 +63224,38 @@
             const active = !!(numKey || denKey);
             const effNum = numKey || 'profile';
             const effDen = denKey || 'genpop';
+
+            const _shortLabelFor = (key) => {
+                if (key === 'profile') return (typeof _baseCohortLabel === 'function' ? _baseCohortLabel() : 'Total Universe');
+                if (key === 'genpop')  return 'Gen Pop';
+                const run = (_comparisonRunsState.runsByKey || {})[key];
+                return (run && run.label) || 'Run';
+            };
+            const headerSuffix = active ? ' (' + _shortLabelFor(effNum) + ' ÷ ' + _shortLabelFor(effDen) + ')' : '';
+
+            // Header label update — behavioral cards (every
+            // .behavioral-header-row .index-col), interests list
+            // (.interest-header-row span.index-col), and location tables
+            // (.location-row.header .index-col / .cw-gp-col). We
+            // snapshot the original label the first time so Reset can
+            // put it back verbatim.
+            const headers = document.querySelectorAll(
+                '.behavioral-header-row .index-col, '
+                + '.interest-header-row .index-col, '
+                + '.location-row.header .index-col, '
+                + '.location-row.header .cw-gp-col'
+            );
+            headers.forEach(h => {
+                if (h._cmpOrigLabel == null) h._cmpOrigLabel = h.textContent;
+                h.textContent = h._cmpOrigLabel + headerSuffix;
+            });
+
+            try {
+                console.info('[index picker] active=' + active
+                    + ' numKey=' + (numKey || '(default profile)')
+                    + ' denKey=' + (denKey || '(default genpop)')
+                    + ' effNum=' + effNum + ' effDen=' + effDen);
+            } catch (_) {}
 
             const pctFor = (row, which) => {
                 if (which === 'profile') {
@@ -63226,7 +63270,20 @@
                 return isFinite(v) ? v : null;
             };
 
-            const rows = document.querySelectorAll('.behavioral-item, .interest-item, .location-row');
+            // Data rows only — explicitly EXCLUDE header rows (they
+            // share the `.location-row` class with `.location-row.header`
+            // and used to get their "Index" / "CW GP Index" label
+            // overwritten with "—" because no data-cmp-pct attrs exist
+            // on the header). Behavioral / interests headers are class-
+            // distinct so they were never grabbed by the data-row
+            // selectors, but Location used a shared base class.
+            const rows = document.querySelectorAll(
+                '.behavioral-item, '
+                + '.interest-item, '
+                + '.location-row:not(.header):not(#allLocationsHeader)'
+            );
+            let _picker_updated = 0;
+            let _picker_blanked = 0;
             rows.forEach(row => {
                 const idxCell = row.querySelector('.index-col');
                 if (!idxCell) return;
@@ -63252,6 +63309,7 @@
                 if (numPct == null || denPct == null || denPct === 0) {
                     idxCell.textContent = '—';
                     idxCell.style.color = 'var(--text-secondary, #9ca3af)';
+                    _picker_blanked++;
                     return;
                 }
                 const idxVal = (numPct / denPct) * 100;
@@ -63263,7 +63321,11 @@
                 idxCell.textContent = txt;
                 idxCell.style.color = (idxVal >= 100) ? 'var(--accent-green, #66d9ef)' : 'var(--accent-red, #f92672)';
                 idxCell.style.fontWeight = '700';
+                _picker_updated++;
             });
+            try {
+                console.info('[index picker] updated=' + _picker_updated + ' blanked=' + _picker_blanked + ' total=' + rows.length);
+            } catch (_) {}
         }
 
         // Write per-row pct attributes the picker reads. Called at the
