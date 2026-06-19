@@ -49,7 +49,14 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
     "BRAND": [
         "ACCESSORIES", "ACTIVEWEAR", "AMUSEMENT PARKS", "APPAREL",
         "APPAREL/FOOTWEAR", "AUTOMOBILE",
-        "B2B", "BANKS", "BEAUTY", "BETTING", "BEVERAGE", "CASUAL DINING", "CPG",
+        # 'BANK' is the canonical value the Profile-IQ pipeline writes into
+        # the BRAND CATEGORY row for traditional retail banks (Bank of
+        # America, Citibank, Wells Fargo, BMO, Bread Financial, ...). Older
+        # 'BANKS' (plural) is kept for legacy files; 'BANKING' covered for
+        # forward compatibility. Without these, bank profiles fall through
+        # to 'OTHER' and are hidden from the leaderboard tabs.
+        "B2B", "BANK", "BANKS", "BANKING",
+        "BEAUTY", "BETTING", "BEVERAGE", "CASUAL DINING", "CPG",
         "CREDIT PROVIDERS", "CREDIT PROVIDER", "DIGITAL BANKING", "EVENTS",
         "FOOTWEAR", "FRANCHISE", "GROCERY", "INTIMATES", "JEWELRY", "MEMBERSHIP",
         "NON PROFIT/CHARITY", "PHARMA", "QSR", "RETAILERS", "SECURITY",
