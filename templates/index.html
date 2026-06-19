@@ -64675,7 +64675,15 @@
                 document.head.appendChild(s);
             }
 
-            const manyCuts = series.length >= 2;
+            // 2026-06-19 (revised): trigger on >= 1 cut, not >= 2.
+            // `series` is the data-cuts list only (excludes the base
+            // Total Universe row that's always shown in the breakdown
+            // when any cut is active), so series.length === 1 still
+            // produces a 2-row breakdown (Total Universe + the cut).
+            // User screenshot showed "2,8..." / "Cross..." truncation
+            // with exactly one cut (Avid), so the threshold needed to
+            // drop. Call it `manyCuts` for legacy reasons.
+            const manyCuts = series.length >= 1;
             const listOpts = manyCuts ? { showHeader: true } : null;
 
             targets.forEach(t => {
