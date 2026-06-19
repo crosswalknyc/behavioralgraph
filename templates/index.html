@@ -102278,16 +102278,24 @@
         </div>
     </div>
     
-    <!-- Chat Widget -->
+    <!-- Chat Widget — REMOVED 2026-06-18 per user request: floating 💬
+         bubble was overlapping dashboard content in the bottom-right
+         corner and had no clear product home. Entire block is preserved
+         here as an HTML comment so we can restore it (uncomment the
+         block below) without re-deriving the markup, status menu, group
+         chat handler, etc. The .chat-widget* CSS in the <style> block
+         and the toggleChatWindow / setMyChatStatus / sendChatMessage JS
+         helpers are intentionally LEFT IN PLACE — they no-op safely
+         when the DOM elements are absent, and keeping them means the
+         restore is a single uncomment.
     <div class="chat-widget" id="chatWidget">
         <button class="chat-widget-btn" onclick="toggleChatWindow()" id="chatWidgetBtn">
-            💬
+            CHAT
             <span class="unread-badge" id="chatUnreadBadge" style="display: none;">0</span>
         </button>
-        
         <div class="chat-window" id="chatWindow">
             <div class="chat-header">
-                <h3>💬 Team Chat</h3>
+                <h3>Team Chat</h3>
                 <div class="chat-header-actions" style="display: flex; align-items: center; gap: 0.5rem;">
                     <div class="chat-status-dropdown" style="position: relative;">
                         <button id="chatStatusBtn" onclick="toggleChatStatusMenu()" title="Your status" style="background: transparent; border: none; cursor: pointer; padding: 0.25rem; display: flex; align-items: center;">
@@ -102303,45 +102311,38 @@
                             </button>
                         </div>
                     </div>
-                    <button onclick="startNewGroupChat()" title="New Group Chat">👥</button>
-                    <button onclick="toggleChatWindow()" title="Minimize">−</button>
+                    <button onclick="startNewGroupChat()" title="New Group Chat">+G</button>
+                    <button onclick="toggleChatWindow()" title="Minimize">-</button>
                 </div>
             </div>
-            
             <div class="chat-body">
-                <!-- Contact List View -->
                 <div class="chat-contacts" id="chatContactsView">
                     <div class="chat-contacts-search">
-                        <input type="text" id="chatSearchInput" placeholder="🔍 Search team members..." oninput="filterChatContacts(this.value)">
+                        <input type="text" id="chatSearchInput" placeholder="Search team members..." oninput="filterChatContacts(this.value)">
                     </div>
                     <div class="chat-new-group">
                         <button onclick="startNewGroupChat()">+ New Group Chat</button>
                     </div>
-                    <div id="chatContactsList">
-                        <!-- Populated by JS -->
-                    </div>
+                    <div id="chatContactsList"></div>
                 </div>
-                
-                <!-- Conversation View -->
                 <div class="chat-conversation" id="chatConversationView">
                     <div class="chat-conversation-header">
-                        <button class="chat-back-btn" onclick="backToChatContacts()">←</button>
+                        <button class="chat-back-btn" onclick="backToChatContacts()">&lt;</button>
                         <div class="chat-conversation-avatar" id="chatConvoAvatar">
                             <div class="avatar-initials">?</div>
                         </div>
                         <span class="chat-conversation-name" id="chatConvoName">Chat</span>
                     </div>
-                    <div class="chat-messages" id="chatMessages">
-                        <!-- Messages populated by JS -->
-                    </div>
+                    <div class="chat-messages" id="chatMessages"></div>
                     <div class="chat-input-area">
                         <input type="text" id="chatMessageInput" placeholder="Type a message..." onkeypress="handleChatKeyPress(event)">
-                        <button class="chat-send-btn" onclick="sendChatMessage()">➤</button>
+                        <button class="chat-send-btn" onclick="sendChatMessage()">send</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    -->
     
     <!-- Left-justified footer with data source — hidden 2026-06-03 because the
          fixed-position bar was overlaying the bottom of dashboard views and
