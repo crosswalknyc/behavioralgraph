@@ -64594,24 +64594,30 @@
             // first row in compare-mode reads "Casual Fan  n=X" — that
             // labels the big number above unambiguously when one or more
             // data cuts are stacked underneath.
+            // 2026-06-19: bumped row typography (font-size 0.72 -> 0.95rem,
+            // label weight 600 -> 700, value weight 500 -> 700, gap 0.18
+            // -> 0.4rem, dashed border -> solid 1px for stronger
+            // separation) per user feedback "Avid and Total Audience
+            // need to be more prominent". The Total Universe / Avid
+            // breakdown lines under the big Crosswalk Respondents / US
+            // numbers used to read as tiny grey caption text; now they
+            // sit at near-body-copy size and bold so the cohort scale
+            // is immediately legible.
             const buildList = (which, baseValue) => {
                 const wrap = document.createElement('div');
                 wrap.className = 'cmp-stat-list';
-                wrap.style.cssText = 'margin-top:0.5rem;display:flex;flex-direction:column;gap:0.18rem;padding-top:0.4rem;border-top:1px dashed var(--border-color, rgba(255,255,255,0.08));';
+                wrap.style.cssText = 'margin-top:0.65rem;display:flex;flex-direction:column;gap:0.4rem;padding-top:0.55rem;border-top:1px solid var(--border-color, rgba(255,255,255,0.14));';
 
                 const appendRow = (labelText, labelColor, value, opts) => {
                     const row = document.createElement('div');
-                    row.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;font-size:0.72rem;line-height:1.25;';
+                    row.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem;font-size:0.95rem;line-height:1.3;';
                     const lbl = document.createElement('span');
                     lbl.textContent = labelText;
                     lbl.title = labelText;
-                    lbl.style.cssText = 'color:' + labelColor + ';font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;';
+                    lbl.style.cssText = 'color:' + labelColor + ';font-weight:700;letter-spacing:0.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;';
                     const val = document.createElement('span');
                     val.textContent = (which === 'sample' ? 'n=' : '') + _fmt(value);
-                    val.style.cssText = 'color:var(--text-primary, #e6e6e6);font-variant-numeric:tabular-nums;font-weight:500;';
-                    if (opts && opts.subtle) {
-                        row.style.opacity = '0.95';
-                    }
+                    val.style.cssText = 'color:var(--text-primary, #e6e6e6);font-variant-numeric:tabular-nums;font-weight:700;';
                     row.appendChild(lbl);
                     row.appendChild(val);
                     wrap.appendChild(row);
@@ -64619,7 +64625,7 @@
 
                 // Casual / Core = the base profile. Always first when active.
                 if (baseValue != null && baseValue > 0) {
-                    appendRow(_baseCohortLabel(), CASUAL_FAN_LABEL_COLOR, baseValue, { subtle: true });
+                    appendRow(_baseCohortLabel(), CASUAL_FAN_LABEL_COLOR, baseValue);
                 }
 
                 series.forEach((entry, idx) => {
