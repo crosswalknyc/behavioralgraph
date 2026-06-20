@@ -63201,6 +63201,161 @@
             }
         }
 
+        // ============================================================
+        // PICKER-DERIVED DATA HELPERS (2026-06-19)
+        // ============================================================
+        // The Index source picker historically only affected the .index-col
+        // cells in the behavioral / interests / location tables. Per user
+        // 2026-06-19: "whatever you select to index against should also
+        // show here like it does with a regular TU vs GP display — anywhere
+        // an index is shown". So the picker's (numKey, denKey) needs to be
+        // a global source of truth for downstream renders: Audience
+        // Snapshot demographic indexes, Key Takeaways multipliers, and
+        // (eventually) demographic chart bars, Key Differentiators, etc.
+        //
+        // Helpers below produce a parsed-shaped data object whose
+        // .demographics dict comes from the numerator cohort and whose
+        // .demographicsIndex is either (a) the numerator's pre-computed
+        // index when denKey is genpop — that index IS already num/GP —
+        // or (b) freshly computed num.demographics / den.demographics * 100
+        // when denKey is a non-GP cohort.
+
+        // Look up the parsed-shaped data for a picker key.
+        //   'profile' / null / undefined -> the active profile (originalData)
+        //   'genpop'                     -> null (sentinel; back-derive via
+        //                                  numerator's demographicsIndex)
+        //   <run_key>                    -> _comparisonRunsState.runsByKey[k].parsed
+        function _pickerDataForKey(key, originalData) {
+            if (key === 'profile' || !key) return originalData || null;
+            if (key === 'genpop') return null;
+            const runsByKey = (_comparisonRunsState && _comparisonRunsState.runsByKey) || {};
+            const run = runsByKey[key];
+            return (run && run.parsed) || null;
+        }
+
+        // Friendly label for a picker key — drives "<num> ÷ <den>" callouts.
+        function _pickerLabelForKey(key) {
+            if (key === 'profile' || !key) return (typeof _baseCohortLabel === 'function' ? _baseCohortLabel() : 'Total Universe');
+            if (key === 'genpop') return 'Gen Pop';
+            const runsByKey = (_comparisonRunsState && _comparisonRunsState.runsByKey) || {};
+            const run = runsByKey[key];
+            return (run && run.label) || 'Run';
+        }
+
+        // Build a parsed-shaped data object for the current picker state.
+        // Falls back to originalData when the picker is at its default
+        // ("Profile vs Gen Pop") so existing behavior is unchanged.
+        function _pickerDeriveSnapshotData(originalData) {
+            if (!originalData) return originalData;
+            const numKey = _comparisonRunsState && _comparisonRunsState.indexNumKey;
+            const denKey = _comparisonRunsState && _comparisonRunsState.indexDenKey;
+            // Default picker (both null OR num=profile + den=genpop) ->
+            // no override needed; return original.
+            if (!numKey && !denKey) return originalData;
+
+            const numData = _pickerDataForKey(numKey || 'profile', originalData);
+            // If we can't resolve the numerator's parsed data, bail out
+            // gracefully — the user shouldn't see a broken snapshot just
+            // because a run failed to load.
+            if (!numData) return originalData;
+
+            const effDenKey = denKey || 'genpop';
+            // When denominator is GP, the numerator's pre-computed
+            // demographicsIndex IS num/GP — no recomputation needed.
+            if (effDenKey === 'genpop') {
+                return numData;
+            }
+
+            const denData = _pickerDataForKey(effDenKey, originalData);
+            if (!denData || !denData.demographics) return numData;
+
+            // Recompute demographicsIndex bucket-by-bucket as
+            // num.demographics[cat][bucket] / den.demographics[cat][bucket] * 100.
+            const demoCats = ['gender', 'age', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
+            const newIndex = {};
+            const numDemos = (numData && numData.demographics) || {};
+            const denDemos = denData.demographics || {};
+            demoCats.forEach(cat => {
+                const numDemo = numDemos[cat] || {};
+                const denDemo = denDemos[cat] || {};
+                newIndex[cat] = {};
+                Object.keys(numDemo).forEach(bucket => {
+                    const np = Number(numDemo[bucket]);
+                    const dp = Number(denDemo[bucket]);
+                    newIndex[cat][bucket] = (isFinite(np) && isFinite(dp) && dp > 0)
+                        ? (np / dp) * 100
+                        : 100;
+                });
+            });
+
+            return Object.assign({}, numData, { demographicsIndex: newIndex });
+        }
+
+        // Rebuild the Insights tab Audience Snapshot grid + the
+        // "Key Takeaways vs Gen Pop" bullets using the picker's
+        // currently-selected num/den cohorts. Cheap; safe to call from
+        // the picker change handler. Skipped silently when the snapshot
+        // hasn't been initialized yet (e.g. before a profile is loaded).
+        function _rerenderAudienceSnapshotForPicker() {
+            try {
+                if (typeof currentDashboardData === 'undefined' || !currentDashboardData) return;
+                const snapshotEl = document.getElementById('audienceSnapshot');
+                if (!snapshotEl) return;
+                const data = _pickerDeriveSnapshotData(currentDashboardData);
+                if (!data || !data.demographics) return;
+
+                const demoInsights = [];
+                const _topBucketIdx = (cat, ucCat) => {
+                    const dict = data.demographics[cat] || {};
+                    const top = Object.entries(dict).sort((a, b) => b[1] - a[1])[0];
+                    if (!top) return null;
+                    const idxDict = (data.demographicsIndex || {});
+                    const idx = (idxDict[cat] && idxDict[cat][top[0]])
+                              || (idxDict[ucCat] && idxDict[ucCat][top[0]])
+                              || 100;
+                    return { bucket: top[0], pct: top[1], idx };
+                };
+
+                const g = _topBucketIdx('gender', 'Gender');
+                if (g) demoInsights.push({ label: 'Dominant Gender', value: g.bucket, sub: g.pct.toFixed(2) + '%', index: g.idx });
+                const a = _topBucketIdx('age', 'Age');
+                if (a) demoInsights.push({ label: 'Largest Age Group', value: (typeof getAgeDisplayLabel === 'function' ? getAgeDisplayLabel(a.bucket) : a.bucket), sub: a.pct.toFixed(2) + '%', index: a.idx });
+                const e = _topBucketIdx('ethnicity', 'Ethnicity');
+                if (e) demoInsights.push({ label: 'Top Ethnicity', value: e.bucket, sub: e.pct.toFixed(2) + '%', index: e.idx });
+                const i = _topBucketIdx('income', 'Income');
+                if (i) demoInsights.push({ label: 'Top Income', value: i.bucket, sub: i.pct.toFixed(2) + '%', index: i.idx });
+
+                const snapshotTooltips = {
+                    'Dominant Gender': 'The gender that makes up the largest percentage of this audience.',
+                    'Largest Age Group': 'The age bracket that represents the highest share of this audience.',
+                    'Top Ethnicity': 'The ethnic group that comprises the largest portion of this audience.',
+                    'Top Income': 'The income bracket most common among this audience.'
+                };
+
+                const _isGP = (typeof isSelectedProfileGenPop === 'function') ? isSelectedProfileGenPop() : false;
+                const denLabel = _pickerLabelForKey(_comparisonRunsState.indexDenKey || 'genpop');
+                snapshotEl.innerHTML = demoInsights.map(d => {
+                    const idxDisplay = String(Math.round(Number(d.index)));
+                    const idxColor = (typeof getIndexColor === 'function') ? getIndexColor(d.index) : '';
+                    const indexHtml = _isGP ? '' : `<div class="snapshot-index" style="font-size: 0.75rem; font-weight: 600; color: ${idxColor}; margin-top: 0.25rem;">${idxDisplay}</div>`;
+                    const tooltipIdx = _isGP ? '' : ` Index: ${idxDisplay} vs ${denLabel} (100 = same as ${denLabel}).`;
+                    return `
+                    <div class="snapshot-item has-tooltip" data-tooltip="${snapshotTooltips[d.label] || d.label}: ${d.value} at ${d.sub} of the audience.${tooltipIdx}">
+                        <div class="snapshot-label">${d.label}</div>
+                        <div class="snapshot-value">${d.value}</div>
+                        <div class="snapshot-subtext">${d.sub}</div>
+                        ${indexHtml}
+                    </div>`;
+                }).join('') || '<div class="snapshot-loading">No demographic data</div>';
+
+                if (typeof generateAudienceTakeaways === 'function') {
+                    generateAudienceTakeaways(demoInsights, data, { denLabel: denLabel });
+                }
+            } catch (err) {
+                console.warn('[picker] snapshot re-render failed', err);
+            }
+        }
+
         // Walk every dashboard table that exposes an .index-col cell and
         // rewrite its text using the picker's chosen numerator and
         // denominator. Each row carries data attributes (data-cmp-pct-*)
@@ -63326,6 +63481,13 @@
             try {
                 console.info('[index picker] updated=' + _picker_updated + ' blanked=' + _picker_blanked + ' total=' + rows.length);
             } catch (_) {}
+
+            // 2026-06-19: per user "anywhere an index is shown" — also
+            // re-render the Insights tab Audience Snapshot grid + Key
+            // Takeaways bullets against the picker's chosen num/den
+            // cohorts. Helper is defensively try/catched so a missing
+            // run or unparseable cohort doesn't break the picker.
+            try { _rerenderAudienceSnapshotForPicker(); } catch (e) { console.warn('[index picker] snapshot re-render failed', e); }
         }
 
         // Write per-row pct attributes the picker reads. Called at the
@@ -69328,10 +69490,20 @@
         }
         
         // Generate audience vs Gen Pop takeaways with AI behavioral summary
-        async function generateAudienceTakeaways(demoInsights, data) {
+        async function generateAudienceTakeaways(demoInsights, data, opts) {
             const takeawaysContainer = document.getElementById('audienceTakeaways');
             if (!takeawaysContainer) return;
-            
+
+            // 2026-06-19: when the Index source picker selects a non-GP
+            // denominator (e.g. "Avid vs Total Universe"), every "vs Gen
+            // Pop" / "than Gen Pop" / "over Gen Pop" string in the
+            // takeaway bullets should swap to the picker's actual
+            // denominator label. opts.denLabel is passed by
+            // _rerenderAudienceSnapshotForPicker(); falls back to "Gen
+            // Pop" for the default-picker code path that calls this
+            // from renderTopInsights.
+            const denLabel = (opts && opts.denLabel) || 'Gen Pop';
+
             const takeaways = [];
             const brandName = currentDashboardData?.brandName || 'This audience';
             
@@ -69345,11 +69517,11 @@
                     const idxNorm = idx > 0 && idx < 10 ? idx * 100 : idx;
                     const mult = (idxNorm / 100).toFixed(3);
                     if (idxNorm >= 105) {
-                        takeaways.push(`<span class="takeaway-over">Gender skews ${d.value.toLowerCase()}</span> — ${d.sub} (${mult}x vs Gen Pop)`);
+                        takeaways.push(`<span class="takeaway-over">Gender skews ${d.value.toLowerCase()}</span> — ${d.sub} (${mult}x vs ${denLabel})`);
                     } else if (idxNorm <= 95) {
-                        takeaways.push(`<span class="takeaway-under">Under-indexes on ${d.value.toLowerCase()}</span> — ${mult}x vs Gen Pop`);
+                        takeaways.push(`<span class="takeaway-under">Under-indexes on ${d.value.toLowerCase()}</span> — ${mult}x vs ${denLabel}`);
                     } else {
-                        takeaways.push(`Gender <span class="takeaway-highlight">similar to Gen Pop</span> (${d.value} ${d.sub})`);
+                        takeaways.push(`Gender <span class="takeaway-highlight">similar to ${denLabel}</span> (${d.value} ${d.sub})`);
                     }
                 }
                 
@@ -69357,7 +69529,7 @@
                     if (idx >= 150) {
                         takeaways.push(`<span class="takeaway-over">Core age group</span> — ${d.value} age group is ${idxMultiplier}x over-indexed`);
                     } else if (idx >= 120) {
-                        takeaways.push(`<span class="takeaway-over">Age skews toward ${d.value}</span> — ${idxMultiplier}x more concentrated than Gen Pop`);
+                        takeaways.push(`<span class="takeaway-over">Age skews toward ${d.value}</span> — ${idxMultiplier}x more concentrated than ${denLabel}`);
                     } else if (idx <= 80) {
                         takeaways.push(`Age distribution <span class="takeaway-under">under-indexes</span> in ${d.value} bracket (${idxMultiplier}x)`);
                     } else {
@@ -69367,11 +69539,11 @@
                 
                 if (d.label === 'Top Ethnicity') {
                     if (idx >= 130) {
-                        takeaways.push(`<span class="takeaway-over">Strong ${d.value} representation</span> — ${idxMultiplier}x higher than Gen Pop`);
+                        takeaways.push(`<span class="takeaway-over">Strong ${d.value} representation</span> — ${idxMultiplier}x higher than ${denLabel}`);
                     } else if (idx <= 70) {
-                        takeaways.push(`<span class="takeaway-under">Lower ${d.value} representation</span> than Gen Pop (${idxMultiplier}x)`);
+                        takeaways.push(`<span class="takeaway-under">Lower ${d.value} representation</span> than ${denLabel} (${idxMultiplier}x)`);
                     } else {
-                        takeaways.push(`Ethnicity mix is <span class="takeaway-highlight">representative</span> of Gen Pop`);
+                        takeaways.push(`Ethnicity mix is <span class="takeaway-highlight">representative</span> of ${denLabel}`);
                     }
                 }
                 
@@ -69380,13 +69552,13 @@
                     const isLowIncome = d.value.includes('40') || d.value.includes('60');
                     
                     if (idx >= 130 && isHighIncome) {
-                        takeaways.push(`<span class="takeaway-over">Affluent audience</span> — ${d.value} bracket is ${idxMultiplier}x over Gen Pop`);
+                        takeaways.push(`<span class="takeaway-over">Affluent audience</span> — ${d.value} bracket is ${idxMultiplier}x over ${denLabel}`);
                     } else if (idx >= 120) {
                         takeaways.push(`<span class="takeaway-over">Income skews toward ${d.value}</span> — ${idxMultiplier}x concentration`);
                     } else if (idx <= 80) {
                         takeaways.push(`Income <span class="takeaway-under">under-indexes</span> in ${d.value} range (${idxMultiplier}x)`);
                     } else {
-                        takeaways.push(`Income distribution is <span class="takeaway-highlight">aligned with Gen Pop</span>`);
+                        takeaways.push(`Income distribution is <span class="takeaway-highlight">aligned with ${denLabel}</span>`);
                     }
                 }
             });
@@ -69479,7 +69651,7 @@
             if (takeaways.length > 0) {
                 takeawaysContainer.innerHTML = `
                     <div class="audience-takeaways-title">
-                        <span>📊</span> Key Takeaways vs Gen Pop
+                        <span>📊</span> Key Takeaways vs ${denLabel}
                     </div>
                     <ul>
                         ${takeaways.map(t => `<li>${t}</li>`).join('')}
