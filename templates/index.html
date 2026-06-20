@@ -60990,9 +60990,14 @@
             const profileInfo = document.getElementById('dashProfileInfo');
             if (profileInfo && brandName) {
                 profileInfo.style.display = 'flex';
+                // 2026-06-20: clear the cached base title before writing
+                // the new one so the previous profile's name doesn't
+                // bleed through when _updateProfileTitleForVisibleCohorts
+                // strips/re-applies the " - <Cohort>" suffix.
+                try { _resetProfileTitleCache(); } catch (_) {}
                 document.getElementById('dashBrandNameHeader').textContent = headerTitle;
                 updateDashProfileHeaderMeta(resolvedDateRange, parsed);
-                
+
                 // Fetch profile image (custom uploads only)
                 fetchProfileImage(brandName);
             }
@@ -62458,6 +62463,8 @@
             _comparisonRunsState.includeCasualFan = !!val;
             try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] casual-fan toggle charts failed', e); }
             try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] casual-fan toggle tables failed', e); }
+            // 2026-06-20: visible-cohorts list changed; refresh Insights tab.
+            try { _renderInsightsForVisibleCohorts(); } catch (e) { console.warn('[insights] casual-fan toggle render failed', e); }
         }
 
         // ---------------------------------------------------------------
@@ -63094,6 +63101,7 @@
                 try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] norm off charts failed', e); }
                 try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] norm off tables failed', e); }
                 try { _refreshIndexSourcePickerOptions(); } catch (_) {}
+                try { _renderInsightsForVisibleCohorts(); } catch (e) { console.warn('[insights] norm off render failed', e); }
                 return { ok: true };
             }
             // Loading…
@@ -63128,6 +63136,7 @@
             try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('[compare] norm on charts failed', e); }
             try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] norm on tables failed', e); }
             try { _refreshIndexSourcePickerOptions(); } catch (_) {}
+            try { _renderInsightsForVisibleCohorts(); } catch (e) { console.warn('[insights] norm on render failed', e); }
             return { ok: true };
         }
 
@@ -63291,69 +63300,269 @@
             return Object.assign({}, numData, { demographicsIndex: newIndex });
         }
 
-        // Rebuild the Insights tab Audience Snapshot grid + the
-        // "Key Takeaways vs Gen Pop" bullets using the picker's
-        // currently-selected num/den cohorts. Cheap; safe to call from
-        // the picker change handler. Skipped silently when the snapshot
-        // hasn't been initialized yet (e.g. before a profile is loaded).
-        function _rerenderAudienceSnapshotForPicker() {
+        // ============================================================
+        // MULTI-COHORT INSIGHTS RENDERER (2026-06-20)
+        // ============================================================
+        // User feedback 2026-06-20 (Kevin Durant screenshot with TU +
+        // Avid + Norm cohorts visible): "on this page these need to
+        // have stats for all selected so if you select TU and Avid you
+        // would say dominant gender Total universe and have it then
+        // total gender avid then show it. then do key takeaways avid,
+        // key takeaways total universe. if you deselect total universe
+        // and only show avid this page would only be based on avid and
+        // in the title it would say kevin durant - avid. if it was only
+        // total universe it would say kevin durant - total universe if
+        // it is more than one cut it would just say kevin durant".
+        //
+        // Translation:
+        //   - The Insights tab Audience Snapshot grid + Key Takeaways
+        //     bullets need a SECTION PER VISIBLE COHORT.
+        //   - Visible cohorts = base Total Universe (when
+        //     includeCasualFan !== false) + every selected data cut
+        //     (including Category Norm).
+        //   - When exactly 1 cohort is visible, the dashboard header
+        //     title gets " - <CohortLabel>" suffix. 0 or 2+ cohorts =
+        //     bare base title (snapshot/takeaways still render N
+        //     sections in the 2+ case).
+        //   - Index denominator for each cohort's section is whatever
+        //     the picker has set (defaults to Gen Pop).
+
+        // Resolve the list of cohorts whose snapshot + takeaways should
+        // render on the Insights tab. Always includes the base Total
+        // Universe row unless the user has explicitly hidden it via the
+        // "Show Total Universe" checkbox in the Data Cuts popover.
+        function _getVisibleCohorts(originalData) {
+            const out = [];
+            const state = _comparisonRunsState || {};
+            const includeTU = state.includeCasualFan !== false;
+            const selectedKeys = Array.isArray(state.selectedKeys) ? state.selectedKeys : [];
+            const runsByKey = state.runsByKey || {};
+
+            if (includeTU && originalData) {
+                out.push({
+                    key: 'profile',
+                    label: (typeof _baseCohortLabel === 'function' ? _baseCohortLabel() : 'Total Universe'),
+                    parsed: originalData
+                });
+            }
+            selectedKeys.forEach(k => {
+                const run = runsByKey[k];
+                if (!run || !run.parsed) return;
+                out.push({
+                    key: k,
+                    label: run.label || 'Run',
+                    parsed: run.parsed
+                });
+            });
+            return out;
+        }
+
+        // Extract the four-tile Audience Snapshot demoInsights from a
+        // parsed-shaped data object. Optional indexOverride lets the
+        // caller supply a recomputed demographicsIndex (e.g. when the
+        // picker denominator isn't Gen Pop).
+        function _computeDemoInsights(data, indexOverride) {
+            if (!data || !data.demographics) return [];
+            const idxRoot = indexOverride || data.demographicsIndex || {};
+            const _top = (cat, ucCat) => {
+                const dict = data.demographics[cat] || {};
+                const top = Object.entries(dict).sort((a, b) => b[1] - a[1])[0];
+                if (!top) return null;
+                const idx = (idxRoot[cat] && idxRoot[cat][top[0]])
+                          || (idxRoot[ucCat] && idxRoot[ucCat][top[0]])
+                          || 100;
+                return { bucket: top[0], pct: top[1], idx };
+            };
+            const out = [];
+            const g = _top('gender', 'Gender');
+            if (g) out.push({ label: 'Dominant Gender', value: g.bucket, sub: g.pct.toFixed(2) + '%', index: g.idx });
+            const a = _top('age', 'Age');
+            if (a) out.push({ label: 'Largest Age Group', value: (typeof getAgeDisplayLabel === 'function' ? getAgeDisplayLabel(a.bucket) : a.bucket), sub: a.pct.toFixed(2) + '%', index: a.idx });
+            const e = _top('ethnicity', 'Ethnicity');
+            if (e) out.push({ label: 'Top Ethnicity', value: e.bucket, sub: e.pct.toFixed(2) + '%', index: e.idx });
+            const i = _top('income', 'Income');
+            if (i) out.push({ label: 'Top Income', value: i.bucket, sub: i.pct.toFixed(2) + '%', index: i.idx });
+            return out;
+        }
+
+        // Build a recomputed demographicsIndex for a cohort's parsed data
+        // when the picker denominator isn't Gen Pop. Returns undefined
+        // (so callers fall back to cohort.parsed.demographicsIndex) when
+        // den is Gen Pop or denData is missing.
+        function _denOverrideForCohort(cohortParsed, denKey, denData) {
+            if (!denKey || denKey === 'genpop') return undefined;
+            if (!denData || !denData.demographics) return undefined;
+            const demoCats = ['gender', 'age', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
+            const out = {};
+            const numDemos = (cohortParsed && cohortParsed.demographics) || {};
+            const denDemos = denData.demographics || {};
+            demoCats.forEach(cat => {
+                const numDemo = numDemos[cat] || {};
+                const denDemo = denDemos[cat] || {};
+                out[cat] = {};
+                Object.keys(numDemo).forEach(bucket => {
+                    const np = Number(numDemo[bucket]);
+                    const dp = Number(denDemo[bucket]);
+                    out[cat][bucket] = (isFinite(np) && isFinite(dp) && dp > 0)
+                        ? (np / dp) * 100
+                        : 100;
+                });
+            });
+            return out;
+        }
+
+        // Single source of truth for the four-tile snapshot HTML
+        // (no wrapping grid; caller is responsible for the .audience-
+        // snapshot grid container around the tiles).
+        function _buildSnapshotTilesHTML(demoInsights, opts) {
+            const isGP = !!(opts && opts.isGP);
+            const denLabel = (opts && opts.denLabel) || 'Gen Pop';
+            const snapshotTooltips = {
+                'Dominant Gender': 'The gender that makes up the largest percentage of this audience.',
+                'Largest Age Group': 'The age bracket that represents the highest share of this audience.',
+                'Top Ethnicity': 'The ethnic group that comprises the largest portion of this audience.',
+                'Top Income': 'The income bracket most common among this audience.'
+            };
+            return demoInsights.map(d => {
+                const idxDisplay = String(Math.round(Number(d.index)));
+                const idxColor = (typeof getIndexColor === 'function') ? getIndexColor(d.index) : '';
+                const indexHtml = isGP ? '' : `<div class="snapshot-index" style="font-size: 0.75rem; font-weight: 600; color: ${idxColor}; margin-top: 0.25rem;">${idxDisplay}</div>`;
+                const tooltipIdx = isGP ? '' : ` Index: ${idxDisplay} vs ${denLabel} (100 = same as ${denLabel}).`;
+                return `
+                <div class="snapshot-item has-tooltip" data-tooltip="${snapshotTooltips[d.label] || d.label}: ${d.value} at ${d.sub} of the audience.${tooltipIdx}">
+                    <div class="snapshot-label">${d.label}</div>
+                    <div class="snapshot-value">${d.value}</div>
+                    <div class="snapshot-subtext">${d.sub}</div>
+                    ${indexHtml}
+                </div>`;
+            }).join('');
+        }
+
+        // Update the dashboard header title (#dashBrandNameHeader) with a
+        // " - <CohortLabel>" suffix when exactly one cohort is visible.
+        // The base title (originally set by renderDashboard) is cached
+        // on the element via dataset.baseTitle so suffix toggles are
+        // reversible.
+        function _updateProfileTitleForVisibleCohorts(cohorts) {
+            const el = document.getElementById('dashBrandNameHeader');
+            if (!el) return;
+            const current = (el.textContent || '').trim();
+            // Cache the base title on first call (or when no suffix is
+            // currently applied). Strip any pre-existing " - X" suffix
+            // when re-caching so we always store the bare name.
+            if (!el.dataset.baseTitle) {
+                el.dataset.baseTitle = current.replace(/\s+-\s+.+$/, '').trim();
+            }
+            const base = el.dataset.baseTitle || current;
+            if (cohorts.length === 1) {
+                el.textContent = base + ' - ' + cohorts[0].label;
+            } else {
+                el.textContent = base;
+            }
+        }
+
+        // Reset the cached base title — call from renderDashboard when
+        // loading a new profile so the previous profile's cached title
+        // doesn't leak into the new one.
+        function _resetProfileTitleCache() {
+            const el = document.getElementById('dashBrandNameHeader');
+            if (el && el.dataset.baseTitle) delete el.dataset.baseTitle;
+        }
+
+        // Main entrypoint: rebuild Insights tab Audience Snapshot grid +
+        // Key Takeaways bullets across all visible cohorts. Replaces the
+        // single-cohort _rerenderAudienceSnapshotForPicker. Safe to call
+        // from any cohort-state-change handler (picker change, data cut
+        // toggle, casual-fan toggle, norm toggle, profile load).
+        function _renderInsightsForVisibleCohorts() {
             try {
                 if (typeof currentDashboardData === 'undefined' || !currentDashboardData) return;
                 const snapshotEl = document.getElementById('audienceSnapshot');
-                if (!snapshotEl) return;
-                const data = _pickerDeriveSnapshotData(currentDashboardData);
-                if (!data || !data.demographics) return;
+                const takeawaysEl = document.getElementById('audienceTakeaways');
+                if (!snapshotEl && !takeawaysEl) return;
 
-                const demoInsights = [];
-                const _topBucketIdx = (cat, ucCat) => {
-                    const dict = data.demographics[cat] || {};
-                    const top = Object.entries(dict).sort((a, b) => b[1] - a[1])[0];
-                    if (!top) return null;
-                    const idxDict = (data.demographicsIndex || {});
-                    const idx = (idxDict[cat] && idxDict[cat][top[0]])
-                              || (idxDict[ucCat] && idxDict[ucCat][top[0]])
-                              || 100;
-                    return { bucket: top[0], pct: top[1], idx };
-                };
+                const cohorts = _getVisibleCohorts(currentDashboardData);
 
-                const g = _topBucketIdx('gender', 'Gender');
-                if (g) demoInsights.push({ label: 'Dominant Gender', value: g.bucket, sub: g.pct.toFixed(2) + '%', index: g.idx });
-                const a = _topBucketIdx('age', 'Age');
-                if (a) demoInsights.push({ label: 'Largest Age Group', value: (typeof getAgeDisplayLabel === 'function' ? getAgeDisplayLabel(a.bucket) : a.bucket), sub: a.pct.toFixed(2) + '%', index: a.idx });
-                const e = _topBucketIdx('ethnicity', 'Ethnicity');
-                if (e) demoInsights.push({ label: 'Top Ethnicity', value: e.bucket, sub: e.pct.toFixed(2) + '%', index: e.idx });
-                const i = _topBucketIdx('income', 'Income');
-                if (i) demoInsights.push({ label: 'Top Income', value: i.bucket, sub: i.pct.toFixed(2) + '%', index: i.idx });
+                // Always refresh the title — even if there's no data
+                // yet, this clears any stale suffix from the previous
+                // cohort state.
+                _updateProfileTitleForVisibleCohorts(cohorts);
 
-                const snapshotTooltips = {
-                    'Dominant Gender': 'The gender that makes up the largest percentage of this audience.',
-                    'Largest Age Group': 'The age bracket that represents the highest share of this audience.',
-                    'Top Ethnicity': 'The ethnic group that comprises the largest portion of this audience.',
-                    'Top Income': 'The income bracket most common among this audience.'
-                };
+                if (cohorts.length === 0) {
+                    if (snapshotEl) snapshotEl.innerHTML = '<div class="snapshot-loading">Select a cohort to see audience snapshot.</div>';
+                    if (takeawaysEl) {
+                        takeawaysEl.innerHTML = '';
+                        takeawaysEl.style.display = 'none';
+                    }
+                    return;
+                }
 
                 const _isGP = (typeof isSelectedProfileGenPop === 'function') ? isSelectedProfileGenPop() : false;
-                const denLabel = _pickerLabelForKey(_comparisonRunsState.indexDenKey || 'genpop');
-                snapshotEl.innerHTML = demoInsights.map(d => {
-                    const idxDisplay = String(Math.round(Number(d.index)));
-                    const idxColor = (typeof getIndexColor === 'function') ? getIndexColor(d.index) : '';
-                    const indexHtml = _isGP ? '' : `<div class="snapshot-index" style="font-size: 0.75rem; font-weight: 600; color: ${idxColor}; margin-top: 0.25rem;">${idxDisplay}</div>`;
-                    const tooltipIdx = _isGP ? '' : ` Index: ${idxDisplay} vs ${denLabel} (100 = same as ${denLabel}).`;
-                    return `
-                    <div class="snapshot-item has-tooltip" data-tooltip="${snapshotTooltips[d.label] || d.label}: ${d.value} at ${d.sub} of the audience.${tooltipIdx}">
-                        <div class="snapshot-label">${d.label}</div>
-                        <div class="snapshot-value">${d.value}</div>
-                        <div class="snapshot-subtext">${d.sub}</div>
-                        ${indexHtml}
-                    </div>`;
-                }).join('') || '<div class="snapshot-loading">No demographic data</div>';
+                const denKey = (_comparisonRunsState && _comparisonRunsState.indexDenKey) || 'genpop';
+                const denLabel = _pickerLabelForKey(denKey);
+                const denData = _pickerDataForKey(denKey, currentDashboardData);
 
-                if (typeof generateAudienceTakeaways === 'function') {
-                    generateAudienceTakeaways(demoInsights, data, { denLabel: denLabel });
+                // Pre-compute demoInsights per cohort so both snapshot
+                // tiles and takeaways read from the same numbers.
+                const perCohort = cohorts.map(c => {
+                    const idxOverride = _denOverrideForCohort(c.parsed, denKey, denData);
+                    const insights = _computeDemoInsights(c.parsed, idxOverride);
+                    return { cohort: c, insights };
+                });
+
+                // ---- Snapshot panel --------------------------------
+                if (snapshotEl) {
+                    if (cohorts.length === 1) {
+                        // Single cohort: original flat-grid layout so
+                        // we don't disturb the established look.
+                        snapshotEl.innerHTML = _buildSnapshotTilesHTML(perCohort[0].insights, { isGP: _isGP, denLabel })
+                            || '<div class="snapshot-loading">No demographic data</div>';
+                    } else {
+                        // Multi-cohort: stack labeled sections.
+                        snapshotEl.innerHTML = perCohort.map(p => `
+                            <div class="cohort-snapshot-section" style="grid-column: 1 / -1; margin-bottom: 0.75rem;">
+                                <div class="cohort-section-label" style="font-size:0.78rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-secondary,#9ca3af);margin-bottom:0.45rem;">👤 ${p.cohort.label}</div>
+                                <div class="audience-snapshot" style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;">
+                                    ${_buildSnapshotTilesHTML(p.insights, { isGP: _isGP, denLabel })}
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                }
+
+                // ---- Takeaways panel -------------------------------
+                if (takeawaysEl) {
+                    if (typeof generateAudienceTakeaways !== 'function') return;
+                    if (cohorts.length === 1) {
+                        // Single cohort: let generateAudienceTakeaways
+                        // own the container as it did historically.
+                        generateAudienceTakeaways(perCohort[0].insights, perCohort[0].cohort.parsed, { denLabel });
+                    } else {
+                        // Multi-cohort: render per-cohort blocks. We
+                        // ask generateAudienceTakeaways for the HTML
+                        // via opts.returnHTML so we can stitch them.
+                        const blocks = perCohort.map(p => {
+                            const html = generateAudienceTakeaways(p.insights, p.cohort.parsed, { denLabel, returnHTML: true, titleOverride: 'Key Takeaways · ' + p.cohort.label });
+                            return html || '';
+                        }).filter(Boolean);
+                        if (blocks.length > 0) {
+                            takeawaysEl.innerHTML = blocks.join('');
+                            takeawaysEl.style.display = 'block';
+                        } else {
+                            takeawaysEl.innerHTML = '';
+                            takeawaysEl.style.display = 'none';
+                        }
+                    }
                 }
             } catch (err) {
-                console.warn('[picker] snapshot re-render failed', err);
+                console.warn('[insights] multi-cohort render failed', err);
             }
+        }
+
+        // Backwards-compatible alias — existing call sites (picker
+        // change handler, etc.) still call this name.
+        function _rerenderAudienceSnapshotForPicker() {
+            _renderInsightsForVisibleCohorts();
         }
 
         // Walk every dashboard table that exposes an .index-col cell and
@@ -63895,6 +64104,8 @@
             _updateCompareDateRangesButtonBadge();
             applyComparisonRunsToDashboardCharts();
             try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('[compare] category tables re-apply failed', e); }
+            // 2026-06-20: visible-cohorts list changed; refresh Insights tab.
+            try { _renderInsightsForVisibleCohorts(); } catch (e) { console.warn('[insights] data-cut toggle render failed', e); }
             return result;
         }
 
@@ -65872,6 +66083,8 @@
             if (profileInfo && brandName) {
                 profileInfo.style.display = 'flex';
                 const brandNameEl = document.getElementById('dashBrandNameHeader');
+                // 2026-06-20: reset cached base title (see _updateProfileTitleForVisibleCohorts)
+                try { _resetProfileTitleCache(); } catch (_) {}
                 if (brandNameEl) brandNameEl.textContent = headerTitle;
                 updateDashProfileHeaderMeta(dateRange, parsed);
                 // Cache this run's analyzed-period year so the sidebar tree
@@ -69647,21 +69860,37 @@
                 }
             }
             
-            // Show demographic takeaways
-            if (takeaways.length > 0) {
-                takeawaysContainer.innerHTML = `
+            // 2026-06-20: opts.returnHTML lets _renderInsightsForVisibleCohorts
+            // assemble multiple per-cohort blocks into a single container
+            // without each call clobbering the others. opts.titleOverride
+            // lets the multi-cohort renderer label each block with the
+            // cohort name (e.g. "Key Takeaways · Avid").
+            const titleText = (opts && opts.titleOverride) || ('Key Takeaways vs ' + denLabel);
+            const blockHTML = takeaways.length > 0 ? `
+                <div class="audience-takeaways-section">
                     <div class="audience-takeaways-title">
-                        <span>📊</span> Key Takeaways vs ${denLabel}
+                        <span>📊</span> ${titleText}
                     </div>
                     <ul>
                         ${takeaways.map(t => `<li>${t}</li>`).join('')}
                     </ul>
-                `;
+                </div>
+            ` : '';
+
+            if (opts && opts.returnHTML) {
+                // Fetch behavioral profile for the SINGLE-cohort case is
+                // owned by the caller; skip here so multi-cohort doesn't
+                // fire N parallel AI requests.
+                return blockHTML;
+            }
+
+            if (takeaways.length > 0) {
+                takeawaysContainer.innerHTML = blockHTML;
                 takeawaysContainer.style.display = 'block';
             } else {
                 takeawaysContainer.style.display = 'none';
             }
-            
+
             // Fetch AI-generated behavioral summary for the separate card
             fetchBehavioralProfile(data);
         }
@@ -79725,7 +79954,15 @@
             
             // Generate audience vs Gen Pop takeaways
             generateAudienceTakeaways(demoInsights, data);
-            
+
+            // 2026-06-20: hand off to the multi-cohort renderer so that
+            // if the user already has multiple data cuts selected (or
+            // has hidden Total Universe) the snapshot, takeaways, and
+            // page title all reflect the active cohort state from the
+            // very first render of this profile — not just after a
+            // subsequent toggle.
+            try { _renderInsightsForVisibleCohorts(); } catch (e) { console.warn('[insights] post-render reapply failed', e); }
+
             // Metrics row
             document.getElementById('insightsSampleSize').textContent = formatNumber(data.sampleSize || 0);
             document.getElementById('insightsProjectedUS').textContent = formatNumber(data.projectedUS || 0);
