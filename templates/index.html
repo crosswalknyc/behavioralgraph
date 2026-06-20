@@ -63541,17 +63541,36 @@
                         // Multi-cohort: render per-cohort blocks. We
                         // ask generateAudienceTakeaways for the HTML
                         // via opts.returnHTML so we can stitch them.
-                        const blocks = perCohort.map(p => {
-                            const html = generateAudienceTakeaways(p.insights, p.cohort.parsed, { denLabel, returnHTML: true, titleOverride: 'Key Takeaways · ' + p.cohort.label });
-                            return html || '';
-                        }).filter(Boolean);
-                        if (blocks.length > 0) {
-                            takeawaysEl.innerHTML = blocks.join('');
-                            takeawaysEl.style.display = 'block';
-                        } else {
-                            takeawaysEl.innerHTML = '';
-                            takeawaysEl.style.display = 'none';
-                        }
+                        //
+                        // 2026-06-20 bug fix: generateAudienceTakeaways
+                        // is declared async (because the non-returnHTML
+                        // path awaits the AI behavioral summary). Even
+                        // when opts.returnHTML short-circuits before
+                        // any await, the returned value is wrapped in
+                        // a Promise. Previously we joined Promises
+                        // directly → "[object Promise][object Promise]"
+                        // bled into the DOM. Await them first.
+                        (async () => {
+                            try {
+                                const htmls = await Promise.all(
+                                    perCohort.map(p => generateAudienceTakeaways(
+                                        p.insights,
+                                        p.cohort.parsed,
+                                        { denLabel, returnHTML: true, titleOverride: 'Key Takeaways · ' + p.cohort.label }
+                                    ))
+                                );
+                                const blocks = htmls.filter(Boolean);
+                                if (blocks.length > 0) {
+                                    takeawaysEl.innerHTML = blocks.join('');
+                                    takeawaysEl.style.display = 'block';
+                                } else {
+                                    takeawaysEl.innerHTML = '';
+                                    takeawaysEl.style.display = 'none';
+                                }
+                            } catch (err) {
+                                console.warn('[insights] multi-cohort takeaway assembly failed', err);
+                            }
+                        })();
                     }
                 }
             } catch (err) {
