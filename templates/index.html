@@ -16528,6 +16528,7 @@
                                          Populated by _renderAudienceShareBoxes() after the profile
                                          CSV finishes parsing. Hidden by default; revealed once
                                          data is available. -->
+                                    <span class="asb-section-label" id="audienceShareSectionLabel" style="display: none; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #9ca3af); white-space: nowrap; margin-right: 0.35rem;">Total Universe Composition:</span>
                                     <div id="audienceShareBoxes" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
                                         <div class="asb-box" data-channel="social" title="Engaged with the subject on a social platform (YouTube, IG, TikTok, FB, Twitter)."><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">—</span></div>
                                         <div class="asb-box" data-channel="search" title="Discovered or looked up the subject via Google / AI search."><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">—</span></div>
@@ -63999,10 +64000,12 @@
 
         function _renderAudienceShareBoxes(parsed) {
             const container = document.getElementById('audienceShareBoxes');
+            const sectionLabel = document.getElementById('audienceShareSectionLabel');
             if (!container) return;
             const share = _computeAudienceShare(parsed);
             if (!share) {
                 container.style.display = 'none';
+                if (sectionLabel) sectionLabel.style.display = 'none';
                 return;
             }
             const fmt = (v) => (v >= 0.5 ? Math.round(v) : (v > 0 ? v.toFixed(1) : 0)) + '%';
@@ -64038,6 +64041,7 @@
             container.title = 'Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%). Detected archetype: '
                 + (share.archetype || 'GENERIC').replace(/_/g, ' ');
             container.style.display = 'inline-flex';
+            if (sectionLabel) sectionLabel.style.display = 'inline-block';
         }
 
         async function _fetchCategoryNorm() {
