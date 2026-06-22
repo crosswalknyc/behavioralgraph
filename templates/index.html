@@ -35337,17 +35337,17 @@
             if (convSection) convSection.style.display = hideConv ? 'none' : 'flex';
             if (!hideConv && convEl) {
                 convEl.innerHTML = '<div style="display:flex;gap:0.5rem;align-items:stretch;">'
-                    + '<div style="flex:1;padding:0.75rem 0.5rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;display:flex;flex-direction:column;justify-content:center;">'
+                    + '<div style="flex:1;padding:0.75rem 0.5rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;display:flex;flex-direction:column;justify-content:flex-start;">'
                     +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Pre Conversions</div>'
                     +   '<div style="font-size:1.3rem;font-weight:700;">' + _bpiqFmtNum(convPreProj) + '</div>'
                     +   '<div style="font-size:0.6rem;color:var(--text-secondary);">US consumers</div>'
                     + '</div>'
-                    + '<div style="flex:1;padding:0.75rem 0.5rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;display:flex;flex-direction:column;justify-content:center;">'
+                    + '<div style="flex:1;padding:0.75rem 0.5rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;display:flex;flex-direction:column;justify-content:flex-start;">'
                     +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Post Conversions</div>'
                     +   '<div style="font-size:1.3rem;font-weight:700;">' + _bpiqFmtNum(convPostProj) + '</div>'
                     +   '<div style="font-size:0.6rem;color:var(--text-secondary);">US consumers</div>'
                     + '</div>'
-                    + '<div style="flex:1;padding:0.75rem 0.5rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;display:flex;flex-direction:column;justify-content:center;">'
+                    + '<div style="flex:1;padding:0.75rem 0.5rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;display:flex;flex-direction:column;justify-content:flex-start;">'
                     +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Consumer Lift</div>'
                     +   '<div style="font-size:1.3rem;font-weight:700;">' + _bpiqFmtLift(conv.lift_pct_users) + '</div>'
                     + '</div>'
@@ -35844,9 +35844,9 @@
             function _bpiqMathRow(rows, totalLabel, totalValue, totalColor) {
                 var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;line-height:1.7;">';
                 rows.forEach(function(r, i) {
-                    html += '<tr style="' + (i === 0 ? '' : 'border-top:1px dashed rgba(255,255,255,0.08);') + '">'
-                         +    '<td style="padding:8px 12px;color:var(--text-secondary);">' + r.label + '</td>'
-                         +    '<td style="padding:8px 12px;text-align:right;font-weight:600;white-space:nowrap;">' + r.value + '</td>'
+                    html += '<tr style="height:3.2rem;' + (i === 0 ? '' : 'border-top:1px dashed rgba(255,255,255,0.08);') + '">'
+                         +    '<td style="padding:8px 12px;color:var(--text-secondary);vertical-align:middle;">' + r.label + '</td>'
+                         +    '<td style="padding:8px 12px;text-align:right;font-weight:600;white-space:nowrap;vertical-align:middle;">' + r.value + '</td>'
                          +  '</tr>';
                 });
                 html += '<tr style="border-top:2px solid rgba(200,230,0,0.5);">'
@@ -35921,7 +35921,7 @@
                 var blvRateValue = (v.rates && v.rates.blv_per_incr_user) || 0;
                 blvBody.innerHTML = _bpiqMathRow(
                     [
-                        { label: 'Incremental Consumers (post − pre · DiD vs Gen Pop)',
+                        { label: 'Incremental Consumers<br><span style="font-size:12px;">(post − pre · DiD vs Gen Pop)</span>',
                           value: _bpiqFmtNum(blvCount) },
                         { label: '× $/incremental-consumer rate &nbsp;'
                                  + _bpiqBenchHint(_bm.blv_per_incr_user),
