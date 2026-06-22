@@ -15,6 +15,13 @@ Targets (sourced from s3://dashboard-inputs/<TITLE> - Viewers.csv):
     The Grinch:     sample 153,179    → gen pop 5,053,394
     Cat in the Hat: sample 1,554,550  → gen pop 51,284,604
 
+`reach_us_override` is set to `ceil(sample × 32.99) + 1` so the
+pipeline's `int(reach_us / 32.99)` floor lands exactly on the target
+sample after panel rounding — rather than the simpler "use viewer
+file's gen-pop directly" approach, which is off-by-one for some
+samples because the viewer file's projection uses 33.0 while the SVOD
+pipeline uses 329.9M / 10M = 32.99.
+
 All three are Universal Pictures releases pre-2021 (2000–2003). Since
 Universal is owned by NBCUniversal (the same parent as Peacock), these
 are NATIVE content on Peacock — conversion calibrated to 0.50% (native
@@ -43,6 +50,23 @@ os.environ.setdefault("USE_CLAUDE_REASONING", "1")
 from SVOD_Churn_Attribution import run_synthetic_attribution  # noqa: E402
 
 
+_PANEL_TO_US = 329_900_000 / 10_000_000  # 32.99 — matches SVOD pipeline
+
+
+def _reach_for_sample(sample: int) -> int:
+    """Return the smallest reach_us value that, after the pipeline's
+    int(reach_us / 32.99) floor, yields the requested panel sample
+    exactly. Adds a 1-unit safety margin to clear floating-point
+    boundary cases."""
+    return int(sample * _PANEL_TO_US) + 1
+
+
+# Panel sample-size targets from the *-Viewers.csv files
+BLUE_CRUSH_SAMPLE     = 21_658
+THE_GRINCH_SAMPLE     = 153_179
+CAT_IN_THE_HAT_SAMPLE = 1_554_550
+
+
 CONFIGS: list[dict] = [
     {
         "project_name":   "Blue_Crush",
@@ -50,7 +74,7 @@ CONFIGS: list[dict] = [
         "platform":       "peacock",
         "release":        "2002-08-16",
         "genre":          "Movie - Sports Drama",
-        "reach_us_override":  714_549,
+        "reach_us_override":  _reach_for_sample(BLUE_CRUSH_SAMPLE),
         "context_note": (
             "Blue Crush (2002) — Universal Pictures theatrical surfing "
             "sports drama, directed by John Stockwell. Kate Bosworth, "
@@ -70,7 +94,7 @@ CONFIGS: list[dict] = [
         "platform":       "peacock",
         "release":        "2018-11-09",
         "genre":          "Movie - Holiday Family Animation",
-        "reach_us_override":  5_053_394,
+        "reach_us_override":  _reach_for_sample(THE_GRINCH_SAMPLE),
         "context_note": (
             "The Grinch (2018) — Illumination animated Universal "
             "Pictures Christmas-season feature. Benedict Cumberbatch, "
@@ -90,7 +114,7 @@ CONFIGS: list[dict] = [
         "platform":       "peacock",
         "release":        "2003-11-21",
         "genre":          "Movie - Family Comedy",
-        "reach_us_override":  51_284_604,
+        "reach_us_override":  _reach_for_sample(CAT_IN_THE_HAT_SAMPLE),
         "context_note": (
             "Dr. Seuss' The Cat in the Hat (2003) — live-action "
             "Universal Pictures theatrical family comedy directed by "

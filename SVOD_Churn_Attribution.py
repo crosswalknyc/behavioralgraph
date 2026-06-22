@@ -3978,6 +3978,29 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
     if validation_result.get('passed', True):
         return df_out, changes
 
+    # ── Analyst-locked reach override ─────────────────────────────────
+    # When the caller passed an explicit `reach_us_override` (e.g.
+    # pulls anchored to a dashboard-inputs Viewers.csv panel sample,
+    # or any other case where the headline number is the analyst's
+    # ground truth, not Claude's estimate), suppress the watchers /
+    # signups / conversion adjustments here. The override IS the
+    # source of truth — the AI plausibility check would otherwise
+    # crush a defensible analyst projection toward a tier-floor or
+    # comp-show fallback and silently break the contract with the
+    # input panel. We log the bypass so it's auditable.
+    if p.get('reach_us_override') is not None:
+        _lock_msg = (
+            f"AI adjustments skipped — caller passed explicit "
+            f"reach_us_override={int(p['reach_us_override']):,} US. "
+            f"Headline watchers / signups remain panel-derived from "
+            f"the override; the AI plausibility flags are recorded "
+            f"for audit but not applied."
+        )
+        print(f"   🔒 {_lock_msg}")
+        if isinstance(p, dict):
+            p.setdefault('_ai_flags', []).append(_lock_msg)
+        return df_out, changes
+
     adjusted_watchers = total_watchers
     adjusted_signups = new_signups
 
