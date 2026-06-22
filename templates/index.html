@@ -35844,9 +35844,10 @@
             function _bpiqMathRow(rows, totalLabel, totalValue, totalColor) {
                 var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;line-height:1.7;">';
                 rows.forEach(function(r, i) {
-                    html += '<tr style="height:3.2rem;' + (i === 0 ? '' : 'border-top:1px dashed rgba(255,255,255,0.08);') + '">'
-                         +    '<td style="padding:8px 12px;color:var(--text-secondary);vertical-align:middle;">' + r.label + '</td>'
-                         +    '<td style="padding:8px 12px;text-align:right;font-weight:600;white-space:nowrap;vertical-align:middle;">' + r.value + '</td>'
+                    var rowH = (i === 0) ? '4rem' : '3.2rem';
+                    html += '<tr style="height:' + rowH + ';' + (i === 0 ? '' : 'border-top:1px dashed rgba(255,255,255,0.08);') + '">'
+                         +    '<td style="padding:8px 12px;color:var(--text-secondary);vertical-align:bottom;">' + r.label + '</td>'
+                         +    '<td style="padding:8px 12px;text-align:right;font-weight:600;white-space:nowrap;vertical-align:bottom;">' + r.value + '</td>'
                          +  '</tr>';
                 });
                 html += '<tr style="border-top:2px solid rgba(200,230,0,0.5);">'
