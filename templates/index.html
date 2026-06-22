@@ -2438,7 +2438,7 @@
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-small { padding: 0.35rem 0.75rem; font-size: 0.7rem; width: auto; }
         /* Dashboard Run row: same-height Run dropdown + Compare date ranges button, purple button, visible dropdown chevron */
-        #dashProfileRunsRow { align-items: stretch; }
+        #dashProfileRunsRow { align-items: center; }
         #dashProfileRunsRow select,
         #dashProfileRunsRow #dashViewDeltasBtn { height: 2rem; min-height: 2rem; box-sizing: border-box; display: inline-flex; align-items: center; }
         #dashProfileRunsRow select { background-color: var(--bg-input); padding-right: 1.75rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238892b0' d='M6 9L1 4h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 12px; }
@@ -16522,13 +16522,12 @@
                             <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
                                 <div class="dash-brand-box" id="dashBrandNameHeader"></div>
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
-                                <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 0.5rem;">
+                                <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; grid-template-columns: calc(180px - 0.5rem) auto 1fr; align-items: center; gap: 0.5rem;">
                                     <button type="button" class="btn btn-small" id="dashViewDeltasBtn" style="font-size: 0.8rem;">Data Cuts</button>
                                     <!-- Audience-share boxes: Social / Search / Owned / Retail / Media.
                                          Populated by _renderAudienceShareBoxes() after the profile
                                          CSV finishes parsing. Hidden by default; revealed once
                                          data is available. -->
-                                    <span class="asb-section-label" id="audienceShareSectionLabel" style="display: none; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #9ca3af); white-space: nowrap; margin-left: auto; margin-right: 0.35rem;">Total Universe Composition</span>
                                     <div id="audienceShareBoxes" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
                                         <div class="asb-box" data-channel="social" title="Engaged with the subject on a social platform (YouTube, IG, TikTok, FB, Twitter)."><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">—</span></div>
                                         <div class="asb-box" data-channel="search" title="Discovered or looked up the subject via Google / AI search."><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">—</span></div>
@@ -16536,6 +16535,7 @@
                                         <div class="asb-box" data-channel="retail" title="Retail / eCommerce engagement share"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">—</span></div>
                                         <div class="asb-box" data-channel="media"  title="Engaged with the subject's content via traditional / third-party media (TV, streaming, films, music, news, podcasts)."><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">—</span></div>
                                     </div>
+                                    <span class="asb-section-label" id="audienceShareSectionLabel" style="display: none; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #9ca3af); white-space: nowrap; margin-left: 0.35rem;">Total Universe Composition</span>
                                 </div>
                             </div>
                         </div>
@@ -67264,7 +67264,7 @@
                 // for every profile, even when there are no sibling runs
                 // to compare. The Data Cuts button itself is conditionally
                 // hidden when there's no second sibling to diff against.
-                if (runsRow) runsRow.style.display = 'flex';
+                if (runsRow) runsRow.style.display = 'grid';
                 if (sameSubjectRuns.length > 1) {
                     if (deltasBtn) deltasBtn.style.display = '';
                     if (typeof _setupComparisonForCurrentProfile === 'function') {
