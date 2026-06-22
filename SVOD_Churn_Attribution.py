@@ -2732,18 +2732,41 @@ def _research_engagement_metrics(*, show_name, platform_name, genre, content_cad
     if runtime_minutes:
         runtime_hint = f"\nRuntime: ~{int(runtime_minutes)} minutes per " + ("piece." if is_movie else "episode.")
 
-    format_hint = (
-        f"This is a FEATURE FILM (single piece of content, ~90-150 min runtime). "
-        f"Completion rate = % of viewers who watched start → end credits."
-        if is_movie else
-        f"This is a SERIES with {episode_count or 'unknown'} episode(s) released on a "
-        f"'{content_cadence or 'unknown'}' cadence. Completion rate is the AVERAGE "
-        f"per-episode completion across the season — i.e. of the people who pressed "
-        f"play on each episode, what % watched to its end. Also estimate completion "
-        f"PER EPISODE (drop-off curve typically declines from ep 1 → ep N for binge "
-        f"releases, sometimes flat or rising for prestige weekly drops as casuals "
-        f"churn out and only fans remain)."
-    )
+    # Long-running series (>20 eps) skip the per-episode breakdown entirely
+    # because (a) Claude can't meaningfully estimate 100+ distinct values and
+    # (b) returning a 150-float JSON array blows the token budget mid-array
+    # and corrupts the entire response. We just ask for the season/series
+    # average instead, which is the only value the dashboard actually surfaces.
+    _request_per_episode = (not is_movie) and (episode_count or 0) <= 20
+
+    if is_movie:
+        format_hint = (
+            f"This is a FEATURE FILM (single piece of content, ~90-150 min runtime). "
+            f"Completion rate = % of viewers who watched start → end credits."
+        )
+    elif _request_per_episode:
+        format_hint = (
+            f"This is a SERIES with {episode_count or 'unknown'} episode(s) released "
+            f"on a '{content_cadence or 'unknown'}' cadence. Completion rate is the "
+            f"AVERAGE per-episode completion across the season — i.e. of the people "
+            f"who pressed play on each episode, what % watched to its end. Also "
+            f"estimate completion PER EPISODE (drop-off curve typically declines "
+            f"from ep 1 → ep N for binge releases, sometimes flat or rising for "
+            f"prestige weekly drops as casuals churn out and only fans remain)."
+        )
+    else:
+        format_hint = (
+            f"This is a LONG-RUNNING SERIES with {episode_count or 'many'} episodes "
+            f"on a '{content_cadence or 'unknown'}' cadence — typically a multi-"
+            f"season catalog title or a procedural with a sustained viewing base. "
+            f"Completion rate is the SERIES-LEVEL AVERAGE — across all episodes and "
+            f"all seasons, of the people who pressed play on a given episode, what % "
+            f"watched it to its end on average. Long-running series have a self-"
+            f"selection effect: casual samplers drop out over time so the remaining "
+            f"audience tends to have HIGHER per-episode completion than a freshly-"
+            f"released single-season binge. Do NOT return a per-episode array — "
+            f"a single series-average value is what's needed."
+        )
 
     system = (
         "You are a senior streaming engagement analyst. Your job is to model "
@@ -2816,7 +2839,7 @@ def _research_engagement_metrics(*, show_name, platform_name, genre, content_cad
         f'  "completion_rate_reasoning":   "<2-3 sentences citing specific '
         f'attributes of this title and at least one source or comparable>",\n'
         f'  "per_episode_completion_pct":  '
-        f'{"null" if is_movie else f"[<{episode_count or 1} floats>]"},\n'
+        f'{"[<%d floats>]" % episode_count if _request_per_episode else "null"},\n'
         f'  "second_screen_pct":           <float 15-85, e.g. 58.2>,\n'
         f'  "second_screen_reasoning":     "<2-3 sentences explaining the '
         f'attention demand of this specific title>",\n'
@@ -2826,11 +2849,16 @@ def _research_engagement_metrics(*, show_name, platform_name, genre, content_cad
         f'}}'
     )
 
+    # Token budget: ~700 tokens of reasoning + small numeric fields fits in 900,
+    # but a per-episode array bumps it up linearly. We allow 1500 even for the
+    # no-array path so a verbose reasoning block doesn't truncate.
+    _max_tokens = 2500 if _request_per_episode else 1500
+
     print(f"   🧠 Asking Claude to research engagement KPIs "
           f"(completion rate + second-screen) for '{clean_name}'…")
     raw = claude_reason_json(
         system=system, user=user,
-        max_tokens=900, temperature=0.2,
+        max_tokens=_max_tokens, temperature=0.2,
     )
     if not raw:
         print(f"   ⚠️  Claude returned no engagement metrics; skipping rows")
@@ -2852,7 +2880,31 @@ def _research_engagement_metrics(*, show_name, platform_name, genre, content_cad
                 if depth == 0:
                     end = i + 1
                     break
-        result = json.loads(s[start:end])
+        candidate = s[start:end] if end > start else s[start:]
+        try:
+            result = json.loads(candidate)
+        except json.JSONDecodeError as parse_err:
+            # Truncated response — try to salvage the scalar fields we care
+            # about (completion_rate_pct, second_screen_pct) by extracting
+            # them with regex before giving up. This lets long-series runs
+            # still get the two headline numbers even if the array got
+            # cut off mid-stream.
+            import re as _re
+            cr_m = _re.search(r'"completion_rate_pct"\s*:\s*([0-9.]+)', candidate)
+            ss_m = _re.search(r'"second_screen_pct"\s*:\s*([0-9.]+)', candidate)
+            if cr_m and ss_m:
+                result = {
+                    'completion_rate_pct':       float(cr_m.group(1)),
+                    'second_screen_pct':         float(ss_m.group(1)),
+                    'completion_rate_reasoning': '(truncated JSON; scalar fields recovered)',
+                    'second_screen_reasoning':   '(truncated JSON; scalar fields recovered)',
+                    'sources_cited':             [],
+                    'confidence':                'low',
+                }
+                print(f"   ⚠️  Engagement JSON truncated — salvaged scalars: "
+                      f"cr={result['completion_rate_pct']}% ss={result['second_screen_pct']}%")
+            else:
+                raise parse_err
     except Exception as e:
         print(f"   ⚠️  Engagement metrics JSON parse failed: {e}")
         return None
