@@ -3833,6 +3833,7 @@ def create_user():
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
             'has_blue_iq_access': req_data.get('has_blue_iq_access', cd.get('has_blue_iq_access', False) if cd else False),
+            'has_ip_valuation_iq_access': req_data.get('has_ip_valuation_iq_access', cd.get('has_ip_valuation_iq_access', False) if cd else False),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
@@ -3986,6 +3987,8 @@ def update_user(username):
             user['has_share_of_time_run_access'] = bool(req_data['has_share_of_time_run_access'])
         if 'has_blue_iq_access' in req_data:
             user['has_blue_iq_access'] = bool(req_data['has_blue_iq_access'])
+        if 'has_ip_valuation_iq_access' in req_data:
+            user['has_ip_valuation_iq_access'] = bool(req_data['has_ip_valuation_iq_access'])
         if user.get('has_share_of_time_access') is False:
             user['has_share_of_time_run_access'] = False
         if 'auto_access_new' in req_data:
@@ -4382,6 +4385,7 @@ def restore_defaults_all_users():
             user['has_analysis_iq_access'] = False
             user['analysis_iq_modules'] = user.get('analysis_iq_modules', [])
             user['has_rankers_iq_access'] = False
+            user['has_ip_valuation_iq_access'] = False
             user['rankers_iq_options'] = user.get('rankers_iq_options', [])
             user['has_llmo_iq_access'] = False
             user['has_workspace_access'] = True
@@ -4784,6 +4788,7 @@ def api_set_company_defaults(company_name):
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
             'has_blue_iq_access': req.get('has_blue_iq_access', False),
+            'has_ip_valuation_iq_access': req.get('has_ip_valuation_iq_access', False),
             'credits': req.get('credits', 5),
             'auto_access_new': req.get('auto_access_new', {}),
         }
@@ -4847,6 +4852,7 @@ def api_reset_company_users(company_name):
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
                 user['has_blue_iq_access'] = cd.get('has_blue_iq_access', False)
+                user['has_ip_valuation_iq_access'] = cd.get('has_ip_valuation_iq_access', False)
                 user['credits'] = cd.get('credits', 5)
                 user['auto_access_new'] = dict(cd.get('auto_access_new', {}))
             else:
@@ -4873,6 +4879,7 @@ def api_reset_company_users(company_name):
                 user['has_share_of_time_access'] = True
                 user['has_share_of_time_run_access'] = True
                 user['has_blue_iq_access'] = False
+                user['has_ip_valuation_iq_access'] = False
                 user['credits'] = 5
                 user['auto_access_new'] = {}
             if user.get('has_share_of_time_access') is False:
@@ -6928,6 +6935,7 @@ def compute_product_access_flags(user, role):
             'has_blue_iq_access': True,
             'has_intent_iq_access': True,
             'has_helm_iq_access': True,
+            'has_ip_valuation_iq_access': True,
         }
     u = user or {}
     has_sot_view = bool(u.get('has_share_of_time_access', True))
@@ -6962,6 +6970,7 @@ def compute_product_access_flags(user, role):
         'has_blue_iq_access': bool(u.get('has_blue_iq_access', False)),
         'has_intent_iq_access': bool(u.get('has_intent_iq_access', True)),
         'has_helm_iq_access': role == 'super_admin',
+        'has_ip_valuation_iq_access': bool(u.get('has_ip_valuation_iq_access', False)),
     }
 
 
@@ -7058,6 +7067,7 @@ def index():
     has_blue_iq = _acc.get('has_blue_iq_access', False)
     has_intent_iq = _acc.get('has_intent_iq_access', True)
     has_helm_iq = _acc.get('has_helm_iq_access', False)
+    has_ip_valuation_iq = _acc.get('has_ip_valuation_iq_access', False)
 
     # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
@@ -7117,6 +7127,7 @@ def index():
                            has_blue_iq_access=has_blue_iq,
                            has_intent_iq_access=has_intent_iq,
                            has_helm_iq_access=has_helm_iq,
+                           has_ip_valuation_iq_access=has_ip_valuation_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,

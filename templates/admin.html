@@ -2716,6 +2716,19 @@
                         </div>
                     </div>
 
+                    <!-- IP Valuation IQ Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasIpValuationIQAccess">
+                                <span style="font-weight: 600;">💎 IP VALUATION IQ</span>
+                            </label>
+                        </div>
+                        <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; padding: 0 0.5rem 0.5rem 1.75rem;">
+                            PE-focused valuation tool: pick MOVIE / SERIES profiles + Subscriber IQ titles, build a TAM and editable revenue waterfall.
+                        </small>
+                    </div>
+
                     <!-- ROAS IQ Access -->
                     <div class="dashboard-access-item">
                         <div class="dashboard-access-header">
@@ -7519,6 +7532,7 @@
             document.getElementById('allBehavioralCategories').checked = true;
             document.getElementById('hasProfileIQAccess').checked = true;
             document.getElementById('hasSubscriberIQAccess').checked = false;
+            (function(){ var el = document.getElementById('hasIpValuationIQAccess'); if (el) el.checked = false; })();
             document.getElementById('hasWorkspaceAccess').checked = true;
             document.getElementById('hasSFConversionAccess').checked = false;
             document.getElementById('hasFlywheelConversionAccess').checked = false;
@@ -7656,6 +7670,7 @@
             document.getElementById('allBehavioralCategories').checked = user.allowed_behavioral_categories?.includes('*') ?? true; // Default true
             document.getElementById('hasProfileIQAccess').checked = user.has_profile_iq_access !== false; // Default true
             document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
+            (function(){ var el = document.getElementById('hasIpValuationIQAccess'); if (el) el.checked = user.has_ip_valuation_iq_access === true; })(); // Default false
             document.getElementById('hasROASIQAccess').checked = user.has_roas_iq_access !== false; // Default true (matches backend)
             document.getElementById('hasEcommerceIQAccess').checked = user.has_ecommerce_iq_access !== false; // Default true (matches backend)
             document.getElementById('hasWorkspaceAccess').checked = user.has_workspace_access !== false; // Default true
@@ -9724,6 +9739,7 @@
                     Array.from(document.querySelectorAll('#behavioralCategoryCheckboxes input:checked')).map(cb => cb.value),
                 has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
+                has_ip_valuation_iq_access: !!(document.getElementById('hasIpValuationIQAccess') && document.getElementById('hasIpValuationIQAccess').checked),
                 has_roas_iq_access: document.getElementById('hasROASIQAccess').checked,
                 has_ecommerce_iq_access: document.getElementById('hasEcommerceIQAccess').checked,
                 has_workspace_access: document.getElementById('hasWorkspaceAccess').checked,
