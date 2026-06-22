@@ -64485,6 +64485,27 @@
                 // cohort state.
                 _updateProfileTitleForVisibleCohorts(cohorts);
 
+                // 2026-06-22: hide the Demographic Profile Summary +
+                // Key Differentiators cards when more than one cohort
+                // is visible. Both cards display a SINGLE set of
+                // dominant-trait rows (Female 58%, Core age 55-64,
+                // Top income $25-50k, etc.) which can only describe
+                // one cohort at a time — once a second cut is added,
+                // those rows silently keep showing the base profile
+                // even though the user is now also looking at Avid,
+                // Avid Female, etc. Hiding the row entirely is less
+                // misleading than letting it look stale.
+                try {
+                    const demoRow = document.getElementById('demoInsightsRow');
+                    if (demoRow) {
+                        if (cohorts.length > 1) {
+                            demoRow.style.display = 'none';
+                        } else {
+                            demoRow.style.removeProperty('display');
+                        }
+                    }
+                } catch (_) {}
+
                 if (cohorts.length === 0) {
                     if (snapshotEl) snapshotEl.innerHTML = '<div class="snapshot-loading">Select a cohort to see audience snapshot.</div>';
                     if (takeawaysEl) {
