@@ -70151,19 +70151,29 @@
             const palette = (typeof _COMPARISON_PALETTE !== 'undefined' && Array.isArray(_COMPARISON_PALETTE) && _COMPARISON_PALETTE.length)
                 ? _COMPARISON_PALETTE
                 : ['#fd971f', '#a6e22e', '#f92672', '#ae81ff', '#e6db74'];
+            // 2026-06-22: one line per cohort + drop the profile name so
+            // the chips read e.g. "Total Universe Median: 47.12 years"
+            // / "Avid Median: 52.33 years" / "Avid Female Median: 54.84
+            // years" instead of "Reba McEntire Median: 47.12 years" /
+            // "Avid Reba McEntire Median: 52.33 years" etc. — the
+            // subject is already in the page title, repeating it on
+            // every chip just turned the strip into a wall of text.
+            // Container is a <span>; use display:block spans (not divs)
+            // to keep markup valid while still stacking vertically.
+            const baseLbl = (typeof _baseCohortLabel === 'function') ? _baseCohortLabel() : 'Total Universe';
             const cohortChipsHtml = cohortSeries.map((entry, ci) => {
                 const dict = (entry && entry.parsed && entry.parsed.demographics && entry.parsed.demographics.age) || {};
                 const med = (typeof calculateMedianAgeFromDistribution === 'function')
                     ? calculateMedianAgeFromDistribution(dict) : 0;
                 if (!(med > 0)) return '';
                 const color = palette[ci % palette.length];
-                const label = _cohortDisplayLabel(entry, profileName);
-                return ` | <span style="color: ${color}; font-weight: 600;">${label} Median: ${med.toFixed(2)} years</span>`;
+                const label = (entry && entry.label) || 'Cohort';
+                return `<span style="display:block; color: ${color}; font-weight: 600;">${label} Median: ${med.toFixed(2)} years</span>`;
             }).join('');
 
-            el.innerHTML = isGP
-                ? `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>${cohortChipsHtml}`
-                : `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>${cohortChipsHtml} | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
+            const baseHtml = `<span class="median-highlight" style="display:block; color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${baseLbl} Median: ${profileVal}</span>`;
+            const gpHtml = isGP ? '' : `<span style="display:block; color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
+            el.innerHTML = baseHtml + cohortChipsHtml + gpHtml;
         }
 
         function _renderIncomeMedianDisplay() {
@@ -70190,6 +70200,9 @@
             const palette = (typeof _COMPARISON_PALETTE !== 'undefined' && Array.isArray(_COMPARISON_PALETTE) && _COMPARISON_PALETTE.length)
                 ? _COMPARISON_PALETTE
                 : ['#fd971f', '#a6e22e', '#f92672', '#ae81ff', '#e6db74'];
+            // 2026-06-22: one line per cohort + drop the profile name
+            // (mirror of the age-median layout above).
+            const baseLbl = (typeof _baseCohortLabel === 'function') ? _baseCohortLabel() : 'Total Universe';
             const cohortChipsHtml = cohortSeries.map((entry, ci) => {
                 const dict = (entry && entry.parsed && entry.parsed.demographics && entry.parsed.demographics.income) || {};
                 let med = null;
@@ -70199,13 +70212,13 @@
                 } catch (_) {}
                 if (med == null) return '';
                 const color = palette[ci % palette.length];
-                const label = _cohortDisplayLabel(entry, profileName);
-                return ` | <span style="color: ${color}; font-weight: 600;">${label} Median: $${med}</span>`;
+                const label = (entry && entry.label) || 'Cohort';
+                return `<span style="display:block; color: ${color}; font-weight: 600;">${label} Median: $${med}</span>`;
             }).join('');
 
-            el.innerHTML = isGP
-                ? `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>${cohortChipsHtml}`
-                : `<span class="median-highlight" style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>${cohortChipsHtml} | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
+            const baseHtml = `<span class="median-highlight" style="display:block; color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${baseLbl} Median: ${profileVal}</span>`;
+            const gpHtml = isGP ? '' : `<span style="display:block; color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
+            el.innerHTML = baseHtml + cohortChipsHtml + gpHtml;
         }
 
         function _renderDemoTablesForChartsInTableMode() {
