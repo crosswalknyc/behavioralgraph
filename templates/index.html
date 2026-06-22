@@ -35270,9 +35270,9 @@
                             var innerMidY = (innerRect.top + innerRect.bottom) / 2 - cardRect.top;
                             var arrowX = -8;
                             var innerLeft = innerRect.left - cardRect.left;
-                            svg.innerHTML = '<defs><marker id="bpiqArrowHead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="var(--border-color)" stroke-width="1.5"/></marker></defs>' +
-                                '<path d="M' + arrowX + ',' + tMidY + ' C' + (arrowX + 20) + ',' + tMidY + ' ' + (innerLeft - 20) + ',' + innerMidY + ' ' + innerLeft + ',' + innerMidY + '" fill="none" stroke="var(--border-color)" stroke-width="1.5" marker-end="url(#bpiqArrowHead)"/>' +
-                                '<path d="M' + arrowX + ',' + cMidY + ' C' + (arrowX + 20) + ',' + cMidY + ' ' + (innerLeft - 20) + ',' + innerMidY + ' ' + innerLeft + ',' + innerMidY + '" fill="none" stroke="var(--border-color)" stroke-width="1.5" marker-end="url(#bpiqArrowHead)"/>';
+                            svg.innerHTML = '<defs><marker id="bpiqArrowHead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0.5 L7,4 L0,7.5" fill="none" stroke="var(--accent-lime)" stroke-width="2"/></marker></defs>' +
+                                '<path d="M' + arrowX + ',' + tMidY + ' L' + innerLeft + ',' + innerMidY + '" fill="none" stroke="var(--accent-lime)" stroke-width="2" marker-end="url(#bpiqArrowHead)"/>' +
+                                '<path d="M' + arrowX + ',' + cMidY + ' L' + innerLeft + ',' + innerMidY + '" fill="none" stroke="var(--accent-lime)" stroke-width="2" marker-end="url(#bpiqArrowHead)"/>';
                         }
                     }, 50);
                 }
