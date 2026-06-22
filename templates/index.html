@@ -14112,6 +14112,7 @@
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
                             <option value="brandPartnershipIQ" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
                             <option value="flywheelConversion" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
+                            <option value="ipValuationIQ" {% if not has_ip_valuation_iq_access %}disabled{% endif %}>💎 IP Valuation IQ</option>
                             {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                             <option value="customAnalysis">🔧 Analysis IQ</option>
                             {% endif %}
@@ -19600,7 +19601,7 @@
                            'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
                            'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
                            'shareOfTimeIQView','flywheelConversionView','talentFitIQView',
-                           'journeyIQView','blueIQView'];
+                           'journeyIQView','blueIQView','ipValuationIQView'];
                 ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
             }
 
@@ -22742,6 +22743,952 @@
                         document.getElementById('iiqInFlightBody').innerHTML = 'Failed: ' + escapeHtml(e.message || e);
                     });
             };
+
+        })();
+        </script>
+
+        <!-- ============================================================
+             IP VALUATION IQ — PE valuation tool for legacy Hollywood IP
+             ============================================================ -->
+        <style>
+            #ipValuationIQView {
+                display: none;
+                flex: 1;
+                flex-direction: column;
+                padding: 1rem 1.25rem;
+                gap: 1rem;
+                overflow-y: auto;
+                color: var(--text-primary);
+            }
+            #ipValuationIQView .ipv-header h2 { margin: 0; font-size: 1.4rem; }
+            #ipValuationIQView .ipv-header p { margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.82rem; }
+            #ipValuationIQView .ipv-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+            #ipValuationIQView .ipv-card {
+                background: rgba(255,255,255,0.03);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 10px;
+                padding: 0.85rem 1rem;
+            }
+            body[data-theme="light"] #ipValuationIQView .ipv-card { background: #fff; border-color: rgba(0,0,0,0.08); }
+            #ipValuationIQView .ipv-card h3 { margin: 0 0 0.55rem; font-size: 0.95rem; }
+            #ipValuationIQView .ipv-card .ipv-card-sub { font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.6rem; }
+            #ipValuationIQView .ipv-picker-search {
+                width: 100%;
+                background: rgba(0,0,0,0.25);
+                border: 1px solid rgba(255,255,255,0.12);
+                color: var(--text-primary);
+                border-radius: 6px;
+                padding: 0.4rem 0.6rem;
+                font-size: 0.8rem;
+                margin-bottom: 0.5rem;
+            }
+            body[data-theme="light"] #ipValuationIQView .ipv-picker-search { background: #fafafa; border-color: rgba(0,0,0,0.12); }
+            #ipValuationIQView .ipv-picker-list {
+                max-height: 280px;
+                overflow-y: auto;
+                border: 1px solid rgba(255,255,255,0.06);
+                border-radius: 6px;
+                padding: 0.35rem;
+            }
+            #ipValuationIQView .ipv-picker-row {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.3rem 0.45rem;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.78rem;
+            }
+            #ipValuationIQView .ipv-picker-row:hover { background: rgba(255,255,255,0.04); }
+            body[data-theme="light"] #ipValuationIQView .ipv-picker-row:hover { background: rgba(0,0,0,0.04); }
+            #ipValuationIQView .ipv-picker-row input { margin: 0; }
+            #ipValuationIQView .ipv-picker-row .ipv-row-cat { color: var(--text-secondary); font-size: 0.7rem; margin-left: auto; }
+            #ipValuationIQView .ipv-picker-group-header {
+                padding: 0.35rem 0.5rem;
+                font-size: 0.66rem;
+                font-weight: 700;
+                letter-spacing: 0.06em;
+                color: var(--text-secondary);
+                text-transform: uppercase;
+                background: rgba(255,255,255,0.03);
+                border-radius: 4px;
+                margin-top: 0.25rem;
+            }
+            #ipValuationIQView .ipv-stat {
+                display: flex;
+                flex-direction: column;
+                gap: 0.15rem;
+            }
+            #ipValuationIQView .ipv-stat .ipv-stat-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+            #ipValuationIQView .ipv-stat .ipv-stat-value { font-size: 1.8rem; font-weight: 700; line-height: 1.1; }
+            #ipValuationIQView .ipv-stat .ipv-stat-sub { font-size: 0.72rem; color: var(--text-secondary); }
+            #ipValuationIQView table.ipv-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+            #ipValuationIQView table.ipv-table th, #ipValuationIQView table.ipv-table td {
+                padding: 0.4rem 0.55rem;
+                text-align: right;
+                border-bottom: 1px solid rgba(255,255,255,0.06);
+                white-space: nowrap;
+            }
+            body[data-theme="light"] #ipValuationIQView table.ipv-table th, body[data-theme="light"] #ipValuationIQView table.ipv-table td { border-bottom-color: rgba(0,0,0,0.06); }
+            #ipValuationIQView table.ipv-table th { font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+            #ipValuationIQView table.ipv-table td.ipv-left, #ipValuationIQView table.ipv-table th.ipv-left { text-align: left; }
+            #ipValuationIQView table.ipv-table tr.ipv-total td { font-weight: 700; border-top: 2px solid rgba(255,255,255,0.18); border-bottom: none; padding-top: 0.65rem; }
+            body[data-theme="light"] #ipValuationIQView table.ipv-table tr.ipv-total td { border-top-color: rgba(0,0,0,0.18); }
+            #ipValuationIQView input.ipv-num {
+                width: 90px;
+                background: rgba(0,0,0,0.25);
+                border: 1px solid rgba(255,255,255,0.12);
+                color: var(--text-primary);
+                border-radius: 4px;
+                padding: 0.25rem 0.4rem;
+                font-size: 0.78rem;
+                text-align: right;
+            }
+            body[data-theme="light"] #ipValuationIQView input.ipv-num { background: #fafafa; border-color: rgba(0,0,0,0.12); }
+            #ipValuationIQView input.ipv-text {
+                width: 100%;
+                background: rgba(0,0,0,0.25);
+                border: 1px solid rgba(255,255,255,0.12);
+                color: var(--text-primary);
+                border-radius: 4px;
+                padding: 0.25rem 0.4rem;
+                font-size: 0.78rem;
+                text-align: left;
+            }
+            body[data-theme="light"] #ipValuationIQView input.ipv-text { background: #fafafa; border-color: rgba(0,0,0,0.12); }
+            #ipValuationIQView .ipv-btn {
+                background: rgba(99,102,241,0.18);
+                border: 1px solid rgba(99,102,241,0.4);
+                color: var(--text-primary);
+                border-radius: 6px;
+                padding: 0.4rem 0.75rem;
+                font-size: 0.78rem;
+                cursor: pointer;
+            }
+            #ipValuationIQView .ipv-btn:hover { background: rgba(99,102,241,0.3); }
+            #ipValuationIQView .ipv-btn.ipv-btn-ghost { background: transparent; border-color: rgba(255,255,255,0.12); }
+            body[data-theme="light"] #ipValuationIQView .ipv-btn.ipv-btn-ghost { border-color: rgba(0,0,0,0.12); }
+            #ipValuationIQView .ipv-empty { color: var(--text-secondary); font-size: 0.78rem; padding: 0.6rem; text-align: center; }
+            #ipValuationIQView .ipv-demo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.85rem; }
+            #ipValuationIQView .ipv-demo-block { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0.55rem 0.65rem; }
+            body[data-theme="light"] #ipValuationIQView .ipv-demo-block { background: #fafafa; border-color: rgba(0,0,0,0.06); }
+            #ipValuationIQView .ipv-demo-block h5 { margin: 0 0 0.4rem; font-size: 0.78rem; }
+            #ipValuationIQView .ipv-demo-bar-row { display: grid; grid-template-columns: 110px 1fr 56px; align-items: center; gap: 0.4rem; margin-bottom: 0.25rem; font-size: 0.72rem; }
+            #ipValuationIQView .ipv-demo-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.06); overflow: hidden; }
+            #ipValuationIQView .ipv-demo-bar > div { height: 100%; background: linear-gradient(90deg, #6366f1, #a78bfa); }
+            #ipValuationIQView .ipv-tag {
+                display: inline-block;
+                font-size: 0.65rem;
+                font-weight: 700;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                padding: 0.12rem 0.4rem;
+                border-radius: 4px;
+                margin-right: 0.35rem;
+            }
+            #ipValuationIQView .ipv-tag.ipv-tag-profile { background: rgba(34,197,94,0.18); color: #4ade80; }
+            #ipValuationIQView .ipv-tag.ipv-tag-svod { background: rgba(34,211,238,0.18); color: #22d3ee; }
+            #ipValuationIQView .ipv-multiplier-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.55rem; }
+            #ipValuationIQView .ipv-multiplier-row label { font-size: 0.74rem; color: var(--text-secondary); }
+            #ipValuationIQView .ipv-stream-cell { display: flex; flex-direction: column; gap: 0.15rem; }
+            #ipValuationIQView .ipv-stream-cell .ipv-stream-name { font-weight: 600; }
+            #ipValuationIQView .ipv-stream-cell .ipv-stream-desc { font-size: 0.68rem; color: var(--text-secondary); }
+            #ipValuationIQView .ipv-status { color: var(--text-secondary); font-size: 0.76rem; }
+        </style>
+
+        <div id="ipValuationIQView">
+            <div class="ipv-header">
+                <h2>💎 IP Valuation IQ <span style="font-size:0.78rem;color:var(--text-secondary);font-weight:400;margin-left:0.4rem;">Value a legacy Hollywood IP for a PE diligence deck</span></h2>
+                <p>Pick MOVIE / SERIES profiles as the Current Market signal and Subscriber IQ titles as the Historical Revenue signal. The tool combines US audience reach without double-counting, surfaces the addressable demographic, projects TAM with a configurable multiplier, and runs an editable revenue waterfall across 8 monetization streams. Every cell is overwritable; defaults are conservative placeholders.</p>
+            </div>
+
+            <div class="ipv-grid-2">
+                <div class="ipv-card">
+                    <h3>Current Market <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— MOVIE + SERIES profiles</span></h3>
+                    <div class="ipv-card-sub">Each pick contributes its digital engager audience (US Gen Pop projection) and full 9-category demographics.</div>
+                    <input type="text" id="ipvCurrentMarketSearch" class="ipv-picker-search" placeholder="🔍 Search MOVIE / SERIES profiles..." oninput="ipvFilterCurrentMarket()" />
+                    <div class="ipv-picker-list" id="ipvCurrentMarketList">
+                        <div class="ipv-empty">Loading profiles...</div>
+                    </div>
+                </div>
+
+                <div class="ipv-card">
+                    <h3>Historical Revenue Generation <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— Subscriber IQ titles</span></h3>
+                    <div class="ipv-card-sub">Each pick contributes the title's New Platform Signups audience (US Gen Pop projection) plus its age / gender demographics.</div>
+                    <input type="text" id="ipvHistoricalSearch" class="ipv-picker-search" placeholder="🔍 Search Subscriber IQ titles..." oninput="ipvFilterHistorical()" />
+                    <div class="ipv-picker-list" id="ipvHistoricalList">
+                        <div class="ipv-empty">Loading titles...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ipv-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+                    <h3 style="margin:0;">Sources <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— every selection, per-source, untouched</span></h3>
+                    <span class="ipv-status" id="ipvSourcesStatus">No selections yet.</span>
+                </div>
+                <div id="ipvSourcesTableWrap">
+                    <div class="ipv-empty">Pick at least one Current Market or Historical Revenue title to begin.</div>
+                </div>
+            </div>
+
+            <div class="ipv-grid-2">
+                <div class="ipv-card">
+                    <div class="ipv-stat">
+                        <span class="ipv-stat-label">Combined US Current Universe</span>
+                        <span class="ipv-stat-value" id="ipvUniverseValue">—</span>
+                        <span class="ipv-stat-sub" id="ipvUniverseSub">Overlap-adjusted union of every selection's US projection: 1 − ∏(1 − p<sub>i</sub>) × 329.9M. Each p<sub>i</sub> is one selection's share of US population. This intentionally does not double-count viewers who engaged with multiple selections.</span>
+                    </div>
+                </div>
+                <div class="ipv-card">
+                    <div class="ipv-stat">
+                        <span class="ipv-stat-label">Projected TAM</span>
+                        <span class="ipv-stat-value" id="ipvTamValue">—</span>
+                        <span class="ipv-stat-sub">TAM = Universe × Latent Reach Multiplier. 1.0 = current digital window only. 1.5 = adds estimated lapsed audience (default). 2.0 = aggressive total reach.</span>
+                        <div class="ipv-multiplier-row">
+                            <label for="ipvTamMultiplier">Latent Reach Multiplier</label>
+                            <input type="number" id="ipvTamMultiplier" class="ipv-num" min="0.1" max="10" step="0.1" value="1.5" oninput="ipvOnTamMultiplierChange()" />
+                            <button type="button" class="ipv-btn ipv-btn-ghost" onclick="ipvResetTamMultiplier()">Reset 1.5x</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ipv-card">
+                <h3>Combined Demographics <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— raw-count weighted across selections, renormalized per category</span></h3>
+                <div class="ipv-card-sub" id="ipvDemoSub">Profile IQ selections contribute all 9 categories; Subscriber IQ selections contribute AGE + GENDER only.</div>
+                <div id="ipvDemoGrid"><div class="ipv-empty">Select titles above to build a combined demographic profile.</div></div>
+            </div>
+
+            <div class="ipv-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem; flex-wrap:wrap; gap:0.5rem;">
+                    <div>
+                        <h3 style="margin:0;">Valuation Waterfall <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— every cell editable</span></h3>
+                        <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.2rem;">Annual Revenue = TAM × Capture % × Units/Buyer × Price. Total = Annual Revenue × Years. Defaults are conservative placeholders — overwrite with your diligence numbers.</div>
+                    </div>
+                    <div style="display:flex; gap:0.4rem;">
+                        <button type="button" class="ipv-btn ipv-btn-ghost" onclick="ipvAddWaterfallRow()">+ Add Custom Row</button>
+                        <button type="button" class="ipv-btn ipv-btn-ghost" onclick="ipvResetWaterfall()">Reset to defaults</button>
+                        <button type="button" class="ipv-btn" onclick="ipvCopyToClipboard()">📋 Copy to clipboard (markdown)</button>
+                    </div>
+                </div>
+                <div id="ipvWaterfallWrap"></div>
+            </div>
+        </div>
+
+        <script>
+        // ============================================================
+        // IP Valuation IQ — frontend controller
+        // ============================================================
+        (function() {
+            var US_POPULATION = 329900000;
+
+            var DEFAULT_WATERFALL = [
+                { id: 'tix',   stream: 'Re-release Theatrical Tickets', desc: 'Limited theatrical re-release on a legacy-IP slate', capture: 3.0,   units: 1.0,  price: 15.00,    years: 1 },
+                { id: 'svod',  stream: 'SVOD Licensing',                desc: 'Flat per-year license to a streamer (Netflix / Max / Prime)', capture: 100.0, units: 1.0,  price: 50000000, years: 5 },
+                { id: 'avod',  stream: 'AVOD / FAST Licensing',         desc: 'Ad-supported streaming (Tubi / Pluto / Roku) — CPM-blended ARPU per viewer-month', capture: 8.0,  units: 12.0, price: 0.40,     years: 3 },
+                { id: 'pvod',  stream: 'Home Video / PVOD / TVOD',      desc: 'Apple TV / Prime Video / Vudu transactional', capture: 1.5,  units: 1.2,  price: 9.99,     years: 2 },
+                { id: 'merch', stream: 'Merchandise & Consumer Products', desc: 'Apparel, collectibles, anniversary editions', capture: 2.0,  units: 1.5,  price: 22.00,    years: 3 },
+                { id: 'brand', stream: 'Brand Partnerships & Sponsorships', desc: 'Co-branded campaigns, integrations, anniversary tie-ins', capture: 100.0, units: 4.0,  price: 1500000,  years: 3 },
+                { id: 'music', stream: 'Music & Soundtrack Rights',     desc: 'Sync licensing + streaming-music royalties on the score / soundtrack', capture: 5.0,  units: 1.0,  price: 1.20,     years: 5 },
+                { id: 'seq',   stream: 'Sequel / Reboot Greenlight',    desc: 'One-time premium on a new production slate × probability', capture: 100.0, units: 1.0,  price: 35000000, years: 1 }
+            ];
+
+            var state = window.__ipValuationIQ = {
+                profileIqJobs: [],         // [{s3_key, display_name, category, accessible, ...}]
+                svodFiles: [],             // [{s3_key, show_name, category, ...}]
+                currentMarket: [],         // selected Profile IQ s3_keys
+                historical: [],            // selected Subscriber IQ s3_keys
+                detailCache: {},           // key = source|s3_key -> parsed detail
+                fetchInFlight: {},         // key -> Promise
+                tamMultiplier: 1.5,
+                waterfall: JSON.parse(JSON.stringify(DEFAULT_WATERFALL)),
+                listsLoaded: false
+            };
+
+            // -------------------- public entry --------------------
+            window.showIpValuationIQ = function() {
+                var dd = document.getElementById('viewNavDropdown');
+                var opt = dd && dd.querySelector('option[value="ipValuationIQ"]');
+                if (opt && opt.disabled) return;
+                if (typeof setViewNavDropdown === 'function') setViewNavDropdown('ipValuationIQ');
+                _ipvHideOtherViews();
+                var view = document.getElementById('ipValuationIQView');
+                if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
+                if (!state.listsLoaded) {
+                    Promise.all([ipvLoadProfileIqList(), ipvLoadSubscriberIqList()])
+                        .then(function() { state.listsLoaded = true; ipvRenderPickers(); ipvRecomputeAll(); })
+                        .catch(function(e) { console.error('[IP Valuation IQ] load lists failed', e); });
+                } else {
+                    ipvRenderPickers();
+                    ipvRecomputeAll();
+                }
+            };
+
+            function _ipvHideOtherViews() {
+                var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
+                           'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
+                           'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
+                           'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
+                           'shareOfTimeIQView','flywheelConversionView','talentFitIQView',
+                           'journeyIQView','blueIQView','intentIQView','helmIQView'];
+                ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
+            }
+
+            // -------------------- data fetching --------------------
+            function ipvLoadProfileIqList() {
+                return fetch('/api/ip-valuation-iq/profile-iq-list', { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (!d || !d.success) throw new Error((d && d.error) || 'Failed to load profile list');
+                        state.profileIqJobs = (d.jobs || []).filter(function(j) {
+                            return j && (j.accessible !== false);
+                        });
+                    });
+            }
+
+            function ipvLoadSubscriberIqList() {
+                return fetch('/api/ip-valuation-iq/subscriber-iq-list', { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (!d || !d.success) throw new Error((d && d.error) || 'Failed to load subscriber list');
+                        state.svodFiles = d.files || [];
+                    });
+            }
+
+            function ipvFetchProfileDetail(s3Key) {
+                var cacheKey = 'profile|' + s3Key;
+                if (state.detailCache[cacheKey]) return Promise.resolve(state.detailCache[cacheKey]);
+                if (state.fetchInFlight[cacheKey]) return state.fetchInFlight[cacheKey];
+                var p = fetch('/api/get-csv-data/' + encodeURIComponent(s3Key), { credentials: 'same-origin', cache: 'no-store' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (!d || !d.success) throw new Error((d && d.error) || 'Failed to load profile CSV');
+                        var rows = d.data || [];
+                        var parsed = (typeof parseAllData === 'function') ? parseAllData(rows) : null;
+                        var detail = {
+                            source: 'profileIQ',
+                            s3_key: s3Key,
+                            cohortType: 'Digital Engagers',
+                            projection: (parsed && parsed.projectedUS) || 0,
+                            sampleSize: (parsed && parsed.sampleSize) || 0,
+                            demographics: (parsed && parsed.demographics) || {},
+                            ageRaw: (parsed && parsed.demographicsAgeRaw) || {},
+                            brandCategory: (parsed && parsed.brandCategory) || ''
+                        };
+                        state.detailCache[cacheKey] = detail;
+                        delete state.fetchInFlight[cacheKey];
+                        return detail;
+                    })
+                    .catch(function(e) { delete state.fetchInFlight[cacheKey]; throw e; });
+                state.fetchInFlight[cacheKey] = p;
+                return p;
+            }
+
+            function ipvFetchSubscriberDetail(s3Key) {
+                var cacheKey = 'svod|' + s3Key;
+                if (state.detailCache[cacheKey]) return Promise.resolve(state.detailCache[cacheKey]);
+                if (state.fetchInFlight[cacheKey]) return state.fetchInFlight[cacheKey];
+                var p = fetch('/api/subscriber-iq/data/' + encodeURIComponent(s3Key), { credentials: 'same-origin', cache: 'no-store' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (!d || !d.success) throw new Error((d && d.error) || 'Failed to load subscriber CSV');
+                        var data = d.data || {};
+                        var km = data.key_metrics || {};
+                        function parseGenPop(node) {
+                            if (!node) return 0;
+                            var gp = node.gen_pop;
+                            if (gp == null) return 0;
+                            if (typeof gp === 'number') return gp;
+                            return parseFloat(String(gp).replace(/,/g, '')) || 0;
+                        }
+                        function parseCount(node) {
+                            if (!node) return 0;
+                            var c = node.count;
+                            if (c == null) return 0;
+                            if (typeof c === 'number') return c;
+                            return parseFloat(String(c).replace(/,/g, '')) || 0;
+                        }
+                        // Prefer New Platform Signups (the cohort the demographic block is normalized to);
+                        // fall back to Total Show Watchers when signups data is absent.
+                        var newSignupsGp = parseGenPop(km.new_signups);
+                        var watchersGp = parseGenPop(km.total_watchers);
+                        var projection, cohort, sampleSize;
+                        if (newSignupsGp > 0) {
+                            projection = newSignupsGp;
+                            cohort = 'New Platform Signups';
+                            sampleSize = parseCount(km.new_signups);
+                        } else if (watchersGp > 0) {
+                            projection = watchersGp;
+                            cohort = 'Total Show Watchers';
+                            sampleSize = parseCount(km.total_watchers);
+                        } else {
+                            projection = 0;
+                            cohort = 'Subscriber IQ';
+                            sampleSize = 0;
+                        }
+                        var demoAgeArr = ((data.demographics || {}).age) || [];
+                        var demoGenderArr = ((data.demographics || {}).gender) || [];
+                        var ageObj = {}, ageRaw = {};
+                        demoAgeArr.forEach(function(row) {
+                            var label = row.age_range || row.label || row.bucket;
+                            if (!label) return;
+                            var pct = row.percentage;
+                            if (typeof pct === 'string') pct = parseFloat(pct.replace('%', '').trim());
+                            var cnt = row.count;
+                            if (typeof cnt === 'string') cnt = parseFloat(String(cnt).replace(/,/g, ''));
+                            ageObj[label] = (typeof pct === 'number' && !isNaN(pct)) ? pct : 0;
+                            ageRaw[label] = (typeof cnt === 'number' && !isNaN(cnt)) ? cnt : 0;
+                        });
+                        var genderObj = {}, genderRaw = {};
+                        demoGenderArr.forEach(function(row) {
+                            var label = row.gender || row.label || row.bucket;
+                            if (!label) return;
+                            var pct = row.percentage;
+                            if (typeof pct === 'string') pct = parseFloat(pct.replace('%', '').trim());
+                            var cnt = row.count;
+                            if (typeof cnt === 'string') cnt = parseFloat(String(cnt).replace(/,/g, ''));
+                            genderObj[label] = (typeof pct === 'number' && !isNaN(pct)) ? pct : 0;
+                            genderRaw[label] = (typeof cnt === 'number' && !isNaN(cnt)) ? cnt : 0;
+                        });
+                        var detail = {
+                            source: 'subscriberIQ',
+                            s3_key: s3Key,
+                            cohortType: cohort,
+                            projection: projection,
+                            sampleSize: sampleSize,
+                            demographics: { age: ageObj, gender: genderObj },
+                            demographicsRaw: { age: ageRaw, gender: genderRaw },
+                            show: data.metadata && data.metadata.show,
+                            platform: data.metadata && data.metadata.platform
+                        };
+                        state.detailCache[cacheKey] = detail;
+                        delete state.fetchInFlight[cacheKey];
+                        return detail;
+                    })
+                    .catch(function(e) { delete state.fetchInFlight[cacheKey]; throw e; });
+                state.fetchInFlight[cacheKey] = p;
+                return p;
+            }
+
+            // -------------------- pickers --------------------
+            function ipvRenderPickers() {
+                ipvFilterCurrentMarket();
+                ipvFilterHistorical();
+            }
+
+            function ipvDisplayNameForJob(j) {
+                return j.display_name || j.project_name || j.name || j.title || (j.s3_key || '').replace('.csv', '').replace(/_/g, ' ');
+            }
+
+            function ipvCategoryLabel(cat) {
+                return (cat || '').toString();
+            }
+
+            window.ipvFilterCurrentMarket = function() {
+                var q = (document.getElementById('ipvCurrentMarketSearch').value || '').toLowerCase().trim();
+                var list = document.getElementById('ipvCurrentMarketList');
+                if (!list) return;
+                if (!state.profileIqJobs.length) {
+                    list.innerHTML = '<div class="ipv-empty">No MOVIE / SERIES profiles found. Confirm BRAND CATEGORY on profile CSVs is MOVIE or SERIES - *.</div>';
+                    return;
+                }
+                var filtered = state.profileIqJobs.filter(function(j) {
+                    if (!q) return true;
+                    var name = ipvDisplayNameForJob(j).toLowerCase();
+                    var cat = (j.category || '').toLowerCase();
+                    return name.indexOf(q) >= 0 || cat.indexOf(q) >= 0;
+                });
+                // Group by category for readability
+                var groups = {};
+                filtered.forEach(function(j) {
+                    var c = (j.category || 'UNCATEGORIZED').toUpperCase();
+                    if (!groups[c]) groups[c] = [];
+                    groups[c].push(j);
+                });
+                var cats = Object.keys(groups).sort(function(a, b) {
+                    if (a === 'MOVIE' && b !== 'MOVIE') return -1;
+                    if (b === 'MOVIE' && a !== 'MOVIE') return 1;
+                    return a.localeCompare(b);
+                });
+                var html = '';
+                cats.forEach(function(c) {
+                    html += '<div class="ipv-picker-group-header">' + ipvEscape(c) + ' &middot; ' + groups[c].length + '</div>';
+                    groups[c].sort(function(a, b) { return ipvDisplayNameForJob(a).localeCompare(ipvDisplayNameForJob(b)); });
+                    groups[c].forEach(function(j) {
+                        var sk = j.s3_key;
+                        var checked = state.currentMarket.indexOf(sk) >= 0 ? 'checked' : '';
+                        html += '<label class="ipv-picker-row">'
+                              + '<input type="checkbox" ' + checked + ' onchange="ipvToggleCurrentMarket(' + JSON.stringify(sk) + ', this.checked)">'
+                              + '<span>' + ipvEscape(ipvDisplayNameForJob(j)) + '</span>'
+                              + '<span class="ipv-row-cat">' + ipvEscape(c) + '</span>'
+                              + '</label>';
+                    });
+                });
+                if (!html) html = '<div class="ipv-empty">No matches.</div>';
+                list.innerHTML = html;
+            };
+
+            window.ipvFilterHistorical = function() {
+                var q = (document.getElementById('ipvHistoricalSearch').value || '').toLowerCase().trim();
+                var list = document.getElementById('ipvHistoricalList');
+                if (!list) return;
+                if (!state.svodFiles.length) {
+                    list.innerHTML = '<div class="ipv-empty">No Subscriber IQ titles found.</div>';
+                    return;
+                }
+                var filtered = state.svodFiles.filter(function(f) {
+                    if (!q) return true;
+                    var name = (f.show_name || '').toLowerCase();
+                    var cat = (f.category || '').toLowerCase();
+                    return name.indexOf(q) >= 0 || cat.indexOf(q) >= 0;
+                });
+                var groups = {};
+                filtered.forEach(function(f) {
+                    var c = (f.category || 'SVOD Acquisition').toUpperCase();
+                    if (!groups[c]) groups[c] = [];
+                    groups[c].push(f);
+                });
+                var cats = Object.keys(groups).sort();
+                var html = '';
+                cats.forEach(function(c) {
+                    html += '<div class="ipv-picker-group-header">' + ipvEscape(c) + ' &middot; ' + groups[c].length + '</div>';
+                    groups[c].sort(function(a, b) { return (a.show_name || '').localeCompare(b.show_name || ''); });
+                    groups[c].forEach(function(f) {
+                        var sk = f.s3_key;
+                        var checked = state.historical.indexOf(sk) >= 0 ? 'checked' : '';
+                        html += '<label class="ipv-picker-row">'
+                              + '<input type="checkbox" ' + checked + ' onchange="ipvToggleHistorical(' + JSON.stringify(sk) + ', this.checked)">'
+                              + '<span>' + ipvEscape(f.show_name || sk) + '</span>'
+                              + '<span class="ipv-row-cat">' + ipvEscape(c) + '</span>'
+                              + '</label>';
+                    });
+                });
+                if (!html) html = '<div class="ipv-empty">No matches.</div>';
+                list.innerHTML = html;
+            };
+
+            window.ipvToggleCurrentMarket = function(sk, checked) {
+                var i = state.currentMarket.indexOf(sk);
+                if (checked && i < 0) state.currentMarket.push(sk);
+                if (!checked && i >= 0) state.currentMarket.splice(i, 1);
+                if (checked) ipvFetchProfileDetail(sk).then(ipvRecomputeAll).catch(function(e) { ipvRecomputeAll(); console.warn('[IP Valuation IQ] fetch fail', e); });
+                else ipvRecomputeAll();
+            };
+
+            window.ipvToggleHistorical = function(sk, checked) {
+                var i = state.historical.indexOf(sk);
+                if (checked && i < 0) state.historical.push(sk);
+                if (!checked && i >= 0) state.historical.splice(i, 1);
+                if (checked) ipvFetchSubscriberDetail(sk).then(ipvRecomputeAll).catch(function(e) { ipvRecomputeAll(); console.warn('[IP Valuation IQ] fetch fail', e); });
+                else ipvRecomputeAll();
+            };
+
+            // -------------------- selections + math --------------------
+            function ipvGetActiveDetails() {
+                var out = [];
+                state.currentMarket.forEach(function(sk) {
+                    var d = state.detailCache['profile|' + sk];
+                    if (d) out.push(d);
+                });
+                state.historical.forEach(function(sk) {
+                    var d = state.detailCache['svod|' + sk];
+                    if (d) out.push(d);
+                });
+                return out;
+            }
+
+            function ipvCombinedUniverse(details) {
+                if (!details.length) return 0;
+                var oneMinus = 1;
+                details.forEach(function(d) {
+                    var p = (d.projection || 0) / US_POPULATION;
+                    if (p < 0) p = 0;
+                    if (p > 1) p = 1;
+                    oneMinus *= (1 - p);
+                });
+                return Math.round(US_POPULATION * (1 - oneMinus));
+            }
+
+            function ipvSumProjections(details) {
+                var s = 0;
+                details.forEach(function(d) { s += (d.projection || 0); });
+                return s;
+            }
+
+            function ipvCombinedDemographics(details) {
+                // For each demo category, sum raw counts (weight by sampleSize when raw not present)
+                // and renormalize to 100%. Subscriber IQ contributes only AGE + GENDER.
+                var cats = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
+                var rawByCat = {};
+                cats.forEach(function(c) { rawByCat[c] = {}; });
+                var contribCount = { profile: 0, svod: 0 };
+
+                details.forEach(function(d) {
+                    var demo = d.demographics || {};
+                    var sampleSize = d.sampleSize || d.projection || 0;
+                    if (d.source === 'profileIQ') contribCount.profile += 1;
+                    if (d.source === 'subscriberIQ') contribCount.svod += 1;
+                    cats.forEach(function(cat) {
+                        var bucket = demo[cat] || {};
+                        if (!bucket || typeof bucket !== 'object') return;
+                        // Use demographicsRaw if present (Subscriber IQ), else pct * sampleSize
+                        var rawSource = null;
+                        if (cat === 'age' && d.ageRaw && Object.keys(d.ageRaw).length) rawSource = d.ageRaw;
+                        if (d.demographicsRaw && d.demographicsRaw[cat]) rawSource = d.demographicsRaw[cat];
+                        Object.keys(bucket).forEach(function(label) {
+                            var pct = parseFloat(bucket[label]);
+                            if (isNaN(pct)) return;
+                            var rawCount;
+                            if (rawSource && rawSource[label] != null) {
+                                rawCount = parseFloat(rawSource[label]) || 0;
+                            } else {
+                                rawCount = (pct / 100) * (sampleSize || 0);
+                            }
+                            if (!rawCount || rawCount <= 0) {
+                                // If sample size is unknown, fall back to weighting by projection as a stand-in raw scale.
+                                rawCount = (pct / 100) * (d.projection || 0);
+                            }
+                            if (!rawCount || rawCount <= 0) return;
+                            rawByCat[cat][label] = (rawByCat[cat][label] || 0) + rawCount;
+                        });
+                    });
+                });
+
+                var out = {};
+                cats.forEach(function(cat) {
+                    var raws = rawByCat[cat];
+                    var total = 0;
+                    Object.keys(raws).forEach(function(k) { total += raws[k]; });
+                    if (total <= 0) { out[cat] = null; return; }
+                    var bucket = {};
+                    Object.keys(raws).forEach(function(k) {
+                        bucket[k] = (raws[k] / total) * 100;
+                    });
+                    out[cat] = bucket;
+                });
+                out.__contribCount = contribCount;
+                return out;
+            }
+
+            // -------------------- rendering --------------------
+            function ipvFormatNumber(n) {
+                if (n == null || isNaN(n)) return '—';
+                if (Math.abs(n) >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+                return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+            }
+
+            function ipvFormatMoney(n) {
+                if (n == null || isNaN(n)) return '$0';
+                var abs = Math.abs(n);
+                if (abs >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+                if (abs >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+                if (abs >= 1e3) return '$' + (n / 1e3).toFixed(1) + 'K';
+                return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+            }
+
+            function ipvEscape(s) {
+                if (s == null) return '';
+                return String(s).replace(/[&<>"']/g, function(c) {
+                    return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+                });
+            }
+
+            function ipvRenderSources(details) {
+                var wrap = document.getElementById('ipvSourcesTableWrap');
+                var status = document.getElementById('ipvSourcesStatus');
+                if (!details.length) {
+                    wrap.innerHTML = '<div class="ipv-empty">Pick at least one Current Market or Historical Revenue title to begin.</div>';
+                    if (status) status.textContent = 'No selections yet.';
+                    return;
+                }
+                if (status) status.textContent = details.length + ' selection' + (details.length === 1 ? '' : 's');
+                var sumProj = ipvSumProjections(details);
+                var html = '<table class="ipv-table">'
+                         + '<thead><tr>'
+                         + '<th class="ipv-left">Title</th>'
+                         + '<th class="ipv-left">Source</th>'
+                         + '<th class="ipv-left">Cohort</th>'
+                         + '<th>US Projection</th>'
+                         + '<th>Share of Combined</th>'
+                         + '</tr></thead><tbody>';
+                details.forEach(function(d) {
+                    var name;
+                    var srcLabel;
+                    if (d.source === 'profileIQ') {
+                        var job = state.profileIqJobs.find(function(j) { return j.s3_key === d.s3_key; });
+                        name = job ? ipvDisplayNameForJob(job) : (d.s3_key || '').replace('.csv', '').replace(/_/g, ' ');
+                        srcLabel = '<span class="ipv-tag ipv-tag-profile">Profile IQ</span> ' + ipvEscape(d.brandCategory || (job && job.category) || '');
+                    } else {
+                        var f = state.svodFiles.find(function(x) { return x.s3_key === d.s3_key; });
+                        name = (f && f.show_name) || d.show || (d.s3_key || '').replace('.csv', '').replace(/_/g, ' ');
+                        srcLabel = '<span class="ipv-tag ipv-tag-svod">Subscriber IQ</span> ' + ipvEscape((f && f.category) || '');
+                    }
+                    var share = sumProj > 0 ? ((d.projection / sumProj) * 100) : 0;
+                    html += '<tr>'
+                          + '<td class="ipv-left">' + ipvEscape(name) + '</td>'
+                          + '<td class="ipv-left">' + srcLabel + '</td>'
+                          + '<td class="ipv-left">' + ipvEscape(d.cohortType) + '</td>'
+                          + '<td>' + ipvFormatNumber(d.projection) + '</td>'
+                          + '<td>' + share.toFixed(1) + '%</td>'
+                          + '</tr>';
+                });
+                html += '<tr class="ipv-total">'
+                      + '<td class="ipv-left" colspan="3">Additive sum (informational — see Combined Universe below for overlap-adjusted figure)</td>'
+                      + '<td>' + ipvFormatNumber(sumProj) + '</td>'
+                      + '<td>100%</td>'
+                      + '</tr>';
+                html += '</tbody></table>';
+                wrap.innerHTML = html;
+            }
+
+            function ipvRenderUniverseAndTam(details) {
+                var universe = ipvCombinedUniverse(details);
+                var multiplier = state.tamMultiplier || 1.5;
+                var tam = Math.round(universe * multiplier);
+                document.getElementById('ipvUniverseValue').textContent = universe > 0 ? ipvFormatNumber(universe) : '—';
+                document.getElementById('ipvTamValue').textContent = tam > 0 ? ipvFormatNumber(tam) : '—';
+
+                // Per-source tooltip line
+                var sub = document.getElementById('ipvUniverseSub');
+                if (sub) {
+                    var pieces = details.map(function(d) {
+                        var p = (d.projection || 0) / US_POPULATION;
+                        return (p * 100).toFixed(2) + '%';
+                    });
+                    var detailLine = pieces.length
+                        ? ' Per-selection p<sub>i</sub>: ' + pieces.join(', ') + '.'
+                        : '';
+                    sub.innerHTML = 'Overlap-adjusted union of every selection\'s US projection: 1 − ∏(1 − p<sub>i</sub>) × 329.9M. Each p<sub>i</sub> is one selection\'s share of US population.' + detailLine + ' This intentionally does not double-count viewers who engaged with multiple selections.';
+                }
+                return { universe: universe, tam: tam };
+            }
+
+            function ipvRenderDemographics(details) {
+                var grid = document.getElementById('ipvDemoGrid');
+                var subEl = document.getElementById('ipvDemoSub');
+                if (!details.length) {
+                    grid.innerHTML = '<div class="ipv-empty">Select titles above to build a combined demographic profile.</div>';
+                    return;
+                }
+                var combo = ipvCombinedDemographics(details);
+                var contrib = combo.__contribCount || { profile: 0, svod: 0 };
+                if (subEl) {
+                    subEl.textContent = 'Combining ' + contrib.profile + ' Profile IQ + ' + contrib.svod
+                        + ' Subscriber IQ selection' + ((contrib.profile + contrib.svod) === 1 ? '' : 's')
+                        + '. Profile IQ contributes all 9 categories; Subscriber IQ contributes AGE + GENDER only.';
+                }
+                var labels = {
+                    age: 'Age', gender: 'Gender', ethnicity: 'Ethnicity', income: 'Household Income',
+                    education: 'Education', relationship: 'Relationship', sexual_orientation: 'Sexual Orientation',
+                    parental_status: 'Parental Status', occupation: 'Occupation'
+                };
+                var html = '';
+                Object.keys(labels).forEach(function(cat) {
+                    var bucket = combo[cat];
+                    if (!bucket || !Object.keys(bucket).length) return;
+                    var entries = Object.keys(bucket).map(function(k) { return [k, bucket[k]]; }).sort(function(a, b) { return b[1] - a[1]; });
+                    html += '<div class="ipv-demo-block"><h5>' + ipvEscape(labels[cat]) + '</h5>';
+                    var max = entries[0] ? entries[0][1] : 100;
+                    entries.forEach(function(e) {
+                        var widthPct = max > 0 ? Math.max(2, Math.min(100, (e[1] / max) * 100)) : 0;
+                        html += '<div class="ipv-demo-bar-row">'
+                              + '<span title="' + ipvEscape(e[0]) + '" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + ipvEscape(e[0]) + '</span>'
+                              + '<div class="ipv-demo-bar"><div style="width:' + widthPct + '%"></div></div>'
+                              + '<span style="text-align:right;">' + e[1].toFixed(1) + '%</span>'
+                              + '</div>';
+                    });
+                    html += '</div>';
+                });
+                if (!html) html = '<div class="ipv-empty">No demographic data on the selected titles yet.</div>';
+                grid.innerHTML = '<div class="ipv-demo-grid">' + html + '</div>';
+            }
+
+            function ipvComputeWaterfallTotals(tam) {
+                var rows = state.waterfall.map(function(r) {
+                    var capture = parseFloat(r.capture) || 0;
+                    var units = parseFloat(r.units) || 0;
+                    var price = parseFloat(r.price) || 0;
+                    var years = parseFloat(r.years) || 0;
+                    var addressable = tam * (capture / 100);
+                    var annual = addressable * units * price;
+                    var total = annual * years;
+                    return { row: r, addressable: addressable, annual: annual, total: total };
+                });
+                var grand = rows.reduce(function(s, x) { return s + (x.total || 0); }, 0);
+                return { rows: rows, grand: grand };
+            }
+
+            function ipvRenderWaterfall(tam) {
+                var wrap = document.getElementById('ipvWaterfallWrap');
+                var computed = ipvComputeWaterfallTotals(tam || 0);
+                var html = '<table class="ipv-table">'
+                         + '<thead><tr>'
+                         + '<th class="ipv-left">Revenue Stream</th>'
+                         + '<th>TAM Capture %</th>'
+                         + '<th>Units / Buyer</th>'
+                         + '<th>Price / Unit</th>'
+                         + '<th>Years</th>'
+                         + '<th>Annual Revenue</th>'
+                         + '<th>Total</th>'
+                         + '<th></th>'
+                         + '</tr></thead><tbody>';
+                computed.rows.forEach(function(rc, i) {
+                    var r = rc.row;
+                    html += '<tr data-ipv-row-idx="' + i + '">'
+                          + '<td class="ipv-left">'
+                            + '<div class="ipv-stream-cell">'
+                              + '<input class="ipv-text ipv-stream-name" type="text" value="' + ipvEscape(r.stream) + '" oninput="ipvOnWaterfallEdit(' + i + ', \'stream\', this.value)" />'
+                              + '<input class="ipv-text ipv-stream-desc" type="text" value="' + ipvEscape(r.desc || '') + '" oninput="ipvOnWaterfallEdit(' + i + ', \'desc\', this.value)" />'
+                            + '</div>'
+                          + '</td>'
+                          + '<td><input class="ipv-num" type="number" min="0" step="0.1" value="' + r.capture + '" oninput="ipvOnWaterfallEdit(' + i + ', \'capture\', this.value)" /></td>'
+                          + '<td><input class="ipv-num" type="number" min="0" step="0.1" value="' + r.units + '" oninput="ipvOnWaterfallEdit(' + i + ', \'units\', this.value)" /></td>'
+                          + '<td><input class="ipv-num" type="number" min="0" step="0.01" value="' + r.price + '" oninput="ipvOnWaterfallEdit(' + i + ', \'price\', this.value)" /></td>'
+                          + '<td><input class="ipv-num" type="number" min="0" step="1" value="' + r.years + '" oninput="ipvOnWaterfallEdit(' + i + ', \'years\', this.value)" /></td>'
+                          + '<td>' + ipvFormatMoney(rc.annual) + '</td>'
+                          + '<td>' + ipvFormatMoney(rc.total) + '</td>'
+                          + '<td><button class="ipv-btn ipv-btn-ghost" style="padding:0.2rem 0.5rem;" onclick="ipvRemoveWaterfallRow(' + i + ')" title="Remove row">✕</button></td>'
+                          + '</tr>';
+                });
+                html += '<tr class="ipv-total"><td class="ipv-left" colspan="6">Total Projected IP Value</td><td>' + ipvFormatMoney(computed.grand) + '</td><td></td></tr>';
+                html += '</tbody></table>';
+                wrap.innerHTML = html;
+            }
+
+            window.ipvOnWaterfallEdit = function(idx, field, value) {
+                var r = state.waterfall[idx];
+                if (!r) return;
+                if (field === 'stream' || field === 'desc') {
+                    r[field] = value;
+                } else {
+                    var n = parseFloat(value);
+                    r[field] = isNaN(n) ? 0 : n;
+                }
+                // Only re-render totals (input focus preserved by NOT re-rendering full row)
+                var details = ipvGetActiveDetails();
+                var ut = ipvRenderUniverseAndTam(details);
+                ipvUpdateWaterfallTotalsInPlace(ut.tam);
+            };
+
+            function ipvUpdateWaterfallTotalsInPlace(tam) {
+                var computed = ipvComputeWaterfallTotals(tam || 0);
+                var rows = document.querySelectorAll('#ipvWaterfallWrap tbody tr[data-ipv-row-idx]');
+                rows.forEach(function(tr, i) {
+                    var rc = computed.rows[i];
+                    if (!rc) return;
+                    var tds = tr.querySelectorAll('td');
+                    // 0: stream, 1: capture, 2: units, 3: price, 4: years, 5: annual, 6: total, 7: remove
+                    if (tds[5]) tds[5].textContent = ipvFormatMoney(rc.annual);
+                    if (tds[6]) tds[6].textContent = ipvFormatMoney(rc.total);
+                });
+                var grandRow = document.querySelector('#ipvWaterfallWrap tr.ipv-total td:nth-child(2)');
+                if (grandRow) grandRow.textContent = ipvFormatMoney(computed.grand);
+            }
+
+            window.ipvAddWaterfallRow = function() {
+                state.waterfall.push({ id: 'custom_' + Date.now(), stream: 'Custom Stream', desc: '', capture: 1.0, units: 1.0, price: 10.00, years: 1 });
+                ipvRecomputeAll();
+            };
+
+            window.ipvRemoveWaterfallRow = function(idx) {
+                state.waterfall.splice(idx, 1);
+                ipvRecomputeAll();
+            };
+
+            window.ipvResetWaterfall = function() {
+                state.waterfall = JSON.parse(JSON.stringify(DEFAULT_WATERFALL));
+                ipvRecomputeAll();
+            };
+
+            window.ipvResetTamMultiplier = function() {
+                state.tamMultiplier = 1.5;
+                var el = document.getElementById('ipvTamMultiplier');
+                if (el) el.value = '1.5';
+                ipvRecomputeAll();
+            };
+
+            window.ipvOnTamMultiplierChange = function() {
+                var el = document.getElementById('ipvTamMultiplier');
+                var v = parseFloat(el && el.value);
+                if (isNaN(v) || v <= 0) return;
+                state.tamMultiplier = v;
+                var details = ipvGetActiveDetails();
+                var ut = ipvRenderUniverseAndTam(details);
+                ipvUpdateWaterfallTotalsInPlace(ut.tam);
+            };
+
+            // -------------------- copy-to-clipboard markdown export --------------------
+            window.ipvCopyToClipboard = function() {
+                var details = ipvGetActiveDetails();
+                var universe = ipvCombinedUniverse(details);
+                var multiplier = state.tamMultiplier || 1.5;
+                var tam = Math.round(universe * multiplier);
+                var computed = ipvComputeWaterfallTotals(tam);
+                var lines = [];
+                lines.push('# IP Valuation IQ — Diligence Summary');
+                lines.push('');
+                lines.push('## Sources');
+                lines.push('| Title | Source | Cohort | US Projection | Share of Combined |');
+                lines.push('|---|---|---|---:|---:|');
+                var sumProj = ipvSumProjections(details);
+                details.forEach(function(d) {
+                    var name;
+                    if (d.source === 'profileIQ') {
+                        var job = state.profileIqJobs.find(function(j) { return j.s3_key === d.s3_key; });
+                        name = job ? ipvDisplayNameForJob(job) : d.s3_key;
+                    } else {
+                        var f = state.svodFiles.find(function(x) { return x.s3_key === d.s3_key; });
+                        name = (f && f.show_name) || d.show || d.s3_key;
+                    }
+                    var srcLabel = d.source === 'profileIQ' ? 'Profile IQ' : 'Subscriber IQ';
+                    var share = sumProj > 0 ? ((d.projection / sumProj) * 100).toFixed(1) : '0.0';
+                    lines.push('| ' + name + ' | ' + srcLabel + ' | ' + d.cohortType + ' | ' + (d.projection || 0).toLocaleString('en-US') + ' | ' + share + '% |');
+                });
+                lines.push('');
+                lines.push('## Universe + TAM');
+                lines.push('- **Combined US Current Universe:** ' + universe.toLocaleString('en-US') + ' (overlap-adjusted union)');
+                lines.push('- **Latent Reach Multiplier:** ' + multiplier + 'x');
+                lines.push('- **Projected TAM:** ' + tam.toLocaleString('en-US'));
+                lines.push('');
+                lines.push('## Valuation Waterfall');
+                lines.push('| Revenue Stream | TAM Capture % | Units / Buyer | Price / Unit | Years | Annual Revenue | Total |');
+                lines.push('|---|---:|---:|---:|---:|---:|---:|');
+                computed.rows.forEach(function(rc) {
+                    var r = rc.row;
+                    lines.push('| ' + r.stream + ' | ' + r.capture + '% | ' + r.units + ' | $' + r.price + ' | ' + r.years + ' | ' + ipvFormatMoney(rc.annual) + ' | ' + ipvFormatMoney(rc.total) + ' |');
+                });
+                lines.push('| **Total Projected IP Value** | | | | | | **' + ipvFormatMoney(computed.grand) + '** |');
+                var text = lines.join('\n');
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(function() {
+                        var status = document.getElementById('ipvSourcesStatus');
+                        if (status) {
+                            var prior = status.textContent;
+                            status.textContent = 'Copied to clipboard.';
+                            setTimeout(function() { status.textContent = prior; }, 1800);
+                        }
+                    });
+                } else {
+                    // Fallback for older browsers
+                    var ta = document.createElement('textarea');
+                    ta.value = text;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    try { document.execCommand('copy'); } catch (e) {}
+                    document.body.removeChild(ta);
+                }
+            };
+
+            // -------------------- master recompute --------------------
+            function ipvRecomputeAll() {
+                var details = ipvGetActiveDetails();
+                ipvRenderSources(details);
+                var ut = ipvRenderUniverseAndTam(details);
+                ipvRenderDemographics(details);
+                ipvRenderWaterfall(ut.tam);
+            }
+            window.ipvRecomputeAll = ipvRecomputeAll;
 
         })();
         </script>
@@ -26700,6 +27647,7 @@
                 talentFitIQ: showTalentFitIQ,
                 blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); },
                 intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); },
+                ipValuationIQ: function() { if (typeof showIpValuationIQ === 'function') showIpValuationIQ(); },
                 helmIQ: function() {
                     var c = document.querySelector('.container');
                     if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } }
@@ -26735,12 +27683,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', helmIQ: 'helmIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', ipValuationIQ: 'ipValuationIQView', helmIQ: 'helmIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView', 'intentIQView', 'helmIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView', 'intentIQView', 'ipValuationIQView', 'helmIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -26766,6 +27714,7 @@
                 talentFitIQ: 'Talent Fit IQ: Analyze how well talents resonate with your brand audience using behavioral data and social metrics.',
                 blueIQ: 'Blue IQ: Political-audience tracker. Filter by party (AI-imputed) and state or DMA to see issue searches, search engines, social platforms, top politicians and articles.',
                 intentIQ: 'Intent IQ: Title-scoped marketing-intent measurement. Ingest a campaign URL map and report on phase performance, audiences-of-interest, paid vs organic interplay, talent halo, trailer viewership, and audience shift over campaign life.',
+                ipValuationIQ: 'IP Valuation IQ: Value a legacy Hollywood IP. Pick MOVIE / SERIES profiles for current audience and Subscriber IQ titles for historical signal, then build a TAM and editable revenue waterfall (theatrical re-release, licensing, merch, brand partnerships, soundtrack, sequel).',
                 admin: 'Admin: Manage users, access, and system settings.',
                 purgatory: 'Purgatory: Review and release items pending admin approval.'
             };
@@ -26792,6 +27741,7 @@
                         ['workspace', d.has_workspace_access !== false],
                         ['blueIQ', !!d.has_blue_iq_access],
                         ['intentIQ', d.has_intent_iq_access !== false],
+                        ['ipValuationIQ', !!d.has_ip_valuation_iq_access],
                         ['helmIQ', !!d.has_helm_iq_access]
                     ];
                     pairs.forEach(function (pv) {
@@ -28003,6 +28953,8 @@
             if (talentFitIQView) talentFitIQView.style.display = 'none';
             const journeyIQViewEl = document.getElementById('journeyIQView');
             if (journeyIQViewEl) journeyIQViewEl.style.display = 'none';
+            const ipValuationIQViewEl = document.getElementById('ipValuationIQView');
+            if (ipValuationIQViewEl) ipValuationIQViewEl.style.display = 'none';
             hideLLMOIQView();
             var helmV = document.getElementById('helmIQView');
             if (helmV) helmV.style.display = 'none';
@@ -62922,12 +63874,31 @@
             // (a) Archetype base — clone so we can mutate.
             const base = Object.assign({}, _AUDIENCE_SHARE_ARCHETYPES[archetype] || _AUDIENCE_SHARE_ARCHETYPES.GENERIC);
 
-            // (b) Data signals — max-BP per category, summed within the
-            // four non-owned buckets. ALSO count how many buckets have a
-            // non-trivial signal (>=5% max BP) so we can gate the data
-            // nudge on signal richness.
+            // (b) Data signals — INDEX-WEIGHTED max-BP per category,
+            // summed within the four non-owned buckets.
+            //
+            // 2026-06-22 algorithm change. Previously this used raw
+            // max-BP, which captured GENERAL DIGITAL CONSUMPTION (every
+            // audience uses Google ~50%, Netflix ~70%, Amazon ~40%) and
+            // therefore produced almost-identical bucket sums for every
+            // profile in the same archetype. User report: "this is
+            // showing the same for all profiles".
+            //
+            // Switch to weighting each category's top-BP item by how
+            // much THAT item over-indexes vs Gen Pop. The over-index
+            // factor is what the subject's audience does DIFFERENTLY
+            // from the general population, so it cleanly separates
+            // (e.g.) a basketball-player audience from a music-talent
+            // audience even though both are TALENT archetype.
+            //
+            // overFactor = clamp(index / 100, 0.4, 2.5) — a 100 (parity)
+            // index contributes its raw BP; a 250 (2.5x over) index
+            // contributes 2.5x weight; anything under 40 collapses to
+            // 0.4 so under-indexed buckets still register some signal.
             const dataSums = { social: 0, search: 0, retail: 0, media: 0 };
-            const SIG_THRESHOLD = 5;
+            const SIG_THRESHOLD = 3; // lowered from 5 since the new
+            // signal is index-weighted; even a small BP at a high index
+            // is a real subject affinity.
             let nonTrivialBuckets = 0;
             const sawSignal = { social: false, search: false, retail: false, media: false };
             for (const cat of Object.keys(beh)) {
@@ -62939,16 +63910,29 @@
                     arr = Object.entries(items).map(([n, p]) => ({ name: n, pct: parseFloat(p) || 0 }));
                 }
                 if (arr.length === 0) continue;
-                let maxBP = 0;
-                for (const it of arr) {
-                    const p = (typeof it.pct === 'number') ? it.pct : parseFloat(it.pct || it.percentage || 0) || 0;
-                    if (p > maxBP) maxBP = p;
-                }
-                if (maxBP <= 0) continue;
                 const bucket = _audienceShareBucketFor(cat);
                 if (!bucket || bucket === 'owned') continue;
-                dataSums[bucket] += maxBP;
-                if (maxBP >= SIG_THRESHOLD && !sawSignal[bucket]) {
+                // Find the item with the strongest combined signal —
+                // BP × clamped(index/100). That picks the category
+                // representative the audience is BOTH consuming AND
+                // over-indexing on, which is the most subject-specific
+                // item.
+                let topContribution = 0;
+                let topRawBP = 0;
+                for (const it of arr) {
+                    const p   = (typeof it.pct   === 'number') ? it.pct   : parseFloat(it.pct   || it.percentage || 0) || 0;
+                    const idx = (typeof it.index === 'number') ? it.index : parseFloat(it.index || 100) || 100;
+                    if (p <= 0) continue;
+                    const overFactor = Math.max(0.4, Math.min(2.5, idx / 100));
+                    const contrib = p * overFactor;
+                    if (contrib > topContribution) {
+                        topContribution = contrib;
+                        topRawBP = p;
+                    }
+                }
+                if (topContribution <= 0) continue;
+                dataSums[bucket] += topContribution;
+                if (topRawBP >= SIG_THRESHOLD && !sawSignal[bucket]) {
                     sawSignal[bucket] = true;
                     nonTrivialBuckets += 1;
                 }
@@ -62971,14 +63955,20 @@
             // use Visa") would override the archetype anchor and produce
             // results that fight the subject's actual engagement shape.
             //
-            // Weight is 80% archetype / 20% data when active — small enough
-            // to keep the archetype dominant but large enough to move the
-            // needle on commerce brands where the data ACTUALLY tracks
-            // subject-specific engagement.
+            // Weight is 60% archetype / 40% data when active.
+            //
+            // 2026-06-22: bumped W_DATA from 0.20 → 0.40 so the new
+            // index-weighted data signal (see (b) above) can actually
+            // differentiate same-archetype profiles. At 20% the
+            // archetype completely dominated and profiles converged to
+            // identical-looking boxes. 40% gives the subject's own
+            // over-indexing pattern a real say while keeping the
+            // archetype as a structural anchor so e.g. an INFLUENCER
+            // file with thin behavioral data doesn't go off the rails.
             const RICH_THRESHOLD = 3;
             const useData = nonTrivialBuckets >= RICH_THRESHOLD;
-            const W_ARCH = useData ? 0.80 : 1.00;
-            const W_DATA = useData ? 0.20 : 0.00;
+            const W_ARCH = useData ? 0.60 : 1.00;
+            const W_DATA = useData ? 0.40 : 0.00;
             const archRestSum = base.social + base.search + base.retail + base.media || 1;
             const dataRestSum = dataSums.social + dataSums.search + dataSums.retail + dataSums.media;
             const restPct = 100 - ownedPct;
