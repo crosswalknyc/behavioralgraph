@@ -35267,13 +35267,12 @@
                             var tMidY = (tRect.top + tRect.bottom) / 2 - cardRect.top;
                             var cMidY = (cRect.top + cRect.bottom) / 2 - cardRect.top;
                             var innerRect = innerCard.getBoundingClientRect();
-                            var innerTop = innerRect.top - cardRect.top;
-                            var innerBottom = innerRect.bottom - cardRect.top;
                             var innerMidX = (innerRect.left + innerRect.right) / 2 - cardRect.left;
+                            var innerMidY = (innerRect.top + innerRect.bottom) / 2 - cardRect.top;
                             var arrowX = -8;
-                            svg.innerHTML = '<defs><marker id="bpiqArrowHead" markerWidth="8" markerHeight="8" refX="4" refY="7" orient="auto"><path d="M0.5,0 L4,7 L7.5,0" fill="none" stroke="var(--accent-lime)" stroke-width="2"/></marker><marker id="bpiqArrowHeadUp" markerWidth="8" markerHeight="8" refX="4" refY="1" orient="auto"><path d="M0.5,8 L4,1 L7.5,8" fill="none" stroke="var(--accent-lime)" stroke-width="2"/></marker></defs>' +
-                                '<path d="M' + arrowX + ',' + tMidY + ' L' + innerMidX + ',' + tMidY + ' L' + innerMidX + ',' + innerTop + '" fill="none" stroke="var(--accent-lime)" stroke-width="2" marker-end="url(#bpiqArrowHead)"/>' +
-                                '<path d="M' + arrowX + ',' + cMidY + ' L' + innerMidX + ',' + cMidY + ' L' + innerMidX + ',' + innerBottom + '" fill="none" stroke="var(--accent-lime)" stroke-width="2" marker-end="url(#bpiqArrowHeadUp)"/>';
+                            svg.innerHTML = '<defs><marker id="bpiqArrowHead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0.5 L7,4 L0,7.5" fill="none" stroke="var(--accent-lime)" stroke-width="2"/></marker></defs>' +
+                                '<path d="M' + arrowX + ',' + tMidY + ' L' + innerMidX + ',' + tMidY + ' L' + innerMidX + ',' + innerMidY + '" fill="none" stroke="var(--accent-lime)" stroke-width="2" marker-end="url(#bpiqArrowHead)"/>' +
+                                '<path d="M' + arrowX + ',' + cMidY + ' L' + innerMidX + ',' + cMidY + ' L' + innerMidX + ',' + innerMidY + '" fill="none" stroke="var(--accent-lime)" stroke-width="2" marker-end="url(#bpiqArrowHead)"/>';
                         }
                     }, 50);
                 }
