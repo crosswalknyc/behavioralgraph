@@ -64354,31 +64354,60 @@
         function _computeDemoInsights(data, indexOverride) {
             if (!data || !data.demographics) return [];
             const idxRoot = indexOverride || data.demographicsIndex || {};
+            // 2026-06-22: pick the TOP-INDEXING bucket in each
+            // category rather than the largest-share bucket. Previously
+            // we sorted by BP% which surfaced "Female 74% / White 36%
+            // / Less than $25k 27%" — the audience's mass, but not
+            // what makes it distinctive vs Gen Pop. The user wants the
+            // tiles to highlight the demographic that over-indexes
+            // most strongly (e.g. an ethnicity at 8% BP but 250 index
+            // beats a 36% / 62 index "majority"). When every bucket
+            // has the same index (Gen Pop self-compare → all 100s, or
+            // no index data) we fall back to highest BP so the tile
+            // still shows something meaningful.
             const _top = (cat, ucCat) => {
                 const dict = data.demographics[cat] || {};
-                const top = Object.entries(dict).sort((a, b) => b[1] - a[1])[0];
-                if (!top) return null;
-                // 2026-06-22: use nullish coalescing (??) instead of ||
-                // so a legitimate index of 0 (e.g. when the cohort's
-                // BP for the top bucket is 0) is preserved instead of
-                // silently coerced to 100. Previous bug: every Viewers
-                // tile read "100" because 0 || 0 || 100 = 100.
-                const idxCat = (idxRoot[cat] && idxRoot[cat][top[0]]);
-                const idxUc  = (idxRoot[ucCat] && idxRoot[ucCat][top[0]]);
-                const idx = (idxCat != null) ? idxCat
-                          : (idxUc  != null) ? idxUc
-                          : 100;
-                return { bucket: top[0], pct: top[1], idx };
+                const entries = Object.entries(dict);
+                if (entries.length === 0) return null;
+                const idxFor = (bucket) => {
+                    const idxCat = (idxRoot[cat]   && idxRoot[cat][bucket]);
+                    const idxUc  = (idxRoot[ucCat] && idxRoot[ucCat][bucket]);
+                    return (idxCat != null) ? Number(idxCat)
+                         : (idxUc  != null) ? Number(idxUc)
+                         : null;
+                };
+                let allSameOrMissing = true;
+                let firstIdx = null;
+                for (const [b] of entries) {
+                    const v = idxFor(b);
+                    if (firstIdx === null) firstIdx = v;
+                    if (v !== firstIdx) { allSameOrMissing = false; break; }
+                }
+                let pick;
+                if (allSameOrMissing) {
+                    pick = entries.slice().sort((a, b) => b[1] - a[1])[0];
+                } else {
+                    pick = entries.slice().sort((a, b) => {
+                        const ia = idxFor(a[0]); const ib = idxFor(b[0]);
+                        const aIdx = (ia == null) ? -Infinity : ia;
+                        const bIdx = (ib == null) ? -Infinity : ib;
+                        if (bIdx !== aIdx) return bIdx - aIdx;
+                        return b[1] - a[1];
+                    })[0];
+                }
+                if (!pick) return null;
+                const idxVal = idxFor(pick[0]);
+                return { bucket: pick[0], pct: pick[1], idx: (idxVal != null ? idxVal : 100) };
             };
             const out = [];
             const g = _top('gender', 'Gender');
-            if (g) out.push({ label: 'Dominant Gender', value: g.bucket, sub: g.pct.toFixed(2) + '%', index: g.idx });
+            if (g) out.push({ label: 'Top Indexing Gender', value: g.bucket, sub: g.pct.toFixed(2) + '%', index: g.idx });
             const a = _top('age', 'Age');
-            if (a) out.push({ label: 'Largest Age Group', value: (typeof getAgeDisplayLabel === 'function' ? getAgeDisplayLabel(a.bucket) : a.bucket), sub: a.pct.toFixed(2) + '%', index: a.idx });
+            if (a) out.push({ label: 'Top Indexing Age', value: (typeof getAgeDisplayLabel === 'function' ? getAgeDisplayLabel(a.bucket) : a.bucket), sub: a.pct.toFixed(2) + '%', index: a.idx });
             const e = _top('ethnicity', 'Ethnicity');
-            if (e) out.push({ label: 'Top Ethnicity', value: e.bucket, sub: e.pct.toFixed(2) + '%', index: e.idx });
+            if (e) out.push({ label: 'Top Indexing Ethnicity', value: e.bucket, sub: e.pct.toFixed(2) + '%', index: e.idx });
             const i = _top('income', 'Income');
-            if (i) out.push({ label: 'Top Income', value: i.bucket, sub: i.pct.toFixed(2) + '%', index: i.idx });
+            if (i) out.push({ label: 'Top Indexing Income', value: i.bucket, sub: i.pct.toFixed(2) + '%', index: i.idx });
             return out;
         }
 
@@ -64415,10 +64444,10 @@
             const isGP = !!(opts && opts.isGP);
             const denLabel = (opts && opts.denLabel) || 'Gen Pop';
             const snapshotTooltips = {
-                'Dominant Gender': 'The gender that makes up the largest percentage of this audience.',
-                'Largest Age Group': 'The age bracket that represents the highest share of this audience.',
-                'Top Ethnicity': 'The ethnic group that comprises the largest portion of this audience.',
-                'Top Income': 'The income bracket most common among this audience.'
+                'Top Indexing Gender': 'The gender that over-indexes the most vs ' + denLabel + ' (highest index, not necessarily the largest share).',
+                'Top Indexing Age': 'The age bracket that over-indexes the most vs ' + denLabel + ' (highest index, not necessarily the largest share).',
+                'Top Indexing Ethnicity': 'The ethnic group that over-indexes the most vs ' + denLabel + ' (highest index, not necessarily the largest share).',
+                'Top Indexing Income': 'The income bracket that over-indexes the most vs ' + denLabel + ' (highest index, not necessarily the largest share).'
             };
             return demoInsights.map(d => {
                 const idxDisplay = String(Math.round(Number(d.index)));
@@ -70834,7 +70863,7 @@
                 const idxMultiplier = (idx / 100).toFixed(3);
                 const pct = parseFloat(d.sub);
                 
-                if (d.label === 'Dominant Gender') {
+                if (d.label === 'Top Indexing Gender') {
                     const idxNorm = idx > 0 && idx < 10 ? idx * 100 : idx;
                     const mult = (idxNorm / 100).toFixed(3);
                     if (idxNorm >= 105) {
@@ -70846,7 +70875,7 @@
                     }
                 }
                 
-                if (d.label === 'Largest Age Group') {
+                if (d.label === 'Top Indexing Age') {
                     if (idx >= 150) {
                         takeaways.push(`<span class="takeaway-over">Core age group</span> — ${d.value} age group is ${idxMultiplier}x over-indexed`);
                     } else if (idx >= 120) {
@@ -70858,7 +70887,7 @@
                     }
                 }
                 
-                if (d.label === 'Top Ethnicity') {
+                if (d.label === 'Top Indexing Ethnicity') {
                     if (idx >= 130) {
                         takeaways.push(`<span class="takeaway-over">Strong ${d.value} representation</span> — ${idxMultiplier}x higher than ${denLabel}`);
                     } else if (idx <= 70) {
@@ -70868,7 +70897,7 @@
                     }
                 }
                 
-                if (d.label === 'Top Income') {
+                if (d.label === 'Top Indexing Income') {
                     const isHighIncome = d.value.includes('150') || d.value.includes('250') || d.value.includes('100');
                     const isLowIncome = d.value.includes('40') || d.value.includes('60');
                     
@@ -70888,7 +70917,7 @@
             const overallTraits = [];
             
             // Analyze age skew
-            const ageInsight = demoInsights.find(d => d.label === 'Largest Age Group');
+            const ageInsight = demoInsights.find(d => d.label === 'Top Indexing Age');
             if (ageInsight) {
                 const ageValue = ageInsight.value;
                 const ageIdx = ageInsight.index;
@@ -70906,7 +70935,7 @@
             }
             
             // Analyze ethnicity/diversity
-            const ethnicityInsight = demoInsights.find(d => d.label === 'Top Ethnicity');
+            const ethnicityInsight = demoInsights.find(d => d.label === 'Top Indexing Ethnicity');
             if (ethnicityInsight) {
                 const ethValue = ethnicityInsight.value.toUpperCase();
                 const ethIdx = ethnicityInsight.index;
@@ -70926,14 +70955,14 @@
             }
             
             // Analyze gender skew
-            const genderInsight = demoInsights.find(d => d.label === 'Dominant Gender');
+            const genderInsight = demoInsights.find(d => d.label === 'Top Indexing Gender');
             if (genderInsight && genderInsight.index >= 130) {
                 const genderValue = genderInsight.value.toLowerCase();
                 overallTraits.push(`predominantly ${genderValue}`);
             }
             
             // Analyze income/affluence
-            const incomeInsight = demoInsights.find(d => d.label === 'Top Income');
+            const incomeInsight = demoInsights.find(d => d.label === 'Top Indexing Income');
             if (incomeInsight) {
                 const incValue = incomeInsight.value;
                 const incIdx = incomeInsight.index;
@@ -77505,19 +77534,19 @@
         function buildDeckAudienceSnapshotItems() {
             const data = currentDashboardData;
             if (!data?.demographics) return [];
-            const items = [];
-            const addTop = (catKey, label, formatKey) => {
-                const values = data.demographics[catKey] || data.demographics[catKey.charAt(0).toUpperCase() + catKey.slice(1)] || {};
-                const top = Object.entries(values).sort((a, b) => b[1] - a[1])[0];
-                if (!top) return;
-                const displayVal = formatKey ? formatKey(top[0]) : top[0];
-                items.push({ name: `${label}: ${displayVal}`, pct: top[1], index: data.demographicsIndex?.[catKey]?.[top[0]] || 100 });
-            };
-            addTop('gender', 'Dominant Gender');
-            addTop('age', 'Largest Age Group', getAgeDisplayLabel);
-            addTop('ethnicity', 'Top Ethnicity');
-            addTop('income', 'Top Income');
-            return items;
+            // 2026-06-22: keep the deck export in sync with the on-
+            // screen Audience Snapshot tiles by routing through
+            // _computeDemoInsights (top-indexing per category, with
+            // BP-fallback when index data is missing). Preserves the
+            // existing deck item shape: { name, pct, index }.
+            const insights = (typeof _computeDemoInsights === 'function')
+                ? _computeDemoInsights(data)
+                : [];
+            return insights.map(d => ({
+                name: `${d.label}: ${d.value}`,
+                pct: parseFloat(d.sub) || 0,
+                index: Number(d.index) || 100
+            }));
         }
 
         function buildDeckInterestHighlightItems() {
@@ -81003,45 +81032,24 @@
             
             // ===== SUMMARY TAB =====
             
-            // Audience Snapshot - determine top demographic characteristics
-            const demoInsights = [];
-            if (data.demographics) {
-                // Top gender
-                const topGender = Object.entries(data.demographics.gender || {}).sort((a,b) => b[1] - a[1])[0];
-                if (topGender) {
-                    const genderIdx = data.demographicsIndex?.gender?.[topGender[0]] || data.demographicsIndex?.Gender?.[topGender[0]] || 100;
-                    demoInsights.push({ label: 'Dominant Gender', value: topGender[0], sub: topGender[1].toFixed(2) + '%', index: genderIdx });
-                }
-                
-                // Top age group
-                const topAge = Object.entries(data.demographics.age || {}).sort((a,b) => b[1] - a[1])[0];
-                if (topAge) {
-                    const displayAge = getAgeDisplayLabel(topAge[0]);
-                    const ageIdx = data.demographicsIndex?.age?.[topAge[0]] || data.demographicsIndex?.Age?.[topAge[0]] || 100;
-                    demoInsights.push({ label: 'Largest Age Group', value: displayAge, sub: topAge[1].toFixed(2) + '%', index: ageIdx });
-                }
-                
-                // Top ethnicity
-                const topEth = Object.entries(data.demographics.ethnicity || {}).sort((a,b) => b[1] - a[1])[0];
-                if (topEth) {
-                    const ethIdx = data.demographicsIndex?.ethnicity?.[topEth[0]] || data.demographicsIndex?.Ethnicity?.[topEth[0]] || 100;
-                    demoInsights.push({ label: 'Top Ethnicity', value: topEth[0], sub: topEth[1].toFixed(2) + '%', index: ethIdx });
-                }
-                
-                // Top income
-                const topIncome = Object.entries(data.demographics.income || {}).sort((a,b) => b[1] - a[1])[0];
-                if (topIncome) {
-                    const incomeIdx = data.demographicsIndex?.income?.[topIncome[0]] || data.demographicsIndex?.Income?.[topIncome[0]] || 100;
-                    demoInsights.push({ label: 'Top Income', value: topIncome[0], sub: topIncome[1].toFixed(2) + '%', index: incomeIdx });
-                }
-            }
+            // Audience Snapshot - top-indexing demographic per category.
+            // 2026-06-22: route through the single source of truth in
+            // _computeDemoInsights so this initial render matches what
+            // _renderInsightsForVisibleCohorts will paint a frame later
+            // (no flicker between "highest BP" and "highest index"
+            // logic, no label drift). The compute helper handles both
+            // top-indexing selection and the "all-same / no-index"
+            // fallback to highest BP, so this single call replaces
+            // the four inline blocks above.
+            const demoInsights = (typeof _computeDemoInsights === 'function')
+                ? _computeDemoInsights(data)
+                : [];
             
-            // Tooltip descriptions for each snapshot category
             const snapshotTooltips = {
-                'Dominant Gender': 'The gender that makes up the largest percentage of this audience.',
-                'Largest Age Group': 'The age bracket that represents the highest share of this audience.',
-                'Top Ethnicity': 'The ethnic group that comprises the largest portion of this audience.',
-                'Top Income': 'The income bracket most common among this audience.'
+                'Top Indexing Gender': 'The gender that over-indexes the most vs Gen Pop (highest index, not necessarily the largest share).',
+                'Top Indexing Age': 'The age bracket that over-indexes the most vs Gen Pop (highest index, not necessarily the largest share).',
+                'Top Indexing Ethnicity': 'The ethnic group that over-indexes the most vs Gen Pop (highest index, not necessarily the largest share).',
+                'Top Indexing Income': 'The income bracket that over-indexes the most vs Gen Pop (highest index, not necessarily the largest share).'
             };
             
             const audienceSnapshotEl2 = document.getElementById('audienceSnapshot');
