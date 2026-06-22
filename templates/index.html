@@ -35649,7 +35649,7 @@
                 Object.keys(postMap).forEach(function(k) { if ((preMap[k]||0)  > 0 || (postMap[k]||0) > 0) union[k] = true; });
                 var values = Object.keys(union);
                 if (!values.length) {
-                    html += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
+                    html += '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:1.25rem;"><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
                          +  '<div style="padding:0.75rem;color:var(--text-secondary);font-size:12px;">No data</div></div>';
                     return;
                 }
@@ -35690,7 +35690,7 @@
                     return '<span style="font-size:10px;color:#c8e600;margin-left:4px;">' + glyph + '</span>';
                 };
                 var thBase = 'padding:6px 10px;cursor:pointer;user-select:none;';
-                html += '<div><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
+                html += '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:1.25rem;"><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
                      +  '<table style="width:100%;border-collapse:collapse;font-size:12px;" data-bpiq-demo-field="' + field + '">'
                      +  '<thead><tr style="border-bottom:1px solid var(--border-color);">'
                      +  '<th data-bpiq-demo-sort="label"    style="' + thBase + 'text-align:left;">'  + arrow('label')    + '</th>'
