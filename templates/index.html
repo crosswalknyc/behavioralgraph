@@ -35633,7 +35633,7 @@
             _bpiqDemoData = d || {};
             var pre  = (_bpiqDemoData.pre)  || {};
             var post = (_bpiqDemoData.post) || {};
-            var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">';
+            var html = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;">';
             ['gender', 'age', 'ethnicity', 'income'].forEach(function(field) {
                 var preMap  = _bpiqMergeDemo(field, pre[field]);
                 var postMap = _bpiqMergeDemo(field, post[field]);
