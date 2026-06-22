@@ -12719,6 +12719,80 @@ def api_intent_in_flight(title_slug):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# ============================================================================
+# IP VALUATION IQ — PE valuation tool for legacy Hollywood IP
+# ============================================================================
+# Lets a PE user multi-select Profile IQ profiles (MOVIE / SERIES) + Subscriber
+# IQ titles to build a Combined US Universe (overlap-adjusted union), combined
+# demographics, TAM (Universe x latent multiplier), and an editable 8-row
+# valuation waterfall. Pure read endpoints — all valuation math runs client-side.
+def _require_ip_valuation_iq():
+    """Return (False, error_response) if IP Valuation IQ isn't available for this user."""
+    user = get_current_user()
+    if not user:
+        return False, (jsonify({'success': False, 'error': 'Not authenticated'}), 401)
+    role = _normalize_role(user.get('role', 'user'))
+    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+    if not acc.get('has_ip_valuation_iq_access', False):
+        return False, (jsonify({'success': False, 'error': 'IP Valuation IQ access not enabled'}), 403)
+    return True, None
+
+
+@app.route('/api/ip-valuation-iq/profile-iq-list')
+@requires_auth
+def api_ip_valuation_profile_iq_list():
+    """Return Profile IQ jobs filtered to MOVIE + SERIES-* for the IP picker.
+
+    Delegates to list_jobs() so we inherit all accessibility tagging, SVOD/
+    purgatory filtering, allowed_runs gating, etc. — then trims to content-
+    asset categories only.
+    """
+    ok, err = _require_ip_valuation_iq()
+    if not ok:
+        return err
+    try:
+        resp = list_jobs()
+        data = resp.get_json() if hasattr(resp, 'get_json') else None
+        if not data or not isinstance(data, dict):
+            return jsonify({'success': False, 'error': 'Unable to load profile list'}), 500
+        jobs = data.get('jobs', []) or []
+        filtered = []
+        for j in jobs:
+            cat = (j.get('category') or '').upper().strip()
+            if cat == 'MOVIE' or cat.startswith('SERIES'):
+                filtered.append(j)
+        return jsonify({
+            'success': True,
+            'jobs': filtered,
+            'count': len(filtered),
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/ip-valuation-iq/subscriber-iq-list')
+@requires_auth
+def api_ip_valuation_subscriber_iq_list():
+    """Return all Subscriber IQ titles for the Historical Revenue picker.
+
+    Passthrough proxy of list_subscriber_iq_files() with an IP Valuation IQ
+    access check layered on top.
+    """
+    ok, err = _require_ip_valuation_iq()
+    if not ok:
+        return err
+    try:
+        resp = list_subscriber_iq_files()
+        data = resp.get_json() if hasattr(resp, 'get_json') else None
+        if not data or not isinstance(data, dict):
+            return jsonify({'success': False, 'error': 'Unable to load subscriber list'}), 500
+        return jsonify(data)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/subscriber-iq/list')
 @requires_auth
 def list_subscriber_iq_files():
