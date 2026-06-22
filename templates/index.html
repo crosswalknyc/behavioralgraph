@@ -22826,7 +22826,7 @@
             #ipValuationIQView table.ipv-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
             #ipValuationIQView table.ipv-table th, #ipValuationIQView table.ipv-table td {
                 padding: 0.4rem 0.55rem;
-                text-align: right;
+                text-align: left;
                 border-bottom: 1px solid rgba(255,255,255,0.06);
                 white-space: nowrap;
             }
@@ -22843,7 +22843,7 @@
                 border-radius: 4px;
                 padding: 0.25rem 0.4rem;
                 font-size: 0.78rem;
-                text-align: right;
+                text-align: left;
             }
             body[data-theme="light"] #ipValuationIQView input.ipv-num { background: #fafafa; border-color: rgba(0,0,0,0.12); }
             #ipValuationIQView input.ipv-text {
@@ -22869,7 +22869,7 @@
             #ipValuationIQView .ipv-btn:hover { background: rgba(99,102,241,0.3); }
             #ipValuationIQView .ipv-btn.ipv-btn-ghost { background: transparent; border-color: rgba(255,255,255,0.12); }
             body[data-theme="light"] #ipValuationIQView .ipv-btn.ipv-btn-ghost { border-color: rgba(0,0,0,0.12); }
-            #ipValuationIQView .ipv-empty { color: var(--text-secondary); font-size: 0.78rem; padding: 0.6rem; text-align: center; }
+            #ipValuationIQView .ipv-empty { color: var(--text-secondary); font-size: 0.78rem; padding: 0.6rem; text-align: left; }
             #ipValuationIQView .ipv-demo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.85rem; }
             #ipValuationIQView .ipv-demo-block { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 0.55rem 0.65rem; }
             body[data-theme="light"] #ipValuationIQView .ipv-demo-block { background: #fafafa; border-color: rgba(0,0,0,0.06); }
@@ -23496,7 +23496,7 @@
                         html += '<div class="ipv-demo-bar-row">'
                               + '<span title="' + ipvEscape(e[0]) + '" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + ipvEscape(e[0]) + '</span>'
                               + '<div class="ipv-demo-bar"><div style="width:' + widthPct + '%"></div></div>'
-                              + '<span style="text-align:right;">' + e[1].toFixed(1) + '%</span>'
+                              + '<span style="text-align:left;">' + e[1].toFixed(1) + '%</span>'
                               + '</div>';
                     });
                     html += '</div>';
