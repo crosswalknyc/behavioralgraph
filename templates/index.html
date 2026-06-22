@@ -18430,69 +18430,56 @@
                             <div id="bpiqPlatformTable" style="overflow-x: auto;"></div>
                         </div>
 
-                        <!-- 🤝 Brand Engagement Value -->
-                        <div id="bpiqBevCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
-                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
-                                <div style="flex:1; min-width:260px;">
-                                    <h3 style="margin: 0 0 0.35rem;">🤝 Brand Engagement Value</h3>
-                                    <details class="bpiq-methodology">
-                                        <summary class="bpiq-method-summary">How this is calculated</summary>
-                                        <div class="bpiq-method-body">
-                                            Values every <strong>post-campaign engaged consumer</strong> at a flat $/consumer rate — capturing the value of brand mindshare itself, separate from the social-media amplification valued in EMV.
-                                        </div>
-                                    </details>
-                                </div>
-                                <div style="text-align:right; min-width:170px;">
+                        <!-- Valuation cards row: BEV, BLV, Conversion -->
+                        <div id="bpiqValuationRow" style="display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch;">
+                            <!-- 🤝 Brand Engagement Value -->
+                            <div id="bpiqBevCard" class="tab-section" style="flex: 1; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; display: none; flex-direction: column;">
+                                <div style="text-align:center; margin-bottom:0.75rem;">
                                     <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Brand Engagement Value</div>
                                     <div id="bpiqBevTotal" style="font-size:1.8rem; font-weight:700; color:#6366f1;">—</div>
                                 </div>
+                                <h3 style="margin: 0 0 0.35rem; font-size: 0.95rem;">🤝 Brand Engagement Value</h3>
+                                <details class="bpiq-methodology">
+                                    <summary class="bpiq-method-summary">How this is calculated</summary>
+                                    <div class="bpiq-method-body">
+                                        Values every <strong>post-campaign engaged consumer</strong> at a flat $/consumer rate — capturing the value of brand mindshare itself, separate from the social-media amplification valued in EMV.
+                                    </div>
+                                </details>
+                                <div id="bpiqBevBody" style="margin-top:0.75rem;"></div>
                             </div>
-                            <div id="bpiqBevBody"></div>
-                        </div>
 
-                        <!-- 📈 Brand Lift Value -->
-                        <div id="bpiqBlvCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
-                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
-                                <div style="flex:1; min-width:260px;">
-                                    <h3 style="margin: 0 0 0.35rem;">📈 Brand Lift Value</h3>
-                                    <details class="bpiq-methodology">
-                                        <summary class="bpiq-method-summary">How this is calculated</summary>
-                                        <div class="bpiq-method-body">
-                                            Values only the <strong>incremental consumers</strong> (DiD lift over Gen Pop) at a higher rate than BEV — these are the partnership-attributable brand engagers who would not have engaged without the campaign.
-                                        </div>
-                                    </details>
-                                </div>
-                                <div style="text-align:right; min-width:170px;">
+                            <!-- 📈 Brand Lift Value -->
+                            <div id="bpiqBlvCard" class="tab-section" style="flex: 1; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; display: none; flex-direction: column;">
+                                <div style="text-align:center; margin-bottom:0.75rem;">
                                     <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Brand Lift Value</div>
                                     <div id="bpiqBlvTotal" style="font-size:1.8rem; font-weight:700; color:#f59e0b;">—</div>
                                 </div>
+                                <h3 style="margin: 0 0 0.35rem; font-size: 0.95rem;">📈 Brand Lift Value</h3>
+                                <details class="bpiq-methodology">
+                                    <summary class="bpiq-method-summary">How this is calculated</summary>
+                                    <div class="bpiq-method-body">
+                                        Values only the <strong>incremental consumers</strong> (DiD lift over Gen Pop) at a higher rate than BEV — these are the partnership-attributable brand engagers who would not have engaged without the campaign.
+                                    </div>
+                                </details>
+                                <div id="bpiqBlvBody" style="margin-top:0.75rem;"></div>
                             </div>
-                            <div id="bpiqBlvBody"></div>
-                        </div>
 
-                        <!-- 💳 Conversion Value — absorbs the legacy
-                             "💳 Conversions" card so the value math
-                             ('Post Conversions × $/order') sits next to
-                             the inputs that drive it. Hidden when no
-                             conversion signal is detected. -->
-                        <div id="bpiqConvValCard" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
-                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem;">
-                                <div style="flex:1; min-width:260px;">
-                                    <h3 style="margin: 0 0 0.35rem;">💳 Conversion Value</h3>
-                                    <details class="bpiq-methodology">
-                                        <summary class="bpiq-method-summary">How this is calculated</summary>
-                                        <div class="bpiq-method-body">
-                                            Values every measured <strong>post-campaign order / sign-up confirmation</strong> at the brand's average order value (AOV).
-                                        </div>
-                                    </details>
-                                </div>
-                                <div style="text-align:right; min-width:170px;">
+                            <!-- 💳 Conversion Value -->
+                            <div id="bpiqConvValCard" class="tab-section" style="flex: 1; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; display: none; flex-direction: column;">
+                                <div style="text-align:center; margin-bottom:0.75rem;">
                                     <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">Conversion Value</div>
                                     <div id="bpiqConvValTotal" style="font-size:1.8rem; font-weight:700; color:#ef4444;">—</div>
                                 </div>
+                                <h3 style="margin: 0 0 0.35rem; font-size: 0.95rem;">💳 Conversion Value</h3>
+                                <details class="bpiq-methodology">
+                                    <summary class="bpiq-method-summary">How this is calculated</summary>
+                                    <div class="bpiq-method-body">
+                                        Values every measured <strong>post-campaign order / sign-up confirmation</strong> at the brand's average order value (AOV).
+                                    </div>
+                                </details>
+                                <div id="bpiqConversions" style="margin-top:0.75rem;"></div>
+                                <div id="bpiqConvValBody" style="margin-top:0.75rem;"></div>
                             </div>
-                            <div id="bpiqConversions" style="margin-bottom:1rem;"></div>
-                            <div id="bpiqConvValBody"></div>
                         </div>
                         <div class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
                             <h3 style="margin: 0 0 0.5rem;">👥 Demographics: Pre vs Post Brand Engagers</h3>
@@ -35359,7 +35346,7 @@
             var hideConv = !conv.enabled
                         || conv.low_signal
                         || (convPreProj === 0 && convPostProj === 0);
-            if (convSection) convSection.style.display = hideConv ? 'none' : '';
+            if (convSection) convSection.style.display = hideConv ? 'none' : 'flex';
             if (!hideConv && convEl) {
                 convEl.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem;">'
                     + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
@@ -35916,7 +35903,7 @@
             }
 
             // ---------- 🤝 Brand Engagement Value ----------
-            if (bevCard)   bevCard.style.display = '';
+            if (bevCard)   bevCard.style.display = 'flex';
             if (bevTotalEl) bevTotalEl.textContent = _bpiqFmtMoney(v.brand_engagement_value || 0);
             if (bevBody) {
                 var bevCount = (_bpiqState.valBases && _bpiqState.valBases.bev) || 0;
@@ -35937,7 +35924,7 @@
             }
 
             // ---------- 📈 Brand Lift Value ----------
-            if (blvCard)   blvCard.style.display = '';
+            if (blvCard)   blvCard.style.display = 'flex';
             if (blvTotalEl) blvTotalEl.textContent = _bpiqFmtMoney(v.brand_lift_value || 0);
             if (blvBody) {
                 var blvCount = (v.incremental_users != null)
