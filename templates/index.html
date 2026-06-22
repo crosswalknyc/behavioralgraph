@@ -65599,18 +65599,67 @@
                 const includeCasualFan = _comparisonRunsState.includeCasualFan !== false;
                 const showProfileBar = includeCasualFan || cmpSeries.length === 0;
 
-                const buildSanitized = (label, data, bg) => ({
-                    _isComparison: true,
-                    label,
-                    data,
-                    backgroundColor: bg,
-                    borderColor: bg,
-                    borderWidth: 0,
-                    borderRadius: 4,
-                    hoverBackgroundColor: bg,
-                    hoverBorderColor: bg,
-                    datalabels: { display: false }
+                // 2026-06-22: per-bar precomputed Index vs Gen Pop so the
+                // datalabels formatter can read a plain array off the
+                // dataset (no scriptable callbacks, no Chart.js
+                // _scriptable -> _scriptable recursion).
+                const _gpForIndex = Array.isArray(origGP) ? origGP : origKeys.map(() => 0);
+                const _computeIndices = (data) => data.map((v, i) => {
+                    const gp = Number(_gpForIndex[i]) || 0;
+                    if (!(gp > 0) || !isFinite(v)) return null;
+                    return Math.round((Number(v) / gp) * 100);
                 });
+
+                const buildSanitized = (label, data, bg, opts) => {
+                    const isGP = !!(opts && opts.isGP);
+                    const indices = isGP ? data.map(() => null) : _computeIndices(data);
+                    return {
+                        _isComparison: true,
+                        label,
+                        data,
+                        backgroundColor: bg,
+                        borderColor: bg,
+                        borderWidth: 0,
+                        borderRadius: 4,
+                        hoverBackgroundColor: bg,
+                        hoverBorderColor: bg,
+                        _cmpIndices: indices,
+                        _cmpIsGP: isGP,
+                        // Per-dataset datalabels config. Functions here are
+                        // SAFE — they only read context.dataset._cmpIndices /
+                        // .data / ._cmpIsGP (plain arrays on the dataset,
+                        // populated above) and return primitive values.
+                        // They do NOT cascade through inherited scriptable
+                        // chains, which is what triggered the recursion
+                        // crash that originally caused datalabels to be
+                        // disabled wholesale in compare mode.
+                        datalabels: {
+                            display: function(ctx) {
+                                const v = ctx.dataset.data[ctx.dataIndex];
+                                return typeof v === 'number' && isFinite(v) && v > 0;
+                            },
+                            anchor: 'end',
+                            align: 'end',
+                            clamp: true,
+                            color: function(ctx) {
+                                if (ctx.dataset._cmpIsGP) return '#9ca3af';
+                                const idx = ctx.dataset._cmpIndices && ctx.dataset._cmpIndices[ctx.dataIndex];
+                                if (idx == null) return '#cbd5e1';
+                                if (idx >= 110) return '#22c55e';
+                                if (idx <= 90)  return '#ef4444';
+                                return '#cbd5e1';
+                            },
+                            font: { size: 10, weight: '600' },
+                            formatter: function(value, ctx) {
+                                const pct = (typeof value === 'number' && isFinite(value)) ? value : 0;
+                                const pctStr = (pct >= 10 ? pct.toFixed(1) : pct.toFixed(2)) + '%';
+                                if (ctx.dataset._cmpIsGP) return pctStr;
+                                const idx = ctx.dataset._cmpIndices && ctx.dataset._cmpIndices[ctx.dataIndex];
+                                return (idx == null) ? pctStr : (pctStr + ' (' + idx + ')');
+                            }
+                        }
+                    };
+                };
 
                 // First time we enter comparison mode for this chart,
                 // snapshot the original datasets + plugin options so we can
@@ -65623,7 +65672,7 @@
                 chart.data.datasets = [
                     ...(showProfileBar ? [buildSanitized(mainProfileLabel, profileData, '#22d3ee')] : []),
                     ...cmpSeries.map(s => buildSanitized(s.label, s.data, s.backgroundColor)),
-                    ...gpDataset.map(s => buildSanitized(s.label, s.data, s.backgroundColor))
+                    ...gpDataset.map(s => buildSanitized(s.label, s.data, s.backgroundColor, { isGP: true }))
                 ];
 
                 // Replace the ENTIRE plugins config with a scriptable-free
@@ -65648,7 +65697,16 @@
                             }
                         },
                         tooltip: { enabled: true },
-                        datalabels: { display: false }
+                        // 2026-06-22: enable datalabels in compare mode so
+                        // every cohort bar carries its own pct + index
+                        // (vs Gen Pop) label. The actual display config
+                        // is set per-dataset in buildSanitized() above so
+                        // we stay clear of the inherited-scriptable
+                        // recursion that disabled this previously. The
+                        // chart-level config here is intentionally empty
+                        // (no scriptable callbacks) — the per-dataset
+                        // config owns everything.
+                        datalabels: { display: true }
                     };
                 }
                 chart._comparisonActive = true;
