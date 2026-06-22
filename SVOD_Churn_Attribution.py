@@ -1967,6 +1967,17 @@ PLATFORM_PENETRATION = {
     'amc+': {'pct': 3, 'subs_millions': 11, 'tier': 'niche'},
     'shudder': {'pct': 1, 'subs_millions': 2, 'tier': 'niche'},
     'mubi': {'pct': 1, 'subs_millions': 1, 'tier': 'niche'},
+    # YouTube — added 2026-06-22 for free/AVOD movie pulls (e.g.
+    # back-catalog Universal titles streaming on YouTube Movies). Pew
+    # Research 2024 puts YouTube US adult penetration at ~83%, making
+    # it the most-penetrated streaming destination in the country.
+    # Treated as 'dominant' tier so the conversion-rate agent gets the
+    # right context (vs. defaulting to 'unknown'/15%). Subscriber count
+    # uses YouTube Premium US estimate; total reach is much higher
+    # because YouTube is free-with-ads as well.
+    'youtube': {'pct': 83, 'subs_millions': 250, 'tier': 'dominant'},
+    'youtube tv': {'pct': 12, 'subs_millions': 8, 'tier': 'major'},
+    'youtube premium': {'pct': 9, 'subs_millions': 20, 'tier': 'major'},
 }
 
 def _get_platform_info(platform_name):
@@ -3978,23 +3989,34 @@ def apply_ai_adjustments(df_out, validation_result, total_watchers, new_signups,
     if validation_result.get('passed', True):
         return df_out, changes
 
-    # ── Analyst-locked reach override ─────────────────────────────────
-    # When the caller passed an explicit `reach_us_override` (e.g.
-    # pulls anchored to a dashboard-inputs Viewers.csv panel sample,
-    # or any other case where the headline number is the analyst's
-    # ground truth, not Claude's estimate), suppress the watchers /
-    # signups / conversion adjustments here. The override IS the
-    # source of truth — the AI plausibility check would otherwise
-    # crush a defensible analyst projection toward a tier-floor or
-    # comp-show fallback and silently break the contract with the
-    # input panel. We log the bypass so it's auditable.
-    if p.get('reach_us_override') is not None:
+    # ── Analyst-locked headline overrides ─────────────────────────────
+    # When the caller passes either an explicit `reach_us_override`
+    # (anchored e.g. to a dashboard-inputs Viewers.csv panel sample)
+    # or an explicit `conversion_pct` (analyst-asserted conversion
+    # rate — typical for native vs. licensed catalog calibration, or
+    # zero-friction platforms like YouTube where 100% conversion is
+    # the correct framing), suppress the AI watchers/signups/
+    # conversion corrections here. The analyst-supplied number IS
+    # the source of truth — letting the AI plausibility check rewrite
+    # it would silently break the contract with the analyst's
+    # intent. The flags are still recorded on p['_ai_flags'] for
+    # the audit sidecar; they just aren't applied to the CSV rows.
+    _has_reach_override = p.get('reach_us_override') is not None
+    _has_conv_override  = p.get('conversion_pct') is not None
+    if _has_reach_override or _has_conv_override:
+        _lock_bits = []
+        if _has_reach_override:
+            _lock_bits.append(
+                f"reach_us_override={int(p['reach_us_override']):,} US")
+        if _has_conv_override:
+            _lock_bits.append(
+                f"conversion_pct={float(p['conversion_pct']):.3f}%")
         _lock_msg = (
             f"AI adjustments skipped — caller passed explicit "
-            f"reach_us_override={int(p['reach_us_override']):,} US. "
-            f"Headline watchers / signups remain panel-derived from "
-            f"the override; the AI plausibility flags are recorded "
-            f"for audit but not applied."
+            f"{' + '.join(_lock_bits)}. Headline watchers / signups "
+            f"remain panel-derived from the analyst's overrides; the "
+            f"AI plausibility flags are recorded for audit but not "
+            f"applied."
         )
         print(f"   🔒 {_lock_msg}")
         if isinstance(p, dict):
