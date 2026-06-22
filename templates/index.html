@@ -35336,20 +35336,20 @@
                         || (convPreProj === 0 && convPostProj === 0);
             if (convSection) convSection.style.display = hideConv ? 'none' : 'flex';
             if (!hideConv && convEl) {
-                convEl.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem;">'
-                    + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Pre Conversions</div>'
-                    +   '<div style="font-size:1.5rem;font-weight:700;">' + _bpiqFmtNum(convPreProj) + '</div>'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);">US consumers</div>'
+                convEl.innerHTML = '<div style="display:flex;gap:0.5rem;align-items:stretch;">'
+                    + '<div style="flex:1;padding:0.75rem 0.5rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;display:flex;flex-direction:column;justify-content:center;">'
+                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Pre Conversions</div>'
+                    +   '<div style="font-size:1.3rem;font-weight:700;">' + _bpiqFmtNum(convPreProj) + '</div>'
+                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);">US consumers</div>'
                     + '</div>'
-                    + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Post Conversions</div>'
-                    +   '<div style="font-size:1.5rem;font-weight:700;">' + _bpiqFmtNum(convPostProj) + '</div>'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);">US consumers</div>'
+                    + '<div style="flex:1;padding:0.75rem 0.5rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;display:flex;flex-direction:column;justify-content:center;">'
+                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Post Conversions</div>'
+                    +   '<div style="font-size:1.3rem;font-weight:700;">' + _bpiqFmtNum(convPostProj) + '</div>'
+                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);">US consumers</div>'
                     + '</div>'
-                    + '<div style="padding:1rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;">'
-                    +   '<div style="font-size:0.7rem;color:var(--text-secondary);text-transform:uppercase;">Consumer Lift</div>'
-                    +   '<div style="font-size:1.5rem;font-weight:700;">' + _bpiqFmtLift(conv.lift_pct_users) + '</div>'
+                    + '<div style="flex:1;padding:0.75rem 0.5rem;border:1px solid var(--border-color);border-radius:8px;text-align:center;display:flex;flex-direction:column;justify-content:center;">'
+                    +   '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;">Consumer Lift</div>'
+                    +   '<div style="font-size:1.3rem;font-weight:700;">' + _bpiqFmtLift(conv.lift_pct_users) + '</div>'
                     + '</div>'
                     + '</div>';
             }
@@ -35850,7 +35850,7 @@
                          +  '</tr>';
                 });
                 html += '<tr style="border-top:2px solid rgba(200,230,0,0.5);">'
-                     +    '<td style="padding:10px 12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:12px;color:var(--text-secondary);">' + totalLabel + '</td>'
+                     +    '<td style="padding:10px 12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:10px;white-space:nowrap;color:var(--text-secondary);">' + totalLabel + '</td>'
                      +    '<td style="padding:10px 12px;text-align:right;font-weight:700;font-size:2.3rem;white-space:nowrap;color:' + (totalColor || 'inherit') + ';">' + totalValue + '</td>'
                      +  '</tr>';
                 html += '</table>';
@@ -35905,7 +35905,7 @@
                           value: '$ ' + _bpiqRateInput('bev', bevRateValue, 'Edit $/consumer — recalculates Brand Engagement Value & Total Brand Value')
                                  + ' <span style="color:var(--text-secondary);font-size:13px;">/consumer</span>' }
                     ],
-                    '= Brand Engagement Value',
+                    'Brand Engagement Value',
                     _bpiqFmtMoney(v.brand_engagement_value || 0),
                     '#6366f1'
                 );
@@ -35928,7 +35928,7 @@
                           value: '$ ' + _bpiqRateInput('blv', blvRateValue, 'Edit $/incremental consumer — recalculates Brand Lift Value & Total Brand Value')
                                  + ' <span style="color:var(--text-secondary);font-size:13px;">/incr. consumer</span>' }
                     ],
-                    '= Brand Lift Value',
+                    'Brand Lift Value',
                     _bpiqFmtMoney(v.brand_lift_value || 0),
                     '#f59e0b'
                 );
@@ -35954,7 +35954,7 @@
                               value: '$ ' + _bpiqRateInput('conv', convRateValue, 'Edit $/conversion (AOV) — recalculates Conversion Value & Total Brand Value')
                                      + ' <span style="color:var(--text-secondary);font-size:13px;">/order</span>' }
                         ],
-                        '= Conversion Value',
+                        'Conversion Value',
                         _bpiqFmtMoney(v.conversion_value || 0),
                         '#ef4444'
                     );
