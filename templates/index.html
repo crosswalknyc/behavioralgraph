@@ -35691,7 +35691,8 @@
                 };
                 var thBase = 'padding:6px 10px;cursor:pointer;user-select:none;';
                 html += '<div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:1.25rem;"><h4 style="margin:0 0 0.5rem;font-size:13px;">' + _BPIQ_DEMO_LABELS[field] + '</h4>'
-                     +  '<table style="width:100%;border-collapse:collapse;font-size:12px;" data-bpiq-demo-field="' + field + '">'
+                     +  '<table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;" data-bpiq-demo-field="' + field + '">'
+                     +  '<colgroup><col style="width:auto;"><col style="width:18%;"><col style="width:18%;"><col style="width:16%;"><col style="width:18%;"></colgroup>'
                      +  '<thead><tr style="border-bottom:1px solid var(--border-color);">'
                      +  '<th data-bpiq-demo-sort="label"    style="' + thBase + 'text-align:left;">'  + arrow('label')    + '</th>'
                      +  '<th data-bpiq-demo-sort="pre"      style="' + thBase + 'text-align:right;">Pre %'   + arrow('pre')      + '</th>'
