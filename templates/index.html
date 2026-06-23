@@ -40515,22 +40515,14 @@
                     // cannot produce: median pre-signup journey, pre-cancel
                     // off-platform lead-time, non-converter substitution
                     // rate, and the Pluto-in-network upsell pool size.
-                    // Fields are pulled directly off the new
-                    // build_kpis() in build_paramount_plus_subscriber_lifecycle_journey_iq.py.
+                    //
+                    // The first-party-visible tiles (active subs, new
+                    // signups, churned count, net growth) are intentionally
+                    // omitted — Paramount has all of those natively from
+                    // billing / CRM and showing them back is filler. The
+                    // related kpis fields are still emitted by the builder
+                    // for downstream consumers.
                     var fmt = function(v) { return (v != null && Number(v) !== 0) ? _jiqFmt(v) : '—'; };
-                    var pctSub = function(rawPct, decimals, prefix, suffix) {
-                        var s = _jiqPct(rawPct, decimals);
-                        if (s === '—') return '';
-                        return (prefix || '') + s + (suffix || '');
-                    };
-                    var subs      = kpis.subscribers_active_window;
-                    var newSubs   = kpis.new_signups;
-                    var churned   = kpis.churned;
-                    var netGrowth = (kpis.net_growth != null) ? kpis.net_growth
-                                       : ((newSubs != null && churned != null) ? (newSubs - churned) : null);
-                    var atRisk    = kpis.at_risk_30d_count;
-                    var atRiskPct = (subs && atRisk) ? (atRisk / subs * 100) : null;
-                    var netGrowthSign = (netGrowth != null && netGrowth >= 0) ? '+' : '';
                     var medJourneyD = kpis.median_journey_days_to_signup;
                     var medTouches  = kpis.median_touchpoints_to_signup;
                     var avgLeadD    = kpis.avg_leadtime_days_to_churn;
@@ -40540,22 +40532,6 @@
                     var plutoPool   = kpis.pluto_addressable_upsell_pool;
                     var fastCap     = kpis.fast_capture_rate_pct;
                     k = [
-                        ['Active subscribers (window)',
-                            fmt(subs),
-                            'US Paramount+ subs with any activity in window'],
-                        ['New signups',
-                            fmt(newSubs),
-                            pctSub(subs ? (newSubs / subs * 100) : null, 1, '', ' of active subs')],
-                        ['Churned',
-                            fmt(churned),
-                            pctSub(subs ? (churned / subs * 100) : null, 1, '', ' of active subs'),
-                            'amber'],
-                        ['Net subscriber growth',
-                            (netGrowth != null && Number(netGrowth) !== 0)
-                                ? (netGrowthSign + _jiqFmt(netGrowth))
-                                : '—',
-                            'new signups − cancels',
-                            (netGrowth != null && netGrowth >= 0) ? 'lime' : 'amber'],
                         ['Median journey to signup',
                             (medJourneyD != null ? medJourneyD + ' days' : '—'),
                             (medTouches != null
