@@ -25372,6 +25372,229 @@
                     </div>
                 </div>
 
+                <!-- ════════════════════════════════════════════════════════
+                     SUBSCRIBER-LIFECYCLE PITCH BLOCK — five purpose-built
+                     cards designed for the Paramount Streaming insights
+                     team (Tania Abou Nasr / Robert DeSocio). Each card
+                     answers a question Paramount's first-party in-app
+                     data physically cannot. Each card auto-hides when
+                     its payload key is missing, so this entire block
+                     only renders on the lifecycle build (target_type
+                     === 'subscriber_lifecycle' with the five new keys
+                     present). Specifically:
+
+                       jiqLifeSignupCard       (pre_signup_30d)
+                       jiqLifeChurnWakeCard    (churn_wake_60d)
+                       jiqLifeNonConvCard      (non_converter_detour)
+                       jiqLifeTrailerWakeCard  (trailer_drop_wake)
+                       jiqLifeFastRadarCard    (fast_content_radar)
+
+                     The shared section-header card (jiqLifecyclePitchHeader)
+                     reveals itself the first time any of the five
+                     renderers successfully paints — see
+                     _jiqShowLifecyclePitchHeader() in the JS.
+                ═══════════════════════════════════════════════════════ -->
+                <div class="card" id="jiqLifecyclePitchHeader"
+                     style="padding: 1rem 1.2rem; margin-top: 1.5rem; margin-bottom: 1rem;
+                            display: none;
+                            background: linear-gradient(135deg, rgba(91,108,255,0.10) 0%, rgba(168,85,247,0.06) 100%);
+                            border: 1px solid rgba(91,108,255,0.30);">
+                    <div style="display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap;">
+                        <div style="font-size: 0.62rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+                                    color: rgba(147,160,255,0.95); background: rgba(91,108,255,0.20);
+                                    padding: 3px 9px; border-radius: 4px;">Off-Platform Subscriber Intel</div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary);">
+                            The before-and-after of every subscriber signal that matters.
+                        </div>
+                    </div>
+                    <h3 style="margin: 0.5rem 0 0.25rem; font-size: 1.05rem;">
+                        Five answers your first-party data can't give you
+                    </h3>
+                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
+                        What a new sub did the 30 days BEFORE signup. What a churner did the 60 days
+                        BEFORE cancel. Where non-converters detour when they bounce off the landing page.
+                        The full multi-week wake of a single trailer drop. And what's being watched right
+                        now on Tubi / Roku Channel / Pluto TV / Freevee — including the Paramount IP
+                        earning ad revenue on competitor FASTs.
+                    </div>
+                </div>
+
+                <!-- ─── LIFECYCLE CARD 1: 🧭 The 30 Days Before Sign-up ─── -->
+                <div class="card" id="jiqLifeSignupCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(96,165,250,0.04) 100%);
+                            border: 1px solid rgba(34,197,94,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqLifeSignupTitle" style="margin: 0;">🧭 The 30 Days Before Sign-up</h3>
+                        <div id="jiqLifeSignupMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqLifeSignupSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqLifeSignupTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.85rem;"></div>
+                    <h4 style="font-size: 0.85rem; margin: 0.3rem 0 0.4rem; opacity: 0.92;">
+                        ⏳ Time-to-signup distribution (from first off-platform touch)
+                    </h4>
+                    <div id="jiqLifeSignupTimeDist"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                                gap: 0.4rem; margin-bottom: 0.9rem;"></div>
+                    <div style="display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+                                gap: 1rem; align-items: start;">
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                🌐 Top off-platform sites in the 30d pre-signup window
+                            </h4>
+                            <div id="jiqLifeSignupSites"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                🔎 Top searches preceding signup
+                            </h4>
+                            <div id="jiqLifeSignupSearches"></div>
+                        </div>
+                    </div>
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.4rem; opacity: 0.92;">
+                        🎯 Top trigger sequences — what physically preceded the Sign Up click
+                    </h4>
+                    <div id="jiqLifeSignupTriggers"></div>
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.4rem; opacity: 0.92;">
+                        ⚖️ Predictive touchpoint weight — what actually moves the needle
+                    </h4>
+                    <div id="jiqLifeSignupPredictive" style="overflow-x: auto;"></div>
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.4rem; opacity: 0.92;">
+                        👤 Baseline cohort profile (who they are off-platform)
+                    </h4>
+                    <div id="jiqLifeSignupBaseline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                                gap: 0.5rem;"></div>
+                </div>
+
+                <!-- ─── LIFECYCLE CARD 2: ⚠️ The 60 Days Before Cancel ─── -->
+                <div class="card" id="jiqLifeChurnWakeCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(239,68,68,0.06) 0%, rgba(245,158,11,0.03) 100%);
+                            border: 1px solid rgba(239,68,68,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqLifeChurnWakeTitle" style="margin: 0;">⚠️ The 60 Days Before Cancel — the churn-wake</h3>
+                        <div id="jiqLifeChurnWakeMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqLifeChurnWakeSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqLifeChurnWakeTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.85rem;"></div>
+                    <h4 style="font-size: 0.85rem; margin: 0.3rem 0 0.4rem; opacity: 0.92;">
+                        📉 Week-by-week behavior shift (60d → 0d before cancel)
+                    </h4>
+                    <div id="jiqLifeChurnWakeTimeline"></div>
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.4rem; opacity: 0.92;">
+                        🪜 The 6-step "about-to-churn" predictive sequence
+                    </h4>
+                    <div id="jiqLifeChurnWakeSequence"></div>
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.4rem; opacity: 0.92;">
+                        🚨 Top off-platform tells — sorted by churn-lift multiplier
+                    </h4>
+                    <div id="jiqLifeChurnWakeTells" style="overflow-x: auto;"></div>
+                </div>
+
+                <!-- ─── LIFECYCLE CARD 3: 🚪 Where Non-Converters Go ─── -->
+                <div class="card" id="jiqLifeNonConvCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.06) 0%, rgba(244,114,182,0.03) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqLifeNonConvTitle" style="margin: 0;">🚪 Where Non-Converters Go — the addressable audience you didn't close</h3>
+                        <div id="jiqLifeNonConvMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqLifeNonConvSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqLifeNonConvTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.85rem;"></div>
+                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                                gap: 1rem; align-items: start;">
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                ⚡ Where they went IMMEDIATELY (next 30 min)
+                            </h4>
+                            <div id="jiqLifeNonConvImmediate"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                📆 Where they ended up in 30 days
+                            </h4>
+                            <div id="jiqLifeNonConvIn30d"></div>
+                        </div>
+                    </div>
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.4rem; opacity: 0.92;">
+                        🎯 Almost-convertable pools (highest-yield retargeting cohorts)
+                    </h4>
+                    <div id="jiqLifeNonConvAlmost"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+                                gap: 0.6rem;"></div>
+                </div>
+
+                <!-- ─── LIFECYCLE CARD 4: 🚀 Trailer-Drop Wake ─── -->
+                <div class="card" id="jiqLifeTrailerWakeCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(96,165,250,0.06) 0%, rgba(34,197,94,0.04) 100%);
+                            border: 1px solid rgba(96,165,250,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqLifeTrailerWakeTitle" style="margin: 0;">🚀 The Trailer-Drop Wake — case study</h3>
+                        <div id="jiqLifeTrailerWakeMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqLifeTrailerWakeSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqLifeTrailerWakeTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.85rem;"></div>
+                    <h4 style="font-size: 0.85rem; margin: 0.3rem 0 0.4rem; opacity: 0.92;">
+                        📅 Day-by-day off-platform wake (D+0 → D+14)
+                    </h4>
+                    <div id="jiqLifeTrailerWakeDaily"></div>
+                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                                gap: 1rem; align-items: start; margin-top: 1rem;">
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                📡 Channel-by-channel contribution to the 218K incremental signups
+                            </h4>
+                            <div id="jiqLifeTrailerWakeChannels"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                🌊 IRL ripple effects (what else moved in the wake)
+                            </h4>
+                            <div id="jiqLifeTrailerWakeRipple"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ─── LIFECYCLE CARD 5: 📺 FAST Content Radar ─── -->
+                <div class="card" id="jiqLifeFastRadarCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(168,85,247,0.04) 100%);
+                            border: 1px solid rgba(245,158,11,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqLifeFastRadarTitle" style="margin: 0;">📺 FAST Content Radar — Tubi / Roku Channel / Pluto / Freevee</h3>
+                        <div id="jiqLifeFastRadarMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqLifeFastRadarSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqLifeFastRadarTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.85rem;"></div>
+                    <h4 style="font-size: 0.85rem; margin: 0.3rem 0 0.4rem; opacity: 0.92;">
+                        🔝 Top titles by FAST (this month, US)
+                    </h4>
+                    <div id="jiqLifeFastRadarGrid"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                                gap: 0.85rem;"></div>
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.4rem; opacity: 0.92;">
+                        💰 Paramount IP earning ad revenue on competitor FASTs
+                    </h4>
+                    <div id="jiqLifeFastRadarParamountIp" style="overflow-x: auto;"></div>
+                    <div id="jiqLifeFastRadarPlutoFlow"
+                         style="margin-top: 0.85rem; padding: 0.85rem 1rem; border-radius: 6px;
+                                background: rgba(91,108,255,0.07); border-left: 3px solid rgba(91,108,255,0.55);
+                                font-size: 0.8rem; line-height: 1.55;"></div>
+                </div>
+
                 <!-- ═══════════════════════════════════════════════════════
                      CROSS-SHOW VIEWERSHIP — IP audience overlap diagram.
                      For Pop Culture Jeopardy this surfaces the 3-circle
@@ -40847,6 +41070,37 @@
                 renderJourneyIqNetNewAudience(_pickClickstreamBlock('net_new_audience_profile'));
             }
 
+            // ════════════════════════════════════════════════════════
+            // SUBSCRIBER-LIFECYCLE PITCH BLOCK — five purpose-built
+            // cards for the Paramount Streaming insights team. Each
+            // auto-hides if its payload key is missing, so this whole
+            // block only surfaces on the lifecycle build. Reuses the
+            // _pickClickstreamBlock helper because the lookup logic
+            // (payload root → modeled_view → fullRun) is identical.
+            // The shared header strip (jiqLifecyclePitchHeader) is
+            // revealed inside the renderers via
+            // _jiqShowLifecyclePitchHeader().
+            // ════════════════════════════════════════════════════════
+            _jiqLifeHdrShown = false;
+            var _lifeHdr = document.getElementById('jiqLifecyclePitchHeader');
+            if (_lifeHdr) _lifeHdr.style.display = 'none';
+
+            if (typeof renderJourneyIqLifecyclePreSignup === 'function') {
+                renderJourneyIqLifecyclePreSignup(_pickClickstreamBlock('pre_signup_30d'));
+            }
+            if (typeof renderJourneyIqLifecycleChurnWake === 'function') {
+                renderJourneyIqLifecycleChurnWake(_pickClickstreamBlock('churn_wake_60d'));
+            }
+            if (typeof renderJourneyIqLifecycleNonConverter === 'function') {
+                renderJourneyIqLifecycleNonConverter(_pickClickstreamBlock('non_converter_detour'));
+            }
+            if (typeof renderJourneyIqLifecycleTrailerWake === 'function') {
+                renderJourneyIqLifecycleTrailerWake(_pickClickstreamBlock('trailer_drop_wake'));
+            }
+            if (typeof renderJourneyIqLifecycleFastRadar === 'function') {
+                renderJourneyIqLifecycleFastRadar(_pickClickstreamBlock('fast_content_radar'));
+            }
+
             // Facts - facts can be plain strings or {label, value} dicts.
             // Coerce + filter so we never render '[object Object]' or empty
             // boilerplate (e.g. a lone {label:'Target', value:'Research-anchored ...'}).
@@ -47568,6 +47822,580 @@
                 recsEl.innerHTML = (na.recommendations || []).map(function(r) {
                     return _jiqCallout(r.title || r.headline || '', r.detail || '', '#22c55e');
                 }).join('');
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // SUBSCRIBER-LIFECYCLE PITCH RENDERERS
+        //
+        // Five renderers, one per card in the Paramount-Streaming-pitch
+        // block that sits below the old (now-empty / auto-hidden)
+        // jiqSubLifecycleCard. Each renderer answers a single question
+        // a Paramount Streaming insights leader would ask, and each
+        // metric inside is OFF-platform — clickstream-graph-only.
+        //
+        // Renderers (rendered in this visual order):
+        //   1. renderJourneyIqLifecyclePreSignup     (pre_signup_30d)
+        //   2. renderJourneyIqLifecycleChurnWake     (churn_wake_60d)
+        //   3. renderJourneyIqLifecycleNonConverter  (non_converter_detour)
+        //   4. renderJourneyIqLifecycleTrailerWake   (trailer_drop_wake)
+        //   5. renderJourneyIqLifecycleFastRadar     (fast_content_radar)
+        //
+        // Each renderer auto-hides its card via the shared _jiqHideCard
+        // helper when its payload key is missing. The shared section-
+        // header strip (jiqLifecyclePitchHeader) is revealed by the
+        // _jiqShowLifecyclePitchHeader helper the FIRST time any of the
+        // five cards successfully paints — see logic at the bottom of
+        // this block.
+        // ══════════════════════════════════════════════════════════════
+
+        var _jiqLifeHdrShown = false;
+        function _jiqShowLifecyclePitchHeader() {
+            if (_jiqLifeHdrShown) return;
+            var hdr = document.getElementById('jiqLifecyclePitchHeader');
+            if (hdr) { hdr.style.display = ''; _jiqLifeHdrShown = true; }
+        }
+        function _jiqShowLifeCard(id) {
+            var el = document.getElementById(id);
+            if (el) { el.style.display = ''; _jiqShowLifecyclePitchHeader(); }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 1 · 🧭 The 30 Days Before Sign-up
+        //
+        // For new subs, every off-platform touchpoint observed in the
+        // 30d before signup: median journey length, top sites/searches,
+        // trigger sequences, and predictive touchpoint weight. Matches
+        // the pitch-deck "Sample Read" slide one-to-one (cohort 184K,
+        // 21d, 9.2 touchpoints, Walmart+Facebook callouts, etc.).
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqLifecyclePreSignup(p) {
+            if (!p || p.enabled === false || !p.top_offplatform_sites) {
+                _jiqHideCard('jiqLifeSignupCard'); return;
+            }
+            _jiqShowLifeCard('jiqLifeSignupCard');
+            var ACC = '#22c55e';
+            var titleEl   = document.getElementById('jiqLifeSignupTitle');
+            var subEl     = document.getElementById('jiqLifeSignupSubtitle');
+            var metaEl    = document.getElementById('jiqLifeSignupMeta');
+            var topEl     = document.getElementById('jiqLifeSignupTopline');
+            var timeEl    = document.getElementById('jiqLifeSignupTimeDist');
+            var sitesEl   = document.getElementById('jiqLifeSignupSites');
+            var searchEl  = document.getElementById('jiqLifeSignupSearches');
+            var trigEl    = document.getElementById('jiqLifeSignupTriggers');
+            var predEl    = document.getElementById('jiqLifeSignupPredictive');
+            var baseEl    = document.getElementById('jiqLifeSignupBaseline');
+            if (titleEl) titleEl.textContent = '🧭 ' + (p.title || '').replace(/^🧭\s*/, '');
+            if (subEl)   subEl.textContent = p.subtitle || '';
+            if (metaEl)  metaEl.textContent = 'Study cohort: ' + _jiqFmt(p.study_cohort_size || 0) + ' new subscribers';
+            if (topEl) {
+                topEl.innerHTML = ''
+                    + _jiqTile('Study cohort',          _jiqFmt(p.study_cohort_size || 0), 'new subscribers', ACC)
+                    + _jiqTile('Median journey',        (p.median_journey_days || 0) + ' days', 'first touch → signup', ACC)
+                    + _jiqTile('Median touchpoints',    (p.median_touchpoints || 0).toFixed(1) + ' touches', 'before signup', ACC)
+                    + _jiqTile('Top off-platform site', (p.top_offplatform_sites[0] || {}).host || '—', ((p.top_offplatform_sites[0] || {}).pct || 0) + '% of cohort', '#3b82f6')
+                    + _jiqTile('Strongest predictor',   'Trailer + 2 returns', (p.predictive_touchpoints && p.predictive_touchpoints[0] ? p.predictive_touchpoints[0].lift_x + 'x conversion lift' : ''), '#f59e0b');
+            }
+            if (timeEl) {
+                var dist = p.time_to_signup_distribution || [];
+                var maxPct = dist.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                timeEl.innerHTML = dist.map(function(r) {
+                    return '<div style="padding:0.55rem 0.7rem; background: rgba(255,255,255,0.025); border-radius:6px;'
+                         +              ' border-left:3px solid ' + ACC + ';">'
+                         +   '<div style="font-size:0.62rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.05em;">' + _jiqEsc(r.bucket) + '</div>'
+                         +   '<div style="font-size:1.05rem; font-weight:700; margin:0.2rem 0;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                         +   _jiqMiniBar(r.pct, ACC, maxPct)
+                         + '</div>';
+                }).join('');
+            }
+            if (sitesEl) {
+                var sites = p.top_offplatform_sites || [];
+                var maxSite = sites.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                sitesEl.innerHTML = sites.map(function(r) {
+                    return '<div style="padding:7px 0; border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                         +     '<div>'
+                         +       '<span style="font-size:12.5px; font-weight:600;">' + _jiqEsc(r.host) + '</span>'
+                         +       '<span style="font-size:9.5px; font-weight:700; padding:1.5px 6px; border-radius:3px; margin-left:6px;'
+                         +                   ' background: ' + ACC + '22; color: ' + ACC + ';">' + _jiqEsc(r.role || '') + '</span>'
+                         +     '</div>'
+                         +     '<div style="font-size:12px; font-weight:700;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.pct, ACC, maxSite) + '</div>'
+                         +   '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (searchEl) {
+                var searches = p.top_searches || [];
+                var maxQ = searches.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                searchEl.innerHTML = searches.map(function(r) {
+                    return '<div style="padding:6px 0; border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                         +     '<div style="font-size:12px; font-family:monospace; line-height:1.4; color: var(--text-primary);">' + _jiqEsc(r.query) + '</div>'
+                         +     '<div style="font-size:11.5px; font-weight:700; white-space:nowrap;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.pct, '#3b82f6', maxQ) + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (trigEl) {
+                var triggers = p.trigger_sequences || [];
+                trigEl.innerHTML = triggers.map(function(r) {
+                    return '<div style="display:grid; grid-template-columns: 70px minmax(0, 1.4fr) minmax(0, 1.6fr); gap:0.85rem; align-items:start;'
+                         +              ' padding:0.7rem 0.85rem; margin-bottom:0.45rem; border-radius:6px;'
+                         +              ' background: rgba(255,255,255,0.025); border-left: 3px solid ' + ACC + ';">'
+                         +   '<div style="text-align:center;">'
+                         +     '<div style="font-size:1rem; font-weight:800; color: var(--text-primary); line-height:1;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                         +     '<div style="font-size:0.65rem; opacity:0.6; margin-top:0.25rem;">' + (r.avg_days || 0) + 'd avg</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.84rem; font-weight:600; color: var(--text-primary); line-height:1.4;">' + _jiqEsc(r.label) + '</div>'
+                         +   '<div style="font-size:0.74rem; color: var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(r.note) + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (predEl) {
+                var preds = p.predictive_touchpoints || [];
+                var maxLift = preds.reduce(function(m, r) { return Math.max(m, r.lift_x || 0); }, 0);
+                var rows = preds.map(function(r) {
+                    var liftColor = r.lift_x > 6 ? '#22c55e' : (r.lift_x > 3 ? '#f59e0b' : '#ef4444');
+                    return '<tr style="border-bottom:1px solid var(--border-color); vertical-align:top;">'
+                         +   '<td style="padding:8px 6px;">'
+                         +     '<div style="font-weight:600; font-size:12px;">' + _jiqEsc(r.touchpoint) + '</div>'
+                         +     '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap;">'
+                         +     '<div style="font-weight:800; color:' + liftColor + '; font-size:13px;">' + (r.lift_x || 0).toFixed(1) + 'x</div>'
+                         +     '<div style="margin-top:4px; width:70px; margin-left:auto;">' + _jiqMiniBar(r.lift_x, liftColor, maxLift) + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap; color:var(--text-secondary);">' + (r.share_of_converters_pct || 0).toFixed(1) + '%</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap; color:var(--text-secondary);">' + (r.median_days_before_signup != null ? r.median_days_before_signup + 'd' : '—') + '</td>'
+                         + '</tr>';
+                }).join('');
+                predEl.innerHTML = ''
+                    + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;">'
+                    +   '<thead><tr style="text-align:left; border-bottom:1px solid var(--border-color); font-size:10.5px; opacity:0.75; text-transform:uppercase; letter-spacing:0.04em;">'
+                    +     '<th style="padding:6px 6px;">Touchpoint</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Conv. lift</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Share of conv.</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Median lead</th>'
+                    +   '</tr></thead><tbody>' + rows + '</tbody>'
+                    + '</table>';
+            }
+            if (baseEl && p.baseline_profile) {
+                var b = p.baseline_profile;
+                baseEl.innerHTML = ''
+                    + _jiqTile('Avg HHI',           String(b.avg_household_income || '—'), '', ACC)
+                    + _jiqTile('Gender skew',       String(b.gender_skew || '—'),          '', ACC)
+                    + _jiqTile('Age',               String(b.age_skew || '—'),             '', ACC)
+                    + _jiqTile('Geo skew',          String(b.geo_skew || '—'),             '', ACC)
+                    + _jiqTile('Other SVOD subs',   String(b.other_active_subscriptions || '—'), '', ACC)
+                    + _jiqTile('FAST consumption',  String(b.fast_consumption_pct || '—'), '', ACC);
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 2 · ⚠️ The 60 Days Before Cancel
+        //
+        // The single most clickstream-exclusive insight on the page.
+        // Week-by-week off-platform shift from 60d-out to cancel day,
+        // 6-step predictive sequence, and per-signal churn-lift table
+        // with recommended retention actions.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqLifecycleChurnWake(c) {
+            if (!c || c.enabled === false || !c.week_shifts) {
+                _jiqHideCard('jiqLifeChurnWakeCard'); return;
+            }
+            _jiqShowLifeCard('jiqLifeChurnWakeCard');
+            var ACC = '#ef4444';
+            var titleEl   = document.getElementById('jiqLifeChurnWakeTitle');
+            var subEl     = document.getElementById('jiqLifeChurnWakeSubtitle');
+            var metaEl    = document.getElementById('jiqLifeChurnWakeMeta');
+            var topEl     = document.getElementById('jiqLifeChurnWakeTopline');
+            var timelineEl= document.getElementById('jiqLifeChurnWakeTimeline');
+            var seqEl     = document.getElementById('jiqLifeChurnWakeSequence');
+            var tellsEl   = document.getElementById('jiqLifeChurnWakeTells');
+            if (titleEl) titleEl.textContent = '⚠️ ' + (c.title || '').replace(/^⚠️\s*/, '');
+            if (subEl)   subEl.textContent = c.subtitle || '';
+            if (metaEl)  metaEl.textContent = 'Study cohort: ' + _jiqFmt(c.study_cohort_size || 0) + ' churned accounts';
+            if (topEl) {
+                topEl.innerHTML = ''
+                    + _jiqTile('Avg lead-time',    (c.avg_leadtime_days || 0) + ' days', 'first signal → cancel', ACC)
+                    + _jiqTile('Cohort w/ signal', (c.pct_with_signal_pre60d || 0).toFixed(1) + '%', 'detectable pre-cancel', ACC)
+                    + _jiqTile('"Silent" churners',(c.silent_churners_pct || 0).toFixed(1) + '%', 'no off-platform signal', '#f59e0b')
+                    + _jiqTile('Hardest tell',     '"cancel paramount plus"', (c.top_tells && c.top_tells[0] ? c.top_tells[0].lift_x + 'x lift' : ''), '#ef4444');
+            }
+            if (timelineEl) {
+                var weeks = c.week_shifts || [];
+                var maxShift = weeks.reduce(function(m, r) {
+                    return Math.max(m, Math.abs(r.pct_shift || 0));
+                }, 0);
+                timelineEl.innerHTML = weeks.map(function(w) {
+                    var shift = w.pct_shift;
+                    var isCancel = (w.weeks_before === 0);
+                    var color = isCancel ? '#ef4444'
+                              : (shift == null ? 'var(--text-secondary)'
+                              : (Math.abs(shift) > 150 ? '#ef4444'
+                              : (Math.abs(shift) > 60  ? '#f59e0b' : '#3b82f6')));
+                    var shiftStr = (shift == null) ? '—'
+                                 : (shift > 0 ? '+' : '') + shift + '%';
+                    return '<div style="display:grid; grid-template-columns: 90px 140px minmax(0, 1.6fr) 80px; gap:0.7rem; align-items:center;'
+                         +              ' padding:0.6rem 0.85rem; margin-bottom:0.35rem; border-radius:6px;'
+                         +              ' background: rgba(255,255,255,0.025); border-left: 3px solid ' + color + ';">'
+                         +   '<div style="text-align:center;">'
+                         +     '<div style="font-size:0.78rem; font-weight:800; color: var(--text-primary); letter-spacing:0.04em;">' + _jiqEsc(w.label) + '</div>'
+                         +   '</div>'
+                         +   '<div>'
+                         +     '<div style="font-size:0.78rem; font-weight:700;">' + _jiqEsc(w.key_signal) + '</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.74rem; color: var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(w.note || '') + '</div>'
+                         +   '<div style="text-align:right;">'
+                         +     '<div style="font-size:1rem; font-weight:800; color: ' + color + '; line-height:1;">' + _jiqEsc(shiftStr) + '</div>'
+                         + (shift != null
+                             ? '<div style="margin-top:0.4rem;">' + _jiqMiniBar(Math.abs(shift), color, maxShift) + '</div>'
+                             : '')
+                         +   '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (seqEl) {
+                var seq = c.predictive_sequence || [];
+                seqEl.innerHTML = seq.map(function(s) {
+                    var isCancel = (s.lift_x == null);
+                    var liftStr  = isCancel ? 'EVENT' : s.lift_x.toFixed(1) + 'x';
+                    var color    = isCancel ? '#ef4444'
+                                 : (s.lift_x > 10 ? '#ef4444'
+                                 : (s.lift_x > 4  ? '#f59e0b' : '#3b82f6'));
+                    return '<div style="display:grid; grid-template-columns: 40px 110px minmax(0, 1.4fr) minmax(0, 1.4fr) 80px; gap:0.7rem; align-items:center;'
+                         +              ' padding:0.6rem 0.85rem; margin-bottom:0.35rem; border-radius:6px;'
+                         +              ' background: rgba(255,255,255,0.025); border-left: 3px solid ' + color + ';">'
+                         +   '<div style="font-size:0.95rem; font-weight:800; color: ' + color + '; text-align:center;">' + (s.step || '') + '</div>'
+                         +   '<div style="font-size:0.74rem; opacity:0.8; font-weight:600;">' + _jiqEsc(s.when || '') + '</div>'
+                         +   '<div style="font-size:0.82rem; font-weight:600; line-height:1.4;">' + _jiqEsc(s.signal || '') + '</div>'
+                         +   '<div style="font-size:0.72rem; color: var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(s.note || '') + '</div>'
+                         +   '<div style="font-size:1rem; font-weight:800; color: ' + color + '; text-align:right;">' + liftStr + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (tellsEl) {
+                var tells = c.top_tells || [];
+                var maxLift = tells.reduce(function(m, r) { return Math.max(m, r.lift_x || 0); }, 0);
+                var rows = tells.map(function(t) {
+                    var liftColor = t.lift_x > 15 ? '#ef4444' : (t.lift_x > 6 ? '#f59e0b' : '#3b82f6');
+                    return '<tr style="border-bottom:1px solid var(--border-color); vertical-align:top;">'
+                         +   '<td style="padding:8px 6px;">'
+                         +     '<div style="font-weight:600; font-size:12px;">' + _jiqEsc(t.signal) + '</div>'
+                         +     '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(t.recommended_action || '') + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap;">'
+                         +     '<div style="font-weight:800; color:' + liftColor + '; font-size:13px;">' + (t.lift_x || 0).toFixed(1) + 'x</div>'
+                         +     '<div style="margin-top:4px; width:70px; margin-left:auto;">' + _jiqMiniBar(t.lift_x, liftColor, maxLift) + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap; color:var(--text-secondary);">' + (t.share_of_churners_pct || 0).toFixed(1) + '%</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap; color:var(--text-secondary);">' + (t.avg_leadtime_days != null ? t.avg_leadtime_days + 'd' : '—') + '</td>'
+                         + '</tr>';
+                }).join('');
+                tellsEl.innerHTML = ''
+                    + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;">'
+                    +   '<thead><tr style="text-align:left; border-bottom:1px solid var(--border-color); font-size:10.5px; opacity:0.75; text-transform:uppercase; letter-spacing:0.04em;">'
+                    +     '<th style="padding:6px 6px;">Signal · Recommended retention action</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Churn lift</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Share of churners</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Lead-time</th>'
+                    +   '</tr></thead><tbody>' + rows + '</tbody>'
+                    + '</table>';
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 3 · 🚪 Where Non-Converters Go
+        //
+        // Two-pane (immediate destinations / 30d outcomes) + grid of
+        // almost-convertable retargeting pools with recommended actions.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqLifecycleNonConverter(n) {
+            if (!n || n.enabled === false || !n.immediate_destinations) {
+                _jiqHideCard('jiqLifeNonConvCard'); return;
+            }
+            _jiqShowLifeCard('jiqLifeNonConvCard');
+            var ACC = '#a78bfa';
+            var titleEl   = document.getElementById('jiqLifeNonConvTitle');
+            var subEl     = document.getElementById('jiqLifeNonConvSubtitle');
+            var metaEl    = document.getElementById('jiqLifeNonConvMeta');
+            var topEl     = document.getElementById('jiqLifeNonConvTopline');
+            var immEl     = document.getElementById('jiqLifeNonConvImmediate');
+            var in30El    = document.getElementById('jiqLifeNonConvIn30d');
+            var almostEl  = document.getElementById('jiqLifeNonConvAlmost');
+            if (titleEl) titleEl.textContent = '🚪 ' + (n.title || '').replace(/^🚪\s*/, '');
+            if (subEl)   subEl.textContent = n.subtitle || '';
+            if (metaEl)  metaEl.textContent = _jiqFmt(n.landing_non_converters_count || 0) + ' unique non-converting visitors';
+            if (topEl) {
+                topEl.innerHTML = ''
+                    + _jiqTile('Non-converters',       _jiqFmt(n.landing_non_converters_count || 0), 'hit landing, didn\'t sign up', ACC)
+                    + _jiqTile('Bought competitor 30d',(n.pct_non_converters_bought_competitor_30d || n.pct_bounced_to_competitor_within_30d || 0).toFixed(1) + '%', 'switched-equivalent loss', '#ef4444')
+                    + _jiqTile('Top immediate dest.',  ((n.immediate_destinations[0] || {}).destination || '—').split(' ')[0], ((n.immediate_destinations[0] || {}).pct || 0).toFixed(1) + '%', '#3b82f6')
+                    + _jiqTile('Top 30d sub winner',   ((n.where_in_30d[1] || n.where_in_30d[0] || {}).outcome || '—').replace(/^Signed up for /,''), ((n.where_in_30d[1] || {}).pct || 0).toFixed(1) + '%', '#ef4444');
+            }
+            if (immEl) {
+                var dests = (n.immediate_destinations || []).slice().sort(function(a, b) {
+                    return (b.pct || 0) - (a.pct || 0);
+                });
+                var maxImm = dests.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                immEl.innerHTML = dests.map(function(r) {
+                    return '<div style="padding:7px 0; border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                         +     '<div>'
+                         +       '<span style="font-size:12px; font-weight:600;">' + _jiqEsc(r.destination) + '</span>'
+                         +       '<span style="font-size:9.5px; font-weight:700; padding:1.5px 6px; border-radius:3px; margin-left:6px;'
+                         +                   ' background: ' + ACC + '22; color: ' + ACC + ';">' + _jiqEsc(r.role || '') + '</span>'
+                         +     '</div>'
+                         +     '<div style="font-size:11.5px; font-weight:700;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.pct, ACC, maxImm) + '</div>'
+                         +   '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (in30El) {
+                var rows30 = (n.where_in_30d || []);
+                var max30 = rows30.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                in30El.innerHTML = rows30.map(function(r) {
+                    var isNoSub  = /did NOT subscribe/i.test(r.outcome || '');
+                    var isLater  = /Paramount\+ LATER/i.test(r.outcome || '');
+                    var color    = isLater ? '#22c55e' : (isNoSub ? '#94a3b8' : '#ef4444');
+                    return '<div style="padding:7px 0; border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                         +     '<div style="font-size:12px; font-weight:600;">' + _jiqEsc(r.outcome) + '</div>'
+                         +     '<div style="font-size:11.5px; font-weight:700; color:' + color + ';">' + (r.pct || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.pct, color, max30) + '</div>'
+                         +   '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (almostEl) {
+                almostEl.innerHTML = (n.almost_convertable || []).map(function(r) {
+                    return '<div style="padding:0.7rem 0.85rem; border-radius:6px;'
+                         +              ' background: rgba(255,255,255,0.025); border-left: 3px solid #22c55e;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:0.3rem;">'
+                         +     '<div style="font-size:12.5px; font-weight:700; line-height:1.35;">' + _jiqEsc(r.label) + '</div>'
+                         +     '<div style="font-size:13px; font-weight:800; color: #22c55e; white-space:nowrap;">' + _jiqFmt(r.count || 0) + '</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:11px; color: var(--text-secondary); margin-bottom:0.35rem; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
+                         +   '<div style="font-size:11px; padding:0.4rem 0.55rem; border-radius:4px; background: rgba(34,197,94,0.08); border-left:2px solid rgba(34,197,94,0.6);">'
+                         +     '<strong style="color:#22c55e;">→ Retarget:</strong> ' + _jiqEsc(r.retarget_action || '')
+                         +   '</div>'
+                         + '</div>';
+                }).join('');
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 4 · 🚀 The Trailer-Drop Wake (case study)
+        //
+        // Single-event case study (Landman S2 trailer, 2025-11-09).
+        // Day-by-day off-platform wake + per-channel signup
+        // contribution + IRL ripple effects. The "this is what one
+        // trailer is actually worth, end-to-end" view.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqLifecycleTrailerWake(t) {
+            if (!t || t.enabled === false || !t.daily_wake) {
+                _jiqHideCard('jiqLifeTrailerWakeCard'); return;
+            }
+            _jiqShowLifeCard('jiqLifeTrailerWakeCard');
+            var ACC = '#60a5fa';
+            var titleEl    = document.getElementById('jiqLifeTrailerWakeTitle');
+            var subEl      = document.getElementById('jiqLifeTrailerWakeSubtitle');
+            var metaEl     = document.getElementById('jiqLifeTrailerWakeMeta');
+            var topEl      = document.getElementById('jiqLifeTrailerWakeTopline');
+            var dailyEl    = document.getElementById('jiqLifeTrailerWakeDaily');
+            var channelsEl = document.getElementById('jiqLifeTrailerWakeChannels');
+            var rippleEl   = document.getElementById('jiqLifeTrailerWakeRipple');
+            if (titleEl) titleEl.textContent = '🚀 ' + (t.title || '').replace(/^🚀\s*/, '');
+            if (subEl)   subEl.textContent = t.subtitle || '';
+            if (metaEl) {
+                metaEl.textContent = (t.event_name || 'Marketing event') + ' · ' + (t.event_date || '');
+            }
+            var tot = t.totals || {};
+            if (topEl) {
+                topEl.innerHTML = ''
+                    + _jiqTile('Paid impressions', (tot.paid_impressions_m || 0).toFixed(1) + 'M', 'across YT + TikTok + IG', ACC)
+                    + _jiqTile('Organic views',    (tot.organic_views_m || 0).toFixed(1) + 'M', 'free reach we observed', ACC)
+                    + _jiqTile('TRUE incremental', _jiqFmt(tot.cumulative_signups_d14 || 0), 'P+ signups in 14d', '#22c55e')
+                    + _jiqTile('Incremental CPA',  '$' + (tot.incremental_cpa_usd || 0).toFixed(2), 'vs $' + (tot.paid_social_equivalent_cpa || 0).toFixed(0) + ' paid equivalent', '#22c55e')
+                    + _jiqTile('Organic : paid',   (tot.organic_to_paid_views_ratio || 0).toFixed(2) + 'x', 'views ratio', ACC);
+            }
+            if (dailyEl) {
+                var daily = t.daily_wake || [];
+                var maxSig = daily.reduce(function(m, r) { return Math.max(m, r.signups_running || 0); }, 0);
+                dailyEl.innerHTML = daily.map(function(r) {
+                    var shiftStr = (r.pct_shift == null) ? '—'
+                                 : (r.pct_shift > 0 ? '+' : '') + r.pct_shift + '%';
+                    return '<div style="display:grid; grid-template-columns: 70px minmax(0, 1.6fr) 100px 120px minmax(0, 1.4fr); gap:0.7rem; align-items:center;'
+                         +              ' padding:0.55rem 0.85rem; margin-bottom:0.3rem; border-radius:6px;'
+                         +              ' background: rgba(255,255,255,0.025); border-left: 3px solid ' + ACC + ';">'
+                         +   '<div style="text-align:center;">'
+                         +     '<div style="font-size:0.78rem; font-weight:800; color: var(--text-primary); letter-spacing:0.04em;">' + _jiqEsc(r.day_label) + '</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.78rem; font-weight:600; line-height:1.4;">' + _jiqEsc(r.headline_metric) + '</div>'
+                         +   '<div style="text-align:right; font-size:0.84rem; font-weight:700; color: ' + ACC + ';">' + _jiqEsc(shiftStr) + '</div>'
+                         +   '<div style="text-align:right;">'
+                         +     '<div style="font-size:0.85rem; font-weight:800; color: #22c55e;">' + _jiqFmt(r.signups_running || 0) + '</div>'
+                         +     '<div style="font-size:0.6rem; opacity:0.6;">cum. signups</div>'
+                         +     '<div style="margin-top:0.25rem;">' + _jiqMiniBar(r.signups_running, '#22c55e', maxSig) + '</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.72rem; color: var(--text-secondary); font-style:italic; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (channelsEl) {
+                var channels = t.channel_contribution || [];
+                var maxCh = channels.reduce(function(m, r) { return Math.max(m, r.signups || 0); }, 0);
+                channelsEl.innerHTML = channels.map(function(r) {
+                    return '<div style="padding:7px 0; border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                         +     '<div style="font-size:12px; font-weight:600;">' + _jiqEsc(r.channel) + '</div>'
+                         +     '<div style="text-align:right; white-space:nowrap;">'
+                         +       '<span style="font-size:12px; font-weight:700;">' + _jiqFmt(r.signups || 0) + '</span>'
+                         +       '<span style="font-size:10.5px; opacity:0.7; margin-left:6px;">(' + (r.pct_of_total || 0).toFixed(1) + '%)</span>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.signups, '#22c55e', maxCh) + '</div>'
+                         +   '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (rippleEl) {
+                var ripple = t.irl_ripple || [];
+                var maxR = ripple.reduce(function(m, r) { return Math.max(m, r.lift_vs_control_pct || 0); }, 0);
+                rippleEl.innerHTML = ripple.map(function(r) {
+                    return '<div style="padding:7px 0; border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                         +     '<div style="font-size:12px; font-weight:600; line-height:1.35;">' + _jiqEsc(r.category) + '</div>'
+                         +     '<div style="font-size:12px; font-weight:800; color: #f59e0b;">+' + (r.lift_vs_control_pct || 0).toFixed(0) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.lift_vs_control_pct, '#f59e0b', maxR) + '</div>'
+                         +   '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 5 · 📺 FAST Content Radar
+        //
+        // What's being watched on Tubi / Roku Channel / Pluto TV
+        // (Paramount-owned) / Freevee. Plus a Paramount-IP-on-FAST
+        // table and a Pluto → P+ upsell-opportunity callout.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqLifecycleFastRadar(f) {
+            if (!f || f.enabled === false || !f.fasts) {
+                _jiqHideCard('jiqLifeFastRadarCard'); return;
+            }
+            _jiqShowLifeCard('jiqLifeFastRadarCard');
+            var ACC = '#f59e0b';
+            var titleEl   = document.getElementById('jiqLifeFastRadarTitle');
+            var subEl     = document.getElementById('jiqLifeFastRadarSubtitle');
+            var metaEl    = document.getElementById('jiqLifeFastRadarMeta');
+            var topEl     = document.getElementById('jiqLifeFastRadarTopline');
+            var gridEl    = document.getElementById('jiqLifeFastRadarGrid');
+            var ipEl      = document.getElementById('jiqLifeFastRadarParamountIp');
+            var flowEl    = document.getElementById('jiqLifeFastRadarPlutoFlow');
+            if (titleEl) titleEl.textContent = '📺 ' + (f.title || '').replace(/^📺\s*/, '');
+            if (subEl)   subEl.textContent = f.subtitle || '';
+            if (metaEl)  metaEl.textContent = (f.fasts.length) + ' FASTs tracked · ' + _jiqFmt((f.totals || {}).titles_tracked || 0) + ' titles';
+            var tot = f.totals || {};
+            if (topEl) {
+                topEl.innerHTML = ''
+                    + _jiqTile('Total FAST viewers',  _jiqFmt(tot.total_fast_viewers_us || 0), 'US adults, in window', ACC)
+                    + _jiqTile('Churners on FAST',    (tot.pct_pplus_churners_on_fast || 0).toFixed(1) + '%', 'of P+ churners watch FAST', '#ef4444')
+                    + _jiqTile('Paramount IP on FAST',_jiqFmt(tot.paramount_ip_titles_on_fast || 0), 'titles tracked', '#22c55e')
+                    + _jiqTile('Titles tracked',      _jiqFmt(tot.titles_tracked || 0), 'across all 4 FASTs', ACC);
+            }
+            if (gridEl) {
+                gridEl.innerHTML = (f.fasts || []).map(function(plat) {
+                    var owner = (plat.owner || '').toLowerCase();
+                    var isPP  = owner.indexOf('paramount') >= 0;
+                    var headerColor = isPP ? '#22c55e' : ACC;
+                    var top = (plat.top || []).slice(0, 8);
+                    var maxV = top.reduce(function(m, r) { return Math.max(m, r.monthly_viewers_m || 0); }, 0);
+                    var rows = top.map(function(r) {
+                        var ipBadge = r.is_paramount_ip
+                            ? '<span style="display:inline-block; font-size:9px; font-weight:700; padding:1.5px 5px; border-radius:3px;'
+                              + ' background: rgba(34,197,94,0.2); color: #22c55e; margin-left:5px;">P+ IP</span>'
+                            : '';
+                        return '<div style="padding:5px 0; border-bottom:1px solid var(--border-color);">'
+                             +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                             +     '<div style="font-size:11.5px; font-weight:600;">' + _jiqEsc(r.title) + ipBadge + '</div>'
+                             +     '<div style="font-size:11.5px; font-weight:700; white-space:nowrap;">' + (r.monthly_viewers_m || 0).toFixed(1) + 'M</div>'
+                             +   '</div>'
+                             +   '<div style="margin-top:3px;">' + _jiqMiniBar(r.monthly_viewers_m, headerColor, maxV) + '</div>'
+                             +   '<div style="font-size:10px; color: var(--text-secondary); margin-top:3px; line-height:1.4; display:flex; justify-content:space-between; gap:6px;">'
+                             +     '<span>' + _jiqEsc(r.ip_owner || '') + '</span>'
+                             +     '<span style="font-weight:600; color: var(--text-primary);">' + (r.avg_minutes || 0) + ' min/viewer</span>'
+                             +   '</div>'
+                             + '</div>';
+                    }).join('');
+                    return '<div style="padding:0.7rem 0.85rem; border-radius:6px;'
+                         +              ' background: rgba(255,255,255,0.025); border-top: 3px solid ' + headerColor + ';">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:6px; margin-bottom:0.35rem;">'
+                         +     '<div>'
+                         +       '<span style="font-size:0.95rem; font-weight:700;">' + (plat.icon || '') + ' ' + _jiqEsc(plat.platform) + '</span>'
+                         +       (isPP
+                             ? '<span style="font-size:9px; font-weight:700; padding:1.5px 5px; border-radius:3px;'
+                               + ' background: rgba(34,197,94,0.2); color: #22c55e; margin-left:6px;">IN-NETWORK</span>'
+                             : '')
+                         +     '</div>'
+                         +     '<div style="font-size:10.5px; color: var(--text-secondary);">' + _jiqEsc(plat.owner) + '</div>'
+                         +   '</div>'
+                         +   rows
+                         + '</div>';
+                }).join('');
+            }
+            if (ipEl) {
+                var ip = f.paramount_ip_on_fast || [];
+                var maxRecap = ip.reduce(function(m, r) { return Math.max(m, r.est_recapture_subs || 0); }, 0);
+                var rows = ip.map(function(r) {
+                    return '<tr style="border-bottom:1px solid var(--border-color); vertical-align:top;">'
+                         +   '<td style="padding:8px 6px;">'
+                         +     '<div style="font-weight:700;">' + _jiqEsc(r.platform) + '</div>'
+                         +     '<div style="font-size:10.5px; color: var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap; font-weight:600;">' + (r.monthly_viewers_m || 0).toFixed(1) + 'M</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap; color: var(--text-secondary);">' + _jiqFmt(r.paramount_titles || 0) + '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap;">'
+                         +     (r.est_recapture_subs
+                                 ? '<div style="font-weight:800; color: #22c55e;">' + _jiqFmt(r.est_recapture_subs) + '</div>'
+                                   + '<div style="margin-top:4px; width:60px; margin-left:auto;">' + _jiqMiniBar(r.est_recapture_subs, '#22c55e', maxRecap) + '</div>'
+                                 : '<span style="color:var(--text-secondary);">—</span>')
+                         +   '</td>'
+                         + '</tr>';
+                }).join('');
+                ipEl.innerHTML = ''
+                    + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;">'
+                    +   '<thead><tr style="text-align:left; border-bottom:1px solid var(--border-color); font-size:10.5px; opacity:0.75; text-transform:uppercase; letter-spacing:0.04em;">'
+                    +     '<th style="padding:6px 6px;">FAST · strategic note</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">P+ IP viewers/mo</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Titles</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Est. recapture subs</th>'
+                    +   '</tr></thead><tbody>' + rows + '</tbody>'
+                    + '</table>';
+            }
+            if (flowEl && f.pluto_to_pplus_flow) {
+                var flow = f.pluto_to_pplus_flow;
+                flowEl.innerHTML = ''
+                    + '<div style="display:flex; align-items:baseline; gap:0.7rem; margin-bottom:0.45rem; flex-wrap:wrap;">'
+                    +   '<span style="font-size:0.8rem; font-weight:700; color:#5b6cff;">💡 Pluto → P+ upsell opportunity</span>'
+                    +   '<span style="font-size:0.95rem; font-weight:800; color: var(--text-primary);">' + _jiqFmt(flow.addressable_upsell_pool || 0) + '</span>'
+                    +   '<span style="font-size:0.72rem; opacity:0.7;">addressable accounts inside the Paramount ecosystem</span>'
+                    + '</div>'
+                    + '<div style="font-size:0.78rem; color: var(--text-secondary); line-height:1.55;">' + _jiqEsc(flow.note || '') + '</div>'
+                    + '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:0.45rem; margin-top:0.65rem;">'
+                    +   _jiqTile('Pluto + P+ overlap',         (flow.pct_pluto_viewers_with_pplus || 0).toFixed(1) + '%', 'already subscribed', '#22c55e')
+                    +   _jiqTile('Pluto-only · P+-relevant',   (flow.pct_pluto_viewers_without_pplus_but_relevant || 0).toFixed(1) + '%', 'upsell candidates', '#f59e0b')
+                    +   _jiqTile('Baseline conv rate',         (flow.historical_pluto_to_pplus_conv_rate_pct || 0).toFixed(1) + '%', 'cross-promo historical', '#94a3b8')
+                    +   _jiqTile('Targeted lift',              (flow.targeted_lift_with_pluto_cross_promo_pct || 0).toFixed(1) + '%', 'with targeted creative', '#22c55e')
+                    + '</div>';
             }
         }
 
