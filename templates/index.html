@@ -25581,8 +25581,14 @@
                      drill-down weekly table so the audience curve since
                      premiere is legible at a glance.
                 ═══════════════════════════════════════════════════════ -->
+                <!-- RETIRED: Viewership Trends card is permanently hidden.
+                     The WoW/MoM chart + "This Week / This Month" tiles
+                     duplicated detail surfaced elsewhere on the page.
+                     Markup retained so the renderer's element lookups
+                     do not throw; the !important display:none below
+                     keeps it off-screen regardless of any caller. -->
                 <div class="card" id="jiqTvTrendsCard"
-                     style="padding: 1rem; margin-bottom: 1rem; display: none;
+                     style="display: none !important; padding: 1rem; margin-bottom: 1rem;
                             background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(34,197,94,0.02) 100%);
                             border: 1px solid rgba(34,197,94,0.22);">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
@@ -41537,18 +41543,15 @@
             // ---- Touchpoints panel ----
             renderJourneyIqTouchpoints(touchpoints);
 
-            // ---- Viewership Trends card (TV-show payloads carry
-            //      viewership_trends with weekly + monthly active
-            //      accounts and watch hours). Renderer auto-hides
-            //      the card if the block is missing.
-            if (typeof renderJourneyIqTvTrends === 'function') {
-                renderJourneyIqTvTrends(
-                    d.viewership_trends
-                    || ((fullRun || {}).modeled_view || {}).viewership_trends
-                    || (fullRun || {}).viewership_trends,
-                    window._jiqCurrentAnnotations || []
-                );
-            }
+            // ---- Viewership Trends card — RETIRED. The week-over-week
+            //      / month-over-month chart and its 4 mid-strip tiles
+            //      were redundant with the per-stage detail in the
+            //      lifecycle / discovery cards below. Card markup is
+            //      kept in the DOM (always display:none) and the
+            //      renderer is no longer wired in; safe to delete in
+            //      a future cleanup pass.
+            var _retiredTvTrendsCard = document.getElementById('jiqTvTrendsCard');
+            if (_retiredTvTrendsCard) _retiredTvTrendsCard.style.display = 'none';
 
             // ---- Subscriber IQ Summary cards (Accounts / Revenue /
             //      Timing / SVOD Platforms — mirrors the Subscriber
@@ -45714,9 +45717,17 @@
         var _jiqTrendsState = null;
 
         function renderJourneyIqTvTrends(trends, annotations) {
-            annotations = annotations || [];
+            // RETIRED — Viewership Trends card is permanently hidden.
+            // The WoW / MoM line chart + 4 "This Week / This Month"
+            // tiles were redundant with the lifecycle + discovery
+            // details elsewhere on the page. Function kept as a no-op
+            // for back-compat with any caller that still references
+            // it; always force the card hidden and exit early.
             var card = document.getElementById('jiqTvTrendsCard');
-            if (!card) return;
+            if (card) card.style.display = 'none';
+            return;
+            // eslint-disable-next-line no-unreachable
+            annotations = annotations || [];
             var hasData = trends
                 && ((trends.weekly && trends.weekly.length)
                  || (trends.monthly && trends.monthly.length));
