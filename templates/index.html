@@ -43816,8 +43816,8 @@
                 tile_a_sub:         'discovered on homepage, Top 10, or similar-to-X shelf',
                 tile_b_label:       'Direct intent → watched',
                 tile_b_sub:         'searched by name / deep link / resumed from My List',
-                tile_c_label:       'Re-engaged → watched',
-                tile_c_sub:         'platform push / marketing email / social drove them back',
+                tile_c_label:       'Marketing → watched',
+                tile_c_sub:         'paid / organic marketing / social',
             };
             var BK_LABELS = {
                 site_title:         '🏦 Entry Paths — how researchers came to a bank PDP',
@@ -43941,9 +43941,10 @@
                         + tile(BK_LABELS.tile_b_label, sw,     '#10b981', BK_LABELS.tile_b_sub)
                         + tile(BK_LABELS.tile_c_label, ab,     '#22d3ee', BK_LABELS.tile_c_sub);
                 } else if (_isTvCtx) {
-                    // Tile 3 = "Re-engaged → watched" (Netflix push/email
-                    // pulled them back) — that's a POSITIVE entry path, so
-                    // use violet (not red) to avoid implying it's drop-off.
+                    // Tile 3 = "Marketing → watched" (paid + organic
+                    // marketing + social pulled them in) — that's a
+                    // POSITIVE entry path, so use violet (not red) to
+                    // avoid implying it's drop-off.
                     split.innerHTML = ''
                         + tile(TV_LABELS.tile_a_label, onSite, '#10b981', TV_LABELS.tile_a_sub)
                         + tile(TV_LABELS.tile_b_label, sw,     '#3b82f6', TV_LABELS.tile_b_sub)
