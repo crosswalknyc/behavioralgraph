@@ -16522,20 +16522,24 @@
                             <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
                                 <div class="dash-brand-box" id="dashBrandNameHeader"></div>
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
-                                <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; grid-template-columns: calc(180px - 0.5rem) auto 1fr; align-items: center; gap: 0.5rem;">
+                                <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; grid-template-columns: calc(180px - 0.5rem) auto; align-items: center; gap: 0.5rem;">
                                     <button type="button" class="btn btn-small" id="dashViewDeltasBtn" style="font-size: 0.8rem;">Data Cuts</button>
                                     <!-- Audience-share boxes: Social / Search / Owned / Retail / Media.
                                          Populated by _renderAudienceShareBoxes() after the profile
-                                         CSV finishes parsing. Hidden by default; revealed once
-                                         data is available. -->
-                                    <div id="audienceShareBoxes" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
-                                        <div class="asb-box" data-channel="social" title="Engaged with the subject on a social platform (YouTube, IG, TikTok, FB, Twitter)."><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">—</span></div>
-                                        <div class="asb-box" data-channel="search" title="Discovered or looked up the subject via Google / AI search."><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">—</span></div>
-                                        <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent and influencer profiles (no brand-owned channel)."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">—</span></div>
-                                        <div class="asb-box" data-channel="retail" title="Retail / eCommerce engagement share"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">—</span></div>
-                                        <div class="asb-box" data-channel="media"  title="Engaged with the subject's content via traditional / third-party media (TV, streaming, films, music, news, podcasts)."><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">—</span></div>
+                                         CSV finishes parsing. Wrapper hides until data is ready;
+                                         label sits ABOVE the boxes, boxes themselves match the
+                                         Data Cuts button height (2rem) by laying out label + pct
+                                         on a single horizontal line. -->
+                                    <div id="audienceShareWrap" style="display: none; flex-direction: column; align-items: flex-start; gap: 0.2rem;">
+                                        <span class="asb-section-label" id="audienceShareSectionLabel" style="font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary, #9ca3af); white-space: nowrap; line-height: 1;">Total Universe Composition</span>
+                                        <div id="audienceShareBoxes" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
+                                            <div class="asb-box" data-channel="social" title="Engaged with the subject on a social platform (YouTube, IG, TikTok, FB, Twitter)."><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">—</span></div>
+                                            <div class="asb-box" data-channel="search" title="Discovered or looked up the subject via Google / AI search."><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">—</span></div>
+                                            <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent and influencer profiles (no brand-owned channel)."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">—</span></div>
+                                            <div class="asb-box" data-channel="retail" title="Retail / eCommerce engagement share"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">—</span></div>
+                                            <div class="asb-box" data-channel="media"  title="Engaged with the subject's content via traditional / third-party media (TV, streaming, films, music, news, podcasts)."><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">—</span></div>
+                                        </div>
                                     </div>
-                                    <span class="asb-section-label" id="audienceShareSectionLabel" style="display: none; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary, #9ca3af); white-space: nowrap; margin-left: 0.35rem;">Total Universe Composition</span>
                                 </div>
                             </div>
                         </div>
@@ -22818,11 +22822,42 @@
             #ipValuationIQView .ipv-stat {
                 display: flex;
                 flex-direction: column;
-                gap: 0.15rem;
+                gap: 0.2rem;
             }
-            #ipValuationIQView .ipv-stat .ipv-stat-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
-            #ipValuationIQView .ipv-stat .ipv-stat-value { font-size: 1.8rem; font-weight: 700; line-height: 1.1; }
+            #ipValuationIQView .ipv-stat .ipv-stat-label { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+            #ipValuationIQView .ipv-stat .ipv-stat-value { font-size: 2rem; font-weight: 700; line-height: 1.1; }
             #ipValuationIQView .ipv-stat .ipv-stat-sub { font-size: 0.72rem; color: var(--text-secondary); }
+            #ipValuationIQView .ipv-stat-row {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 0.75rem;
+                position: sticky;
+                top: 0;
+                z-index: 10;
+                background: var(--bg-primary, #0b0b14);
+                padding: 0.6rem 0;
+                margin: -0.6rem 0 0;
+            }
+            @media (max-width: 900px) {
+                #ipValuationIQView .ipv-stat-row {
+                    grid-template-columns: 1fr;
+                    position: static;
+                }
+            }
+            body[data-theme="light"] #ipValuationIQView .ipv-stat-row { background: var(--bg-primary, #f7f7fb); }
+            #ipValuationIQView .ipv-stat-card {
+                background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(168,85,247,0.06));
+                border: 1px solid rgba(99,102,241,0.28);
+                border-radius: 10px;
+                padding: 0.85rem 1rem;
+            }
+            #ipValuationIQView .ipv-stat-card.ipv-stat-card-total {
+                background: linear-gradient(135deg, rgba(34,197,94,0.14), rgba(132,204,22,0.06));
+                border-color: rgba(34,197,94,0.32);
+            }
+            #ipValuationIQView .ipv-stat-card .ipv-stat-value { font-variant-numeric: tabular-nums; }
+            #ipValuationIQView .ipv-stat-card.ipv-stat-card-total .ipv-stat-value { color: #4ade80; }
+            body[data-theme="light"] #ipValuationIQView .ipv-stat-card.ipv-stat-card-total .ipv-stat-value { color: #15803d; }
             #ipValuationIQView table.ipv-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
             #ipValuationIQView table.ipv-table th, #ipValuationIQView table.ipv-table td {
                 padding: 0.4rem 0.55rem;
@@ -22899,14 +22934,42 @@
 
         <div id="ipValuationIQView">
             <div class="ipv-header">
-                <h2>💎 IP Valuation IQ <span style="font-size:0.78rem;color:var(--text-secondary);font-weight:400;margin-left:0.4rem;">Value a legacy Hollywood IP for a PE diligence deck</span></h2>
-                <p>Pick MOVIE / SERIES profiles as the Current Market signal and Subscriber IQ titles as the Historical Revenue signal. The tool combines US audience reach without double-counting, surfaces the addressable demographic, projects TAM with a configurable multiplier, and runs an editable revenue waterfall across 8 monetization streams. Every cell is overwritable; defaults are conservative placeholders.</p>
+                <h2>💎 IP Valuation IQ <span style="font-size:0.78rem;color:var(--text-secondary);font-weight:400;margin-left:0.4rem;">Value a legacy Hollywood IP</span></h2>
             </div>
 
+            <!-- STICKY STAT ROW: always-visible Universe, TAM, Total IP Value -->
+            <div class="ipv-stat-row">
+                <div class="ipv-stat-card">
+                    <div class="ipv-stat">
+                        <span class="ipv-stat-label">Total Current Universe</span>
+                        <span class="ipv-stat-value" id="ipvUniverseValue">Pick titles below</span>
+                        <span class="ipv-stat-sub" id="ipvUniverseSub">US population reached across selections (overlap-adjusted, no double-counting).</span>
+                    </div>
+                </div>
+                <div class="ipv-stat-card">
+                    <div class="ipv-stat">
+                        <span class="ipv-stat-label">Projected TAM</span>
+                        <span class="ipv-stat-value" id="ipvTamValue">—</span>
+                        <div class="ipv-multiplier-row">
+                            <label for="ipvTamMultiplier" style="font-size:0.72rem;">Multiplier</label>
+                            <input type="number" id="ipvTamMultiplier" class="ipv-num" style="width:70px;" min="0.1" max="10" step="0.1" value="1.5" oninput="ipvOnTamMultiplierChange()" />
+                            <span class="ipv-stat-sub">Universe × multiplier. 1.5x adds lapsed audience.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="ipv-stat-card ipv-stat-card-total">
+                    <div class="ipv-stat">
+                        <span class="ipv-stat-label">Total Projected IP Value</span>
+                        <span class="ipv-stat-value" id="ipvTotalValue">—</span>
+                        <span class="ipv-stat-sub">Sum across every row of the Valuation Waterfall below.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PICKERS: two side-by-side selectors -->
             <div class="ipv-grid-2">
                 <div class="ipv-card">
-                    <h3>Current Market <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— MOVIE + SERIES profiles</span></h3>
-                    <div class="ipv-card-sub">Each pick contributes its digital engager audience (US Gen Pop projection) and full 9-category demographics.</div>
+                    <h3>1. Current Market <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— pick MOVIE / SERIES profiles (audience reach)</span></h3>
                     <input type="text" id="ipvCurrentMarketSearch" class="ipv-picker-search" placeholder="🔍 Search MOVIE / SERIES profiles..." oninput="ipvFilterCurrentMarket()" />
                     <div class="ipv-picker-list" id="ipvCurrentMarketList">
                         <div class="ipv-empty">Loading profiles...</div>
@@ -22914,8 +22977,7 @@
                 </div>
 
                 <div class="ipv-card">
-                    <h3>Historical Revenue Generation <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— Subscriber IQ titles</span></h3>
-                    <div class="ipv-card-sub">Each pick contributes the title's New Platform Signups audience (US Gen Pop projection) plus its age / gender demographics.</div>
+                    <h3>2. Historical Revenue <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— pick Subscriber IQ titles (past streaming signal)</span></h3>
                     <input type="text" id="ipvHistoricalSearch" class="ipv-picker-search" placeholder="🔍 Search Subscriber IQ titles..." oninput="ipvFilterHistorical()" />
                     <div class="ipv-picker-list" id="ipvHistoricalList">
                         <div class="ipv-empty">Loading titles...</div>
@@ -22923,57 +22985,37 @@
                 </div>
             </div>
 
-            <div class="ipv-card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
-                    <h3 style="margin:0;">Sources <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— every selection, per-source, untouched</span></h3>
-                    <span class="ipv-status" id="ipvSourcesStatus">No selections yet.</span>
-                </div>
-                <div id="ipvSourcesTableWrap">
-                    <div class="ipv-empty">Pick at least one Current Market or Historical Revenue title to begin.</div>
-                </div>
-            </div>
-
-            <div class="ipv-grid-2">
-                <div class="ipv-card">
-                    <div class="ipv-stat">
-                        <span class="ipv-stat-label">Combined US Current Universe</span>
-                        <span class="ipv-stat-value" id="ipvUniverseValue">—</span>
-                        <span class="ipv-stat-sub" id="ipvUniverseSub">Overlap-adjusted union of every selection's US projection: 1 − ∏(1 − p<sub>i</sub>) × 329.9M. Each p<sub>i</sub> is one selection's share of US population. This intentionally does not double-count viewers who engaged with multiple selections.</span>
-                    </div>
-                </div>
-                <div class="ipv-card">
-                    <div class="ipv-stat">
-                        <span class="ipv-stat-label">Projected TAM</span>
-                        <span class="ipv-stat-value" id="ipvTamValue">—</span>
-                        <span class="ipv-stat-sub">TAM = Universe × Latent Reach Multiplier. 1.0 = current digital window only. 1.5 = adds estimated lapsed audience (default). 2.0 = aggressive total reach.</span>
-                        <div class="ipv-multiplier-row">
-                            <label for="ipvTamMultiplier">Latent Reach Multiplier</label>
-                            <input type="number" id="ipvTamMultiplier" class="ipv-num" min="0.1" max="10" step="0.1" value="1.5" oninput="ipvOnTamMultiplierChange()" />
-                            <button type="button" class="ipv-btn ipv-btn-ghost" onclick="ipvResetTamMultiplier()">Reset 1.5x</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="ipv-card">
-                <h3>Combined Demographics <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— raw-count weighted across selections, renormalized per category</span></h3>
-                <div class="ipv-card-sub" id="ipvDemoSub">Profile IQ selections contribute all 9 categories; Subscriber IQ selections contribute AGE + GENDER only.</div>
-                <div id="ipvDemoGrid"><div class="ipv-empty">Select titles above to build a combined demographic profile.</div></div>
-            </div>
-
+            <!-- WATERFALL: the valuation builder (the main work surface) -->
             <div class="ipv-card">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem; flex-wrap:wrap; gap:0.5rem;">
                     <div>
-                        <h3 style="margin:0;">Valuation Waterfall <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— every cell editable</span></h3>
-                        <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.2rem;">Annual Revenue = TAM × Capture % × Units/Buyer × Price. Total = Annual Revenue × Years. Defaults are conservative placeholders — overwrite with your diligence numbers.</div>
+                        <h3 style="margin:0;">3. Valuation Waterfall <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— every cell editable</span></h3>
+                        <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.2rem;">Annual Revenue = TAM × Capture % × Units/Buyer × Price. Total = Annual Revenue × Years.</div>
                     </div>
                     <div style="display:flex; gap:0.4rem;">
-                        <button type="button" class="ipv-btn ipv-btn-ghost" onclick="ipvAddWaterfallRow()">+ Add Custom Row</button>
-                        <button type="button" class="ipv-btn ipv-btn-ghost" onclick="ipvResetWaterfall()">Reset to defaults</button>
-                        <button type="button" class="ipv-btn" onclick="ipvCopyToClipboard()">📋 Copy to clipboard (markdown)</button>
+                        <button type="button" class="ipv-btn ipv-btn-ghost" onclick="ipvAddWaterfallRow()">+ Add Row</button>
+                        <button type="button" class="ipv-btn ipv-btn-ghost" onclick="ipvResetWaterfall()">Reset</button>
+                        <button type="button" class="ipv-btn" onclick="ipvCopyToClipboard()">📋 Copy markdown</button>
                     </div>
                 </div>
                 <div id="ipvWaterfallWrap"></div>
+            </div>
+
+            <!-- SOURCES + DEMOGRAPHICS: detail surfaces, less prominent -->
+            <div class="ipv-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+                    <h3 style="margin:0;">Sources <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— per-selection breakdown</span></h3>
+                    <span class="ipv-status" id="ipvSourcesStatus">No selections yet.</span>
+                </div>
+                <div id="ipvSourcesTableWrap">
+                    <div class="ipv-empty">Pick at least one Current Market or Historical Revenue title above.</div>
+                </div>
+            </div>
+
+            <div class="ipv-card">
+                <h3>Combined Demographics <span style="font-size:0.7rem;color:var(--text-secondary);font-weight:400;">— audience profile across selections</span></h3>
+                <div class="ipv-card-sub" id="ipvDemoSub">Profile IQ selections contribute all 9 categories; Subscriber IQ selections contribute AGE + GENDER only.</div>
+                <div id="ipvDemoGrid"><div class="ipv-empty">Select titles above to build a combined demographic profile.</div></div>
             </div>
         </div>
 
@@ -23447,20 +23489,34 @@
                 var universe = ipvCombinedUniverse(details);
                 var multiplier = state.tamMultiplier || 1.5;
                 var tam = Math.round(universe * multiplier);
-                document.getElementById('ipvUniverseValue').textContent = universe > 0 ? ipvFormatNumber(universe) : '—';
-                document.getElementById('ipvTamValue').textContent = tam > 0 ? ipvFormatNumber(tam) : '—';
+                var universeEl = document.getElementById('ipvUniverseValue');
+                var tamEl = document.getElementById('ipvTamValue');
+                if (universeEl) {
+                    if (universe > 0) {
+                        universeEl.textContent = ipvFormatNumber(universe);
+                        universeEl.style.fontSize = '';
+                    } else {
+                        universeEl.textContent = 'Pick titles below';
+                        universeEl.style.fontSize = '1rem';
+                    }
+                }
+                if (tamEl) {
+                    tamEl.textContent = tam > 0 ? ipvFormatNumber(tam) : '—';
+                }
 
-                // Per-source tooltip line
                 var sub = document.getElementById('ipvUniverseSub');
                 if (sub) {
                     var pieces = details.map(function(d) {
                         var p = (d.projection || 0) / US_POPULATION;
                         return (p * 100).toFixed(2) + '%';
                     });
-                    var detailLine = pieces.length
-                        ? ' Per-selection p<sub>i</sub>: ' + pieces.join(', ') + '.'
-                        : '';
-                    sub.innerHTML = 'Overlap-adjusted union of every selection\'s US projection: 1 − ∏(1 − p<sub>i</sub>) × 329.9M. Each p<sub>i</sub> is one selection\'s share of US population.' + detailLine + ' This intentionally does not double-count viewers who engaged with multiple selections.';
+                    if (details.length) {
+                        sub.textContent = details.length + ' selection' + (details.length === 1 ? '' : 's')
+                            + ' · per-selection share of US: ' + pieces.join(', ')
+                            + '. Combined via 1 − ∏(1 − p) so overlap is not double-counted.';
+                    } else {
+                        sub.textContent = 'US population reached across selections (overlap-adjusted, no double-counting).';
+                    }
                 }
                 return { universe: universe, tam: tam };
             }
@@ -23555,6 +23611,19 @@
                 html += '<tr class="ipv-total"><td class="ipv-left" colspan="6">Total Projected IP Value</td><td>' + ipvFormatMoney(computed.grand) + '</td><td></td></tr>';
                 html += '</tbody></table>';
                 wrap.innerHTML = html;
+                ipvWriteTotalValueStat(computed.grand);
+            }
+
+            function ipvWriteTotalValueStat(grand) {
+                var el = document.getElementById('ipvTotalValue');
+                if (!el) return;
+                if (grand > 0) {
+                    el.textContent = ipvFormatMoney(grand);
+                    el.style.fontSize = '';
+                } else {
+                    el.textContent = '—';
+                    el.style.fontSize = '';
+                }
             }
 
             window.ipvOnWaterfallEdit = function(idx, field, value) {
@@ -23585,6 +23654,7 @@
                 });
                 var grandRow = document.querySelector('#ipvWaterfallWrap tr.ipv-total td:nth-child(2)');
                 if (grandRow) grandRow.textContent = ipvFormatMoney(computed.grand);
+                ipvWriteTotalValueStat(computed.grand);
             }
 
             window.ipvAddWaterfallRow = function() {
@@ -64000,12 +64070,11 @@
 
         function _renderAudienceShareBoxes(parsed) {
             const container = document.getElementById('audienceShareBoxes');
-            const sectionLabel = document.getElementById('audienceShareSectionLabel');
+            const wrap = document.getElementById('audienceShareWrap');
             if (!container) return;
             const share = _computeAudienceShare(parsed);
             if (!share) {
-                container.style.display = 'none';
-                if (sectionLabel) sectionLabel.style.display = 'none';
+                if (wrap) wrap.style.display = 'none';
                 return;
             }
             const fmt = (v) => (v >= 0.5 ? Math.round(v) : (v > 0 ? v.toFixed(1) : 0)) + '%';
@@ -64040,8 +64109,7 @@
             container.setAttribute('data-archetype', share.archetype || '');
             container.title = 'Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%). Detected archetype: '
                 + (share.archetype || 'GENERIC').replace(/_/g, ' ');
-            container.style.display = 'inline-flex';
-            if (sectionLabel) sectionLabel.style.display = 'inline-block';
+            if (wrap) wrap.style.display = 'flex';
         }
 
         async function _fetchCategoryNorm() {
