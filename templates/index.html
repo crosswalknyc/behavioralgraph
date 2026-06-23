@@ -2452,14 +2452,14 @@
          * 5x weight on the subject's self-pin BP for the Owned slice.
          * For talent profiles, Owned renders as "—" (talent doesn't have
          * a brand .com / app channel). */
-        /* 2026-06-22: Single-line layout — label + pct side by side
-         * inside each box so the row height matches the Data Cuts
-         * button (2rem). The previous stacked layout (label on top,
-         * value below) pushed each box well past 2rem and made the
-         * whole row look chunky next to the button. The section
-         * label "Total Universe Composition" was also moved OUT of
-         * this flex row and into a new vertical wrapper
-         * (#audienceShareWrap) above the boxes. */
+        /* 2026-06-23: Boxes sit on the SAME row as the Data Cuts
+         * button (5 boxes are the 2nd grid column of #dashProfileRunsRow),
+         * each box 2rem tall to match Data Cuts. The section label
+         * "Total Universe Composition" is rendered as a SIBLING ABOVE
+         * #dashProfileRunsRow (not nested inside it) so the label
+         * doesn't push the boxes out of alignment with the Data Cuts
+         * button. Each box uses a single horizontal line (label + pct
+         * side by side) to stay at 2rem. */
         #audienceShareBoxes {
             display: flex;
             flex-direction: row;
@@ -16529,23 +16529,22 @@
                             <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
                                 <div class="dash-brand-box" id="dashBrandNameHeader"></div>
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
+                                <!-- Audience-share section label sits ABOVE the Data Cuts row so
+                                     it labels the 5 colored boxes without crowding the row. Hidden
+                                     until _renderAudienceShareBoxes() populates real values. -->
+                                <span class="asb-section-label" id="audienceShareSectionLabel" style="display: none; margin-top: 0.5rem; margin-bottom: 0.2rem; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary, #9ca3af); white-space: nowrap; line-height: 1;">Total Universe Composition</span>
                                 <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; grid-template-columns: calc(180px - 0.5rem) auto; align-items: center; gap: 0.5rem;">
                                     <button type="button" class="btn btn-small" id="dashViewDeltasBtn" style="font-size: 0.8rem;">Data Cuts</button>
-                                    <!-- Audience-share boxes: Social / Search / Owned / Retail / Media.
-                                         Populated by _renderAudienceShareBoxes() after the profile
-                                         CSV finishes parsing. Wrapper hides until data is ready;
-                                         label sits ABOVE the boxes, boxes themselves match the
-                                         Data Cuts button height (2rem) by laying out label + pct
-                                         on a single horizontal line. -->
-                                    <div id="audienceShareWrap" style="display: none; flex-direction: column; align-items: flex-start; gap: 0.2rem;">
-                                        <span class="asb-section-label" id="audienceShareSectionLabel" style="font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary, #9ca3af); white-space: nowrap; line-height: 1;">Total Universe Composition</span>
-                                        <div id="audienceShareBoxes" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
-                                            <div class="asb-box" data-channel="social" title="Engaged with the subject on a social platform (YouTube, IG, TikTok, FB, Twitter)."><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">—</span></div>
-                                            <div class="asb-box" data-channel="search" title="Discovered or looked up the subject via Google / AI search."><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">—</span></div>
-                                            <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent and influencer profiles (no brand-owned channel)."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">—</span></div>
-                                            <div class="asb-box" data-channel="retail" title="Retail / eCommerce engagement share"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">—</span></div>
-                                            <div class="asb-box" data-channel="media"  title="Engaged with the subject's content via traditional / third-party media (TV, streaming, films, music, news, podcasts)."><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">—</span></div>
-                                        </div>
+                                    <!-- Audience-share boxes (Social / Search / Owned / Retail / Media)
+                                         sit on the SAME row as Data Cuts so all six pills line up at
+                                         the same 2rem height. The section label "Total Universe
+                                         Composition" is the sibling above this row. -->
+                                    <div id="audienceShareBoxes" style="display: none;" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
+                                        <div class="asb-box" data-channel="social" title="Engaged with the subject on a social platform (YouTube, IG, TikTok, FB, Twitter)."><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">—</span></div>
+                                        <div class="asb-box" data-channel="search" title="Discovered or looked up the subject via Google / AI search."><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">—</span></div>
+                                        <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent and influencer profiles (no brand-owned channel)."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">—</span></div>
+                                        <div class="asb-box" data-channel="retail" title="Retail / eCommerce engagement share"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">—</span></div>
+                                        <div class="asb-box" data-channel="media"  title="Engaged with the subject's content via traditional / third-party media (TV, streaming, films, music, news, podcasts)."><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">—</span></div>
                                     </div>
                                 </div>
                             </div>
@@ -40145,13 +40144,15 @@
                     ];
                 } else if (targetType === 'subscriber_lifecycle'
                            || kpis.lifecycle_mode === true) {
-                    // Subscriber-lifecycle run (Paramount+ et al.) —
-                    // platform-wide acquisition, churn, ARPU, reactivation.
-                    // The big interactive lifecycle card below the strip is
-                    // the centerpiece; the strip here just gives the top-
-                    // level lifecycle ratios at a glance.
-                    var fmt    = function(v) { return (v != null && Number(v) !== 0) ? _jiqFmt(v) : '—'; };
-                    var pct1   = function(v) { return _jiqPct(v, 1); };
+                    // Subscriber-lifecycle run (Paramount+ rebuild) — the
+                    // strip is now off-platform-pitch-grade. Each tile is
+                    // a metric the platform's in-app event log physically
+                    // cannot produce: median pre-signup journey, pre-cancel
+                    // off-platform lead-time, non-converter substitution
+                    // rate, and the Pluto-in-network upsell pool size.
+                    // Fields are pulled directly off the new
+                    // build_kpis() in build_paramount_plus_subscriber_lifecycle_journey_iq.py.
+                    var fmt = function(v) { return (v != null && Number(v) !== 0) ? _jiqFmt(v) : '—'; };
                     var pctSub = function(rawPct, decimals, prefix, suffix) {
                         var s = _jiqPct(rawPct, decimals);
                         if (s === '—') return '';
@@ -40162,14 +40163,17 @@
                     var churned   = kpis.churned;
                     var netGrowth = (kpis.net_growth != null) ? kpis.net_growth
                                        : ((newSubs != null && churned != null) ? (newSubs - churned) : null);
-                    var churnRate = kpis.churn_rate_annualized_pct;
-                    var arpu      = kpis.avg_arpu_monthly_usd;
-                    var tenure    = kpis.avg_tenure_at_churn_months;
                     var atRisk    = kpis.at_risk_30d_count;
-                    var react180  = kpis.reactivated_within_180d_pct;
-                    var boom90    = kpis.boomerang_within_90d_pct;
                     var atRiskPct = (subs && atRisk) ? (atRisk / subs * 100) : null;
                     var netGrowthSign = (netGrowth != null && netGrowth >= 0) ? '+' : '';
+                    var medJourneyD = kpis.median_journey_days_to_signup;
+                    var medTouches  = kpis.median_touchpoints_to_signup;
+                    var avgLeadD    = kpis.avg_leadtime_days_to_churn;
+                    var pctSignal   = kpis.pct_churners_with_offplatform_signal_pre60d;
+                    var nonConv     = kpis.landing_non_converters_count;
+                    var nonConvComp = kpis.pct_non_converters_bought_competitor_30d;
+                    var plutoPool   = kpis.pluto_addressable_upsell_pool;
+                    var fastCap     = kpis.fast_capture_rate_pct;
                     k = [
                         ['Active subscribers (window)',
                             fmt(subs),
@@ -40187,21 +40191,27 @@
                                 : '—',
                             'new signups − cancels',
                             (netGrowth != null && netGrowth >= 0) ? 'lime' : 'amber'],
-                        ['Annualized churn rate',
-                            (churnRate != null ? churnRate.toFixed(1) + '%' : '—'),
-                            (tenure != null ? 'avg tenure at churn ' + tenure.toFixed(1) + ' mo' : ''),
-                            'amber'],
-                        ['Avg ARPU',
-                            (arpu != null ? '$' + arpu.toFixed(2) : '—'),
-                            'per subscriber / month'],
-                        ['At-risk subs (30d)',
-                            fmt(atRisk),
-                            pctSub(atRiskPct, 1, '', ' of active subs · ≥1 churn-intent signal'),
-                            'magenta'],
-                        ['Reactivation (180d)',
-                            (react180 != null ? react180.toFixed(1) + '%' : '—'),
-                            (boom90 != null ? boom90.toFixed(1) + '% boomerang within 90d' : ''),
+                        ['Median journey to signup',
+                            (medJourneyD != null ? medJourneyD + ' days' : '—'),
+                            (medTouches != null
+                                ? medTouches.toFixed(1) + ' off-platform touchpoints (median)'
+                                : '')],
+                        ['Avg churn lead-time',
+                            (avgLeadD != null ? avgLeadD + ' days' : '—'),
+                            (pctSignal != null
+                                ? pctSignal.toFixed(1) + '% of churners show off-platform signal pre-60d'
+                                : ''),
                             'cyan'],
+                        ['Non-converters → competitor in 30d',
+                            (nonConvComp != null ? nonConvComp.toFixed(1) + '%' : '—'),
+                            (nonConv ? _jiqFmt(nonConv) + ' unique non-converting visitors' : ''),
+                            'magenta'],
+                        ['Pluto → P+ upsell pool',
+                            fmt(plutoPool),
+                            (fastCap != null
+                                ? fastCap.toFixed(1) + '% of churners captured in-network on Pluto'
+                                : 'addressable inside the Paramount ecosystem'),
+                            'lime'],
                     ];
                 } else if (targetType === 'banking_research'
                            || (meta.category || '').toLowerCase() === 'banking_research') {
@@ -64692,11 +64702,12 @@
 
         function _renderAudienceShareBoxes(parsed) {
             const container = document.getElementById('audienceShareBoxes');
-            const wrap = document.getElementById('audienceShareWrap');
+            const sectionLabel = document.getElementById('audienceShareSectionLabel');
             if (!container) return;
             const share = _computeAudienceShare(parsed);
             if (!share) {
-                if (wrap) wrap.style.display = 'none';
+                container.style.display = 'none';
+                if (sectionLabel) sectionLabel.style.display = 'none';
                 return;
             }
             const fmt = (v) => (v >= 0.5 ? Math.round(v) : (v > 0 ? v.toFixed(1) : 0)) + '%';
@@ -64731,7 +64742,8 @@
             container.setAttribute('data-archetype', share.archetype || '');
             container.title = 'Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%). Detected archetype: '
                 + (share.archetype || 'GENERIC').replace(/_/g, ' ');
-            if (wrap) wrap.style.display = 'flex';
+            container.style.display = 'flex';
+            if (sectionLabel) sectionLabel.style.display = 'inline-block';
         }
 
         async function _fetchCategoryNorm() {
