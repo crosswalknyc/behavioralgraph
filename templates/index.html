@@ -25064,28 +25064,24 @@
                      unchanged.
                 ═══════════════════════════════════════════════════════ -->
 
-                <!-- ─── LANDMAN CARD A: 🏜️ The Landman Phenomenon ─── -->
-                <div class="card" id="jiqLandmanHeroCard"
-                     style="padding: 1.1rem 1.2rem; margin-top: 1rem; margin-bottom: 1rem; display: none;
-                            background: linear-gradient(135deg, rgba(245,158,11,0.10) 0%, rgba(168,85,247,0.06) 100%);
-                            border: 1px solid rgba(245,158,11,0.30);">
-                    <div style="display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.35rem;">
-                        <div style="font-size: 0.62rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
-                                    color: rgba(251,191,36,0.95); background: rgba(245,158,11,0.20);
-                                    padding: 3px 9px; border-radius: 4px;">The Landman Phenomenon</div>
-                        <div id="jiqLandmanHeroMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <h3 id="jiqLandmanHeroTitle" style="margin: 0.25rem 0 0.3rem; font-size: 1.1rem;">
-                        🏜️ Why Season 2 became a Paramount+ tentpole event
-                    </h3>
-                    <div id="jiqLandmanHeroSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.85rem; line-height: 1.55;"></div>
-                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92;">
-                        🔥 The viral moments that drove the viewership
-                    </h4>
-                    <div id="jiqLandmanHeroViral"
-                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
-                                gap: 0.6rem;"></div>
-                </div>
+                <!-- REMOVED per request: 🏜️ The Landman Phenomenon hero
+                     card (THE LANDMAN PHENOMENON pill + subtitle +
+                     "🔥 The viral moments that drove the viewership"
+                     3-tile grid: wind-energy monologue, Tommy-and-
+                     Cooper reveal, Demi Moore boardroom scene).
+
+                     Important: renderJourneyIqLandmanHero() ALSO
+                     populates the separate Ad Sales Opportunities
+                     card via `whyEl = document.getElementById(
+                     'jiqAdOppsList')` (line ~48604). With this hero
+                     markup gone, the renderer's _jiqShowCard(
+                     'jiqLandmanHeroCard') call no-ops (null guard
+                     in helper), every `if (titleEl)` / `if (subEl)`
+                     / `if (metaEl)` / `if (viralEl)` write short-
+                     circuits, and the `if (whyEl)` block continues
+                     to paint the Ad Sales Opportunities card as
+                     before. Ad Sales Opportunities is preserved. -->
+                
 
                 <!-- ─── LANDMAN CARD B: 🧭 How They Got to Landman (7 discovery paths) ─── -->
                 <div class="card" id="jiqLandmanPathsCard"
