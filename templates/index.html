@@ -2452,33 +2452,41 @@
          * 5x weight on the subject's self-pin BP for the Owned slice.
          * For talent profiles, Owned renders as "—" (talent doesn't have
          * a brand .com / app channel). */
+        /* 2026-06-22: Single-line layout — label + pct side by side
+         * inside each box so the row height matches the Data Cuts
+         * button (2rem). The previous stacked layout (label on top,
+         * value below) pushed each box well past 2rem and made the
+         * whole row look chunky next to the button. The section
+         * label "Total Universe Composition" was also moved OUT of
+         * this flex row and into a new vertical wrapper
+         * (#audienceShareWrap) above the boxes. */
         #audienceShareBoxes {
-            display: none;
+            display: flex;
             flex-direction: row;
             flex-wrap: nowrap;
             gap: 0.35rem;
-            align-items: stretch;
-            margin-left: 0.5rem;
+            align-items: center;
         }
         .asb-box {
             display: inline-flex;
-            flex-direction: column;
+            flex-direction: row;
             align-items: center;
             justify-content: center;
-            min-width: 3.5rem;
+            gap: 0.35rem;
             height: 2rem;
-            padding: 0.15rem 0.5rem;
+            padding: 0 0.55rem;
             border-radius: 4px;
             border: 1px solid transparent;
             background: var(--bg-input);
             font-family: 'Space Mono', monospace;
-            line-height: 1.1;
+            line-height: 1;
             cursor: help;
+            white-space: nowrap;
         }
         .asb-box .asb-label {
-            font-size: 0.55rem;
-            font-weight: 600;
-            letter-spacing: 0.04em;
+            font-size: 0.6rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
             color: var(--text-secondary);
         }
