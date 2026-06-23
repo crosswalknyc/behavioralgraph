@@ -26033,7 +26033,7 @@
                     <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                         <h3 id="jiqTopPathsMainTitle" style="margin: 0 0 0.3rem; display: none;"></h3>
                         <div id="jiqTopPathsSubtitle" style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem;">Top observed paths</div>
-                        <div id="jiqTopPathsDesc" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Most common ordered sequences (adjacent dups collapsed). The bigger the user count, the more reliably we can attribute the purchase to that sequence.</div>
+                        <div id="jiqTopPathsDesc" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Most common ordered sequences (adjacent dups collapsed). The bigger the user count, the more reliably we can attribute the conversion event to that sequence.</div>
                         <div id="jiqPathTopPaths" style="overflow-x: auto;"></div>
                     </div>
                 </div>
@@ -26051,8 +26051,14 @@
                 <!-- Removed per request: Funnel · Detours · Where Non-Converters Went · Top Inception Keywords
                      (the modeled view doesn't populate them; they were always empty/noise) -->
 
-                <!-- Touchpoints table -->
-                <div class="card" style="padding: 1rem; margin-top: 1rem;" id="jiqTouchpointsCard">
+                <!-- RETIRED: Touchpoints table + its sister cards
+                     (Touchpoint Overlap, Touches Before Purchase) are
+                     hidden across all JIQ runs per request. The
+                     conv-when-seen / conv-when-not framing was too
+                     attribution-heavy for a clickstream-only journey
+                     view; the marketing-footprint and inception-referrer
+                     cards above already cover what drove discovery. -->
+                <div class="card" style="display: none !important; padding: 1rem; margin-top: 1rem;" id="jiqTouchpointsCard">
                     <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem;">
                         <h3 style="margin: 0 0 0.5rem;">📍 Touchpoints — what drove conversation vs conversion</h3>
                         <div id="jiqTpBaselineMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
@@ -26071,7 +26077,11 @@
                     <div id="jiqTouchpointsTable" style="overflow-x: auto;"></div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-top: 1rem;">
+                <!-- RETIRED: Touchpoint Overlap + Touches Before Purchase
+                     hidden alongside the Touchpoints table. The whole
+                     conv-when-seen / conv-when-not block was retired
+                     per request. -->
+                <div style="display: none !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-top: 1rem;">
                     <div class="card" style="padding: 1rem;" id="jiqOverlapCard">
                         <h3 style="margin: 0 0 0.5rem;">🔗 Touchpoint Overlap</h3>
                         <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Top co-occurring pairs (users who touched BOTH surfaces) and the conv-rate within that overlap.</div>
@@ -26182,8 +26192,12 @@
                      Auto-hides when payload.cross_show_overlap is missing
                      (e.g. on non-tv-show runs that don't carry IP overlap).
                 ═══════════════════════════════════════════════════════ -->
+                <!-- RETIRED: Cross-Show Viewership card hidden across all
+                     JIQ runs per request. The IP-overlap Venn is no
+                     longer surfaced inline; markup retained so the
+                     renderer's element-ID lookups do not throw. -->
                 <div class="card" id="jiqCrossShowCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
+                     style="display: none !important; padding: 1rem; margin-top: 1rem;
                             background: linear-gradient(135deg, rgba(244,114,182,0.06) 0%, rgba(168,85,247,0.02) 100%);
                             border: 1px solid rgba(244,114,182,0.22);">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
@@ -26218,8 +26232,14 @@
                     <div id="jiqCrossShowNote" style="margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); font-style: italic;"></div>
                 </div>
 
+                <!-- RETIRED: Subscriber-IQ-mirror cards
+                     (Accounts / Revenue / Timing / SVOD Platforms)
+                     hidden across all JIQ runs per request. They were
+                     mirrors of the standalone Subscriber IQ dashboard;
+                     subscriber metrics for journey context now live in
+                     the interactive Subscriber Lifecycle card above. -->
                 <div class="card" id="jiqSubIqAccountsCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
+                     style="display: none !important; padding: 1rem; margin-top: 1rem;
                             background: linear-gradient(135deg, rgba(91,108,255,0.06) 0%, rgba(91,108,255,0.02) 100%);
                             border: 1px solid rgba(91,108,255,0.22);">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
@@ -26234,7 +26254,7 @@
                 </div>
 
                 <div class="card" id="jiqSubIqRevenueCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
+                     style="display: none !important; padding: 1rem; margin-top: 1rem;
                             background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(34,197,94,0.02) 100%);
                             border: 1px solid rgba(34,197,94,0.22);">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
@@ -26247,7 +26267,7 @@
                 </div>
 
                 <div class="card" id="jiqSubIqTimingCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
+                     style="display: none !important; padding: 1rem; margin-top: 1rem;
                             background: linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(245,158,11,0.02) 100%);
                             border: 1px solid rgba(245,158,11,0.22);">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
@@ -26263,7 +26283,7 @@
                 </div>
 
                 <div class="card" id="jiqSubIqPlatformsCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
+                     style="display: none !important; padding: 1rem; margin-top: 1rem;
                             background: linear-gradient(135deg, rgba(168,85,247,0.06) 0%, rgba(168,85,247,0.02) 100%);
                             border: 1px solid rgba(168,85,247,0.22);">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
@@ -43868,6 +43888,26 @@
                 _setText('jiqSwitchedSubtitle',    TV_LABELS.switched_sub);
                 _setText('jiqInterstepTitle',      TV_LABELS.interstep_title);
                 _setText('jiqInterstepSubtitle',   TV_LABELS.interstep_sub);
+                // ---- TV-show framing for the "Top observed paths" table:
+                //      reframe it as the press-play journey (every step
+                //      they took to get to the play button + how long it
+                //      took). Replaces the generic "we can attribute the
+                //      conversion event" copy that reads weird for streaming.
+                _setText('jiqPathTitle',           '▶️ Path to Press-Play');
+                _setText('jiqPathSubtitle',
+                    'How accounts came to Paramount+ to press play on episode 1. '
+                    'Right-aligned ribbon: each viewer\'s clickstream sequence — '
+                    'where they first encountered the show, every step they took, '
+                    'and how long it took to reach the play button. '
+                    'Column height \u221d unique accounts at that step. Hover for the top hosts.');
+                _setText('jiqTopPathsSubtitle',    'Top journeys to press-play');
+                _setText('jiqTopPathsDesc',
+                    'Each row is a real clickstream sequence we observed leading up '
+                    'to the first episode play. <strong>Users</strong> = accounts who '
+                    'followed that exact sequence. <strong>Avg days</strong> = elapsed '
+                    'time from first touch to play. The italic note walks through the '
+                    'journey step-by-step. Sources are strictly clickstream-observable '
+                    '(referrer, UTM, or CTV deep-link).');
             }
             // Fandango-specific title overrides
             var _isFandangoCtx = (_metaCtx.target || '').toLowerCase().indexOf('fandango') >= 0;
