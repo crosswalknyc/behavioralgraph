@@ -25131,21 +25131,15 @@
                             <div id="jiqBsCompPlatforms"></div>
                         </div>
                     </div>
-                    <!-- ── Brands + Podcasts/News ── -->
-                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-                                gap: 1rem; align-items: start; margin-bottom: 1rem;">
-                        <div>
-                            <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
-                                🛒 Off-Paramount brand affinity
-                            </h4>
-                            <div id="jiqBsBrands"></div>
-                        </div>
-                        <div>
-                            <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
-                                🎙️ Podcast / news footprint
-                            </h4>
-                            <div id="jiqBsPodcasts"></div>
-                        </div>
+                    <!-- ── Podcast / news footprint
+                         (Brand affinity moved out of this card into the
+                         "Ad Sales Opportunities" card lower on the page,
+                         renamed to "Ad and Sponsorship Opportunity") ── -->
+                    <div style="margin-bottom: 1rem;">
+                        <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
+                            🎙️ Podcast / news footprint
+                        </h4>
+                        <div id="jiqBsPodcasts"></div>
                     </div>
                     <!-- ── Sheridan-universe context: SMALL, explicitly "you already have this" ── -->
                     <div id="jiqBsSheridanContext"
@@ -25407,6 +25401,23 @@
                     <div id="jiqAdOppsList"
                          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
                                 gap: 0.6rem;"></div>
+                    <!-- ── 🛒 Ad and Sponsorship Opportunity (was "Off-Paramount
+                         brand affinity" inside the Beyond-Sheridan card).
+                         Data still lives in beyond_sheridan.off_platform_brands
+                         in the payload; renderJourneyIqSheridanMap paints
+                         this container directly. ── -->
+                    <div id="jiqAdOppsBrandsWrap" style="margin-top: 1rem;">
+                        <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
+                            🛒 Ad and Sponsorship Opportunity
+                        </h4>
+                        <div id="jiqAdOppsBrandsSubtitle"
+                             style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem; line-height: 1.5;">
+                            Off-Paramount brand indices vs gen-pop (100 = average). High-index
+                            brands are the natural in-show product-integration / sponsorship
+                            slate for the next season window.
+                        </div>
+                        <div id="jiqAdOppsBrands"></div>
+                    </div>
                 </div>
 
                 <!-- Removed per request: Funnel · Detours · Where Non-Converters Went · Top Inception Keywords
@@ -48907,7 +48918,11 @@
             var metaEl    = document.getElementById('jiqSheridanMapMeta');
             var showsEl   = document.getElementById('jiqBsOffShows');
             var platEl    = document.getElementById('jiqBsCompPlatforms');
-            var brandsEl  = document.getElementById('jiqBsBrands');
+            // Brand affinity rows render INTO the "Ad Sales Opportunities"
+            // card (renamed sub-section: "🛒 Ad and Sponsorship Opportunity")
+            // even though the underlying data still lives in the
+            // beyond_sheridan.off_platform_brands payload block.
+            var brandsEl  = document.getElementById('jiqAdOppsBrands');
             var podsEl    = document.getElementById('jiqBsPodcasts');
             var ctxEl     = document.getElementById('jiqBsSheridanContext');
             var implEl    = document.getElementById('jiqBsImplication');
@@ -48962,29 +48977,44 @@
                 }).join('');
             }
 
-            // ── Off-Paramount brand affinity (index vs gen-pop=100) ──
+            // ── 🛒 Ad and Sponsorship Opportunity
+            //    (was "Off-Paramount brand affinity"; rendered into the
+            //     "Ad Sales Opportunities" card now). Show or hide the
+            //     sub-section based on data presence, and make sure the
+            //     parent Ad Sales card itself is visible when we have
+            //     anything to paint - the hero renderer normally handles
+            //     that via why_it_matters, this is a belt-and-suspenders
+            //     fallback for when only the brand-affinity data is set.
             if (brandsEl) {
-                var brands = s.off_platform_brands || [];
-                var maxIdx = brands.reduce(function(m, r) { return Math.max(m, r.index || 0); }, 0);
-                brandsEl.innerHTML = brands.map(function(r) {
-                    var color = (r.index || 0) > 220 ? GRN : ((r.index || 0) > 175 ? AMB : BLUE);
-                    return '<div style="padding:5px 0; border-bottom:1px solid var(--border-color);">'
-                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
-                         +     '<div>'
-                         +       '<div style="font-size:11.5px; font-weight:700;">' + _jiqEsc(r.brand) + '</div>'
-                         +       '<div style="font-size:9.5px; opacity:0.6; margin-top:1px;">' + _jiqEsc(r.category || '') + '</div>'
-                         +     '</div>'
-                         +     '<div style="text-align:right; white-space:nowrap;">'
-                         +       '<div style="font-size:12px; font-weight:800; color:' + color + ';">' + Math.round(r.index || 0) + '</div>'
-                         +       '<div style="font-size:8.5px; opacity:0.6; margin-top:1px;">index</div>'
-                         +     '</div>'
-                         +   '</div>'
-                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.index, color, maxIdx) + '</div>'
-                         + ((r.note)
-                            ? ('<div style="font-size:10px; color: var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note) + '</div>')
-                            : '')
-                         + '</div>';
-                }).join('');
+                var brands     = s.off_platform_brands || [];
+                var brandsWrap = document.getElementById('jiqAdOppsBrandsWrap');
+                if (!brands.length) {
+                    if (brandsWrap) brandsWrap.style.display = 'none';
+                    brandsEl.innerHTML = '';
+                } else {
+                    if (brandsWrap) brandsWrap.style.display = '';
+                    _jiqShowCard('jiqAdOppsCard');
+                    var maxIdx = brands.reduce(function(m, r) { return Math.max(m, r.index || 0); }, 0);
+                    brandsEl.innerHTML = brands.map(function(r) {
+                        var color = (r.index || 0) > 220 ? GRN : ((r.index || 0) > 175 ? AMB : BLUE);
+                        return '<div style="padding:5px 0; border-bottom:1px solid var(--border-color);">'
+                             +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                             +     '<div>'
+                             +       '<div style="font-size:11.5px; font-weight:700;">' + _jiqEsc(r.brand) + '</div>'
+                             +       '<div style="font-size:9.5px; opacity:0.6; margin-top:1px;">' + _jiqEsc(r.category || '') + '</div>'
+                             +     '</div>'
+                             +     '<div style="text-align:right; white-space:nowrap;">'
+                             +       '<div style="font-size:12px; font-weight:800; color:' + color + ';">' + Math.round(r.index || 0) + '</div>'
+                             +       '<div style="font-size:8.5px; opacity:0.6; margin-top:1px;">index</div>'
+                             +     '</div>'
+                             +   '</div>'
+                             +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.index, color, maxIdx) + '</div>'
+                             + ((r.note)
+                                ? ('<div style="font-size:10px; color: var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note) + '</div>')
+                                : '')
+                             + '</div>';
+                    }).join('');
+                }
             }
 
             // ── Podcast / news footprint ──
