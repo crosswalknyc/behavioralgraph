@@ -25739,45 +25739,17 @@
                      Auto-hides when payload.cross_show_overlap is missing
                      (e.g. on non-tv-show runs that don't carry IP overlap).
                 ═══════════════════════════════════════════════════════ -->
-                <!-- RETIRED: Cross-Show Viewership card hidden across all
-                     JIQ runs per request. The IP-overlap Venn is no
-                     longer surfaced inline; markup retained so the
-                     renderer's element-ID lookups do not throw. -->
-                <div class="card" id="jiqCrossShowCard"
-                     style="display: none !important; padding: 1rem; margin-top: 1rem;
-                            background: linear-gradient(135deg, rgba(244,114,182,0.06) 0%, rgba(168,85,247,0.02) 100%);
-                            border: 1px solid rgba(244,114,182,0.22);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqCrossShowTitle" style="margin: 0;">🎯 Cross-Show Viewership - IP audience overlap</h3>
-                        <div id="jiqCrossShowMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqCrossShowSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
-
-                    <!-- 3-show audience-strip cards (header) -->
-                    <div id="jiqCrossShowStrip"
-                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-                                gap: 0.6rem; margin-bottom: 0.85rem;"></div>
-
-                    <!-- Venn diagram + region table side-by-side -->
-                    <div id="jiqCrossShowGrid"
-                         style="display: grid; grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr);
-                                gap: 1rem; align-items: start; margin-bottom: 0.85rem;">
-                        <div id="jiqCrossShowVenn" style="overflow:hidden; min-width:0;"></div>
-                        <div id="jiqCrossShowRegions" style="overflow-x: auto; min-width:0;"></div>
-                    </div>
-
-                    <!-- Sony-strategy takeaway tiles -->
-                    <div style="margin-top: 0.4rem;">
-                        <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
-                            🔑 Strategic takeaways for the IP owner
-                        </h4>
-                        <div id="jiqCrossShowTakeaways"
-                             style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-                                    gap: 0.6rem;"></div>
-                    </div>
-
-                    <div id="jiqCrossShowNote" style="margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); font-style: italic;"></div>
-                </div>
+                <!-- REMOVED per request: Cross-Show Viewership card
+                     (🍿 Sheridan-Universe overlap Venn / 🎯 IP audience
+                     overlap). The previous "RETIRED" approach used
+                     inline display:none !important but the renderer
+                     renderJourneyIqCrossShowOverlap() was overriding
+                     it at runtime by setting `card.style.display = ''`
+                     whenever the payload shipped shows + regions
+                     (which Landman does). With the markup gone, the
+                     renderer's `if (!card) return;` early-exit short-
+                     circuits harmlessly. -->
+                
 
                 <!-- RETIRED: Subscriber-IQ-mirror cards
                      (Accounts / Revenue / Timing / SVOD Platforms)
