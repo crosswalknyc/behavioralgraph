@@ -49067,11 +49067,12 @@
             if (subEl)   subEl.textContent = c.subtitle || '';
             if (metaEl)  metaEl.textContent = (c.behaviors.length) + ' companion behaviors tracked';
 
-            // ── Headline: fully-engaged stat + benchmark comparison ──
+            // ── Headline: fully-engaged stat (benchmark comparison
+            //    line was removed per request - we no longer show the
+            //    'vs 26% streaming benchmark · +Xpp vs benchmark'
+            //    sub-line under the big number) ──
             if (headEl) {
                 var hd = c.headline || {};
-                var liftPp = hd.lift_vs_benchmark_pp || 0;
-                var liftStr = (liftPp >= 0 ? '+' : '') + liftPp.toFixed(1) + 'pp vs benchmark';
                 headEl.innerHTML = ''
                     // Big number tile
                     + '<div style="padding:1rem 1.1rem; border-radius:8px;'
@@ -49081,9 +49082,6 @@
                     +     '🎯 Fully Engaged - no second-screen</div>'
                     +   '<div style="font-size:2.4rem; font-weight:800; color:' + TEAL + '; line-height:1; margin-top:0.4rem; font-variant-numeric:tabular-nums;">'
                     +     (hd.fully_engaged_pct || 0).toFixed(1) + '%</div>'
-                    +   '<div style="font-size:11px; opacity:0.8; margin-top:0.4rem;">'
-                    +     'vs ' + (hd.benchmark_pct || 0).toFixed(0) + '% streaming benchmark · '
-                    +     '<span style="color:' + GRN + '; font-weight:700;">' + liftStr + '</span></div>'
                     + '</div>'
                     // Note tile
                     + '<div style="padding:0.95rem 1.05rem; border-radius:8px;'
