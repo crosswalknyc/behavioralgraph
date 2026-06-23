@@ -3833,7 +3833,6 @@ def create_user():
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
             'has_blue_iq_access': req_data.get('has_blue_iq_access', cd.get('has_blue_iq_access', False) if cd else False),
-            'has_ip_valuation_iq_access': req_data.get('has_ip_valuation_iq_access', cd.get('has_ip_valuation_iq_access', False) if cd else False),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
@@ -3987,8 +3986,6 @@ def update_user(username):
             user['has_share_of_time_run_access'] = bool(req_data['has_share_of_time_run_access'])
         if 'has_blue_iq_access' in req_data:
             user['has_blue_iq_access'] = bool(req_data['has_blue_iq_access'])
-        if 'has_ip_valuation_iq_access' in req_data:
-            user['has_ip_valuation_iq_access'] = bool(req_data['has_ip_valuation_iq_access'])
         if user.get('has_share_of_time_access') is False:
             user['has_share_of_time_run_access'] = False
         if 'auto_access_new' in req_data:
@@ -4385,7 +4382,6 @@ def restore_defaults_all_users():
             user['has_analysis_iq_access'] = False
             user['analysis_iq_modules'] = user.get('analysis_iq_modules', [])
             user['has_rankers_iq_access'] = False
-            user['has_ip_valuation_iq_access'] = False
             user['rankers_iq_options'] = user.get('rankers_iq_options', [])
             user['has_llmo_iq_access'] = False
             user['has_workspace_access'] = True
@@ -4788,7 +4784,6 @@ def api_set_company_defaults(company_name):
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
             'has_blue_iq_access': req.get('has_blue_iq_access', False),
-            'has_ip_valuation_iq_access': req.get('has_ip_valuation_iq_access', False),
             'credits': req.get('credits', 5),
             'auto_access_new': req.get('auto_access_new', {}),
         }
@@ -4852,7 +4847,6 @@ def api_reset_company_users(company_name):
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
                 user['has_blue_iq_access'] = cd.get('has_blue_iq_access', False)
-                user['has_ip_valuation_iq_access'] = cd.get('has_ip_valuation_iq_access', False)
                 user['credits'] = cd.get('credits', 5)
                 user['auto_access_new'] = dict(cd.get('auto_access_new', {}))
             else:
@@ -4879,7 +4873,6 @@ def api_reset_company_users(company_name):
                 user['has_share_of_time_access'] = True
                 user['has_share_of_time_run_access'] = True
                 user['has_blue_iq_access'] = False
-                user['has_ip_valuation_iq_access'] = False
                 user['credits'] = 5
                 user['auto_access_new'] = {}
             if user.get('has_share_of_time_access') is False:
@@ -6935,7 +6928,6 @@ def compute_product_access_flags(user, role):
             'has_blue_iq_access': True,
             'has_intent_iq_access': True,
             'has_helm_iq_access': True,
-            'has_ip_valuation_iq_access': True,
         }
     u = user or {}
     has_sot_view = bool(u.get('has_share_of_time_access', True))
@@ -6970,7 +6962,6 @@ def compute_product_access_flags(user, role):
         'has_blue_iq_access': bool(u.get('has_blue_iq_access', False)),
         'has_intent_iq_access': bool(u.get('has_intent_iq_access', True)),
         'has_helm_iq_access': role == 'super_admin',
-        'has_ip_valuation_iq_access': bool(u.get('has_ip_valuation_iq_access', False)),
     }
 
 
@@ -7067,7 +7058,6 @@ def index():
     has_blue_iq = _acc.get('has_blue_iq_access', False)
     has_intent_iq = _acc.get('has_intent_iq_access', True)
     has_helm_iq = _acc.get('has_helm_iq_access', False)
-    has_ip_valuation_iq = _acc.get('has_ip_valuation_iq_access', False)
 
     # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
@@ -7127,7 +7117,6 @@ def index():
                            has_blue_iq_access=has_blue_iq,
                            has_intent_iq_access=has_intent_iq,
                            has_helm_iq_access=has_helm_iq,
-                           has_ip_valuation_iq_access=has_ip_valuation_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -7735,23 +7724,195 @@ def save_cached_summary(cache_key, data):
     save_cached_summary_to_s3(cache_key, data)
 
 
+def _generate_behavioral_summary_multi(profile_name, cohorts):
+    """Multi-cohort comparative behavioral read.
+
+    Cohorts is a list of dicts each with: label (e.g. 'Total Universe',
+    'Avid'), demographics, demographicsIndex, demographicsGenPop,
+    behavioral, behavioralIndex, topOverIndexers. Produces 4-6 bullets
+    that explicitly call out where the cohorts DIFFER (and only note
+    similarity when it's the headline).
+    """
+    if not cohorts or len(cohorts) < 2:
+        return {"error": "Multi-cohort mode requires 2+ cohorts."}
+
+    cohort_labels = [str(c.get('label', f'Cohort {i+1}')).strip() or f'Cohort {i+1}'
+                     for i, c in enumerate(cohorts)]
+
+    # Cache key includes all cohort labels + a fingerprint of each cohort's
+    # behavioral signature so we don't collide with the single-cohort cache
+    # AND so a different cohort combination caches separately.
+    fingerprint_parts = [profile_name.lower().strip(), 'multi:' + '|'.join(cohort_labels)]
+    for c in cohorts:
+        beh = c.get('behavioral', {})
+        if isinstance(beh, dict):
+            for cat in sorted(beh.keys()):
+                items = beh.get(cat, [])
+                if isinstance(items, list) and items:
+                    top_names = [it.get('name', '') for it in items[:3] if isinstance(it, dict)]
+                    fingerprint_parts.append(f"{c.get('label','')}::{cat}:{','.join(top_names)}")
+    fingerprint = '|'.join(fingerprint_parts)
+    cache_hash = hashlib.md5(fingerprint.encode()).hexdigest()[:16]
+    safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', profile_name)[:50]
+    cache_key = f"{safe_name}_multi_{cache_hash}"
+
+    cached_result = get_cached_summary(cache_key)
+    if cached_result:
+        cached_result['cached'] = True
+        return cached_result
+
+    client = get_openai_client()
+    if not client:
+        return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
+
+    try:
+        def _build_cohort_block(c):
+            label = c.get('label', 'Cohort')
+            demographics = _filter_demographics_for_insights(c.get('demographics', {}))
+            demographics_index = c.get('demographicsIndex', {})
+            behavioral = _filter_behavioral_for_insights(c.get('behavioral', {}))
+            behavioral_index = c.get('behavioralIndex', {})
+            top_over = [i for i in c.get('topOverIndexers', [])
+                        if i.get('pct', 0) >= MIN_PCT_FOR_INSIGHTS]
+
+            demo_summary = []
+            for category, values in demographics.items():
+                if isinstance(values, dict) and values:
+                    top_items = sorted(values.items(), key=lambda x: x[1], reverse=True)[:3]
+                    index_data = demographics_index.get(category, {})
+                    bits = []
+                    for name, pct in top_items:
+                        idx = index_data.get(name, 100) if isinstance(index_data, dict) else 100
+                        bits.append(f"{name} ({pct:.1f}%, {idx:.0f} idx)")
+                    if bits:
+                        demo_summary.append(f"  {category}: {', '.join(bits)}")
+
+            behavior_summary = []
+            for category, items in behavioral.items():
+                if isinstance(items, list) and items:
+                    top_items = items[:5]
+                    index_data = behavioral_index.get(category, [])
+                    bits = []
+                    for i, item in enumerate(top_items):
+                        name = item.get('name', item.get('value', ''))
+                        pct = item.get('pct', 0)
+                        idx = 100
+                        if isinstance(index_data, list) and i < len(index_data):
+                            idx = index_data[i].get('index', 100)
+                        elif isinstance(item, dict):
+                            idx = item.get('index', 100)
+                        bits.append(f"{name} ({pct:.1f}%, {idx:.0f} idx)")
+                    if bits:
+                        behavior_summary.append(f"  {category}: {', '.join(bits)}")
+
+            top_indexers_lines = []
+            for item in top_over[:8]:
+                top_indexers_lines.append(
+                    f"  - {item.get('name','')} ({item.get('category','')}) "
+                    f"{item.get('pct',0):.1f}% vs {item.get('genPop',0):.1f}% GP, "
+                    f"{item.get('index',100):.0f} idx"
+                )
+
+            return (
+                f"=== COHORT: {label} ===\n"
+                f"DEMOGRAPHICS (>=25%):\n"
+                + ('\n'.join(demo_summary[:6]) if demo_summary else '  (no demographics meet 25%)')
+                + "\n\nBEHAVIORAL (>=25%):\n"
+                + ('\n'.join(behavior_summary[:10]) if behavior_summary else '  (no behaviors meet 25%)')
+                + "\n\nTOP OVER-INDEXERS (>=25%):\n"
+                + ('\n'.join(top_indexers_lines) if top_indexers_lines else '  (none meet 25%)')
+            )
+
+        cohort_blocks = [_build_cohort_block(c) for c in cohorts]
+        cohorts_str = '\n\n'.join(cohort_blocks)
+        labels_list = ', '.join(cohort_labels)
+
+        prompt = (
+            f"You are an expert consumer behavior analyst comparing {len(cohorts)} audience "
+            f"cohorts within the same profile ({profile_name}). The cohorts are: {labels_list}.\n\n"
+            f"{cohorts_str}\n\n"
+            "INSTRUCTIONS:\n"
+            "- Write 4-6 bullet points that describe these cohorts as a UNIFIED READ, "
+            "explicitly calling out where they DIVERGE.\n"
+            f"- Each bullet should name the cohorts (e.g. \"{cohort_labels[0]} skews ... while "
+            f"{cohort_labels[1]} indexes higher on ...\") rather than treating them as one group.\n"
+            "- Only cite data points that represent 25%+ of the cohort being described.\n"
+            "- Focus on LIFESTYLE / BEHAVIORS / consumption habits, not raw demo stats.\n"
+            "- When a behavior is shared across cohorts and the gap is small, you can note "
+            "the shared baseline in one sentence, but spend most bullets on the DIFFERENCES.\n"
+            "- Avoid 'should/recommend/consider' language. Stay descriptive.\n"
+            "- Each bullet 1-2 sentences max.\n\n"
+            "Format: return ONLY a JSON array of strings (one bullet per element)."
+        )
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert consumer behavior analyst who writes comparative audience reads that surface real differences between cohorts. Return only valid JSON arrays."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=700,
+            temperature=0.65
+        )
+
+        content = response.choices[0].message.content.strip()
+        try:
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+            bullets = json.loads(content)
+            if not isinstance(bullets, list):
+                bullets = [content]
+        except Exception:
+            bullets = [line.strip().lstrip('- •').strip()
+                       for line in content.split('\n')
+                       if line.strip() and not line.strip().startswith('[')]
+
+        result = {
+            "bullets": bullets,
+            "tokens_used": response.usage.total_tokens,
+            "cached": False,
+            "mode": "compare",
+            "cohort_labels": cohort_labels,
+        }
+        save_cached_summary(cache_key, result)
+        return result
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+
 def generate_behavioral_summary(profile_data):
-    """Generate behavioral summary bullets using AI based on demographic and behavioral data."""
-    # Extract data needed for cache key
+    """Generate behavioral summary bullets using AI based on demographic and behavioral data.
+
+    Two modes supported on the same endpoint:
+      1. Single-cohort (legacy): payload has top-level
+         demographics / behavioral / topOverIndexers. Produces "WHO are
+         {profile_name} panelists" bullets.
+      2. Multi-cohort (compare): payload has cohorts=[{label, demographics,
+         demographicsIndex, behavioral, behavioralIndex, topOverIndexers}, ...]
+         When 2+ cohorts are present we route to the comparison prompt
+         which writes a unified read calling out where the cohorts
+         DIVERGE (e.g. "Total Universe leans X while Avid Fans skew Y").
+    """
     profile_name = profile_data.get('profileName', 'This audience')
+    cohorts = profile_data.get('cohorts')
+
+    if isinstance(cohorts, list) and len(cohorts) >= 2:
+        return _generate_behavioral_summary_multi(profile_name, cohorts)
+
     behavioral = profile_data.get('behavioral', {})
     top_over_indexers = profile_data.get('topOverIndexers', [])
     
-    # Generate cache key and check for cached result
     cache_key = generate_cache_key(profile_name, behavioral, top_over_indexers)
     cached_result = get_cached_summary(cache_key)
     
     if cached_result:
-        # Return cached result with a flag indicating it was cached
         cached_result['cached'] = True
         return cached_result
     
-    # No cache hit - generate new summary
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
@@ -12714,80 +12875,6 @@ def api_intent_in_flight(title_slug):
         return jsonify(_intent_iq.get_in_flight(title_slug,
                                                   as_of=request.args.get('as_of'),
                                                   window=request.args.get('window')))
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-# ============================================================================
-# IP VALUATION IQ — PE valuation tool for legacy Hollywood IP
-# ============================================================================
-# Lets a PE user multi-select Profile IQ profiles (MOVIE / SERIES) + Subscriber
-# IQ titles to build a Combined US Universe (overlap-adjusted union), combined
-# demographics, TAM (Universe x latent multiplier), and an editable 8-row
-# valuation waterfall. Pure read endpoints — all valuation math runs client-side.
-def _require_ip_valuation_iq():
-    """Return (False, error_response) if IP Valuation IQ isn't available for this user."""
-    user = get_current_user()
-    if not user:
-        return False, (jsonify({'success': False, 'error': 'Not authenticated'}), 401)
-    role = _normalize_role(user.get('role', 'user'))
-    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
-    if not acc.get('has_ip_valuation_iq_access', False):
-        return False, (jsonify({'success': False, 'error': 'IP Valuation IQ access not enabled'}), 403)
-    return True, None
-
-
-@app.route('/api/ip-valuation-iq/profile-iq-list')
-@requires_auth
-def api_ip_valuation_profile_iq_list():
-    """Return Profile IQ jobs filtered to MOVIE + SERIES-* for the IP picker.
-
-    Delegates to list_jobs() so we inherit all accessibility tagging, SVOD/
-    purgatory filtering, allowed_runs gating, etc. — then trims to content-
-    asset categories only.
-    """
-    ok, err = _require_ip_valuation_iq()
-    if not ok:
-        return err
-    try:
-        resp = list_jobs()
-        data = resp.get_json() if hasattr(resp, 'get_json') else None
-        if not data or not isinstance(data, dict):
-            return jsonify({'success': False, 'error': 'Unable to load profile list'}), 500
-        jobs = data.get('jobs', []) or []
-        filtered = []
-        for j in jobs:
-            cat = (j.get('category') or '').upper().strip()
-            if cat == 'MOVIE' or cat.startswith('SERIES'):
-                filtered.append(j)
-        return jsonify({
-            'success': True,
-            'jobs': filtered,
-            'count': len(filtered),
-        })
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/ip-valuation-iq/subscriber-iq-list')
-@requires_auth
-def api_ip_valuation_subscriber_iq_list():
-    """Return all Subscriber IQ titles for the Historical Revenue picker.
-
-    Passthrough proxy of list_subscriber_iq_files() with an IP Valuation IQ
-    access check layered on top.
-    """
-    ok, err = _require_ip_valuation_iq()
-    if not ok:
-        return err
-    try:
-        resp = list_subscriber_iq_files()
-        data = resp.get_json() if hasattr(resp, 'get_json') else None
-        if not data or not isinstance(data, dict):
-            return jsonify({'success': False, 'error': 'Unable to load subscriber list'}), 500
-        return jsonify(data)
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
