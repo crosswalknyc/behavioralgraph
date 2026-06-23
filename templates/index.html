@@ -25079,12 +25079,6 @@
                     </h4>
                     <div id="jiqLandmanHeroViral"
                          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
-                                gap: 0.6rem; margin-bottom: 1rem;"></div>
-                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92;">
-                        💡 Why this matters strategically
-                    </h4>
-                    <div id="jiqLandmanHeroWhy"
-                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
                                 gap: 0.6rem;"></div>
                 </div>
 
@@ -25394,6 +25388,23 @@
                                 gap: 0.5rem; margin-bottom: 0.85rem;"></div>
                     <h4 style="font-size: 0.85rem; margin: 1rem 0 0.4rem; opacity: 0.92;">🎯 What to do with this audience</h4>
                     <div id="jiqNetNewRecs"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                                gap: 0.6rem;"></div>
+                </div>
+
+                <!-- ─── LANDMAN CARD G: 💰 Ad Sales Opportunities (was "Why this matters strategically") ─── -->
+                <div class="card" id="jiqAdOppsCard"
+                     style="padding: 1.1rem 1.2rem; margin-top: 1rem; margin-bottom: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.08) 0%, rgba(34,197,94,0.05) 100%);
+                            border: 1px solid rgba(168,85,247,0.28);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqAdOppsTitle" style="margin: 0;">💰 Ad Sales Opportunities</h3>
+                        <div id="jiqAdOppsMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqAdOppsSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.85rem; line-height: 1.55;">
+                        Where the off-platform Landman signal becomes pitch-grade revenue inventory.
+                    </div>
+                    <div id="jiqAdOppsList"
                          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
                                 gap: 0.6rem;"></div>
                 </div>
@@ -41245,6 +41256,7 @@
             _jiqHideCard('jiqLandmanPathsCard');
             _jiqHideCard('jiqSheridanMapCard');           // now "Beyond the Sheridan Universe"
             _jiqHideCard('jiqCompanionBehaviorsCard');
+            _jiqHideCard('jiqAdOppsCard');                // moved out of the hero card, lives near the bottom
             if (typeof renderJourneyIqLandmanHero === 'function') {
                 renderJourneyIqLandmanHero(_pickClickstreamBlock('landman_phenomenon'));
             }
@@ -48690,7 +48702,12 @@
             var subEl    = document.getElementById('jiqLandmanHeroSubtitle');
             var metaEl   = document.getElementById('jiqLandmanHeroMeta');
             var viralEl  = document.getElementById('jiqLandmanHeroViral');
-            var whyEl    = document.getElementById('jiqLandmanHeroWhy');
+            // "Why this matters strategically" was renamed → "Ad Sales
+            // Opportunities" and moved out of the hero card into its own
+            // standalone card lower on the page (jiqAdOppsCard). The
+            // hero renderer still paints it, but writes into the new
+            // container and toggles the new card's visibility separately.
+            var whyEl    = document.getElementById('jiqAdOppsList');
             if (titleEl) titleEl.textContent = '🏜️ ' + (h.title || 'The Landman Phenomenon');
             if (subEl)   subEl.textContent = h.subtitle || '';
             // Meta line intentionally generic — no first-party viewer
@@ -48739,7 +48756,8 @@
                 }).join('');
             }
             if (whyEl) {
-                whyEl.innerHTML = (h.why_it_matters || []).map(function(w) {
+                var _whyList = h.why_it_matters || [];
+                whyEl.innerHTML = _whyList.map(function(w) {
                     var chips = w.stat_chips || [];
                     return '<div style="padding:0.7rem 0.85rem; border-radius:6px;'
                          +              ' background: rgba(255,255,255,0.03); border:1px solid rgba(167,139,250,0.25);'
@@ -48756,6 +48774,11 @@
                             : '')
                          + '</div>';
                 }).join('');
+                if (_whyList.length) {
+                    _jiqShowCard('jiqAdOppsCard');
+                } else {
+                    _jiqHideCard('jiqAdOppsCard');
+                }
             }
         }
 
