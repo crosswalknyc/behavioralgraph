@@ -26095,6 +26095,78 @@
                      missing (e.g. on non-TV-show runs).
                 ═══════════════════════════════════════════════════════ -->
                 <!-- ═══════════════════════════════════════════════════════
+                     SUBSCRIBER LIFECYCLE JOURNEY — interactive platform
+                     lifecycle card (target_type='subscriber_lifecycle').
+                     Renders the full ACQUISITION → ENGAGEMENT → AT-RISK
+                     → CHURN → POST-CHURN → WIN-BACK sequence, gated by
+                     a cohort selector at the top so the team can re-cut
+                     every stage for the chosen acquisition archetype
+                     (All / Sheridan / Sports / Sci-Fi / Promo / Bundle).
+                     Each stage is a collapsible <details> card with
+                     a one-line summary in the collapsed state.
+                     Auto-hides when payload.subscriber_lifecycle is
+                     missing (i.e. on non-lifecycle runs).
+                ═══════════════════════════════════════════════════════ -->
+                <div class="card" id="jiqSubLifecycleCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(167,139,250,0.06) 0%, rgba(244,114,182,0.02) 100%);
+                            border: 1px solid rgba(167,139,250,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 0.3rem;">
+                        <h3 id="jiqSubLifecycleTitle" style="margin: 0;">🔄 Subscriber Lifecycle Journey</h3>
+                        <div id="jiqSubLifecycleMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSubLifecycleSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+
+                    <!-- Cohort selector tabs — click to re-cut every stage below -->
+                    <div style="font-size: 0.66rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.35rem;">
+                        Cohort — click to re-cut every stage
+                    </div>
+                    <div id="jiqSubLifecycleCohortTabs"
+                         style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.85rem;"></div>
+
+                    <!-- Cohort tagline (story behind the selected cohort) -->
+                    <div id="jiqSubLifecycleCohortTagline"
+                         style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.85rem;
+                                padding: 0.55rem 0.75rem; background: rgba(255,255,255,0.025);
+                                border-left: 3px solid currentColor; border-radius: 4px;"></div>
+
+                    <!-- Cohort topline tiles (active subs / signups / churn / ARPU / etc.) -->
+                    <div id="jiqSubLifecycleCohortSummary"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.95rem;"></div>
+
+                    <!-- Expand-all / Collapse-all controls -->
+                    <div style="display: flex; justify-content: flex-end; gap: 0.4rem; margin-bottom: 0.5rem;">
+                        <button id="jiqSubLifecycleExpandAll"
+                                style="font-size: 0.68rem; padding: 0.3rem 0.7rem; border-radius: 6px;
+                                       background: rgba(255,255,255,0.04); color: var(--text-secondary);
+                                       border: 1px solid rgba(255,255,255,0.1); cursor: pointer;">
+                            Expand all stages
+                        </button>
+                        <button id="jiqSubLifecycleCollapseAll"
+                                style="font-size: 0.68rem; padding: 0.3rem 0.7rem; border-radius: 6px;
+                                       background: rgba(255,255,255,0.04); color: var(--text-secondary);
+                                       border: 1px solid rgba(255,255,255,0.1); cursor: pointer;">
+                            Collapse all
+                        </button>
+                    </div>
+
+                    <!-- The six collapsible lifecycle stages render here -->
+                    <div id="jiqSubLifecycleStages"></div>
+
+                    <!-- Monthly MAU + churn-rate trend strip (one view, all cohorts) -->
+                    <div style="margin-top: 1rem;">
+                        <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
+                            📈 Monthly subscriber trend (all cohorts combined)
+                        </h4>
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                            MAU in millions · monthly churn % · key tentpole / season event.
+                        </div>
+                        <div id="jiqSubLifecycleTrend" style="overflow-x: auto;"></div>
+                    </div>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════
                      CROSS-SHOW VIEWERSHIP — IP audience overlap diagram.
                      For Pop Culture Jeopardy this surfaces the 3-circle
                      Venn of Broadcast Jeopardy! × Hulu Jeopardy! × PCJ
@@ -40859,6 +40931,66 @@
                         [_crBrandLbl + ' subs attributed', _crFmt(commerceSubs),
                          _crSub(commercePct, 3, '', ' of watchers · 7-day post-watch attribution')],
                     ];
+                } else if (targetType === 'subscriber_lifecycle'
+                           || kpis.lifecycle_mode === true) {
+                    // Subscriber-lifecycle run (Paramount+ et al.) —
+                    // platform-wide acquisition, churn, ARPU, reactivation.
+                    // The big interactive lifecycle card below the strip is
+                    // the centerpiece; the strip here just gives the top-
+                    // level lifecycle ratios at a glance.
+                    var fmt    = function(v) { return (v != null && Number(v) !== 0) ? _jiqFmt(v) : '—'; };
+                    var pct1   = function(v) { return _jiqPct(v, 1); };
+                    var pctSub = function(rawPct, decimals, prefix, suffix) {
+                        var s = _jiqPct(rawPct, decimals);
+                        if (s === '—') return '';
+                        return (prefix || '') + s + (suffix || '');
+                    };
+                    var subs      = kpis.subscribers_active_window;
+                    var newSubs   = kpis.new_signups;
+                    var churned   = kpis.churned;
+                    var netGrowth = (kpis.net_growth != null) ? kpis.net_growth
+                                       : ((newSubs != null && churned != null) ? (newSubs - churned) : null);
+                    var churnRate = kpis.churn_rate_annualized_pct;
+                    var arpu      = kpis.avg_arpu_monthly_usd;
+                    var tenure    = kpis.avg_tenure_at_churn_months;
+                    var atRisk    = kpis.at_risk_30d_count;
+                    var react180  = kpis.reactivated_within_180d_pct;
+                    var boom90    = kpis.boomerang_within_90d_pct;
+                    var atRiskPct = (subs && atRisk) ? (atRisk / subs * 100) : null;
+                    var netGrowthSign = (netGrowth != null && netGrowth >= 0) ? '+' : '';
+                    k = [
+                        ['Active subscribers (window)',
+                            fmt(subs),
+                            'US Paramount+ subs with any activity in window'],
+                        ['New signups',
+                            fmt(newSubs),
+                            pctSub(subs ? (newSubs / subs * 100) : null, 1, '', ' of active subs')],
+                        ['Churned',
+                            fmt(churned),
+                            pctSub(subs ? (churned / subs * 100) : null, 1, '', ' of active subs'),
+                            'amber'],
+                        ['Net subscriber growth',
+                            (netGrowth != null && Number(netGrowth) !== 0)
+                                ? (netGrowthSign + _jiqFmt(netGrowth))
+                                : '—',
+                            'new signups − cancels',
+                            (netGrowth != null && netGrowth >= 0) ? 'lime' : 'amber'],
+                        ['Annualized churn rate',
+                            (churnRate != null ? churnRate.toFixed(1) + '%' : '—'),
+                            (tenure != null ? 'avg tenure at churn ' + tenure.toFixed(1) + ' mo' : ''),
+                            'amber'],
+                        ['Avg ARPU',
+                            (arpu != null ? '$' + arpu.toFixed(2) : '—'),
+                            'per subscriber / month'],
+                        ['At-risk subs (30d)',
+                            fmt(atRisk),
+                            pctSub(atRiskPct, 1, '', ' of active subs · ≥1 churn-intent signal'),
+                            'magenta'],
+                        ['Reactivation (180d)',
+                            (react180 != null ? react180.toFixed(1) + '%' : '—'),
+                            (boom90 != null ? boom90.toFixed(1) + '% boomerang within 90d' : ''),
+                            'cyan'],
+                    ];
                 } else if (targetType === 'banking_research'
                            || (meta.category || '').toLowerCase() === 'banking_research') {
                     // Banking-research category run — researchers + new-
@@ -41438,6 +41570,19 @@
                     d.cross_show_overlap
                     || ((fullRun || {}).modeled_view || {}).cross_show_overlap
                     || (fullRun || {}).cross_show_overlap
+                );
+            }
+
+            // ---- Subscriber Lifecycle (interactive platform-lifecycle card)
+            //      For target_type='subscriber_lifecycle' builds. Renders
+            //      cohort tabs + 6 collapsible stages (acquisition →
+            //      engagement → at-risk → churn → post-churn → win-back).
+            //      Auto-hides when the block is missing.
+            if (typeof renderJourneyIqSubscriberLifecycle === 'function') {
+                renderJourneyIqSubscriberLifecycle(
+                    d.subscriber_lifecycle
+                    || ((fullRun || {}).modeled_view || {}).subscriber_lifecycle
+                    || (fullRun || {}).subscriber_lifecycle
                 );
             }
 
@@ -46961,6 +47106,597 @@
             if (/hulu/i.test(n))         return 'Hulu';
             if (/pop culture|^pcj/i.test(n)) return 'PCJ';
             return n.replace(/\s*\([^)]*\)\s*$/, '');
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // SUBSCRIBER LIFECYCLE renderer — interactive cohort-cuttable
+        // platform-lifecycle card. Drives:
+        //   - cohort selector tabs (top)
+        //   - cohort topline tile strip + tagline
+        //   - 6 collapsible stage cards (acquisition → win-back)
+        //   - per-stage cohort-aware inner panels
+        //   - monthly trend strip
+        // State lives on window._jiqSubLifecycleState so cohort-tab
+        // clicks re-render just the per-cohort pieces (tabs + summary
+        // + tagline + stages) without rebuilding the trend strip.
+        // ──────────────────────────────────────────────────────────────
+        window._jiqSubLifecycleState = window._jiqSubLifecycleState || { cohortId: 'all', data: null };
+
+        function renderJourneyIqSubscriberLifecycle(lc) {
+            var card = document.getElementById('jiqSubLifecycleCard');
+            if (!card) return;
+            if (!lc || !lc.cohorts || !lc.cohorts.length || !lc.stages || !lc.stages.length) {
+                card.style.display = 'none';
+                return;
+            }
+            card.style.display = '';
+
+            window._jiqSubLifecycleState.data     = lc;
+            window._jiqSubLifecycleState.cohortId = lc.default_cohort_id || (lc.cohorts[0] || {}).id || 'all';
+
+            var titleEl = document.getElementById('jiqSubLifecycleTitle');
+            if (titleEl) titleEl.textContent = '🔄 ' + (lc.title || 'Subscriber Lifecycle Journey');
+            var subEl = document.getElementById('jiqSubLifecycleSubtitle');
+            if (subEl) subEl.textContent = lc.subtitle || '';
+            var metaEl = document.getElementById('jiqSubLifecycleMeta');
+            if (metaEl) {
+                var w = lc.window || {};
+                metaEl.textContent = (w.start && w.end)
+                    ? (w.start + ' → ' + w.end + (lc.platform ? '  ·  ' + lc.platform : ''))
+                    : (lc.platform || '');
+            }
+
+            _jiqSLRenderTabs();
+            _jiqSLRenderActiveCohort();
+            _jiqSLRenderTrend(lc.monthly_trends || []);
+            _jiqSLWireGlobalControls();
+        }
+
+        function _jiqSLRenderTabs() {
+            var lc     = (window._jiqSubLifecycleState || {}).data;
+            var active = (window._jiqSubLifecycleState || {}).cohortId;
+            var el     = document.getElementById('jiqSubLifecycleCohortTabs');
+            if (!lc || !el) return;
+            el.innerHTML = (lc.cohorts || []).map(function(c) {
+                var isActive = (c.id === active);
+                var bg = isActive ? (c.color + '22') : 'rgba(255,255,255,0.03)';
+                var bd = isActive ? c.color : 'rgba(255,255,255,0.12)';
+                var fg = isActive ? c.color : 'var(--text-secondary)';
+                var fw = isActive ? '600' : '500';
+                return '<button data-jiqsl-cohort="' + _jiqEsc(c.id) + '" '
+                     + 'style="padding:0.45rem 0.85rem; border-radius:999px; cursor:pointer; '
+                     + 'border:1px solid ' + bd + '; background:' + bg + '; color:' + fg + '; '
+                     + 'font-size:0.78rem; font-weight:' + fw + '; transition:all 0.15s;">'
+                     + (c.icon ? (c.icon + ' ') : '') + _jiqEsc(c.label)
+                     + '</button>';
+            }).join('');
+            el.querySelectorAll('button[data-jiqsl-cohort]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var cid = btn.getAttribute('data-jiqsl-cohort');
+                    if (!cid || cid === window._jiqSubLifecycleState.cohortId) return;
+                    window._jiqSubLifecycleState.cohortId = cid;
+                    _jiqSLRenderTabs();
+                    _jiqSLRenderActiveCohort();
+                });
+            });
+        }
+
+        function _jiqSLRenderActiveCohort() {
+            var lc     = (window._jiqSubLifecycleState || {}).data;
+            var cid    = (window._jiqSubLifecycleState || {}).cohortId;
+            if (!lc) return;
+            var cohort = (lc.cohorts || []).find(function(c) { return c.id === cid; }) || {};
+            var color  = cohort.color || '#a78bfa';
+            var totals = ((lc.cohort_totals || {})[cid]) || {};
+
+            // Tagline
+            var tagEl = document.getElementById('jiqSubLifecycleCohortTagline');
+            if (tagEl) {
+                tagEl.style.color = color;
+                tagEl.textContent = cohort.tagline || '';
+            }
+
+            // Summary tiles
+            var summEl = document.getElementById('jiqSubLifecycleCohortSummary');
+            if (summEl) {
+                var arpu    = totals.avg_arpu_monthly_usd;
+                var tiles = [
+                    ['Active subs',         _jiqFmt(totals.subscribers_active_window),                 '365-day window'],
+                    ['New signups',         _jiqFmt(totals.new_signups),                               'in window'],
+                    ['Churned',             _jiqFmt(totals.churned),                                   'in window'],
+                    ['Annualized churn',    (totals.churn_rate_annualized_pct != null ? totals.churn_rate_annualized_pct.toFixed(1) + '%' : '—'),  'rolling'],
+                    ['Avg tenure @ churn',  (totals.avg_tenure_at_churn_months   != null ? totals.avg_tenure_at_churn_months.toFixed(1) + ' mo' : '—'),  ''],
+                    ['Avg ARPU',            (arpu != null ? ('$' + arpu.toFixed(2)) : '—'),            '/ month'],
+                    ['At-risk (30d)',       _jiqFmt(totals.at_risk_30d_count),                         '≥1 churn-intent signal'],
+                    ['Reactivation (180d)', (totals.reactivated_within_180d_pct != null ? totals.reactivated_within_180d_pct.toFixed(1) + '%' : '—'), 'come back within 6mo'],
+                ];
+                summEl.innerHTML = tiles.map(function(t) {
+                    return '<div style="background:rgba(255,255,255,0.03); padding:0.55rem 0.7rem; '
+                         + 'border-radius:8px; border:1px solid rgba(255,255,255,0.06);">'
+                         + '<div style="font-size:0.6rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.05em;">'
+                         + _jiqEsc(t[0]) + '</div>'
+                         + '<div style="font-size:1.05rem; font-weight:600; color:' + color + '; margin-top:0.18rem;">'
+                         + _jiqEsc(t[1]) + '</div>'
+                         + (t[2] ? '<div style="font-size:0.62rem; opacity:0.55; margin-top:0.1rem;">'
+                                 + _jiqEsc(t[2]) + '</div>' : '')
+                         + '</div>';
+                }).join('');
+            }
+
+            // Stages
+            var stagesEl = document.getElementById('jiqSubLifecycleStages');
+            if (stagesEl) {
+                stagesEl.innerHTML = (lc.stages || []).map(function(stage) {
+                    return _jiqSLRenderStage(stage, cid, cohort);
+                }).join('');
+            }
+        }
+
+        function _jiqSLWireGlobalControls() {
+            var expandBtn   = document.getElementById('jiqSubLifecycleExpandAll');
+            var collapseBtn = document.getElementById('jiqSubLifecycleCollapseAll');
+            var container   = document.getElementById('jiqSubLifecycleStages');
+            if (expandBtn && !expandBtn.dataset.jiqslWired) {
+                expandBtn.dataset.jiqslWired = '1';
+                expandBtn.addEventListener('click', function() {
+                    if (!container) return;
+                    container.querySelectorAll('details.jiq-sl-stage').forEach(function(d) { d.open = true; });
+                });
+            }
+            if (collapseBtn && !collapseBtn.dataset.jiqslWired) {
+                collapseBtn.dataset.jiqslWired = '1';
+                collapseBtn.addEventListener('click', function() {
+                    if (!container) return;
+                    container.querySelectorAll('details.jiq-sl-stage').forEach(function(d) { d.open = false; });
+                });
+            }
+        }
+
+        function _jiqSLRenderStage(stage, cohortId, cohort) {
+            var c = (stage.cohorts || {})[cohortId] || {};
+            var color = cohort.color || '#a78bfa';
+            var summary = _jiqSLStageSummary(stage, c, cohortId, cohort);
+            var inner = '';
+            if      (stage.id === 'acquisition') inner = _jiqSLRenderAcquisition(c, color);
+            else if (stage.id === 'engagement')  inner = _jiqSLRenderEngagement(c, color);
+            else if (stage.id === 'at_risk')     inner = _jiqSLRenderAtRisk(stage, cohortId, c, color);
+            else if (stage.id === 'churn')       inner = _jiqSLRenderChurn(c, color);
+            else if (stage.id === 'post_churn')  inner = _jiqSLRenderPostChurn(c, color);
+            else if (stage.id === 'winback')     inner = _jiqSLRenderWinback(c, color);
+            return ''
+                + '<details class="jiq-sl-stage" style="margin-bottom:0.55rem; background:rgba(255,255,255,0.02); '
+                +   'border:1px solid rgba(255,255,255,0.08); border-left:3px solid ' + color
+                +   '; border-radius:8px; padding:0.6rem 0.8rem;">'
+                +   '<summary style="cursor:pointer; list-style:none; display:flex; align-items:center; gap:0.7rem; outline:none;">'
+                +     '<span style="display:inline-flex; min-width:1.9rem; width:1.9rem; height:1.9rem; border-radius:50%; '
+                +        'background:' + color + '22; align-items:center; justify-content:center; font-size:0.95rem;">'
+                +        (stage.icon || '•') + '</span>'
+                +     '<div style="flex:1; min-width:0;">'
+                +       '<div style="font-size:0.58rem; opacity:0.55; text-transform:uppercase; letter-spacing:0.06em;">'
+                +         'Stage ' + (stage.order || '') + '</div>'
+                +       '<div style="font-size:0.95rem; font-weight:600; color:' + color + ';">'
+                +         _jiqEsc(stage.title || stage.id) + '</div>'
+                +       '<div style="font-size:0.78rem; opacity:0.78; margin-top:0.15rem;">' + summary + '</div>'
+                +     '</div>'
+                +     '<span style="opacity:0.5; font-size:0.85rem;">▾</span>'
+                +   '</summary>'
+                +   '<div style="margin-top:0.85rem; padding-top:0.7rem; '
+                +        'border-top:1px dashed rgba(255,255,255,0.06);">' + inner + '</div>'
+                + '</details>';
+        }
+
+        function _jiqSLStageSummary(stage, c, cohortId, cohort) {
+            if (stage.id === 'acquisition') {
+                var t  = c.top_trigger || '—';
+                var tp = (c.top_trigger_pct != null) ? c.top_trigger_pct.toFixed(1) + '%' : '—';
+                return _jiqFmt(c.new_signups) + ' new signups · top trigger: <strong>'
+                    + _jiqEsc(t) + '</strong> (' + tp + ')';
+            }
+            if (stage.id === 'engagement') {
+                var m = c.metrics || {};
+                return 'avg <strong>' + (m.titles_started_30d_avg || 0).toFixed(1)
+                    + ' titles started</strong> · '
+                    + (m.minutes_watched_30d_avg || 0).toFixed(0) + ' min watched · '
+                    + (m.logins_per_week_avg || 0).toFixed(1) + ' logins/wk · per sub in first 30d';
+            }
+            if (stage.id === 'at_risk') {
+                var ct = (stage.cohorts || {})[cohortId] || {};
+                return _jiqFmt(ct.at_risk_count)
+                    + ' subs showing 1+ churn-intent signal in 30d ('
+                    + (ct.at_risk_pct != null ? ct.at_risk_pct.toFixed(1) + '%' : '—')
+                    + ' of cohort) · <strong>click to drill into each signal</strong>';
+            }
+            if (stage.id === 'churn') {
+                var tm = c.timing || {};
+                return _jiqFmt(c.churned) + ' cancels · median '
+                    + (tm.median_days_first_signal_to_cancel != null ? tm.median_days_first_signal_to_cancel : '—')
+                    + 'd from first signal · tenure '
+                    + (c.avg_tenure_months != null ? c.avg_tenure_months.toFixed(1) : '—')
+                    + ' mo';
+            }
+            if (stage.id === 'post_churn') {
+                var dests = c.destinations || [];
+                var top   = dests[0] || {};
+                var boom  = (c.boomerang_within_90d_pct != null) ? c.boomerang_within_90d_pct.toFixed(1) + '%' : '—';
+                return 'top destination: <strong>' + _jiqEsc(top.label || '—') + '</strong> ('
+                     + (top.pct != null ? top.pct.toFixed(1) + '%' : '—')
+                     + ') · 90-day boomerang back to P+: ' + boom;
+            }
+            if (stage.id === 'winback') {
+                var m = c.metrics || {};
+                return (m.reactivated_within_180d_pct != null ? m.reactivated_within_180d_pct.toFixed(1) + '%' : '—')
+                     + ' reactivate within 180d · '
+                     + (m.avg_days_to_reactivate != null ? m.avg_days_to_reactivate + 'd' : '—')
+                     + ' avg time to return';
+            }
+            return '';
+        }
+
+        // ── Stage 1: Acquisition ───────────────────────────────────
+        function _jiqSLRenderAcquisition(c, color) {
+            var triggers = c.top_triggers || [];
+            var channels = c.channels || [];
+            var tier     = c.tier_mix || {};
+            var triggerRows = triggers.map(function(t) {
+                var bar = Math.min(100, (t.pct || 0) * 2.4);
+                return '<tr>'
+                     + '<td style="padding:0.3rem 0.5rem 0.3rem 0; font-size:0.78rem;">' + _jiqEsc(t.label) + '</td>'
+                     + '<td style="padding:0.3rem 0.5rem; font-size:0.78rem; text-align:right; white-space:nowrap; color:' + color + '; font-weight:600;">'
+                     + (t.pct != null ? t.pct.toFixed(1) + '%' : '—') + '</td>'
+                     + '<td style="padding:0.3rem 0; width:42%;">'
+                     +   '<div style="height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">'
+                     +     '<div style="height:100%; width:' + bar + '%; background:' + color + ';"></div>'
+                     +   '</div></td>'
+                     + '<td style="padding:0.3rem 0 0.3rem 0.5rem; font-size:0.7rem; opacity:0.6; text-align:right; white-space:nowrap;">'
+                     + (t.avg_days_aware_to_signup != null ? t.avg_days_aware_to_signup + 'd to signup' : '') + '</td>'
+                     + '</tr>';
+            }).join('');
+            var channelRows = channels.map(function(ch) {
+                return '<tr>'
+                     + '<td style="padding:0.25rem 0.5rem 0.25rem 0; font-size:0.76rem;">' + _jiqEsc(ch.channel) + '</td>'
+                     + '<td style="padding:0.25rem 0; font-size:0.76rem; text-align:right; color:' + color + '; font-weight:600;">'
+                     + (ch.pct != null ? ch.pct.toFixed(1) + '%' : '—') + '</td>'
+                     + '</tr>';
+            }).join('');
+            var tierBars = ''
+                + _jiqSLTierBar('Essential (ad-tier)', tier.essential_pct, '#22c55e')
+                + _jiqSLTierBar('Premium + Showtime',  tier.premium_pct,   '#a78bfa')
+                + _jiqSLTierBar('Bundled (partner)',   tier.bundled_pct,   '#06b6d4');
+
+            return ''
+                + '<div style="display:grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap:1rem;">'
+                +   '<div>'
+                +     '<div style="font-size:0.7rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem;">Top acquisition triggers</div>'
+                +     '<table style="width:100%; border-collapse:collapse;">' + triggerRows + '</table>'
+                +   '</div>'
+                +   '<div>'
+                +     '<div style="font-size:0.7rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem;">Tier mix at signup</div>'
+                +     '<div style="margin-bottom:0.85rem;">' + tierBars + '</div>'
+                +     '<div style="font-size:0.7rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem;">Attribution by channel</div>'
+                +     '<table style="width:100%; border-collapse:collapse;">' + channelRows + '</table>'
+                +   '</div>'
+                + '</div>';
+        }
+        function _jiqSLTierBar(label, pct, c) {
+            var v = (pct != null ? pct.toFixed(1) + '%' : '—');
+            var w = Math.min(100, pct || 0);
+            return '<div style="margin-bottom:0.45rem;">'
+                 + '<div style="display:flex; justify-content:space-between; font-size:0.74rem; margin-bottom:0.15rem;">'
+                 +   '<span>' + _jiqEsc(label) + '</span>'
+                 +   '<span style="color:' + c + '; font-weight:600;">' + v + '</span>'
+                 + '</div>'
+                 + '<div style="height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">'
+                 +   '<div style="height:100%; width:' + w + '%; background:' + c + ';"></div>'
+                 + '</div></div>';
+        }
+
+        // ── Stage 2: Engagement ────────────────────────────────────
+        function _jiqSLRenderEngagement(c, color) {
+            var m  = c.metrics || {};
+            var tc = c.top_content || [];
+            var mTiles = [
+                ['Titles started / 30d',  (m.titles_started_30d_avg  || 0).toFixed(1)],
+                ['Titles finished / 30d', (m.titles_finished_30d_avg || 0).toFixed(1)],
+                ['Minutes watched / 30d', (m.minutes_watched_30d_avg || 0).toFixed(0)],
+                ['Subs with ≥3 titles',   (m.pct_with_3plus_titles_30d != null ? m.pct_with_3plus_titles_30d.toFixed(1) + '%' : '—')],
+                ['Cross-genre subs',      (m.pct_cross_genre_30d != null ? m.pct_cross_genre_30d.toFixed(1) + '%' : '—')],
+                ['Logins / week',         (m.logins_per_week_avg || 0).toFixed(1)],
+            ];
+            var tilesHtml = mTiles.map(function(t) {
+                return '<div style="background:rgba(255,255,255,0.03); padding:0.45rem 0.6rem; border-radius:6px;">'
+                     + '<div style="font-size:0.62rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.04em;">' + _jiqEsc(t[0]) + '</div>'
+                     + '<div style="font-size:0.95rem; font-weight:600; color:' + color + ';">' + _jiqEsc(t[1]) + '</div>'
+                     + '</div>';
+            }).join('');
+            var contentRows = tc.map(function(t) {
+                var w = Math.min(100, (t.reach_pct || 0));
+                return '<tr>'
+                     + '<td style="padding:0.25rem 0.5rem 0.25rem 0; font-size:0.78rem;">' + _jiqEsc(t.title) + '</td>'
+                     + '<td style="padding:0.25rem 0.5rem; font-size:0.78rem; text-align:right; color:' + color + '; font-weight:600;">'
+                     + (t.reach_pct != null ? t.reach_pct.toFixed(1) + '%' : '—') + '</td>'
+                     + '<td style="padding:0.25rem 0;">'
+                     +   '<div style="height:5px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">'
+                     +     '<div style="height:100%; width:' + w + '%; background:' + color + '; opacity:0.7;"></div>'
+                     +   '</div></td>'
+                     + '</tr>';
+            }).join('');
+            return ''
+                + '<div style="font-size:0.7rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem;">First-30-day behavior</div>'
+                + '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:0.45rem; margin-bottom:0.85rem;">' + tilesHtml + '</div>'
+                + '<div style="font-size:0.7rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem;">Top content consumed in first 30 days (cohort reach)</div>'
+                + '<table style="width:100%; border-collapse:collapse;">' + contentRows + '</table>';
+        }
+
+        // ── Stage 3: At-Risk Signals ───────────────────────────────
+        function _jiqSLRenderAtRisk(stage, cohortId, ct, color) {
+            var signals = stage.signals || [];
+            var rows = signals.map(function(s) {
+                var sc = (s.cohorts || {})[cohortId] || {};
+                var liftColor = '#f87171';
+                if (sc.churn_lift_x != null) {
+                    if (sc.churn_lift_x >= 9)      liftColor = '#dc2626';
+                    else if (sc.churn_lift_x >= 6) liftColor = '#f59e0b';
+                    else if (sc.churn_lift_x >= 4) liftColor = '#fbbf24';
+                    else                            liftColor = '#a3a3a3';
+                }
+                var sharePct = (sc.share_pct != null) ? sc.share_pct.toFixed(1) + '%' : '—';
+                var liftTxt  = (sc.churn_lift_x != null) ? sc.churn_lift_x.toFixed(1) + 'x' : '—';
+                var leadTxt  = (sc.leadtime_days != null) ? sc.leadtime_days + 'd' : '—';
+                var note     = sc.note || '';
+                var desc     = s.desc || '';
+                var bar      = Math.min(100, (sc.churn_lift_x || 0) * 7);
+                return ''
+                    + '<details class="jiq-sl-signal" style="background:rgba(255,255,255,0.025); '
+                    +    'border:1px solid rgba(255,255,255,0.06); border-left:3px solid ' + liftColor
+                    +    '; border-radius:6px; margin-bottom:0.4rem; padding:0.5rem 0.7rem;">'
+                    +   '<summary style="cursor:pointer; list-style:none; display:flex; align-items:center; gap:0.65rem; outline:none;">'
+                    +     '<span style="font-size:1.1rem;">' + (s.icon || '•') + '</span>'
+                    +     '<div style="flex:1; min-width:0;">'
+                    +       '<div style="font-size:0.84rem; font-weight:600;">' + _jiqEsc(s.label) + '</div>'
+                    +       '<div style="height:4px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden; margin-top:0.3rem;">'
+                    +         '<div style="height:100%; width:' + bar + '%; background:' + liftColor + ';"></div>'
+                    +       '</div>'
+                    +     '</div>'
+                    +     '<div style="display:flex; gap:0.85rem; align-items:center; white-space:nowrap;">'
+                    +       '<div style="text-align:right;">'
+                    +         '<div style="font-size:0.58rem; opacity:0.55; text-transform:uppercase; letter-spacing:0.05em;">share</div>'
+                    +         '<div style="font-size:0.85rem; font-weight:600;">' + sharePct + '</div>'
+                    +       '</div>'
+                    +       '<div style="text-align:right;">'
+                    +         '<div style="font-size:0.58rem; opacity:0.55; text-transform:uppercase; letter-spacing:0.05em;">churn lift</div>'
+                    +         '<div style="font-size:0.95rem; font-weight:700; color:' + liftColor + ';">' + liftTxt + '</div>'
+                    +       '</div>'
+                    +       '<div style="text-align:right;">'
+                    +         '<div style="font-size:0.58rem; opacity:0.55; text-transform:uppercase; letter-spacing:0.05em;">lead-time</div>'
+                    +         '<div style="font-size:0.85rem; font-weight:600;">' + leadTxt + '</div>'
+                    +       '</div>'
+                    +     '</div>'
+                    +   '</summary>'
+                    +   '<div style="margin-top:0.55rem; padding-top:0.5rem; border-top:1px dashed rgba(255,255,255,0.06); font-size:0.74rem; line-height:1.45;">'
+                    +     (desc ? '<div style="opacity:0.78; margin-bottom:0.35rem;">' + _jiqEsc(desc) + '</div>' : '')
+                    +     (note ? '<div style="color:' + liftColor + '; opacity:0.92;">→ ' + _jiqEsc(note) + '</div>' : '')
+                    +   '</div>'
+                    + '</details>';
+            }).join('');
+            var legend = ''
+                + '<div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center; font-size:0.66rem; opacity:0.7; margin-bottom:0.65rem;">'
+                +   '<span><strong>share</strong> = % of selected cohort showing the signal in 30d</span>'
+                +   '<span>·</span>'
+                +   '<span><strong>churn lift</strong> = multiplier on 30d-forward cancel probability vs. cohort baseline</span>'
+                +   '<span>·</span>'
+                +   '<span><strong>lead-time</strong> = median days from first occurrence to cancel</span>'
+                + '</div>';
+            var desc = (stage.desc || '');
+            return ''
+                + (desc ? '<div style="font-size:0.78rem; opacity:0.78; margin-bottom:0.55rem;">' + _jiqEsc(desc) + '</div>' : '')
+                + legend
+                + '<div>' + rows + '</div>';
+        }
+
+        // ── Stage 4: Churn ─────────────────────────────────────────
+        function _jiqSLRenderChurn(c, color) {
+            var reasons   = c.stated_reasons || [];
+            var channels  = c.cancel_channels || [];
+            var timing    = c.timing || {};
+            var dow       = c.day_of_week_distribution || {};
+            var reasonRows = reasons.map(function(r) {
+                var w = Math.min(100, (r.pct || 0) * 2);
+                return '<tr>'
+                     + '<td style="padding:0.25rem 0.5rem 0.25rem 0; font-size:0.78rem;">' + _jiqEsc(r.reason) + '</td>'
+                     + '<td style="padding:0.25rem 0.5rem; font-size:0.78rem; text-align:right; color:' + color + '; font-weight:600; white-space:nowrap;">'
+                     + (r.pct != null ? r.pct.toFixed(1) + '%' : '—') + '</td>'
+                     + '<td style="padding:0.25rem 0; width:38%;">'
+                     +   '<div style="height:5px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">'
+                     +     '<div style="height:100%; width:' + w + '%; background:' + color + ';"></div>'
+                     +   '</div></td>'
+                     + '</tr>';
+            }).join('');
+            var chanRows = channels.map(function(ch) {
+                return '<tr>'
+                     + '<td style="padding:0.25rem 0.5rem 0.25rem 0; font-size:0.76rem;">' + _jiqEsc(ch.channel) + '</td>'
+                     + '<td style="padding:0.25rem 0; font-size:0.76rem; text-align:right; color:' + color + '; font-weight:600;">'
+                     + (ch.pct != null ? ch.pct.toFixed(1) + '%' : '—') + '</td>'
+                     + '</tr>';
+            }).join('');
+            var maxDow = Math.max.apply(null, Object.keys(dow).map(function(k) { return dow[k] || 0; }).concat([1]));
+            var dowOrder = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+            var dowBars = dowOrder.map(function(d) {
+                var v = dow[d] || 0;
+                var h = Math.max(8, (v / maxDow) * 60);
+                return '<div style="text-align:center; flex:1;">'
+                     + '<div style="font-size:0.65rem; color:' + color + '; font-weight:600; margin-bottom:0.2rem;">' + v.toFixed(1) + '%</div>'
+                     + '<div style="height:' + h + 'px; background:' + color + '88; border-radius:3px 3px 0 0; margin: 0 0.15rem;"></div>'
+                     + '<div style="font-size:0.62rem; opacity:0.65; margin-top:0.2rem;">' + d + '</div>'
+                     + '</div>';
+            }).join('');
+            var timingTiles = ''
+                + '<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:0.45rem; margin-bottom:0.85rem;">'
+                +   _jiqSLChurnTile('Median lead-time', (timing.median_days_first_signal_to_cancel != null ? timing.median_days_first_signal_to_cancel + 'd' : '—'), 'first signal → cancel', color)
+                +   _jiqSLChurnTile('Cancel within 7d of signal', (timing.pct_cancel_within_7d_of_signal != null ? timing.pct_cancel_within_7d_of_signal.toFixed(1) + '%' : '—'), 'fast-fuse subs', color)
+                +   _jiqSLChurnTile('Cancel within 30d of signal', (timing.pct_cancel_within_30d != null ? timing.pct_cancel_within_30d.toFixed(1) + '%' : '—'), 'monthly cancel window', color)
+                + '</div>';
+            return ''
+                + timingTiles
+                + '<div style="display:grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap:1rem;">'
+                +   '<div>'
+                +     '<div style="font-size:0.7rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem;">Stated reason at cancel</div>'
+                +     '<table style="width:100%; border-collapse:collapse;">' + reasonRows + '</table>'
+                +   '</div>'
+                +   '<div>'
+                +     '<div style="font-size:0.7rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem;">Cancel channel</div>'
+                +     '<table style="width:100%; border-collapse:collapse; margin-bottom:0.85rem;">' + chanRows + '</table>'
+                +     '<div style="font-size:0.7rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem;">Day-of-week of cancel</div>'
+                +     '<div style="display:flex; align-items:flex-end; gap:0.15rem; height:96px; padding-top:0.5rem;">' + dowBars + '</div>'
+                +   '</div>'
+                + '</div>';
+        }
+        function _jiqSLChurnTile(label, value, sub, color) {
+            return '<div style="background:rgba(255,255,255,0.03); padding:0.5rem 0.7rem; border-radius:6px;">'
+                 + '<div style="font-size:0.6rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.04em;">' + _jiqEsc(label) + '</div>'
+                 + '<div style="font-size:1.05rem; font-weight:700; color:' + color + '; margin-top:0.15rem;">' + _jiqEsc(value) + '</div>'
+                 + '<div style="font-size:0.62rem; opacity:0.55; margin-top:0.1rem;">' + _jiqEsc(sub) + '</div>'
+                 + '</div>';
+        }
+
+        // ── Stage 5: Post-Churn Destinations ───────────────────────
+        function _jiqSLRenderPostChurn(c, color) {
+            var dests = c.destinations || [];
+            var events = c.surrounding_events || [];
+            var typeColor = function(t) {
+                if (t === 'svod')      return '#a78bfa';
+                if (t === 'fast')      return '#22c55e';
+                if (t === 'video')     return '#ef4444';
+                if (t === 'boomerang') return '#06b6d4';
+                if (t === 'dark')      return '#737373';
+                return '#a3a3a3';
+            };
+            var typeLabel = function(t) {
+                if (t === 'svod')      return 'SVOD';
+                if (t === 'fast')      return 'FAST';
+                if (t === 'video')     return 'VIDEO';
+                if (t === 'boomerang') return 'BOOMERANG';
+                if (t === 'dark')      return 'NO REPLACEMENT';
+                return '';
+            };
+            var destRows = dests.map(function(d) {
+                var c2 = typeColor(d.type);
+                var w  = Math.min(100, (d.pct || 0) * 2.2);
+                return '<tr>'
+                     + '<td style="padding:0.3rem 0.5rem 0.3rem 0; font-size:0.78rem;">'
+                     +   '<span style="display:inline-block; min-width:88px; font-size:0.58rem; padding:0.1rem 0.35rem; border-radius:3px; '
+                     +     'background:' + c2 + '22; color:' + c2 + '; font-weight:600; text-align:center; margin-right:0.5rem;">'
+                     +     typeLabel(d.type) + '</span>'
+                     +   _jiqEsc(d.label)
+                     + '</td>'
+                     + '<td style="padding:0.3rem 0.5rem; font-size:0.78rem; text-align:right; color:' + c2 + '; font-weight:700; white-space:nowrap;">'
+                     + (d.pct != null ? d.pct.toFixed(1) + '%' : '—') + '</td>'
+                     + '<td style="padding:0.3rem 0; width:35%;">'
+                     +   '<div style="height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">'
+                     +     '<div style="height:100%; width:' + w + '%; background:' + c2 + ';"></div>'
+                     +   '</div></td>'
+                     + '</tr>';
+            }).join('');
+            var eventRows = events.map(function(e) {
+                var w = Math.min(100, (e.pct || 0) * 1.8);
+                return '<tr>'
+                     + '<td style="padding:0.25rem 0.5rem 0.25rem 0; font-size:0.76rem;">' + _jiqEsc(e.label) + '</td>'
+                     + '<td style="padding:0.25rem 0.5rem; font-size:0.76rem; text-align:right; color:' + color + '; font-weight:600; white-space:nowrap;">'
+                     + (e.pct != null ? e.pct.toFixed(1) + '%' : '—') + '</td>'
+                     + '<td style="padding:0.25rem 0;">'
+                     +   '<div style="height:5px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">'
+                     +     '<div style="height:100%; width:' + w + '%; background:' + color + '; opacity:0.7;"></div>'
+                     +   '</div></td>'
+                     + '</tr>';
+            }).join('');
+            return ''
+                + '<div style="font-size:0.7rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem;">Where they went next (within 30d of cancel)</div>'
+                + '<table style="width:100%; border-collapse:collapse; margin-bottom:1rem;">' + destRows + '</table>'
+                + '<div style="font-size:0.7rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem;">'
+                +   'Surrounding events (last 7d before cancel) — the "WHY"'
+                + '</div>'
+                + '<div style="font-size:0.7rem; opacity:0.62; margin-bottom:0.45rem;">'
+                +   'Promo-code searches, competitor pricing visits, "is X worth it" queries, and other context captured in the week before cancellation.'
+                + '</div>'
+                + '<table style="width:100%; border-collapse:collapse;">' + eventRows + '</table>';
+        }
+
+        // ── Stage 6: Win-Back ──────────────────────────────────────
+        function _jiqSLRenderWinback(c, color) {
+            var m = c.metrics || {};
+            var triggers = c.triggers || [];
+            var tiles = [
+                ['Within 30 days',  (m.reactivated_within_30d_pct  != null ? m.reactivated_within_30d_pct.toFixed(1)  + '%' : '—')],
+                ['Within 90 days',  (m.reactivated_within_90d_pct  != null ? m.reactivated_within_90d_pct.toFixed(1)  + '%' : '—')],
+                ['Within 180 days', (m.reactivated_within_180d_pct != null ? m.reactivated_within_180d_pct.toFixed(1) + '%' : '—')],
+                ['Within 365 days', (m.reactivated_within_365d_pct != null ? m.reactivated_within_365d_pct.toFixed(1) + '%' : '—')],
+                ['Avg days to return', (m.avg_days_to_reactivate != null ? m.avg_days_to_reactivate + 'd' : '—')],
+                ['ARPU on return',  (m.avg_arpu_at_reactivation_usd != null ? '$' + m.avg_arpu_at_reactivation_usd.toFixed(2) : '—')],
+            ];
+            var tilesHtml = tiles.map(function(t) {
+                return '<div style="background:rgba(255,255,255,0.03); padding:0.5rem 0.65rem; border-radius:6px;">'
+                     + '<div style="font-size:0.6rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.04em;">' + _jiqEsc(t[0]) + '</div>'
+                     + '<div style="font-size:1rem; font-weight:700; color:' + color + '; margin-top:0.18rem;">' + _jiqEsc(t[1]) + '</div>'
+                     + '</div>';
+            }).join('');
+            var triggerRows = triggers.map(function(t) {
+                var w = Math.min(100, (t.pct || 0) * 1.6);
+                return '<tr>'
+                     + '<td style="padding:0.3rem 0.5rem 0.3rem 0; font-size:0.78rem;">' + _jiqEsc(t.trigger) + '</td>'
+                     + '<td style="padding:0.3rem 0.5rem; font-size:0.78rem; text-align:right; color:' + color + '; font-weight:600; white-space:nowrap;">'
+                     + (t.pct != null ? t.pct.toFixed(1) + '%' : '—') + '</td>'
+                     + '<td style="padding:0.3rem 0; width:42%;">'
+                     +   '<div style="height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">'
+                     +     '<div style="height:100%; width:' + w + '%; background:' + color + ';"></div>'
+                     +   '</div></td>'
+                     + '</tr>';
+            }).join('');
+            return ''
+                + '<div style="font-size:0.7rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem;">Reactivation funnel</div>'
+                + '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:0.45rem; margin-bottom:1rem;">' + tilesHtml + '</div>'
+                + '<div style="font-size:0.7rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem;">What triggered the return</div>'
+                + '<table style="width:100%; border-collapse:collapse;">' + triggerRows + '</table>';
+        }
+
+        // ── Monthly trend strip (one view, all cohorts combined) ──
+        function _jiqSLRenderTrend(months) {
+            var el = document.getElementById('jiqSubLifecycleTrend');
+            if (!el) return;
+            if (!months || !months.length) {
+                el.innerHTML = '<div style="opacity:0.6; font-size:0.75rem;">No monthly trend data.</div>';
+                return;
+            }
+            var maxMau   = Math.max.apply(null, months.map(function(m) { return m.mau_millions || 0; }).concat([1]));
+            var maxChurn = Math.max.apply(null, months.map(function(m) { return m.monthly_churn_pct || 0; }).concat([1]));
+            var cells = months.map(function(m) {
+                var mauH   = Math.max(8, (m.mau_millions      / maxMau)   * 70);
+                var churnH = Math.max(4, (m.monthly_churn_pct / maxChurn) * 36);
+                var tip = _jiqEsc(m.month + ' · ' + (m.mau_millions || 0).toFixed(1) + 'M MAU · '
+                                    + (m.monthly_churn_pct || 0).toFixed(2) + '% monthly churn · '
+                                    + (m.new_signups != null ? m.new_signups.toLocaleString() + ' signups · ' : '')
+                                    + (m.churns != null ? m.churns.toLocaleString() + ' cancels' : '')
+                                    + (m.event ? ' — ' + m.event : ''));
+                return '<div style="min-width:78px; flex:0 0 auto; text-align:center;" title="' + tip + '">'
+                     +   '<div style="font-size:0.62rem; color:#f59e0b; font-weight:600; margin-bottom:0.15rem;">'
+                     +     (m.monthly_churn_pct || 0).toFixed(2) + '%</div>'
+                     +   '<div style="height:36px; display:flex; align-items:flex-end; justify-content:center;">'
+                     +     '<div style="height:' + churnH + 'px; width:14px; background:#f59e0b88; border-radius:2px 2px 0 0;"></div>'
+                     +   '</div>'
+                     +   '<div style="height:1px; background:rgba(255,255,255,0.1); margin:0.15rem 0;"></div>'
+                     +   '<div style="height:70px; display:flex; align-items:flex-end; justify-content:center;">'
+                     +     '<div style="height:' + mauH + 'px; width:18px; background:#a78bfa; border-radius:2px 2px 0 0;"></div>'
+                     +   '</div>'
+                     +   '<div style="font-size:0.62rem; color:#a78bfa; font-weight:600; margin-top:0.15rem;">'
+                     +     (m.mau_millions || 0).toFixed(1) + 'M</div>'
+                     +   '<div style="font-size:0.58rem; opacity:0.55; margin-top:0.18rem;">' + _jiqEsc(m.month) + '</div>'
+                     + '</div>';
+            }).join('');
+            el.innerHTML = ''
+                + '<div style="display:flex; gap:0.45rem; align-items:flex-start; padding-bottom:0.4rem; min-width: min-content;">' + cells + '</div>'
+                + '<div style="display:flex; gap:1rem; font-size:0.65rem; opacity:0.7; margin-top:0.4rem;">'
+                +   '<span><span style="display:inline-block; width:10px; height:10px; background:#a78bfa; border-radius:2px; vertical-align:middle; margin-right:0.3rem;"></span>MAU (millions)</span>'
+                +   '<span><span style="display:inline-block; width:10px; height:10px; background:#f59e0b88; border-radius:2px; vertical-align:middle; margin-right:0.3rem;"></span>Monthly churn %</span>'
+                +   '<span style="opacity:0.55;">— hover any month for the key event</span>'
+                + '</div>';
         }
 
         // ---- Touchpoints renderer (table + overlap + touch distribution) ----
