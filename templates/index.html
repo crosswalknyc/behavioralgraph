@@ -25141,11 +25141,6 @@
                         </h4>
                         <div id="jiqBsPodcasts"></div>
                     </div>
-                    <!-- ── Sheridan-universe context: SMALL, explicitly "you already have this" ── -->
-                    <div id="jiqBsSheridanContext"
-                         style="margin-top: 0.7rem; padding: 0.6rem 0.85rem; border-radius: 6px;
-                                background: rgba(168,85,247,0.06); border-left: 3px solid rgba(168,85,247,0.45);
-                                font-size: 0.72rem; line-height: 1.5; color: var(--text-secondary);"></div>
                     <!-- ── Strategic implication ── -->
                     <div id="jiqBsImplication"
                          style="margin-top: 0.9rem; padding: 0.75rem 0.9rem; border-radius: 6px;
@@ -48924,7 +48919,6 @@
             // beyond_sheridan.off_platform_brands payload block.
             var brandsEl  = document.getElementById('jiqAdOppsBrands');
             var podsEl    = document.getElementById('jiqBsPodcasts');
-            var ctxEl     = document.getElementById('jiqBsSheridanContext');
             var implEl    = document.getElementById('jiqBsImplication');
 
             if (titleEl) titleEl.textContent = '🌐 ' + (s.title || "Beyond the Sheridan Universe and Nielsen's 50K Homes (From a 10M Genpop Sample)");
@@ -49040,15 +49034,6 @@
                             : '')
                          + '</div>';
                 }).join('');
-            }
-
-            // ── Sheridan-universe context (kept SMALL) ──
-            if (ctxEl && s.sheridan_context) {
-                var sc = s.sheridan_context;
-                ctxEl.innerHTML = '<strong style="color:' + PUR + ';">📎 Sheridan-universe context:</strong> '
-                                + (sc.pct_with_prior_sheridan_history || 0).toFixed(1) + '% of Landman viewers had prior Sheridan-IP history; '
-                                + (sc.pct_pure_net_new || 0).toFixed(1) + '% (~' + _jiqFmt(sc.count_pure_net_new || 0) + ' accounts) were net-new. '
-                                + _jiqEsc(sc.note || '');
             }
 
             // ── Strategic implication ──
