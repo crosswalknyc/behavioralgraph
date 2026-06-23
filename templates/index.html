@@ -44673,8 +44673,17 @@
             }
         }
         function _jiqCompanionLabelWidth(text) {
-            var t = String(text || '');
-            return Math.max(80, Math.min(190, t.length * 5.4));
+            // For multi-line wrapped labels, width must be based on the
+            // LONGEST individual line, not total character count.
+            // Accepts either a string or a pre-wrapped array of lines.
+            var lines = Array.isArray(text)
+                ? text
+                : String(text || '').split('\n');
+            var longest = 0;
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].length > longest) longest = lines[i].length;
+            }
+            return Math.max(80, Math.min(220, longest * 5.6));
         }
         function _jiqThinCompanionTicks(ticks, xForFn, xMinVal, xMaxVal, minPx, skipZero) {
             minPx = minPx || 62;
@@ -44741,9 +44750,50 @@
             if (maxPct <= 0) maxPct = 1;
 
             function _truncLabel(s) {
-                var t = String(s || '').split('(')[0].trim();
-                if (t.length > 26) t = t.slice(0, 25) + '…';
-                return t;
+                // Strip trailing parenthetical (e.g. "Read recap (Vulture, EW)" → "Read recap")
+                // so the label is the clean noun phrase. NO ellipsis-
+                // truncation any more — long labels wrap onto multiple
+                // lines via _wrapLabel() below; the bubble renderer
+                // emits multi-line <tspan>s so the full label is always
+                // visible.
+                return String(s || '').split('(')[0].trim();
+            }
+            // Greedy word-wrap to at most `maxChars` per line. Keeps up
+            // to MAX_LINES lines; anything beyond that is appended to
+            // the last line with an ellipsis. Returns array of strings.
+            function _wrapLabel(s, maxChars, maxLines) {
+                maxChars = maxChars || 22;
+                maxLines = maxLines || 3;
+                var clean = String(s || '').trim();
+                if (!clean) return [''];
+                var words = clean.split(/\s+/);
+                var lines = [];
+                var current = '';
+                for (var i = 0; i < words.length; i++) {
+                    var w = words[i];
+                    // Word alone is longer than the wrap width — accept
+                    // as its own line (don't hard-break inside a word).
+                    if (w.length > maxChars && !current) {
+                        lines.push(w);
+                        current = '';
+                        continue;
+                    }
+                    var trial = current ? (current + ' ' + w) : w;
+                    if (trial.length > maxChars) {
+                        if (current) lines.push(current);
+                        current = w;
+                    } else {
+                        current = trial;
+                    }
+                    if (lines.length >= maxLines) break;
+                }
+                if (current && lines.length < maxLines) lines.push(current);
+                if (lines.length > maxLines) {
+                    var keep = lines.slice(0, maxLines - 1);
+                    keep.push((lines[maxLines - 1] || '').slice(0, maxChars - 1) + '…');
+                    lines = keep;
+                }
+                return lines.length ? lines : [''];
             }
             function _truncWindow(s) {
                 var t = String(s || '').trim();
@@ -44964,10 +45014,20 @@
             });
 
             // Bubbles + labels (timing text lives in tooltip to avoid subtext collisions)
+            // Long labels wrap onto up to 3 lines via _wrapLabel(); we
+            // emit them as <tspan dy>s so the full label is visible.
+            var LABEL_LINE_HEIGHT = 12;     // px between wrapped label lines
             rows.forEach(function(e) {
                 var labelAbove = (e.cy < axisY);
-                var labelY0 = labelAbove ? (e.cy - e.r - 14) : (e.cy + e.r + 16);
                 var cleanLabel = _truncLabel(e.vertical);
+                var labelLines = _wrapLabel(cleanLabel, 22, 3);
+                // Anchor the FIRST line so the whole block sits the same
+                // distance from the bubble regardless of line count:
+                //   above the bubble → top line is highest
+                //   below the bubble → top line is just under the bubble
+                var labelY0 = labelAbove
+                    ? (e.cy - e.r - 14 - (labelLines.length - 1) * LABEL_LINE_HEIGHT)
+                    : (e.cy + e.r + 16);
 
                 parts.push('<g>'
                      + '<circle cx="' + e.cx + '" cy="' + e.cy + '" r="' + e.r + '" fill="' + e.color + '" opacity="0.92" stroke="#fff" stroke-width="2"/>'
@@ -44976,7 +45036,11 @@
                      + '</g>');
 
                 var labelX = Math.max(padL + 50, Math.min(W - padR - 50, e.cx));
-                parts.push('<text x="' + labelX + '" y="' + labelY0 + '" text-anchor="middle" fill="var(--text-primary)" font-weight="600" font-size="10.5">' + _jiqEsc(cleanLabel) + '</text>');
+                var tspans = labelLines.map(function(line, idx) {
+                    var dy = (idx === 0) ? 0 : LABEL_LINE_HEIGHT;
+                    return '<tspan x="' + labelX + '" dy="' + dy + '">' + _jiqEsc(line) + '</tspan>';
+                }).join('');
+                parts.push('<text x="' + labelX + '" y="' + labelY0 + '" text-anchor="middle" fill="var(--text-primary)" font-weight="600" font-size="10.5">' + tspans + '</text>');
             });
 
             var anchorWord = anchorIsPurchase ? 'purchase' : 'showtime';
