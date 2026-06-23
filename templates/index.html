@@ -46663,8 +46663,19 @@
             if (metaEl && cso.totals) {
                 var t = cso.totals;
                 var metaParts = [];
-                if (t.union_total != null) metaParts.push(_jiqFmt(t.union_total) + ' US adults across all 3 properties');
-                if (t.pcj_net_new_pct != null) metaParts.push(t.pcj_net_new_pct + '% of PCJ is net-new to the IP');
+                var nProps = (cso.shows || []).length;
+                if (t.union_total != null) {
+                    metaParts.push(_jiqFmt(t.union_total) + ' US adults across all '
+                                   + nProps + ' propert' + (nProps === 1 ? 'y' : 'ies'));
+                }
+                // Generic "% of <show> is net-new to the IP" — reads
+                // target_net_new_pct + target_short_name when present, else
+                // falls back to the PCJ-specific fields for back-compat.
+                var netNewPct  = (t.target_net_new_pct != null) ? t.target_net_new_pct : t.pcj_net_new_pct;
+                var netNewName = t.target_short_name || (t.pcj_net_new_pct != null ? 'PCJ' : null);
+                if (netNewPct != null && netNewName) {
+                    metaParts.push(netNewPct + '% of ' + netNewName + ' is net-new to the IP');
+                }
                 metaEl.textContent = metaParts.join(' · ');
             }
 
@@ -46701,10 +46712,13 @@
             var regionsEl = document.getElementById('jiqCrossShowRegions');
             if (regionsEl) regionsEl.innerHTML = _jiqRenderCrossShowRegions(cso);
 
-            // Sony takeaways
+            // Studio takeaways — supports the legacy `sony_takeaways`
+            // field (PCJ build) plus a generic `takeaways` field that
+            // any show can use without re-using Sony branding.
             var takeEl = document.getElementById('jiqCrossShowTakeaways');
             if (takeEl) {
-                takeEl.innerHTML = (cso.sony_takeaways || []).map(function(tk) {
+                var _takeaways = cso.takeaways || cso.sony_takeaways || [];
+                takeEl.innerHTML = _takeaways.map(function(tk) {
                     var tone = tk.tone || 'neutral';
                     var accent = tone === 'positive' ? '#22c55e'
                               : tone === 'negative' ? '#ef4444'
@@ -46912,7 +46926,9 @@
                         +    ' border-radius:8px; border:1px solid ' + c + '55;">'
                         +    _jiqEsc(label) + '</span>';
                 }).join('');
-                var rowAccent = inSet === 'pcj' ? '#a78bfa' : 'transparent';
+                var primaryRegionId = (cso.totals && cso.totals.primary_region_id)
+                                      || 'pcj';
+                var rowAccent = (rg.id === primaryRegionId) ? '#a78bfa' : 'transparent';
                 html += ''
                     + '<tr style="border-bottom:1px solid var(--border-color); '
                     +   (rowAccent !== 'transparent' ? 'background: rgba(168,85,247,0.05);' : '')
