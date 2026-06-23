@@ -26048,6 +26048,209 @@
                     <div id="jiqClusterTabs" style="display: flex; gap: 0.25rem; flex-wrap: wrap;"></div>
                 </div>
 
+                <!-- ════════════════════════════════════════════════════════
+                     CLICKSTREAM-ONLY INSIGHTS — the "your first-party
+                     data can't see this" pitch block. Six cards that
+                     each answer a question the platform's in-app event
+                     log physically cannot:
+
+                       1. 🔭 Off-Platform Discovery Halo
+                          (earned-media flywheel vs net-new accounts)
+                       2. 🎭 Competitive Consideration Set
+                          (competitor PDPs visited 30d before play)
+                       3. 📡 Paid vs. Earned Attribution
+                          (would-have-converted-anyway waste %)
+                       4. 🎬 Moment-Level Second Screen
+                          (per-scene phone behavior 30-180 min after)
+                       5. 🛒 Cultural Ripple
+                          (IRL e-commerce + search categories lifted)
+                       6. 🧬 Net-New Audience Profile
+                          (off-platform footprint of net-new viewers)
+
+                     Each card auto-hides when its payload block is
+                     missing, so this whole section only renders on
+                     runs that ship the clickstream-exclusive insights.
+                ═══════════════════════════════════════════════════════ -->
+                <div class="card" id="jiqClickstreamHeader"
+                     style="padding: 1rem 1.2rem; margin-top: 1.5rem; margin-bottom: 1rem;
+                            display: none;
+                            background: linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(168,85,247,0.06) 100%);
+                            border: 1px solid rgba(59,130,246,0.30);">
+                    <div style="display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap;">
+                        <div style="font-size: 0.62rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+                                    color: rgba(96,165,250,0.9); background: rgba(59,130,246,0.18);
+                                    padding: 3px 9px; border-radius: 4px;">Clickstream-Only Insights</div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary);">
+                            What your first-party data can't see — but our cross-platform clickstream graph can.
+                        </div>
+                    </div>
+                    <h3 style="margin: 0.5rem 0 0.25rem; font-size: 1.05rem;">
+                        Six views of the journey that live OFF your platform
+                    </h3>
+                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.55;">
+                        Discovery on TikTok / YouTube / Reddit before they ever hit your homepage.
+                        Competitor PDP browsing in the 30 days before press-play. The earned-media
+                        overlap your paid-attribution is double-counting. The specific scenes that
+                        drove Google searches and TikTok posts on the household phone.
+                        The Western-wear, country-music, and ranch-listing browsing your show triggered
+                        in the real world. And the off-platform footprint of every account you just
+                        acquired — so you know what to greenlight next.
+                    </div>
+                </div>
+
+                <!-- ─── CARD 1: 🔭 Off-Platform Discovery Halo ─── -->
+                <div class="card" id="jiqHaloCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(96,165,250,0.06) 0%, rgba(96,165,250,0.02) 100%);
+                            border: 1px solid rgba(96,165,250,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqHaloTitle" style="margin: 0;">🔭 Off-Platform Discovery Halo</h3>
+                        <div id="jiqHaloMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqHaloSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqHaloTotals"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.85rem;"></div>
+                    <h4 style="font-size: 0.85rem; margin: 0.3rem 0 0.4rem; opacity: 0.92;">
+                        📈 Weekly earned-media volume vs. P+ net-new accounts
+                    </h4>
+                    <div id="jiqHaloWeekly" style="overflow-x: auto;"></div>
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.4rem; opacity: 0.92;">
+                        💡 What this tells you that your platform data can't
+                    </h4>
+                    <div id="jiqHaloCallouts"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                                gap: 0.6rem;"></div>
+                </div>
+
+                <!-- ─── CARD 2: 🎭 Competitive Consideration Set ─── -->
+                <div class="card" id="jiqCompSetCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(244,114,182,0.06) 0%, rgba(244,114,182,0.02) 100%);
+                            border: 1px solid rgba(244,114,182,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqCompSetTitle" style="margin: 0;">🎭 Competitive Consideration Set</h3>
+                        <div id="jiqCompSetMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqCompSetSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+                                gap: 1rem; align-items: start;">
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                🥊 What "lost" to Landman in the 30d pre-play browse
+                            </h4>
+                            <div id="jiqCompSetLost" style="overflow-x: auto;"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                🤝 Still co-watching alongside Landman
+                            </h4>
+                            <div id="jiqCompSetCoWatch"></div>
+                        </div>
+                    </div>
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.4rem; opacity: 0.92;">
+                        💡 What this tells you that your platform data can't
+                    </h4>
+                    <div id="jiqCompSetCallouts"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                                gap: 0.6rem;"></div>
+                </div>
+
+                <!-- ─── CARD 3: 📡 Paid vs. Earned Attribution Truth ─── -->
+                <div class="card" id="jiqPaidEarnedCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(245,158,11,0.04) 100%);
+                            border: 1px solid rgba(34,197,94,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqPaidEarnedTitle" style="margin: 0;">📡 Paid vs. Earned Attribution — what actually moved the needle</h3>
+                        <div id="jiqPaidEarnedMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqPaidEarnedSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqPaidEarnedTotals"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.85rem;"></div>
+                    <h4 style="font-size: 0.85rem; margin: 0.3rem 0 0.4rem; opacity: 0.92;">
+                        📊 Per-channel truth: reported CPA vs. true incremental CPA
+                    </h4>
+                    <div id="jiqPaidEarnedTable" style="overflow-x: auto;"></div>
+                </div>
+
+                <!-- ─── CARD 4: 🎬 Moment-Level Second-Screen ─── -->
+                <div class="card" id="jiqMomentCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.06) 0%, rgba(244,114,182,0.02) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqMomentTitle" style="margin: 0;">🎬 Moment-Level Second-Screen — what each scene triggered on the phone</h3>
+                        <div id="jiqMomentMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqMomentSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqMomentList"></div>
+                    <div id="jiqMomentVerdict"
+                         style="margin-top: 0.85rem; padding: 0.7rem 0.9rem; border-radius: 6px;
+                                background: rgba(168,85,247,0.07); border-left: 3px solid rgba(168,85,247,0.55);
+                                font-size: 0.78rem; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── CARD 5: 🛒 Cultural Ripple ─── -->
+                <div class="card" id="jiqRippleCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(245,158,11,0.02) 100%);
+                            border: 1px solid rgba(245,158,11,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqRippleTitle" style="margin: 0;">🛒 Cultural Ripple — what the show triggered in the real world</h3>
+                        <div id="jiqRippleMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqRippleSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqRippleList"></div>
+                    <div id="jiqRippleVerdict"
+                         style="margin-top: 0.85rem; padding: 0.7rem 0.9rem; border-radius: 6px;
+                                background: rgba(245,158,11,0.07); border-left: 3px solid rgba(245,158,11,0.55);
+                                font-size: 0.78rem; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── CARD 6: 🧬 Net-New Audience Profile ─── -->
+                <div class="card" id="jiqNetNewCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(91,108,255,0.06) 0%, rgba(168,85,247,0.02) 100%);
+                            border: 1px solid rgba(91,108,255,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNetNewTitle" style="margin: 0;">🧬 Net-New Audience Profile — who you just acquired</h3>
+                        <div id="jiqNetNewMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNetNewSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqNetNewTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.85rem;"></div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                                gap: 1rem; align-items: start;">
+                        <div>
+                            <h4 style="font-size: 0.8rem; margin: 0 0 0.4rem; opacity: 0.9;">📺 Content affinities (off-P+)</h4>
+                            <div id="jiqNetNewContent"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.8rem; margin: 0 0 0.4rem; opacity: 0.9;">🏷️ Brand affinities</h4>
+                            <div id="jiqNetNewBrands"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.8rem; margin: 0 0 0.4rem; opacity: 0.9;">📰 News / podcasts</h4>
+                            <div id="jiqNetNewNews"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.8rem; margin: 0 0 0.4rem; opacity: 0.9;">📱 Other streaming</h4>
+                            <div id="jiqNetNewStreaming"></div>
+                        </div>
+                    </div>
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.4rem; opacity: 0.92;">👤 Who they are (demographics)</h4>
+                    <div id="jiqNetNewDemo"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.85rem;"></div>
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.4rem; opacity: 0.92;">🎯 What to do with this audience</h4>
+                    <div id="jiqNetNewRecs"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                                gap: 0.6rem;"></div>
+                </div>
+
                 <!-- Removed per request: Funnel · Detours · Where Non-Converters Went · Top Inception Keywords
                      (the modeled view doesn't populate them; they were always empty/noise) -->
 
@@ -41609,6 +41812,48 @@
                 );
             }
 
+            // ════════════════════════════════════════════════════════
+            // CLICKSTREAM-ONLY INSIGHTS — the "your first-party data
+            // can't see this" pitch block. Six cards. Each auto-hides
+            // when its payload key is missing, so non-TV-show runs
+            // (banking, mark-rober, subscriber-lifecycle, etc.) stay
+            // clean and don't accidentally surface a Landman-shaped
+            // card with empty data.
+            //
+            // The shared section-header card (jiqClickstreamHeader)
+            // reveals itself the first time any of these six renderers
+            // successfully paints — see _jiqShowClickstreamHeader().
+            // ════════════════════════════════════════════════════════
+            function _pickClickstreamBlock(key) {
+                return d[key]
+                    || ((fullRun || {}).modeled_view || {})[key]
+                    || (fullRun || {})[key];
+            }
+            // Reset the section header on each render so cohort / cut
+            // switches that REMOVE the data also hide the strip.
+            _jiqHdrCardEverShown = false;
+            var _hdr = document.getElementById('jiqClickstreamHeader');
+            if (_hdr) _hdr.style.display = 'none';
+
+            if (typeof renderJourneyIqOffPlatformHalo === 'function') {
+                renderJourneyIqOffPlatformHalo(_pickClickstreamBlock('off_platform_halo'));
+            }
+            if (typeof renderJourneyIqCompetitiveConsideration === 'function') {
+                renderJourneyIqCompetitiveConsideration(_pickClickstreamBlock('competitive_consideration'));
+            }
+            if (typeof renderJourneyIqPaidVsEarned === 'function') {
+                renderJourneyIqPaidVsEarned(_pickClickstreamBlock('paid_vs_earned'));
+            }
+            if (typeof renderJourneyIqMomentSecondScreen === 'function') {
+                renderJourneyIqMomentSecondScreen(_pickClickstreamBlock('moment_second_screen'));
+            }
+            if (typeof renderJourneyIqCulturalRipple === 'function') {
+                renderJourneyIqCulturalRipple(_pickClickstreamBlock('cultural_ripple'));
+            }
+            if (typeof renderJourneyIqNetNewAudience === 'function') {
+                renderJourneyIqNetNewAudience(_pickClickstreamBlock('net_new_audience_profile'));
+            }
+
             // Facts - facts can be plain strings or {label, value} dicts.
             // Coerce + filter so we never render '[object Object]' or empty
             // boilerplate (e.g. a lone {label:'Target', value:'Research-anchored ...'}).
@@ -43896,18 +44141,18 @@
                 _setText('jiqPathTitle',           '▶️ Path to Press-Play');
                 _setText('jiqPathSubtitle',
                     'How accounts came to Paramount+ to press play on episode 1. '
-                    'Right-aligned ribbon: each viewer\'s clickstream sequence — '
-                    'where they first encountered the show, every step they took, '
-                    'and how long it took to reach the play button. '
-                    'Column height \u221d unique accounts at that step. Hover for the top hosts.');
+                    + 'Right-aligned ribbon: each viewer\'s clickstream sequence — '
+                    + 'where they first encountered the show, every step they took, '
+                    + 'and how long it took to reach the play button. '
+                    + 'Column height \u221d unique accounts at that step. Hover for the top hosts.');
                 _setText('jiqTopPathsSubtitle',    'Top journeys to press-play');
                 _setText('jiqTopPathsDesc',
                     'Each row is a real clickstream sequence we observed leading up '
-                    'to the first episode play. <strong>Users</strong> = accounts who '
-                    'followed that exact sequence. <strong>Avg days</strong> = elapsed '
-                    'time from first touch to play. The italic note walks through the '
-                    'journey step-by-step. Sources are strictly clickstream-observable '
-                    '(referrer, UTM, or CTV deep-link).');
+                    + 'to the first episode play. <strong>Users</strong> = accounts who '
+                    + 'followed that exact sequence. <strong>Avg days</strong> = elapsed '
+                    + 'time from first touch to play. The italic note walks through the '
+                    + 'journey step-by-step. Sources are strictly clickstream-observable '
+                    + '(referrer, UTM, or CTV deep-link).');
             }
             // Fandango-specific title overrides
             var _isFandangoCtx = (_metaCtx.target || '').toLowerCase().indexOf('fandango') >= 0;
@@ -47813,6 +48058,524 @@
                 +   '<span><span style="display:inline-block; width:10px; height:10px; background:#f59e0b88; border-radius:2px; vertical-align:middle; margin-right:0.3rem;"></span>Monthly churn %</span>'
                 +   '<span style="opacity:0.55;">— hover any month for the key event</span>'
                 + '</div>';
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // CLICKSTREAM-ONLY INSIGHT RENDERERS
+        //
+        // Six renderers, one per card in the "your first-party data
+        // can't see this" pitch block (between Path-to-Press-Play and
+        // the Facts card). Each renderer:
+        //   • looks up its card by ID and auto-hides if the payload
+        //     block is missing/disabled (so non-Landman runs stay clean)
+        //   • paints title / subtitle / meta from data — never hard-codes
+        //   • outputs information-dense, sparkline-style visuals
+        //     without pulling in a chart library
+        //
+        // The shared "show the header strip when at least one card
+        // renders" logic lives at the bottom (see _jiqShowClickstreamHeader).
+        // ══════════════════════════════════════════════════════════════
+
+        // Shared helpers (small enough to inline; avoid colliding with
+        // the existing _jiq* utilities defined far above).
+        var _jiqHdrCardEverShown = false;
+        function _jiqShowClickstreamHeader() {
+            // Reveals the section header card the FIRST time any of
+            // the six clickstream-only renderers successfully paints.
+            // Stays sticky after that so subsequent renders (e.g. cut
+            // switch) don't toggle the strip.
+            if (_jiqHdrCardEverShown) return;
+            var hdr = document.getElementById('jiqClickstreamHeader');
+            if (hdr) { hdr.style.display = ''; _jiqHdrCardEverShown = true; }
+        }
+        function _jiqHideCard(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        }
+        function _jiqShowCard(id) {
+            var el = document.getElementById(id);
+            if (el) { el.style.display = ''; _jiqShowClickstreamHeader(); }
+        }
+        function _jiqTile(label, value, sub, accentColor) {
+            // Compact KPI tile used across the clickstream cards.
+            var color = accentColor || 'var(--accent-cyan)';
+            return ''
+                + '<div style="padding:0.55rem 0.7rem; background: rgba(255,255,255,0.025);'
+                + '            border-radius:6px; border-left: 3px solid ' + color + ';">'
+                +   '<div style="font-size:0.62rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.18rem;">'
+                +     _jiqEsc(label) + '</div>'
+                +   '<div style="font-size:1.05rem; font-weight:700; color: var(--text-primary); line-height:1.1;">'
+                +     _jiqEsc(value) + '</div>'
+                + (sub ? '<div style="font-size:0.68rem; opacity:0.6; margin-top:0.2rem;">' + _jiqEsc(sub) + '</div>' : '')
+                + '</div>';
+        }
+        function _jiqCallout(headline, detail, accentColor) {
+            var color = accentColor || 'var(--accent-cyan)';
+            return ''
+                + '<div style="padding:0.7rem 0.85rem; border-radius:6px;'
+                + '            background: rgba(255,255,255,0.025); border-left: 3px solid ' + color + ';">'
+                +   '<div style="font-size:0.78rem; font-weight:700; color: var(--text-primary); margin-bottom:0.3rem; line-height:1.3;">'
+                +     _jiqEsc(headline) + '</div>'
+                +   '<div style="font-size:0.72rem; color: var(--text-secondary); line-height:1.5;">'
+                +     _jiqEsc(detail) + '</div>'
+                + '</div>';
+        }
+        function _jiqMiniBar(pct, color, maxPct) {
+            // Inline horizontal bar — used for sparkline-style
+            // metrics inside table cells. Pct is 0-100; maxPct
+            // (default 100) scales the visual width.
+            var mx = maxPct || 100;
+            var w = Math.max(2, Math.min(100, (pct / mx) * 100));
+            return '<div style="height:6px; width:100%; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden;">'
+                 +   '<div style="height:100%; width:' + w.toFixed(1) + '%; background:' + (color || 'var(--accent-cyan)') + ';"></div>'
+                 + '</div>';
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 1 · 🔭 Off-Platform Discovery Halo
+        //
+        // Weekly off-platform earned-media volume (TikTok views,
+        // YouTube creator-clip views, Google branded searches, Reddit
+        // comments) mapped to P+ net-new accounts the same week.
+        // Surfaces the earned-media multiplier each paid dollar bought.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqOffPlatformHalo(halo) {
+            if (!halo || halo.enabled === false || !halo.weeks || !halo.weeks.length) {
+                _jiqHideCard('jiqHaloCard'); return;
+            }
+            _jiqShowCard('jiqHaloCard');
+            var titleEl  = document.getElementById('jiqHaloTitle');
+            var subEl    = document.getElementById('jiqHaloSubtitle');
+            var metaEl   = document.getElementById('jiqHaloMeta');
+            var totalsEl = document.getElementById('jiqHaloTotals');
+            var weekEl   = document.getElementById('jiqHaloWeekly');
+            var callEl   = document.getElementById('jiqHaloCallouts');
+            if (titleEl && halo.title) titleEl.textContent = '🔭 ' + halo.title.replace(/^🔭\s*/, '');
+            if (subEl)   subEl.textContent = halo.subtitle || '';
+            if (metaEl)  metaEl.textContent = (halo.weeks.length + ' weeks · clickstream-observed earned media');
+
+            var t = halo.totals || {};
+            var ACC = '#60a5fa';
+            if (totalsEl) {
+                totalsEl.innerHTML = ''
+                    + _jiqTile('TikTok views',   (t.tiktok_views_m  != null ? t.tiktok_views_m  + 'M' : '—'), '#landman + creator clips', ACC)
+                    + _jiqTile('YouTube views',  (t.youtube_views_m != null ? t.youtube_views_m + 'M' : '—'), 'trailer + creator reviews', ACC)
+                    + _jiqTile('Google searches',(t.google_searches_k != null ? _jiqFmt(t.google_searches_k) + 'K' : '—'), 'branded queries', ACC)
+                    + _jiqTile('Reddit comments',(t.reddit_comments  != null ? _jiqFmt(t.reddit_comments) : '—'), '/r/yellowstone, /r/paramountplus', ACC)
+                    + _jiqTile('Net-new P+ accts',(t.total_net_new_accounts != null ? _jiqFmt(t.total_net_new_accounts) : '—'), 'across all 10 weeks', '#22c55e')
+                    + _jiqTile('Earned-assisted', (t.earned_assisted_share_pct != null ? t.earned_assisted_share_pct + '%' : '—'), 'of paid-attributed plays', '#f59e0b')
+                    + _jiqTile('Organic : paid',  (t.organic_to_paid_reach_ratio != null ? t.organic_to_paid_reach_ratio + 'x' : '—'), 'reach multiplier', '#a78bfa');
+            }
+
+            if (weekEl) {
+                var maxTT = 0, maxYT = 0, maxGG = 0, maxNN = 0;
+                halo.weeks.forEach(function(w) {
+                    if (w.tiktok_views_m  > maxTT) maxTT = w.tiktok_views_m;
+                    if (w.youtube_views_m > maxYT) maxYT = w.youtube_views_m;
+                    if (w.google_searches_k > maxGG) maxGG = w.google_searches_k;
+                    if (w.pplus_net_new_accounts > maxNN) maxNN = w.pplus_net_new_accounts;
+                });
+                var rows = halo.weeks.map(function(w) {
+                    return '<tr style="border-bottom:1px solid var(--border-color); vertical-align:top;">'
+                         +   '<td style="padding:8px 6px; font-weight:600; white-space:nowrap;">' + _jiqEsc(w.week_label) + '</td>'
+                         +   '<td style="padding:8px 6px; min-width:120px;">'
+                         +     '<div style="display:flex; align-items:center; gap:6px;"><span style="font-size:11px; opacity:0.8; min-width:40px; text-align:right;">' + w.tiktok_views_m + 'M</span>' + _jiqMiniBar(w.tiktok_views_m, '#ec4899', maxTT) + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; min-width:120px;">'
+                         +     '<div style="display:flex; align-items:center; gap:6px;"><span style="font-size:11px; opacity:0.8; min-width:40px; text-align:right;">' + w.youtube_views_m + 'M</span>' + _jiqMiniBar(w.youtube_views_m, '#ef4444', maxYT) + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; min-width:120px;">'
+                         +     '<div style="display:flex; align-items:center; gap:6px;"><span style="font-size:11px; opacity:0.8; min-width:50px; text-align:right;">' + _jiqFmt(w.google_searches_k) + 'K</span>' + _jiqMiniBar(w.google_searches_k, '#3b82f6', maxGG) + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; min-width:140px;">'
+                         +     '<div style="display:flex; align-items:center; gap:6px;"><span style="font-size:11px; font-weight:700; color: var(--text-primary); min-width:60px; text-align:right;">' + _jiqFmt(w.pplus_net_new_accounts) + '</span>' + _jiqMiniBar(w.pplus_net_new_accounts, '#22c55e', maxNN) + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; font-size:11px; color:var(--text-secondary); font-style:italic;">' + _jiqEsc(w.note) + '</td>'
+                         + '</tr>';
+                }).join('');
+                weekEl.innerHTML = ''
+                    + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;">'
+                    +   '<thead><tr style="text-align:left; border-bottom:1px solid var(--border-color); font-size:11px; opacity:0.75; text-transform:uppercase; letter-spacing:0.04em;">'
+                    +     '<th style="padding:6px 6px;">Week</th>'
+                    +     '<th style="padding:6px 6px;">TikTok (M views)</th>'
+                    +     '<th style="padding:6px 6px;">YouTube (M views)</th>'
+                    +     '<th style="padding:6px 6px;">Google searches</th>'
+                    +     '<th style="padding:6px 6px;">P+ net-new accounts</th>'
+                    +     '<th style="padding:6px 6px;">Week story</th>'
+                    +   '</tr></thead>'
+                    +   '<tbody>' + rows + '</tbody>'
+                    + '</table>';
+            }
+            if (callEl) {
+                callEl.innerHTML = (halo.callouts || []).map(function(c) {
+                    return _jiqCallout(c.headline, c.detail, ACC);
+                }).join('');
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 2 · 🎭 Competitive Consideration Set
+        //
+        // Two-pane view: "What lost to Landman" (competitor PDPs
+        // browsed in the 30d before press-play) and "Still co-watching"
+        // (titles actively watched in parallel). Cross-platform shadow
+        // of the decision the platform can't see in first-party data.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqCompetitiveConsideration(comp) {
+            if (!comp || comp.enabled === false || !comp.lost_to_landman || !comp.lost_to_landman.length) {
+                _jiqHideCard('jiqCompSetCard'); return;
+            }
+            _jiqShowCard('jiqCompSetCard');
+            var ACC = '#f472b6';
+            var titleEl   = document.getElementById('jiqCompSetTitle');
+            var subEl     = document.getElementById('jiqCompSetSubtitle');
+            var metaEl    = document.getElementById('jiqCompSetMeta');
+            var lostEl    = document.getElementById('jiqCompSetLost');
+            var coEl      = document.getElementById('jiqCompSetCoWatch');
+            var callEl    = document.getElementById('jiqCompSetCallouts');
+            if (titleEl) titleEl.textContent = '🎭 ' + (comp.title || '').replace(/^🎭\s*/, '');
+            if (subEl)   subEl.textContent = comp.subtitle || '';
+            if (metaEl)  metaEl.textContent = comp.lost_to_landman.length + ' competitor titles tracked';
+
+            // Sort lost-rows by % who browsed (descending) for impact.
+            var lost = (comp.lost_to_landman || []).slice().sort(function(a, b) {
+                return (b.pct_of_landman_viewers || 0) - (a.pct_of_landman_viewers || 0);
+            });
+            var maxPct = lost.reduce(function(m, r) { return Math.max(m, r.pct_of_landman_viewers || 0); }, 0);
+            if (lostEl) {
+                lostEl.innerHTML = ''
+                    + '<table style="width:100%; border-collapse:collapse; font-size:12px;">'
+                    +   '<thead><tr style="text-align:left; border-bottom:1px solid var(--border-color); font-size:10.5px; opacity:0.75; text-transform:uppercase; letter-spacing:0.04em;">'
+                    +     '<th style="padding:6px 4px;">Title</th>'
+                    +     '<th style="padding:6px 4px;">Platform</th>'
+                    +     '<th style="padding:6px 4px; text-align:right; white-space:nowrap;">% who browsed</th>'
+                    +     '<th style="padding:6px 4px; text-align:right; white-space:nowrap;">Avg days pre-play</th>'
+                    +     '<th style="padding:6px 4px; text-align:right; white-space:nowrap;">% still watching</th>'
+                    +   '</tr></thead><tbody>'
+                    + lost.map(function(r) {
+                        var inNet = r.is_in_network ? '<span style="font-size:9px; padding:1px 5px; border-radius:3px; background: rgba(91,108,255,0.18); color:#a3b3ff; margin-left:5px;">IN-NET</span>' : '';
+                        return '<tr style="border-bottom:1px solid var(--border-color); vertical-align:top;">'
+                             +   '<td style="padding:7px 4px;">'
+                             +     '<div style="font-weight:600;">' + _jiqEsc(r.title) + inNet + '</div>'
+                             +     '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:3px; line-height:1.4;">' + _jiqEsc(r.note) + '</div>'
+                             +   '</td>'
+                             +   '<td style="padding:7px 4px; font-size:11px; color:var(--text-secondary); white-space:nowrap;">' + _jiqEsc(r.platform) + '</td>'
+                             +   '<td style="padding:7px 4px; text-align:right; white-space:nowrap;">'
+                             +     '<div style="font-weight:700; color:' + ACC + ';">' + (r.pct_of_landman_viewers || 0).toFixed(1) + '%</div>'
+                             +     '<div style="margin-top:3px; width:70px; margin-left:auto;">' + _jiqMiniBar(r.pct_of_landman_viewers, ACC, maxPct) + '</div>'
+                             +   '</td>'
+                             +   '<td style="padding:7px 4px; text-align:right; color:var(--text-secondary);">' + (r.avg_days_before_landman_play != null ? r.avg_days_before_landman_play + 'd' : '—') + '</td>'
+                             +   '<td style="padding:7px 4px; text-align:right; font-weight:600;">' + (r.pct_still_watching_now != null ? r.pct_still_watching_now.toFixed(1) + '%' : '—') + '</td>'
+                             + '</tr>';
+                    }).join('')
+                    + '</tbody></table>';
+            }
+
+            if (coEl) {
+                var co = (comp.still_co_watching || []).slice().sort(function(a, b) {
+                    return (b.pct_concurrent || 0) - (a.pct_concurrent || 0);
+                });
+                var maxCo = co.reduce(function(m, r) { return Math.max(m, r.pct_concurrent || 0); }, 0);
+                coEl.innerHTML = co.map(function(r) {
+                    var inNet = r.is_in_network ? '<span style="font-size:9px; padding:1px 5px; border-radius:3px; background: rgba(91,108,255,0.18); color:#a3b3ff; margin-left:5px;">IN-NET</span>' : '';
+                    return '<div style="padding:7px 0; border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                         +     '<div style="font-size:12px; font-weight:600;">' + _jiqEsc(r.title) + inNet + '</div>'
+                         +     '<div style="font-size:12px; font-weight:700; color:' + ACC + ';">' + (r.pct_concurrent || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:10.5px; color:var(--text-secondary); margin:3px 0;">' + _jiqEsc(r.platform) + '</div>'
+                         +   _jiqMiniBar(r.pct_concurrent, ACC, maxCo)
+                         + '</div>';
+                }).join('');
+            }
+            if (callEl) {
+                callEl.innerHTML = (comp.callouts || []).map(function(c) {
+                    return _jiqCallout(c.headline, c.detail, ACC);
+                }).join('');
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 3 · 📡 Paid vs. Earned Attribution Truth
+        //
+        // For each paid marketing channel: paid impressions, paid-
+        // attributed plays, % earned-media overlap (would-have-
+        // converted-anyway), true incremental lift %, and the gap
+        // between reported CPA and true incremental CPA. The "your
+        // last-click is lying to you" report card.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqPaidVsEarned(pe) {
+            if (!pe || pe.enabled === false || !pe.channels || !pe.channels.length) {
+                _jiqHideCard('jiqPaidEarnedCard'); return;
+            }
+            _jiqShowCard('jiqPaidEarnedCard');
+            var titleEl  = document.getElementById('jiqPaidEarnedTitle');
+            var subEl    = document.getElementById('jiqPaidEarnedSubtitle');
+            var metaEl   = document.getElementById('jiqPaidEarnedMeta');
+            var totalsEl = document.getElementById('jiqPaidEarnedTotals');
+            var tableEl  = document.getElementById('jiqPaidEarnedTable');
+            if (titleEl) titleEl.textContent = '📡 ' + (pe.title || '').replace(/^📡\s*/, '');
+            if (subEl)   subEl.textContent = pe.subtitle || '';
+            if (metaEl)  metaEl.textContent = pe.channels.length + ' channels · earned-overlap audited';
+
+            var t = pe.totals || {};
+            if (totalsEl) {
+                totalsEl.innerHTML = ''
+                    + _jiqTile('Total paid spend',  '$' + (t.paid_spend_usd_m || 0).toFixed(2) + 'M', 'across all channels', '#22c55e')
+                    + _jiqTile('Reported plays',    _jiqFmt(t.paid_attributed_plays || 0), 'paid-attributed', '#22c55e')
+                    + _jiqTile('TRUE incremental',  _jiqFmt(t.true_incremental_plays || 0), 'plays that wouldn\'t have happened', '#3b82f6')
+                    + _jiqTile('Wasted spend',      '$' + (t.wasted_spend_usd_m || 0).toFixed(2) + 'M', (t.wasted_spend_pct || 0) + '% of total', '#ef4444')
+                    + _jiqTile('Best channel',      String(t.best_channel_by_incrementality || '—'), 'highest incremental lift', '#22c55e')
+                    + _jiqTile('Worst channel',     String(t.worst_channel_by_incrementality || '—'), 'highest earned overlap', '#ef4444');
+            }
+
+            if (tableEl) {
+                var rows = (pe.channels || []).map(function(c) {
+                    var overlap = c.earned_overlap_pct || 0;
+                    var inc     = c.incremental_lift_pct || 0;
+                    var overlapColor = overlap > 70 ? '#ef4444' : (overlap > 45 ? '#f59e0b' : '#22c55e');
+                    var incColor     = inc > 60 ? '#22c55e' : (inc > 35 ? '#f59e0b' : '#ef4444');
+                    var cpaDelta = (c.cpa_true_incremental_usd != null && c.cpa_paid_only_usd != null)
+                        ? (c.cpa_true_incremental_usd / Math.max(0.01, c.cpa_paid_only_usd))
+                        : null;
+                    return '<tr style="border-bottom:1px solid var(--border-color); vertical-align:top;">'
+                         +   '<td style="padding:8px 6px;">'
+                         +     '<div style="font-weight:700; font-size:12.5px;">' + _jiqEsc(c.channel) + '</div>'
+                         +     '<div style="font-size:11px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(c.verdict || '') + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap; font-size:11.5px; color:var(--text-secondary);">' + (c.paid_impressions_m || 0).toFixed(1) + 'M</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap; font-weight:600;">' + _jiqFmt(c.paid_attributed_plays || 0) + '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap;">'
+                         +     '<div style="font-weight:700; color:' + overlapColor + ';">' + overlap.toFixed(1) + '%</div>'
+                         +     '<div style="margin-top:3px; width:60px; margin-left:auto;">' + _jiqMiniBar(overlap, overlapColor, 100) + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap;">'
+                         +     '<div style="font-weight:700; color:' + incColor + ';">' + inc.toFixed(1) + '%</div>'
+                         +     '<div style="margin-top:3px; width:60px; margin-left:auto;">' + _jiqMiniBar(inc, incColor, 100) + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap; color:var(--text-secondary);">$' + (c.cpa_paid_only_usd || 0).toFixed(2) + '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap;">'
+                         +     '<div style="font-weight:700; color: var(--text-primary);">$' + (c.cpa_true_incremental_usd || 0).toFixed(2) + '</div>'
+                         + (cpaDelta != null && cpaDelta > 1.2
+                             ? '<div style="font-size:10.5px; color:#ef4444; margin-top:2px;">' + cpaDelta.toFixed(1) + 'x reported</div>'
+                             : '')
+                         +   '</td>'
+                         + '</tr>';
+                }).join('');
+                tableEl.innerHTML = ''
+                    + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;">'
+                    +   '<thead><tr style="text-align:left; border-bottom:1px solid var(--border-color); font-size:10.5px; opacity:0.75; text-transform:uppercase; letter-spacing:0.04em;">'
+                    +     '<th style="padding:6px 6px;">Channel</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Paid impr.</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Reported plays</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Earned overlap</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">True incremental</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Reported CPA</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">TRUE CPA</th>'
+                    +   '</tr></thead>'
+                    +   '<tbody>' + rows + '</tbody>'
+                    + '</table>';
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 4 · 🎬 Moment-Level Second-Screen
+        //
+        // Per-episode show moments that triggered measurable second-
+        // screen behavior in the next 30-180 min on the same household
+        // devices. Renders each moment as a panel with episode +
+        // timecode + scene description + trigger type + spike % +
+        // top query/platform + reaction note.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqMomentSecondScreen(ms) {
+            if (!ms || ms.enabled === false || !ms.moments || !ms.moments.length) {
+                _jiqHideCard('jiqMomentCard'); return;
+            }
+            _jiqShowCard('jiqMomentCard');
+            var ACC = '#a78bfa';
+            var titleEl   = document.getElementById('jiqMomentTitle');
+            var subEl     = document.getElementById('jiqMomentSubtitle');
+            var metaEl    = document.getElementById('jiqMomentMeta');
+            var listEl    = document.getElementById('jiqMomentList');
+            var verdictEl = document.getElementById('jiqMomentVerdict');
+            if (titleEl) titleEl.textContent = '🎬 ' + (ms.title || '').replace(/^🎬\s*/, '');
+            if (subEl)   subEl.textContent = ms.subtitle || '';
+            var agg = ms.aggregate || {};
+            if (metaEl) {
+                metaEl.textContent = (agg.episodes_with_measurable_spike || ms.moments.length) + ' / '
+                    + (agg.episodes_total || ms.moments.length) + ' eps triggered spikes · '
+                    + (agg.pct_eps_triggering_external_search != null ? agg.pct_eps_triggering_external_search + '% drove external searches' : '');
+            }
+            // Sort by spike % descending so the most impactful moments
+            // surface first (puts the Ep-10 finale 412% at the top).
+            var moments = ms.moments.slice().sort(function(a, b) {
+                return (b.spike_pct || 0) - (a.spike_pct || 0);
+            });
+            var maxSpike = moments.reduce(function(m, r) { return Math.max(m, r.spike_pct || 0); }, 0);
+            if (listEl) {
+                listEl.innerHTML = moments.map(function(m) {
+                    var triggerColor = (m.trigger_type || '').indexOf('Social') >= 0 ? '#ec4899'
+                                      : (m.trigger_type || '').indexOf('Cast') >= 0 ? '#3b82f6'
+                                      : '#22c55e';
+                    return '<div style="display:grid; grid-template-columns: 92px minmax(0, 1.4fr) minmax(0, 1.1fr) 120px; gap:0.8rem; align-items:center;'
+                         +              ' padding:0.7rem 0.85rem; margin-bottom:0.45rem; border-radius:6px;'
+                         +              ' background: rgba(255,255,255,0.025); border-left: 3px solid ' + ACC + ';">'
+                         +   '<div style="text-align:center;">'
+                         +     '<div style="font-size:0.72rem; font-weight:800; color: var(--text-primary); letter-spacing:0.04em;">' + _jiqEsc(m.episode) + '</div>'
+                         +     '<div style="font-size:0.65rem; opacity:0.6; margin-top:0.15rem;">@ ' + _jiqEsc(m.minute_mark) + '</div>'
+                         +   '</div>'
+                         +   '<div>'
+                         +     '<div style="font-size:0.84rem; font-weight:600; color: var(--text-primary); line-height:1.35;">' + _jiqEsc(m.scene) + '</div>'
+                         +     '<div style="font-size:0.7rem; color: var(--text-secondary); font-style:italic; margin-top:0.3rem; line-height:1.45;">' + _jiqEsc(m.note) + '</div>'
+                         +   '</div>'
+                         +   '<div>'
+                         +     '<div style="display:inline-block; font-size:0.6rem; font-weight:700; padding:2px 7px; border-radius:3px; text-transform:uppercase; letter-spacing:0.04em;'
+                         +                ' background: ' + triggerColor + '22; color: ' + triggerColor + ';">' + _jiqEsc(m.trigger_type) + '</div>'
+                         +     '<div style="font-size:0.75rem; color: var(--text-primary); margin-top:0.3rem; font-family: monospace; line-height:1.35; word-break:break-word;">' + _jiqEsc(m.top_query_or_platform) + '</div>'
+                         +   '</div>'
+                         +   '<div style="text-align:right;">'
+                         +     '<div style="font-size:1.15rem; font-weight:800; color: ' + ACC + '; line-height:1;">+' + (m.spike_pct || 0) + '%</div>'
+                         +     '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.2rem;">vs baseline · ' + (m.window_min || 0) + ' min window</div>'
+                         +     '<div style="margin-top:0.35rem;">' + _jiqMiniBar(m.spike_pct, ACC, maxSpike) + '</div>'
+                         +   '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (verdictEl && agg.verdict) {
+                verdictEl.innerHTML = '<strong style="color:' + ACC + ';">💡 So what:</strong> ' + _jiqEsc(agg.verdict);
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 5 · 🛒 Cultural Ripple
+        //
+        // E-commerce + search categories whose volume measurably lifted
+        // in Landman-viewing households vs a matched non-Landman
+        // control set. Each row: category, lift %, top sites, window,
+        // narrative note. Sorted by lift descending.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqCulturalRipple(cr) {
+            if (!cr || cr.enabled === false || !cr.categories || !cr.categories.length) {
+                _jiqHideCard('jiqRippleCard'); return;
+            }
+            _jiqShowCard('jiqRippleCard');
+            var ACC = '#f59e0b';
+            var titleEl   = document.getElementById('jiqRippleTitle');
+            var subEl     = document.getElementById('jiqRippleSubtitle');
+            var metaEl    = document.getElementById('jiqRippleMeta');
+            var listEl    = document.getElementById('jiqRippleList');
+            var verdictEl = document.getElementById('jiqRippleVerdict');
+            if (titleEl) titleEl.textContent = '🛒 ' + (cr.title || '').replace(/^🛒\s*/, '');
+            if (subEl)   subEl.textContent = cr.subtitle || '';
+            if (metaEl)  metaEl.textContent = cr.categories.length + ' off-platform categories tracked';
+            var cats = cr.categories.slice().sort(function(a, b) {
+                return (b.lift_vs_control_pct || 0) - (a.lift_vs_control_pct || 0);
+            });
+            var maxLift = cats.reduce(function(m, r) { return Math.max(m, r.lift_vs_control_pct || 0); }, 0);
+            if (listEl) {
+                listEl.innerHTML = cats.map(function(r) {
+                    var siteChips = (r.top_sites || []).map(function(s) {
+                        return '<span style="display:inline-block; font-size:10px; padding:2px 7px; border-radius:99px; background: rgba(245,158,11,0.12); color: var(--text-primary); margin: 2px 4px 2px 0;">' + _jiqEsc(s) + '</span>';
+                    }).join('');
+                    return '<div style="display:grid; grid-template-columns: minmax(0, 1.6fr) 120px minmax(0, 1.4fr); gap:0.85rem; align-items:start;'
+                         +              ' padding:0.7rem 0.85rem; margin-bottom:0.45rem; border-radius:6px;'
+                         +              ' background: rgba(255,255,255,0.025); border-left: 3px solid ' + ACC + ';">'
+                         +   '<div>'
+                         +     '<div style="font-size:0.84rem; font-weight:700;">' + _jiqEsc(r.category) + '</div>'
+                         +     '<div style="font-size:0.7rem; color: var(--text-secondary); font-style:italic; margin-top:0.35rem; line-height:1.5;">' + _jiqEsc(r.note) + '</div>'
+                         +   '</div>'
+                         +   '<div style="text-align:right;">'
+                         +     '<div style="font-size:1.2rem; font-weight:800; color:' + ACC + '; line-height:1;">+' + (r.lift_vs_control_pct || 0).toFixed(1) + '%</div>'
+                         +     '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.25rem;">vs control · ' + (r.window_days || 0) + 'd window</div>'
+                         +     '<div style="margin-top:0.4rem;">' + _jiqMiniBar(r.lift_vs_control_pct, ACC, maxLift) + '</div>'
+                         +   '</div>'
+                         +   '<div>'
+                         +     '<div style="font-size:0.65rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.3rem;">Top destinations</div>'
+                         +     '<div>' + siteChips + '</div>'
+                         +   '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (verdictEl && cr.verdict) {
+                verdictEl.innerHTML = '<strong style="color:' + ACC + ';">💡 Monetization angle:</strong> ' + _jiqEsc(cr.verdict);
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 6 · 🧬 Net-New Audience Profile
+        //
+        // For the slice of viewers whose first-ever Sheridan-IP play
+        // was Landman (no prior Yellowstone / Tulsa King / etc.),
+        // their off-platform digital footprint: content + brand +
+        // news + streaming affinities, demographics, and concrete
+        // P+ recommendations on what to do with them.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqNetNewAudience(na) {
+            if (!na || na.enabled === false || !na.top_content_affinities) {
+                _jiqHideCard('jiqNetNewCard'); return;
+            }
+            _jiqShowCard('jiqNetNewCard');
+            var ACC = '#5b6cff';
+            var titleEl   = document.getElementById('jiqNetNewTitle');
+            var subEl     = document.getElementById('jiqNetNewSubtitle');
+            var metaEl    = document.getElementById('jiqNetNewMeta');
+            var topEl     = document.getElementById('jiqNetNewTopline');
+            var contentEl = document.getElementById('jiqNetNewContent');
+            var brandEl   = document.getElementById('jiqNetNewBrands');
+            var newsEl    = document.getElementById('jiqNetNewNews');
+            var streamEl  = document.getElementById('jiqNetNewStreaming');
+            var demoEl    = document.getElementById('jiqNetNewDemo');
+            var recsEl    = document.getElementById('jiqNetNewRecs');
+            if (titleEl) titleEl.textContent = '🧬 ' + (na.title || '').replace(/^🧬\s*/, '');
+            if (subEl)   subEl.textContent = na.subtitle || '';
+            if (metaEl)  metaEl.textContent = 'Off-platform footprint of net-new accounts';
+
+            if (topEl) {
+                topEl.innerHTML = ''
+                    + _jiqTile('Cohort size',           _jiqFmt(na.cohort_size || 0), 'first-ever Sheridan play', ACC)
+                    + _jiqTile('Of all Landman accts',  (na.cohort_pct_of_landman_viewers || 0).toFixed(1) + '%', 'net-new to the IP', ACC)
+                    + _jiqTile('Brand-new P+ subs',     (na.cohort_pct_new_paying_subs || 0).toFixed(1) + '%', 'subscribed for this show', '#22c55e')
+                    + _jiqTile('What to upsell',        'Sports + Showtime', 'see recommendations →', '#f59e0b');
+            }
+
+            // Compact ranked-list helper: each row is "name · index pill · pct"
+            function _rankedList(rows, valLabel, indexKey, pctKey, color) {
+                var maxPct = rows.reduce(function(m, r) { return Math.max(m, r[pctKey] || 0); }, 0);
+                return rows.map(function(r) {
+                    var idx = r[indexKey];
+                    var idxBadge = (idx != null)
+                        ? '<span style="display:inline-block; font-size:9.5px; font-weight:700; padding:1.5px 6px; border-radius:3px;'
+                          + ' background: ' + color + '22; color: ' + color + '; margin-left:5px;">idx ' + idx + '</span>'
+                        : '';
+                    var nameKey = r.content || r.brand || r.publisher || r.platform || '—';
+                    return '<div style="padding:6px 0; border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                         +     '<div style="font-size:11.5px; font-weight:600; line-height:1.35;">' + _jiqEsc(nameKey) + idxBadge + '</div>'
+                         +     '<div style="font-size:11px; font-weight:700; color: var(--text-primary); white-space:nowrap;">' + (r[pctKey] || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r[pctKey], color, maxPct) + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (contentEl) contentEl.innerHTML = _rankedList(na.top_content_affinities || [], 'content', 'index_vs_pplus_baseline', 'pct_of_cohort', '#a78bfa');
+            if (brandEl)   brandEl.innerHTML   = _rankedList(na.top_brand_affinities  || [], 'brand',   'index',                   'pct_of_cohort', '#f59e0b');
+            if (newsEl)    newsEl.innerHTML    = _rankedList(na.top_news_publishers   || [], 'pub',     null,                      'pct_of_cohort', '#3b82f6');
+            if (streamEl)  streamEl.innerHTML  = _rankedList(na.top_other_streaming   || [], 'plat',    null,                      'pct_of_cohort', '#22c55e');
+
+            if (demoEl) {
+                var d = na.demographics || {};
+                demoEl.innerHTML = ''
+                    + _jiqTile('Avg HHI',             String(d.avg_household_income  || '—'), '', ACC)
+                    + _jiqTile('Gender skew',         String(d.gender_skew           || '—'), '', ACC)
+                    + _jiqTile('Age',                 String(d.age_skew              || '—'), '', ACC)
+                    + _jiqTile('Geo skew',            String(d.geo_skew              || '—'), '', ACC)
+                    + _jiqTile('Household',           String(d.household_composition || '—'), '', ACC);
+            }
+            if (recsEl) {
+                recsEl.innerHTML = (na.recommendations || []).map(function(r) {
+                    return _jiqCallout(r.title || r.headline || '', r.detail || '', '#22c55e');
+                }).join('');
+            }
         }
 
         // ---- Touchpoints renderer (table + overlap + touch distribution) ----
