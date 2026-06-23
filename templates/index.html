@@ -25108,48 +25108,91 @@
                                 font-size: 0.78rem; line-height: 1.55;"></div>
                 </div>
 
-                <!-- ─── LANDMAN CARD C: 🌟 The Sheridan Universe Map ─── -->
+                <!-- ─── LANDMAN CARD C: 🌐 Beyond the Sheridan Universe ───
+                     (Card ID kept as jiqSheridanMapCard for back-compat
+                     with the dispatcher hide-list; content is now the
+                     off-Paramount footprint, not Sheridan-IP overlap.) -->
                 <div class="card" id="jiqSheridanMapCard"
                      style="padding: 1rem; margin-top: 1rem; margin-bottom: 1rem; display: none;
-                            background: linear-gradient(135deg, rgba(168,85,247,0.06) 0%, rgba(245,158,11,0.04) 100%);
-                            border: 1px solid rgba(168,85,247,0.22);">
+                            background: linear-gradient(135deg, rgba(96,165,250,0.06) 0%, rgba(34,197,94,0.04) 100%);
+                            border: 1px solid rgba(96,165,250,0.22);">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqSheridanMapTitle" style="margin: 0;">🌟 The Sheridan Universe Map</h3>
+                        <h3 id="jiqSheridanMapTitle" style="margin: 0;">🌐 Beyond the Sheridan Universe</h3>
                         <div id="jiqSheridanMapMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
-                    <div id="jiqSheridanMapSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem; line-height: 1.55;"></div>
-                    <div id="jiqSheridanMapTopline"
-                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-                                gap: 0.5rem; margin-bottom: 0.95rem;"></div>
-                    <div style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-                                gap: 1rem; align-items: start;">
+                    <div id="jiqSheridanMapSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.85rem; line-height: 1.55;"></div>
+                    <!-- ── Off-Paramount shows table + Competitor-platform overlap ── -->
+                    <div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+                                gap: 1rem; align-items: start; margin-bottom: 1rem;">
                         <div>
                             <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
-                                🎬 Prior-Sheridan-IP feeders into Landman
+                                📺 What else they watch (non-Paramount)
                             </h4>
-                            <div id="jiqSheridanMapFeeders" style="overflow-x: auto;"></div>
+                            <div id="jiqBsOffShows" style="overflow-x: auto;"></div>
                         </div>
                         <div>
                             <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
-                                🧮 % of Landman viewers who watched each
+                                🛰️ Competitor-platform overlap
                             </h4>
-                            <div id="jiqSheridanMapOverlap"></div>
+                            <div id="jiqBsCompPlatforms"></div>
                         </div>
                     </div>
-                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.45rem; opacity: 0.92;">
-                        🌱 Net-new to the Sheridan universe (the strategic-asset cohort)
-                    </h4>
-                    <div id="jiqSheridanMapNetNew"
-                         style="padding: 0.8rem 0.95rem; border-radius: 6px;
-                                background: rgba(34,197,94,0.07); border-left: 3px solid rgba(34,197,94,0.55);"></div>
-                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.45rem; opacity: 0.92;">
-                        🔁 Binge-graduation: what they watched RIGHT AFTER Landman
-                    </h4>
-                    <div id="jiqSheridanMapBinge"></div>
-                    <div id="jiqSheridanMapRec"
+                    <!-- ── Brands + Podcasts/News ── -->
+                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                                gap: 1rem; align-items: start; margin-bottom: 1rem;">
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
+                                🛒 Off-Paramount brand affinity
+                            </h4>
+                            <div id="jiqBsBrands"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
+                                🎙️ Podcast / news footprint
+                            </h4>
+                            <div id="jiqBsPodcasts"></div>
+                        </div>
+                    </div>
+                    <!-- ── Sheridan-universe context: SMALL, explicitly "you already have this" ── -->
+                    <div id="jiqBsSheridanContext"
+                         style="margin-top: 0.7rem; padding: 0.6rem 0.85rem; border-radius: 6px;
+                                background: rgba(168,85,247,0.06); border-left: 3px solid rgba(168,85,247,0.45);
+                                font-size: 0.72rem; line-height: 1.5; color: var(--text-secondary);"></div>
+                    <!-- ── Strategic implication ── -->
+                    <div id="jiqBsImplication"
                          style="margin-top: 0.9rem; padding: 0.75rem 0.9rem; border-radius: 6px;
-                                background: rgba(168,85,247,0.07); border-left: 3px solid rgba(168,85,247,0.55);
+                                background: rgba(96,165,250,0.08); border-left: 3px solid rgba(96,165,250,0.55);
                                 font-size: 0.78rem; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── LANDMAN CARD D: 🎯 What They're Doing While Watching
+                     (aggregate companion-behavior breakdown — sibling to
+                     the existing Moment-Level Second-Screen card.) -->
+                <div class="card" id="jiqCompanionBehaviorsCard"
+                     style="padding: 1rem; margin-top: 1rem; margin-bottom: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(20,184,166,0.06) 0%, rgba(96,165,250,0.04) 100%);
+                            border: 1px solid rgba(20,184,166,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqCompanionTitle" style="margin: 0;">🎯 What They're Doing While Watching</h3>
+                        <div id="jiqCompanionMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqCompanionSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.85rem; line-height: 1.55;"></div>
+                    <!-- Headline: fully-engaged % vs benchmark -->
+                    <div id="jiqCompanionHeadline"
+                         style="display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr);
+                                gap: 0.85rem; align-items: stretch; margin-bottom: 0.95rem;"></div>
+                    <!-- Behavior breakdown — horizontal bars, one per behavior -->
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92;">
+                        📋 Behavior breakdown (% of viewers per ep)
+                    </h4>
+                    <div id="jiqCompanionBehaviors" style="display: flex; flex-direction: column; gap: 0.4rem;"></div>
+                    <!-- Ad / partnership implications -->
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.45rem; opacity: 0.92;">
+                        💡 Ad / partnership implications
+                    </h4>
+                    <div id="jiqCompanionImplications"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                                gap: 0.55rem;"></div>
                 </div>
 
                 <!-- ════════════════════════════════════════════════════════
@@ -41238,11 +41281,12 @@
             if (typeof _jiqHideTemplatedCardsForStoryMode === 'function') {
                 _jiqHideTemplatedCardsForStoryMode(_storyMode);
             }
-            // Always reset the three Landman cards so cut/cohort
+            // Always reset the Landman story-mode cards so cut/cohort
             // switches that REMOVE the data also hide them.
             _jiqHideCard('jiqLandmanHeroCard');
             _jiqHideCard('jiqLandmanPathsCard');
-            _jiqHideCard('jiqSheridanMapCard');
+            _jiqHideCard('jiqSheridanMapCard');           // now "Beyond the Sheridan Universe"
+            _jiqHideCard('jiqCompanionBehaviorsCard');
             if (typeof renderJourneyIqLandmanHero === 'function') {
                 renderJourneyIqLandmanHero(_pickClickstreamBlock('landman_phenomenon'));
             }
@@ -41250,7 +41294,16 @@
                 renderJourneyIqLandmanPaths(_pickClickstreamBlock('landman_discovery_paths'));
             }
             if (typeof renderJourneyIqSheridanMap === 'function') {
-                renderJourneyIqSheridanMap(_pickClickstreamBlock('sheridan_universe_map'));
+                // Reads new `beyond_sheridan` block; falls back to the
+                // legacy `sheridan_universe_map` key if a stale payload
+                // happens to be served.
+                renderJourneyIqSheridanMap(
+                    _pickClickstreamBlock('beyond_sheridan')
+                    || _pickClickstreamBlock('sheridan_universe_map')
+                );
+            }
+            if (typeof renderJourneyIqCompanionBehaviors === 'function') {
+                renderJourneyIqCompanionBehaviors(_pickClickstreamBlock('companion_behaviors'));
             }
 
             if (typeof renderJourneyIqOffPlatformHalo === 'function') {
@@ -48769,15 +48822,13 @@
             var rollupEl   = document.getElementById('jiqLandmanPathsRollup');
             if (titleEl) titleEl.textContent = '🧭 ' + (p.title || 'How They Got to Landman');
             if (subEl)   subEl.textContent = p.subtitle || '';
-            var t = p.topline || {};
-            if (metaEl)  metaEl.textContent = (p.paths.length) + ' archetypal viewer journeys';
-            if (topEl) {
-                topEl.innerHTML = ''
-                    + _jiqTile('Total viewers',           _jiqFmt(t.total_viewers || 0), 'US accounts in window', '#3b82f6')
-                    + _jiqTile('Paths reconstructed',     String(t.paths_count || p.paths.length), 'each 100% clickstream-attributable', ACC)
-                    + _jiqTile('In-network share',        (t.in_network_pct || 0).toFixed(1) + '%', 'existing P+ subs via home shelf', '#a78bfa')
-                    + _jiqTile('Acquisition-path share',  (t.acquisition_paths_pct || 0).toFixed(1) + '%', 'pulled in via the 6 other paths', ACC);
-            }
+            if (metaEl)  metaEl.textContent = (p.paths.length) + ' off-Paramount discovery paths';
+            // The new payload shape no longer emits `topline` — the
+            // metrics that were there (total viewers, in-network share)
+            // are first-party data Paramount already has. We surface the
+            // in-network cohort as a small sidebar below the path list
+            // instead. Clear the topline grid so nothing renders.
+            if (topEl) topEl.innerHTML = '';
             if (listEl) {
                 var maxCohort = (p.paths || []).reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
                 listEl.innerHTML = (p.paths || []).map(function(r) {
@@ -48823,124 +48874,275 @@
                 }).join('');
             }
             if (rollupEl) {
-                rollupEl.innerHTML = '<strong style="color:#22c55e;">📊 Rollup:</strong> ' + _jiqEsc(p.rollup_note || '');
+                // Render the in-network sidebar callout (small, muted,
+                // explicitly framed as "the part Paramount already
+                // sees") followed by the rollup-note paragraph.
+                var sb = p.in_network_sidebar || null;
+                var sidebarHtml = '';
+                if (sb) {
+                    sidebarHtml = ''
+                        + '<div style="margin-bottom:0.65rem; padding:0.65rem 0.85rem; border-radius:6px;'
+                        +              ' background: rgba(148,163,184,0.08); border-left:3px solid rgba(148,163,184,0.55);">'
+                        +   '<div style="display:flex; align-items:baseline; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.3rem;">'
+                        +     '<div style="font-size:11.5px; font-weight:700; opacity:0.9;">📎 ' + _jiqEsc(sb.label || 'For context') + '</div>'
+                        +     '<div style="font-size:11px; opacity:0.7;">'
+                        +       _jiqFmt(sb.cohort_size || 0) + ' accounts · '
+                        +       (sb.pct_of_viewers || 0).toFixed(1) + '% of viewers'
+                        +     '</div>'
+                        +   '</div>'
+                        +   '<div style="font-size:11px; color: var(--text-secondary); line-height:1.55;">' + _jiqEsc(sb.summary || '') + '</div>'
+                        + '</div>';
+                }
+                rollupEl.innerHTML = sidebarHtml
+                    + '<strong style="color:#22c55e;">📊 Rollup:</strong> ' + _jiqEsc(p.rollup_note || '');
             }
         }
 
         // ──────────────────────────────────────────────────────────────
-        // CARD C · 🌟 The Sheridan Universe Map
+        // CARD C · 🌐 Beyond the Sheridan Universe
         //
-        // The IP-halo view. Prior-Sheridan-IP feeder table + per-show
-        // overlap mini-bars + the net-new-to-universe callout + binge-
-        // graduation lift bars + strategic next-show recommendation.
+        // The OFF-Paramount footprint. What Landman viewers watch on
+        // competitor streamers, which platforms they cross-sub to,
+        // which brands they index high on, which podcasts/news they
+        // consume. The Sheridan-universe overlap is shown small for
+        // context only — Paramount already has full first-party
+        // visibility on which of THEIR subs watched which of THEIR
+        // shows. This card is the rest of the audience's media life.
+        //
+        // Function name kept as renderJourneyIqSheridanMap so the
+        // dispatcher wiring + hide list don't need to be re-plumbed.
         // ──────────────────────────────────────────────────────────────
         function renderJourneyIqSheridanMap(s) {
-            if (!s || s.enabled === false || !s.feeders) {
+            // Accept either the new shape (off_paramount_shows) or the
+            // legacy shape (feeders). Auto-hide if neither present.
+            if (!s || s.enabled === false
+                || (!s.off_paramount_shows && !s.feeders)) {
                 _jiqHideCard('jiqSheridanMapCard'); return;
             }
             _jiqShowCard('jiqSheridanMapCard');
-            var ACC = '#a78bfa';
-            var titleEl     = document.getElementById('jiqSheridanMapTitle');
-            var subEl       = document.getElementById('jiqSheridanMapSubtitle');
-            var metaEl      = document.getElementById('jiqSheridanMapMeta');
-            var topEl       = document.getElementById('jiqSheridanMapTopline');
-            var feedersEl   = document.getElementById('jiqSheridanMapFeeders');
-            var overlapEl   = document.getElementById('jiqSheridanMapOverlap');
-            var netNewEl    = document.getElementById('jiqSheridanMapNetNew');
-            var bingeEl     = document.getElementById('jiqSheridanMapBinge');
-            var recEl       = document.getElementById('jiqSheridanMapRec');
-            if (titleEl) titleEl.textContent = '🌟 ' + (s.title || 'The Sheridan Universe Map');
+            var BLUE = '#60a5fa', GRN = '#22c55e', AMB = '#f59e0b', PUR = '#a78bfa';
+            var titleEl   = document.getElementById('jiqSheridanMapTitle');
+            var subEl     = document.getElementById('jiqSheridanMapSubtitle');
+            var metaEl    = document.getElementById('jiqSheridanMapMeta');
+            var showsEl   = document.getElementById('jiqBsOffShows');
+            var platEl    = document.getElementById('jiqBsCompPlatforms');
+            var brandsEl  = document.getElementById('jiqBsBrands');
+            var podsEl    = document.getElementById('jiqBsPodcasts');
+            var ctxEl     = document.getElementById('jiqBsSheridanContext');
+            var implEl    = document.getElementById('jiqBsImplication');
+
+            if (titleEl) titleEl.textContent = '🌐 ' + (s.title || 'Beyond the Sheridan Universe');
             if (subEl)   subEl.textContent = s.subtitle || '';
-            var t = s.topline || {};
-            if (metaEl)  metaEl.textContent = (s.feeders.length) + ' prior Sheridan titles tracked';
-            if (topEl) {
-                topEl.innerHTML = ''
-                    + _jiqTile('Prior-Sheridan share',  (t.pct_with_prior_sheridan_history || 0).toFixed(1) + '%', 'of Landman viewers', ACC)
-                    + _jiqTile('Pure net-new to universe', (t.pct_pure_net_new || 0).toFixed(1) + '%', 'never watched Sheridan before', '#22c55e')
-                    + _jiqTile('Net-new cohort size',   _jiqFmt(t.count_pure_net_new || 0), 'strategic-asset audience', '#22c55e')
-                    + _jiqTile('Best single feeder',    String(t.best_single_feeder || '—'), 'cross-show graduation rate', ACC);
-            }
-            if (feedersEl) {
-                var feeders = s.feeders || [];
-                var maxGrad = feeders.reduce(function(m, r) { return Math.max(m, r.graduated_to_landman || 0); }, 0);
-                var rows = feeders.map(function(r) {
-                    var rateColor = r.graduation_rate_pct > 55 ? '#22c55e' : (r.graduation_rate_pct > 45 ? '#f59e0b' : '#94a3b8');
+            if (metaEl)  metaEl.textContent = ((s.off_paramount_shows || []).length) + ' non-Paramount shows tracked · '
+                                            + ((s.competitor_platforms || []).length) + ' competitor platforms';
+
+            // ── Off-Paramount shows table (overlap %) ──
+            if (showsEl) {
+                var shows = s.off_paramount_shows || [];
+                var maxShow = shows.reduce(function(m, r) { return Math.max(m, r.overlap_pct || 0); }, 0);
+                var rows = shows.map(function(r) {
+                    var color = r.overlap_pct > 30 ? GRN : (r.overlap_pct > 20 ? AMB : BLUE);
                     return '<tr style="border-bottom:1px solid var(--border-color); vertical-align:top;">'
-                         +   '<td style="padding:8px 6px;">'
-                         +     '<div style="font-weight:700; font-size:12.5px;">' + _jiqEsc(r.title) + '</div>'
+                         +   '<td style="padding:7px 6px;">'
+                         +     '<div style="font-weight:700; font-size:12px; line-height:1.3;">' + _jiqEsc(r.title) + '</div>'
+                         +     '<div style="font-size:10px; opacity:0.7; margin-top:2px;">' + _jiqEsc(r.platform) + '</div>'
                          +     '<div style="font-size:10.5px; color: var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
                          +   '</td>'
-                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap; color: var(--text-secondary);">' + _jiqFmt(r.feeder_pool || 0) + '</td>'
-                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap;">'
-                         +     '<div style="font-weight:800; color:' + ACC + ';">' + _jiqFmt(r.graduated_to_landman || 0) + '</div>'
-                         +     '<div style="margin-top:4px; width:80px; margin-left:auto;">' + _jiqMiniBar(r.graduated_to_landman, ACC, maxGrad) + '</div>'
-                         +   '</td>'
-                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap;">'
-                         +     '<div style="font-weight:800; color:' + rateColor + ';">' + (r.graduation_rate_pct || 0).toFixed(1) + '%</div>'
+                         +   '<td style="padding:7px 6px; text-align:right; white-space:nowrap; vertical-align:middle;">'
+                         +     '<div style="font-weight:800; color:' + color + '; font-size:13px;">' + (r.overlap_pct || 0).toFixed(1) + '%</div>'
+                         +     '<div style="margin-top:4px; width:80px; margin-left:auto;">' + _jiqMiniBar(r.overlap_pct, color, maxShow) + '</div>'
                          +   '</td>'
                          + '</tr>';
                 }).join('');
-                feedersEl.innerHTML = ''
-                    + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;">'
-                    +   '<thead><tr style="text-align:left; border-bottom:1px solid var(--border-color); font-size:10.5px; opacity:0.75; text-transform:uppercase; letter-spacing:0.04em;">'
-                    +     '<th style="padding:6px 6px;">Prior Sheridan title</th>'
-                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Feeder pool</th>'
-                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">→ Landman</th>'
-                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Conv. rate</th>'
+                showsEl.innerHTML = ''
+                    + '<table style="width:100%; border-collapse:collapse; font-size:12px;">'
+                    +   '<thead><tr style="text-align:left; border-bottom:1px solid var(--border-color); font-size:10px; opacity:0.7; text-transform:uppercase; letter-spacing:0.04em;">'
+                    +     '<th style="padding:5px 6px;">Show · Platform · Why it matters</th>'
+                    +     '<th style="padding:5px 6px; text-align:right; white-space:nowrap;">Overlap</th>'
                     +   '</tr></thead><tbody>' + rows + '</tbody>'
                     + '</table>';
             }
-            if (overlapEl) {
-                var ov = s.graduation_overlap || [];
-                var maxOv = ov.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
-                overlapEl.innerHTML = ov.map(function(r) {
+
+            // ── Competitor-platform overlap mini-bars ──
+            if (platEl) {
+                var plats = s.competitor_platforms || [];
+                var maxPlat = plats.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                platEl.innerHTML = plats.map(function(r) {
                     return '<div style="padding:5px 0; border-bottom:1px solid var(--border-color);">'
                          +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
-                         +     '<div style="font-size:11.5px; font-weight:600; line-height:1.35;">' + _jiqEsc(r.label) + '</div>'
-                         +     '<div style="font-size:11.5px; font-weight:700; white-space:nowrap;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                         +     '<div style="font-size:11.5px; font-weight:700;">' + _jiqEsc(r.platform) + '</div>'
+                         +     '<div style="font-size:12px; font-weight:800; color:' + BLUE + '; white-space:nowrap;">' + (r.pct || 0).toFixed(1) + '%</div>'
                          +   '</div>'
-                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.pct, ACC, maxOv) + '</div>'
+                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.pct, BLUE, maxPlat) + '</div>'
+                         + ((r.note)
+                            ? ('<div style="font-size:10px; color: var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note) + '</div>')
+                            : '')
                          + '</div>';
                 }).join('');
             }
-            if (netNewEl && s.net_new_to_universe) {
-                var nn = s.net_new_to_universe;
-                var nnPaths = (nn.discovery_paths || []);
-                var maxNn = nnPaths.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
-                var pathsHtml = nnPaths.map(function(r) {
-                    return '<div style="padding:4px 0;">'
+
+            // ── Off-Paramount brand affinity (index vs gen-pop=100) ──
+            if (brandsEl) {
+                var brands = s.off_platform_brands || [];
+                var maxIdx = brands.reduce(function(m, r) { return Math.max(m, r.index || 0); }, 0);
+                brandsEl.innerHTML = brands.map(function(r) {
+                    var color = (r.index || 0) > 220 ? GRN : ((r.index || 0) > 175 ? AMB : BLUE);
+                    return '<div style="padding:5px 0; border-bottom:1px solid var(--border-color);">'
                          +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
-                         +     '<div style="font-size:11px;">' + _jiqEsc(r.label) + '</div>'
-                         +     '<div style="font-size:11px; font-weight:700;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                         +     '<div>'
+                         +       '<div style="font-size:11.5px; font-weight:700;">' + _jiqEsc(r.brand) + '</div>'
+                         +       '<div style="font-size:9.5px; opacity:0.6; margin-top:1px;">' + _jiqEsc(r.category || '') + '</div>'
+                         +     '</div>'
+                         +     '<div style="text-align:right; white-space:nowrap;">'
+                         +       '<div style="font-size:12px; font-weight:800; color:' + color + ';">' + Math.round(r.index || 0) + '</div>'
+                         +       '<div style="font-size:8.5px; opacity:0.6; margin-top:1px;">index</div>'
+                         +     '</div>'
                          +   '</div>'
-                         +   '<div style="margin-top:3px;">' + _jiqMiniBar(r.pct, '#22c55e', maxNn) + '</div>'
+                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.index, color, maxIdx) + '</div>'
+                         + ((r.note)
+                            ? ('<div style="font-size:10px; color: var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note) + '</div>')
+                            : '')
                          + '</div>';
                 }).join('');
-                netNewEl.innerHTML = ''
-                    + '<div style="display:flex; align-items:baseline; gap:0.7rem; margin-bottom:0.55rem; flex-wrap:wrap;">'
-                    +   '<span style="font-size:1.15rem; font-weight:800; color:#22c55e;">' + _jiqFmt(nn.count || 0) + '</span>'
-                    +   '<span style="font-size:0.78rem; font-weight:700; opacity:0.85;">net-new-to-Sheridan accounts</span>'
-                    +   '<span style="font-size:0.72rem; opacity:0.7;">(' + (nn.pct_of_landman_viewers || 0).toFixed(1) + '% of Landman viewers)</span>'
+            }
+
+            // ── Podcast / news footprint ──
+            if (podsEl) {
+                var pods = s.podcast_news_footprint || [];
+                var maxPod = pods.reduce(function(m, r) { return Math.max(m, r.index || 0); }, 0);
+                podsEl.innerHTML = pods.map(function(r) {
+                    var color = (r.index || 0) > 200 ? GRN : ((r.index || 0) > 160 ? AMB : BLUE);
+                    return '<div style="padding:5px 0; border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                         +     '<div>'
+                         +       '<div style="font-size:11.5px; font-weight:700;">' + _jiqEsc(r.item) + '</div>'
+                         +       '<div style="font-size:9.5px; opacity:0.6; margin-top:1px;">' + _jiqEsc(r.category || '') + '</div>'
+                         +     '</div>'
+                         +     '<div style="text-align:right; white-space:nowrap;">'
+                         +       '<div style="font-size:12px; font-weight:800; color:' + color + ';">' + Math.round(r.index || 0) + '</div>'
+                         +       '<div style="font-size:8.5px; opacity:0.6; margin-top:1px;">index</div>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.index, color, maxPod) + '</div>'
+                         + ((r.note)
+                            ? ('<div style="font-size:10px; color: var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note) + '</div>')
+                            : '')
+                         + '</div>';
+                }).join('');
+            }
+
+            // ── Sheridan-universe context (kept SMALL) ──
+            if (ctxEl && s.sheridan_context) {
+                var sc = s.sheridan_context;
+                ctxEl.innerHTML = '<strong style="color:' + PUR + ';">📎 Sheridan-universe context:</strong> '
+                                + (sc.pct_with_prior_sheridan_history || 0).toFixed(1) + '% of Landman viewers had prior Sheridan-IP history; '
+                                + (sc.pct_pure_net_new || 0).toFixed(1) + '% (~' + _jiqFmt(sc.count_pure_net_new || 0) + ' accounts) were net-new. '
+                                + _jiqEsc(sc.note || '');
+            }
+
+            // ── Strategic implication ──
+            if (implEl) {
+                implEl.innerHTML = '<strong style="color:' + BLUE + ';">🎯 Where the opportunity actually is:</strong> ' + _jiqEsc(s.implication || '');
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD D · 🎯 What They're Doing While Watching
+        //
+        // Aggregate companion-behavior breakdown — the sibling to the
+        // existing Moment-Level Second-Screen card. That one shows what
+        // each SCENE triggers; this one shows what % of viewers do each
+        // companion activity across the whole show (fully-engaged vs
+        // ordering food vs IMDb-ing cast vs doomscrolling, etc.).
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqCompanionBehaviors(c) {
+            if (!c || c.enabled === false || !c.behaviors) {
+                _jiqHideCard('jiqCompanionBehaviorsCard'); return;
+            }
+            _jiqShowCard('jiqCompanionBehaviorsCard');
+            var TEAL = '#14b8a6', BLUE = '#60a5fa', GRN = '#22c55e', AMB = '#f59e0b', GRY = '#94a3b8';
+            var titleEl  = document.getElementById('jiqCompanionTitle');
+            var subEl    = document.getElementById('jiqCompanionSubtitle');
+            var metaEl   = document.getElementById('jiqCompanionMeta');
+            var headEl   = document.getElementById('jiqCompanionHeadline');
+            var bhEl     = document.getElementById('jiqCompanionBehaviors');
+            var implEl   = document.getElementById('jiqCompanionImplications');
+            if (titleEl) titleEl.textContent = '🎯 ' + (c.title || "What They're Doing While Watching");
+            if (subEl)   subEl.textContent = c.subtitle || '';
+            if (metaEl)  metaEl.textContent = (c.behaviors.length) + ' companion behaviors tracked';
+
+            // ── Headline: fully-engaged stat + benchmark comparison ──
+            if (headEl) {
+                var hd = c.headline || {};
+                var liftPp = hd.lift_vs_benchmark_pp || 0;
+                var liftStr = (liftPp >= 0 ? '+' : '') + liftPp.toFixed(1) + 'pp vs benchmark';
+                headEl.innerHTML = ''
+                    // Big number tile
+                    + '<div style="padding:1rem 1.1rem; border-radius:8px;'
+                    +              ' background: rgba(20,184,166,0.10); border:1px solid rgba(20,184,166,0.35);'
+                    +              ' display:flex; flex-direction:column; justify-content:center;">'
+                    +   '<div style="font-size:9.5px; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; opacity:0.85; color:' + TEAL + ';">'
+                    +     '🎯 Fully Engaged — no second-screen</div>'
+                    +   '<div style="font-size:2.4rem; font-weight:800; color:' + TEAL + '; line-height:1; margin-top:0.4rem; font-variant-numeric:tabular-nums;">'
+                    +     (hd.fully_engaged_pct || 0).toFixed(1) + '%</div>'
+                    +   '<div style="font-size:11px; opacity:0.8; margin-top:0.4rem;">'
+                    +     'vs ' + (hd.benchmark_pct || 0).toFixed(0) + '% streaming benchmark · '
+                    +     '<span style="color:' + GRN + '; font-weight:700;">' + liftStr + '</span></div>'
                     + '</div>'
-                    + '<div style="font-size:0.78rem; color: var(--text-secondary); line-height:1.55; margin-bottom:0.7rem;">' + _jiqEsc(nn.note || '') + '</div>'
-                    + '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.35rem;">How the net-new cohort got in:</div>'
-                    + pathsHtml;
+                    // Note tile
+                    + '<div style="padding:0.95rem 1.05rem; border-radius:8px;'
+                    +              ' background: rgba(255,255,255,0.025); border:1px solid var(--border-color);'
+                    +              ' display:flex; align-items:center;">'
+                    +   '<div>'
+                    +     '<div style="font-size:11px; font-weight:700; opacity:0.85; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.06em;">What this tells us</div>'
+                    +     '<div style="font-size:12px; line-height:1.55; color: var(--text-secondary);">' + _jiqEsc(hd.note || '') + '</div>'
+                    +     '<div style="margin-top:0.5rem; font-size:11px; color: var(--text-secondary);">'
+                    +       'The remaining <strong style="color:' + AMB + ';">' + (hd.second_screen_pct || 0).toFixed(1) + '%</strong> ARE multitasking — but selectively. The breakdown below shows what they\'re actually doing.</div>'
+                    +   '</div>'
+                    + '</div>';
             }
-            if (bingeEl) {
-                var binge = s.binge_graduation || [];
-                var maxLift = binge.reduce(function(m, r) { return Math.max(m, r.lift_pct || 0); }, 0);
-                bingeEl.innerHTML = binge.map(function(r) {
-                    return '<div style="padding:5px 0; border-bottom:1px solid var(--border-color);">'
-                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
-                         +     '<div style="font-size:12px; font-weight:600;">' + _jiqEsc(r.label) + '</div>'
-                         +     '<div style="font-size:12px; font-weight:800; color:#f59e0b;">+' + (r.lift_pct || 0).toFixed(0) + '%</div>'
+
+            // ── Behavior rows: horizontal mini-bars sorted desc by % ──
+            if (bhEl) {
+                var rows = (c.behaviors || []).slice().sort(function(a, b) {
+                    return (b.pct || 0) - (a.pct || 0);
+                });
+                var maxPct = rows.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                bhEl.innerHTML = rows.map(function(r) {
+                    var isEngaged = (r.label || '').toLowerCase().indexOf('fully engaged') !== -1;
+                    var barColor = isEngaged ? TEAL : (r.pct > 20 ? AMB : (r.pct > 10 ? BLUE : GRY));
+                    return '<details style="padding:0.5rem 0.75rem; border-radius:6px;'
+                         +                ' background: rgba(255,255,255,0.025); border-left:3px solid ' + barColor + ';">'
+                         +   '<summary style="cursor:pointer; list-style:none; outline:none;">'
+                         +     '<div style="display:grid; grid-template-columns: 28px minmax(0, 1fr) 70px 110px; gap:0.6rem; align-items:center;">'
+                         +       '<div style="font-size:1.05rem; line-height:1; text-align:center;">' + _jiqEsc(r.icon || '•') + '</div>'
+                         +       '<div style="font-size:11.5px; font-weight:600; line-height:1.35;">' + _jiqEsc(r.label) + '</div>'
+                         +       '<div style="text-align:right; font-size:13px; font-weight:800; color:' + barColor + '; font-variant-numeric:tabular-nums;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                         +       '<div>' + _jiqMiniBar(r.pct, barColor, maxPct) + '</div>'
+                         +     '</div>'
+                         +   '</summary>'
+                         +   '<div style="margin-top:0.55rem; padding-top:0.5rem; border-top:1px dashed var(--border-color);'
+                         +              ' font-size:11px; line-height:1.55; color: var(--text-secondary);">'
+                         +     ((r.window) ? '<div style="margin-bottom:0.3rem;"><strong style="color:' + barColor + ';">⏱️ Typical window:</strong> ' + _jiqEsc(r.window) + '</div>' : '')
+                         +     ((r.top_sites) ? '<div style="margin-bottom:0.3rem;"><strong style="color:' + barColor + ';">🔗 Top destinations:</strong> ' + _jiqEsc(r.top_sites) + '</div>' : '')
+                         +     ((r.note) ? '<div style="margin-bottom:0.3rem;">' + _jiqEsc(r.note) + '</div>' : '')
+                         +     ((r.implication) ? '<div style="margin-top:0.45rem; padding:0.45rem 0.6rem; border-radius:4px; background:' + barColor + '12; border-left:2px solid ' + barColor + '88;"><strong style="color:' + barColor + ';">→ Implication:</strong> ' + _jiqEsc(r.implication) + '</div>' : '')
                          +   '</div>'
-                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.lift_pct, '#f59e0b', maxLift) + '</div>'
-                         + '</div>';
+                         + '</details>';
                 }).join('');
             }
-            if (recEl) {
-                recEl.innerHTML = '<strong style="color:#a78bfa;">🎯 Next-show recommendation:</strong> ' + _jiqEsc(s.next_recommendation || '');
+
+            // ── Ad / partnership implications grid ──
+            if (implEl) {
+                var imps = c.ad_implications_summary || [];
+                implEl.innerHTML = imps.map(function(im) {
+                    return '<div style="padding:0.7rem 0.85rem; border-radius:6px;'
+                         +              ' background: rgba(255,255,255,0.025); border:1px solid rgba(20,184,166,0.22);'
+                         +              ' border-left:3px solid ' + TEAL + ';">'
+                         +   '<div style="font-size:11.5px; font-weight:700; margin-bottom:0.35rem; line-height:1.35;">' + _jiqEsc(im.title || '') + '</div>'
+                         +   '<div style="font-size:11px; color: var(--text-secondary); line-height:1.55;">' + _jiqEsc(im.detail || '') + '</div>'
+                         + '</div>';
+                }).join('');
             }
         }
 
