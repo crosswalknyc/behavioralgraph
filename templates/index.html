@@ -25756,68 +25756,21 @@
                      circuits harmlessly. -->
                 
 
-                <!-- RETIRED: Subscriber-IQ-mirror cards
-                     (Accounts / Revenue / Timing / SVOD Platforms)
-                     hidden across all JIQ runs per request. They were
-                     mirrors of the standalone Subscriber IQ dashboard;
-                     subscriber metrics for journey context now live in
-                     the interactive Subscriber Lifecycle card above. -->
-                <div class="card" id="jiqSubIqAccountsCard"
-                     style="display: none !important; padding: 1rem; margin-top: 1rem;
-                            background: linear-gradient(135deg, rgba(91,108,255,0.06) 0%, rgba(91,108,255,0.02) 100%);
-                            border: 1px solid rgba(91,108,255,0.22);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 style="margin: 0;">👥 Subscriber Acquisition - from Subscriber IQ</h3>
-                        <div id="jiqSubIqAccountsMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqSubIqAccountsSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
-                    <div id="jiqSubIqAccountsTiles"
-                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-                                gap: 0.6rem; margin-bottom: 0.4rem;"></div>
-                    <div id="jiqSubIqAccountsNote" style="margin-top: 0.5rem; font-size: 0.7rem; color: var(--text-secondary); font-style: italic;"></div>
-                </div>
-
-                <div class="card" id="jiqSubIqRevenueCard"
-                     style="display: none !important; padding: 1rem; margin-top: 1rem;
-                            background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(34,197,94,0.02) 100%);
-                            border: 1px solid rgba(34,197,94,0.22);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 style="margin: 0;">💰 Subscription Revenue Impact - from Subscriber IQ</h3>
-                        <div id="jiqSubIqRevenueMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqSubIqRevenueSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
-                    <div id="jiqSubIqRevenueRows"></div>
-                    <div id="jiqSubIqRevenueNote" style="margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); font-style: italic;"></div>
-                </div>
-
-                <div class="card" id="jiqSubIqTimingCard"
-                     style="display: none !important; padding: 1rem; margin-top: 1rem;
-                            background: linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(245,158,11,0.02) 100%);
-                            border: 1px solid rgba(245,158,11,0.22);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 style="margin: 0;">⏱️ Signup Timing - from Subscriber IQ</h3>
-                        <div id="jiqSubIqTimingMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqSubIqTimingSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
-                    <div id="jiqSubIqTimingBuckets"
-                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-                                gap: 0.6rem; margin-bottom: 0.8rem;"></div>
-                    <div id="jiqSubIqTimingChart" style="overflow-x: auto;"></div>
-                    <div id="jiqSubIqTimingNote" style="margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); font-style: italic;"></div>
-                </div>
-
-                <div class="card" id="jiqSubIqPlatformsCard"
-                     style="display: none !important; padding: 1rem; margin-top: 1rem;
-                            background: linear-gradient(135deg, rgba(168,85,247,0.06) 0%, rgba(168,85,247,0.02) 100%);
-                            border: 1px solid rgba(168,85,247,0.22);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 style="margin: 0;">📱 SVOD Platform Overlap - from Subscriber IQ</h3>
-                        <div id="jiqSubIqPlatformsMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqSubIqPlatformsSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
-                    <div id="jiqSubIqPlatformsList"></div>
-                    <div id="jiqSubIqPlatformsNote" style="margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); font-style: italic;"></div>
-                </div>
+                <!-- REMOVED per request: Subscriber-IQ-mirror cards
+                     (👥 Subscriber Acquisition, 💰 Subscription Revenue
+                     Impact, ⏱️ Signup Timing, 📱 SVOD Platform Overlap
+                     - all suffixed "from Subscriber IQ"). The previous
+                     "RETIRED display:none !important" approach was
+                     being overridden at runtime by
+                     renderJourneyIqSubscriberSummary() setting
+                     card.style.display = '' whenever the payload
+                     shipped sub.accounts / sub.revenue / sub.timing /
+                     sub.svod_platform_overlap. With the markup gone,
+                     every if (card) / if (metaEl) / etc. guard in
+                     the renderer short-circuits harmlessly. Journey
+                     context for subscriber metrics now lives in the
+                     interactive Subscriber Lifecycle card above. -->
+                
             </div>
         </div><!-- End journeyIQView -->
 
