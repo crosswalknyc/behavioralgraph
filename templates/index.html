@@ -24538,7 +24538,7 @@
 
 
                 <!-- KPI strip -->
-                <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0 0.4rem;">
+                <div id="jiqKpiStripTitleRow" style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0 0.4rem;">
                     <h3 id="jiqKpiStripTitle" style="margin: 0; font-size: 1.0rem;">📊 Headline Funnel</h3>
                 </div>
                 <details id="jiqKpiStripHowto" style="margin: 0 0 0.6rem;">
@@ -25074,9 +25074,6 @@
                         🏜️ Why Season 2 became a Paramount+ tentpole event
                     </h3>
                     <div id="jiqLandmanHeroSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.85rem; line-height: 1.55;"></div>
-                    <div id="jiqLandmanHeroTopline"
-                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-                                gap: 0.5rem; margin-bottom: 1rem;"></div>
                     <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92;">
                         🔥 The viral moments that drove the wake
                     </h4>
@@ -48626,6 +48623,12 @@
         // new story cards + the six clickstream-only insight cards take
         // their place.
         var _JIQ_STORY_MODE_HIDE_LIST = [
+            // ── Top-of-page KPI surfaces (first-party data only,
+            //    Paramount already has these — they're not the pitch) ──
+            'jiqKpiStripTitleRow',       // "📊 Headline Viewership" title row
+            'jiqKpiStripHowto',          // "How to read this chart" disclosure
+            'jiqKpiStrip',               // the actual KPI tile grid
+            // ── Templated JIQ cards ──
             'jiqTvTrendsCard',           // generic TV trends
             'jiqEcosystemCard',          // generic ecosystem panel
             'jiqAudienceHypCard',        // "Cohorts with Strong Intent" (templated)
@@ -48675,23 +48678,14 @@
             var titleEl  = document.getElementById('jiqLandmanHeroTitle');
             var subEl    = document.getElementById('jiqLandmanHeroSubtitle');
             var metaEl   = document.getElementById('jiqLandmanHeroMeta');
-            var topEl    = document.getElementById('jiqLandmanHeroTopline');
             var viralEl  = document.getElementById('jiqLandmanHeroViral');
             var whyEl    = document.getElementById('jiqLandmanHeroWhy');
             if (titleEl) titleEl.textContent = '🏜️ ' + (h.title || 'The Landman Phenomenon');
             if (subEl)   subEl.textContent = h.subtitle || '';
-            var t = h.topline || {};
-            if (metaEl)  metaEl.textContent = 'Season 2 launch window · ' + _jiqFmt(t.total_us_viewers || 0) + ' US viewers';
-            if (topEl) {
-                topEl.innerHTML = ''
-                    + _jiqTile('Total US viewers',     _jiqFmt(t.total_us_viewers || 0), '90-day window', ACC)
-                    + _jiqTile('Net-new P+ subs',      _jiqFmt(t.net_new_pplus_subs || 0), 'pulled by Landman', '#22c55e')
-                    + _jiqTile('TRUE incremental',     _jiqFmt(t.true_incremental_subs || 0), 'vs matched control', '#22c55e')
-                    + _jiqTile('Brand-new to P+',      (t.pct_viewers_brand_new_to_pplus || 0).toFixed(1) + '%', 'no prior 30d P+ activity', ACC)
-                    + _jiqTile('Completion rate',      (t.completion_rate_pct || 0).toFixed(1) + '%', 'avg ' + (t.avg_minutes_per_viewer || 0) + ' min/viewer', '#3b82f6')
-                    + _jiqTile('Repeat-viewer rate',   (t.repeat_viewer_pct || 0).toFixed(1) + '%', 'household re-watch frequency', '#a78bfa')
-                    + _jiqTile('Sheridan-slate rank',  '#' + (t.rank_in_sheridan_slate || '—'), 'by net-new sub pull (this year)', '#f59e0b');
-            }
+            // Meta line intentionally generic — no first-party viewer
+            // counts up here (Paramount has those). The off-platform
+            // evidence lives inside each viral-moment card below.
+            if (metaEl)  metaEl.textContent = 'Season 2 launch window · clickstream-observed wake';
             if (viralEl) {
                 viralEl.innerHTML = (h.viral_moments || []).map(function(m) {
                     return '<div style="padding:0.8rem 0.95rem; border-radius:6px;'
