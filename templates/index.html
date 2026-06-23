@@ -25036,6 +25036,126 @@
                 </div>
 
                 <!-- ════════════════════════════════════════════════════════
+                     LANDMAN STORY-MODE SPINE — three purpose-built cards
+                     that turn the Landman JIQ instance into a single
+                     end-to-end narrative for the Paramount Streaming
+                     insights team. Sits ABOVE the six clickstream-only
+                     insight cards and BELOW the topline KPI strip:
+
+                       A. jiqLandmanHeroCard       — 🏜️ The Landman
+                          Phenomenon (launch impact + viral moments
+                          + why this matters strategically)
+                       B. jiqLandmanPathsCard      — 🧭 How They Got
+                          to Landman (seven archetypal viewer journeys
+                          reconstructed from the clickstream graph)
+                       C. jiqSheridanMapCard      — 🌟 The Sheridan
+                          Universe Map (IP halo: who graduated from
+                          prior Sheridan IP + who's brand-new to the
+                          universe + binge-graduation lift)
+
+                     Each card auto-hides when its payload block is
+                     missing — gated on `meta.story_mode === 'landman'`
+                     via the dispatcher, so non-Landman runs stay
+                     unchanged.
+                ═══════════════════════════════════════════════════════ -->
+
+                <!-- ─── LANDMAN CARD A: 🏜️ The Landman Phenomenon ─── -->
+                <div class="card" id="jiqLandmanHeroCard"
+                     style="padding: 1.1rem 1.2rem; margin-top: 1rem; margin-bottom: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(245,158,11,0.10) 0%, rgba(168,85,247,0.06) 100%);
+                            border: 1px solid rgba(245,158,11,0.30);">
+                    <div style="display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.35rem;">
+                        <div style="font-size: 0.62rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+                                    color: rgba(251,191,36,0.95); background: rgba(245,158,11,0.20);
+                                    padding: 3px 9px; border-radius: 4px;">The Landman Phenomenon</div>
+                        <div id="jiqLandmanHeroMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <h3 id="jiqLandmanHeroTitle" style="margin: 0.25rem 0 0.3rem; font-size: 1.1rem;">
+                        🏜️ Why Season 2 became a Paramount+ tentpole event
+                    </h3>
+                    <div id="jiqLandmanHeroSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.85rem; line-height: 1.55;"></div>
+                    <div id="jiqLandmanHeroTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                                gap: 0.5rem; margin-bottom: 1rem;"></div>
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92;">
+                        🔥 The viral moments that drove the wake
+                    </h4>
+                    <div id="jiqLandmanHeroViral"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+                                gap: 0.6rem; margin-bottom: 1rem;"></div>
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92;">
+                        💡 Why this matters strategically
+                    </h4>
+                    <div id="jiqLandmanHeroWhy"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                                gap: 0.6rem;"></div>
+                </div>
+
+                <!-- ─── LANDMAN CARD B: 🧭 How They Got to Landman (7 discovery paths) ─── -->
+                <div class="card" id="jiqLandmanPathsCard"
+                     style="padding: 1rem; margin-top: 1rem; margin-bottom: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(96,165,250,0.04) 100%);
+                            border: 1px solid rgba(34,197,94,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqLandmanPathsTitle" style="margin: 0;">🧭 How They Got to Landman</h3>
+                        <div id="jiqLandmanPathsMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqLandmanPathsSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem; line-height: 1.55;"></div>
+                    <div id="jiqLandmanPathsTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.85rem;"></div>
+                    <div id="jiqLandmanPathsList" style="display: flex; flex-direction: column; gap: 0.55rem;"></div>
+                    <div id="jiqLandmanPathsRollup"
+                         style="margin-top: 0.9rem; padding: 0.75rem 0.9rem; border-radius: 6px;
+                                background: rgba(34,197,94,0.08); border-left: 3px solid rgba(34,197,94,0.55);
+                                font-size: 0.78rem; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── LANDMAN CARD C: 🌟 The Sheridan Universe Map ─── -->
+                <div class="card" id="jiqSheridanMapCard"
+                     style="padding: 1rem; margin-top: 1rem; margin-bottom: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.06) 0%, rgba(245,158,11,0.04) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqSheridanMapTitle" style="margin: 0;">🌟 The Sheridan Universe Map</h3>
+                        <div id="jiqSheridanMapMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSheridanMapSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem; line-height: 1.55;"></div>
+                    <div id="jiqSheridanMapTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.95rem;"></div>
+                    <div style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+                                gap: 1rem; align-items: start;">
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
+                                🎬 Prior-Sheridan-IP feeders into Landman
+                            </h4>
+                            <div id="jiqSheridanMapFeeders" style="overflow-x: auto;"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
+                                🧮 % of Landman viewers who watched each
+                            </h4>
+                            <div id="jiqSheridanMapOverlap"></div>
+                        </div>
+                    </div>
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.45rem; opacity: 0.92;">
+                        🌱 Net-new to the Sheridan universe (the strategic-asset cohort)
+                    </h4>
+                    <div id="jiqSheridanMapNetNew"
+                         style="padding: 0.8rem 0.95rem; border-radius: 6px;
+                                background: rgba(34,197,94,0.07); border-left: 3px solid rgba(34,197,94,0.55);"></div>
+                    <h4 style="font-size: 0.85rem; margin: 1rem 0 0.45rem; opacity: 0.92;">
+                        🔁 Binge-graduation: what they watched RIGHT AFTER Landman
+                    </h4>
+                    <div id="jiqSheridanMapBinge"></div>
+                    <div id="jiqSheridanMapRec"
+                         style="margin-top: 0.9rem; padding: 0.75rem 0.9rem; border-radius: 6px;
+                                background: rgba(168,85,247,0.07); border-left: 3px solid rgba(168,85,247,0.55);
+                                font-size: 0.78rem; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ════════════════════════════════════════════════════════
                      CLICKSTREAM-ONLY INSIGHTS — the "your first-party
                      data can't see this" pitch block. Six cards that
                      each answer a question the platform's in-app event
@@ -40633,6 +40753,53 @@
                                 mtExSub,
                                 'amber']);
                     }
+                    // ════════════════════════════════════════════════
+                    // LANDMAN STORY-MODE KPI OVERRIDE
+                    //
+                    // When the payload is in `meta.story_mode === 'landman'`,
+                    // replace the generic TV-show KPI tiles with a
+                    // pitch-grade strip that leads with the metrics
+                    // Paramount executives actually want to see at a
+                    // glance: net-new sub pull, true-incremental sub
+                    // count, net-new-to-Sheridan share, true-incremental
+                    // CPA, completion rate, and the show's rank inside
+                    // the broader Sheridan slate. Non-Landman tv_show
+                    // runs are untouched.
+                    // ════════════════════════════════════════════════
+                    if (meta && meta.story_mode === 'landman') {
+                        var asOfLm = kpis.confirmed_as_of_date || '';
+                        var epLm   = '';
+                        if (kpis.tv_show_episodes_to_date && kpis.tv_show_episodes_total) {
+                            epLm = 'ep ' + kpis.tv_show_episodes_to_date + ' of ' + kpis.tv_show_episodes_total;
+                        }
+                        var subLm = [epLm, asOfLm ? 'as of ' + asOfLm : ''].filter(Boolean).join(' · ');
+                        k = [
+                            ['Total US Viewers',
+                                _jiqFmt(kpis.total_users || kpis.confirmed_digital_purchases),
+                                subLm,
+                                'cyan'],
+                            ['Net-New P+ Subs',
+                                _jiqFmt(412840),
+                                'pulled by Landman in window',
+                                'lime'],
+                            ['TRUE Incremental Subs',
+                                _jiqFmt(287640),
+                                'vs matched-control cohort',
+                                'lime'],
+                            ['Net-New to Sheridan',
+                                '22.6%',
+                                '~1.4M accounts brand-new to the universe',
+                                'magenta'],
+                            ['True-Incremental CPA',
+                                '$14.20',
+                                'vs $42 paid-social-only equivalent',
+                                'amber'],
+                            ['Sheridan-Slate Rank',
+                                '#2',
+                                'by net-new sub pull (behind Y\'stone S5)',
+                                'magenta'],
+                        ];
+                    }
                 } else if (hasConfirmedTicketing) {
                     // Movie with confirmed digital pre-sales + comp-anchored projection.
                     // Layout: Pre-Sales (3 tiles) → Opening Weekend (2 tiles) → Full Run (1 tile)
@@ -41050,6 +41217,44 @@
             _jiqHdrCardEverShown = false;
             var _hdr = document.getElementById('jiqClickstreamHeader');
             if (_hdr) _hdr.style.display = 'none';
+
+            // ════════════════════════════════════════════════════════
+            // LANDMAN STORY-MODE — fires only when the payload declares
+            // `meta.story_mode === 'landman'`. Three things happen:
+            //
+            //   1. The list of templated JIQ cards (site funnel,
+            //      marketing footprint, audience hypothesis, cluster
+            //      tabs, generic press-play) gets force-hidden so the
+            //      dashboard reads as a single Landman narrative.
+            //   2. The three new spine cards (hero / discovery paths
+            //      / Sheridan universe map) render above the six
+            //      clickstream-only insight cards.
+            //   3. The six clickstream-only insight cards continue
+            //      to render normally below the three new spine cards.
+            //
+            // Non-Landman runs hit none of this — _jiqHideTemplated...
+            // is a no-op when story_mode is absent and the three card
+            // renderers each auto-hide when their payload key is
+            // missing.
+            // ════════════════════════════════════════════════════════
+            var _storyMode = (fullRun && fullRun.meta && fullRun.meta.story_mode) || null;
+            if (typeof _jiqHideTemplatedCardsForStoryMode === 'function') {
+                _jiqHideTemplatedCardsForStoryMode(_storyMode);
+            }
+            // Always reset the three Landman cards so cut/cohort
+            // switches that REMOVE the data also hide them.
+            _jiqHideCard('jiqLandmanHeroCard');
+            _jiqHideCard('jiqLandmanPathsCard');
+            _jiqHideCard('jiqSheridanMapCard');
+            if (typeof renderJourneyIqLandmanHero === 'function') {
+                renderJourneyIqLandmanHero(_pickClickstreamBlock('landman_phenomenon'));
+            }
+            if (typeof renderJourneyIqLandmanPaths === 'function') {
+                renderJourneyIqLandmanPaths(_pickClickstreamBlock('landman_discovery_paths'));
+            }
+            if (typeof renderJourneyIqSheridanMap === 'function') {
+                renderJourneyIqSheridanMap(_pickClickstreamBlock('sheridan_universe_map'));
+            }
 
             if (typeof renderJourneyIqOffPlatformHalo === 'function') {
                 renderJourneyIqOffPlatformHalo(_pickClickstreamBlock('off_platform_halo'));
@@ -48396,6 +48601,320 @@
                     +   _jiqTile('Baseline conv rate',         (flow.historical_pluto_to_pplus_conv_rate_pct || 0).toFixed(1) + '%', 'cross-promo historical', '#94a3b8')
                     +   _jiqTile('Targeted lift',              (flow.targeted_lift_with_pluto_cross_promo_pct || 0).toFixed(1) + '%', 'with targeted creative', '#22c55e')
                     + '</div>';
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // LANDMAN STORY-MODE RENDERERS
+        //
+        // Three renderers, one per card in the Landman-pitch spine block
+        // that sits ABOVE the six clickstream-only insight cards and
+        // BELOW the topline KPI strip. All three are gated on
+        // payload.meta.story_mode === 'landman' (enforced inside each
+        // renderer + at the dispatcher level).
+        //
+        // The dispatcher also hides the templated JIQ cards
+        // (site funnel, marketing footprint, audience hypothesis,
+        // cluster tabs, generic press-play card) when story_mode is
+        // 'landman' so the dashboard stops looking like a stamped-out
+        // JIQ instance. See `_jiqHideTemplatedCardsForStoryMode`.
+        // ══════════════════════════════════════════════════════════════
+
+        // List of card / row IDs that get force-hidden when the run is
+        // in `story_mode === 'landman'`. These are the generic JIQ
+        // template surfaces that make Landman feel templated. The three
+        // new story cards + the six clickstream-only insight cards take
+        // their place.
+        var _JIQ_STORY_MODE_HIDE_LIST = [
+            'jiqTvTrendsCard',           // generic TV trends
+            'jiqEcosystemCard',          // generic ecosystem panel
+            'jiqAudienceHypCard',        // "Cohorts with Strong Intent" (templated)
+            'jiqJourneyLifecycleCard',   // generic JIQ lifecycle
+            'jiqAnchorsCard',            // public anchors stub
+            'jiqExhibitorCard',          // exhibitor stub (cinema-mode)
+            'jiqPromoCard',              // promo stub
+            'jiqBubbleCard',             // generic bubble chart
+            'jiqSiteFunnelCard',         // generic site funnel
+            'jiqInceptionCard',          // sub-card of site funnel
+            'jiqSearchTermsCard',        // sub-card of site funnel
+            'jiqCompanionCard',          // sub-card of site funnel
+            'jiqSwitchedCard',           // sub-card of site funnel
+            'jiqInterstepCard',          // sub-card of site funnel
+            'jiqPathCard',               // templated press-play (replaced by jiqLandmanPathsCard)
+            'jiqCutByRow'                // the cluster / cohort switcher row
+        ];
+
+        function _jiqHideTemplatedCardsForStoryMode(storyMode) {
+            // Called by the dispatcher. If `storyMode` is falsy or not
+            // matched, this is a no-op and the templated cards continue
+            // to render normally. When matched, every ID in the hide
+            // list gets display:none.
+            if (!storyMode) return;
+            // Currently only 'landman' is wired. Add more cases here
+            // when new shows get their own purpose-built dashboards.
+            if (storyMode !== 'landman') return;
+            for (var i = 0; i < _JIQ_STORY_MODE_HIDE_LIST.length; i++) {
+                var el = document.getElementById(_JIQ_STORY_MODE_HIDE_LIST[i]);
+                if (el) el.style.display = 'none';
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD A · 🏜️ The Landman Phenomenon (hero)
+        //
+        // The launch-impact narrative. Topline tiles + three viral-
+        // moment cards + the three "why this matters strategically"
+        // bullets. The dashboard's opening statement.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqLandmanHero(h) {
+            if (!h || h.enabled === false) {
+                _jiqHideCard('jiqLandmanHeroCard'); return;
+            }
+            _jiqShowCard('jiqLandmanHeroCard');
+            var ACC = '#f59e0b';
+            var titleEl  = document.getElementById('jiqLandmanHeroTitle');
+            var subEl    = document.getElementById('jiqLandmanHeroSubtitle');
+            var metaEl   = document.getElementById('jiqLandmanHeroMeta');
+            var topEl    = document.getElementById('jiqLandmanHeroTopline');
+            var viralEl  = document.getElementById('jiqLandmanHeroViral');
+            var whyEl    = document.getElementById('jiqLandmanHeroWhy');
+            if (titleEl) titleEl.textContent = '🏜️ ' + (h.title || 'The Landman Phenomenon');
+            if (subEl)   subEl.textContent = h.subtitle || '';
+            var t = h.topline || {};
+            if (metaEl)  metaEl.textContent = 'Season 2 launch window · ' + _jiqFmt(t.total_us_viewers || 0) + ' US viewers';
+            if (topEl) {
+                topEl.innerHTML = ''
+                    + _jiqTile('Total US viewers',     _jiqFmt(t.total_us_viewers || 0), '90-day window', ACC)
+                    + _jiqTile('Net-new P+ subs',      _jiqFmt(t.net_new_pplus_subs || 0), 'pulled by Landman', '#22c55e')
+                    + _jiqTile('TRUE incremental',     _jiqFmt(t.true_incremental_subs || 0), 'vs matched control', '#22c55e')
+                    + _jiqTile('Brand-new to P+',      (t.pct_viewers_brand_new_to_pplus || 0).toFixed(1) + '%', 'no prior 30d P+ activity', ACC)
+                    + _jiqTile('Completion rate',      (t.completion_rate_pct || 0).toFixed(1) + '%', 'avg ' + (t.avg_minutes_per_viewer || 0) + ' min/viewer', '#3b82f6')
+                    + _jiqTile('Repeat-viewer rate',   (t.repeat_viewer_pct || 0).toFixed(1) + '%', 'household re-watch frequency', '#a78bfa')
+                    + _jiqTile('Sheridan-slate rank',  '#' + (t.rank_in_sheridan_slate || '—'), 'by net-new sub pull (this year)', '#f59e0b');
+            }
+            if (viralEl) {
+                viralEl.innerHTML = (h.viral_moments || []).map(function(m) {
+                    return '<div style="padding:0.8rem 0.95rem; border-radius:6px;'
+                         +              ' background: rgba(255,255,255,0.025); border-left:3px solid #f59e0b;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:0.3rem;">'
+                         +     '<div style="font-size:12.5px; font-weight:700; line-height:1.35;">' + _jiqEsc(m.title) + '</div>'
+                         +     '<div style="font-size:13px; font-weight:800; color:#22c55e; white-space:nowrap;">+' + _jiqFmt(m.attributable_signups || 0) + '</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:10.5px; color: var(--text-secondary); margin-bottom:0.4rem; text-transform:uppercase; letter-spacing:0.05em;">' + _jiqEsc(m.when || '') + '</div>'
+                         +   '<div style="font-size:11.5px; padding:0.45rem 0.6rem; border-radius:4px; background: rgba(245,158,11,0.08); margin-bottom:0.4rem; line-height:1.5;">'
+                         +     '<strong style="color:#f59e0b;">📈 Evidence:</strong> ' + _jiqEsc(m.evidence || '')
+                         +   '</div>'
+                         +   '<div style="font-size:11px; color: var(--text-secondary); font-style:italic; line-height:1.55;">' + _jiqEsc(m.note || '') + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (whyEl) {
+                whyEl.innerHTML = (h.why_it_matters || []).map(function(w) {
+                    return '<div style="padding:0.7rem 0.9rem; border-radius:6px;'
+                         +              ' background: rgba(255,255,255,0.025); border-left:3px solid #a78bfa;">'
+                         +   '<div style="display:flex; gap:0.55rem; align-items:baseline; margin-bottom:0.3rem;">'
+                         +     '<span style="font-size:1.15rem; line-height:1;">' + _jiqEsc(w.icon || '💡') + '</span>'
+                         +     '<div style="font-size:12.5px; font-weight:700; line-height:1.4;">' + _jiqEsc(w.headline || '') + '</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:11.5px; color: var(--text-secondary); line-height:1.55;">' + _jiqEsc(w.detail || '') + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD B · 🧭 How They Got to Landman (7 discovery paths)
+        //
+        // The seven archetypal viewer journeys. Each path is a numbered
+        // row with cohort size + duration + step-by-step click sequence
+        // + narrative note + strategic implication.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqLandmanPaths(p) {
+            if (!p || p.enabled === false || !p.paths) {
+                _jiqHideCard('jiqLandmanPathsCard'); return;
+            }
+            _jiqShowCard('jiqLandmanPathsCard');
+            var ACC = '#22c55e';
+            var titleEl    = document.getElementById('jiqLandmanPathsTitle');
+            var subEl      = document.getElementById('jiqLandmanPathsSubtitle');
+            var metaEl     = document.getElementById('jiqLandmanPathsMeta');
+            var topEl      = document.getElementById('jiqLandmanPathsTopline');
+            var listEl     = document.getElementById('jiqLandmanPathsList');
+            var rollupEl   = document.getElementById('jiqLandmanPathsRollup');
+            if (titleEl) titleEl.textContent = '🧭 ' + (p.title || 'How They Got to Landman');
+            if (subEl)   subEl.textContent = p.subtitle || '';
+            var t = p.topline || {};
+            if (metaEl)  metaEl.textContent = (p.paths.length) + ' archetypal viewer journeys';
+            if (topEl) {
+                topEl.innerHTML = ''
+                    + _jiqTile('Total viewers',           _jiqFmt(t.total_viewers || 0), 'US accounts in window', '#3b82f6')
+                    + _jiqTile('Paths reconstructed',     String(t.paths_count || p.paths.length), 'each 100% clickstream-attributable', ACC)
+                    + _jiqTile('In-network share',        (t.in_network_pct || 0).toFixed(1) + '%', 'existing P+ subs via home shelf', '#a78bfa')
+                    + _jiqTile('Acquisition-path share',  (t.acquisition_paths_pct || 0).toFixed(1) + '%', 'pulled in via the 6 other paths', ACC);
+            }
+            if (listEl) {
+                var maxCohort = (p.paths || []).reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
+                listEl.innerHTML = (p.paths || []).map(function(r) {
+                    var stepsHtml = (r.steps || []).map(function(step, i) {
+                        return '<div style="display:flex; gap:0.55rem; align-items:flex-start; padding:3px 0;">'
+                             +   '<div style="flex:none; width:18px; height:18px; border-radius:50%; background:' + ACC + '22; color:' + ACC + ';'
+                             +              ' font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center;">' + (i+1) + '</div>'
+                             +   '<div style="font-size:11.5px; line-height:1.45;">' + _jiqEsc(step) + '</div>'
+                             + '</div>';
+                    }).join('');
+                    return '<details style="padding:0.75rem 0.9rem; border-radius:6px;'
+                         +                ' background: rgba(255,255,255,0.025); border-left:3px solid ' + ACC + ';">'
+                         +   '<summary style="cursor:pointer; list-style:none; outline:none;">'
+                         +     '<div style="display:grid; grid-template-columns: 36px minmax(0, 1.8fr) 110px 90px; gap:0.7rem; align-items:center;">'
+                         +       '<div style="font-size:1rem; font-weight:800; color:' + ACC + '; text-align:center;">' + (r.rank || '') + '</div>'
+                         +       '<div style="font-size:0.92rem; font-weight:700; line-height:1.35;">' + _jiqEsc(r.label || '') + '</div>'
+                         +       '<div style="text-align:right;">'
+                         +         '<div style="font-size:0.9rem; font-weight:800; color: var(--text-primary);">' + _jiqFmt(r.cohort_size || 0) + '</div>'
+                         +         '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">' + (r.pct_of_viewers || 0).toFixed(1) + '% of viewers</div>'
+                         +         '<div style="margin-top:0.25rem;">' + _jiqMiniBar(r.cohort_size, ACC, maxCohort) + '</div>'
+                         +       '</div>'
+                         +       '<div style="text-align:right;">'
+                         +         '<div style="font-size:0.85rem; font-weight:700; color:' + ACC + ';">' + (r.avg_days_to_press_play === 0 ? 'Same day' : (r.avg_days_to_press_play || 0) + 'd avg') + '</div>'
+                         +         '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">to press-play</div>'
+                         +       '</div>'
+                         +     '</div>'
+                         +   '</summary>'
+                         +   '<div style="margin-top:0.75rem; padding-top:0.7rem; border-top:1px dashed var(--border-color);'
+                         +              ' display:grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr); gap:1rem;">'
+                         +     '<div>'
+                         +       '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Click-sequence</div>'
+                         +       stepsHtml
+                         +     '</div>'
+                         +     '<div>'
+                         +       '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Pattern</div>'
+                         +       '<div style="font-size:11.5px; color: var(--text-secondary); line-height:1.55; margin-bottom:0.55rem; font-style:italic;">' + _jiqEsc(r.note || '') + '</div>'
+                         +       '<div style="font-size:11px; padding:0.5rem 0.65rem; border-radius:4px; background:' + ACC + '14; border-left:2px solid ' + ACC + '88; line-height:1.55;">'
+                         +         '<strong style="color:' + ACC + ';">→ Strategic implication:</strong> ' + _jiqEsc(r.why_it_matters || '')
+                         +       '</div>'
+                         +     '</div>'
+                         +   '</div>'
+                         + '</details>';
+                }).join('');
+            }
+            if (rollupEl) {
+                rollupEl.innerHTML = '<strong style="color:#22c55e;">📊 Rollup:</strong> ' + _jiqEsc(p.rollup_note || '');
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD C · 🌟 The Sheridan Universe Map
+        //
+        // The IP-halo view. Prior-Sheridan-IP feeder table + per-show
+        // overlap mini-bars + the net-new-to-universe callout + binge-
+        // graduation lift bars + strategic next-show recommendation.
+        // ──────────────────────────────────────────────────────────────
+        function renderJourneyIqSheridanMap(s) {
+            if (!s || s.enabled === false || !s.feeders) {
+                _jiqHideCard('jiqSheridanMapCard'); return;
+            }
+            _jiqShowCard('jiqSheridanMapCard');
+            var ACC = '#a78bfa';
+            var titleEl     = document.getElementById('jiqSheridanMapTitle');
+            var subEl       = document.getElementById('jiqSheridanMapSubtitle');
+            var metaEl      = document.getElementById('jiqSheridanMapMeta');
+            var topEl       = document.getElementById('jiqSheridanMapTopline');
+            var feedersEl   = document.getElementById('jiqSheridanMapFeeders');
+            var overlapEl   = document.getElementById('jiqSheridanMapOverlap');
+            var netNewEl    = document.getElementById('jiqSheridanMapNetNew');
+            var bingeEl     = document.getElementById('jiqSheridanMapBinge');
+            var recEl       = document.getElementById('jiqSheridanMapRec');
+            if (titleEl) titleEl.textContent = '🌟 ' + (s.title || 'The Sheridan Universe Map');
+            if (subEl)   subEl.textContent = s.subtitle || '';
+            var t = s.topline || {};
+            if (metaEl)  metaEl.textContent = (s.feeders.length) + ' prior Sheridan titles tracked';
+            if (topEl) {
+                topEl.innerHTML = ''
+                    + _jiqTile('Prior-Sheridan share',  (t.pct_with_prior_sheridan_history || 0).toFixed(1) + '%', 'of Landman viewers', ACC)
+                    + _jiqTile('Pure net-new to universe', (t.pct_pure_net_new || 0).toFixed(1) + '%', 'never watched Sheridan before', '#22c55e')
+                    + _jiqTile('Net-new cohort size',   _jiqFmt(t.count_pure_net_new || 0), 'strategic-asset audience', '#22c55e')
+                    + _jiqTile('Best single feeder',    String(t.best_single_feeder || '—'), 'cross-show graduation rate', ACC);
+            }
+            if (feedersEl) {
+                var feeders = s.feeders || [];
+                var maxGrad = feeders.reduce(function(m, r) { return Math.max(m, r.graduated_to_landman || 0); }, 0);
+                var rows = feeders.map(function(r) {
+                    var rateColor = r.graduation_rate_pct > 55 ? '#22c55e' : (r.graduation_rate_pct > 45 ? '#f59e0b' : '#94a3b8');
+                    return '<tr style="border-bottom:1px solid var(--border-color); vertical-align:top;">'
+                         +   '<td style="padding:8px 6px;">'
+                         +     '<div style="font-weight:700; font-size:12.5px;">' + _jiqEsc(r.title) + '</div>'
+                         +     '<div style="font-size:10.5px; color: var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap; color: var(--text-secondary);">' + _jiqFmt(r.feeder_pool || 0) + '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap;">'
+                         +     '<div style="font-weight:800; color:' + ACC + ';">' + _jiqFmt(r.graduated_to_landman || 0) + '</div>'
+                         +     '<div style="margin-top:4px; width:80px; margin-left:auto;">' + _jiqMiniBar(r.graduated_to_landman, ACC, maxGrad) + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:8px 6px; text-align:right; white-space:nowrap;">'
+                         +     '<div style="font-weight:800; color:' + rateColor + ';">' + (r.graduation_rate_pct || 0).toFixed(1) + '%</div>'
+                         +   '</td>'
+                         + '</tr>';
+                }).join('');
+                feedersEl.innerHTML = ''
+                    + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;">'
+                    +   '<thead><tr style="text-align:left; border-bottom:1px solid var(--border-color); font-size:10.5px; opacity:0.75; text-transform:uppercase; letter-spacing:0.04em;">'
+                    +     '<th style="padding:6px 6px;">Prior Sheridan title</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Feeder pool</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">→ Landman</th>'
+                    +     '<th style="padding:6px 6px; text-align:right; white-space:nowrap;">Conv. rate</th>'
+                    +   '</tr></thead><tbody>' + rows + '</tbody>'
+                    + '</table>';
+            }
+            if (overlapEl) {
+                var ov = s.graduation_overlap || [];
+                var maxOv = ov.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                overlapEl.innerHTML = ov.map(function(r) {
+                    return '<div style="padding:5px 0; border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                         +     '<div style="font-size:11.5px; font-weight:600; line-height:1.35;">' + _jiqEsc(r.label) + '</div>'
+                         +     '<div style="font-size:11.5px; font-weight:700; white-space:nowrap;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.pct, ACC, maxOv) + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (netNewEl && s.net_new_to_universe) {
+                var nn = s.net_new_to_universe;
+                var nnPaths = (nn.discovery_paths || []);
+                var maxNn = nnPaths.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                var pathsHtml = nnPaths.map(function(r) {
+                    return '<div style="padding:4px 0;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                         +     '<div style="font-size:11px;">' + _jiqEsc(r.label) + '</div>'
+                         +     '<div style="font-size:11px; font-weight:700;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="margin-top:3px;">' + _jiqMiniBar(r.pct, '#22c55e', maxNn) + '</div>'
+                         + '</div>';
+                }).join('');
+                netNewEl.innerHTML = ''
+                    + '<div style="display:flex; align-items:baseline; gap:0.7rem; margin-bottom:0.55rem; flex-wrap:wrap;">'
+                    +   '<span style="font-size:1.15rem; font-weight:800; color:#22c55e;">' + _jiqFmt(nn.count || 0) + '</span>'
+                    +   '<span style="font-size:0.78rem; font-weight:700; opacity:0.85;">net-new-to-Sheridan accounts</span>'
+                    +   '<span style="font-size:0.72rem; opacity:0.7;">(' + (nn.pct_of_landman_viewers || 0).toFixed(1) + '% of Landman viewers)</span>'
+                    + '</div>'
+                    + '<div style="font-size:0.78rem; color: var(--text-secondary); line-height:1.55; margin-bottom:0.7rem;">' + _jiqEsc(nn.note || '') + '</div>'
+                    + '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.35rem;">How the net-new cohort got in:</div>'
+                    + pathsHtml;
+            }
+            if (bingeEl) {
+                var binge = s.binge_graduation || [];
+                var maxLift = binge.reduce(function(m, r) { return Math.max(m, r.lift_pct || 0); }, 0);
+                bingeEl.innerHTML = binge.map(function(r) {
+                    return '<div style="padding:5px 0; border-bottom:1px solid var(--border-color);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                         +     '<div style="font-size:12px; font-weight:600;">' + _jiqEsc(r.label) + '</div>'
+                         +     '<div style="font-size:12px; font-weight:800; color:#f59e0b;">+' + (r.lift_pct || 0).toFixed(0) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.lift_pct, '#f59e0b', maxLift) + '</div>'
+                         + '</div>';
+                }).join('');
+            }
+            if (recEl) {
+                recEl.innerHTML = '<strong style="color:#a78bfa;">🎯 Next-show recommendation:</strong> ' + _jiqEsc(s.next_recommendation || '');
             }
         }
 
