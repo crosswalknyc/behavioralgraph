@@ -25424,48 +25424,17 @@
                 <!-- Removed per request: Funnel · Detours · Where Non-Converters Went · Top Inception Keywords
                      (the modeled view doesn't populate them; they were always empty/noise) -->
 
-                <!-- RETIRED: Touchpoints table + its sister cards
-                     (Touchpoint Overlap, Touches Before Purchase) are
-                     hidden across all JIQ runs per request. The
-                     conv-when-seen / conv-when-not framing was too
-                     attribution-heavy for a clickstream-only journey
-                     view; the marketing-footprint and inception-referrer
-                     cards above already cover what drove discovery. -->
-                <div class="card" style="display: none !important; padding: 1rem; margin-top: 1rem;" id="jiqTouchpointsCard">
-                    <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem;">
-                        <h3 style="margin: 0 0 0.5rem;">📍 Touchpoints - what drove conversation vs conversion</h3>
-                        <div id="jiqTpBaselineMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.4rem;">Each row is a marketing surface (trailer, social platform, talent mention, brand partnership, press, etc.) the cohort touched. <strong>Conv-when-Seen / Conv-when-Not</strong> = conversion rate of users who did vs didn't touch the channel. <strong>Avg Days</strong> = cadence from first touch to conversion.</div>
-                    <details style="margin: 0 0 0.85rem;">
-                        <summary style="cursor:pointer;color:var(--accent-cyan);font-size:0.72rem;font-weight:600;user-select:none;padding:3px 0;">ℹ️ How to read this chart</summary>
-                        <div style="margin-top:6px;padding:0.7rem 0.9rem;background:var(--bg-secondary);border-left:3px solid var(--accent-cyan);border-radius:6px;font-size:0.76rem;line-height:1.55;">
-                            <ul style="margin:0;padding-left:1.1rem;">
-                                <li><strong>Conv-when-Seen / Conv-when-Not</strong> - the causal-attribution pair. Buyers' conversion rate when reached vs not reached by that channel. The bigger the gap, the more the channel actually moves the needle.</li>
-                                <li><strong>Avg Days to Conv</strong> - cadence: <em>1–2 days</em> = late-funnel intent surface (search, showtime lookup); <em>14–18 days</em> = early-funnel awareness (trailer, press).</li>
-                                <li><strong>Touches / User</strong> - frequency. High values (e.g. 4.2 for TikTok) = repeat-visit channels; low values (1.1 for press) = one-and-done.</li>
-                            </ul>
-                        </div>
-                    </details>
-                    <div id="jiqTouchpointsTable" style="overflow-x: auto;"></div>
-                </div>
-
-                <!-- RETIRED: Touchpoint Overlap + Touches Before Purchase
-                     hidden alongside the Touchpoints table. The whole
-                     conv-when-seen / conv-when-not block was retired
-                     per request. -->
-                <div style="display: none !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; margin-top: 1rem;">
-                    <div class="card" style="padding: 1rem;" id="jiqOverlapCard">
-                        <h3 style="margin: 0 0 0.5rem;">🔗 Touchpoint Overlap</h3>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Top co-occurring pairs (users who touched BOTH surfaces) and the conv-rate within that overlap.</div>
-                        <div id="jiqOverlap"></div>
-                    </div>
-                    <div class="card" style="padding: 1rem;" id="jiqTouchDistCard">
-                        <h3 style="margin: 0 0 0.5rem;">📊 Touches Before Purchase</h3>
-                        <div id="jiqTouchDistSub" style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem;">How many touches did each cohort receive? Converters vs non-converters by touch count.</div>
-                        <div id="jiqTouchDist"></div>
-                    </div>
-                </div>
+                <!-- REMOVED per request: 📍 Touchpoints - what drove
+                     conversation vs conversion + its sister cards
+                     (🔗 Touchpoint Overlap, 📊 Touches Before Purchase).
+                     The previous "RETIRED" markup with `display: none
+                     !important;` was being overridden at runtime by the
+                     renderJourneyIqTouchpoints() function (which set
+                     `card.style.display = ''` whenever rows were
+                     present). With the markup gone, the renderer's
+                     `if (card)` / `if (ovCard)` / `if (tdCard)` guards
+                     short-circuit harmlessly. -->
+                
 
                 <div class="card" style="padding: 1rem; margin-top: 1rem;" id="jiqFactsCard">
                     <h3 style="margin: 0 0 0.5rem;">✨ Interesting Facts</h3>
