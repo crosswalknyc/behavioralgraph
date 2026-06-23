@@ -25671,39 +25671,22 @@
                                 gap: 0.6rem;"></div>
                 </div>
 
-                <!-- ─── LIFECYCLE CARD 4: 🚀 Trailer-Drop Wake ─── -->
-                <div class="card" id="jiqLifeTrailerWakeCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
-                            background: linear-gradient(135deg, rgba(96,165,250,0.06) 0%, rgba(34,197,94,0.04) 100%);
-                            border: 1px solid rgba(96,165,250,0.22);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqLifeTrailerWakeTitle" style="margin: 0;">🚀 The Trailer-Drop Wake - case study</h3>
-                        <div id="jiqLifeTrailerWakeMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqLifeTrailerWakeSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
-                    <div id="jiqLifeTrailerWakeTopline"
-                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-                                gap: 0.5rem; margin-bottom: 0.85rem;"></div>
-                    <h4 style="font-size: 0.85rem; margin: 0.3rem 0 0.4rem; opacity: 0.92;">
-                        📅 Day-by-day off-platform wake (D+0 → D+14)
-                    </h4>
-                    <div id="jiqLifeTrailerWakeDaily"></div>
-                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-                                gap: 1rem; align-items: start; margin-top: 1rem;">
-                        <div>
-                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
-                                📡 Channel-by-channel contribution to the 218K incremental signups
-                            </h4>
-                            <div id="jiqLifeTrailerWakeChannels"></div>
-                        </div>
-                        <div>
-                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
-                                🌊 IRL ripple effects (what else moved in the wake)
-                            </h4>
-                            <div id="jiqLifeTrailerWakeRipple"></div>
-                        </div>
-                    </div>
-                </div>
+                <!-- REMOVED per request: 🚀 The Trailer-Drop Wake -
+                     case study (Landman S2 trailer, Nov 9 2025) card.
+                     Same pattern as the other recent removals - the
+                     renderer renderJourneyIqLifecycleTrailerWake()
+                     calls _jiqShowLifeCard('jiqLifeTrailerWakeCard')
+                     and then writes into the card's child elements
+                     via document.getElementById(...) lookups. Every
+                     write is guarded with `if (titleEl)` / `if (subEl)`
+                     / etc., and both _jiqShowLifeCard / _jiqHideCard
+                     have their own `if (el)` null guards. With the
+                     markup gone, every guard short-circuits
+                     harmlessly. Renderer call at ~line 41234 and the
+                     function itself at ~line 48337 are left in place
+                     because removing them would require pruning
+                     dispatcher wiring; they are now no-ops. -->
+                
 
                 <!-- ─── LIFECYCLE CARD 5: 📺 FAST Content Radar ─── -->
                 <div class="card" id="jiqLifeFastRadarCard"
