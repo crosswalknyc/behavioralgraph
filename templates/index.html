@@ -2455,11 +2455,13 @@
         /* 2026-06-23: Boxes sit on the SAME row as the Data Cuts
          * button (5 boxes are the 2nd grid column of #dashProfileRunsRow),
          * each box 2rem tall to match Data Cuts. The section label
-         * "Total Universe Composition" is rendered as a SIBLING ABOVE
-         * #dashProfileRunsRow (not nested inside it) so the label
-         * doesn't push the boxes out of alignment with the Data Cuts
-         * button. Each box uses a single horizontal line (label + pct
-         * side by side) to stay at 2rem. */
+         * "Total Universe Composition" is stacked INSIDE the 2nd grid
+         * column (#audienceShareCol) directly above the boxes only,
+         * so the label is horizontally aligned with the boxes (not
+         * the Data Cuts button). The parent grid uses align-items: end
+         * so the Data Cuts button and the boxes' bottom edges line up
+         * on the same Y axis. Each box uses a single horizontal line
+         * (label + pct side by side) to stay at 2rem. */
         #audienceShareBoxes {
             display: flex;
             flex-direction: row;
@@ -16529,22 +16531,25 @@
                             <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
                                 <div class="dash-brand-box" id="dashBrandNameHeader"></div>
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
-                                <!-- Audience-share section label sits ABOVE the Data Cuts row so
-                                     it labels the 5 colored boxes without crowding the row. Hidden
-                                     until _renderAudienceShareBoxes() populates real values. -->
-                                <span class="asb-section-label" id="audienceShareSectionLabel" style="display: none; margin-top: 0.5rem; margin-bottom: 0.2rem; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary, #9ca3af); white-space: nowrap; line-height: 1;">Total Universe Composition</span>
-                                <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; grid-template-columns: calc(180px - 0.5rem) auto; align-items: center; gap: 0.5rem;">
+                                <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem; grid-template-columns: calc(180px - 0.5rem) auto; align-items: end; gap: 0.5rem;">
                                     <button type="button" class="btn btn-small" id="dashViewDeltasBtn" style="font-size: 0.8rem;">Data Cuts</button>
-                                    <!-- Audience-share boxes (Social / Search / Owned / Retail / Media)
-                                         sit on the SAME row as Data Cuts so all six pills line up at
-                                         the same 2rem height. The section label "Total Universe
-                                         Composition" is the sibling above this row. -->
-                                    <div id="audienceShareBoxes" style="display: none;" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
-                                        <div class="asb-box" data-channel="social" title="Engaged with the subject on a social platform (YouTube, IG, TikTok, FB, Twitter)."><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">-</span></div>
-                                        <div class="asb-box" data-channel="search" title="Discovered or looked up the subject via Google / AI search."><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">-</span></div>
-                                        <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent and influencer profiles (no brand-owned channel)."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">-</span></div>
-                                        <div class="asb-box" data-channel="retail" title="Retail / eCommerce engagement share"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">-</span></div>
-                                        <div class="asb-box" data-channel="media"  title="Engaged with the subject's content via traditional / third-party media (TV, streaming, films, music, news, podcasts)."><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">-</span></div>
+                                    <!-- Column 2: the section label "Total Universe Composition"
+                                         sits DIRECTLY above the 5 audience-share boxes (Social /
+                                         Search / Owned / Retail / Media) inside this flex column.
+                                         align-items: end on the parent grid pins the boxes' bottom
+                                         edge to the same Y as the Data Cuts button - so the row
+                                         reads as one aligned strip with the label only above the
+                                         boxes (not above the button). Hidden until
+                                         _renderAudienceShareBoxes() populates real values. -->
+                                    <div id="audienceShareCol" style="display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem;">
+                                        <span class="asb-section-label" id="audienceShareSectionLabel" style="display: none; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary, #9ca3af); white-space: nowrap; line-height: 1;">Total Universe Composition</span>
+                                        <div id="audienceShareBoxes" style="display: none;" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
+                                            <div class="asb-box" data-channel="social" title="Engaged with the subject on a social platform (YouTube, IG, TikTok, FB, Twitter)."><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">-</span></div>
+                                            <div class="asb-box" data-channel="search" title="Discovered or looked up the subject via Google / AI search."><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">-</span></div>
+                                            <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent and influencer profiles (no brand-owned channel)."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">-</span></div>
+                                            <div class="asb-box" data-channel="retail" title="Retail / eCommerce engagement share"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">-</span></div>
+                                            <div class="asb-box" data-channel="media"  title="Engaged with the subject's content via traditional / third-party media (TV, streaming, films, music, news, podcasts)."><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">-</span></div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
