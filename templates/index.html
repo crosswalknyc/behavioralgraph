@@ -13832,6 +13832,176 @@
             line-height: 1.35;
             margin-top: 0.2rem;
         }
+
+        /* ===========================================================
+           PROGRESSIVE DISCLOSURE - "broad first, deep on demand"
+           ===========================================================
+           Used inside each Landman card to make the dashboard feel
+           interactive: the lead punchline + hero stats are always
+           visible, and the dense supporting data sits behind native
+           HTML5 <details>/<summary> elements so the user clicks to
+           drill in.
+
+           Why <details>: zero JS, accessible by default, browser
+           handles state. We just style away the default arrow and
+           paint our own caret that rotates when [open] is set.
+
+           Two scopes:
+             .jiq-disclose         - card-level "Show full breakdown"
+             .jiq-row-disclose     - row-level click to expand a
+                                     single list item (path,
+                                     behavior, brand, etc.)
+           =========================================================== */
+
+        /* Card-level disclosure (e.g., "Show full data ↓" toggle that
+           wraps a chart / table inside an otherwise summary-first
+           card). Visually a subtle button strip, NOT a card. */
+        details.jiq-disclose { margin-top: 0.6rem; }
+        details.jiq-disclose > summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 0.55rem 0.85rem;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.025);
+            border: 1px solid var(--border-color);
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+            user-select: none;
+        }
+        details.jiq-disclose > summary::-webkit-details-marker { display: none; }
+        details.jiq-disclose > summary::marker { content: ''; }
+        details.jiq-disclose > summary:hover {
+            background: rgba(255,255,255,0.05);
+            color: var(--text-primary);
+            border-color: rgba(96,165,250,0.35);
+        }
+        details.jiq-disclose > summary .jiq-disclose-caret {
+            display: inline-block;
+            transition: transform 0.18s ease;
+            font-size: 0.7rem;
+            opacity: 0.7;
+        }
+        details.jiq-disclose[open] > summary {
+            background: rgba(96,165,250,0.10);
+            color: var(--text-primary);
+            border-color: rgba(96,165,250,0.40);
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+        details.jiq-disclose[open] > summary .jiq-disclose-caret {
+            transform: rotate(180deg);
+        }
+        details.jiq-disclose > .jiq-disclose-body {
+            padding: 0.85rem 0.85rem 0.5rem;
+            border: 1px solid rgba(96,165,250,0.40);
+            border-top: 0;
+            border-radius: 0 0 6px 6px;
+            background: rgba(255,255,255,0.012);
+        }
+
+        /* Row-level disclosure - a single list item that expands to
+           reveal extra context (e.g., one of the 11 discovery paths,
+           one of the second-screen behaviors). Looks like a row,
+           NOT a button. The caret is small + right-aligned. */
+        details.jiq-row-disclose {
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.02);
+            margin-bottom: 0.4rem;
+            overflow: hidden;
+            transition: border-color 0.12s ease, background 0.12s ease;
+        }
+        details.jiq-row-disclose > summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 0.65rem 0.85rem;
+            display: block;
+            user-select: none;
+            position: relative;
+        }
+        details.jiq-row-disclose > summary::-webkit-details-marker { display: none; }
+        details.jiq-row-disclose > summary::marker { content: ''; }
+        details.jiq-row-disclose > summary:hover {
+            background: rgba(255,255,255,0.04);
+        }
+        details.jiq-row-disclose[open] {
+            border-color: rgba(96,165,250,0.50);
+            background: rgba(255,255,255,0.035);
+        }
+        details.jiq-row-disclose .jiq-row-caret {
+            position: absolute;
+            top: 0.7rem;
+            right: 0.85rem;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            opacity: 0.7;
+            transition: transform 0.18s ease;
+        }
+        details.jiq-row-disclose[open] .jiq-row-caret {
+            transform: rotate(180deg);
+            color: rgba(96,165,250,0.95);
+            opacity: 1;
+        }
+        details.jiq-row-disclose > .jiq-row-body {
+            padding: 0.4rem 0.85rem 0.85rem;
+            border-top: 1px dashed var(--border-color);
+            margin-top: 0.4rem;
+        }
+
+        /* Card lead - the always-visible punchline + 2-3 hero stat
+           tiles that sit at the top of each Landman card. The pattern
+           is: hero number(s) on the left, 1-2 sentence punchline on
+           the right. Mobile collapses to stacked. */
+        .jiq-card-lead {
+            display: grid;
+            grid-template-columns: minmax(160px, auto) minmax(0, 1fr);
+            gap: 0.85rem;
+            align-items: center;
+            padding: 0.85rem 0.95rem;
+            margin-bottom: 0.7rem;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-color);
+            border-left-width: 3px;
+        }
+        .jiq-card-lead .jiq-lead-hero {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+        .jiq-card-lead .jiq-lead-hero-num {
+            font-size: 1.65rem;
+            font-weight: 800;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+        .jiq-card-lead .jiq-lead-hero-sub {
+            font-size: 0.66rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 600;
+        }
+        .jiq-card-lead .jiq-lead-punch {
+            font-size: 0.85rem;
+            line-height: 1.45;
+        }
+        .jiq-card-lead .jiq-lead-punch strong {
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+        @media (max-width: 720px) {
+            .jiq-card-lead {
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+            }
+        }
     </style>
     <script>
         /* Apply persisted theme before render to avoid flash-of-wrong-theme.
@@ -25271,37 +25441,52 @@
                         <div id="jiqSheridanMapMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqSheridanMapSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.85rem; line-height: 1.55;"></div>
-                    <!-- ── Off-Paramount shows table + Competitor-platform overlap ── -->
-                    <div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-                                gap: 1rem; align-items: start; margin-bottom: 1rem;">
-                        <div>
-                            <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
-                                📺 What else they watch (non-Paramount)
-                            </h4>
+
+                    <!-- Strategic implication lives at the TOP of the
+                         card now (not bottom) - it IS the punchline,
+                         so put it where the eye lands first. The 3
+                         data sections below are collapsed by default
+                         and read like deep-dive drawers. -->
+                    <div id="jiqBsImplication"
+                         style="padding: 0.75rem 0.9rem; border-radius: 6px;
+                                background: rgba(96,165,250,0.10); border-left: 3px solid rgba(96,165,250,0.65);
+                                font-size: 0.83rem; line-height: 1.6; margin-bottom: 0.85rem;"></div>
+
+                    <!-- 3 collapsible sections. Renderer writes its
+                         tables/lists into the inner #jiqBs* containers
+                         exactly like before; the <details> wrapper is
+                         a pure presentation layer. The summary lines
+                         double as section headers so the user can scan
+                         what's inside without expanding. -->
+                    <details class="jiq-disclose" style="margin-top: 0;">
+                        <summary>
+                            <span>📺 What else they watch <span style="opacity:0.7; font-weight:400;">(non-Paramount shows + overlap %)</span></span>
+                            <span class="jiq-disclose-caret">▼</span>
+                        </summary>
+                        <div class="jiq-disclose-body">
                             <div id="jiqBsOffShows" style="overflow-x: auto;"></div>
                         </div>
-                        <div>
-                            <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
-                                🛰️ Competitor-platform overlap
-                            </h4>
+                    </details>
+
+                    <details class="jiq-disclose">
+                        <summary>
+                            <span>🛰️ Competitor-platform overlap <span style="opacity:0.7; font-weight:400;">(Netflix / Hulu / HBO Max / etc.)</span></span>
+                            <span class="jiq-disclose-caret">▼</span>
+                        </summary>
+                        <div class="jiq-disclose-body">
                             <div id="jiqBsCompPlatforms"></div>
                         </div>
-                    </div>
-                    <!-- ── Podcast / news footprint
-                         (Brand affinity moved out of this card into the
-                         "Ad Sales Opportunities" card lower on the page,
-                         renamed to "Ad and Sponsorship Opportunity") ── -->
-                    <div style="margin-bottom: 1rem;">
-                        <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
-                            🎙️ Podcast / news footprint
-                        </h4>
-                        <div id="jiqBsPodcasts"></div>
-                    </div>
-                    <!-- ── Strategic implication ── -->
-                    <div id="jiqBsImplication"
-                         style="margin-top: 0.9rem; padding: 0.75rem 0.9rem; border-radius: 6px;
-                                background: rgba(96,165,250,0.08); border-left: 3px solid rgba(96,165,250,0.55);
-                                font-size: 0.78rem; line-height: 1.55;"></div>
+                    </details>
+
+                    <details class="jiq-disclose">
+                        <summary>
+                            <span>🎙️ Podcast / news footprint <span style="opacity:0.7; font-weight:400;">(Shawn Ryan / Joe Rogan / oil-industry pubs)</span></span>
+                            <span class="jiq-disclose-caret">▼</span>
+                        </summary>
+                        <div class="jiq-disclose-body">
+                            <div id="jiqBsPodcasts"></div>
+                        </div>
+                    </details>
                 </div>
 
                 <!-- ─── LANDMAN CARD D: 🎯 What They're Doing While Watching
@@ -25407,13 +25592,26 @@
                     <div id="jiqHaloCallouts"
                          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
                                 gap: 0.6rem; margin-bottom: 1rem;"></div>
-                    <div id="jiqHaloTotals"
-                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-                                gap: 0.5rem; margin-bottom: 0.85rem;"></div>
-                    <h4 style="font-size: 0.85rem; margin: 0.3rem 0 0.4rem; opacity: 0.92;">
-                        📈 Weekly earned-media volume vs. P+ net-new accounts
-                    </h4>
-                    <div id="jiqHaloWeekly" style="overflow-x: auto;"></div>
+
+                    <!-- Supporting evidence (totals + weekly chart) is
+                         hidden behind a collapsible. The takeaways
+                         above already say the punchline; this is for
+                         viewers who want to see the underlying numbers. -->
+                    <details class="jiq-disclose">
+                        <summary>
+                            <span>📊 Show the numbers <span style="opacity:0.7; font-weight:400;">(totals strip + weekly volume chart)</span></span>
+                            <span class="jiq-disclose-caret">▼</span>
+                        </summary>
+                        <div class="jiq-disclose-body">
+                            <div id="jiqHaloTotals"
+                                 style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                                        gap: 0.5rem; margin-bottom: 0.85rem;"></div>
+                            <h4 style="font-size: 0.85rem; margin: 0.3rem 0 0.4rem; opacity: 0.92;">
+                                📈 Weekly earned-media volume vs. P+ net-new accounts
+                            </h4>
+                            <div id="jiqHaloWeekly" style="overflow-x: auto;"></div>
+                        </div>
+                    </details>
                 </div>
 
                 <!-- ─── CARD 2: 🎭 Competitive Consideration Set ─── -->
@@ -25437,21 +25635,32 @@
                     <div id="jiqCompSetCallouts"
                          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
                                 gap: 0.6rem; margin-bottom: 1rem;"></div>
-                    <div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-                                gap: 1rem; align-items: start;">
-                        <div>
-                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
-                                🥊 What "lost" to Landman in the 30d pre-play browse
-                            </h4>
+
+                    <!-- Two data drilldowns. Each is its own
+                         collapsible so a viewer can open just the
+                         lost-to-Landman list (or just the co-watch)
+                         without expanding both. The grid layout the
+                         tables used to share is preserved when both
+                         are open via CSS. -->
+                    <details class="jiq-disclose">
+                        <summary>
+                            <span>🥊 What "lost" to Landman <span style="opacity:0.7; font-weight:400;">(competing shows browsed in the 30d pre-play window)</span></span>
+                            <span class="jiq-disclose-caret">▼</span>
+                        </summary>
+                        <div class="jiq-disclose-body">
                             <div id="jiqCompSetLost" style="overflow-x: auto;"></div>
                         </div>
-                        <div>
-                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
-                                🤝 Still co-watching alongside Landman
-                            </h4>
+                    </details>
+
+                    <details class="jiq-disclose">
+                        <summary>
+                            <span>🤝 Still co-watching alongside Landman <span style="opacity:0.7; font-weight:400;">(parallel-platform overlap)</span></span>
+                            <span class="jiq-disclose-caret">▼</span>
+                        </summary>
+                        <div class="jiq-disclose-body">
                             <div id="jiqCompSetCoWatch"></div>
                         </div>
-                    </div>
+                    </details>
                 </div>
 
                 <!-- ─── CARD 3: 📡 Paid vs. Earned Attribution Truth ─── -->
@@ -25567,23 +25776,34 @@
                     <div id="jiqAdOppsList"
                          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
                                 gap: 0.6rem;"></div>
-                    <!-- ── 🛒 Ad and Sponsorship Opportunity (was "Off-Paramount
-                         brand affinity" inside the Beyond-Sheridan card).
-                         Data still lives in beyond_sheridan.off_platform_brands
-                         in the payload; renderJourneyIqSheridanMap paints
-                         this container directly. ── -->
-                    <div id="jiqAdOppsBrandsWrap" style="margin-top: 1rem;">
-                        <h4 style="font-size: 0.85rem; margin: 0 0 0.45rem; opacity: 0.92;">
-                            🛒 Ad and Sponsorship Opportunity
-                        </h4>
-                        <div id="jiqAdOppsBrandsSubtitle"
-                             style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem; line-height: 1.5;">
-                            Off-Paramount brand indices vs gen-pop (100 = average). High-index
-                            brands are the natural in-show product-integration / sponsorship
-                            slate for the next season window.
+
+                    <!-- 🛒 Ad and Sponsorship Opportunity sub-section.
+                         The brand affinity list can run 8-12 entries
+                         long, so wrap it in a collapsible to keep
+                         the card scannable. The summary doubles as
+                         the section header (matches the visual
+                         pattern used in Beyond Sheridan / Halo /
+                         Comp Set). Inner #jiqAdOppsBrandsWrap is
+                         preserved as the renderJourneyIqSheridanMap
+                         visibility-toggle container so payload-empty
+                         runs still hide cleanly. -->
+                    <details class="jiq-disclose" style="margin-top: 1rem;">
+                        <summary>
+                            <span>🛒 Ad and Sponsorship Opportunity <span style="opacity:0.7; font-weight:400;">(brand affinity index vs gen-pop)</span></span>
+                            <span class="jiq-disclose-caret">▼</span>
+                        </summary>
+                        <div class="jiq-disclose-body">
+                            <div id="jiqAdOppsBrandsWrap">
+                                <div id="jiqAdOppsBrandsSubtitle"
+                                     style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.5rem; line-height: 1.5;">
+                                    Off-Paramount brand indices vs gen-pop (100 = average). High-index
+                                    brands are the natural in-show product-integration / sponsorship
+                                    slate for the next season window.
+                                </div>
+                                <div id="jiqAdOppsBrands"></div>
+                            </div>
                         </div>
-                        <div id="jiqAdOppsBrands"></div>
-                    </div>
+                    </details>
                 </div>
 
                 <!-- Removed per request: Funnel · Detours · Where Non-Converters Went · Top Inception Keywords
@@ -48803,6 +49023,74 @@
         }
 
         // ──────────────────────────────────────────────────────────────
+        // PROGRESSIVE-DISCLOSURE HELPERS - HTML5 <details>/<summary>
+        // wrappers used inside Landman card renderers to make each
+        // card "broad first, deep on demand". See the .jiq-disclose
+        // and .jiq-row-disclose CSS at the top of the file for the
+        // visual treatment.
+        //
+        // Three helpers:
+        //   _jiqRowDisclose(summaryHTML, bodyHTML, opts)
+        //       One collapsible row. The summary is always visible;
+        //       the body appears when the user clicks. opts.open=true
+        //       to start expanded (e.g., for the lead row in a list).
+        //
+        //   _jiqCardDisclose(summaryHTML, bodyHTML, opts)
+        //       Card-level "Show full breakdown ▼" toggle. Used for
+        //       wrapping a chart / data table that we want hidden
+        //       until the user opts in.
+        //
+        //   _jiqCardLead(heroNum, heroSub, punchHTML, accentColor)
+        //       The lead strip at the top of each Landman card -
+        //       big hero number + 1-2 sentence punchline. Always
+        //       visible. accentColor sets the left border + the
+        //       hero-number color.
+        // ──────────────────────────────────────────────────────────────
+        function _jiqRowDisclose(summaryHTML, bodyHTML, opts) {
+            opts = opts || {};
+            var openAttr = opts.open ? ' open' : '';
+            // Optional accent: paints a 3px left border in the
+            // caller's color (used by Companion Behaviors so each row
+            // keeps its hot/warm/cool color tied to the % intensity).
+            var styleAttr = '';
+            if (opts.accentColor) {
+                styleAttr = ' style="border-left: 3px solid ' + opts.accentColor + ';"';
+            }
+            return '<details class="jiq-row-disclose"' + openAttr + styleAttr + '>'
+                 +   '<summary>'
+                 +     summaryHTML
+                 +     '<span class="jiq-row-caret">▼</span>'
+                 +   '</summary>'
+                 +   '<div class="jiq-row-body">'
+                 +     bodyHTML
+                 +   '</div>'
+                 + '</details>';
+        }
+        function _jiqCardDisclose(summaryHTML, bodyHTML, opts) {
+            opts = opts || {};
+            var openAttr = opts.open ? ' open' : '';
+            return '<details class="jiq-disclose"' + openAttr + '>'
+                 +   '<summary>'
+                 +     '<span>' + summaryHTML + '</span>'
+                 +     '<span class="jiq-disclose-caret">▼</span>'
+                 +   '</summary>'
+                 +   '<div class="jiq-disclose-body">'
+                 +     bodyHTML
+                 +   '</div>'
+                 + '</details>';
+        }
+        function _jiqCardLead(heroNum, heroSub, punchHTML, accentColor) {
+            accentColor = accentColor || '#f59e0b';
+            return '<div class="jiq-card-lead" style="border-left-color:' + accentColor + ';">'
+                 +   '<div class="jiq-lead-hero">'
+                 +     '<div class="jiq-lead-hero-num" style="color:' + accentColor + ';">' + _jiqEsc(heroNum) + '</div>'
+                 +     '<div class="jiq-lead-hero-sub">' + _jiqEsc(heroSub) + '</div>'
+                 +   '</div>'
+                 +   '<div class="jiq-lead-punch">' + punchHTML + '</div>'
+                 + '</div>';
+        }
+
+        // ──────────────────────────────────────────────────────────────
         // LANDMAN STORY-MODE FUNNEL TABS - 4-tab nav (Before / During /
         // After / Opportunity) + headlines strip rendered above the
         // Landman cards.
@@ -49082,16 +49370,31 @@
             var rollupEl   = document.getElementById('jiqLandmanPathsRollup');
             if (titleEl) titleEl.textContent = '🧭 ' + (p.title || 'How They Got to Landman');
             if (subEl)   subEl.textContent = p.subtitle || '';
-            if (metaEl)  metaEl.textContent = (p.paths.length) + ' off-Paramount discovery paths';
-            // The new payload shape no longer emits `topline` - the
-            // metrics that were there (total viewers, in-network share)
-            // are first-party data Paramount already has. We surface the
-            // in-network cohort as a small sidebar below the path list
-            // instead. Clear the topline grid so nothing renders.
-            if (topEl) topEl.innerHTML = '';
+            if (metaEl)  metaEl.textContent = (p.paths.length) + ' discovery paths · click any to expand';
+            // The "topline" container is now used for the always-visible
+            // card lead - hero stat + 1-2 sentence punchline. The dense
+            // path data sits below in #jiqLandmanPathsList where every
+            // row is a collapsible <details>.
+            if (topEl) {
+                var totalAccounts = (p.paths || []).reduce(function(s, r) {
+                    return s + (r.cohort_size || 0);
+                }, 0);
+                var pathCount = (p.paths || []).length;
+                topEl.innerHTML = _jiqCardLead(
+                    pathCount + ' paths',
+                    'mapped end-to-end',
+                    '<strong>How ' + _jiqFmt(totalAccounts) + ' Landman watchers actually arrived '
+                        + 'at press-play.</strong> Each row below is one archetypal journey - '
+                        + 'cohort size, days from first touch to press-play, the click-sequence, '
+                        + 'and what it means strategically. <em>Click any path to expand the '
+                        + 'full breakdown.</em>',
+                    ACC
+                );
+            }
             if (listEl) {
                 var maxCohort = (p.paths || []).reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
-                listEl.innerHTML = (p.paths || []).map(function(r) {
+                listEl.innerHTML = (p.paths || []).map(function(r, idx) {
+                    // Click-sequence (rendered in the expanded body)
                     var stepsHtml = (r.steps || []).map(function(step, i) {
                         return '<div style="display:flex; gap:0.55rem; align-items:flex-start; padding:3px 0;">'
                              +   '<div style="flex:none; width:18px; height:18px; border-radius:50%; background:' + ACC + '22; color:' + ACC + ';'
@@ -49099,38 +49402,48 @@
                              +   '<div style="font-size:11.5px; line-height:1.45;">' + _jiqEsc(step) + '</div>'
                              + '</div>';
                     }).join('');
-                    return '<details style="padding:0.75rem 0.9rem; border-radius:6px;'
-                         +                ' background: rgba(255,255,255,0.025); border-left:3px solid ' + ACC + ';">'
-                         +   '<summary style="cursor:pointer; list-style:none; outline:none;">'
-                         +     '<div style="display:grid; grid-template-columns: 36px minmax(0, 1.8fr) 110px 90px; gap:0.7rem; align-items:center;">'
-                         +       '<div style="font-size:1rem; font-weight:800; color:' + ACC + '; text-align:center;">' + (r.rank || '') + '</div>'
-                         +       '<div style="font-size:0.92rem; font-weight:700; line-height:1.35;">' + _jiqEsc(r.label || '') + '</div>'
-                         +       '<div style="text-align:right;">'
-                         +         '<div style="font-size:0.9rem; font-weight:800; color: var(--text-primary);">' + _jiqFmt(r.cohort_size || 0) + '</div>'
-                         +         '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">' + (r.pct_of_viewers || 0).toFixed(1) + '% of viewers</div>'
-                         +         '<div style="margin-top:0.25rem;">' + _jiqMiniBar(r.cohort_size, ACC, maxCohort) + '</div>'
-                         +       '</div>'
-                         +       '<div style="text-align:right;">'
-                         +         '<div style="font-size:0.85rem; font-weight:700; color:' + ACC + ';">' + (r.avg_days_to_press_play === 0 ? 'Same day' : (r.avg_days_to_press_play || 0) + 'd avg') + '</div>'
-                         +         '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">to press-play</div>'
-                         +       '</div>'
-                         +     '</div>'
-                         +   '</summary>'
-                         +   '<div style="margin-top:0.75rem; padding-top:0.7rem; border-top:1px dashed var(--border-color);'
-                         +              ' display:grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr); gap:1rem;">'
-                         +     '<div>'
-                         +       '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Click-sequence</div>'
-                         +       stepsHtml
-                         +     '</div>'
-                         +     '<div>'
-                         +       '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Pattern</div>'
-                         +       '<div style="font-size:11.5px; color: var(--text-secondary); line-height:1.55; margin-bottom:0.55rem; font-style:italic;">' + _jiqEsc(r.note || '') + '</div>'
-                         +       '<div style="font-size:11px; padding:0.5rem 0.65rem; border-radius:4px; background:' + ACC + '14; border-left:2px solid ' + ACC + '88; line-height:1.55;">'
-                         +         '<strong style="color:' + ACC + ';">→ Strategic implication:</strong> ' + _jiqEsc(r.why_it_matters || '')
-                         +       '</div>'
+                    // Summary (always visible) - rank, label, cohort,
+                    // days-to-press-play. Trailing 22px column reserves
+                    // room for the caret painted by .jiq-row-caret.
+                    var daysStr = (r.avg_days_to_press_play === 0)
+                        ? 'Same day'
+                        : (r.avg_days_to_press_play || 0) + 'd avg';
+                    var summaryHtml = ''
+                         + '<div style="display:grid; grid-template-columns: 32px minmax(0, 1.6fr) 110px 90px 22px; gap:0.7rem; align-items:center;">'
+                         +   '<div style="font-size:1rem; font-weight:800; color:' + ACC + '; text-align:center;">' + _jiqEsc(r.rank || '') + '</div>'
+                         +   '<div style="font-size:0.92rem; font-weight:700; line-height:1.35;">' + _jiqEsc(r.label || '') + '</div>'
+                         +   '<div style="text-align:right;">'
+                         +     '<div style="font-size:0.9rem; font-weight:800; color: var(--text-primary);">' + _jiqFmt(r.cohort_size || 0) + '</div>'
+                         +     '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">' + (r.pct_of_viewers || 0).toFixed(1) + '% of viewers</div>'
+                         +     '<div style="margin-top:0.25rem;">' + _jiqMiniBar(r.cohort_size, ACC, maxCohort) + '</div>'
+                         +   '</div>'
+                         +   '<div style="text-align:right;">'
+                         +     '<div style="font-size:0.85rem; font-weight:700; color:' + ACC + ';">' + _jiqEsc(daysStr) + '</div>'
+                         +     '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">to press-play</div>'
+                         +   '</div>'
+                         +   '<div></div>'
+                         + '</div>';
+                    // Body (expanded) - 2-col: click-sequence on left,
+                    // pattern note + strategic implication on right.
+                    var bodyHtml = ''
+                         + '<div style="display:grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr); gap:1rem;">'
+                         +   '<div>'
+                         +     '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Click-sequence</div>'
+                         +     stepsHtml
+                         +   '</div>'
+                         +   '<div>'
+                         +     '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Pattern</div>'
+                         +     '<div style="font-size:11.5px; color: var(--text-secondary); line-height:1.55; margin-bottom:0.55rem; font-style:italic;">' + _jiqEsc(r.note || '') + '</div>'
+                         +     '<div style="font-size:11px; padding:0.5rem 0.65rem; border-radius:4px; background:' + ACC + '14; border-left:2px solid ' + ACC + '88; line-height:1.55;">'
+                         +       '<strong style="color:' + ACC + ';">→ Strategic implication:</strong> ' + _jiqEsc(r.why_it_matters || '')
                          +     '</div>'
                          +   '</div>'
-                         + '</details>';
+                         + '</div>';
+                    // Only the lead path (rank #1 / array idx 0) opens
+                    // by default so the user immediately sees what an
+                    // expanded row looks like. The remaining 10 stay
+                    // collapsed - one click reveals them.
+                    return _jiqRowDisclose(summaryHtml, bodyHtml, { open: idx === 0 });
                 }).join('');
             }
             if (rollupEl) {
@@ -49255,11 +49568,19 @@
             if (brandsEl) {
                 var brands     = s.off_platform_brands || [];
                 var brandsWrap = document.getElementById('jiqAdOppsBrandsWrap');
+                // brandsWrap lives inside a <details class="jiq-disclose">
+                // wrapper now (collapsible "Ad and Sponsorship
+                // Opportunity" drawer). Hide the entire <details>
+                // when there is no brand data, otherwise the user
+                // sees an empty drawer that still has a header.
+                var brandsDetails = brandsWrap ? brandsWrap.closest('details.jiq-disclose') : null;
                 if (!brands.length) {
                     if (brandsWrap) brandsWrap.style.display = 'none';
+                    if (brandsDetails) brandsDetails.style.display = 'none';
                     brandsEl.innerHTML = '';
                 } else {
                     if (brandsWrap) brandsWrap.style.display = '';
+                    if (brandsDetails) brandsDetails.style.display = '';
                     _jiqShowCard('jiqAdOppsCard');
                     var maxIdx = brands.reduce(function(m, r) { return Math.max(m, r.index || 0); }, 0);
                     brandsEl.innerHTML = brands.map(function(r) {
@@ -49369,7 +49690,12 @@
                     + '</div>';
             }
 
-            // ── Behavior rows: horizontal mini-bars sorted desc by % ──
+            // ── Behavior rows: each is a collapsible row showing
+            //    icon + label + % + mini-bar in the summary, and
+            //    typical window + top destinations + note + ad
+            //    implication in the body. Sorted desc by %. The
+            //    "Fully Engaged" row opens by default (it's the
+            //    headline anchor) and gets the teal accent. ──
             if (bhEl) {
                 var rows = (c.behaviors || []).slice().sort(function(a, b) {
                     return (b.pct || 0) - (a.pct || 0);
@@ -49378,24 +49704,30 @@
                 bhEl.innerHTML = rows.map(function(r) {
                     var isEngaged = (r.label || '').toLowerCase().indexOf('fully engaged') !== -1;
                     var barColor = isEngaged ? TEAL : (r.pct > 20 ? AMB : (r.pct > 10 ? BLUE : GRY));
-                    return '<details style="padding:0.5rem 0.75rem; border-radius:6px;'
-                         +                ' background: rgba(255,255,255,0.025); border-left:3px solid ' + barColor + ';">'
-                         +   '<summary style="cursor:pointer; list-style:none; outline:none;">'
-                         +     '<div style="display:grid; grid-template-columns: 28px minmax(0, 1fr) 70px 110px; gap:0.6rem; align-items:center;">'
-                         +       '<div style="font-size:1.05rem; line-height:1; text-align:center;">' + _jiqEsc(r.icon || '•') + '</div>'
-                         +       '<div style="font-size:11.5px; font-weight:600; line-height:1.35;">' + _jiqEsc(r.label) + '</div>'
-                         +       '<div style="text-align:right; font-size:13px; font-weight:800; color:' + barColor + '; font-variant-numeric:tabular-nums;">' + (r.pct || 0).toFixed(1) + '%</div>'
-                         +       '<div>' + _jiqMiniBar(r.pct, barColor, maxPct) + '</div>'
-                         +     '</div>'
-                         +   '</summary>'
-                         +   '<div style="margin-top:0.55rem; padding-top:0.5rem; border-top:1px dashed var(--border-color);'
-                         +              ' font-size:11px; line-height:1.55; color: var(--text-secondary);">'
-                         +     ((r.window) ? '<div style="margin-bottom:0.3rem;"><strong style="color:' + barColor + ';">⏱️ Typical window:</strong> ' + _jiqEsc(r.window) + '</div>' : '')
-                         +     ((r.top_sites) ? '<div style="margin-bottom:0.3rem;"><strong style="color:' + barColor + ';">🔗 Top destinations:</strong> ' + _jiqEsc(r.top_sites) + '</div>' : '')
-                         +     ((r.note) ? '<div style="margin-bottom:0.3rem;">' + _jiqEsc(r.note) + '</div>' : '')
-                         +     ((r.implication) ? '<div style="margin-top:0.45rem; padding:0.45rem 0.6rem; border-radius:4px; background:' + barColor + '12; border-left:2px solid ' + barColor + '88;"><strong style="color:' + barColor + ';">→ Implication:</strong> ' + _jiqEsc(r.implication) + '</div>' : '')
-                         +   '</div>'
-                         + '</details>';
+                    // Summary - trailing 22px column reserves space
+                    // for the .jiq-row-caret painted by CSS.
+                    var summaryHtml = ''
+                         + '<div style="display:grid; grid-template-columns: 28px minmax(0, 1fr) 70px 110px 22px; gap:0.6rem; align-items:center;">'
+                         +   '<div style="font-size:1.05rem; line-height:1; text-align:center;">' + _jiqEsc(r.icon || '•') + '</div>'
+                         +   '<div style="font-size:11.5px; font-weight:600; line-height:1.35;">' + _jiqEsc(r.label) + '</div>'
+                         +   '<div style="text-align:right; font-size:13px; font-weight:800; color:' + barColor + '; font-variant-numeric:tabular-nums;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                         +   '<div>' + _jiqMiniBar(r.pct, barColor, maxPct) + '</div>'
+                         +   '<div></div>'
+                         + '</div>';
+                    // Body - typical window + top destinations + note
+                    // + implication. Each row is a one-line strong-
+                    // labelled fact rather than a wall of paragraph.
+                    var bodyHtml = ''
+                         + '<div style="font-size:11px; line-height:1.55; color: var(--text-secondary);">'
+                         +   ((r.window) ? '<div style="margin-bottom:0.3rem;"><strong style="color:' + barColor + ';">⏱️ Typical window:</strong> ' + _jiqEsc(r.window) + '</div>' : '')
+                         +   ((r.top_sites) ? '<div style="margin-bottom:0.3rem;"><strong style="color:' + barColor + ';">🔗 Top destinations:</strong> ' + _jiqEsc(r.top_sites) + '</div>' : '')
+                         +   ((r.note) ? '<div style="margin-bottom:0.3rem;">' + _jiqEsc(r.note) + '</div>' : '')
+                         +   ((r.implication) ? '<div style="margin-top:0.45rem; padding:0.45rem 0.6rem; border-radius:4px; background:' + barColor + '12; border-left:2px solid ' + barColor + '88;"><strong style="color:' + barColor + ';">→ Implication:</strong> ' + _jiqEsc(r.implication) + '</div>' : '')
+                         + '</div>';
+                    return _jiqRowDisclose(summaryHtml, bodyHtml, {
+                        open:        isEngaged,
+                        accentColor: barColor
+                    });
                 }).join('');
             }
 
