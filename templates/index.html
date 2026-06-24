@@ -65085,31 +65085,17 @@
             // Run access is now handled via the 'accessible' flag from the server
             // All profiles are shown; inaccessible ones appear locked/dimmed
             
-            const searchTerm = (document.getElementById('dashProfileSearchInput')?.value || '').toLowerCase();
+            const searchTerm = (document.getElementById('dashProfileSearchInput')?.value || '').toLowerCase().trim();
 
-            // Build a vowel-fuzzy regex from the search term so common
-            // misspellings around vowel choice still match. Examples:
-            //   "rosanne" -> /r[aeiou]?s[aeiou]?nn[aeiou]?/ matches "roseanne"
-            //   "rosa"    -> /r[aeiou]?s[aeiou]?/           matches "rose", "rosa", "rosi"
-            //   "stephan" -> /st[aeiou]?ph[aeiou]?n[aeiou]?/ matches "stephen"
-            // Each vowel becomes [aeiou] (treat any vowel as fungible),
-            // and each consonant boundary tolerates an optional inserted
-            // vowel for the "rosa"->"rose-a-nne" case. Special regex
-            // chars in the search term are escaped so a user typing
-            // "iq.us" doesn't blow up the matcher.
-            const _buildFuzzySearchRegex = (term) => {
-                if (!term) return null;
-                const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const fuzzy = escaped.split('').map(ch => {
-                    if (/[aeiou]/i.test(ch)) return '[aeiou]';
-                    if (/[a-z0-9]/i.test(ch)) return ch + '[aeiou]?';
-                    return ch;
-                }).join('');
-                try { return new RegExp(fuzzy, 'i'); } catch (_) { return null; }
-            };
-            const fuzzyRe = _buildFuzzySearchRegex(searchTerm);
-
-            // If searching, group matches by profile_subject (same as non-search) so "The Rock" shows once with sub date ranges
+            // Direct (literal) substring match only - per user 2026-06-23:
+            // "make the profile selector search find direct matches based on
+            // what you type in not like". The previous vowel-fuzzy regex
+            // (turning every char into [aeiou]? wildcards so "rosanne"
+            // matched "roseanne", "stephan" matched "stephen", etc.) was
+            // producing too many false positives where the typed string
+            // wasn't actually present in the result. Now we only match
+            // when the literal lowercased searchTerm appears as a
+            // substring of fullName / subject / category.
             if (searchTerm) {
                 const matchingProfiles = profiles.filter(p => {
                     const fullName = getProfileFullName(p).toLowerCase();
@@ -65118,17 +65104,11 @@
                     const catDisplay = getCategoryDisplayLabel(p.category || 'UNCATEGORIZED').toLowerCase();
                     const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
                     const masterCat = getMasterCategory(p.category || 'UNCATEGORIZED', isSvod).toLowerCase();
-                    // Exact substring first (cheaper + preserves prior
-                    // ranking) - fall through to vowel-fuzzy regex for
-                    // names whose vowel choice differs from what the
-                    // user typed (rosanne vs roseanne, stephan vs
-                    // stephen, etc.).
                     if (fullName.includes(searchTerm)) return true;
                     if (subj.replace(/_/g, ' ').includes(searchTerm)) return true;
                     if (cat.includes(searchTerm)) return true;
                     if (catDisplay.includes(searchTerm)) return true;
                     if (masterCat.includes(searchTerm)) return true;
-                    if (fuzzyRe && (fuzzyRe.test(fullName) || fuzzyRe.test(subj.replace(/_/g, ' ')))) return true;
                     return false;
                 });
                 
