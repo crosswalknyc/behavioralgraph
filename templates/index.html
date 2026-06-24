@@ -67774,12 +67774,21 @@
             // (.location-row.header .index-col / .cw-gp-col). We
             // snapshot the original label the first time so Reset can
             // put it back verbatim.
-            const headers = document.querySelectorAll(
+            //
+            // Demographic Table-view cards (.behavioral-table flagged
+            // data-no-cmp-inject="1") are SKIPPED because their .index-col
+            // is only 56px wide; appending a "(Short Form Converts ÷
+            // Short Form Views)"-style suffix wraps to 5-6 lines and
+            // overflows left into the Gen Pop column. The picker is
+            // already documented on the cover page of any PDF export
+            // and on the popover itself, so the demo-table headers can
+            // stay terse without losing context.
+            const headers = Array.from(document.querySelectorAll(
                 '.behavioral-header-row .index-col, '
                 + '.interest-header-row .index-col, '
                 + '.location-row.header .index-col, '
                 + '.location-row.header .cw-gp-col'
-            );
+            )).filter(h => !h.closest('.behavioral-table[data-no-cmp-inject="1"]'));
             headers.forEach(h => {
                 if (h._cmpOrigLabel == null) h._cmpOrigLabel = h.textContent;
                 h.textContent = h._cmpOrigLabel + headerSuffix;
@@ -89029,14 +89038,6 @@
             doc.setTextColor(200, 200, 220);
             if (meta.dateRange) {
                 doc.text(meta.dateRange, W / 2, cursorY, { align: 'center' });
-                cursorY += 24;
-            }
-
-            // Sample size
-            if (meta.sampleSize) {
-                doc.setFontSize(13);
-                doc.setTextColor(170, 170, 195);
-                doc.text('Sample size: n=' + meta.sampleSize, W / 2, cursorY, { align: 'center' });
                 cursorY += 32;
             } else {
                 cursorY += 12;
@@ -89048,19 +89049,33 @@
             doc.line(W * 0.25, cursorY, W * 0.75, cursorY);
             cursorY += 28;
 
-            // Data Cuts header + list
+            // Data Cuts header + per-cohort rows. Each cohort row is two
+            // pieces: the label (left of center) and the sample size
+            // (right of center) so the eye reads "Avid    n=92,400" as
+            // one line even though jsPDF draws them as two text calls.
+            // Cohorts without a comparable sample size (Gen Pop, Category
+            // Norm) get a dim em-dash placeholder.
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(12);
             doc.setTextColor(139, 92, 246);
             doc.text('DATA CUTS', W / 2, cursorY, { align: 'center' });
-            cursorY += 22;
+            cursorY += 24;
 
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(13);
-            doc.setTextColor(225, 225, 235);
-            (meta.cohortLabels || []).forEach(lbl => {
-                doc.text(String(lbl), W / 2, cursorY, { align: 'center' });
-                cursorY += 19;
+            const cohorts = Array.isArray(meta.cohorts) ? meta.cohorts : [];
+            // Compute a column gap centered on the page so both pieces
+            // visually balance regardless of label length.
+            const cohortColCenter = W / 2;
+            cohorts.forEach(c => {
+                const label = String(c.label || '');
+                const nText = c.sampleN ? ('n=' + c.sampleN) : '\u2014';
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(13);
+                doc.setTextColor(225, 225, 235);
+                doc.text(label, cohortColCenter - 14, cursorY, { align: 'right' });
+                doc.setFontSize(12);
+                doc.setTextColor(c.sampleN ? 170 : 110, c.sampleN ? 170 : 110, c.sampleN ? 195 : 140);
+                doc.text(nText, cohortColCenter + 14, cursorY, { align: 'left' });
+                cursorY += 21;
             });
 
             // Index formula
@@ -89149,10 +89164,22 @@
                 const sampleSize = (document.getElementById('dashSampleSize')?.textContent || '')
                     .replace(/\s+/g, ' ').trim();
 
-                // Cohorts: Total Universe (always), each selected Data Cut, then
-                // Gen Pop / Category Norm if their toggles are on.
+                // Cohorts: Total Universe (always), each selected Data Cut,
+                // then Gen Pop / Category Norm if their toggles are on. Each
+                // entry carries its own sample size so the cover page can
+                // render e.g. "Avid  n=92,400" alongside the base profile.
+                // Gen Pop and Category Norm have no comparable per-profile n
+                // (Gen Pop is the panel; Category Norm is a weighted average)
+                // so they leave the sample-size slot blank.
                 const baseLbl = (typeof _baseCohortLabel === 'function') ? _baseCohortLabel() : 'Total Universe';
-                const cohortLabels = [baseLbl];
+                const _fmtCohortN = (n) => {
+                    const v = Number(n);
+                    if (!isFinite(v) || v <= 0) return '';
+                    if (typeof formatNumber === 'function') return formatNumber(Math.round(v));
+                    return Math.round(v).toLocaleString();
+                };
+                const baseSampleN = (currentProfileData && Number(currentProfileData.sampleSize)) || 0;
+                const cohorts = [{ label: baseLbl, sampleN: baseSampleN ? _fmtCohortN(baseSampleN) : sampleSize }];
                 const cmpState = (typeof _comparisonRunsState !== 'undefined') ? _comparisonRunsState : null;
                 const selectedKeys = (cmpState && Array.isArray(cmpState.selectedKeys)) ? cmpState.selectedKeys : [];
                 const runsByKey = (cmpState && cmpState.runsByKey) || {};
@@ -89160,12 +89187,14 @@
                     if (k === '__category_norm__') return; // handled below
                     const run = runsByKey[k];
                     const lbl = (run && run.label) ? String(run.label).trim() : '';
-                    if (lbl) cohortLabels.push(lbl);
+                    if (!lbl) return;
+                    const n = (run && run.parsed && Number(run.parsed.sampleSize)) || 0;
+                    cohorts.push({ label: lbl, sampleN: n ? _fmtCohortN(n) : '' });
                 });
-                if (!cmpState || cmpState.includeGenPop !== false) cohortLabels.push('Gen Pop');
+                if (!cmpState || cmpState.includeGenPop !== false) cohorts.push({ label: 'Gen Pop', sampleN: '' });
                 if (cmpState && cmpState.includeCategoryNorm) {
                     const normCat = cmpState.categoryNormCategory ? (' (' + cmpState.categoryNormCategory + ')') : '';
-                    cohortLabels.push('Category Norm' + normCat);
+                    cohorts.push({ label: 'Category Norm' + normCat, sampleN: '' });
                 }
 
                 // Index formula: numerator/denominator picker resolves to a
@@ -89181,7 +89210,7 @@
 
                 showNotification('📑 Building cover page...', 'info');
                 await _pdfDrawCoverPage(doc, {
-                    profileImgSrc, profileName, dateRange, sampleSize, cohortLabels, indexFormula
+                    profileImgSrc, profileName, dateRange, sampleSize, cohorts, indexFormula
                 });
 
                 // Sections to capture. Order matches the dashboard's left-to-right
