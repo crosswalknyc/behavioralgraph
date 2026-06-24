@@ -952,13 +952,30 @@ def insert_daily_row(
 
 def _iter_profile_jobs(s3_cache_jobs: list[dict]) -> Iterable[dict]:
     """Yield Profile IQ job entries we care about (skip non-profile sources
-    and items in purgatory)."""
+    and items in purgatory).
+
+    Avid Fan profiles (`<NAME> - Avid Fan.csv`) are panel-segmentation
+    files used by the audience-overlap views, not standalone Profile IQ
+    entities. They have no BRAND INPUT block and shouldn't appear in
+    the IQ Ranker leaderboard. We skip them here so the nightly cron
+    stops computing daily metrics for them; the leaderboard SQL also
+    filters them out so any pre-existing rows already in
+    `reference.profile_iq_daily_metrics` are hidden from the dashboard.
+    """
     seen: set[str] = set()
     for j in s3_cache_jobs or []:
         s3_key = j.get("s3_key") or j.get("job_id") or ""
         if not s3_key:
             continue
         if "purgatory" in s3_key.lower():
+            continue
+        # Hardcoded match on the literal " - Avid Fan" suffix used by the
+        # panel-segmentation file naming convention. Matching on bare
+        # "avid" would falsely catch real names like "David Letterman"
+        # whose substring "avid" is unrelated.
+        haystack = " | ".join(str(j.get(k) or "") for k in
+            ("project_name", "display_name", "profile_subject", "s3_key")).lower()
+        if "avid fan" in haystack:
             continue
         # We dedupe on profile_subject so multi-year runs of the same person
         # only get one row per day.
@@ -1246,6 +1263,18 @@ def aggregate_leaderboard(
         where_search = (f"AND (positionCaseInsensitive(project_name, '{s_clean}') > 0 "
                         f"OR positionCaseInsensitive(profile_subject, '{s_clean}') > 0)")
 
+    # Exclude "<NAME> - Avid Fan" panel-segmentation profiles. These are
+    # audience-overlap helpers, not real Profile IQ entities, and they
+    # otherwise dominate the leaderboard with thousands of synthetic
+    # entries. Filter on the literal "avid fan" string so we don't false-
+    # positive real names containing the "avid" substring (e.g. David
+    # Letterman). Applied to BOTH curr and prev CTEs so deltas don't
+    # silently pull these rows back in via the prior window.
+    where_no_avid = (
+        "AND positionCaseInsensitive(profile_subject, 'avid fan') = 0 "
+        "AND positionCaseInsensitive(project_name, 'avid fan')   = 0"
+    )
+
     # CW IQ Score across a multi-day window: mention-weighted average so
     # days with very low / partial clickstream data (e.g. yesterday before
     # the nightly pipeline finishes loading) contribute proportionally
@@ -1343,6 +1372,7 @@ def aggregate_leaderboard(
           AND {where_master}
           {where_sub}
           {where_search}
+          {where_no_avid}
         GROUP BY profile_subject
     ),
     prev AS (
@@ -1370,6 +1400,7 @@ def aggregate_leaderboard(
         WHERE snapshot_date BETWEEN toDate('{ps}') AND toDate('{pe}')
           AND {where_master}
           {where_sub}
+          {where_no_avid}
         GROUP BY profile_subject
     )
     SELECT c.profile_subject                          AS profile_subject,
