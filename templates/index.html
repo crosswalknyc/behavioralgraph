@@ -24099,14 +24099,14 @@
                                 <span class="lbl">Recency</span>
                                 <span class="bar"><span style="width: 5%;"></span></span>
                                 <span class="pct">0.05</span>
-                                <span class="def"><b>Are they still alive?</b> 1.0 if mentioned today, 0.5 if mentioned yesterday, 0 otherwise. Stops dormant profiles from coasting on old momentum.</span>
+                                <span class="def"><b>Are they still alive?</b> 1.0 if there's panel activity today, 0.5 if yesterday, 0 otherwise. Stops dormant profiles from coasting on old momentum.</span>
                             </div>
                             <ul style="margin: 0.85rem 0 0; padding-left: 1.1rem; font-size: 0.74rem;">
                                 <li><b>Cold-start damping:</b> Volume and Reach z-scores scale by <code>min(1, days_of_history / 3)</code> so brand-new profiles don't outrank established ones on first-day novelty noise.</li>
-                                <li><b>Multi-day windows:</b> CW IQ across a window is the raw-mention-weighted average of daily scores, so partial-ingest days contribute proportionally less.</li>
+                                <li><b>Multi-day windows:</b> CW IQ across a window is the raw-engagement-weighted average of daily scores, so partial-ingest days contribute proportionally less.</li>
                             </ul>
                             <div style="margin-top: 0.6rem; padding-top: 0.55rem; border-top: 1px dashed rgba(132,225,168,0.25); font-size: 0.74rem;">
-                                <b style="color: #c8f7d4;">Mentions</b> are projected to US gen pop using a per-day multiplier:
+                                <b style="color: #c8f7d4;">Engagements</b> are projected to US gen pop using a per-day multiplier:
                                 <code>projected = raw × 329,900,000 / panelists_active_that_day</code>.
                                 CW IQ is projection-invariant (panel-relative).
                             </div>
@@ -24116,7 +24116,7 @@
                         <div id="iqRankerEVCExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="EVC scoring methodology">
                             <button type="button" class="iqr-explain-close" aria-label="Close" onclick="toggleIQRankerEVCExplainer('{{ m.key }}')">✕</button>
                             <h5>📺 EVC - Engagement vs Viewing Correlation</h5>
-                            <div style="margin-bottom: 0.55rem;">Of the panel's digital touchpoints that mentioned this profile in the selected window, the share who engaged with the talent then watched their content on a streaming or VOD platform. Reads as: <i>&ldquo;of all the times the panel touched something about this person/brand, what % of those then watched their content on a streaming destination?&rdquo;</i> A high EVC means the audience is actively consuming this entity's content, not just engaging with it.</div>
+                            <div style="margin-bottom: 0.55rem;">Of the panel's digital touchpoints that engaged with this profile in the selected window, the share who engaged with the talent then watched their content on a streaming or VOD platform. Reads as: <i>&ldquo;of all the times the panel touched something about this person/brand, what % of those then watched their content on a streaming destination?&rdquo;</i> A high EVC means the audience is actively consuming this entity's content, not just engaging with it.</div>
                             <div style="margin-bottom: 0.6rem;"><code>EVC = 100 × sum(streaming_hits) / sum(raw_mentions)</code></div>
                             <div style="margin-top: 0.7rem; font-size: 0.74rem;">
                                 <b style="color: #c8f7d4;">Streaming/VOD platforms</b> currently included: Netflix, Hulu, Disney+, HBO Max / Max, Prime Video, Apple TV+, Paramount+, Peacock, YouTube / YouTube TV, Tubi, Pluto TV, Sling, Fubo, Philo, Crunchyroll, Showtime, Starz, Discovery+, AMC+, BritBox, Shudder, Mubi, Kanopy, Vudu, Roku Channel, Plex, Freevee / IMDB TV, DAZN, ESPN+, MLB.tv, NBA League Pass, NFL+, Twitch.
@@ -24161,8 +24161,8 @@
                                 <thead><tr>
                                     <th data-iq-sort="rank"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Rank within the selected window." style="cursor: pointer; width: 2.5rem;">#</th>
                                     <th data-iq-sort="name"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Profile name (click a row to drill down to the profile dashboard)." style="cursor: pointer;">Profile</th>
-                                    <th data-iq-sort="mentions"       data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Total mentions projected to US gen pop (raw × 329.9M / panel size that day, summed across the window)." style="cursor: pointer; text-align: right;">Mentions</th>
-                                    <th data-iq-sort="delta_mentions" data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Mentions change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ Mentions</th>
+                                    <th data-iq-sort="mentions"       data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Total engagements projected to US gen pop (raw × 329.9M / panel size that day, summed across the window)." style="cursor: pointer; text-align: right;">Engagements</th>
+                                    <th data-iq-sort="delta_mentions" data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Engagements change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ Engagements</th>
                                     <th data-iq-sort="delta_evc"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
                                         <span class="iqr-th-with-info">Δ EVC<button type="button" class="iqr-th-info" title="Show EVC methodology" aria-label="Show EVC methodology" onclick="event.stopPropagation(); toggleIQRankerEVCExplainer('{{ m.key }}')">i</button></span>
                                     </th>
@@ -24218,7 +24218,7 @@
                             <div class="iqr-compare-chart-pane">
                                 <div class="iqr-modal-toolbar">
                                     <div class="group" role="tablist" aria-label="Metric">
-                                        <button type="button" data-iq-cmp-metric="mentions"      class="active" onclick="setIQRankerCompareMetric('mentions')">Mentions</button>
+                                        <button type="button" data-iq-cmp-metric="mentions"      class="active" onclick="setIQRankerCompareMetric('mentions')">Engagements</button>
                                         <button type="button" data-iq-cmp-metric="cw_iq_score"   onclick="setIQRankerCompareMetric('cw_iq_score')">CW IQ</button>
                                     </div>
                                     <div class="group" role="tablist" aria-label="Mode">
@@ -24269,7 +24269,7 @@
                 </div>
             </div>
 
-            <!-- Context modal - LLM rollup of what's driving today's mentions
+            <!-- Context modal - LLM rollup of what's driving today's engagements
                  for a single profile, plus the raw URL/domain/common_name
                  surface that the rollup was grounded on. Single instance,
                  re-targeted on every "Context" chip click. -->
@@ -107520,7 +107520,7 @@
             profile: null,
         };
         const IQR_CHART_SERIES = [
-            { key: 'mentions',      label: 'Mentions',      color: '#66d9ef', axis: 'y', projected: true },
+            { key: 'mentions',      label: 'Engagements',   color: '#66d9ef', axis: 'y', projected: true },
             { key: 'cw_iq_score',   label: 'CW IQ',         color: '#ffd166', axis: 'y2', projected: false },
         ];
 
@@ -107764,7 +107764,7 @@
                 </div>`;
             };
             wrap.innerHTML = [
-                mkStat('Mentions (last day, projected)', last.mentions, first.mentions, false),
+                mkStat('Engagements (last day, projected)', last.mentions, first.mentions, false),
                 mkStat('CW IQ',         last.cw_iq_score,   first.cw_iq_score,   true),
                 mkStat('Panel size (last day)', last.panel_size, first.panel_size, false),
             ].join('');
@@ -107775,7 +107775,7 @@
         // ────────────────────────────────────────────────────────────────
         // Pick N profiles from the leaderboard, fetch each one's full
         // timeseries in parallel, and overlay them on a single Chart.js
-        // line chart for any chosen metric (Mentions / Pos / Neg / Net
+        // line chart for any chosen metric (Engagements / Pos / Neg / Net
         // Sent / CW IQ) in any of three modes (Daily values / Δ DoD / %ΔDoD).
         const IQR_COMPARE_STATE = {
             master: null,                     // master key the modal opened from
@@ -107796,7 +107796,7 @@
         const IQR_COMPARE_MAX = 12;
 
         const IQR_COMPARE_METRIC_META = {
-            mentions:      { label: 'Mentions',      axis: 'count', projected: true  },
+            mentions:      { label: 'Engagements',   axis: 'count', projected: true  },
             cw_iq_score:   { label: 'CW IQ',         axis: 'score', projected: false },
         };
 
@@ -108195,7 +108195,7 @@
             const def = y.toISOString().slice(0, 10);
             const date = window.prompt(
                 'Which date should we load IQ Rankers data for?\n\n'
-                + 'Loads ONE day of mentions / sentiment / CW IQ Score for every Profile IQ profile.\n'
+                + 'Loads ONE day of engagements / sentiment / CW IQ Score for every Profile IQ profile.\n'
                 + 'Use YYYY-MM-DD. Defaults to yesterday (today\'s panel data hasn\'t landed yet).',
                 def,
             );
@@ -108359,7 +108359,7 @@
             // hasn't reached the comparison window).
             const fmtDelta = (n, decimals, prevRawMentions) => {
                 if (prevRawMentions !== undefined && !Number(prevRawMentions || 0)) {
-                    return `<span class="has-tooltip" data-tooltip="No mention data in the prior window for this profile - nothing meaningful to compare to." style="color: var(--text-secondary);">-</span>`;
+                    return `<span class="has-tooltip" data-tooltip="No engagement data in the prior window for this profile - nothing meaningful to compare to." style="color: var(--text-secondary);">-</span>`;
                 }
                 if (n == null || isNaN(n)) return '<span style="color: var(--text-secondary);">-</span>';
                 const sign = n > 0 ? '+' : '';
@@ -108387,10 +108387,10 @@
                 const colour = v >= 40 ? 'var(--accent-cyan)'
                               : v <= 10 ? 'var(--text-secondary)'
                               : 'var(--text-primary)';
-                const tip = `${sh.toLocaleString()} streaming hits / ${rm.toLocaleString()} panel mentions`;
+                const tip = `${sh.toLocaleString()} streaming hits / ${rm.toLocaleString()} panel engagements`;
                 return `<span class="has-tooltip" data-tooltip="${tip}" style="color: ${colour};">${v.toFixed(1)}%</span>`;
             };
-            // TDL cell - Talent Driven Lift, % of mention rows that landed
+            // TDL cell - Talent Driven Lift, % of engagement rows that landed
             // on a Most-Purchased-Brands host_mapping entry. Cyan ≥15% (a
             // clear retail crossover signal), muted ≤2% (commerce-inert).
             const fmtTDL = (r) => {
@@ -108401,7 +108401,7 @@
                 const colour = v >= 15 ? 'var(--accent-cyan)'
                               : v <= 2  ? 'var(--text-secondary)'
                               : 'var(--text-primary)';
-                const tip = `${mh.toLocaleString()} consumer-brand hits / ${rm.toLocaleString()} panel mentions`;
+                const tip = `${mh.toLocaleString()} consumer-brand hits / ${rm.toLocaleString()} panel engagements`;
                 return `<span class="has-tooltip" data-tooltip="${tip}" style="color: ${colour};">${v.toFixed(1)}%</span>`;
             };
             // BVP cell removed from dashboard (kept comment as a marker so
