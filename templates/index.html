@@ -331,19 +331,21 @@
             box-shadow: 0 4px 15px rgba(200, 230, 0, 0.3), 0 0 20px rgba(200, 230, 0, 0.15);
         }
         .header-logo-text {
-            font-weight: 800;
-            font-size: 1.25rem;
-            letter-spacing: 0.02em;
-            color: #1a1a1a;
             background: linear-gradient(135deg, #c8e600, #a0d911);
-            padding: 0.35rem 0.6rem;
+            padding: 0.45rem 0.7rem;
             border-radius: 8px;
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
             box-shadow: 0 4px 15px rgba(200, 230, 0, 0.3), 0 0 20px rgba(200, 230, 0, 0.15);
             transition: box-shadow 0.2s;
         }
         .header-logo-text:hover {
             box-shadow: 0 6px 20px rgba(200, 230, 0, 0.5), 0 0 24px rgba(200, 230, 0, 0.2);
+        }
+        .header-logo-text img {
+            height: 22px;
+            width: auto;
+            display: block;
         }
         .header-text h1 { font-family: 'Space Mono', monospace; font-size: 1.5rem; color: var(--accent-cyan); }
         .header-text p { color: var(--text-secondary); font-size: 0.8rem; }
@@ -14897,7 +14899,7 @@
         {% endif %}
         <header>
             <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem;">
-                <div class="header-logo-text">CROSSWALK</div>
+                <div class="header-logo-text"><img src="{{ url_for('static', filename='crosswalk-logo.png') }}" alt="Crosswalk"></div>
             </div>
             <div class="header-right-section">
                 <div class="user-info-bar">

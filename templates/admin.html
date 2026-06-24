@@ -49,7 +49,14 @@
             gap: 1rem;
         }
 
-        .logo { width: 50px; height: auto; }
+        .logo-wrap {
+            display: inline-flex;
+            align-items: center;
+            background: linear-gradient(135deg, #c8e600, #a0d911);
+            padding: 0.4rem 0.6rem;
+            border-radius: 8px;
+        }
+        .logo { height: 22px; width: auto; display: block; }
         
         .header-text h1 { 
             font-family: 'Space Mono', monospace; 
@@ -998,7 +1005,7 @@
     <div class="container">
         <header>
             <div class="header-left">
-                <img src="{{ url_for('static', filename='crosswalk-logo.png') }}" alt="Crosswalk Logo" class="logo" onerror="this.style.display='none'">
+                <div class="logo-wrap"><img src="{{ url_for('static', filename='crosswalk-logo.png') }}" alt="Crosswalk Logo" class="logo" onerror="this.style.display='none'"></div>
                 <div class="header-text">
                     <h1>🔐 Admin Portal</h1>
                     <p>User Management & Content Control</p>
