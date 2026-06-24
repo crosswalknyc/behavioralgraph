@@ -14308,6 +14308,216 @@
             }
         }
 
+        /* ===========================================================
+           DISCOVERY PATHS - VIEW SWITCHER
+           ===========================================================
+           Tab strip at the top of the card that toggles between the
+           different visualization modes:
+             🎯 Spectrum   - the focal bar + detail panel
+             🗂️ Categories - grouped tiles by channel type
+             🫧 Bubble     - cohort-size vs days-to-play scatter
+           Only the active view is visible; CSS handles the hide.
+           =========================================================== */
+        .jiq-view-switcher {
+            display: flex;
+            gap: 0.35rem;
+            margin-bottom: 0.85rem;
+            padding: 0.3rem;
+            background: rgba(255,255,255,0.025);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            flex-wrap: wrap;
+        }
+        .jiq-view-switcher .view-btn {
+            padding: 0.5rem 0.95rem;
+            border-radius: 6px;
+            border: 0;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease;
+            user-select: none;
+            flex: 1 1 auto;
+            text-align: center;
+        }
+        .jiq-view-switcher .view-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+        .jiq-view-switcher .view-btn.is-active {
+            background: rgba(96,165,250,0.20);
+            color: var(--text-primary);
+            box-shadow: 0 0 0 1px rgba(96,165,250,0.55), 0 2px 8px rgba(0,0,0,0.25);
+        }
+        [data-jiq-pathview-hidden="true"] { display: none !important; }
+
+        /* ----- CATEGORIES VIEW ----- */
+        .jiq-cat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 0.85rem;
+        }
+        .jiq-cat-card {
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            border-left-width: 4px;
+            background: rgba(255,255,255,0.03);
+            padding: 0.95rem 1rem 0.9rem;
+            display: flex;
+            flex-direction: column;
+        }
+        .jiq-cat-card .cat-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin-bottom: 0.55rem;
+            flex-wrap: wrap;
+        }
+        .jiq-cat-card .cat-title {
+            font-size: 13.5px;
+            font-weight: 800;
+            line-height: 1.25;
+        }
+        .jiq-cat-card .cat-meta {
+            font-size: 10.5px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            opacity: 0.85;
+            font-variant-numeric: tabular-nums;
+        }
+        .jiq-cat-card .cat-bar-wrap {
+            position: relative;
+            height: 8px;
+            background: rgba(255,255,255,0.07);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 0.65rem;
+        }
+        .jiq-cat-card .cat-bar-fill {
+            position: absolute;
+            inset: 0 auto 0 0;
+            border-radius: 4px;
+        }
+        .jiq-cat-card .cat-paths {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+        .jiq-cat-card .cat-path {
+            display: grid;
+            grid-template-columns: 28px minmax(0, 1.2fr) minmax(0, 1.4fr) 70px;
+            gap: 0.55rem;
+            align-items: center;
+            padding: 0.4rem 0.55rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.12s ease;
+        }
+        .jiq-cat-card .cat-path:hover {
+            background: rgba(255,255,255,0.05);
+        }
+        .jiq-cat-card .cat-rank {
+            width: 24px;
+            height: 24px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 800;
+            color: #fff;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.5);
+        }
+        .jiq-cat-card .cat-label {
+            font-size: 11.5px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        .jiq-cat-card .cat-stat {
+            text-align: right;
+            font-size: 11px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+        .jiq-cat-card .cat-stat .cat-stat-sub {
+            font-size: 9px;
+            opacity: 0.6;
+            font-weight: 600;
+            margin-top: 1px;
+        }
+        .jiq-cat-card .jiq-path-ribbon {
+            font-size: 12px;
+            gap: 0.18rem;
+        }
+        .jiq-cat-card .jiq-path-ribbon .step {
+            width: 22px;
+            height: 22px;
+            font-size: 11px;
+            border-radius: 5px;
+        }
+
+        /* ----- BUBBLE VIEW ----- */
+        .jiq-bubble-wrap {
+            position: relative;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.025);
+            padding: 1rem 1rem 0.5rem;
+        }
+        .jiq-bubble-wrap svg {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .jiq-bubble-wrap .bubble-axis-label {
+            font-size: 10.5px;
+            fill: var(--text-secondary);
+            opacity: 0.85;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .jiq-bubble-wrap .bubble-tick {
+            font-size: 10px;
+            fill: var(--text-secondary);
+            opacity: 0.65;
+            font-variant-numeric: tabular-nums;
+        }
+        .jiq-bubble-wrap .bubble-grid {
+            stroke: rgba(255,255,255,0.06);
+            stroke-width: 1;
+        }
+        .jiq-bubble-wrap .bubble-circle {
+            cursor: pointer;
+            transition: filter 0.15s ease, transform 0.15s ease;
+            transform-box: fill-box;
+            transform-origin: center;
+        }
+        .jiq-bubble-wrap .bubble-circle:hover {
+            filter: brightness(1.25) drop-shadow(0 0 6px rgba(255,255,255,0.4));
+        }
+        .jiq-bubble-wrap .bubble-circle.is-active {
+            filter: brightness(1.25) drop-shadow(0 0 10px rgba(96,165,250,0.85));
+        }
+        .jiq-bubble-wrap .bubble-rank {
+            fill: #fff;
+            font-size: 11px;
+            font-weight: 800;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.5);
+        }
+        .jiq-bubble-wrap .bubble-quadrant-label {
+            font-size: 10px;
+            fill: var(--text-secondary);
+            opacity: 0.45;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
         /* Owned vs Earned split tiles. */
         .jiq-split-card {
             display: grid;
@@ -49639,6 +49849,212 @@
             _jiqRenderPathDetail();
         }
 
+        // ──────────────────────────────────────────────────────────────
+        // VIEW SWITCHER - flip between Spectrum / Categories / Bubble.
+        // Each view is a hidden block in the topEl; the switcher
+        // toggles data-jiq-pathview-hidden on the inactive ones.
+        // ──────────────────────────────────────────────────────────────
+        var _jiqLandmanView = 'spectrum';   // 'spectrum' | 'categories' | 'bubble'
+
+        function _jiqSetPathView(view) {
+            _jiqLandmanView = view;
+            // Update tab button visual state
+            var btns = document.querySelectorAll('.jiq-view-switcher .view-btn');
+            for (var b = 0; b < btns.length; b++) {
+                btns[b].classList.toggle('is-active', btns[b].getAttribute('data-view') === view);
+            }
+            // Show only the active view block
+            var blocks = document.querySelectorAll('[data-jiq-pathview]');
+            for (var k = 0; k < blocks.length; k++) {
+                var match = blocks[k].getAttribute('data-jiq-pathview') === view;
+                if (match) blocks[k].removeAttribute('data-jiq-pathview-hidden');
+                else       blocks[k].setAttribute('data-jiq-pathview-hidden', 'true');
+            }
+            // Some views need a lazy re-render the first time the user
+            // clicks them (e.g. bubble's SVG measurements depend on
+            // the container being visible to compute correct widths).
+            if (view === 'categories') _jiqRenderPathCategories();
+            if (view === 'bubble')     _jiqRenderPathBubble();
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CATEGORIES VIEW - groups the 11 paths into 4 themed tiles
+        // (Paramount-owned / Social-creator / Editorial-audio /
+        // Community-cross-platform). Each tile is a card with the
+        // category total, a fill bar, and a list of the paths inside.
+        // Clicking a path row inside a tile flips back to the
+        // Spectrum view with that path active.
+        // ──────────────────────────────────────────────────────────────
+        var _JIQ_PATH_CATEGORIES = [
+            { id: 'owned',     label: '🏠 Paramount-owned surfaces',  ranks: [1, 2, 3, 5, 10], color: '#3b82f6',
+              sub:   'The 5 paths Paramount already sees in first-party data.' },
+            { id: 'social',    label: '📱 Social & creator virality', ranks: [4, 11],          color: '#f97316',
+              sub:   'TikTok FYP + creator IG posts driving organic signups.' },
+            { id: 'editorial', label: '🎙️ Editorial & audio halo',    ranks: [8, 9],           color: '#a855f7',
+              sub:   'Talent podcasts + year-end critic listicles - earned media tail.' },
+            { id: 'community', label: '🤝 Community & cross-platform',ranks: [7, 6],           color: '#22c55e',
+              sub:   'Reddit threads + cross-platform drama graduates (Reacher / Justified / Outer Range).' },
+        ];
+
+        function _jiqRenderPathCategories() {
+            var container = document.getElementById('jiqPathCategoriesView');
+            if (!container || !_jiqLandmanPaths.length) return;
+            var byRank = {};
+            _jiqLandmanPaths.forEach(function(p) { byRank[p.rank] = p; });
+            var totalAll = _jiqLandmanPaths.reduce(function(s, p) { return s + (p.cohort_size || 0); }, 0);
+            var html = _JIQ_PATH_CATEGORIES.map(function(cat) {
+                var pathsIn = cat.ranks.map(function(r) { return byRank[r]; }).filter(Boolean);
+                var totalCat = pathsIn.reduce(function(s, p) { return s + (p.cohort_size || 0); }, 0);
+                var pctCat   = totalAll ? (totalCat / totalAll * 100) : 0;
+                // Sort within category by cohort desc so biggest path
+                // anchors the visual top of each tile.
+                pathsIn.sort(function(a, b) { return (b.cohort_size || 0) - (a.cohort_size || 0); });
+                var rowsHtml = pathsIn.map(function(p) {
+                    var color  = _jiqLandmanPathColors[p.rank] || cat.color;
+                    var ribbon = _jiqRenderPathRibbon(p.steps);
+                    return '<div class="cat-path" onclick="_jiqJumpToPathFromCategory(' + p.rank + ')">'
+                         +   '<div class="cat-rank" style="background:' + color + ';">' + _jiqEsc(p.rank) + '</div>'
+                         +   '<div class="cat-label">' + _jiqEsc(p.label || '') + '</div>'
+                         +   '<div>' + ribbon + '</div>'
+                         +   '<div class="cat-stat">'
+                         +     '<div style="color:' + color + ';">' + _jiqFmt(p.cohort_size || 0) + '</div>'
+                         +     '<div class="cat-stat-sub">' + (p.pct_of_viewers || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         + '</div>';
+                }).join('');
+                return '<div class="jiq-cat-card" style="border-left-color:' + cat.color + ';">'
+                     +   '<div class="cat-head">'
+                     +     '<div>'
+                     +       '<div class="cat-title">' + _jiqEsc(cat.label) + '</div>'
+                     +       '<div class="cat-meta" style="margin-top:3px; font-style:italic; opacity:0.75;">' + _jiqEsc(cat.sub) + '</div>'
+                     +     '</div>'
+                     +     '<div class="cat-meta" style="text-align:right;">'
+                     +       '<div style="font-size:16px; font-weight:800; color:' + cat.color + ';">' + pctCat.toFixed(1) + '%</div>'
+                     +       '<div>' + _jiqFmt(totalCat) + ' · ' + pathsIn.length + ' path' + (pathsIn.length === 1 ? '' : 's') + '</div>'
+                     +     '</div>'
+                     +   '</div>'
+                     +   '<div class="cat-bar-wrap">'
+                     +     '<div class="cat-bar-fill" style="width:' + pctCat.toFixed(2) + '%; background:' + cat.color + ';"></div>'
+                     +   '</div>'
+                     +   '<div class="cat-paths">' + rowsHtml + '</div>'
+                     + '</div>';
+            }).join('');
+            container.innerHTML = '<div class="jiq-cat-grid">' + html + '</div>';
+        }
+
+        // Clicking a path inside a category card switches back to the
+        // Spectrum view + opens that path's detail panel. The user
+        // sees their selection persist across the view flip.
+        function _jiqJumpToPathFromCategory(rank) {
+            _jiqSelectPath(rank);
+            _jiqSetPathView('spectrum');
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // BUBBLE VIEW - scatter chart, x = days-to-press-play,
+        // y = cohort size, radius = sqrt(cohort) (so area scales
+        // linearly with cohort), color = owned (blue) vs earned
+        // (amber). Each bubble is clickable and selects the path.
+        // Pure SVG, no charting lib needed.
+        // ──────────────────────────────────────────────────────────────
+        function _jiqRenderPathBubble() {
+            var container = document.getElementById('jiqPathBubbleView');
+            if (!container || !_jiqLandmanPaths.length) return;
+
+            var W = 800, H = 380;
+            var PAD_L = 60, PAD_R = 30, PAD_T = 28, PAD_B = 48;
+            var plotW = W - PAD_L - PAD_R;
+            var plotH = H - PAD_T - PAD_B;
+
+            // Domain
+            var maxDays = Math.max.apply(null, _jiqLandmanPaths.map(function(p) {
+                return (p.avg_days_to_press_play || 0);
+            }));
+            var maxDaysAxis = Math.max(maxDays + 1, 10);
+            var maxCohort   = Math.max.apply(null, _jiqLandmanPaths.map(function(p) {
+                return (p.cohort_size || 0);
+            }));
+
+            function xFor(days) { return PAD_L + (days / maxDaysAxis) * plotW; }
+            function yFor(coh)  { return PAD_T + plotH - (coh  / maxCohort)   * plotH; }
+            // Bubble radius: area proportional to cohort, but capped
+            // so the largest path doesn't swallow the smaller ones.
+            var maxR = 42, minR = 12;
+            function rFor(coh) {
+                if (!maxCohort) return minR;
+                var area = (coh / maxCohort);
+                var r = Math.sqrt(area) * maxR;
+                return Math.max(minR, r);
+            }
+
+            // Gridlines + ticks
+            var xTicks = [0, 2, 4, 6, 8, 10];
+            var yTickVals = [];
+            var tickStep = maxCohort >= 2_000_000 ? 500_000 : 250_000;
+            for (var v = 0; v <= maxCohort + tickStep; v += tickStep) yTickVals.push(v);
+
+            var grid = ''
+                + xTicks.map(function(t) {
+                    return '<line class="bubble-grid" x1="' + xFor(t) + '" x2="' + xFor(t) + '"'
+                         + ' y1="' + PAD_T + '" y2="' + (PAD_T + plotH) + '"/>'
+                         + '<text class="bubble-tick" x="' + xFor(t) + '" y="' + (PAD_T + plotH + 16) + '" text-anchor="middle">' + t + 'd</text>';
+                  }).join('')
+                + yTickVals.map(function(v) {
+                    return '<line class="bubble-grid" x1="' + PAD_L + '" x2="' + (PAD_L + plotW) + '"'
+                         + ' y1="' + yFor(v) + '" y2="' + yFor(v) + '"/>'
+                         + '<text class="bubble-tick" x="' + (PAD_L - 6) + '" y="' + (yFor(v) + 4) + '" text-anchor="end">' + _jiqFmt(v) + '</text>';
+                  }).join('');
+
+            // Axis labels
+            var axisLabels = ''
+                + '<text class="bubble-axis-label" x="' + (PAD_L + plotW/2) + '" y="' + (H - 8) + '" text-anchor="middle">Days from first touch → press play</text>'
+                + '<text class="bubble-axis-label" x="' + (12) + '" y="' + (PAD_T + plotH/2) + '" text-anchor="middle" transform="rotate(-90 12,' + (PAD_T + plotH/2) + ')">Cohort size (viewers)</text>';
+
+            // Quadrant labels - "fast + big" vs "slow + small"
+            var quadLabels = ''
+                + '<text class="bubble-quadrant-label" x="' + (PAD_L + 8)          + '" y="' + (PAD_T + 14)          + '">Fast + big ★</text>'
+                + '<text class="bubble-quadrant-label" x="' + (PAD_L + plotW - 8)  + '" y="' + (PAD_T + plotH - 8)   + '" text-anchor="end">Slow + small (niche)</text>';
+
+            // Bubbles
+            var bubbles = _jiqLandmanPaths.map(function(p) {
+                var cx = xFor(p.avg_days_to_press_play || 0);
+                var cy = yFor(p.cohort_size || 0);
+                var rd = rFor(p.cohort_size || 0);
+                var color = _jiqLandmanPathColors[p.rank] || '#22c55e';
+                var isActive = (p.rank === _jiqLandmanActiveRank);
+                var cls = 'bubble-circle' + (isActive ? ' is-active' : '');
+                var tip = '#' + p.rank + ' · ' + (p.label || '')
+                        + ' · ' + _jiqFmt(p.cohort_size || 0)
+                        + ' viewers · ' + (p.avg_days_to_press_play || 0) + 'd to play';
+                return '<g onclick="_jiqJumpToPathFromBubble(' + p.rank + ')">'
+                     +   '<title>' + _jiqEsc(tip) + '</title>'
+                     +   '<circle class="' + cls + '" cx="' + cx + '" cy="' + cy + '" r="' + rd.toFixed(1)
+                     +          '" fill="' + color + '" fill-opacity="0.78"'
+                     +          ' stroke="' + color + '" stroke-width="1.5"/>'
+                     +   '<text class="bubble-rank" x="' + cx + '" y="' + cy + '">' + _jiqEsc(p.rank) + '</text>'
+                     + '</g>';
+            }).join('');
+
+            container.innerHTML = ''
+                + '<div class="jiq-bubble-wrap">'
+                +   '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Discovery paths bubble chart">'
+                +     grid
+                +     axisLabels
+                +     quadLabels
+                +     bubbles
+                +   '</svg>'
+                +   '<div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color: var(--text-secondary); margin-top:0.3rem; gap:1rem; flex-wrap:wrap;">'
+                +     '<div>Each bubble = one path. Size = cohort. <strong>Top-left = the jackpots</strong> (huge audience, instant press-play).</div>'
+                +     '<div>Click any bubble to see its detail in the Spectrum view.</div>'
+                +   '</div>'
+                + '</div>';
+        }
+
+        function _jiqJumpToPathFromBubble(rank) {
+            _jiqSelectPath(rank);
+            _jiqSetPathView('spectrum');
+        }
+
         // Public click handler for filter tabs.
         function _jiqSetPathFilter(filter) {
             _jiqLandmanFilter = filter;
@@ -50090,28 +50506,45 @@
             // filter buttons (each shows its percentage inline).
             if (topEl) {
                 topEl.innerHTML = ''
-                    // Filter tabs row
-                    + '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.55rem;">'
-                    +   '<div style="font-size:10.5px; font-weight:700; opacity:0.78; text-transform:uppercase; letter-spacing:0.07em;">'
-                    +     '🌈 Path Spectrum <span style="opacity:0.7; font-weight:500; text-transform:none; letter-spacing:0;">- click any segment to drill in</span>'
-                    +   '</div>'
-                    +   '<div class="jiq-spectrum-filter-tabs">'
-                    +     '<button class="filter-btn is-active" data-filter="all" onclick="_jiqSetPathFilter(\'all\')">All <span class="filter-count">' + paths.length + '</span></button>'
-                    +     '<button class="filter-btn" data-filter="owned" onclick="_jiqSetPathFilter(\'owned\')" style="border-left:3px solid ' + OWNED_HEX + ';">🏠 Owned <span class="filter-count">' + ownedCount + ' · ' + ownedPct.toFixed(0) + '%</span></button>'
-                    +     '<button class="filter-btn" data-filter="earned" onclick="_jiqSetPathFilter(\'earned\')" style="border-left:3px solid ' + EARN_HEX + ';">🌐 Earned <span class="filter-count">' + earnCount + ' · ' + earnPct.toFixed(0) + '%</span></button>'
-                    +   '</div>'
+                    // ── View switcher tabs (Spectrum / Categories / Bubble) ──
+                    + '<div class="jiq-view-switcher" role="tablist">'
+                    +   '<button class="view-btn is-active" data-view="spectrum"   onclick="_jiqSetPathView(\'spectrum\')">🎯 Spectrum + Detail</button>'
+                    +   '<button class="view-btn"           data-view="categories" onclick="_jiqSetPathView(\'categories\')">🗂️ Channel Categories</button>'
+                    +   '<button class="view-btn"           data-view="bubble"     onclick="_jiqSetPathView(\'bubble\')">🫧 Bubble Chart</button>'
                     + '</div>'
-                    // Spectrum container - filled by _jiqRenderPathSpectrum
-                    + '<div id="jiqPathSpectrum" class="jiq-path-spectrum"></div>'
-                    + '<div class="jiq-path-spectrum-legend">'
-                    +   '<span><span class="swatch" style="background:' + OWNED_HEX + ';"></span>Paramount-owned (' + ownedCount + ' paths · ' + _jiqFmt(ownedTotal) + ' viewers)</span>'
-                    +   '<span><span class="swatch" style="background:' + EARN_HEX  + ';"></span>Earned / off-Paramount (' + earnCount + ' paths · ' + _jiqFmt(earnTotal) + ' viewers) - first-party blind spot</span>'
+
+                    // ── VIEW 1: SPECTRUM ──
+                    + '<div data-jiq-pathview="spectrum">'
+                    +   '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.55rem;">'
+                    +     '<div style="font-size:10.5px; font-weight:700; opacity:0.78; text-transform:uppercase; letter-spacing:0.07em;">'
+                    +       '🌈 Path Spectrum <span style="opacity:0.7; font-weight:500; text-transform:none; letter-spacing:0;">- click any segment to drill in</span>'
+                    +     '</div>'
+                    +     '<div class="jiq-spectrum-filter-tabs">'
+                    +       '<button class="filter-btn is-active" data-filter="all" onclick="_jiqSetPathFilter(\'all\')">All <span class="filter-count">' + paths.length + '</span></button>'
+                    +       '<button class="filter-btn" data-filter="owned" onclick="_jiqSetPathFilter(\'owned\')" style="border-left:3px solid ' + OWNED_HEX + ';">🏠 Owned <span class="filter-count">' + ownedCount + ' · ' + ownedPct.toFixed(0) + '%</span></button>'
+                    +       '<button class="filter-btn" data-filter="earned" onclick="_jiqSetPathFilter(\'earned\')" style="border-left:3px solid ' + EARN_HEX + ';">🌐 Earned <span class="filter-count">' + earnCount + ' · ' + earnPct.toFixed(0) + '%</span></button>'
+                    +     '</div>'
+                    +   '</div>'
+                    +   '<div id="jiqPathSpectrum" class="jiq-path-spectrum"></div>'
+                    +   '<div class="jiq-path-spectrum-legend">'
+                    +     '<span><span class="swatch" style="background:' + OWNED_HEX + ';"></span>Paramount-owned (' + ownedCount + ' paths · ' + _jiqFmt(ownedTotal) + ' viewers)</span>'
+                    +     '<span><span class="swatch" style="background:' + EARN_HEX  + ';"></span>Earned / off-Paramount (' + earnCount + ' paths · ' + _jiqFmt(earnTotal) + ' viewers) - first-party blind spot</span>'
+                    +   '</div>'
+                    +   '<div id="jiqPathDetailPanel" class="jiq-path-detail-panel"></div>'
                     + '</div>'
-                    // Active-path detail panel - filled by _jiqRenderPathDetail
-                    + '<div id="jiqPathDetailPanel" class="jiq-path-detail-panel"></div>';
+
+                    // ── VIEW 2: CATEGORIES (lazy-rendered on first click) ──
+                    + '<div data-jiq-pathview="categories" data-jiq-pathview-hidden="true" id="jiqPathCategoriesView"></div>'
+
+                    // ── VIEW 3: BUBBLE (lazy-rendered on first click) ──
+                    + '<div data-jiq-pathview="bubble" data-jiq-pathview-hidden="true" id="jiqPathBubbleView"></div>';
 
                 _jiqRenderPathSpectrum();
                 _jiqRenderPathDetail();
+                // The Categories and Bubble views are rendered on
+                // first click (lazy) to avoid up-front DOM weight,
+                // and re-rendered whenever the user clicks back to
+                // them (cheap, the same data + state).
             }
             if (listEl) {
                 var maxCohort = paths.reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
