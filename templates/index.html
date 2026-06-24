@@ -68132,6 +68132,71 @@
             return dateRangeYear ? (baseLbl + ' ' + dateRangeYear) : baseLbl;
         }
 
+        // Per-subject snapshot cache. Keyed by canonical group key
+        // (the same `subject` string handed to _resetComparisonRunsState).
+        // When the user switches profile tabs from subject A -> subject B
+        // -> back to A, the comparison state for A (selected Data Cuts,
+        // index picker, Gen Pop / Casual Fan / Category Norm toggles) is
+        // restored verbatim instead of being wiped. The cached
+        // runsByKey entries carry their already-fetched `.parsed`
+        // payloads so cohort columns / chart bars / demo-Table cohort
+        // columns reappear immediately on the next render pass without
+        // a refetch.
+        const _comparisonStateCacheBySubject = {};
+        const _COMPARE_STATE_SNAPSHOT_KEYS = [
+            'selectedKeys', 'includeGenPop', 'includeCasualFan',
+            'includeCategoryNorm', 'categoryNormCategory',
+            'categoryNormProfileCount', 'categoryNormGeneratedAt',
+            'indexNumKey', 'indexDenKey'
+        ];
+
+        function _snapshotComparisonRunsStateForSubject(subject) {
+            if (!subject) return;
+            const snap = {};
+            _COMPARE_STATE_SNAPSHOT_KEYS.forEach(k => {
+                const v = _comparisonRunsState[k];
+                snap[k] = Array.isArray(v) ? v.slice() : v;
+            });
+            const runsSnap = {};
+            const selKeys = Array.isArray(_comparisonRunsState.selectedKeys) ? _comparisonRunsState.selectedKeys : [];
+            selKeys.forEach(k => {
+                const r = _comparisonRunsState.runsByKey && _comparisonRunsState.runsByKey[k];
+                if (r) runsSnap[k] = r;
+            });
+            snap.runsByKey = runsSnap;
+            _comparisonStateCacheBySubject[subject] = snap;
+        }
+
+        function _restoreComparisonRunsStateForSubject(subject, availableKeys) {
+            if (!subject) return false;
+            const snap = _comparisonStateCacheBySubject[subject];
+            if (!snap) return false;
+            const validKeySet = availableKeys instanceof Set
+                ? availableKeys
+                : new Set(Array.isArray(availableKeys) ? availableKeys : []);
+            _COMPARE_STATE_SNAPSHOT_KEYS.forEach(k => {
+                if (!Object.prototype.hasOwnProperty.call(snap, k)) return;
+                let v = snap[k];
+                if (k === 'selectedKeys' && Array.isArray(v)) {
+                    // Drop any cohort keys that no longer correspond to a
+                    // valid sibling (profile was deleted, renamed, etc.).
+                    // CATEGORY_NORM_KEY ('__category_norm__') is synthetic
+                    // and not in availableRuns - keep it.
+                    v = v.filter(kk => kk === CATEGORY_NORM_KEY || validKeySet.has(kk));
+                }
+                _comparisonRunsState[k] = Array.isArray(v) ? v.slice() : v;
+            });
+            if (snap.runsByKey && typeof snap.runsByKey === 'object') {
+                _comparisonRunsState.runsByKey = _comparisonRunsState.runsByKey || {};
+                Object.entries(snap.runsByKey).forEach(([k, v]) => {
+                    if (k === CATEGORY_NORM_KEY || validKeySet.has(k)) {
+                        _comparisonRunsState.runsByKey[k] = v;
+                    }
+                });
+            }
+            return true;
+        }
+
         function _setupComparisonForCurrentProfile(subject, currentKey, sameSubjectRuns) {
             const others = (sameSubjectRuns || []).filter(p => (p.s3_key || p.job_id) !== currentKey);
             const sorted = typeof sortRunsForGroup === 'function' ? sortRunsForGroup(others) : others;
@@ -68140,9 +68205,32 @@
                 label: _compactRunLabel(p),
                 profile: p
             }));
-            const subjectChanged = (subject || '') !== (_comparisonRunsState.subject || '');
+            const prevSubject = _comparisonRunsState.subject || '';
+            const subjectChanged = (subject || '') !== prevSubject;
             if (subjectChanged) {
+                // Snapshot the OUTGOING subject so the user gets their
+                // Data Cuts back when they return to that profile tab.
+                if (prevSubject) {
+                    try { _snapshotComparisonRunsStateForSubject(prevSubject); }
+                    catch (e) { console.warn('[compare] snapshot prev subject failed', e); }
+                }
                 _resetComparisonRunsState(subject, currentKey, available);
+                // Try to restore the INCOMING subject's saved state. If
+                // none cached (first time seeing this subject this
+                // session), leave the freshly-reset blank state alone.
+                const restored = _restoreComparisonRunsStateForSubject(subject, new Set(available.map(a => a.key)));
+                if (restored) {
+                    _comparisonRunsState.subject = subject || '';
+                    _comparisonRunsState.currentKey = currentKey || '';
+                    _comparisonRunsState.availableRuns = available;
+                    _updateCompareDateRangesButtonBadge();
+                    // The render pass that follows _setupComparisonForCurrentProfile
+                    // (renderCharts / renderBehavioralCards / renderLocationTable
+                    // in displayProfileTabData) calls applyComparisonRunsToDashboardCharts
+                    // + applyComparisonRunsToCategoryTables at the end of each, which
+                    // pick up the restored selectedKeys + runsByKey automatically.
+                    // No need to re-trigger them here.
+                }
             } else {
                 _comparisonRunsState.currentKey = currentKey || '';
                 _comparisonRunsState.availableRuns = available;
