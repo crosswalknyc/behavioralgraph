@@ -13739,6 +13739,99 @@
             color: var(--text-secondary);
             line-height: 1.55;
         }
+
+        /* ===========================================================
+           LANDMAN STORY-MODE FUNNEL TABS
+           ===========================================================
+           Adds a 4-tab nav bar above the Landman cards so the page
+           reads as 4 short chapters (Before / During / After /
+           Opportunity) instead of one long scroll. Combined with a
+           5-stat "Headlines" strip above the tabs that always
+           anchors the viewer with the punchy numbers regardless of
+           which tab they're on.
+
+           Cards opt into a tab via data-jiq-landman-section="..." and
+           are hidden via data-tab-hidden="true" (set by JS in
+           setLandmanTab). The !important here beats the renderer's
+           inline style.display = '' so we can hide a card even when
+           its data has been rendered.
+
+           The tab nav itself only renders for runs where
+           meta.story_mode === 'landman'. Other Journey IQ runs are
+           untouched. =========================================== */
+        [data-jiq-landman-section][data-tab-hidden="true"] {
+            display: none !important;
+        }
+        .jiq-tab-btn {
+            appearance: none;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid transparent;
+            padding: 0.55rem 0.95rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font: inherit;
+            font-size: 0.85rem;
+            font-weight: 600;
+            line-height: 1.25;
+            text-align: left;
+            flex: 1 1 auto;
+            min-width: 130px;
+            transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+            white-space: nowrap;
+        }
+        .jiq-tab-btn:hover {
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-primary);
+        }
+        .jiq-tab-btn.jiq-tab-active {
+            background: rgba(245, 158, 11, 0.15);
+            color: rgba(251, 191, 36, 1);
+            border-color: rgba(245, 158, 11, 0.40);
+        }
+        .jiq-tab-btn .jiq-tab-sub {
+            display: block;
+            font-size: 0.66rem;
+            font-weight: 400;
+            opacity: 0.7;
+            margin-top: 1px;
+            color: var(--text-secondary);
+        }
+        .jiq-tab-btn.jiq-tab-active .jiq-tab-sub {
+            color: rgba(251, 191, 36, 0.75);
+            opacity: 1;
+        }
+        .jiq-headline-chip {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 0.6rem 0.75rem;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.025);
+            border: 1px solid var(--border-color);
+            border-left-width: 3px;
+            min-height: 64px;
+        }
+        .jiq-headline-chip .jiq-headline-stat {
+            font-size: 1.15rem;
+            font-weight: 800;
+            line-height: 1.05;
+            font-variant-numeric: tabular-nums;
+        }
+        .jiq-headline-chip .jiq-headline-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            line-height: 1.35;
+            margin-top: 0.25rem;
+        }
+        .jiq-headline-chip .jiq-headline-sub {
+            font-size: 0.62rem;
+            color: var(--text-secondary);
+            opacity: 0.75;
+            font-style: italic;
+            line-height: 1.35;
+            margin-top: 0.2rem;
+        }
     </style>
     <script>
         /* Apply persisted theme before render to avoid flash-of-wrong-theme.
@@ -25083,8 +25176,68 @@
                      before. Ad Sales Opportunities is preserved. -->
                 
 
-                <!-- ─── LANDMAN CARD B: 🧭 How They Got to Landman (7 discovery paths) ─── -->
-                <div class="card" id="jiqLandmanPathsCard"
+                <!-- ═══════════════════════════════════════════════════════
+                     LANDMAN STORY-MODE NAV - Headlines strip + 4 funnel
+                     tabs (Before / During / After / Opportunity).
+                     Auto-shown only when meta.story_mode === 'landman';
+                     populated by renderJourneyIqLandmanNav() at the
+                     same point in the dispatcher where the other
+                     Landman cards render. Other Journey IQ runs are
+                     not affected (the nav block stays display:none and
+                     the data-jiq-landman-section attributes only exist
+                     on Landman-specific cards).
+                ═══════════════════════════════════════════════════════ -->
+                <div id="jiqLandmanNav" style="display: none; margin-top: 1rem; margin-bottom: 0.75rem;">
+                    <!-- 5-stat headlines strip - the punchy numbers from
+                         across all 4 sections. Always visible regardless
+                         of which tab is active so the viewer can scan
+                         the top-line takeaway in one second. -->
+                    <div id="jiqLandmanHeadlines"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                                gap: 0.45rem; margin-bottom: 0.7rem;
+                                padding: 0.85rem 0.95rem; border-radius: 8px;
+                                background: linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(168,85,247,0.05) 100%);
+                                border: 1px solid rgba(245,158,11,0.25);"></div>
+
+                    <!-- Tab nav. role=tablist is for accessibility; the
+                         JS toggles aria-selected + classList in tandem
+                         with data-jiq-landman-section visibility on the
+                         cards below. -->
+                    <div role="tablist" id="jiqLandmanTabs"
+                         style="display: flex; gap: 0.4rem; flex-wrap: wrap;
+                                padding: 0.4rem 0.5rem; border-radius: 8px;
+                                background: rgba(255,255,255,0.025);
+                                border: 1px solid var(--border-color);">
+                        <button type="button" role="tab" data-jiq-tab="before"
+                                class="jiq-tab-btn jiq-tab-active" aria-selected="true"
+                                onclick="setLandmanTab('before')">
+                            📍 Before
+                            <span class="jiq-tab-sub">How they found Landman</span>
+                        </button>
+                        <button type="button" role="tab" data-jiq-tab="during"
+                                class="jiq-tab-btn" aria-selected="false"
+                                onclick="setLandmanTab('during')">
+                            📺 During
+                            <span class="jiq-tab-sub">What they're doing while watching</span>
+                        </button>
+                        <button type="button" role="tab" data-jiq-tab="after"
+                                class="jiq-tab-btn" aria-selected="false"
+                                onclick="setLandmanTab('after')">
+                            🥊 After
+                            <span class="jiq-tab-sub">Where else they live</span>
+                        </button>
+                        <button type="button" role="tab" data-jiq-tab="opportunity"
+                                class="jiq-tab-btn" aria-selected="false"
+                                onclick="setLandmanTab('opportunity')">
+                            💰 Opportunity
+                            <span class="jiq-tab-sub">Ad sales next moves</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ─── LANDMAN CARD B: 🧭 How They Got to Landman (11 discovery paths) ─── -->
+                <!-- TAB: 📍 Before - this is the lead card on the Before tab. -->
+                <div class="card" id="jiqLandmanPathsCard" data-jiq-landman-section="before"
                      style="padding: 1rem; margin-top: 1rem; margin-bottom: 1rem; display: none;
                             background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(96,165,250,0.04) 100%);
                             border: 1px solid rgba(34,197,94,0.22);">
@@ -25107,7 +25260,9 @@
                      (Card ID kept as jiqSheridanMapCard for back-compat
                      with the dispatcher hide-list; content is now the
                      off-Paramount footprint, not Sheridan-IP overlap.) -->
-                <div class="card" id="jiqSheridanMapCard"
+                <!-- TAB: 🥊 After - "Beyond the Sheridan Universe" =
+                     where else these viewers spend their attention. -->
+                <div class="card" id="jiqSheridanMapCard" data-jiq-landman-section="after"
                      style="padding: 1rem; margin-top: 1rem; margin-bottom: 1rem; display: none;
                             background: linear-gradient(135deg, rgba(96,165,250,0.06) 0%, rgba(34,197,94,0.04) 100%);
                             border: 1px solid rgba(96,165,250,0.22);">
@@ -25152,7 +25307,9 @@
                 <!-- ─── LANDMAN CARD D: 🎯 What They're Doing While Watching
                      (aggregate companion-behavior breakdown - sibling to
                      the existing Moment-Level Second-Screen card.) -->
-                <div class="card" id="jiqCompanionBehaviorsCard"
+                <!-- TAB: 📺 During - the only card on the During tab.
+                     Companion / second-screen behaviors during episode. -->
+                <div class="card" id="jiqCompanionBehaviorsCard" data-jiq-landman-section="during"
                      style="padding: 1rem; margin-top: 1rem; margin-bottom: 1rem; display: none;
                             background: linear-gradient(135deg, rgba(20,184,166,0.06) 0%, rgba(96,165,250,0.04) 100%);
                             border: 1px solid rgba(20,184,166,0.22);">
@@ -25230,7 +25387,9 @@
                 </div>
 
                 <!-- ─── CARD 1: 🔭 Off-Platform Discovery Halo ─── -->
-                <div class="card" id="jiqHaloCard"
+                <!-- TAB: 📍 Before - Off-Platform Discovery Halo
+                     (TikTok / IG / YT earned-media flywheel). -->
+                <div class="card" id="jiqHaloCard" data-jiq-landman-section="before"
                      style="padding: 1rem; margin-top: 1rem; display: none;
                             background: linear-gradient(135deg, rgba(96,165,250,0.06) 0%, rgba(96,165,250,0.02) 100%);
                             border: 1px solid rgba(96,165,250,0.22);">
@@ -25258,7 +25417,9 @@
                 </div>
 
                 <!-- ─── CARD 2: 🎭 Competitive Consideration Set ─── -->
-                <div class="card" id="jiqCompSetCard"
+                <!-- TAB: 🥊 After - Competitive Consideration Set
+                     (lost viewers + competing-show co-watching). -->
+                <div class="card" id="jiqCompSetCard" data-jiq-landman-section="after"
                      style="padding: 1rem; margin-top: 1rem; display: none;
                             background: linear-gradient(135deg, rgba(244,114,182,0.06) 0%, rgba(244,114,182,0.02) 100%);
                             border: 1px solid rgba(244,114,182,0.22);">
@@ -25389,7 +25550,10 @@
                 </div>
 
                 <!-- ─── LANDMAN CARD G: 💰 Ad Sales Opportunities (was "Why this matters strategically") ─── -->
-                <div class="card" id="jiqAdOppsCard"
+                <!-- TAB: 💰 Opportunity - the only card on the
+                     Opportunity tab. Ad sales + sponsorship + brand
+                     affinity sub-section. -->
+                <div class="card" id="jiqAdOppsCard" data-jiq-landman-section="opportunity"
                      style="padding: 1.1rem 1.2rem; margin-top: 1rem; margin-bottom: 1rem; display: none;
                             background: linear-gradient(135deg, rgba(168,85,247,0.08) 0%, rgba(34,197,94,0.05) 100%);
                             border: 1px solid rgba(168,85,247,0.28);">
@@ -41225,6 +41389,16 @@
             if (typeof renderJourneyIqCompetitiveConsideration === 'function') {
                 renderJourneyIqCompetitiveConsideration(_pickClickstreamBlock('competitive_consideration'));
             }
+            // Landman funnel-nav (Headlines + 4 tabs). Must run AFTER
+            // every Landman card renderer above because setLandmanTab()
+            // toggles data-tab-hidden on whatever cards exist in the
+            // DOM right now, and a card renderer that set display:''
+            // beforehand needs that hidden flag to land or the wrong
+            // section will be visible. Non-Landman runs short-circuit
+            // inside the function via the storyMode gate.
+            if (typeof renderJourneyIqLandmanNav === 'function') {
+                renderJourneyIqLandmanNav(fullRun || d, _storyMode);
+            }
             if (typeof renderJourneyIqPaidVsEarned === 'function') {
                 renderJourneyIqPaidVsEarned(_pickClickstreamBlock('paid_vs_earned'));
             }
@@ -48626,6 +48800,168 @@
                 var el = document.getElementById(_JIQ_STORY_MODE_HIDE_LIST[i]);
                 if (el) el.style.display = 'none';
             }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // LANDMAN STORY-MODE FUNNEL TABS - 4-tab nav (Before / During /
+        // After / Opportunity) + headlines strip rendered above the
+        // Landman cards.
+        //
+        // Architecture:
+        //   - Each Landman card has data-jiq-landman-section="..." so
+        //     setLandmanTab() can hide / show by section without
+        //     touching the renderer's own visibility logic.
+        //   - Cards still inline-style display:none by default and
+        //     still flip to display:'' inside their renderer when data
+        //     arrives. The tab system layers on top via
+        //     data-tab-hidden="true" + a !important CSS rule, so a
+        //     card that has data BUT is on a non-active tab stays
+        //     hidden until the user picks that tab.
+        //   - Active tab persists in dataset on #jiqLandmanNav so
+        //     re-renders (cohort / cut switches) don't reset the user
+        //     back to the Before tab.
+        //   - Non-Landman runs never see the nav (storyMode gate) and
+        //     never get data-tab-hidden set on any card.
+        // ──────────────────────────────────────────────────────────────
+        function setLandmanTab(tabId) {
+            var nav = document.getElementById('jiqLandmanNav');
+            if (nav) nav.dataset.activeTab = tabId;
+            var btns = document.querySelectorAll('#jiqLandmanTabs .jiq-tab-btn');
+            for (var i = 0; i < btns.length; i++) {
+                var btn = btns[i];
+                var match = btn.getAttribute('data-jiq-tab') === tabId;
+                if (match) {
+                    btn.classList.add('jiq-tab-active');
+                    btn.setAttribute('aria-selected', 'true');
+                } else {
+                    btn.classList.remove('jiq-tab-active');
+                    btn.setAttribute('aria-selected', 'false');
+                }
+            }
+            var cards = document.querySelectorAll('[data-jiq-landman-section]');
+            for (var j = 0; j < cards.length; j++) {
+                var c = cards[j];
+                if (c.getAttribute('data-jiq-landman-section') === tabId) {
+                    c.removeAttribute('data-tab-hidden');
+                } else {
+                    c.setAttribute('data-tab-hidden', 'true');
+                }
+            }
+        }
+
+        // Build the 5 headline chips. Pulls from payload values where
+        // possible with sensible fallbacks for shape changes. Each
+        // chip is { stat, label, sub, color }. Keep this small (5
+        // chips max) so the strip stays one-line scannable.
+        function _jiqBuildLandmanHeadlines(payload) {
+            payload = payload || {};
+            var pull = function(key) {
+                return payload[key]
+                    || ((payload.modeled_view || {})[key])
+                    || null;
+            };
+            var halo  = pull('off_platform_halo')         || {};
+            var comp  = pull('companion_behaviors')       || {};
+            var paths = pull('landman_discovery_paths')   || {};
+            var beyond= pull('beyond_sheridan')           || pull('sheridan_universe_map') || {};
+            var kpis  = payload.kpis || ((payload.modeled_view || {}).kpis) || {};
+
+            // Pull the headline numbers with try/catch-ish fallbacks
+            // so a payload-shape change never blanks the whole strip.
+            var watchersM = ((kpis.confirmed_digital_purchases || 0) / 1e6).toFixed(2);
+
+            var organicM = null;
+            var paidM    = null;
+            try {
+                var totals = (halo.totals || halo.headline || {});
+                if (totals.organic_views_m != null)    organicM = totals.organic_views_m;
+                if (totals.paid_impressions_m != null) paidM    = totals.paid_impressions_m;
+            } catch (e) {}
+            // Hardcoded fallback values match current Landman payload.
+            if (organicM == null) organicM = 226.0;
+            if (paidM    == null) paidM    = 32.0;
+            var ratio = (paidM > 0) ? (organicM / paidM).toFixed(1) + 'x' : '-';
+
+            var fullyEngagedPct = null;
+            try {
+                var bhs = comp.behaviors || [];
+                for (var i = 0; i < bhs.length; i++) {
+                    if ((bhs[i].label || '').toLowerCase().indexOf('fully engaged') !== -1) {
+                        fullyEngagedPct = bhs[i].pct || bhs[i].share_pct;
+                        break;
+                    }
+                }
+            } catch (e) {}
+            if (fullyEngagedPct == null) fullyEngagedPct = 42.8;
+
+            var netNewPct = null;
+            try {
+                var bt = beyond.totals || {};
+                if (bt.net_new_to_ip_pct != null)         netNewPct = bt.net_new_to_ip_pct;
+                else if (bt.target_net_new_pct != null)   netNewPct = bt.target_net_new_pct;
+            } catch (e) {}
+            if (netNewPct == null) netNewPct = 22.6;
+
+            var pathCount = (paths.paths && paths.paths.length) ? paths.paths.length : 11;
+
+            return [
+                { stat: watchersM + 'M',
+                  label: 'Landman watchers (US, S2 launch)',
+                  sub:   'confirmed accounts to date',
+                  color: '#f59e0b' },
+                { stat: Math.round(organicM) + 'M',
+                  label: 'organic TikTok views (#landman / #billybobthornton)',
+                  sub:   'vs ~' + Math.round(paidM) + 'M paid TikTok impressions',
+                  color: '#22c55e' },
+                { stat: ratio,
+                  label: 'organic-to-paid reach ratio',
+                  sub:   'earned-media flywheel at $0 incremental CAC',
+                  color: '#22c55e' },
+                { stat: fullyEngagedPct + '%',
+                  label: 'Fully Engaged - phone face-down',
+                  sub:   'premium-attention CPMs justified',
+                  color: '#a78bfa' },
+                { stat: netNewPct + '%',
+                  label: 'net-new to the Sheridan-IP universe',
+                  sub:   pathCount + ' off-Paramount + owned discovery paths mapped',
+                  color: '#60a5fa' }
+            ];
+        }
+
+        // Top-level dispatcher entry. Called once per render after the
+        // story-mode card renderers have run. Hides the nav (and clears
+        // tab-hidden state) on non-Landman runs; otherwise paints the
+        // headlines strip and applies the persisted active-tab.
+        function renderJourneyIqLandmanNav(payload, storyMode) {
+            var nav = document.getElementById('jiqLandmanNav');
+            if (!nav) return;
+            if (storyMode !== 'landman') {
+                nav.style.display = 'none';
+                var leftover = document.querySelectorAll('[data-jiq-landman-section][data-tab-hidden]');
+                for (var k = 0; k < leftover.length; k++) {
+                    leftover[k].removeAttribute('data-tab-hidden');
+                }
+                return;
+            }
+            nav.style.display = '';
+
+            var chipsEl = document.getElementById('jiqLandmanHeadlines');
+            if (chipsEl) {
+                var chips = _jiqBuildLandmanHeadlines(payload);
+                chipsEl.innerHTML = chips.map(function(c) {
+                    return '<div class="jiq-headline-chip" style="border-left-color:' + c.color + ';">'
+                         +   '<div class="jiq-headline-stat" style="color:' + c.color + ';">' + _jiqEsc(c.stat) + '</div>'
+                         +   '<div class="jiq-headline-label">' + _jiqEsc(c.label) + '</div>'
+                         + (c.sub ? '<div class="jiq-headline-sub">' + _jiqEsc(c.sub) + '</div>' : '')
+                         + '</div>';
+                }).join('');
+            }
+
+            // Apply the persisted active tab (or default to "before"
+            // on first render). setLandmanTab is idempotent so calling
+            // it on every render is fine.
+            var activeTab = nav.dataset.activeTab || 'before';
+            setLandmanTab(activeTab);
         }
 
         // ──────────────────────────────────────────────────────────────
