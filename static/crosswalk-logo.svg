@@ -1,8 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 32" width="160" height="32" role="img" aria-label="Crosswalk">
-  <g fill="#000">
-    <path d="M1 5 L9 3 L11 27 L3 29 Z"/>
-    <path d="M11 5 L19 3 L21 27 L13 29 Z"/>
-    <path d="M21 5 L29 3 L31 27 L23 29 Z"/>
-    <text x="38" y="25" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="22" letter-spacing="-0.02em">Crosswalk</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 32" width="180" height="32" role="img" aria-label="Crosswalk">
+  <!-- Transparent background so the logo overlays cleanly on the
+       .header-logo-text green gradient wrapper (#c8e600 -> #a0d911).
+       All fills use #0f1115 (near-black) to match the uploaded mark. -->
+  <g fill="#0f1115">
+    <!-- Three italic slashes: width 7, slant 20deg, gap 4 between marks. -->
+    <path d="M2 5 L11 3 L13 27 L4 29 Z"/>
+    <path d="M13 5 L22 3 L24 27 L15 29 Z"/>
+    <path d="M24 5 L33 3 L35 27 L26 29 Z"/>
+    <!-- Wordmark. System sans-stack (SF Pro / Segoe UI / Inter family) so
+         the rendered glyphs match the uploaded screenshot's clean
+         modern sans rather than Arial's slightly mechanical default. -->
+    <text x="42" y="25"
+          font-family="'Inter','SF Pro Text','Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif"
+          font-weight="700"
+          font-size="23"
+          letter-spacing="-0.02em">Crosswalk</text>
   </g>
 </svg>
