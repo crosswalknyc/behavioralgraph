@@ -347,6 +347,8 @@
             height: 28px;
             width: auto;
             display: block;
+            filter: invert(1);
+            mix-blend-mode: multiply;
         }
         .header-text h1 { font-family: 'Space Mono', monospace; font-size: 1.5rem; color: var(--accent-cyan); }
         .header-text p { color: var(--text-secondary); font-size: 0.8rem; }
@@ -14900,7 +14902,7 @@
         {% endif %}
         <header>
             <div style="display: flex; align-items: center;">
-                <div class="header-logo-text"><img src="{{ url_for('static', filename='crosswalk-logo.svg') }}" alt="Crosswalk"></div>
+                <div class="header-logo-text"><img src="{{ url_for('static', filename='crosswalk-logo-white-hires.png') }}" alt="Crosswalk"></div>
             </div>
             <div class="header-right-section">
                 <div class="user-info-bar">
@@ -18018,7 +18020,7 @@
                         <span class="profile-col has-tooltip" data-tooltip="Total Universe percentage">Total Universe</span>
                         <span class="cw-gp-col has-tooltip" data-tooltip="Gen Pop % from CrossWalk panel data">CW Gen Pop</span>
                         <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Census/Nielsen)">GP Census</span>
-                        <span class="index-col has-tooltip" data-tooltip="CrossWalk Gen Pop Index">CW GP Index</span>
+                        <span class="index-col has-tooltip" data-tooltip="Total Universe % ÷ GP Census % × 100 (Census/Nielsen baseline, not CrossWalk panel Gen Pop)">GP Index</span>
                     </div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
                     <div id="locationCountAll" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
@@ -79646,7 +79648,21 @@
                     loc.index = 100;
                 });
             }
-            // For regular profiles: Recalculate index and genPopPct from fresh Gen Pop baseline.
+            // For regular profiles: Recalculate genPopPct (CW Gen Pop column)
+            // from the CW baseline AND recompute index against the ACTUAL
+            // Gen Pop (Nielsen-style DMA percentages from DMA_MASTER /
+            // getGPActualDMA), not CW Gen Pop. Per user 2026-06-24: the
+            // location Index column should index the Total Universe
+            // against true Gen Pop, not against the CW-internal Gen Pop
+            // baseline (which is itself a panel-derived approximation
+            // that can drift from census-grade DMA shares).
+            //
+            // The CW Gen Pop column still reads loc.genPopPct so users
+            // can see the panel baseline alongside census Gen Pop and
+            // the index. If actual Gen Pop is missing for a DMA we
+            // fall back to CW Gen Pop so the row still gets an index
+            // rather than dropping out silently.
+            //
             // IMPORTANT: canonicalize baseline DMAs the same way as profile DMAs
             // so rows like "Phoenix" and "Phoenix (Prescott), AZ" match correctly.
             else if (genPopBaselineData && Array.isArray(genPopBaselineData.locations)) {
@@ -79657,15 +79673,22 @@
                     if (!key) return;
                     gpMap[key] = (gpMap[key] || 0) + (gl.pct || gl.genPopPct || 0);
                 });
+                let _idxActualCount = 0, _idxFallbackCount = 0;
                 locations.forEach(function(loc) {
                     const canon = matchCanonicalDMA(loc.name || '');
                     const key = canon || (loc.name || '').trim();
-                    const gpPct = gpMap[key] || 0;
-                    if (gpPct > 0) {
-                        loc.genPopPct = gpPct;
-                        loc.index = Math.round((loc.pct / gpPct) * 100);
+                    const cwGpPct = gpMap[key] || 0;
+                    if (cwGpPct > 0) loc.genPopPct = cwGpPct;
+                    const actualGpPct = getGPActualDMA(loc.name);
+                    if (actualGpPct != null && actualGpPct > 0) {
+                        loc.index = Math.round((loc.pct / actualGpPct) * 100);
+                        _idxActualCount += 1;
+                    } else if (cwGpPct > 0) {
+                        loc.index = Math.round((loc.pct / cwGpPct) * 100);
+                        _idxFallbackCount += 1;
                     }
                 });
+                console.debug('[location index] actual-gp:', _idxActualCount, 'cw-gp fallback:', _idxFallbackCount);
                 // Debug visibility: report canonical DMA key mismatches between profile and CW baseline.
                 const profileKeys = new Set(locations.map(l => matchCanonicalDMA(l.name || '') || (l.name || '').trim()).filter(Boolean));
                 const baselineKeys = new Set(Object.keys(gpMap));
