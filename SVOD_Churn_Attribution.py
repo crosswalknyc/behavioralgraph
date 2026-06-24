@@ -7416,6 +7416,32 @@ def run_synthetic_attribution(config: dict) -> dict:
             print(f"   ⚠️  Could not derive campaign bounds from episode_dates: "
                   f"{_ep_bounds_err}")
 
+    # ── Caller-supplied Analysis Date Range right-side override ──────
+    # Some pulls want the Analysis Date Range to extend past the last
+    # episode air date — typically "release-to-today" views for live
+    # shows where the user wants the dashboard date range to reflect
+    # cumulative measurement-through-now rather than the binge-drop
+    # day alone. Pass `analysis_end_date_override` as a datetime to
+    # widen the right side of the range without distorting episode
+    # attribution math (which still uses the real episode dates).
+    # The left side stays at min(episode_dates) so "release date" is
+    # still the anchor. We do not push campaign_start later than the
+    # earliest episode — that would mis-attribute.
+    _end_override = config.get('analysis_end_date_override')
+    if _end_override is not None:
+        try:
+            if not hasattr(_end_override, 'date'):
+                _end_override = datetime.combine(_end_override, datetime.min.time())
+            # Only widen — never shrink — relative to the episode-derived end.
+            _cur_end = p.get('campaign_end')
+            if _cur_end is None or _end_override > _cur_end:
+                p['campaign_end'] = _end_override
+                print(f"   📐 Analysis range right-side overridden to "
+                      f"{_end_override.date()} via analysis_end_date_override")
+        except Exception as _ana_end_err:
+            print(f"   ⚠️  Could not apply analysis_end_date_override "
+                  f"({_end_override!r}): {_ana_end_err}")
+
     write_output(
         df_summary=df_summary,
         df_comp=df_comp,
