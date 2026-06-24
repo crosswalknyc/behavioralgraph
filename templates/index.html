@@ -49242,6 +49242,20 @@
                  + '</div>';
         }
 
+        // Click handler for Path Spectrum segments. Finds the path
+        // row with the matching data-jiq-path-rank, opens its
+        // <details>, and scrolls it into view smoothly so the user
+        // ends up looking at the row they just clicked in the bar.
+        function _jiqScrollToPathRow(rank) {
+            var row = document.querySelector('details.jiq-row-disclose[data-jiq-path-rank="' + rank + '"]');
+            if (!row) return;
+            row.open = true;
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.style.transition = 'box-shadow 0.3s ease';
+            row.style.boxShadow = '0 0 0 2px rgba(96,165,250,0.55)';
+            setTimeout(function() { row.style.boxShadow = ''; }, 1400);
+        }
+
         // Map a free-text click-sequence step to a single icon + short
         // label for the compact .jiq-path-ribbon. Pattern-matched
         // against the lower-cased step string. Order matters - more
@@ -49600,60 +49614,143 @@
             if (titleEl) titleEl.textContent = '🧭 ' + (p.title || 'How They Got to Landman');
             if (subEl)   subEl.textContent = p.subtitle || '';
             if (metaEl)  metaEl.textContent = (p.paths.length) + ' discovery paths · click any to expand';
-            // The "topline" container is now used for the always-visible
-            // card lead - hero stat + 1-2 sentence punchline. The dense
-            // path data sits below in #jiqLandmanPathsList where every
-            // row is a collapsible <details>.
+
+            // ── Owned vs Earned color palettes. Owned paths get a
+            // Paramount-blue family (P+ controls these surfaces);
+            // off-Paramount / earned paths get an amber family
+            // (everything Paramount-first-party-data is blind to).
+            // The 5-shade ramps let each of the 5 + 6 paths get its
+            // own distinct fill in the spectrum bar while still
+            // reading as one of two visual buckets.
+            var OWNED_PAL = ['#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'];
+            var EARN_PAL  = ['#7c2d12', '#b45309', '#d97706', '#f59e0b', '#fbbf24', '#fcd34d'];
+            var OWNED_HEX = '#3b82f6';
+            var EARN_HEX  = '#f59e0b';
+
+            // Pre-compute color per path (by channel_class), totals,
+            // owned-vs-earned splits. The renderer reads from these
+            // to draw the spectrum, split tiles, and per-row colors.
+            var paths = p.paths || [];
+            var ownedSeen = 0, earnSeen = 0;
+            var totalAccounts = 0, ownedTotal = 0, earnTotal = 0;
+            var pathColor = {};
+            paths.forEach(function(r) {
+                totalAccounts += (r.cohort_size || 0);
+                if (r.channel_class === 'paramount_owned') {
+                    pathColor[r.rank] = OWNED_PAL[ownedSeen % OWNED_PAL.length];
+                    ownedSeen++;
+                    ownedTotal += (r.cohort_size || 0);
+                } else {
+                    pathColor[r.rank] = EARN_PAL[earnSeen % EARN_PAL.length];
+                    earnSeen++;
+                    earnTotal += (r.cohort_size || 0);
+                }
+            });
+            var ownedPct = totalAccounts ? (ownedTotal / totalAccounts * 100) : 0;
+            var earnPct  = totalAccounts ? (earnTotal  / totalAccounts * 100) : 0;
+
+            // ── HERO VISUAL ──
+            //
+            //   1. Path Spectrum - one horizontal stacked bar, 11
+            //      colored segments, each sized to its cohort. Owned
+            //      paths painted in the blue family, earned paths in
+            //      the amber family. Clicking a segment scrolls to
+            //      that path's row and opens it.
+            //
+            //   2. Owned vs Earned split tiles - the punchline. Big
+            //      percentages making the "Paramount sees the blue,
+            //      can't see the amber" story land instantly.
+            //
+            //   3. Two-line micro caption underneath the spectrum -
+            //      total viewers + path count + click hint. Replaces
+            //      the previous prose-heavy card lead.
             if (topEl) {
-                var totalAccounts = (p.paths || []).reduce(function(s, r) {
-                    return s + (r.cohort_size || 0);
-                }, 0);
-                var pathCount = (p.paths || []).length;
-                topEl.innerHTML = _jiqCardLead(
-                    pathCount + ' paths',
-                    'mapped end-to-end',
-                    '<strong>How ' + _jiqFmt(totalAccounts) + ' Landman watchers actually arrived '
-                        + 'at press-play.</strong> Each row below is one archetypal journey - '
-                        + 'cohort size, days from first touch to press-play, the click-sequence, '
-                        + 'and what it means strategically. <em>Click any path to expand the '
-                        + 'full breakdown.</em>',
-                    ACC
-                );
+                var spectrumSegs = paths.map(function(r) {
+                    var w = totalAccounts ? ((r.cohort_size || 0) / totalAccounts * 100) : 0;
+                    var color = pathColor[r.rank] || ACC;
+                    var tip = '#' + r.rank + ' · ' + (r.label || '')
+                            + ' · ' + _jiqFmt(r.cohort_size || 0)
+                            + ' viewers (' + (r.pct_of_viewers || 0).toFixed(1) + '%)';
+                    return '<div class="jiq-path-spectrum-seg"'
+                         +      ' style="width:' + w.toFixed(2) + '%; background:' + color + ';"'
+                         +      ' title="' + _jiqEsc(tip) + '"'
+                         +      ' data-jiq-path-rank="' + r.rank + '"'
+                         +      ' onclick="_jiqScrollToPathRow(' + r.rank + ')">'
+                         +   (w >= 4 ? _jiqEsc(String(r.rank)) : '')
+                         + '</div>';
+                }).join('');
+                topEl.innerHTML = ''
+                    + '<div style="margin-bottom:0.85rem;">'
+                    +   '<div style="font-size:10.5px; font-weight:700; opacity:0.78; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:0.4rem;">'
+                    +     '🌈 Path Spectrum <span style="opacity:0.7; font-weight:500; text-transform:none; letter-spacing:0;">- every segment is one of the 11 paths, width = cohort size, click to jump</span>'
+                    +   '</div>'
+                    +   '<div class="jiq-path-spectrum">' + spectrumSegs + '</div>'
+                    +   '<div class="jiq-path-spectrum-legend">'
+                    +     '<span><span class="swatch" style="background:' + OWNED_HEX + ';"></span>Paramount-owned surfaces (5 paths)</span>'
+                    +     '<span><span class="swatch" style="background:' + EARN_HEX  + ';"></span>Earned / off-Paramount (6 paths) - first-party blind spot</span>'
+                    +   '</div>'
+                    + '</div>'
+                    + '<div class="jiq-split-card">'
+                    +   '<div class="jiq-split-tile" style="border-left-color:' + OWNED_HEX + ';">'
+                    +     '<div class="label" style="color:' + OWNED_HEX + ';">🏠 Paramount-owned surfaces</div>'
+                    +     '<div class="pct"   style="color:' + OWNED_HEX + ';">' + ownedPct.toFixed(0) + '%</div>'
+                    +     '<div class="meta">' + _jiqFmt(ownedTotal) + ' viewer-touches across 5 paths<br>Home shelf · Tulsa King · CRM · CBS NFL · Walmart+</div>'
+                    +   '</div>'
+                    +   '<div class="jiq-split-tile" style="border-left-color:' + EARN_HEX + ';">'
+                    +     '<div class="label" style="color:' + EARN_HEX + ';">🌐 Earned / off-Paramount</div>'
+                    +     '<div class="pct"   style="color:' + EARN_HEX + ';">' + earnPct.toFixed(0) + '%</div>'
+                    +     '<div class="meta">' + _jiqFmt(earnTotal) + ' viewer-touches across 6 paths<br>TikTok · Reddit · Podcasts · Critics · Cross-platform · Country music</div>'
+                    +   '</div>'
+                    + '</div>';
             }
             if (listEl) {
-                var maxCohort = (p.paths || []).reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
-                listEl.innerHTML = (p.paths || []).map(function(r, idx) {
-                    // Click-sequence (rendered in the expanded body)
+                var maxCohort = paths.reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
+                listEl.innerHTML = paths.map(function(r, idx) {
+                    var rowColor = pathColor[r.rank] || ACC;
+                    // Click-sequence (full text, in the expanded body
+                    // for reference). Each step gets the same icon
+                    // that appears in the compact ribbon so the
+                    // pictogram + sentence reinforce each other.
                     var stepsHtml = (r.steps || []).map(function(step, i) {
+                        var hit  = _jiqPathStepIcon(step);
+                        var icon = hit ? hit.icon : '·';
                         return '<div style="display:flex; gap:0.55rem; align-items:flex-start; padding:3px 0;">'
-                             +   '<div style="flex:none; width:18px; height:18px; border-radius:50%; background:' + ACC + '22; color:' + ACC + ';'
-                             +              ' font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center;">' + (i+1) + '</div>'
+                             +   '<div style="flex:none; width:22px; height:22px; border-radius:5px; background:' + rowColor + '22; color:' + rowColor + ';'
+                             +              ' font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center;">' + _jiqEsc(icon) + '</div>'
                              +   '<div style="font-size:11.5px; line-height:1.45;">' + _jiqEsc(step) + '</div>'
                              + '</div>';
                     }).join('');
-                    // Summary (always visible) - rank, label, cohort,
-                    // days-to-press-play. Trailing 22px column reserves
-                    // room for the caret painted by .jiq-row-caret.
+                    // Summary (always visible) - now VISUAL-first:
+                    // colored rank chip, label, then the icon ribbon
+                    // taking the largest column (the click-sequence
+                    // as a pictogram flow), cohort size with mini-bar,
+                    // and days-to-press-play. Trailing 22px column
+                    // reserves space for the .jiq-row-caret.
                     var daysStr = (r.avg_days_to_press_play === 0)
-                        ? 'Same day'
-                        : (r.avg_days_to_press_play || 0) + 'd avg';
+                        ? '⚡ Same day'
+                        : '⏱ ' + (r.avg_days_to_press_play || 0) + 'd';
+                    var ribbonHtml = _jiqRenderPathRibbon(r.steps);
                     var summaryHtml = ''
-                         + '<div style="display:grid; grid-template-columns: 32px minmax(0, 1.6fr) 110px 90px 22px; gap:0.7rem; align-items:center;">'
-                         +   '<div style="font-size:1rem; font-weight:800; color:' + ACC + '; text-align:center;">' + _jiqEsc(r.rank || '') + '</div>'
-                         +   '<div style="font-size:0.92rem; font-weight:700; line-height:1.35;">' + _jiqEsc(r.label || '') + '</div>'
+                         + '<div style="display:grid; grid-template-columns: 38px minmax(0, 1.4fr) minmax(0, 1.5fr) 110px 80px 22px; gap:0.7rem; align-items:center;">'
+                         +   '<div style="font-size:0.95rem; font-weight:800; color:#fff; text-align:center; background:' + rowColor + '; border-radius:5px; padding:5px 0;">' + _jiqEsc(r.rank || '') + '</div>'
+                         +   '<div style="font-size:0.9rem; font-weight:700; line-height:1.3;">' + _jiqEsc(r.label || '') + '</div>'
+                         +   '<div>' + ribbonHtml + '</div>'
                          +   '<div style="text-align:right;">'
                          +     '<div style="font-size:0.9rem; font-weight:800; color: var(--text-primary);">' + _jiqFmt(r.cohort_size || 0) + '</div>'
                          +     '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">' + (r.pct_of_viewers || 0).toFixed(1) + '% of viewers</div>'
-                         +     '<div style="margin-top:0.25rem;">' + _jiqMiniBar(r.cohort_size, ACC, maxCohort) + '</div>'
+                         +     '<div style="margin-top:0.25rem;">' + _jiqMiniBar(r.cohort_size, rowColor, maxCohort) + '</div>'
                          +   '</div>'
                          +   '<div style="text-align:right;">'
-                         +     '<div style="font-size:0.85rem; font-weight:700; color:' + ACC + ';">' + _jiqEsc(daysStr) + '</div>'
-                         +     '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">to press-play</div>'
+                         +     '<div style="font-size:0.8rem; font-weight:700; color:' + rowColor + ';">' + _jiqEsc(daysStr) + '</div>'
+                         +     '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">to play</div>'
                          +   '</div>'
                          +   '<div></div>'
                          + '</div>';
-                    // Body (expanded) - 2-col: click-sequence on left,
-                    // pattern note + strategic implication on right.
+                    // Body (expanded) - 2-col: full click-sequence on
+                    // the left, pattern note + strategic implication
+                    // on the right. Strategic-implication callout
+                    // borrows the row's color so all path-specific
+                    // chrome stays visually tied to the spectrum bar.
                     var bodyHtml = ''
                          + '<div style="display:grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr); gap:1rem;">'
                          +   '<div>'
@@ -49663,16 +49760,24 @@
                          +   '<div>'
                          +     '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Pattern</div>'
                          +     '<div style="font-size:11.5px; color: var(--text-secondary); line-height:1.55; margin-bottom:0.55rem; font-style:italic;">' + _jiqEsc(r.note || '') + '</div>'
-                         +     '<div style="font-size:11px; padding:0.5rem 0.65rem; border-radius:4px; background:' + ACC + '14; border-left:2px solid ' + ACC + '88; line-height:1.55;">'
-                         +       '<strong style="color:' + ACC + ';">→ Strategic implication:</strong> ' + _jiqEsc(r.why_it_matters || '')
+                         +     '<div style="font-size:11px; padding:0.5rem 0.65rem; border-radius:4px; background:' + rowColor + '14; border-left:2px solid ' + rowColor + '88; line-height:1.55;">'
+                         +       '<strong style="color:' + rowColor + ';">→ Strategic implication:</strong> ' + _jiqEsc(r.why_it_matters || '')
                          +     '</div>'
                          +   '</div>'
                          + '</div>';
-                    // Only the lead path (rank #1 / array idx 0) opens
-                    // by default so the user immediately sees what an
-                    // expanded row looks like. The remaining 10 stay
-                    // collapsed - one click reveals them.
-                    return _jiqRowDisclose(summaryHtml, bodyHtml, { open: idx === 0 });
+                    // Only the lead path (rank #1) opens by default
+                    // so the user immediately sees what an expanded
+                    // row looks like. data-jiq-path-rank lets the
+                    // spectrum bar's onclick handler find + open
+                    // a specific row when the user clicks a segment.
+                    var rowHtml = _jiqRowDisclose(summaryHtml, bodyHtml, {
+                        open:        idx === 0,
+                        accentColor: rowColor
+                    });
+                    return rowHtml.replace(
+                        '<details class="jiq-row-disclose"',
+                        '<details class="jiq-row-disclose" data-jiq-path-rank="' + r.rank + '"'
+                    );
                 }).join('');
             }
             if (rollupEl) {
