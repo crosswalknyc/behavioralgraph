@@ -34336,9 +34336,13 @@ def _iq_rankers_get_jobs():
 
 
 @app.route('/api/iq-rankers/leaderboard', methods=['GET'])
-@requires_auth
 def iq_rankers_leaderboard():
     """Aggregated Talent / Brands leaderboard for the requested window.
+
+    Auth: dashboard session OR a `secret` query param matching the
+    CRON_SECRET env var. The latter is for CLI diagnostics, periodic
+    cache-warming, or external dashboards (e.g. an embedded report in
+    a Notion/Coda doc) that don't run inside a logged-in session.
 
     Query params:
         master         TALENT | BRAND (required)
@@ -34350,7 +34354,13 @@ def iq_rankers_leaderboard():
                        neg | net_sentiment | cw_iq_score | delta_cw_iq
         sort_dir       asc | desc (default desc)
         limit          1..2000 (default 500)
+        secret         (optional) CRON_SECRET for unauth'd callers
     """
+    secret = (request.args.get('secret') or '').strip()
+    cron_ok = bool(secret) and secret == os.environ.get('CRON_SECRET', '')
+    if not cron_ok and 'username' not in (session or {}):
+        return jsonify({'error': 'Authentication required',
+                        'redirect': '/login'}), 401
     if _iq_rankers is None:
         return jsonify({'success': False, 'error': 'IQ Rankers unavailable'}), 500
     try:

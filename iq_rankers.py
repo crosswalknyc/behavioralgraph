@@ -1306,6 +1306,36 @@ def aggregate_leaderboard(
     p_neg      = _wrap("neg",         proj_neg)
     p_uids     = _wrap("unique_uids", proj_uids)
 
+    # Tie-breaker chain. The original code used `mentions DESC` as the
+    # only tiebreaker, which is a no-op when the user already sorts by
+    # mentions (you tie on the same column you're sorting by). This is
+    # what produced screen-fulls of identical projected values clumped
+    # together: a profile with raw=1 mention on a single day with panel
+    # ~472 distinct UIDs projects to round(1 * 329.9M / 472) = 698,941
+    # and any other profile with raw=1 on the same day prints the same
+    # number. ClickHouse then orders the tie arbitrarily.
+    #
+    # Resolve ties by:
+    #   1. raw_mentions DESC   - actual panel signal beats projection
+    #                            collisions; a profile with 5 raw beats
+    #                            one with 1 raw even if both projections
+    #                            round to the same gen-pop number on
+    #                            different days.
+    #   2. cw_iq_score DESC    - zeitgeist score as next discriminator
+    #                            (panel-relative, immune to projection-
+    #                            floor effects).
+    #   3. profile_subject ASC - deterministic alphabetical final tier
+    #                            so reloads return rows in a stable
+    #                            order. The ORDER BY runs against the
+    #                            OUTER SELECT's aliases so we use the
+    #                            outer names, not the CTE internals
+    #                            (raw_mentions_sum, cw_iq_score_calc).
+    tiebreakers = (
+        "raw_mentions DESC, "
+        "cw_iq_score DESC, "
+        "profile_subject ASC"
+    )
+
     sql = f"""
     WITH curr AS (
         SELECT profile_subject,
@@ -1439,7 +1469,7 @@ def aggregate_leaderboard(
            c.bvp_score_calc - coalesce(p.prev_bvp_score_calc, 0) AS delta_bvp
     FROM curr c
     LEFT JOIN prev p ON p.profile_subject = c.profile_subject
-    ORDER BY {no_prior_first}{sort_col} {direction}, mentions DESC
+    ORDER BY {no_prior_first}{sort_col} {direction}, {tiebreakers}
     LIMIT {int(limit)}
     """
 
