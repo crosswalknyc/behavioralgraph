@@ -347,6 +347,8 @@
             height: 28px;
             width: auto;
             display: block;
+            filter: invert(1);
+            mix-blend-mode: multiply;
         }
         .header-text h1 { font-family: 'Space Mono', monospace; font-size: 1.5rem; color: var(--accent-cyan); }
         .header-text p { color: var(--text-secondary); font-size: 0.8rem; }
@@ -14900,7 +14902,7 @@
         {% endif %}
         <header>
             <div style="display: flex; align-items: center;">
-                <div class="header-logo-text"><img src="{{ url_for('static', filename='crosswalk-logo.svg') }}" alt="Crosswalk"></div>
+                <div class="header-logo-text"><img src="{{ url_for('static', filename='crosswalk-logo-white-hires.png') }}" alt="Crosswalk"></div>
             </div>
             <div class="header-right-section">
                 <div class="user-info-bar">
