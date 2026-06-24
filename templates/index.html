@@ -108629,6 +108629,29 @@
                 return;
             }
             const fmtNum = (n) => (n == null ? '' : Number(n).toLocaleString());
+            // Engagements cell - the displayed number is gen-pop projected
+            // (raw × 329.9M / panel_size that day, summed across the
+            // window). Many low-volume profiles tie at the same projected
+            // value because their raw count rounds to the same number
+            // through the projection (e.g. raw=1 with a panel of 472
+            // distinct UIDs always renders as 698,941). Surfacing the
+            // raw count in the hover makes the tie self-explanatory and
+            // gives an honest read of the underlying signal: a profile
+            // with raw=42 mentions/wk is qualitatively different from
+            // one with raw=1, even when they project to similar gen-pop
+            // numbers on the same low-panel days.
+            const fmtEngagements = (r) => {
+                const proj = Number(r.mentions || 0);
+                const raw  = Number(r.raw_mentions || 0);
+                const uids = Number(r.raw_unique_uids || 0);
+                if (!isFinite(proj) || proj <= 0) {
+                    return '<span style="color: var(--text-secondary);">-</span>';
+                }
+                const tip = `${raw.toLocaleString()} panel engagement${raw === 1 ? '' : 's'} `
+                          + `from ${uids.toLocaleString()} unique panelist${uids === 1 ? '' : 's'} `
+                          + `\u2192 projected to US gen pop`;
+                return `<span class="has-tooltip" data-tooltip="${tip}">${proj.toLocaleString()}</span>`;
+            };
             // fmtDelta now takes a third arg `prevRawMentions`. When the
             // prior window has no mention data for this profile we render
             // "-" instead of "+full_value", which would otherwise look
@@ -108732,7 +108755,7 @@
                         </div>
                         <div class="iqr-name-sub">${_iqRenderSubcategory(r)}</div>
                     </td>
-                    <td style="text-align: right;">${fmtNum(r.mentions)}</td>
+                    <td style="text-align: right;">${fmtEngagements(r)}</td>
                     <td style="text-align: right;">${fmtDelta(r.delta_mentions, 0, r.prev_raw_mentions)}</td>
                     <td style="text-align: right;">${fmtDeltaPct(r.delta_evc, r.prev_raw_mentions)}</td>
                     <td style="text-align: right;">${fmtDeltaPct(r.delta_tdl, r.prev_raw_mentions)}</td>
