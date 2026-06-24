@@ -66244,6 +66244,17 @@
                     applyComparisonRunsToHeaderStats();
                 }
             } catch (_) {}
+            // Compare mode just got wiped. If we'd forced demographic
+            // chart prefs to 'table' for the prior profile's compare
+            // session, restore the snapshotted prefs so the new
+            // profile's first render uses the user's normal chart
+            // types instead of inheriting the forced Table view. The
+            // helper is a no-op if nothing was applied.
+            try {
+                if (typeof _applyTableDefaultForCompareMode === 'function') {
+                    _applyTableDefaultForCompareMode();
+                }
+            } catch (_) {}
         }
 
         // Toggle whether the Gen Pop baseline bar/column is layered into
@@ -68416,11 +68427,101 @@
             try { _refreshIndexSourcePickerOptions(); } catch (e) { console.warn('[compare] open picker refresh failed', e); }
         }
 
+        // Compare-mode default = Table view for the 9 demographic charts.
+        //
+        // Overlaid bar / doughnut renders fall apart fast once 3+ cohorts
+        // are layered on (legends crowd, color contrast breaks down, hover
+        // tooltips collide). The table view scales linearly with cohort
+        // count, so as soon as ANY Data Cut is selected we flip all 9
+        // demographic charts to Table view automatically.
+        //
+        // Pre-compare chart-type choices are snapshotted on the first
+        // entry to compare mode and restored when every Data Cut is
+        // un-picked. While compare mode is active, manual chart-type
+        // changes via the per-card dropdown are intentionally transient:
+        // the next compare-state change (genpop / casual-fan toggle,
+        // adding or removing a cut) snaps the card back to Table so the
+        // default remains predictable.
+        //
+        // The helper itself is a no-op outside transitions — calling it
+        // on every applyComparisonRunsToDashboardCharts pass is cheap.
+        let _compareTablePrefsState = { applied: false, priorPrefs: {} };
+
+        function _applyTableDefaultForCompareMode() {
+            if (typeof chartTypePrefs === 'undefined') return;
+            if (typeof DEMO_CHART_KEYS === 'undefined') return;
+            const cuts = (typeof _comparisonRunsState !== 'undefined' && _comparisonRunsState && Array.isArray(_comparisonRunsState.selectedKeys))
+                ? _comparisonRunsState.selectedKeys.length : 0;
+            const compareActive = cuts >= 1;
+
+            if (compareActive) {
+                if (!_compareTablePrefsState.applied) {
+                    _compareTablePrefsState.priorPrefs = {};
+                    DEMO_CHART_KEYS.forEach(k => {
+                        _compareTablePrefsState.priorPrefs[k] = chartTypePrefs[k];
+                    });
+                    _compareTablePrefsState.applied = true;
+                }
+                DEMO_CHART_KEYS.forEach(k => {
+                    chartTypePrefs[k] = 'table';
+                    const sel = document.getElementById(k + 'ChartType');
+                    if (sel) sel.value = 'table';
+                });
+                return;
+            }
+
+            if (_compareTablePrefsState.applied) {
+                const prior = _compareTablePrefsState.priorPrefs || {};
+                DEMO_CHART_KEYS.forEach(k => {
+                    const v = prior[k];
+                    if (typeof v === 'string') {
+                        chartTypePrefs[k] = v;
+                        const sel = document.getElementById(k + 'ChartType');
+                        if (sel) sel.value = v;
+                    }
+                });
+                _compareTablePrefsState.applied = false;
+                _compareTablePrefsState.priorPrefs = {};
+
+                // Exiting compare mode: the Chart.js instances for any
+                // card that was in 'table' mode were destroyed by the
+                // _renderDemoTablesForChartsInTableMode swap helper, so
+                // we rebuild from scratch with the restored prefs.
+                // _renderDemoTablesForChartsInTableMode at the end of
+                // applyComparisonRunsToDashboardCharts will then re-hide
+                // the table containers for the now-non-table charts.
+                try {
+                    const demo = (typeof currentDashboardData !== 'undefined' && currentDashboardData && currentDashboardData.demographics)
+                        ? currentDashboardData.demographics
+                        : (typeof lastRenderedDemographics !== 'undefined' ? (lastRenderedDemographics || {}) : {});
+                    const demoIdx = (typeof currentDashboardData !== 'undefined' && currentDashboardData && currentDashboardData.demographicsIndex)
+                        ? currentDashboardData.demographicsIndex
+                        : (typeof lastRenderedDemographicsIndex !== 'undefined' ? lastRenderedDemographicsIndex : {});
+                    const demoProj = (typeof currentDashboardData !== 'undefined' && currentDashboardData && currentDashboardData.demographicsProjection)
+                        ? currentDashboardData.demographicsProjection
+                        : (typeof lastRenderedDemographicsProjection !== 'undefined' ? lastRenderedDemographicsProjection : {});
+                    const demoGP = (typeof currentDashboardData !== 'undefined' && currentDashboardData && currentDashboardData.demographicsGenPop)
+                        ? currentDashboardData.demographicsGenPop
+                        : (typeof lastRenderedDemographicsGenPop !== 'undefined' ? lastRenderedDemographicsGenPop : {});
+                    if (demo && Object.keys(demo).length > 0 && typeof renderCharts === 'function') {
+                        renderCharts(demo, demoIdx, demoProj, demoGP);
+                    }
+                } catch (e) { console.warn('[compare] restore renderCharts failed', e); }
+            }
+        }
+
         // Mutates each demographic Chart.js instance, layering selected runs
         // (and a Gen Pop bar at the end) onto the existing dataset. Safe to
         // call repeatedly: previously injected datasets are stripped first.
         function applyComparisonRunsToDashboardCharts() {
             if (typeof charts === 'undefined' || !charts) return;
+            // Default compare-mode demographic display to Table view (and
+            // restore pre-compare prefs when every Data Cut is removed).
+            // Runs BEFORE the chart loop so any cards we just flipped to
+            // 'table' get destroyed + swapped by the
+            // _renderDemoTablesForChartsInTableMode call at the end.
+            try { _applyTableDefaultForCompareMode(); }
+            catch (e) { console.warn('[compare] table-default flip failed', e); }
             const series = (_comparisonRunsState.selectedKeys || [])
                 .map(k => _comparisonRunsState.runsByKey[k])
                 .filter(Boolean);
