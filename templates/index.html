@@ -49242,6 +49242,20 @@
                  + '</div>';
         }
 
+        // Click handler for Path Spectrum segments. Finds the path
+        // row with the matching data-jiq-path-rank, opens its
+        // <details>, and scrolls it into view smoothly so the user
+        // ends up looking at the row they just clicked in the bar.
+        function _jiqScrollToPathRow(rank) {
+            var row = document.querySelector('details.jiq-row-disclose[data-jiq-path-rank="' + rank + '"]');
+            if (!row) return;
+            row.open = true;
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.style.transition = 'box-shadow 0.3s ease';
+            row.style.boxShadow = '0 0 0 2px rgba(96,165,250,0.55)';
+            setTimeout(function() { row.style.boxShadow = ''; }, 1400);
+        }
+
         // Map a free-text click-sequence step to a single icon + short
         // label for the compact .jiq-path-ribbon. Pattern-matched
         // against the lower-cased step string. Order matters - more
@@ -49600,60 +49614,143 @@
             if (titleEl) titleEl.textContent = '🧭 ' + (p.title || 'How They Got to Landman');
             if (subEl)   subEl.textContent = p.subtitle || '';
             if (metaEl)  metaEl.textContent = (p.paths.length) + ' discovery paths · click any to expand';
-            // The "topline" container is now used for the always-visible
-            // card lead - hero stat + 1-2 sentence punchline. The dense
-            // path data sits below in #jiqLandmanPathsList where every
-            // row is a collapsible <details>.
+
+            // ── Owned vs Earned color palettes. Owned paths get a
+            // Paramount-blue family (P+ controls these surfaces);
+            // off-Paramount / earned paths get an amber family
+            // (everything Paramount-first-party-data is blind to).
+            // The 5-shade ramps let each of the 5 + 6 paths get its
+            // own distinct fill in the spectrum bar while still
+            // reading as one of two visual buckets.
+            var OWNED_PAL = ['#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'];
+            var EARN_PAL  = ['#7c2d12', '#b45309', '#d97706', '#f59e0b', '#fbbf24', '#fcd34d'];
+            var OWNED_HEX = '#3b82f6';
+            var EARN_HEX  = '#f59e0b';
+
+            // Pre-compute color per path (by channel_class), totals,
+            // owned-vs-earned splits. The renderer reads from these
+            // to draw the spectrum, split tiles, and per-row colors.
+            var paths = p.paths || [];
+            var ownedSeen = 0, earnSeen = 0;
+            var totalAccounts = 0, ownedTotal = 0, earnTotal = 0;
+            var pathColor = {};
+            paths.forEach(function(r) {
+                totalAccounts += (r.cohort_size || 0);
+                if (r.channel_class === 'paramount_owned') {
+                    pathColor[r.rank] = OWNED_PAL[ownedSeen % OWNED_PAL.length];
+                    ownedSeen++;
+                    ownedTotal += (r.cohort_size || 0);
+                } else {
+                    pathColor[r.rank] = EARN_PAL[earnSeen % EARN_PAL.length];
+                    earnSeen++;
+                    earnTotal += (r.cohort_size || 0);
+                }
+            });
+            var ownedPct = totalAccounts ? (ownedTotal / totalAccounts * 100) : 0;
+            var earnPct  = totalAccounts ? (earnTotal  / totalAccounts * 100) : 0;
+
+            // ── HERO VISUAL ──
+            //
+            //   1. Path Spectrum - one horizontal stacked bar, 11
+            //      colored segments, each sized to its cohort. Owned
+            //      paths painted in the blue family, earned paths in
+            //      the amber family. Clicking a segment scrolls to
+            //      that path's row and opens it.
+            //
+            //   2. Owned vs Earned split tiles - the punchline. Big
+            //      percentages making the "Paramount sees the blue,
+            //      can't see the amber" story land instantly.
+            //
+            //   3. Two-line micro caption underneath the spectrum -
+            //      total viewers + path count + click hint. Replaces
+            //      the previous prose-heavy card lead.
             if (topEl) {
-                var totalAccounts = (p.paths || []).reduce(function(s, r) {
-                    return s + (r.cohort_size || 0);
-                }, 0);
-                var pathCount = (p.paths || []).length;
-                topEl.innerHTML = _jiqCardLead(
-                    pathCount + ' paths',
-                    'mapped end-to-end',
-                    '<strong>How ' + _jiqFmt(totalAccounts) + ' Landman watchers actually arrived '
-                        + 'at press-play.</strong> Each row below is one archetypal journey - '
-                        + 'cohort size, days from first touch to press-play, the click-sequence, '
-                        + 'and what it means strategically. <em>Click any path to expand the '
-                        + 'full breakdown.</em>',
-                    ACC
-                );
+                var spectrumSegs = paths.map(function(r) {
+                    var w = totalAccounts ? ((r.cohort_size || 0) / totalAccounts * 100) : 0;
+                    var color = pathColor[r.rank] || ACC;
+                    var tip = '#' + r.rank + ' · ' + (r.label || '')
+                            + ' · ' + _jiqFmt(r.cohort_size || 0)
+                            + ' viewers (' + (r.pct_of_viewers || 0).toFixed(1) + '%)';
+                    return '<div class="jiq-path-spectrum-seg"'
+                         +      ' style="width:' + w.toFixed(2) + '%; background:' + color + ';"'
+                         +      ' title="' + _jiqEsc(tip) + '"'
+                         +      ' data-jiq-path-rank="' + r.rank + '"'
+                         +      ' onclick="_jiqScrollToPathRow(' + r.rank + ')">'
+                         +   (w >= 4 ? _jiqEsc(String(r.rank)) : '')
+                         + '</div>';
+                }).join('');
+                topEl.innerHTML = ''
+                    + '<div style="margin-bottom:0.85rem;">'
+                    +   '<div style="font-size:10.5px; font-weight:700; opacity:0.78; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:0.4rem;">'
+                    +     '🌈 Path Spectrum <span style="opacity:0.7; font-weight:500; text-transform:none; letter-spacing:0;">- every segment is one of the 11 paths, width = cohort size, click to jump</span>'
+                    +   '</div>'
+                    +   '<div class="jiq-path-spectrum">' + spectrumSegs + '</div>'
+                    +   '<div class="jiq-path-spectrum-legend">'
+                    +     '<span><span class="swatch" style="background:' + OWNED_HEX + ';"></span>Paramount-owned surfaces (5 paths)</span>'
+                    +     '<span><span class="swatch" style="background:' + EARN_HEX  + ';"></span>Earned / off-Paramount (6 paths) - first-party blind spot</span>'
+                    +   '</div>'
+                    + '</div>'
+                    + '<div class="jiq-split-card">'
+                    +   '<div class="jiq-split-tile" style="border-left-color:' + OWNED_HEX + ';">'
+                    +     '<div class="label" style="color:' + OWNED_HEX + ';">🏠 Paramount-owned surfaces</div>'
+                    +     '<div class="pct"   style="color:' + OWNED_HEX + ';">' + ownedPct.toFixed(0) + '%</div>'
+                    +     '<div class="meta">' + _jiqFmt(ownedTotal) + ' viewer-touches across 5 paths<br>Home shelf · Tulsa King · CRM · CBS NFL · Walmart+</div>'
+                    +   '</div>'
+                    +   '<div class="jiq-split-tile" style="border-left-color:' + EARN_HEX + ';">'
+                    +     '<div class="label" style="color:' + EARN_HEX + ';">🌐 Earned / off-Paramount</div>'
+                    +     '<div class="pct"   style="color:' + EARN_HEX + ';">' + earnPct.toFixed(0) + '%</div>'
+                    +     '<div class="meta">' + _jiqFmt(earnTotal) + ' viewer-touches across 6 paths<br>TikTok · Reddit · Podcasts · Critics · Cross-platform · Country music</div>'
+                    +   '</div>'
+                    + '</div>';
             }
             if (listEl) {
-                var maxCohort = (p.paths || []).reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
-                listEl.innerHTML = (p.paths || []).map(function(r, idx) {
-                    // Click-sequence (rendered in the expanded body)
+                var maxCohort = paths.reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
+                listEl.innerHTML = paths.map(function(r, idx) {
+                    var rowColor = pathColor[r.rank] || ACC;
+                    // Click-sequence (full text, in the expanded body
+                    // for reference). Each step gets the same icon
+                    // that appears in the compact ribbon so the
+                    // pictogram + sentence reinforce each other.
                     var stepsHtml = (r.steps || []).map(function(step, i) {
+                        var hit  = _jiqPathStepIcon(step);
+                        var icon = hit ? hit.icon : '·';
                         return '<div style="display:flex; gap:0.55rem; align-items:flex-start; padding:3px 0;">'
-                             +   '<div style="flex:none; width:18px; height:18px; border-radius:50%; background:' + ACC + '22; color:' + ACC + ';'
-                             +              ' font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center;">' + (i+1) + '</div>'
+                             +   '<div style="flex:none; width:22px; height:22px; border-radius:5px; background:' + rowColor + '22; color:' + rowColor + ';'
+                             +              ' font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center;">' + _jiqEsc(icon) + '</div>'
                              +   '<div style="font-size:11.5px; line-height:1.45;">' + _jiqEsc(step) + '</div>'
                              + '</div>';
                     }).join('');
-                    // Summary (always visible) - rank, label, cohort,
-                    // days-to-press-play. Trailing 22px column reserves
-                    // room for the caret painted by .jiq-row-caret.
+                    // Summary (always visible) - now VISUAL-first:
+                    // colored rank chip, label, then the icon ribbon
+                    // taking the largest column (the click-sequence
+                    // as a pictogram flow), cohort size with mini-bar,
+                    // and days-to-press-play. Trailing 22px column
+                    // reserves space for the .jiq-row-caret.
                     var daysStr = (r.avg_days_to_press_play === 0)
-                        ? 'Same day'
-                        : (r.avg_days_to_press_play || 0) + 'd avg';
+                        ? '⚡ Same day'
+                        : '⏱ ' + (r.avg_days_to_press_play || 0) + 'd';
+                    var ribbonHtml = _jiqRenderPathRibbon(r.steps);
                     var summaryHtml = ''
-                         + '<div style="display:grid; grid-template-columns: 32px minmax(0, 1.6fr) 110px 90px 22px; gap:0.7rem; align-items:center;">'
-                         +   '<div style="font-size:1rem; font-weight:800; color:' + ACC + '; text-align:center;">' + _jiqEsc(r.rank || '') + '</div>'
-                         +   '<div style="font-size:0.92rem; font-weight:700; line-height:1.35;">' + _jiqEsc(r.label || '') + '</div>'
+                         + '<div style="display:grid; grid-template-columns: 38px minmax(0, 1.4fr) minmax(0, 1.5fr) 110px 80px 22px; gap:0.7rem; align-items:center;">'
+                         +   '<div style="font-size:0.95rem; font-weight:800; color:#fff; text-align:center; background:' + rowColor + '; border-radius:5px; padding:5px 0;">' + _jiqEsc(r.rank || '') + '</div>'
+                         +   '<div style="font-size:0.9rem; font-weight:700; line-height:1.3;">' + _jiqEsc(r.label || '') + '</div>'
+                         +   '<div>' + ribbonHtml + '</div>'
                          +   '<div style="text-align:right;">'
                          +     '<div style="font-size:0.9rem; font-weight:800; color: var(--text-primary);">' + _jiqFmt(r.cohort_size || 0) + '</div>'
                          +     '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">' + (r.pct_of_viewers || 0).toFixed(1) + '% of viewers</div>'
-                         +     '<div style="margin-top:0.25rem;">' + _jiqMiniBar(r.cohort_size, ACC, maxCohort) + '</div>'
+                         +     '<div style="margin-top:0.25rem;">' + _jiqMiniBar(r.cohort_size, rowColor, maxCohort) + '</div>'
                          +   '</div>'
                          +   '<div style="text-align:right;">'
-                         +     '<div style="font-size:0.85rem; font-weight:700; color:' + ACC + ';">' + _jiqEsc(daysStr) + '</div>'
-                         +     '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">to press-play</div>'
+                         +     '<div style="font-size:0.8rem; font-weight:700; color:' + rowColor + ';">' + _jiqEsc(daysStr) + '</div>'
+                         +     '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">to play</div>'
                          +   '</div>'
                          +   '<div></div>'
                          + '</div>';
-                    // Body (expanded) - 2-col: click-sequence on left,
-                    // pattern note + strategic implication on right.
+                    // Body (expanded) - 2-col: full click-sequence on
+                    // the left, pattern note + strategic implication
+                    // on the right. Strategic-implication callout
+                    // borrows the row's color so all path-specific
+                    // chrome stays visually tied to the spectrum bar.
                     var bodyHtml = ''
                          + '<div style="display:grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr); gap:1rem;">'
                          +   '<div>'
@@ -49663,16 +49760,24 @@
                          +   '<div>'
                          +     '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Pattern</div>'
                          +     '<div style="font-size:11.5px; color: var(--text-secondary); line-height:1.55; margin-bottom:0.55rem; font-style:italic;">' + _jiqEsc(r.note || '') + '</div>'
-                         +     '<div style="font-size:11px; padding:0.5rem 0.65rem; border-radius:4px; background:' + ACC + '14; border-left:2px solid ' + ACC + '88; line-height:1.55;">'
-                         +       '<strong style="color:' + ACC + ';">→ Strategic implication:</strong> ' + _jiqEsc(r.why_it_matters || '')
+                         +     '<div style="font-size:11px; padding:0.5rem 0.65rem; border-radius:4px; background:' + rowColor + '14; border-left:2px solid ' + rowColor + '88; line-height:1.55;">'
+                         +       '<strong style="color:' + rowColor + ';">→ Strategic implication:</strong> ' + _jiqEsc(r.why_it_matters || '')
                          +     '</div>'
                          +   '</div>'
                          + '</div>';
-                    // Only the lead path (rank #1 / array idx 0) opens
-                    // by default so the user immediately sees what an
-                    // expanded row looks like. The remaining 10 stay
-                    // collapsed - one click reveals them.
-                    return _jiqRowDisclose(summaryHtml, bodyHtml, { open: idx === 0 });
+                    // Only the lead path (rank #1) opens by default
+                    // so the user immediately sees what an expanded
+                    // row looks like. data-jiq-path-rank lets the
+                    // spectrum bar's onclick handler find + open
+                    // a specific row when the user clicks a segment.
+                    var rowHtml = _jiqRowDisclose(summaryHtml, bodyHtml, {
+                        open:        idx === 0,
+                        accentColor: rowColor
+                    });
+                    return rowHtml.replace(
+                        '<details class="jiq-row-disclose"',
+                        '<details class="jiq-row-disclose" data-jiq-path-rank="' + r.rank + '"'
+                    );
                 }).join('');
             }
             if (rollupEl) {
@@ -65077,7 +65182,7 @@
             renderTopInsights(parsed);
 
             // Populate audience-share boxes (Social/Search/Owned/Retail/Media)
-            try { _renderAudienceShareBoxes(parsed); } catch (e) { console.warn('[audience-share] render failed', e); }
+            try { _renderAudienceShareBoxes(parsed, brandName); } catch (e) { console.warn('[audience-share] render failed', e); }
         }
 
         function parseAllData(csvData) {
@@ -66850,6 +66955,32 @@
         // is NOT excluded - team .coms and team apps (tickets, scores)
         // are a real, heavily-used owned channel.
         const _AUDIENCE_SHARE_NO_OWNED = new Set(['TALENT', 'INFLUENCER', 'CONTENT']);
+        // 2026-06-24: per-subject opt-outs from the CONTENT 100%-media
+        // short-circuit. The default CONTENT rule says "a movie/podcast/
+        // game profile qualifies by consuming the content, so by
+        // definition every engager is a media engager" → 100% Media,
+        // dashes on the other four boxes. For a small set of franchise
+        // movies the user wants the composition to reflect DIGITAL
+        // ENGAGEMENT across the 5 touchpoints (Social / Search / Owned
+        // / Retail / Media) instead. These are routed through the
+        // MEDIA_BRAND archetype + the standard 60/40 archetype-data
+        // blend so each profile still gets its own subject-specific
+        // shape (Grinch retail signal differs from Blue Crush, etc.).
+        // Keys are normalized: lowercased, trimmed, "the " prefix
+        // stripped, all punctuation/whitespace collapsed.
+        const _AUDIENCE_SHARE_CONTENT_OVERRIDE = new Set([
+            'catinthehat',
+            'bluecrush',
+            'grinch'
+        ]);
+        function _normSubjectKeyForAudienceShare(s) {
+            if (!s) return '';
+            return String(s)
+                .toLowerCase()
+                .trim()
+                .replace(/^the\s+/, '')
+                .replace(/[^a-z0-9]+/g, '');
+        }
         // Archetype detection - keyed off BRAND CATEGORY (preferred) with
         // _currentProfileCategory() as a fallback. Conservative: anything
         // unrecognized falls through to GENERIC.
@@ -66950,12 +67081,35 @@
             return null;
         }
 
-        function _computeAudienceShare(parsed) {
+        function _computeAudienceShare(parsed, subjectName) {
             if (!parsed || !parsed.behavioral) return null;
             const beh = parsed.behavioral;
             const brandCat = String(parsed.brandCategory || '').trim().toUpperCase();
             const profileCat = _currentProfileCategory();
-            const archetype = _detectAudienceShareArchetype(brandCat, profileCat);
+            let archetype = _detectAudienceShareArchetype(brandCat, profileCat);
+
+            // 2026-06-24: per-subject opt-out of the CONTENT 100%-Media
+            // short-circuit. For movie franchises in the override list,
+            // re-route to MEDIA_BRAND so the composition reflects
+            // digital engagement across all 5 touchpoints (the 60/40
+            // archetype-data blend below then differentiates them).
+            if (archetype === 'CONTENT') {
+                const subjKey = _normSubjectKeyForAudienceShare(subjectName);
+                // startsWith matching so cohort / year variants
+                // ("The Grinch - 2025" -> "grinch2025", "Cat in the
+                // Hat - Avid Fan" -> "catinthehatavidfan", "Blue
+                // Crush 2" -> "bluecrush2") also pick up the
+                // override. The 3 keys are distinctive enough that
+                // false-positive prefix collisions are negligible.
+                if (subjKey) {
+                    for (const ovr of _AUDIENCE_SHARE_CONTENT_OVERRIDE) {
+                        if (subjKey.startsWith(ovr)) {
+                            archetype = 'MEDIA_BRAND';
+                            break;
+                        }
+                    }
+                }
+            }
             const noOwned = _AUDIENCE_SHARE_NO_OWNED.has(archetype);
 
             // CONTENT short-circuit (2026-06-18): movie / podcast / game /
@@ -67094,11 +67248,27 @@
             };
         }
 
-        function _renderAudienceShareBoxes(parsed) {
+        function _renderAudienceShareBoxes(parsed, subjectName) {
             const container = document.getElementById('audienceShareBoxes');
             const sectionLabel = document.getElementById('audienceShareSectionLabel');
             if (!container) return;
-            const share = _computeAudienceShare(parsed);
+            // Subject is needed for the per-subject CONTENT override
+            // (Cat in the Hat / Blue Crush / The Grinch). Fall back to
+            // the dashboard header text or currentProfileData.name when
+            // the caller didn't pass it explicitly.
+            let subj = subjectName || '';
+            if (!subj) {
+                try {
+                    subj = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || '';
+                } catch (_) {}
+            }
+            if (!subj) {
+                try {
+                    const hdr = document.getElementById('dashBrandNameHeader');
+                    subj = hdr ? hdr.textContent : '';
+                } catch (_) {}
+            }
+            const share = _computeAudienceShare(parsed, subj);
             if (!share) {
                 container.style.display = 'none';
                 if (sectionLabel) sectionLabel.style.display = 'none';
@@ -68132,6 +68302,71 @@
             return dateRangeYear ? (baseLbl + ' ' + dateRangeYear) : baseLbl;
         }
 
+        // Per-subject snapshot cache. Keyed by canonical group key
+        // (the same `subject` string handed to _resetComparisonRunsState).
+        // When the user switches profile tabs from subject A -> subject B
+        // -> back to A, the comparison state for A (selected Data Cuts,
+        // index picker, Gen Pop / Casual Fan / Category Norm toggles) is
+        // restored verbatim instead of being wiped. The cached
+        // runsByKey entries carry their already-fetched `.parsed`
+        // payloads so cohort columns / chart bars / demo-Table cohort
+        // columns reappear immediately on the next render pass without
+        // a refetch.
+        const _comparisonStateCacheBySubject = {};
+        const _COMPARE_STATE_SNAPSHOT_KEYS = [
+            'selectedKeys', 'includeGenPop', 'includeCasualFan',
+            'includeCategoryNorm', 'categoryNormCategory',
+            'categoryNormProfileCount', 'categoryNormGeneratedAt',
+            'indexNumKey', 'indexDenKey'
+        ];
+
+        function _snapshotComparisonRunsStateForSubject(subject) {
+            if (!subject) return;
+            const snap = {};
+            _COMPARE_STATE_SNAPSHOT_KEYS.forEach(k => {
+                const v = _comparisonRunsState[k];
+                snap[k] = Array.isArray(v) ? v.slice() : v;
+            });
+            const runsSnap = {};
+            const selKeys = Array.isArray(_comparisonRunsState.selectedKeys) ? _comparisonRunsState.selectedKeys : [];
+            selKeys.forEach(k => {
+                const r = _comparisonRunsState.runsByKey && _comparisonRunsState.runsByKey[k];
+                if (r) runsSnap[k] = r;
+            });
+            snap.runsByKey = runsSnap;
+            _comparisonStateCacheBySubject[subject] = snap;
+        }
+
+        function _restoreComparisonRunsStateForSubject(subject, availableKeys) {
+            if (!subject) return false;
+            const snap = _comparisonStateCacheBySubject[subject];
+            if (!snap) return false;
+            const validKeySet = availableKeys instanceof Set
+                ? availableKeys
+                : new Set(Array.isArray(availableKeys) ? availableKeys : []);
+            _COMPARE_STATE_SNAPSHOT_KEYS.forEach(k => {
+                if (!Object.prototype.hasOwnProperty.call(snap, k)) return;
+                let v = snap[k];
+                if (k === 'selectedKeys' && Array.isArray(v)) {
+                    // Drop any cohort keys that no longer correspond to a
+                    // valid sibling (profile was deleted, renamed, etc.).
+                    // CATEGORY_NORM_KEY ('__category_norm__') is synthetic
+                    // and not in availableRuns - keep it.
+                    v = v.filter(kk => kk === CATEGORY_NORM_KEY || validKeySet.has(kk));
+                }
+                _comparisonRunsState[k] = Array.isArray(v) ? v.slice() : v;
+            });
+            if (snap.runsByKey && typeof snap.runsByKey === 'object') {
+                _comparisonRunsState.runsByKey = _comparisonRunsState.runsByKey || {};
+                Object.entries(snap.runsByKey).forEach(([k, v]) => {
+                    if (k === CATEGORY_NORM_KEY || validKeySet.has(k)) {
+                        _comparisonRunsState.runsByKey[k] = v;
+                    }
+                });
+            }
+            return true;
+        }
+
         function _setupComparisonForCurrentProfile(subject, currentKey, sameSubjectRuns) {
             const others = (sameSubjectRuns || []).filter(p => (p.s3_key || p.job_id) !== currentKey);
             const sorted = typeof sortRunsForGroup === 'function' ? sortRunsForGroup(others) : others;
@@ -68140,9 +68375,32 @@
                 label: _compactRunLabel(p),
                 profile: p
             }));
-            const subjectChanged = (subject || '') !== (_comparisonRunsState.subject || '');
+            const prevSubject = _comparisonRunsState.subject || '';
+            const subjectChanged = (subject || '') !== prevSubject;
             if (subjectChanged) {
+                // Snapshot the OUTGOING subject so the user gets their
+                // Data Cuts back when they return to that profile tab.
+                if (prevSubject) {
+                    try { _snapshotComparisonRunsStateForSubject(prevSubject); }
+                    catch (e) { console.warn('[compare] snapshot prev subject failed', e); }
+                }
                 _resetComparisonRunsState(subject, currentKey, available);
+                // Try to restore the INCOMING subject's saved state. If
+                // none cached (first time seeing this subject this
+                // session), leave the freshly-reset blank state alone.
+                const restored = _restoreComparisonRunsStateForSubject(subject, new Set(available.map(a => a.key)));
+                if (restored) {
+                    _comparisonRunsState.subject = subject || '';
+                    _comparisonRunsState.currentKey = currentKey || '';
+                    _comparisonRunsState.availableRuns = available;
+                    _updateCompareDateRangesButtonBadge();
+                    // The render pass that follows _setupComparisonForCurrentProfile
+                    // (renderCharts / renderBehavioralCards / renderLocationTable
+                    // in displayProfileTabData) calls applyComparisonRunsToDashboardCharts
+                    // + applyComparisonRunsToCategoryTables at the end of each, which
+                    // pick up the restored selectedKeys + runsByKey automatically.
+                    // No need to re-trigger them here.
+                }
             } else {
                 _comparisonRunsState.currentKey = currentKey || '';
                 _comparisonRunsState.availableRuns = available;
@@ -70492,7 +70750,7 @@
                 }
                 // Always populate the audience-share boxes - they sit on
                 // every profile, not just multi-sibling ones.
-                try { _renderAudienceShareBoxes(parsed); } catch (e) { console.warn('[audience-share] render failed', e); }
+                try { _renderAudienceShareBoxes(parsed, brandName); } catch (e) { console.warn('[audience-share] render failed', e); }
                 // Fetch profile image (custom uploads only)
                 fetchProfileImage(brandName);
             }
