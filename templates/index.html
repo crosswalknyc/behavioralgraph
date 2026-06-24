@@ -344,7 +344,7 @@
             box-shadow: 0 6px 20px rgba(200, 230, 0, 0.5), 0 0 24px rgba(200, 230, 0, 0.2);
         }
         .header-logo-text img {
-            height: 32px;
+            height: 42px;
             width: auto;
             display: block;
         }
@@ -14899,7 +14899,7 @@
         </div>
         {% endif %}
         <header>
-            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+            <div style="flex: 1; display: flex; justify-content: center;">
                 <div class="header-logo-text"><img src="{{ url_for('static', filename='crosswalk-logo.svg') }}" alt="Crosswalk"></div>
             </div>
             <div class="header-right-section">
@@ -69845,18 +69845,28 @@
             const compareActive = cuts >= 1;
 
             if (compareActive) {
+                // INITIAL transition into compare mode: snapshot prior
+                // prefs and force every demographic card to Table so
+                // multi-cohort numbers are legible. SUBSEQUENT calls
+                // (toggling other cuts, picker changes, rerenders) MUST
+                // NOT re-force the cards — if the user has manually
+                // switched a card to bar/donut/etc. after the initial
+                // flip, that choice has to stick for the rest of the
+                // compare session. Earlier behavior re-forced on every
+                // applyComparisonRunsToDashboardCharts pass, which
+                // silently undid every manual chart-type change.
                 if (!_compareTablePrefsState.applied) {
                     _compareTablePrefsState.priorPrefs = {};
                     DEMO_CHART_KEYS.forEach(k => {
                         _compareTablePrefsState.priorPrefs[k] = chartTypePrefs[k];
                     });
                     _compareTablePrefsState.applied = true;
+                    DEMO_CHART_KEYS.forEach(k => {
+                        chartTypePrefs[k] = 'table';
+                        const sel = document.getElementById(k + 'ChartType');
+                        if (sel) sel.value = 'table';
+                    });
                 }
-                DEMO_CHART_KEYS.forEach(k => {
-                    chartTypePrefs[k] = 'table';
-                    const sel = document.getElementById(k + 'ChartType');
-                    if (sel) sel.value = 'table';
-                });
                 return;
             }
 
@@ -74445,6 +74455,21 @@
         
         function changeChartType(chartName, newType) {
             chartTypePrefs[chartName] = newType;
+            // If we're in compare mode (the auto-flip to Table fired and
+            // we snapshotted the user's pre-compare prefs), promote this
+            // manual choice into the snapshot too. Otherwise, when the
+            // user removes the last Data Cut, the exit-restore step
+            // would revert their change back to whatever they had
+            // before entering compare mode - silently undoing the pick
+            // they just made.
+            try {
+                if (typeof _compareTablePrefsState !== 'undefined'
+                    && _compareTablePrefsState
+                    && _compareTablePrefsState.applied
+                    && _compareTablePrefsState.priorPrefs) {
+                    _compareTablePrefsState.priorPrefs[chartName] = newType;
+                }
+            } catch (_) {}
             const demo = currentDashboardData && currentDashboardData.demographics ? currentDashboardData.demographics : (lastRenderedDemographics || {});
             const demoIdx = currentDashboardData && currentDashboardData.demographicsIndex ? currentDashboardData.demographicsIndex : lastRenderedDemographicsIndex;
             const demoProj = currentDashboardData && currentDashboardData.demographicsProjection ? currentDashboardData.demographicsProjection : lastRenderedDemographicsProjection;
