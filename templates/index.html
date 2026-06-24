@@ -332,8 +332,8 @@
         }
         .header-logo-text {
             background: linear-gradient(135deg, #c8e600, #a0d911);
-            padding: 0.5rem 0.75rem;
-            border-radius: 10px;
+            padding: 0.35rem 0.55rem;
+            border-radius: 8px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -344,7 +344,7 @@
             box-shadow: 0 6px 20px rgba(200, 230, 0, 0.5), 0 0 24px rgba(200, 230, 0, 0.2);
         }
         .header-logo-text img {
-            height: 52px;
+            height: 28px;
             width: auto;
             display: block;
         }
@@ -14899,7 +14899,7 @@
         </div>
         {% endif %}
         <header>
-            <div style="flex: 1; display: flex; justify-content: center;">
+            <div style="display: flex; align-items: center;">
                 <div class="header-logo-text"><img src="{{ url_for('static', filename='crosswalk-logo.svg') }}" alt="Crosswalk"></div>
             </div>
             <div class="header-right-section">
