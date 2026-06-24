@@ -35138,6 +35138,190 @@ def iq_rankers_delete_profile():
                     'summary': summary})
 
 
+@app.route('/api/iq-rankers/purge-avid', methods=['POST'])
+def iq_rankers_purge_avid():
+    """One-shot bulk purge of every "<NAME> - Avid Fan" profile from the
+    IQ Ranker dashboard.
+
+    Avid Fan files are panel-segmentation helpers used by the audience-
+    overlap views, not standalone Profile IQ entities. They have no
+    BRAND INPUT block and would otherwise pollute the leaderboard with
+    thousands of synthetic rows. The leaderboard SQL already filters
+    them at read time and the nightly cron skips them at compute time
+    (both via `iq_rankers.aggregate_leaderboard` / `_iter_profile_jobs`),
+    but historical metric rows from before those filters were added
+    still sit in `reference.profile_iq_daily_metrics`. This endpoint
+    deletes those, plus the associated tracker JSONs, s3_cache entries
+    and LLM context cache keys, in a single bulk operation rather than
+    1.6k individual `delete-profile` calls.
+
+    Auth identical to /api/iq-rankers/delete-profile: dashboard session
+    OR a `secret` arg matching the CRON_SECRET env var.
+
+    Required: confirm=1 (safety pin against accidental hits).
+    Optional: dry_run=1 returns a count without mutating anything.
+
+    Match rule: literal "avid fan" substring (case-insensitive) against
+    profile_subject AND project_name. We deliberately avoid bare "avid"
+    since it would false-positive real names (e.g. "David Letterman").
+    """
+    secret = (request.values.get('secret')
+              or request.values.get('cron_secret')
+              or (request.get_json(silent=True) or {}).get('secret')
+              or '')
+    cron_ok = bool(secret) and secret == os.environ.get('CRON_SECRET', '')
+    if not cron_ok and 'username' not in (session or {}):
+        return jsonify({'success': False,
+                        'error': 'authentication required (session or CRON_SECRET)'}), 401
+
+    if _iq_rankers is None:
+        return jsonify({'success': False, 'error': 'iq_rankers unavailable'}), 500
+
+    payload = request.get_json(silent=True) or {}
+    def _arg(name, default=None):
+        return (payload.get(name) if name in payload else request.values.get(name, default))
+    confirm = str(_arg('confirm', '0')).strip() == '1'
+    dry_run = str(_arg('dry_run', '0')).strip() == '1'
+    if not confirm and not dry_run:
+        return jsonify({'success': False,
+                        'error': 'confirm=1 required for destructive op (or dry_run=1 to count)'}), 400
+
+    summary = {
+        'matched_subjects':           [],   # populated only on dry_run
+        'matched_subject_count':      0,
+        'clickhouse_rows_to_delete':  0,
+        'clickhouse_alter_query_sent': False,
+        's3_cache_jobs_removed':      0,
+        'tracker_keys_deleted':       0,
+        'context_cache_keys_deleted': 0,
+        'dry_run':                    dry_run,
+        'errors':                     [],
+    }
+
+    # 1) Inventory: distinct avid subjects + total CH rows. Used in dry-
+    #    run preview AND in the post-delete summary so callers can see
+    #    what was about to disappear.
+    try:
+        cli = _ch_connect()
+        cur = cli.cursor()
+        cur.execute(
+            "SELECT profile_subject, count() FROM reference.profile_iq_daily_metrics "
+            "WHERE positionCaseInsensitive(profile_subject, 'avid fan') > 0 "
+            "   OR positionCaseInsensitive(project_name,    'avid fan') > 0 "
+            "GROUP BY profile_subject"
+        )
+        rows = cur.fetchall() or []
+        subjects = [r[0] for r in rows]
+        total_rows = sum(int(r[1] or 0) for r in rows)
+        summary['matched_subject_count']      = len(subjects)
+        summary['clickhouse_rows_to_delete']  = total_rows
+        # In dry-run, surface the actual list (capped) so the operator
+        # can sanity-check the regex before pulling the trigger.
+        if dry_run:
+            summary['matched_subjects'] = subjects[:50]
+            summary['matched_subjects_truncated'] = len(subjects) > 50
+        try: cli.close()
+        except Exception: pass
+    except Exception as e:
+        summary['errors'].append(f"clickhouse inventory failed: {e}")
+
+    if dry_run:
+        return jsonify({'success': True, 'summary': summary})
+
+    # 2) ClickHouse bulk DELETE. ALTER … DELETE is async on CH's side so
+    #    this returns ~immediately; rows disappear from the leaderboard
+    #    within seconds.
+    try:
+        cli = _ch_connect()
+        cli.cursor().execute(
+            "ALTER TABLE reference.profile_iq_daily_metrics "
+            "DELETE WHERE positionCaseInsensitive(profile_subject, 'avid fan') > 0 "
+            "          OR positionCaseInsensitive(project_name,    'avid fan') > 0"
+        )
+        try: cli.close()
+        except Exception: pass
+        summary['clickhouse_alter_query_sent'] = True
+    except Exception as e:
+        summary['errors'].append(f"clickhouse bulk delete failed: {e}")
+
+    # 3) s3_cache.json scrub — single read-modify-write covering every
+    #    avid entry (vs save-after-each which would be 1.6k S3 PUTs).
+    try:
+        global s3_cache
+        load_persisted_cache()
+        before = len(s3_cache.get('jobs') or [])
+        kept = []
+        removed = 0
+        for j in (s3_cache.get('jobs') or []):
+            haystack = ' | '.join(str(j.get(k) or '') for k in
+                ('profile_subject', 's3_key', 'job_id', 'key',
+                 'project_name', 'display_name')).lower()
+            if 'avid fan' in haystack:
+                removed += 1
+                continue
+            kept.append(j)
+        if removed:
+            s3_cache['jobs'] = kept
+            s3_cache['file_count'] = len(kept)
+            save_persisted_cache()
+        summary['s3_cache_jobs_removed'] = removed
+        summary['s3_cache_jobs_before']  = before
+        summary['s3_cache_jobs_after']   = len(kept)
+    except Exception as e:
+        summary['errors'].append(f"s3_cache scrub failed: {e}")
+
+    # 4) Tracker JSON sweep. List sentiment-iq/trackers/iqr_*.json and
+    #    drop any whose key contains the avid slug fragments. We match
+    #    on the slugged form `avidfan` since the tracker filename strips
+    #    spaces & punctuation (consistent with the slug logic in the
+    #    delete-profile endpoint).
+    try:
+        if s3_client:
+            paginator = s3_client.get_paginator('list_objects_v2')
+            keys_to_delete = []
+            for page in paginator.paginate(
+                Bucket=S3_BUCKET,
+                Prefix='sentiment-iq/trackers/iqr_',
+            ):
+                for obj in page.get('Contents', []) or []:
+                    k = obj['Key'].lower()
+                    if 'avidfan' in k or 'avid_fan' in k or 'avid-fan' in k:
+                        keys_to_delete.append({'Key': obj['Key']})
+            # delete_objects caps at 1000; chunk just in case.
+            for i in range(0, len(keys_to_delete), 1000):
+                chunk = keys_to_delete[i:i + 1000]
+                if chunk:
+                    s3_client.delete_objects(Bucket=S3_BUCKET, Delete={'Objects': chunk})
+            summary['tracker_keys_deleted'] = len(keys_to_delete)
+    except Exception as e:
+        summary['errors'].append(f"tracker sweep failed: {e}")
+
+    # 5) LLM context cache sweep — same fragment match on key paths
+    #    under the iq_rankers_context_cache prefix.
+    try:
+        if s3_client:
+            paginator = s3_client.get_paginator('list_objects_v2')
+            keys_to_delete = []
+            for page in paginator.paginate(
+                Bucket=S3_BUCKET,
+                Prefix=_IQR_CONTEXT_LLM_CACHE_PREFIX,
+            ):
+                for obj in page.get('Contents', []) or []:
+                    k = obj['Key'].lower()
+                    if 'avid_fan' in k or 'avidfan' in k or 'avid-fan' in k:
+                        keys_to_delete.append({'Key': obj['Key']})
+            for i in range(0, len(keys_to_delete), 1000):
+                chunk = keys_to_delete[i:i + 1000]
+                if chunk:
+                    s3_client.delete_objects(Bucket=S3_BUCKET, Delete={'Objects': chunk})
+            summary['context_cache_keys_deleted'] = len(keys_to_delete)
+    except Exception as e:
+        summary['errors'].append(f"context cache sweep failed: {e}")
+
+    return jsonify({'success': len(summary['errors']) == 0,
+                    'summary': summary})
+
+
 @app.route('/api/iq-rankers/categories', methods=['GET'])
 @requires_auth
 def iq_rankers_categories():
