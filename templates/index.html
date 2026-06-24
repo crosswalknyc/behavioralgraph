@@ -23899,8 +23899,8 @@
             <div class="rankers-container">
                 <div class="rankers-platform-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
                     {%- set IQ_RANKER_MASTERS = [
-                        {'key': 'TALENT',    'slug': 'talent',    'icon': '⭐', 'label': 'Talent',     'desc': 'Daily mentions and CW IQ Score across every Talent profile in Profile IQ. Click a row to open the profile.'},
-                        {'key': 'BRAND',     'slug': 'brands',    'icon': '📦', 'label': 'Brands',     'desc': 'Daily mentions and CW IQ Score across every Brand profile in Profile IQ.'},
+                        {'key': 'TALENT',    'slug': 'talent',    'icon': '⭐', 'label': 'Talent',     'desc': 'Daily engagements and CW IQ Score across every Talent profile in Profile IQ. Click a row to open the profile.'},
+                        {'key': 'BRAND',     'slug': 'brands',    'icon': '📦', 'label': 'Brands',     'desc': 'Daily engagements and CW IQ Score across every Brand profile in Profile IQ.'},
                         {'key': 'CONTENT',   'slug': 'content',   'icon': '🎬', 'label': 'Content',    'desc': 'Movies, series, podcasts and games tracked across the panel.'},
                         {'key': 'PLATFORMS', 'slug': 'platforms', 'icon': '🛰️', 'label': 'Platforms',  'desc': 'Streaming, social, search, broadcast and other platforms tracked across the panel.'},
                         {'key': 'SPORT',     'slug': 'sport',     'icon': '🏟️', 'label': 'Sport',      'desc': 'Leagues, teams and sports organizations tracked across the panel.'},
@@ -24081,7 +24081,7 @@
                                 <span class="lbl">Volume</span>
                                 <span class="bar"><span style="width: 50%;"></span></span>
                                 <span class="pct">0.50</span>
-                                <span class="def"><b>How loud is today?</b> z-score of <code>log1p(mentions)</code> vs the profile's own trailing 28-day baseline. Higher = today's panel mention count is unusually big for this profile.</span>
+                                <span class="def"><b>How loud is today?</b> z-score of <code>log1p(engagements)</code> vs the profile's own trailing 28-day baseline. Higher = today's panel engagement count is unusually big for this profile.</span>
                             </div>
                             <div class="iqr-weight-bar">
                                 <span class="lbl">Reach</span>
@@ -24093,7 +24093,7 @@
                                 <span class="lbl">Momentum</span>
                                 <span class="bar"><span style="width: 15%;"></span></span>
                                 <span class="pct">0.15</span>
-                                <span class="def"><b>Are they trending?</b> Day-over-day % change in mentions, clamped to [−2, +2]. Positive = growing vs yesterday, negative = cooling off.</span>
+                                <span class="def"><b>Are they trending?</b> Day-over-day % change in engagements, clamped to [−2, +2]. Positive = growing vs yesterday, negative = cooling off.</span>
                             </div>
                             <div class="iqr-weight-bar">
                                 <span class="lbl">Recency</span>
@@ -67395,7 +67395,12 @@
             // 'genpop', or one of the selected run keys. Null = default
             // behavior (Profile / Gen Pop).
             indexNumKey: null,
-            indexDenKey: null
+            indexDenKey: null,
+            // 2026-06-24: set to true once the user explicitly changes
+            // either picker dropdown. While false the picker uses the
+            // smart default (single-cut numerator when only 1 cut is
+            // selected, else 'profile').
+            indexPickerUserTouched: false
         };
 
         function _resetComparisonRunsState(subject, currentKey, availableRuns) {
@@ -67413,7 +67418,8 @@
                 categoryNormProfileCount: 0,
                 categoryNormGeneratedAt: '',
                 indexNumKey: null,
-                indexDenKey: null
+                indexDenKey: null,
+                indexPickerUserTouched: false
             };
             _updateCompareDateRangesButtonBadge();
             _closeCompareDateRangesPopover();
@@ -68324,9 +68330,35 @@
             const wrap = document.getElementById('cmpIndexSourceWrap');
             if (!numSel || !denSel) return;
             const opts = _cmpIndexSourceOptions();
-            const num = _comparisonRunsState.indexNumKey || 'profile';
-            const den = _comparisonRunsState.indexDenKey || 'genpop';
             const validKeys = new Set(opts.map(o => o.key));
+
+            // 2026-06-24: smart default. When exactly ONE real data cut
+            // is selected (Category Norm is synthetic, not a "real" cut),
+            // the most useful default index is THAT cut vs Gen Pop -
+            // there's no second cut to compare against, so the
+            // historical "Profile vs Gen Pop" default isn't pulling its
+            // weight. Auto-promote that cut as the numerator UNTIL the
+            // user explicitly touches the dropdown (indexPickerUserTouched).
+            //
+            // The flag is reset by the "Reset" link inside the picker so
+            // the smart default resumes; cleared automatically if the
+            // user's stored pick becomes invalid (e.g. they had a cut
+            // selected as numerator and then removed that cut).
+            const realCuts = (_comparisonRunsState.selectedKeys || [])
+                .filter(k => k !== CATEGORY_NORM_KEY);
+            const smartDefaultNum = (realCuts.length === 1 && validKeys.has(realCuts[0]))
+                ? realCuts[0] : 'profile';
+
+            let touched = !!_comparisonRunsState.indexPickerUserTouched;
+            const storedNum = _comparisonRunsState.indexNumKey;
+            const storedDen = _comparisonRunsState.indexDenKey;
+            if (touched && storedNum && !validKeys.has(storedNum)) {
+                touched = false;
+                _comparisonRunsState.indexPickerUserTouched = false;
+            }
+
+            const num = touched ? (storedNum || 'profile') : smartDefaultNum;
+            const den = touched ? (storedDen || 'genpop') : 'genpop';
             const finalNum = validKeys.has(num) ? num : 'profile';
             const finalDen = validKeys.has(den) ? den : 'genpop';
             _comparisonRunsState.indexNumKey = (finalNum === 'profile') ? null : finalNum;
@@ -68818,10 +68850,54 @@
         // shows TU vs GP" - root cause was lack of header feedback
         // (values DID change but were ~indistinguishable from the
         // default Total Universe ÷ Gen Pop for Avid-heavy profiles).
+
+        // 2026-06-24: Short cohort code used in column headers like
+        // "Index (TU÷GP)" or "Index (AV÷GP)". Always returns 2 chars so
+        // the suffix stays narrow enough to fit in the 56px-wide
+        // demographics-table Index column without wrapping into a
+        // multi-line block.
+        //
+        // Mapping:
+        //   profile -> TU (Total Universe)
+        //   genpop  -> GP (Gen Pop)
+        //   run keys -> look up the run's label and reduce it to a known
+        //              2-letter code based on prefix (Avid -> AV, Casual
+        //              -> CA, Super -> SF, Heavy -> HV, Light -> LT,
+        //              Viewer -> VW, Norm/Category Norm -> NM). Anything
+        //              else falls back to the first letter of the first
+        //              two words, uppercased, so we never emit something
+        //              longer than 2 chars.
+        function _shortCohortCode(key) {
+            if (key === 'profile') return 'TU';
+            if (key === 'genpop')  return 'GP';
+            const run = (_comparisonRunsState.runsByKey || {})[key];
+            const label = (run && run.label) ? String(run.label) : String(key || '');
+            const norm = label.toLowerCase().trim();
+            if (!norm) return '??';
+            if (/^avid/.test(norm))               return 'AV';
+            if (/^casual/.test(norm))             return 'CA';
+            if (/^super[\s-]*fan/.test(norm))     return 'SF';
+            if (/^heavy/.test(norm))              return 'HV';
+            if (/^light/.test(norm))              return 'LT';
+            if (/^viewer/.test(norm))             return 'VW';
+            if (/^(category\s*)?norm/.test(norm)) return 'NM';
+            if (/total universe/.test(norm))      return 'TU';
+            if (/gen pop/.test(norm))             return 'GP';
+            const words = norm.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+            if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+            const alnum = norm.replace(/[^a-z0-9]/g, '');
+            return (alnum.slice(0, 2) || '??').toUpperCase();
+        }
+
         function _cmpApplyIndexSourcePicker() {
             const numKey = _comparisonRunsState.indexNumKey;
             const denKey = _comparisonRunsState.indexDenKey;
-            // Picker is active when EITHER side is non-default.
+            // Picker is "active" (non-default) when EITHER side has been
+            // explicitly pinned to something other than the default
+            // Profile / Gen Pop. Tracked because the data-row recompute
+            // path below only fires for active picker state - when
+            // default we let the native per-cell index renderer do its
+            // thing.
             const active = !!(numKey || denKey);
             const effNum = numKey || 'profile';
             const effDen = denKey || 'genpop';
@@ -68832,29 +68908,32 @@
                 const run = (_comparisonRunsState.runsByKey || {})[key];
                 return (run && run.label) || 'Run';
             };
-            const headerSuffix = active ? ' (' + _shortLabelFor(effNum) + ' ÷ ' + _shortLabelFor(effDen) + ')' : '';
+            // 2026-06-24: ALWAYS show the index-source code in column
+            // headers so the user never has to wonder what the Index
+            // column is measuring. Short 2-letter codes (TU / GP / AV /
+            // CA / SF / NM / VW) keep the suffix narrow enough to fit
+            // even in the 56px demographics-table Index column without
+            // wrapping into a multi-line block. Long labels were the
+            // original reason demo tables were skipped; with 2-letter
+            // codes that's no longer a concern.
+            const headerSuffix = ' (' + _shortCohortCode(effNum) + '÷' + _shortCohortCode(effDen) + ')';
 
             // Header label update - behavioral cards (every
             // .behavioral-header-row .index-col), interests list
-            // (.interest-header-row span.index-col), and location tables
-            // (.location-row.header .index-col / .cw-gp-col). We
-            // snapshot the original label the first time so Reset can
-            // put it back verbatim.
-            //
-            // Demographic Table-view cards (.behavioral-table flagged
-            // data-no-cmp-inject="1") are SKIPPED because their .index-col
-            // is only 56px wide; appending a "(Short Form Converts ÷
-            // Short Form Views)"-style suffix wraps to 5-6 lines and
-            // overflows left into the Gen Pop column. The picker is
-            // already documented on the cover page of any PDF export
-            // and on the popover itself, so the demo-table headers can
-            // stay terse without losing context.
+            // (.interest-header-row span.index-col), location tables
+            // (.location-row.header .index-col / .cw-gp-col), and
+            // demographics tables in compare-table-view (their headers
+            // also use .behavioral-header-row .index-col - included
+            // intentionally now that the suffix is 2-letter short codes
+            // that won't overflow the 56px column). Snapshot the
+            // original label the first time so re-applies don't
+            // double-append.
             const headers = Array.from(document.querySelectorAll(
                 '.behavioral-header-row .index-col, '
                 + '.interest-header-row .index-col, '
                 + '.location-row.header .index-col, '
                 + '.location-row.header .cw-gp-col'
-            )).filter(h => !h.closest('.behavioral-table[data-no-cmp-inject="1"]'));
+            ));
             headers.forEach(h => {
                 if (h._cmpOrigLabel == null) h._cmpOrigLabel = h.textContent;
                 h.textContent = h._cmpOrigLabel + headerSuffix;
@@ -69213,7 +69292,7 @@
             'selectedKeys', 'includeGenPop', 'includeCasualFan',
             'includeCategoryNorm', 'categoryNormCategory',
             'categoryNormProfileCount', 'categoryNormGeneratedAt',
-            'indexNumKey', 'indexDenKey'
+            'indexNumKey', 'indexDenKey', 'indexPickerUserTouched'
         ];
 
         function _snapshotComparisonRunsStateForSubject(subject) {
@@ -69690,6 +69769,7 @@
                 e.preventDefault();
                 _comparisonRunsState.indexNumKey = null;
                 _comparisonRunsState.indexDenKey = null;
+                _comparisonRunsState.indexPickerUserTouched = false;
                 _refreshIndexSourcePickerOptions();
                 try { _cmpApplyIndexSourcePicker(); } catch (_) {}
             };
@@ -69720,6 +69800,7 @@
             idxWrap.appendChild(idxHelp);
 
             const onPickerChange = function() {
+                _comparisonRunsState.indexPickerUserTouched = true;
                 _comparisonRunsState.indexNumKey = numSel.value || null;
                 _comparisonRunsState.indexDenKey = denSel.value || null;
                 try { _cmpApplyIndexSourcePicker(); } catch (e) { console.warn('[compare] picker change failed', e); }
@@ -71714,6 +71795,15 @@
             if (parsed.interests) {
                 renderInterests(parsed.interests);
             }
+
+            // 2026-06-24: ensure every page (behavioral / interests /
+            // location / demographics-in-compare-table-mode) always
+            // displays the "Index (TU÷GP)" / "(AV÷GP)" / etc. suffix so
+            // the user can always see what the Index column is measured
+            // against. Defaults to (TU÷GP) when no comparison picker is
+            // active. Wrapped in try/catch so a missing helper never
+            // breaks the render.
+            try { _cmpApplyIndexSourcePicker(); } catch (e) { console.warn('[index header] apply failed', e); }
         }
 
         // Load profiles when dashboard tab is shown
@@ -74406,6 +74496,18 @@
                 try { applyComparisonRunsToDashboardCharts(); } catch (e) { console.warn('compare re-apply failed', e); }
                 try { applyComparisonRunsToCategoryTables(); } catch (e) { console.warn('compare tables re-apply failed', e); }
             }
+
+            // 2026-06-24: re-apply the always-on index source suffix
+            // ("Index (TU÷GP)" etc.) after every chart re-render. This
+            // is the path that fires when the user switches a single
+            // chart's display type via changeChartType() - which calls
+            // renderCharts() but doesn't always go through
+            // applyComparisonRunsToCategoryTables (the regular picker
+            // call site). Without this hook the demo-table headers
+            // would lose the suffix any time the user toggled a chart
+            // type in single-cohort mode.
+            try { if (typeof _cmpApplyIndexSourcePicker === 'function') _cmpApplyIndexSourcePicker(); }
+            catch (e) { console.warn('[index header] post-renderCharts apply failed', e); }
         }
         
         // Age sorting variables
@@ -108317,7 +108419,7 @@
             // meaningful improvement.
             const fmtDeltaPct = (delta, prevRawMentions) => {
                 if (!Number(prevRawMentions || 0)) {
-                    return `<span class="has-tooltip" data-tooltip="No mention data in the prior window for this profile - nothing meaningful to compare to." style="color: var(--text-secondary);">-</span>`;
+                    return `<span class="has-tooltip" data-tooltip="No engagement data in the prior window for this profile - nothing meaningful to compare to." style="color: var(--text-secondary);">-</span>`;
                 }
                 const n = Number(delta);
                 if (!isFinite(n)) return '<span style="color: var(--text-secondary);">-</span>';
@@ -108347,7 +108449,7 @@
                         <div class="iqr-name-row">
                             <span class="iqr-name-text">${_iqEsc(r.project_name || r.profile_subject || '')}</span>
                             <button type="button" class="iqr-row-chip iqr-row-chip-chart" title="Open day-over-day chart" aria-label="Open day-over-day chart" onclick="${chartClick}"><span class="iqr-row-chip-glyph">Δ</span></button>
-                            <button type="button" class="iqr-row-chip iqr-row-chip-context" title="What's driving these mentions? (LLM rollup of the panel's URL surface)" onclick="${contextClick}">Context</button>
+                            <button type="button" class="iqr-row-chip iqr-row-chip-context" title="What's driving these engagements? (LLM rollup of the panel's URL surface)" onclick="${contextClick}">Context</button>
                             <button type="button" class="iqr-row-chip iqr-row-chip-profile" title="Open this profile's dashboard" onclick="${profileClick}">Profile</button>
                         </div>
                         <div class="iqr-name-sub">${_iqRenderSubcategory(r)}</div>
@@ -108430,7 +108532,7 @@
         }
 
         // ──────────────────────────────────────────────────────────────
-        // Context modal - "what's actually driving Ben Stiller's mentions
+        // Context modal - "what's actually driving Ben Stiller's engagements
         // this week?" Re-uses the active master's window so the answer
         // matches the leaderboard column the user is staring at.
         // ──────────────────────────────────────────────────────────────
@@ -108539,7 +108641,7 @@
                 totalsEl.innerHTML = winLine;
             } else {
                 totalsEl.innerHTML = winLine + ' · ' +
-                    `<b>${fmtInt(ctx.total_mentions)}</b> mentions · ` +
+                    `<b>${fmtInt(ctx.total_mentions)}</b> engagements · ` +
                     `<b>${fmtInt(ctx.unique_panelists)}</b> unique panelists`;
             }
 
