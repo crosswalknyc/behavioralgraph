@@ -14462,6 +14462,140 @@
             border-radius: 5px;
         }
 
+        /* ----- JOURNEY STAGES VIEW (default) -----
+           Banking-research style stage-flow table. Every step in
+           every path gets normalized into one of seven canonical
+           stages, each with its own color. The result is a vertical
+           list of paths you can scan in 5 seconds: every row reads
+           as a sequence of colored pills + a 1-line note. */
+        .jiq-stage-legend {
+            display: flex;
+            gap: 0.7rem;
+            flex-wrap: wrap;
+            font-size: 10.5px;
+            margin-bottom: 0.85rem;
+            padding: 0.55rem 0.8rem;
+            background: rgba(255,255,255,0.025);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+        .jiq-stage-legend .leg-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        .jiq-stage-legend .leg-swatch {
+            width: 11px;
+            height: 11px;
+            border-radius: 3px;
+        }
+        .jiq-stages-table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 12px;
+        }
+        .jiq-stages-table thead th {
+            text-align: left;
+            font-size: 9.5px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            padding: 0.5rem 0.7rem;
+            border-bottom: 1px solid var(--border-color);
+            opacity: 0.85;
+            background: rgba(255,255,255,0.02);
+        }
+        .jiq-stages-table tbody td {
+            padding: 0.85rem 0.7rem;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: top;
+        }
+        .jiq-stages-table tbody tr:hover {
+            background: rgba(255,255,255,0.025);
+        }
+        .jiq-stages-table .col-pct {
+            font-size: 15px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            width: 64px;
+            white-space: nowrap;
+        }
+        .jiq-stages-table .col-days {
+            font-size: 12.5px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            width: 78px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .jiq-stages-table .row-rank-chip {
+            display: inline-block;
+            width: 22px;
+            height: 22px;
+            border-radius: 5px;
+            color: #fff;
+            text-align: center;
+            line-height: 22px;
+            font-size: 11px;
+            font-weight: 800;
+            margin-right: 0.55rem;
+            vertical-align: -3px;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.5);
+        }
+        .jiq-stages-table .row-label {
+            font-weight: 700;
+            font-size: 12.5px;
+            margin-bottom: 0.55rem;
+            line-height: 1.3;
+        }
+        .jiq-stages-table .row-channel {
+            font-size: 9.5px;
+            opacity: 0.55;
+            font-weight: 700;
+            margin-left: 0.45rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            white-space: nowrap;
+        }
+        .jiq-stages-table .row-note {
+            font-size: 11px;
+            line-height: 1.55;
+            color: var(--text-secondary);
+            font-style: italic;
+            margin-top: 0.5rem;
+            max-width: 78ch;
+        }
+        .jiq-stage-flow {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            flex-wrap: wrap;
+            row-gap: 0.4rem;
+        }
+        .jiq-stage-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.42rem 0.8rem;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #fff;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.55);
+            white-space: nowrap;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.18);
+        }
+        .jiq-stage-arrow {
+            color: var(--text-secondary);
+            opacity: 0.55;
+            font-size: 12px;
+            line-height: 1;
+        }
+
         /* ----- BUBBLE VIEW ----- */
         .jiq-bubble-wrap {
             position: relative;
@@ -49855,11 +49989,144 @@
         }
 
         // ──────────────────────────────────────────────────────────────
-        // VIEW SWITCHER - flip between Spectrum / Categories / Bubble.
-        // Each view is a hidden block in the topEl; the switcher
-        // toggles data-jiq-pathview-hidden on the inactive ones.
+        // VIEW SWITCHER - flip between Stages / Spectrum / Categories /
+        // Bubble. Each view is a hidden block in the topEl; the
+        // switcher toggles data-jiq-pathview-hidden on the inactive
+        // ones. Default is "stages" (banking-research style stage-
+        // flow table) because it scans fastest top-to-bottom.
         // ──────────────────────────────────────────────────────────────
-        var _jiqLandmanView = 'spectrum';   // 'spectrum' | 'categories' | 'bubble'
+        var _jiqLandmanView = 'stages';   // 'stages' | 'spectrum' | 'categories' | 'bubble'
+
+        // ──────────────────────────────────────────────────────────────
+        // JOURNEY-STAGE VOCABULARY
+        // ──────────────────────────────────────────────────────────────
+        // Every step in every path is normalized into one of seven
+        // canonical stages, each with its own color. The user gets a
+        // compact stage-flow per path that's directly comparable
+        // across all 11 rows: same color = same kind of action.
+        //
+        // Stages render in this fixed canonical order regardless of
+        // where they appear in the source step text (so a path that
+        // matches discovery + landing always renders as
+        // DISCOVERY → LANDING, never the other way).
+        // ──────────────────────────────────────────────────────────────
+        var _JIQ_PATH_STAGES = {
+            'discovery':  { label: 'DISCOVERY',         color: '#a855f7' },  // purple
+            'shelf':      { label: 'P+ HOME SHELF',     color: '#3b82f6' },  // blue
+            'research':   { label: 'RESEARCH',          color: '#ec4899' },  // pink
+            'validation': { label: 'VALIDATION',        color: '#06b6d4' },  // cyan
+            'landing':    { label: 'P+ PDP / LANDING',  color: '#eab308' },  // yellow
+            'signup':     { label: 'TRIAL / SIGNUP',    color: '#f97316' },  // orange
+            'play':       { label: 'PRESS PLAY',        color: '#84cc16' },  // green
+        };
+        var _JIQ_STAGE_ORDER = ['discovery', 'shelf', 'research', 'validation', 'landing', 'signup', 'play'];
+
+        // Pattern-match a path's combined step text against each
+        // stage. Returns an array of stage IDs in canonical order.
+        // PRESS PLAY is always the terminal stage.
+        function _jiqPathToStages(steps) {
+            var allText = (steps || []).join(' | ').toLowerCase();
+            var found = {};
+            // DISCOVERY - any first-exposure surface (social, podcast,
+            // editorial, creator IG, search results, CRM, sports
+            // halo, bundle, adjacent show on a competitor platform).
+            if (/tiktok|fyp|instagram|\big\b|cody johnson|spotify|youtube|reddit|\/r\/|podcast|rogan|shawn ryan|theo von|smartless|vulture|variety|listicle|critic|article|recap|imdb|cbs sports|nfl|email|push|crm|walmart|tulsa king|reacher|outer range|justified|bosch/.test(allText)) {
+                found.discovery = true;
+            }
+            // SHELF - in-app P+ home shelf or algorithm rec
+            // (in-network discovery surfaces).
+            if (/p\+ home shelf|"continue with sheridan"|algorithm shelf|home shelf/.test(allText)) {
+                found.shelf = true;
+            }
+            // RESEARCH - active search query, "where to watch"-style.
+            if (/google|searched|search:|"where to watch"|"what is landman"/.test(allText)) {
+                found.research = true;
+            }
+            // VALIDATION - reading 1+ comparison/explainer articles
+            // (a second-source confidence step).
+            if (/read 1\+|read 2\+|comparison article|explainer.*article|interview article|comparison-search|comparison search/.test(allText)) {
+                found.validation = true;
+            }
+            // LANDING - paramountplus.com PDP or P+ Landman PDP.
+            if (/landman pdp|paramountplus\.com|land on p\+|p\+ landman pdp/.test(allText)) {
+                found.landing = true;
+            }
+            // SIGNUP - trial / subscribe / bundle activation.
+            if (/trial|signup|subscribe|sign-in|sign in|complete signup|bundle activation/.test(allText)) {
+                found.signup = true;
+            }
+            // PLAY - always the terminal anchor.
+            found.play = true;
+            return _JIQ_STAGE_ORDER.filter(function(s) { return found[s]; });
+        }
+
+        // Render a single stage flow as a row of colored pills with
+        // arrow separators.
+        function _jiqRenderStageFlow(steps) {
+            var stages = _jiqPathToStages(steps);
+            var parts  = [];
+            stages.forEach(function(stageId, i) {
+                var st = _JIQ_PATH_STAGES[stageId];
+                if (!st) return;
+                parts.push('<span class="jiq-stage-pill" style="background:' + st.color + ';">' + _jiqEsc(st.label) + '</span>');
+                if (i < stages.length - 1) {
+                    parts.push('<span class="jiq-stage-arrow">→</span>');
+                }
+            });
+            return '<div class="jiq-stage-flow">' + parts.join('') + '</div>';
+        }
+
+        // The full stages-view renderer. Builds the legend strip + a
+        // compact 3-column table (cohort %, avg days, path stages +
+        // note). No expand state - every row is fully readable as-is.
+        function _jiqRenderPathStages() {
+            var container = document.getElementById('jiqPathStagesView');
+            if (!container || !_jiqLandmanPaths.length) return;
+
+            var legendHtml = _JIQ_STAGE_ORDER.map(function(s) {
+                var st = _JIQ_PATH_STAGES[s];
+                return '<span class="leg-item">'
+                     +   '<span class="leg-swatch" style="background:' + st.color + ';"></span>'
+                     +   _jiqEsc(st.label)
+                     + '</span>';
+            }).join('');
+
+            var rowsHtml = _jiqLandmanPaths.map(function(p) {
+                var color    = _jiqLandmanPathColors[p.rank] || '#22c55e';
+                var daysStr  = (p.avg_days_to_press_play === 0)
+                    ? 'Same day'
+                    : (p.avg_days_to_press_play || 0) + 'd';
+                var isOwned  = p.channel_class === 'paramount_owned';
+                var chanTag  = isOwned ? '🏠 Owned' : '🌐 Earned';
+                var chanColor = isOwned ? '#3b82f6' : '#f59e0b';
+                return '<tr>'
+                     +   '<td class="col-pct" style="color:' + color + ';">' + (p.pct_of_viewers || 0).toFixed(1) + '%</td>'
+                     +   '<td class="col-days">' + _jiqEsc(daysStr) + '</td>'
+                     +   '<td>'
+                     +     '<div class="row-label">'
+                     +       '<span class="row-rank-chip" style="background:' + color + ';">' + _jiqEsc(p.rank) + '</span>'
+                     +       _jiqEsc(p.label)
+                     +       '<span class="row-channel" style="color:' + chanColor + ';">' + chanTag + '</span>'
+                     +     '</div>'
+                     +     _jiqRenderStageFlow(p.steps)
+                     +     '<div class="row-note">' + _jiqEsc(p.note || '') + '</div>'
+                     +   '</td>'
+                     + '</tr>';
+            }).join('');
+
+            container.innerHTML = ''
+                + '<div class="jiq-stage-legend">' + legendHtml + '</div>'
+                + '<div style="overflow-x:auto;">'
+                +   '<table class="jiq-stages-table">'
+                +     '<thead><tr>'
+                +       '<th>Cohort</th>'
+                +       '<th>Avg days</th>'
+                +       '<th>Path</th>'
+                +     '</tr></thead>'
+                +     '<tbody>' + rowsHtml + '</tbody>'
+                +   '</table>'
+                + '</div>';
+        }
 
         function _jiqSetPathView(view) {
             _jiqLandmanView = view;
@@ -49878,6 +50145,7 @@
             // Some views need a lazy re-render the first time the user
             // clicks them (e.g. bubble's SVG measurements depend on
             // the container being visible to compute correct widths).
+            if (view === 'stages')     _jiqRenderPathStages();
             if (view === 'categories') _jiqRenderPathCategories();
             if (view === 'bubble')     _jiqRenderPathBubble();
         }
@@ -50511,15 +50779,24 @@
             // filter buttons (each shows its percentage inline).
             if (topEl) {
                 topEl.innerHTML = ''
-                    // ── View switcher tabs (Spectrum / Categories / Bubble) ──
+                    // ── View switcher tabs (Stages [default] / Spectrum / Categories / Bubble) ──
                     + '<div class="jiq-view-switcher" role="tablist">'
-                    +   '<button class="view-btn is-active" data-view="spectrum"   onclick="_jiqSetPathView(\'spectrum\')">🎯 Spectrum + Detail</button>'
+                    +   '<button class="view-btn is-active" data-view="stages"     onclick="_jiqSetPathView(\'stages\')">🏃 Journey Stages</button>'
+                    +   '<button class="view-btn"           data-view="spectrum"   onclick="_jiqSetPathView(\'spectrum\')">🎯 Spectrum + Detail</button>'
                     +   '<button class="view-btn"           data-view="categories" onclick="_jiqSetPathView(\'categories\')">🗂️ Channel Categories</button>'
                     +   '<button class="view-btn"           data-view="bubble"     onclick="_jiqSetPathView(\'bubble\')">🫧 Bubble Chart</button>'
                     + '</div>'
 
-                    // ── VIEW 1: SPECTRUM ──
-                    + '<div data-jiq-pathview="spectrum">'
+                    // ── VIEW 1 (DEFAULT): JOURNEY STAGES ──
+                    // Banking-research style stage-flow table. Every
+                    // row is one path; every step normalized into a
+                    // canonical colored pill so vertical scanning is
+                    // instant ("which paths have VALIDATION? which
+                    // skip RESEARCH?").
+                    + '<div data-jiq-pathview="stages" id="jiqPathStagesView"></div>'
+
+                    // ── VIEW 2: SPECTRUM + DETAIL ──
+                    + '<div data-jiq-pathview="spectrum" data-jiq-pathview-hidden="true">'
                     +   '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.55rem;">'
                     +     '<div style="font-size:10.5px; font-weight:700; opacity:0.78; text-transform:uppercase; letter-spacing:0.07em;">'
                     +       '🌈 Path Spectrum <span style="opacity:0.7; font-weight:500; text-transform:none; letter-spacing:0;">- click any segment to drill in</span>'
@@ -50538,12 +50815,13 @@
                     +   '<div id="jiqPathDetailPanel" class="jiq-path-detail-panel"></div>'
                     + '</div>'
 
-                    // ── VIEW 2: CATEGORIES (lazy-rendered on first click) ──
+                    // ── VIEW 3: CATEGORIES (lazy-rendered on first click) ──
                     + '<div data-jiq-pathview="categories" data-jiq-pathview-hidden="true" id="jiqPathCategoriesView"></div>'
 
-                    // ── VIEW 3: BUBBLE (lazy-rendered on first click) ──
+                    // ── VIEW 4: BUBBLE (lazy-rendered on first click) ──
                     + '<div data-jiq-pathview="bubble" data-jiq-pathview-hidden="true" id="jiqPathBubbleView"></div>';
 
+                _jiqRenderPathStages();
                 _jiqRenderPathSpectrum();
                 _jiqRenderPathDetail();
                 // The Categories and Bubble views are rendered on
