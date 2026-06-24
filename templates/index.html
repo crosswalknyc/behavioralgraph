@@ -65077,7 +65077,7 @@
             renderTopInsights(parsed);
 
             // Populate audience-share boxes (Social/Search/Owned/Retail/Media)
-            try { _renderAudienceShareBoxes(parsed); } catch (e) { console.warn('[audience-share] render failed', e); }
+            try { _renderAudienceShareBoxes(parsed, brandName); } catch (e) { console.warn('[audience-share] render failed', e); }
         }
 
         function parseAllData(csvData) {
@@ -66850,6 +66850,32 @@
         // is NOT excluded - team .coms and team apps (tickets, scores)
         // are a real, heavily-used owned channel.
         const _AUDIENCE_SHARE_NO_OWNED = new Set(['TALENT', 'INFLUENCER', 'CONTENT']);
+        // 2026-06-24: per-subject opt-outs from the CONTENT 100%-media
+        // short-circuit. The default CONTENT rule says "a movie/podcast/
+        // game profile qualifies by consuming the content, so by
+        // definition every engager is a media engager" → 100% Media,
+        // dashes on the other four boxes. For a small set of franchise
+        // movies the user wants the composition to reflect DIGITAL
+        // ENGAGEMENT across the 5 touchpoints (Social / Search / Owned
+        // / Retail / Media) instead. These are routed through the
+        // MEDIA_BRAND archetype + the standard 60/40 archetype-data
+        // blend so each profile still gets its own subject-specific
+        // shape (Grinch retail signal differs from Blue Crush, etc.).
+        // Keys are normalized: lowercased, trimmed, "the " prefix
+        // stripped, all punctuation/whitespace collapsed.
+        const _AUDIENCE_SHARE_CONTENT_OVERRIDE = new Set([
+            'catinthehat',
+            'bluecrush',
+            'grinch'
+        ]);
+        function _normSubjectKeyForAudienceShare(s) {
+            if (!s) return '';
+            return String(s)
+                .toLowerCase()
+                .trim()
+                .replace(/^the\s+/, '')
+                .replace(/[^a-z0-9]+/g, '');
+        }
         // Archetype detection - keyed off BRAND CATEGORY (preferred) with
         // _currentProfileCategory() as a fallback. Conservative: anything
         // unrecognized falls through to GENERIC.
@@ -66950,12 +66976,35 @@
             return null;
         }
 
-        function _computeAudienceShare(parsed) {
+        function _computeAudienceShare(parsed, subjectName) {
             if (!parsed || !parsed.behavioral) return null;
             const beh = parsed.behavioral;
             const brandCat = String(parsed.brandCategory || '').trim().toUpperCase();
             const profileCat = _currentProfileCategory();
-            const archetype = _detectAudienceShareArchetype(brandCat, profileCat);
+            let archetype = _detectAudienceShareArchetype(brandCat, profileCat);
+
+            // 2026-06-24: per-subject opt-out of the CONTENT 100%-Media
+            // short-circuit. For movie franchises in the override list,
+            // re-route to MEDIA_BRAND so the composition reflects
+            // digital engagement across all 5 touchpoints (the 60/40
+            // archetype-data blend below then differentiates them).
+            if (archetype === 'CONTENT') {
+                const subjKey = _normSubjectKeyForAudienceShare(subjectName);
+                // startsWith matching so cohort / year variants
+                // ("The Grinch - 2025" -> "grinch2025", "Cat in the
+                // Hat - Avid Fan" -> "catinthehatavidfan", "Blue
+                // Crush 2" -> "bluecrush2") also pick up the
+                // override. The 3 keys are distinctive enough that
+                // false-positive prefix collisions are negligible.
+                if (subjKey) {
+                    for (const ovr of _AUDIENCE_SHARE_CONTENT_OVERRIDE) {
+                        if (subjKey.startsWith(ovr)) {
+                            archetype = 'MEDIA_BRAND';
+                            break;
+                        }
+                    }
+                }
+            }
             const noOwned = _AUDIENCE_SHARE_NO_OWNED.has(archetype);
 
             // CONTENT short-circuit (2026-06-18): movie / podcast / game /
@@ -67094,11 +67143,27 @@
             };
         }
 
-        function _renderAudienceShareBoxes(parsed) {
+        function _renderAudienceShareBoxes(parsed, subjectName) {
             const container = document.getElementById('audienceShareBoxes');
             const sectionLabel = document.getElementById('audienceShareSectionLabel');
             if (!container) return;
-            const share = _computeAudienceShare(parsed);
+            // Subject is needed for the per-subject CONTENT override
+            // (Cat in the Hat / Blue Crush / The Grinch). Fall back to
+            // the dashboard header text or currentProfileData.name when
+            // the caller didn't pass it explicitly.
+            let subj = subjectName || '';
+            if (!subj) {
+                try {
+                    subj = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || '';
+                } catch (_) {}
+            }
+            if (!subj) {
+                try {
+                    const hdr = document.getElementById('dashBrandNameHeader');
+                    subj = hdr ? hdr.textContent : '';
+                } catch (_) {}
+            }
+            const share = _computeAudienceShare(parsed, subj);
             if (!share) {
                 container.style.display = 'none';
                 if (sectionLabel) sectionLabel.style.display = 'none';
@@ -70580,7 +70645,7 @@
                 }
                 // Always populate the audience-share boxes - they sit on
                 // every profile, not just multi-sibling ones.
-                try { _renderAudienceShareBoxes(parsed); } catch (e) { console.warn('[audience-share] render failed', e); }
+                try { _renderAudienceShareBoxes(parsed, brandName); } catch (e) { console.warn('[audience-share] render failed', e); }
                 // Fetch profile image (custom uploads only)
                 fetchProfileImage(brandName);
             }
