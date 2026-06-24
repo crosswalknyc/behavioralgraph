@@ -14002,6 +14002,158 @@
                 gap: 0.5rem;
             }
         }
+
+        /* ===========================================================
+           DISCOVERY PATHS - VISUAL TREATMENT
+           ===========================================================
+           Used by the "How They Got to Landman" card to replace the
+           old text-heavy list with three big visualizations:
+
+             .jiq-path-spectrum  = single horizontal stacked bar where
+                                   each segment is one of the 11 paths,
+                                   width proportional to cohort_size.
+                                   Owned vs earned painted in two
+                                   different color families. Tooltip
+                                   on hover, click to scroll to that
+                                   path's row in the list below.
+
+             .jiq-split-card     = the big Paramount-owned vs Earned
+                                   side-by-side punchline tiles that
+                                   sit under the spectrum bar.
+
+             .jiq-path-ribbon    = compact left-to-right icon flow
+                                   shown in each path's summary row.
+                                   Renders the click-sequence as just-
+                                   icons (TikTok → search → P+ → ▶)
+                                   so the visual journey reads at a
+                                   glance, no scrolling required.
+           =========================================================== */
+        .jiq-path-spectrum {
+            display: flex;
+            width: 100%;
+            height: 38px;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.02);
+        }
+        .jiq-path-spectrum-seg {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10.5px;
+            font-weight: 800;
+            color: rgba(255,255,255,0.95);
+            cursor: pointer;
+            border-right: 1px solid rgba(0,0,0,0.25);
+            transition: filter 0.12s ease, transform 0.12s ease;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.55);
+            min-width: 8px;
+        }
+        .jiq-path-spectrum-seg:last-child { border-right: 0; }
+        .jiq-path-spectrum-seg:hover {
+            filter: brightness(1.2);
+            transform: scaleY(1.08);
+            z-index: 2;
+        }
+        .jiq-path-spectrum-axis {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: var(--text-secondary);
+            margin-top: 0.3rem;
+            opacity: 0.7;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .jiq-path-spectrum-legend {
+            display: flex;
+            gap: 1.2rem;
+            font-size: 10.5px;
+            color: var(--text-secondary);
+            margin-top: 0.55rem;
+            flex-wrap: wrap;
+        }
+        .jiq-path-spectrum-legend .swatch {
+            display: inline-block;
+            width: 11px;
+            height: 11px;
+            border-radius: 2px;
+            margin-right: 0.35rem;
+            vertical-align: -1px;
+        }
+
+        /* Owned vs Earned split tiles. */
+        .jiq-split-card {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.6rem;
+            margin-top: 0.85rem;
+        }
+        .jiq-split-tile {
+            padding: 0.85rem 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            border-left-width: 4px;
+            background: rgba(255,255,255,0.025);
+        }
+        .jiq-split-tile .label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            opacity: 0.85;
+            margin-bottom: 0.35rem;
+        }
+        .jiq-split-tile .pct {
+            font-size: 1.85rem;
+            font-weight: 800;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+        .jiq-split-tile .meta {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 0.35rem;
+            line-height: 1.4;
+        }
+        @media (max-width: 720px) {
+            .jiq-split-card { grid-template-columns: 1fr; }
+        }
+
+        /* Path icon ribbon - the compact horizontal icon flow shown
+           inside each path's summary row. */
+        .jiq-path-ribbon {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            flex-wrap: wrap;
+            font-size: 14px;
+            line-height: 1;
+            padding: 0.15rem 0;
+        }
+        .jiq-path-ribbon .step {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-color);
+            font-size: 14px;
+        }
+        .jiq-path-ribbon .step.terminal {
+            background: rgba(34,197,94,0.18);
+            border-color: rgba(34,197,94,0.55);
+        }
+        .jiq-path-ribbon .arrow {
+            font-size: 11px;
+            color: var(--text-secondary);
+            opacity: 0.55;
+            line-height: 1;
+        }
     </style>
     <script>
         /* Apply persisted theme before render to avoid flash-of-wrong-theme.
@@ -88679,14 +88831,385 @@
             alert('Use the PNG button on each chart or module to export that chart as an image.');
         }
         
-        function exportPDF() {
+        // -----------------------------------------------------------------
+        // Full Report PDF (Demographics + Behavioral + Interests + Location)
+        // -----------------------------------------------------------------
+        // Captures every card on the four data tabs as a graphic, packs
+        // them into a letter-portrait PDF behind a cover page that carries
+        // the profile image, name, date range, sample size, selected Data
+        // Cuts (with Gen Pop / Category Norm appended when those toggles
+        // are on), and the active Index = <num> / <den> formula.
+        //
+        // Demographics is force-flipped to Table view before capture so the
+        // export always matches the user's described "table views as
+        // graphics" intent regardless of the per-card chart-type pref. The
+        // pre-export prefs are snapshotted and restored once the PDF is
+        // generated (and the active tab is restored too).
+        //
+        // Deps loaded lazily on first call: jsPDF (v2.5.1 UMD) and
+        // html2canvas (v1.4.1) from cdnjs. Subsequent calls hit warm
+        // caches and skip the script-tag injection.
+        // -----------------------------------------------------------------
+        function _pdfLoadScript(src) {
+            return new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = src;
+                s.onload = resolve;
+                s.onerror = () => reject(new Error('Failed to load ' + src));
+                document.head.appendChild(s);
+            });
+        }
+
+        function _pdfImgToDataUrl(src) {
+            return new Promise((resolve, reject) => {
+                if (!src) { reject(new Error('no src')); return; }
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    try {
+                        const c = document.createElement('canvas');
+                        c.width = img.naturalWidth || img.width;
+                        c.height = img.naturalHeight || img.height;
+                        const ctx = c.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        resolve(c.toDataURL('image/png'));
+                    } catch (e) { reject(e); }
+                };
+                img.onerror = () => reject(new Error('image load failed'));
+                img.src = src;
+            });
+        }
+
+        function _pdfDrawPageBg(doc, w, h) {
+            doc.setFillColor(26, 26, 46); // #1a1a2e to match dashboard
+            doc.rect(0, 0, w, h, 'F');
+        }
+
+        async function _pdfDrawCoverPage(doc, meta) {
+            const W = 816, H = 1056;
+            _pdfDrawPageBg(doc, W, H);
+
+            // Top accent bar
+            doc.setFillColor(139, 92, 246); // accent purple
+            doc.rect(0, 0, W, 6, 'F');
+
+            // Profile image, centered near top third
+            let imgBottom = 110;
+            if (meta.profileImgSrc) {
+                try {
+                    const dataUrl = await _pdfImgToDataUrl(meta.profileImgSrc);
+                    const size = 220;
+                    const x = (W - size) / 2;
+                    const y = 110;
+                    doc.addImage(dataUrl, 'PNG', x, y, size, size);
+                    imgBottom = y + size;
+                } catch (_) { /* fall through - no image */ }
+            }
+
+            // Profile name (large, bold)
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(34);
+            const name = (meta.profileName || 'Profile').replace(/\s+/g, ' ').trim();
+            doc.text(name, W / 2, imgBottom + 56, { align: 'center', maxWidth: W - 120 });
+
+            // Date range
+            let cursorY = imgBottom + 90;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(15);
+            doc.setTextColor(200, 200, 220);
+            if (meta.dateRange) {
+                doc.text(meta.dateRange, W / 2, cursorY, { align: 'center' });
+                cursorY += 24;
+            }
+
+            // Sample size
+            if (meta.sampleSize) {
+                doc.setFontSize(13);
+                doc.setTextColor(170, 170, 195);
+                doc.text('Sample size: n=' + meta.sampleSize, W / 2, cursorY, { align: 'center' });
+                cursorY += 32;
+            } else {
+                cursorY += 12;
+            }
+
+            // Section divider
+            doc.setDrawColor(60, 60, 90);
+            doc.setLineWidth(0.6);
+            doc.line(W * 0.25, cursorY, W * 0.75, cursorY);
+            cursorY += 28;
+
+            // Data Cuts header + list
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.setTextColor(139, 92, 246);
+            doc.text('DATA CUTS', W / 2, cursorY, { align: 'center' });
+            cursorY += 22;
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(13);
+            doc.setTextColor(225, 225, 235);
+            (meta.cohortLabels || []).forEach(lbl => {
+                doc.text(String(lbl), W / 2, cursorY, { align: 'center' });
+                cursorY += 19;
+            });
+
+            // Index formula
+            cursorY += 18;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.setTextColor(139, 92, 246);
+            doc.text('INDEX', W / 2, cursorY, { align: 'center' });
+            cursorY += 22;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(13);
+            doc.setTextColor(225, 225, 235);
+            if (meta.indexFormula) {
+                doc.text(meta.indexFormula, W / 2, cursorY, { align: 'center', maxWidth: W - 120 });
+            }
+
+            // Footer
+            doc.setFontSize(9);
+            doc.setTextColor(120, 120, 145);
+            doc.text('Generated ' + new Date().toLocaleString(), W / 2, H - 40, { align: 'center' });
+            doc.text('Crosswalk Profile IQ', W / 2, H - 22, { align: 'center' });
+        }
+
+        function _pdfDrawSectionHeader(doc, title) {
+            const W = 816;
+            doc.setFillColor(139, 92, 246);
+            doc.rect(40, 36, 4, 30, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(22);
+            doc.setTextColor(255, 255, 255);
+            doc.text(String(title).toUpperCase(), 56, 58);
+            doc.setDrawColor(60, 60, 90);
+            doc.setLineWidth(0.4);
+            doc.line(40, 78, W - 40, 78);
+        }
+
+        async function exportPDF() {
             if (!currentProfileData) {
                 alert('Please select a profile first');
                 return;
             }
-            alert('Full report PDF export coming soon. Use Add Page to Deck to add the current tab to your deck, then export the deck.');
+
+            // Snapshot state we mutate so we can restore on completion / error.
+            const originalActiveTabEl = document.querySelector('.tab-content.active');
+            const originalTabName = originalActiveTabEl && originalActiveTabEl.id && originalActiveTabEl.id.startsWith('tab-')
+                ? originalActiveTabEl.id.substring(4) : null;
+            const originalChartPrefs = (typeof chartTypePrefs !== 'undefined') ? Object.assign({}, chartTypePrefs) : null;
+
+            showNotification('📑 Generating PDF report (loading libraries)...', 'info');
+
+            try {
+                if (!window.jspdf) {
+                    await _pdfLoadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+                }
+                if (typeof html2canvas === 'undefined') {
+                    await _pdfLoadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+                }
+                const { jsPDF } = window.jspdf;
+
+                // Force Demographics to Table view so the export always
+                // captures the rich table (with cohort columns) instead
+                // of whatever chart type each card happened to be on.
+                if (originalChartPrefs && typeof DEMO_CHART_KEYS !== 'undefined') {
+                    DEMO_CHART_KEYS.forEach(k => { chartTypePrefs[k] = 'table'; });
+                    try {
+                        if (typeof renderCharts === 'function' && typeof currentDashboardData !== 'undefined'
+                            && currentDashboardData && currentDashboardData.demographics
+                            && Object.keys(currentDashboardData.demographics).length > 0) {
+                            renderCharts(
+                                currentDashboardData.demographics,
+                                currentDashboardData.demographicsIndex || {},
+                                currentDashboardData.demographicsProjection || {},
+                                currentDashboardData.demographicsGenPop || {}
+                            );
+                        }
+                    } catch (e) { console.warn('[exportPDF] demo table render failed', e); }
+                }
+
+                // Build cover-page metadata from the live DOM + comparison state.
+                const profileImgEl = document.querySelector('#dashProfileImage img');
+                const profileImgSrc = (profileImgEl && profileImgEl.src) ? profileImgEl.src : '';
+                const profileName = (document.getElementById('dashBrandNameHeader')?.textContent
+                    || currentProfileData.name || 'Profile').replace(/\s+/g, ' ').trim();
+                const dateRange = (document.getElementById('dashDateRangeHeader')?.textContent || '')
+                    .replace(/\s+/g, ' ').trim();
+                const sampleSize = (document.getElementById('dashSampleSize')?.textContent || '')
+                    .replace(/\s+/g, ' ').trim();
+
+                // Cohorts: Total Universe (always), each selected Data Cut, then
+                // Gen Pop / Category Norm if their toggles are on.
+                const baseLbl = (typeof _baseCohortLabel === 'function') ? _baseCohortLabel() : 'Total Universe';
+                const cohortLabels = [baseLbl];
+                const cmpState = (typeof _comparisonRunsState !== 'undefined') ? _comparisonRunsState : null;
+                const selectedKeys = (cmpState && Array.isArray(cmpState.selectedKeys)) ? cmpState.selectedKeys : [];
+                const runsByKey = (cmpState && cmpState.runsByKey) || {};
+                selectedKeys.forEach(k => {
+                    if (k === '__category_norm__') return; // handled below
+                    const run = runsByKey[k];
+                    const lbl = (run && run.label) ? String(run.label).trim() : '';
+                    if (lbl) cohortLabels.push(lbl);
+                });
+                if (!cmpState || cmpState.includeGenPop !== false) cohortLabels.push('Gen Pop');
+                if (cmpState && cmpState.includeCategoryNorm) {
+                    const normCat = cmpState.categoryNormCategory ? (' (' + cmpState.categoryNormCategory + ')') : '';
+                    cohortLabels.push('Category Norm' + normCat);
+                }
+
+                // Index formula: numerator/denominator picker resolves to a
+                // human label via _pickerLabelForKey; default is Total Universe / Gen Pop.
+                const numKey = (cmpState && cmpState.indexNumKey) || 'profile';
+                const denKey = (cmpState && cmpState.indexDenKey) || 'genpop';
+                const numLbl = (typeof _pickerLabelForKey === 'function') ? _pickerLabelForKey(numKey) : baseLbl;
+                const denLbl = (typeof _pickerLabelForKey === 'function') ? _pickerLabelForKey(denKey) : 'Gen Pop';
+                const indexFormula = 'Index = (' + numLbl + ' \u00f7 ' + denLbl + ') \u00d7 100';
+
+                const W = 816, H = 1056, MARGIN = 40;
+                const doc = new jsPDF({ orientation: 'portrait', unit: 'px', format: [W, H] });
+
+                showNotification('📑 Building cover page...', 'info');
+                await _pdfDrawCoverPage(doc, {
+                    profileImgSrc, profileName, dateRange, sampleSize, cohortLabels, indexFormula
+                });
+
+                // Sections to capture. Order matches the dashboard's left-to-right
+                // tab order minus Insights (per request: demographics, behavioral,
+                // interests, location).
+                const sections = [
+                    { tab: 'demographics', title: 'Demographics', sel: '#tab-demographics .chart-card' },
+                    { tab: 'behavioral',   title: 'Behavioral',   sel: '#tab-behavioral .behavioral-card' },
+                    { tab: 'interests',    title: 'Interests',    sel: '#tab-interests .interests-list-section' },
+                    { tab: 'location',     title: 'Location',     sel: '#tab-location .location-section' }
+                ];
+
+                let totalCards = 0;
+                let processed = 0;
+                for (const sec of sections) {
+                    // Switch to the tab so cards are visible + laid out for capture.
+                    if (typeof window.showTab === 'function') {
+                        try { window.showTab(sec.tab); } catch (_) {}
+                    }
+                    // Give the browser a few frames to lay out + run any per-tab
+                    // render side effects (compare-column injection, sort, etc.).
+                    await new Promise(r => setTimeout(r, 450));
+
+                    const targets = Array.from(document.querySelectorAll(sec.sel));
+                    if (!targets.length) continue;
+                    totalCards += targets.length;
+
+                    // Open the section with a header page that carries the title.
+                    doc.addPage([W, H], 'portrait');
+                    _pdfDrawPageBg(doc, W, H);
+                    _pdfDrawSectionHeader(doc, sec.title);
+                    let cursorY = MARGIN + 60;
+                    let pageHasContent = true; // header counts as content
+
+                    for (let i = 0; i < targets.length; i++) {
+                        const el = targets[i];
+                        // Skip hidden / zero-size elements (off-screen, display:none).
+                        const rect = el.getBoundingClientRect();
+                        if (rect.width < 20 || rect.height < 20) continue;
+
+                        processed += 1;
+                        showNotification('📑 Capturing ' + sec.title + ' (' + processed + ')...', 'info');
+
+                        let canvas;
+                        try {
+                            canvas = await html2canvas(el, {
+                                backgroundColor: '#1a1a2e',
+                                scale: 2,
+                                useCORS: true,
+                                allowTaint: true,
+                                logging: false
+                            });
+                        } catch (e) {
+                            console.warn('[exportPDF] capture failed for', sec.tab, i, e);
+                            continue;
+                        }
+                        const imgData = canvas.toDataURL('image/png');
+                        const maxW = W - MARGIN * 2;
+                        const scale = Math.min(1, maxW / canvas.width);
+                        const drawW = canvas.width * scale;
+                        const drawH = canvas.height * scale;
+                        const drawX = (W - drawW) / 2;
+
+                        // If the card won't fit on the remaining page, flow to a fresh
+                        // page. A card taller than a full page gets a page to itself and
+                        // is scaled down to fit page height.
+                        const availH = H - MARGIN - cursorY;
+                        if (pageHasContent && drawH > availH) {
+                            doc.addPage([W, H], 'portrait');
+                            _pdfDrawPageBg(doc, W, H);
+                            cursorY = MARGIN;
+                            pageHasContent = false;
+                        }
+                        let finalDrawH = drawH;
+                        let finalDrawW = drawW;
+                        let finalDrawX = drawX;
+                        const pageAvailH = H - MARGIN - cursorY;
+                        if (finalDrawH > pageAvailH) {
+                            const shrink = pageAvailH / finalDrawH;
+                            finalDrawH = finalDrawH * shrink;
+                            finalDrawW = finalDrawW * shrink;
+                            finalDrawX = (W - finalDrawW) / 2;
+                        }
+                        doc.addImage(imgData, 'PNG', finalDrawX, cursorY, finalDrawW, finalDrawH);
+                        cursorY += finalDrawH + 14;
+                        pageHasContent = true;
+                    }
+                }
+
+                if (!totalCards) {
+                    throw new Error('No content found to export. Please select a profile and try again.');
+                }
+
+                // Restore mutated state BEFORE save so the user's view is back to
+                // normal even if the save dialog hangs.
+                if (originalChartPrefs && typeof chartTypePrefs !== 'undefined') {
+                    Object.keys(originalChartPrefs).forEach(k => { chartTypePrefs[k] = originalChartPrefs[k]; });
+                    if (typeof DEMO_CHART_KEYS !== 'undefined') {
+                        DEMO_CHART_KEYS.forEach(k => {
+                            const selEl = document.getElementById(k + 'ChartType');
+                            if (selEl && typeof chartTypePrefs[k] === 'string') selEl.value = chartTypePrefs[k];
+                        });
+                    }
+                    try {
+                        if (typeof renderCharts === 'function' && typeof currentDashboardData !== 'undefined'
+                            && currentDashboardData && currentDashboardData.demographics
+                            && Object.keys(currentDashboardData.demographics).length > 0) {
+                            renderCharts(
+                                currentDashboardData.demographics,
+                                currentDashboardData.demographicsIndex || {},
+                                currentDashboardData.demographicsProjection || {},
+                                currentDashboardData.demographicsGenPop || {}
+                            );
+                        }
+                    } catch (_) {}
+                }
+                if (originalTabName && typeof window.showTab === 'function') {
+                    try { window.showTab(originalTabName); } catch (_) {}
+                }
+
+                const safeName = (profileName || 'profile').replace(/[^a-z0-9]+/gi, '_').toLowerCase().replace(/_+$/g, '');
+                const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                doc.save(safeName + '_' + stamp + '_full_report.pdf');
+                showNotification('✅ PDF report downloaded (' + totalCards + ' cards)', 'success');
+            } catch (e) {
+                console.error('[exportPDF] failed', e);
+                // Restore state on error too.
+                if (originalChartPrefs && typeof chartTypePrefs !== 'undefined') {
+                    Object.keys(originalChartPrefs).forEach(k => { chartTypePrefs[k] = originalChartPrefs[k]; });
+                }
+                if (originalTabName && typeof window.showTab === 'function') {
+                    try { window.showTab(originalTabName); } catch (_) {}
+                }
+                showNotification('❌ PDF export failed: ' + (e && e.message ? e.message : 'unknown error'), 'error');
+            }
         }
-        
+
         function exportToExcel() {
             // Convert current data to Excel-friendly format
             alert('Excel export coming soon!');
