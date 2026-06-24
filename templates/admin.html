@@ -1825,6 +1825,107 @@
                             </p>
                         </div>
                     </div>
+
+                    <!-- 2026-06-23: Hide from SELECT PRODUCT Dropdown.
+                         Distinct from the per-Analysis-Tool live toggles above:
+                         when a product here is checked, it is FULLY HIDDEN from
+                         the SELECT PRODUCT dropdown for every user including
+                         super admins. Use this to take a half-built or
+                         deprecated product completely off the menu.
+                         See .cursor/rules/live-features-dropdown.mdc -
+                         every new dropdown <option> in templates/index.html
+                         MUST also be added to this grid AND to
+                         DEFAULT_HIDDEN_PRODUCTS in app.py. -->
+                    <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 1rem;">
+                        <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem;">🚪 Hide from SELECT PRODUCT Dropdown</h3>
+                        <p style="color: var(--text-secondary); margin: 0 0 1rem 0; font-size: 0.85rem;">
+                            Check a product to <strong>completely remove it from the SELECT PRODUCT dropdown for everyone, including super admins</strong>. Useful for hiding half-built, deprecated, or sensitive products. Unchecked = visible (per-user access still applies via the User section).
+                        </p>
+                        <div style="margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hiddenProductsSelectAll" onchange="toggleAllHiddenProducts()">
+                                <span>Hide All Products</span>
+                            </label>
+                            <button class="btn btn-small btn-primary" onclick="saveLiveFeatures()">💾 Save Live Features</button>
+                        </div>
+                        <div id="hiddenProductsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.5rem;">
+                            <!-- Keep these in lock-step with the <option> list in
+                                 templates/index.html #viewNavDropdown AND the
+                                 DEFAULT_HIDDEN_PRODUCTS dict in app.py.
+                                 Admin and Purgatory deliberately excluded - admin
+                                 is needed to reach this page; purgatory is
+                                 already hidden via a separate template gate. -->
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="profileIQ" onchange="updateHiddenProduct('profileIQ', this.checked)">
+                                <span>🎯 Profile IQ</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="subscriberIQ" onchange="updateHiddenProduct('subscriberIQ', this.checked)">
+                                <span>👥 Subscriber IQ</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="journeyIQ" onchange="updateHiddenProduct('journeyIQ', this.checked)">
+                                <span>🗺️ Digital Journey IQ</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="rankerIQ" onchange="updateHiddenProduct('rankerIQ', this.checked)">
+                                <span>📊 Ranker</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="blueIQ" onchange="updateHiddenProduct('blueIQ', this.checked)">
+                                <span>🟦 Blue IQ</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="hedgeFundIQ" onchange="updateHiddenProduct('hedgeFundIQ', this.checked)">
+                                <span>📈 Fin IQ</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="llmoIQ" onchange="updateHiddenProduct('llmoIQ', this.checked)">
+                                <span>🤖 LLMO IQ</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="sfConversion" onchange="updateHiddenProduct('sfConversion', this.checked)">
+                                <span>🔄 SF Conversion</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="intentIQ" onchange="updateHiddenProduct('intentIQ', this.checked)">
+                                <span>🎬 Intent IQ</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="roasIQ" onchange="updateHiddenProduct('roasIQ', this.checked)">
+                                <span>💰 ROAS IQ</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="brandPartnershipIQ" onchange="updateHiddenProduct('brandPartnershipIQ', this.checked)">
+                                <span>🤝 Brand Partnership</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="flywheelConversion" onchange="updateHiddenProduct('flywheelConversion', this.checked)">
+                                <span>🔄 Flywheel Conversion</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="customAnalysis" onchange="updateHiddenProduct('customAnalysis', this.checked)">
+                                <span>🔧 Analysis IQ</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="shareOfTimeIQ" onchange="updateHiddenProduct('shareOfTimeIQ', this.checked)">
+                                <span>⏱️ Share of Time</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="workspace" onchange="updateHiddenProduct('workspace', this.checked)">
+                                <span>🗂️ Workspace</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="helmIQ" onchange="updateHiddenProduct('helmIQ', this.checked)">
+                                <span>⚓ Helm IQ</span>
+                            </label>
+                        </div>
+                        <div style="margin-top: 0.75rem; padding: 0.6rem 0.75rem; background: rgba(124, 58, 237, 0.08); border-radius: 6px; border: 1px solid rgba(124, 58, 237, 0.25);">
+                            <p style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">
+                                <strong>Rule:</strong> any new entry added to the SELECT PRODUCT dropdown in <code>templates/index.html</code> must also be registered here (HTML row above + key in <code>DEFAULT_HIDDEN_PRODUCTS</code> in <code>app.py</code>) so it can be globally hidden, and in the User section so per-user access can be toggled.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -6255,6 +6356,19 @@
             viewNumbers: true
         };
         
+        // 2026-06-23: which SELECT PRODUCT dropdown entries are globally
+        // hidden (removed for everyone, including super admins). Keys must
+        // be kept in sync with DEFAULT_HIDDEN_PRODUCTS in app.py and the
+        // <option> values in templates/index.html #viewNavDropdown.
+        let hiddenProductsData = {
+            profileIQ: false, subscriberIQ: false, journeyIQ: false,
+            rankerIQ: false, blueIQ: false, hedgeFundIQ: false,
+            llmoIQ: false, sfConversion: false, intentIQ: false,
+            roasIQ: false, brandPartnershipIQ: false, flywheelConversion: false,
+            customAnalysis: false, shareOfTimeIQ: false, workspace: false,
+            helmIQ: false
+        };
+        
         // Load Live Features from server
         async function loadLiveFeatures() {
             try {
@@ -6268,9 +6382,13 @@
                 if (data.success && data.features) {
                     liveFeaturesData = { ...liveFeaturesData, ...data.features };
                 }
+                if (data.success && data.hidden_products) {
+                    hiddenProductsData = { ...hiddenProductsData, ...data.hidden_products };
+                }
                 
                 // Update checkboxes
                 renderLiveFeaturesCheckboxes();
+                renderHiddenProductsCheckboxes();
             } catch (error) {
                 console.error('Error loading live features:', error);
             }
@@ -6315,6 +6433,39 @@
             });
         }
         
+        // ----- Hidden SELECT PRODUCT entries (global hide for everyone) -----
+        function renderHiddenProductsCheckboxes() {
+            document.querySelectorAll('.hidden-product-checkbox').forEach(checkbox => {
+                const product = checkbox.dataset.product;
+                checkbox.checked = hiddenProductsData[product] === true;
+            });
+            updateHiddenProductsSelectAll();
+        }
+        
+        function updateHiddenProduct(product, isHidden) {
+            hiddenProductsData[product] = isHidden;
+            updateHiddenProductsSelectAll();
+        }
+        
+        function updateHiddenProductsSelectAll() {
+            const allCheckboxes = document.querySelectorAll('.hidden-product-checkbox');
+            const allChecked = allCheckboxes.length > 0 && Array.from(allCheckboxes).every(cb => cb.checked);
+            const selectAllCheckbox = document.getElementById('hiddenProductsSelectAll');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = allChecked;
+            }
+        }
+        
+        function toggleAllHiddenProducts() {
+            const selectAll = document.getElementById('hiddenProductsSelectAll');
+            const isChecked = selectAll.checked;
+            document.querySelectorAll('.hidden-product-checkbox').forEach(checkbox => {
+                checkbox.checked = isChecked;
+                const product = checkbox.dataset.product;
+                hiddenProductsData[product] = isChecked;
+            });
+        }
+        
         // Save Live Features to server
         async function saveLiveFeatures() {
             try {
@@ -6322,7 +6473,10 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
-                    body: JSON.stringify({ features: liveFeaturesData })
+                    body: JSON.stringify({
+                        features: liveFeaturesData,
+                        hidden_products: hiddenProductsData
+                    })
                 });
                 
                 const data = await response.json();

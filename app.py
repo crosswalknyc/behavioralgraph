@@ -16525,6 +16525,38 @@ DEFAULT_LIVE_FEATURES = {
     'insightsSummary': True, 'viewNumbers': True,
 }
 
+# Globally-hidden SELECT PRODUCT dropdown entries (2026-06-23)
+# When a key here is True, that product is COMPLETELY HIDDEN from the
+# SELECT PRODUCT dropdown for every user including super_admin. This is
+# distinct from per-user has_X_iq_access (which only disables the option
+# but still shows it) and distinct from DEFAULT_LIVE_FEATURES (which
+# controls Analysis Tools sub-tab visibility and shows admin-only items
+# with a red dotted outline).
+#
+# RULE (see .cursor/rules/live-features-dropdown.mdc): any time a new
+# <option> is added to #viewNavDropdown in templates/index.html, add its
+# value as a key here with default False (visible). The admin Live
+# Features tab grid in templates/admin.html must also be updated to
+# expose the toggle.
+DEFAULT_HIDDEN_PRODUCTS = {
+    'profileIQ': False,
+    'subscriberIQ': False,
+    'journeyIQ': False,
+    'rankerIQ': False,
+    'blueIQ': False,
+    'hedgeFundIQ': False,
+    'llmoIQ': False,
+    'sfConversion': False,
+    'intentIQ': False,
+    'roasIQ': False,
+    'brandPartnershipIQ': False,
+    'flywheelConversion': False,
+    'customAnalysis': False,
+    'shareOfTimeIQ': False,
+    'workspace': False,
+    'helmIQ': False,
+}
+
 
 @app.route('/api/admin/live-features', methods=['GET'])
 @requires_auth
@@ -16533,15 +16565,25 @@ def get_live_features():
     try:
         live_features = load_json_from_s3(LIVE_FEATURES_FILE)
         saved = live_features.get('features', {})
+        saved_hidden = live_features.get('hidden_products', {})
         # Merge with defaults so new keys (e.g. viewNumbers) are always present; saved values override
         features = {**DEFAULT_LIVE_FEATURES, **saved}
-        resp = jsonify({'success': True, 'features': features})
+        hidden_products = {**DEFAULT_HIDDEN_PRODUCTS, **saved_hidden}
+        resp = jsonify({
+            'success': True,
+            'features': features,
+            'hidden_products': hidden_products,
+        })
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
         resp.headers['Pragma'] = 'no-cache'
         return resp
     except Exception as e:
         print(f"❌ Error loading live features: {e}")
-        resp = jsonify({'success': True, 'features': dict(DEFAULT_LIVE_FEATURES)})
+        resp = jsonify({
+            'success': True,
+            'features': dict(DEFAULT_LIVE_FEATURES),
+            'hidden_products': dict(DEFAULT_HIDDEN_PRODUCTS),
+        })
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
         resp.headers['Pragma'] = 'no-cache'
         return resp
@@ -16557,9 +16599,11 @@ def save_live_features():
             return jsonify({'success': False, 'error': 'No data provided'}), 400
         
         features = data.get('features', {})
+        hidden_products = data.get('hidden_products', {})
         
         live_features = {
             'features': features,
+            'hidden_products': hidden_products,
             'updated_at': datetime.now().isoformat(),
             'updated_by': session.get('username', 'unknown')
         }
@@ -16571,7 +16615,7 @@ def save_live_features():
             print(f"❌ {error_msg}")
             return jsonify({'success': False, 'error': error_msg}), 500
         
-        print(f"✅ Live features saved by {session.get('username')}: {features}")
+        print(f"✅ Live features saved by {session.get('username')}: features={features}, hidden_products={hidden_products}")
         return jsonify({'success': True})
     except Exception as e:
         print(f"❌ Error saving live features: {e}")

@@ -27035,6 +27035,14 @@
             }, 4000);
         }
         
+        // 2026-06-23: SELECT PRODUCT dropdown entries that are globally
+        // hidden (removed for everyone including super admins). Populated
+        // from /api/admin/live-features on page load and re-applied
+        // whenever the dropdown is rebuilt. Keys MUST match <option>
+        // values in #viewNavDropdown above. See
+        // .cursor/rules/live-features-dropdown.mdc for the rule.
+        window.hiddenProducts = window.hiddenProducts || {};
+        
         // Load live features from server and apply visibility
         async function loadAndApplyLiveFeatures() {
             try {
@@ -27045,6 +27053,9 @@
                     if (data.success && data.features) {
                         liveFeatures = { ...liveFeatures, ...data.features };
                     }
+                    if (data.success && data.hidden_products) {
+                        window.hiddenProducts = { ...(window.hiddenProducts || {}), ...data.hidden_products };
+                    }
                 }
             } catch (error) {
                 console.log('Could not load live features, using defaults');
@@ -27052,6 +27063,45 @@
             
             // Apply visibility to Analysis Tools
             applyLiveFeatureVisibility();
+            // Apply global product-hide to the SELECT PRODUCT dropdown
+            applyHiddenProductsToDropdown();
+        }
+        
+        // 2026-06-23: remove globally-hidden products from #viewNavDropdown
+        // for EVERY user (super_admin included). Per-user has_X_iq_access
+        // gates handled separately by applyProductAccessPayload() in the
+        // custom-panel block - that path only disables the option, it
+        // doesn't remove it. This path fully removes the <option> so the
+        // option also disappears from the custom view-nav-panel
+        // (rebuildViewNavCustomPanel walks viewDropdown.options).
+        // If the currently-selected product becomes hidden, fall back to
+        // the first remaining visible option.
+        function applyHiddenProductsToDropdown() {
+            const dropdown = document.getElementById('viewNavDropdown');
+            if (!dropdown) return;
+            const hiddenMap = window.hiddenProducts || {};
+            let selectionWasHidden = false;
+            const currentValue = dropdown.value;
+            // Iterate a snapshot since we mutate the options collection.
+            Array.from(dropdown.options).forEach(opt => {
+                if (hiddenMap[opt.value] === true) {
+                    if (opt.value === currentValue) selectionWasHidden = true;
+                    opt.parentNode && opt.parentNode.removeChild(opt);
+                }
+            });
+            if (selectionWasHidden) {
+                // Pick the first remaining enabled option as the new selection.
+                const fallback = Array.from(dropdown.options).find(o => !o.disabled);
+                if (fallback) {
+                    dropdown.value = fallback.value;
+                    try { dropdown.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
+                }
+            }
+            // Rebuild the custom view-nav panel so the removed options also
+            // disappear from the visible flyout.
+            if (typeof window.rebuildViewNavCustomPanel === 'function') {
+                try { window.rebuildViewNavCustomPanel(); } catch (_) {}
+            }
         }
         
         // Apply live feature visibility to Data tabs (e.g. Rankers), Analysis Tools, and Insights sub-tabs
@@ -27492,6 +27542,9 @@
                     updateTriggerText();
                 }
                 rebuildViewNavCustomPanel();
+                // 2026-06-23: expose for global-hide enforcer so it can
+                // re-render the custom flyout after removing options.
+                window.rebuildViewNavCustomPanel = rebuildViewNavCustomPanel;
                 function syncProductAccessFromServer() {
                     fetch('/api/me/product-access', { credentials: 'same-origin' })
                         .then(function (r) { return r.json(); })
