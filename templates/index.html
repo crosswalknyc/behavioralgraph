@@ -49242,6 +49242,83 @@
                  + '</div>';
         }
 
+        // Map a free-text click-sequence step to a single icon + short
+        // label for the compact .jiq-path-ribbon. Pattern-matched
+        // against the lower-cased step string. Order matters - more
+        // specific patterns come first (e.g. "p+ home shelf" before
+        // generic "home"). Returns null when nothing matches so the
+        // caller can decide whether to hide the step or render a
+        // fallback dot. Pure presentation - never throws.
+        function _jiqPathStepIcon(stepText) {
+            var s = (stepText || '').toLowerCase();
+            // Discovery surfaces
+            if (/tiktok|fyp/.test(s))                                      return { icon: '🎵', label: 'TikTok' };
+            if (/instagram|\big\b|cody johnson.*post/.test(s))             return { icon: '📷', label: 'Instagram' };
+            if (/youtube/.test(s))                                          return { icon: '📺', label: 'YouTube' };
+            if (/reddit|\/r\//.test(s))                                     return { icon: '👥', label: 'Reddit' };
+            if (/podcast|rogan|shawn ryan|theo von|smartless/.test(s))      return { icon: '🎙️', label: 'Podcast' };
+            if (/spotify/.test(s))                                          return { icon: '🎶', label: 'Spotify' };
+            if (/vulture|variety|indiewire|listicle|\bew\b|critic|article|recap/.test(s)) return { icon: '📰', label: 'Critic' };
+            if (/imdb/.test(s))                                             return { icon: '🎬', label: 'IMDb' };
+            // Owned Paramount surfaces
+            if (/walmart/.test(s))                                          return { icon: '🛒', label: 'Walmart+' };
+            if (/cbs sports|nfl/.test(s))                                   return { icon: '🏈', label: 'CBS Sports' };
+            if (/email|push/.test(s))                                       return { icon: '📧', label: 'CRM' };
+            if (/home shelf|"continue with sheridan"|algorithm shelf/.test(s)) return { icon: '🏠', label: 'P+ shelf' };
+            // Conversion / search / play
+            if (/google|search|"where to watch"|"what is landman"|comparison search/.test(s)) return { icon: '🔍', label: 'Search' };
+            if (/trial|signup|subscribe|sign-in|sign in|complete signup/.test(s)) return { icon: '✍️', label: 'Sign up' };
+            if (/press play|press-play|watch/.test(s))                      return { icon: '▶️', label: 'Press play', terminal: true };
+            // Adjacent-content feeders
+            if (/tulsa king|reacher|outer range|justified|bosch/.test(s))   return { icon: '📺', label: 'Adjacent show' };
+            // Paramount platform landing
+            if (/p\+|paramount\+|landman pdp|paramountplus\.com/.test(s))   return { icon: '🅿️', label: 'Paramount+' };
+            return null;
+        }
+
+        // Render a compact icon-only flow for a single path's click-
+        // sequence. Used in .jiq-path-ribbon. Steps are mapped via
+        // _jiqPathStepIcon and joined with subtle "→" separators.
+        // The terminal "Press play" step is auto-appended in green
+        // if no explicit press-play step is present in the source -
+        // this guarantees every ribbon ends in a strong "completion"
+        // anchor. Long ribbons wrap.
+        function _jiqRenderPathRibbon(steps) {
+            steps = steps || [];
+            var tiles = [];
+            var sawPlay = false;
+            for (var i = 0; i < steps.length; i++) {
+                var hit = _jiqPathStepIcon(steps[i]);
+                if (!hit) continue;
+                if (hit.terminal) sawPlay = true;
+                tiles.push(hit);
+            }
+            if (!sawPlay) {
+                tiles.push({ icon: '▶️', label: 'Press play', terminal: true });
+            }
+            // De-dupe consecutive identical icons (e.g. "P+ shelf"
+            // followed by "Paramount+" both map to similar surfaces).
+            var deduped = [];
+            for (var j = 0; j < tiles.length; j++) {
+                if (j > 0 && deduped[deduped.length - 1].icon === tiles[j].icon) continue;
+                deduped.push(tiles[j]);
+            }
+            var parts = [];
+            for (var k = 0; k < deduped.length; k++) {
+                var t = deduped[k];
+                var cls = 'step' + (t.terminal ? ' terminal' : '');
+                parts.push(
+                    '<span class="' + cls + '" title="' + _jiqEsc(t.label) + '">'
+                  +   _jiqEsc(t.icon)
+                  + '</span>'
+                );
+                if (k < deduped.length - 1) {
+                    parts.push('<span class="arrow">→</span>');
+                }
+            }
+            return '<div class="jiq-path-ribbon">' + parts.join('') + '</div>';
+        }
+
         // ──────────────────────────────────────────────────────────────
         // LANDMAN STORY-MODE FUNNEL TABS - 4-tab nav (Before / During /
         // After / Opportunity) + headlines strip rendered above the
@@ -73481,22 +73558,30 @@
                 tableC.style.display = 'block';
 
                 // Pull bucket data straight from the demographics maps.
+                // The demographics dict is keyed snake_case (sexual_orientation,
+                // parental_status) but the chart-key loop variable `k` is
+                // camelCase (sexualOrientation, parentalStatus). Without the
+                // _cmpDictKey conversion these two cards looked up the wrong
+                // key, got back {}, and rendered "No data available." in
+                // Table view (which then carried through to the PDF export).
+                // _cmpDataCatMap is the single source of truth for the
+                // camelCase -> snake_case mapping; share it across the
+                // base profile / index / projection / Gen Pop lookups too.
                 const dataCat = k;
-                const buckets    = demoData[dataCat] || {};
-                const idxLookup  = demoIdxAll[dataCat] || {};
-                const projLookup = demoProjAll[dataCat] || {};
-                const gpLookup   = demoGPAll[dataCat] || {};
+                const _cmpDictKey = _cmpDataCatMap[dataCat] || dataCat;
+                const buckets    = demoData[_cmpDictKey] || {};
+                const idxLookup  = demoIdxAll[_cmpDictKey] || {};
+                const projLookup = demoProjAll[_cmpDictKey] || {};
+                const gpLookup   = demoGPAll[_cmpDictKey] || {};
                 const bucketKeys = Object.keys(buckets);
                 if (bucketKeys.length === 0) {
                     tableC.innerHTML = '<div class="demo-table-empty">No data available.</div>';
                     return;
                 }
 
-                // Per-cohort bucket lookup for this category (chart-key
-                // -> snake_case dict key). Each lookup is keyed by the
-                // normalized bucket name so "65 OR OLDER" still matches
-                // "65 or Older" / "65+" etc.
-                const _cmpDictKey = _cmpDataCatMap[dataCat] || dataCat;
+                // Per-cohort bucket lookup for this category. Each lookup
+                // is keyed by the normalized bucket name so "65 OR OLDER"
+                // still matches "65 or Older" / "65+" etc.
                 const _cmpLookups = _cmpSeriesForDemo.map(entry => {
                     const dict = (entry && entry.parsed && entry.parsed.demographics && entry.parsed.demographics[_cmpDictKey]) || {};
                     const norm = {};
@@ -73523,12 +73608,36 @@
                     sortedKeys = [...bucketKeys].sort((a, b) => (Number(buckets[b]) || 0) - (Number(buckets[a]) || 0));
                 }
 
+                // Normalized-key fallbacks for Gen Pop / Index / Projection:
+                // bucket casing + whitespace can drift between the profile
+                // and Gen Pop dictionaries ("Widowed" vs "WIDOWED",
+                // "Black or African American" vs "BLACK OR AFRICAN
+                // AMERICAN", etc.). Build a lowercase-trimmed index for
+                // each so a row in the profile that doesn't exact-match a
+                // Gen Pop key still pulls its real value instead of N/A.
+                const _normLookup = (dict) => {
+                    const out = {};
+                    if (dict && typeof dict === 'object') {
+                        for (const [bk, bv] of Object.entries(dict)) {
+                            out[_cmpNormKey(bk)] = bv;
+                        }
+                    }
+                    return out;
+                };
+                const gpNorm   = _normLookup(gpLookup);
+                const idxNorm  = _normLookup(idxLookup);
+                const projNorm = _normLookup(projLookup);
+                const _pickNorm = (dict, dictNorm, key) => {
+                    if (dict && Object.prototype.hasOwnProperty.call(dict, key)) return dict[key];
+                    return dictNorm[_cmpNormKey(key)];
+                };
+
                 const rowsHtml = sortedKeys.map((key, i) => {
                     const profPct = Number(buckets[key]) || 0;
-                    const profProj = Number(projLookup[key]) || (profPct > 0 ? Math.round(profPct / 100 * US_POP) : 0);
-                    const gpPct  = Number(gpLookup[key]) || 0;
+                    const profProj = Number(_pickNorm(projLookup, projNorm, key)) || (profPct > 0 ? Math.round(profPct / 100 * US_POP) : 0);
+                    const gpPct  = Number(_pickNorm(gpLookup, gpNorm, key)) || 0;
                     const gpProj = gpPct > 0 ? Math.round(gpPct / 100 * US_POP) : 0;
-                    const idx    = Number(idxLookup[key]) || 0;
+                    const idx    = Number(_pickNorm(idxLookup, idxNorm, key)) || 0;
                     const displayLabel = (dataCat === 'age' && typeof getAgeDisplayLabel === 'function')
                         ? getAgeDisplayLabel(key) : key;
                     const profStr = isProjection ? _fmtNum(profProj) : _fmtPct(profPct);
@@ -89120,7 +89229,7 @@
                         try {
                             canvas = await html2canvas(el, {
                                 backgroundColor: '#1a1a2e',
-                                scale: 2,
+                                scale: 1.5,
                                 useCORS: true,
                                 allowTaint: true,
                                 logging: false
@@ -89129,7 +89238,11 @@
                             console.warn('[exportPDF] capture failed for', sec.tab, i, e);
                             continue;
                         }
-                        const imgData = canvas.toDataURL('image/png');
+                        // JPEG @ 0.82 quality keeps the report ~30-40MB
+                        // for a typical 40-50 card profile instead of
+                        // 300MB+ PNG (scale 2 + lossless). Dark dashboard
+                        // background hides JPEG ringing on text edges.
+                        const imgData = canvas.toDataURL('image/jpeg', 0.82);
                         const maxW = W - MARGIN * 2;
                         const scale = Math.min(1, maxW / canvas.width);
                         const drawW = canvas.width * scale;
@@ -89156,7 +89269,7 @@
                             finalDrawW = finalDrawW * shrink;
                             finalDrawX = (W - finalDrawW) / 2;
                         }
-                        doc.addImage(imgData, 'PNG', finalDrawX, cursorY, finalDrawW, finalDrawH);
+                        doc.addImage(imgData, 'JPEG', finalDrawX, cursorY, finalDrawW, finalDrawH);
                         cursorY += finalDrawH + 14;
                         pageHasContent = true;
                     }
