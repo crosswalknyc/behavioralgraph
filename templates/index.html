@@ -14028,51 +14028,77 @@
                                    so the visual journey reads at a
                                    glance, no scrolling required.
            =========================================================== */
+        /* The spectrum bar itself - tall, prominent, click-driven.
+           Acts as the navigation chrome for the Discovery Paths card,
+           NOT a passive chart. Each segment is a button. */
         .jiq-path-spectrum {
             display: flex;
             width: 100%;
-            height: 38px;
-            border-radius: 6px;
+            height: 72px;
+            border-radius: 10px;
             overflow: hidden;
-            border: 1px solid var(--border-color);
-            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.03);
+            box-shadow: 0 8px 28px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
         }
         .jiq-path-spectrum-seg {
             position: relative;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            font-size: 10.5px;
+            gap: 3px;
+            font-size: 14px;
             font-weight: 800;
-            color: rgba(255,255,255,0.95);
+            color: rgba(255,255,255,0.98);
             cursor: pointer;
-            border-right: 1px solid rgba(0,0,0,0.25);
-            transition: filter 0.12s ease, transform 0.12s ease;
-            text-shadow: 0 1px 1px rgba(0,0,0,0.55);
-            min-width: 8px;
+            border-right: 1px solid rgba(0,0,0,0.30);
+            transition: filter 0.15s ease, transform 0.15s ease, opacity 0.15s ease, flex-basis 0.35s ease;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.6);
+            min-width: 14px;
+            overflow: hidden;
+            background-image: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(0,0,0,0.05) 100%);
         }
         .jiq-path-spectrum-seg:last-child { border-right: 0; }
+        .jiq-path-spectrum-seg .seg-emoji {
+            font-size: 17px;
+            line-height: 1;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.45));
+        }
+        .jiq-path-spectrum-seg .seg-rank {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            opacity: 0.95;
+        }
+        .jiq-path-spectrum-seg .seg-pct {
+            font-size: 9px;
+            opacity: 0.82;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.02em;
+        }
         .jiq-path-spectrum-seg:hover {
             filter: brightness(1.2);
-            transform: scaleY(1.08);
+            transform: translateY(-2px);
             z-index: 2;
         }
-        .jiq-path-spectrum-axis {
-            display: flex;
-            justify-content: space-between;
-            font-size: 9px;
-            color: var(--text-secondary);
-            margin-top: 0.3rem;
-            opacity: 0.7;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
+        .jiq-path-spectrum-seg.is-active {
+            filter: brightness(1.18);
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.85) inset,
+                        0 0 16px 2px rgba(96,165,250,0.55);
+            z-index: 3;
+        }
+        .jiq-path-spectrum-seg.is-dimmed {
+            opacity: 0.18;
+            filter: grayscale(0.4);
         }
         .jiq-path-spectrum-legend {
             display: flex;
             gap: 1.2rem;
             font-size: 10.5px;
             color: var(--text-secondary);
-            margin-top: 0.55rem;
+            margin-top: 0.6rem;
             flex-wrap: wrap;
         }
         .jiq-path-spectrum-legend .swatch {
@@ -14082,6 +14108,204 @@
             border-radius: 2px;
             margin-right: 0.35rem;
             vertical-align: -1px;
+        }
+
+        /* Filter tabs above the spectrum (All / Owned / Earned).
+           Hide-by-greying-out approach, not remove-from-DOM, so the
+           bar transitions smoothly when filters change. */
+        .jiq-spectrum-filter-tabs {
+            display: flex;
+            gap: 0.4rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .jiq-spectrum-filter-tabs .filter-btn {
+            padding: 0.4rem 0.85rem;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.03);
+            color: var(--text-secondary);
+            font-size: 11.5px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+            user-select: none;
+        }
+        .jiq-spectrum-filter-tabs .filter-btn:hover {
+            background: rgba(255,255,255,0.07);
+            color: var(--text-primary);
+        }
+        .jiq-spectrum-filter-tabs .filter-btn.is-active {
+            background: rgba(96,165,250,0.18);
+            color: var(--text-primary);
+            border-color: rgba(96,165,250,0.65);
+            box-shadow: 0 0 0 1px rgba(96,165,250,0.35);
+        }
+        .jiq-spectrum-filter-tabs .filter-count {
+            opacity: 0.65;
+            margin-left: 0.35rem;
+            font-weight: 600;
+        }
+
+        /* Active path detail panel directly below the spectrum -
+           the "what did I just click?" surface. Glassmorphic-ish
+           card with a colored top bar matching the active path.
+           Updates in place on segment click. */
+        .jiq-path-detail-panel {
+            margin-top: 1rem;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.035);
+            overflow: hidden;
+            position: relative;
+        }
+        .jiq-path-detail-panel .detail-accent {
+            height: 4px;
+            width: 100%;
+            transition: background 0.2s ease;
+        }
+        .jiq-path-detail-panel .detail-head {
+            display: grid;
+            grid-template-columns: 56px minmax(0, 1fr) auto;
+            gap: 0.85rem;
+            align-items: center;
+            padding: 0.85rem 1.05rem 0.7rem;
+        }
+        .jiq-path-detail-panel .detail-rank {
+            width: 46px;
+            height: 46px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: #fff;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.5);
+        }
+        .jiq-path-detail-panel .detail-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            line-height: 1.25;
+        }
+        .jiq-path-detail-panel .detail-channel {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            opacity: 0.7;
+            margin-top: 0.25rem;
+        }
+        .jiq-path-detail-panel .detail-stats {
+            display: flex;
+            gap: 1.1rem;
+            font-variant-numeric: tabular-nums;
+        }
+        .jiq-path-detail-panel .stat {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            line-height: 1.15;
+        }
+        .jiq-path-detail-panel .stat .stat-num {
+            font-size: 1.05rem;
+            font-weight: 800;
+        }
+        .jiq-path-detail-panel .stat .stat-label {
+            font-size: 9.5px;
+            opacity: 0.7;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-top: 0.15rem;
+            font-weight: 700;
+        }
+        .jiq-path-detail-panel .detail-body {
+            padding: 0.4rem 1.05rem 0.95rem;
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.3fr);
+            gap: 1rem;
+        }
+        .jiq-path-detail-panel .detail-body h5 {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            opacity: 0.7;
+            margin: 0 0 0.4rem;
+        }
+        .jiq-path-detail-panel .detail-body .ribbon-wrap .jiq-path-ribbon {
+            font-size: 18px;
+            gap: 0.4rem;
+        }
+        .jiq-path-detail-panel .detail-body .ribbon-wrap .jiq-path-ribbon .step {
+            width: 34px;
+            height: 34px;
+            font-size: 18px;
+            border-radius: 7px;
+        }
+        .jiq-path-detail-panel .detail-pattern {
+            font-size: 12.5px;
+            color: var(--text-secondary);
+            line-height: 1.55;
+            font-style: italic;
+            margin-bottom: 0.5rem;
+        }
+        .jiq-path-detail-panel .detail-implication {
+            font-size: 12px;
+            padding: 0.6rem 0.75rem;
+            border-radius: 6px;
+            line-height: 1.55;
+        }
+        .jiq-path-detail-panel .detail-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.55rem 1.05rem;
+            border-top: 1px solid var(--border-color);
+            background: rgba(0,0,0,0.18);
+        }
+        .jiq-path-detail-panel .detail-nav .nav-btn {
+            padding: 0.4rem 0.85rem;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.04);
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+            user-select: none;
+        }
+        .jiq-path-detail-panel .detail-nav .nav-btn:hover:not(:disabled) {
+            background: rgba(96,165,250,0.15);
+            color: var(--text-primary);
+            border-color: rgba(96,165,250,0.45);
+        }
+        .jiq-path-detail-panel .detail-nav .nav-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+        .jiq-path-detail-panel .detail-nav .nav-progress {
+            font-size: 10.5px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        @media (max-width: 760px) {
+            .jiq-path-detail-panel .detail-head {
+                grid-template-columns: 46px minmax(0, 1fr);
+            }
+            .jiq-path-detail-panel .detail-stats {
+                grid-column: 1 / -1;
+                justify-content: flex-start;
+                gap: 1.3rem;
+            }
+            .jiq-path-detail-panel .stat { align-items: flex-start; }
+            .jiq-path-detail-panel .detail-body {
+                grid-template-columns: 1fr;
+            }
         }
 
         /* Owned vs Earned split tiles. */
@@ -25568,10 +25792,28 @@
                         <div id="jiqLandmanPathsMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqLandmanPathsSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem; line-height: 1.55;"></div>
+                    <!-- Focal hero: Path Spectrum bar + filter tabs +
+                         active-path detail panel. The renderer
+                         (renderJourneyIqLandmanPaths) fills this with
+                         #jiqPathSpectrum + #jiqPathDetailPanel. -->
                     <div id="jiqLandmanPathsTopline"
-                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-                                gap: 0.5rem; margin-bottom: 0.85rem;"></div>
-                    <div id="jiqLandmanPathsList" style="display: flex; flex-direction: column; gap: 0.55rem;"></div>
+                         style="display: block; margin-bottom: 1rem;"></div>
+
+                    <!-- All 11 paths as a full clickable table -
+                         demoted to optional drill-down. The focal
+                         interactive surface above already exposes
+                         every path via the spectrum + detail panel,
+                         so this list is for users who want the wall-
+                         of-data view. Collapsed by default. -->
+                    <details class="jiq-disclose">
+                        <summary>
+                            <span>📋 Show full table <span style="opacity:0.7; font-weight:400;">(all 11 paths side by side with steps + implications)</span></span>
+                            <span class="jiq-disclose-caret">▼</span>
+                        </summary>
+                        <div class="jiq-disclose-body">
+                            <div id="jiqLandmanPathsList" style="display: flex; flex-direction: column; gap: 0.55rem;"></div>
+                        </div>
+                    </details>
                     <div id="jiqLandmanPathsRollup"
                          style="margin-top: 0.9rem; padding: 0.75rem 0.9rem; border-radius: 6px;
                                 background: rgba(34,197,94,0.08); border-left: 3px solid rgba(34,197,94,0.55);
@@ -49242,18 +49484,185 @@
                  + '</div>';
         }
 
-        // Click handler for Path Spectrum segments. Finds the path
-        // row with the matching data-jiq-path-rank, opens its
-        // <details>, and scrolls it into view smoothly so the user
-        // ends up looking at the row they just clicked in the bar.
-        function _jiqScrollToPathRow(rank) {
-            var row = document.querySelector('details.jiq-row-disclose[data-jiq-path-rank="' + rank + '"]');
-            if (!row) return;
-            row.open = true;
-            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            row.style.transition = 'box-shadow 0.3s ease';
-            row.style.boxShadow = '0 0 0 2px rgba(96,165,250,0.55)';
-            setTimeout(function() { row.style.boxShadow = ''; }, 1400);
+        // ──────────────────────────────────────────────────────────────
+        // DISCOVERY PATHS - INTERACTIVE STATE
+        // ──────────────────────────────────────────────────────────────
+        // The spectrum bar is now the focal navigation: clicking a
+        // segment selects that path, updates the inline detail panel,
+        // and visually highlights the bar. Filter tabs reshape the
+        // spectrum to show All / Owned / Earned. Prev/Next buttons
+        // step through the currently-visible paths.
+        //
+        // State lives in closure-level vars so the rerender helpers
+        // can pick up where the last interaction left off without
+        // needing the caller to re-pass everything.
+        // ──────────────────────────────────────────────────────────────
+        var _jiqLandmanPaths       = [];     // cached paths array
+        var _jiqLandmanPathColors  = {};     // rank -> hex color
+        var _jiqLandmanActiveRank  = 1;      // current detail-panel selection
+        var _jiqLandmanFilter      = 'all';  // 'all' | 'owned' | 'earned'
+
+        // Decide whether a given path matches the current filter.
+        function _jiqPathPassesFilter(p, filter) {
+            if (filter === 'owned')  return p.channel_class === 'paramount_owned';
+            if (filter === 'earned') return p.channel_class !== 'paramount_owned';
+            return true;
+        }
+
+        // Build segment widths. When filtered, only the matching
+        // paths get width; the rest are rendered as zero-width slivers
+        // so the CSS transition feels like a sweep rather than a
+        // re-mount. Returns array aligned to _jiqLandmanPaths.
+        function _jiqComputePathWidths(filter) {
+            var visibleTotal = _jiqLandmanPaths.reduce(function(s, p) {
+                return s + (_jiqPathPassesFilter(p, filter) ? (p.cohort_size || 0) : 0);
+            }, 0);
+            return _jiqLandmanPaths.map(function(p) {
+                if (!_jiqPathPassesFilter(p, filter)) return 0;
+                return visibleTotal ? ((p.cohort_size || 0) / visibleTotal * 100) : 0;
+            });
+        }
+
+        // Render (and re-render) the spectrum bar based on the
+        // current filter + active selection. Idempotent - safe to
+        // call any time state changes.
+        function _jiqRenderPathSpectrum() {
+            var container = document.getElementById('jiqPathSpectrum');
+            if (!container) return;
+            var widths = _jiqComputePathWidths(_jiqLandmanFilter);
+            container.innerHTML = _jiqLandmanPaths.map(function(p, i) {
+                var w        = widths[i];
+                var matches  = _jiqPathPassesFilter(p, _jiqLandmanFilter);
+                var isActive = (p.rank === _jiqLandmanActiveRank) && matches;
+                var color    = _jiqLandmanPathColors[p.rank] || '#22c55e';
+                var emoji    = (p.label || '').match(/^\s*(\p{Extended_Pictographic}+)/u);
+                emoji = emoji ? emoji[1] : '•';
+                var tip = '#' + p.rank + ' · ' + (p.label || '')
+                        + ' · ' + _jiqFmt(p.cohort_size || 0)
+                        + ' viewers (' + (p.pct_of_viewers || 0).toFixed(1) + '%)';
+                var cls = 'jiq-path-spectrum-seg'
+                        + (isActive ? ' is-active' : '')
+                        + (!matches ? ' is-dimmed' : '');
+                // Width:0 segments get pointer-events:none so dimmed
+                // paths don't accept clicks while filtered out.
+                var disabledStyle = w > 0 ? '' : ' pointer-events:none;';
+                return '<div class="' + cls + '"'
+                     +      ' style="flex: ' + w.toFixed(3) + ' 0 0; background:' + color + ';' + disabledStyle + '"'
+                     +      ' title="' + _jiqEsc(tip) + '"'
+                     +      ' data-jiq-path-rank="' + p.rank + '"'
+                     +      ' onclick="_jiqSelectPath(' + p.rank + ')">'
+                     +   (w >= 4 ? '<span class="seg-emoji">' + _jiqEsc(emoji) + '</span>' : '')
+                     +   (w >= 2 ? '<span class="seg-rank">#' + _jiqEsc(p.rank) + '</span>' : '')
+                     +   (w >= 7 ? '<span class="seg-pct">' + (p.pct_of_viewers || 0).toFixed(1) + '%</span>' : '')
+                     + '</div>';
+            }).join('');
+        }
+
+        // Render the always-visible detail panel for the active path.
+        function _jiqRenderPathDetail() {
+            var panel = document.getElementById('jiqPathDetailPanel');
+            if (!panel) return;
+            var active = null;
+            for (var i = 0; i < _jiqLandmanPaths.length; i++) {
+                if (_jiqLandmanPaths[i].rank === _jiqLandmanActiveRank) {
+                    active = _jiqLandmanPaths[i]; break;
+                }
+            }
+            if (!active) { panel.innerHTML = ''; return; }
+            var color   = _jiqLandmanPathColors[active.rank] || '#22c55e';
+            var isOwned = active.channel_class === 'paramount_owned';
+            var ribbon  = _jiqRenderPathRibbon(active.steps);
+            var daysStr = (active.avg_days_to_press_play === 0)
+                ? '⚡ Same day'
+                : (active.avg_days_to_press_play || 0) + ' days';
+
+            // Compute prev/next within currently-filtered set so the
+            // arrows step through what the user can actually see.
+            var visible = _jiqLandmanPaths.filter(function(p) {
+                return _jiqPathPassesFilter(p, _jiqLandmanFilter);
+            });
+            var visIdx = -1;
+            for (var v = 0; v < visible.length; v++) {
+                if (visible[v].rank === active.rank) { visIdx = v; break; }
+            }
+            var prevRank = (visIdx > 0) ? visible[visIdx - 1].rank : null;
+            var nextRank = (visIdx >= 0 && visIdx < visible.length - 1) ? visible[visIdx + 1].rank : null;
+            var posStr   = (visIdx >= 0)
+                ? ((visIdx + 1) + ' of ' + visible.length)
+                : '';
+
+            panel.innerHTML = ''
+                + '<div class="detail-accent" style="background:' + color + ';"></div>'
+                + '<div class="detail-head">'
+                +   '<div class="detail-rank" style="background:' + color + ';">' + _jiqEsc(active.rank) + '</div>'
+                +   '<div>'
+                +     '<div class="detail-title">' + _jiqEsc(active.label || '') + '</div>'
+                +     '<div class="detail-channel" style="color:' + color + ';">'
+                +       (isOwned ? '🏠 Paramount-owned surface' : '🌐 Earned / off-Paramount')
+                +     '</div>'
+                +   '</div>'
+                +   '<div class="detail-stats">'
+                +     '<div class="stat"><div class="stat-num" style="color:' + color + ';">' + _jiqFmt(active.cohort_size || 0) + '</div><div class="stat-label">Viewers</div></div>'
+                +     '<div class="stat"><div class="stat-num">' + (active.pct_of_viewers || 0).toFixed(1) + '%</div><div class="stat-label">of Landman</div></div>'
+                +     '<div class="stat"><div class="stat-num">' + _jiqEsc(daysStr) + '</div><div class="stat-label">to play</div></div>'
+                +   '</div>'
+                + '</div>'
+                + '<div class="detail-body">'
+                +   '<div class="ribbon-wrap">'
+                +     '<h5>Click-sequence (visual)</h5>'
+                +     ribbon
+                +   '</div>'
+                +   '<div>'
+                +     '<h5>What this cohort actually did</h5>'
+                +     '<div class="detail-pattern">' + _jiqEsc(active.note || '') + '</div>'
+                +     '<div class="detail-implication" style="background:' + color + '18; border-left:3px solid ' + color + ';">'
+                +       '<strong style="color:' + color + ';">→ Strategic implication:</strong> ' + _jiqEsc(active.why_it_matters || '')
+                +     '</div>'
+                +   '</div>'
+                + '</div>'
+                + '<div class="detail-nav">'
+                +   '<button class="nav-btn"'
+                +          (prevRank ? ' onclick="_jiqSelectPath(' + prevRank + ')"' : ' disabled')
+                +          '>← Prev path</button>'
+                +   '<div class="nav-progress">Path ' + _jiqEsc(posStr) + '</div>'
+                +   '<button class="nav-btn"'
+                +          (nextRank ? ' onclick="_jiqSelectPath(' + nextRank + ')"' : ' disabled')
+                +          '>Next path →</button>'
+                + '</div>';
+        }
+
+        // Public click handler for spectrum segments + nav buttons +
+        // anywhere else that wants to set the active path.
+        function _jiqSelectPath(rank) {
+            _jiqLandmanActiveRank = rank;
+            _jiqRenderPathSpectrum();
+            _jiqRenderPathDetail();
+        }
+
+        // Public click handler for filter tabs.
+        function _jiqSetPathFilter(filter) {
+            _jiqLandmanFilter = filter;
+            // Update tab button visual state.
+            var btns = document.querySelectorAll('.jiq-spectrum-filter-tabs .filter-btn');
+            for (var b = 0; b < btns.length; b++) {
+                var match = btns[b].getAttribute('data-filter') === filter;
+                btns[b].classList.toggle('is-active', match);
+            }
+            // If current active path doesn't pass the new filter,
+            // auto-select the largest one in the new filter so the
+            // detail panel never goes blank.
+            var stillVisible = _jiqLandmanPaths.some(function(p) {
+                return p.rank === _jiqLandmanActiveRank
+                    && _jiqPathPassesFilter(p, filter);
+            });
+            if (!stillVisible) {
+                var candidates = _jiqLandmanPaths
+                    .filter(function(p) { return _jiqPathPassesFilter(p, filter); })
+                    .sort(function(a, b) { return (b.cohort_size || 0) - (a.cohort_size || 0); });
+                if (candidates.length) _jiqLandmanActiveRank = candidates[0].rank;
+            }
+            _jiqRenderPathSpectrum();
+            _jiqRenderPathDetail();
         }
 
         // Map a free-text click-sequence step to a single icon + short
@@ -49632,7 +50041,7 @@
             // to draw the spectrum, split tiles, and per-row colors.
             var paths = p.paths || [];
             var ownedSeen = 0, earnSeen = 0;
-            var totalAccounts = 0, ownedTotal = 0, earnTotal = 0;
+            var totalAccounts = 0, ownedTotal = 0, earnTotal = 0, ownedCount = 0, earnCount = 0;
             var pathColor = {};
             paths.forEach(function(r) {
                 totalAccounts += (r.cohort_size || 0);
@@ -49640,68 +50049,69 @@
                     pathColor[r.rank] = OWNED_PAL[ownedSeen % OWNED_PAL.length];
                     ownedSeen++;
                     ownedTotal += (r.cohort_size || 0);
+                    ownedCount++;
                 } else {
                     pathColor[r.rank] = EARN_PAL[earnSeen % EARN_PAL.length];
                     earnSeen++;
                     earnTotal += (r.cohort_size || 0);
+                    earnCount++;
                 }
             });
             var ownedPct = totalAccounts ? (ownedTotal / totalAccounts * 100) : 0;
             var earnPct  = totalAccounts ? (earnTotal  / totalAccounts * 100) : 0;
 
-            // ── HERO VISUAL ──
+            // Cache state for the interactive helpers
+            // (_jiqSelectPath / _jiqSetPathFilter / _jiqRenderPathSpectrum
+            //  / _jiqRenderPathDetail) so they can repaint without
+            // needing a payload pointer.
+            _jiqLandmanPaths      = paths;
+            _jiqLandmanPathColors = pathColor;
+            // Preserve user's existing active selection across
+            // re-renders (cohort / cut switches) when possible.
+            if (!paths.some(function(r) { return r.rank === _jiqLandmanActiveRank; })) {
+                _jiqLandmanActiveRank = paths.length ? paths[0].rank : 1;
+            }
+
+            // ── FOCAL HERO ──
             //
-            //   1. Path Spectrum - one horizontal stacked bar, 11
-            //      colored segments, each sized to its cohort. Owned
-            //      paths painted in the blue family, earned paths in
-            //      the amber family. Clicking a segment scrolls to
-            //      that path's row and opens it.
+            // The spectrum bar IS the navigation. Click any segment
+            // to update the detail panel directly below. Filter tabs
+            // above let the user reshape the bar to just the
+            // Paramount-owned subset or the earned subset (the bar
+            // smoothly transitions; non-matching segments dim and
+            // shrink to slivers).
             //
-            //   2. Owned vs Earned split tiles - the punchline. Big
-            //      percentages making the "Paramount sees the blue,
-            //      can't see the amber" story land instantly.
+            // Underneath the spectrum sits the always-visible detail
+            // panel - one path at a time, with the icon ribbon
+            // shown big, plus pattern + strategic implication. Prev /
+            // Next buttons step through whatever filter is active.
             //
-            //   3. Two-line micro caption underneath the spectrum -
-            //      total viewers + path count + click hint. Replaces
-            //      the previous prose-heavy card lead.
+            // The owned-vs-earned split tiles are integrated into the
+            // filter buttons (each shows its percentage inline).
             if (topEl) {
-                var spectrumSegs = paths.map(function(r) {
-                    var w = totalAccounts ? ((r.cohort_size || 0) / totalAccounts * 100) : 0;
-                    var color = pathColor[r.rank] || ACC;
-                    var tip = '#' + r.rank + ' · ' + (r.label || '')
-                            + ' · ' + _jiqFmt(r.cohort_size || 0)
-                            + ' viewers (' + (r.pct_of_viewers || 0).toFixed(1) + '%)';
-                    return '<div class="jiq-path-spectrum-seg"'
-                         +      ' style="width:' + w.toFixed(2) + '%; background:' + color + ';"'
-                         +      ' title="' + _jiqEsc(tip) + '"'
-                         +      ' data-jiq-path-rank="' + r.rank + '"'
-                         +      ' onclick="_jiqScrollToPathRow(' + r.rank + ')">'
-                         +   (w >= 4 ? _jiqEsc(String(r.rank)) : '')
-                         + '</div>';
-                }).join('');
                 topEl.innerHTML = ''
-                    + '<div style="margin-bottom:0.85rem;">'
-                    +   '<div style="font-size:10.5px; font-weight:700; opacity:0.78; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:0.4rem;">'
-                    +     '🌈 Path Spectrum <span style="opacity:0.7; font-weight:500; text-transform:none; letter-spacing:0;">- every segment is one of the 11 paths, width = cohort size, click to jump</span>'
+                    // Filter tabs row
+                    + '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.55rem;">'
+                    +   '<div style="font-size:10.5px; font-weight:700; opacity:0.78; text-transform:uppercase; letter-spacing:0.07em;">'
+                    +     '🌈 Path Spectrum <span style="opacity:0.7; font-weight:500; text-transform:none; letter-spacing:0;">- click any segment to drill in</span>'
                     +   '</div>'
-                    +   '<div class="jiq-path-spectrum">' + spectrumSegs + '</div>'
-                    +   '<div class="jiq-path-spectrum-legend">'
-                    +     '<span><span class="swatch" style="background:' + OWNED_HEX + ';"></span>Paramount-owned surfaces (5 paths)</span>'
-                    +     '<span><span class="swatch" style="background:' + EARN_HEX  + ';"></span>Earned / off-Paramount (6 paths) - first-party blind spot</span>'
+                    +   '<div class="jiq-spectrum-filter-tabs">'
+                    +     '<button class="filter-btn is-active" data-filter="all" onclick="_jiqSetPathFilter(\'all\')">All <span class="filter-count">' + paths.length + '</span></button>'
+                    +     '<button class="filter-btn" data-filter="owned" onclick="_jiqSetPathFilter(\'owned\')" style="border-left:3px solid ' + OWNED_HEX + ';">🏠 Owned <span class="filter-count">' + ownedCount + ' · ' + ownedPct.toFixed(0) + '%</span></button>'
+                    +     '<button class="filter-btn" data-filter="earned" onclick="_jiqSetPathFilter(\'earned\')" style="border-left:3px solid ' + EARN_HEX + ';">🌐 Earned <span class="filter-count">' + earnCount + ' · ' + earnPct.toFixed(0) + '%</span></button>'
                     +   '</div>'
                     + '</div>'
-                    + '<div class="jiq-split-card">'
-                    +   '<div class="jiq-split-tile" style="border-left-color:' + OWNED_HEX + ';">'
-                    +     '<div class="label" style="color:' + OWNED_HEX + ';">🏠 Paramount-owned surfaces</div>'
-                    +     '<div class="pct"   style="color:' + OWNED_HEX + ';">' + ownedPct.toFixed(0) + '%</div>'
-                    +     '<div class="meta">' + _jiqFmt(ownedTotal) + ' viewer-touches across 5 paths<br>Home shelf · Tulsa King · CRM · CBS NFL · Walmart+</div>'
-                    +   '</div>'
-                    +   '<div class="jiq-split-tile" style="border-left-color:' + EARN_HEX + ';">'
-                    +     '<div class="label" style="color:' + EARN_HEX + ';">🌐 Earned / off-Paramount</div>'
-                    +     '<div class="pct"   style="color:' + EARN_HEX + ';">' + earnPct.toFixed(0) + '%</div>'
-                    +     '<div class="meta">' + _jiqFmt(earnTotal) + ' viewer-touches across 6 paths<br>TikTok · Reddit · Podcasts · Critics · Cross-platform · Country music</div>'
-                    +   '</div>'
-                    + '</div>';
+                    // Spectrum container - filled by _jiqRenderPathSpectrum
+                    + '<div id="jiqPathSpectrum" class="jiq-path-spectrum"></div>'
+                    + '<div class="jiq-path-spectrum-legend">'
+                    +   '<span><span class="swatch" style="background:' + OWNED_HEX + ';"></span>Paramount-owned (' + ownedCount + ' paths · ' + _jiqFmt(ownedTotal) + ' viewers)</span>'
+                    +   '<span><span class="swatch" style="background:' + EARN_HEX  + ';"></span>Earned / off-Paramount (' + earnCount + ' paths · ' + _jiqFmt(earnTotal) + ' viewers) - first-party blind spot</span>'
+                    + '</div>'
+                    // Active-path detail panel - filled by _jiqRenderPathDetail
+                    + '<div id="jiqPathDetailPanel" class="jiq-path-detail-panel"></div>';
+
+                _jiqRenderPathSpectrum();
+                _jiqRenderPathDetail();
             }
             if (listEl) {
                 var maxCohort = paths.reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
