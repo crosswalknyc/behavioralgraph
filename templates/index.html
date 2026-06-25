@@ -52809,8 +52809,11 @@
         // Per-path full view (when a single path tab is the active
         // view, or rendered inside a compare-mode block).
         //   - headline strip (rank, label, cohort, days)
-        //   - synthesized per-path conversion funnel
-        //   - the path's mini journey map (already-existing renderer)
+        //   - per-path journey MAP rendered with the same chevron +
+        //     pill cluster layout as the master "Full journey" view
+        //     (so the path tab feels visually identical to the
+        //     original, just scoped to one path's touchpoint per
+        //     stage and a per-path funnel)
         //   - (full mode only) pattern + strategic implication block
         function _jiqRenderJourneyPathView(path, opts) {
             opts = opts || {};
@@ -52835,8 +52838,7 @@
                 +     '</div>'
                 +   '</div>'
                 + '</div>';
-            var funnelHtml  = _jiqSynthPathFunnel(path);
-            var miniMapHtml = _jiqRenderPathMiniJmap(path.rank);
+            var mapHtml = _jiqRenderJourneyPathMap(path);
             var patternHtml = '';
             if (!opts.compact) {
                 patternHtml = ''
@@ -52862,7 +52864,141 @@
                     +   '</div>'
                     + '</div>';
             }
-            return headline + funnelHtml + miniMapHtml + patternHtml;
+            return headline + mapHtml + patternHtml;
+        }
+
+        // Deterministic per-path funnel data (5 stages). Skipped
+        // stages drop softer (no in-funnel decision point), longer-
+        // dwell paths drop harder. Pure data - both the embedded
+        // chevron badges and the legacy bar funnel pull from this.
+        function _jiqComputePathFunnelData(path) {
+            var pathMap = (typeof _JIQ_LANDMAN_PATH_JMAP === 'object'
+                            && _JIQ_LANDMAN_PATH_JMAP[path.rank]) || {};
+            var stageOrder = ['discovery', 'research', 'access', 'watch', 'loyalty'];
+            var days       = path.avg_days_to_press_play || 1;
+            var baseDrop   = Math.min(0.30, 0.04 + (days / 30) * 0.18);
+            var prev       = 100.0;
+            return stageOrder.map(function(key, i) {
+                var isActive = !!pathMap[key];
+                var pct, drop;
+                if (i === 0) {
+                    pct  = 100.0;
+                    drop = 0;
+                } else {
+                    var rawDrop = isActive ? baseDrop : baseDrop * 0.55;
+                    pct  = parseFloat((prev * (1 - rawDrop)).toFixed(1));
+                    drop = parseFloat((prev - pct).toFixed(1));
+                }
+                prev = pct;
+                return { pct: pct, drop: drop, key: key, isActive: isActive };
+            });
+        }
+
+        // Per-path journey map - renders the same DOM shape as
+        // _jiqRenderLandmanJourneyMap (title + topline + top
+        // cluster grid + chevron band + bottom cluster grid + foot
+        // slot) so the hover-to-spider / click-to-popover behavior
+        // and the bottom-justified pill layout all "just work"
+        // unchanged. Differences vs the master map:
+        //   - one pill per stage (the path's chosen touchpoint),
+        //     or empty for skipped stages
+        //   - skipped-stage chevrons get .is-inactive (desaturated)
+        //     and no spider / click handlers
+        //   - chevron % + drop badges come from the per-path funnel
+        function _jiqRenderJourneyPathMap(path) {
+            if (!path) return '';
+            var stages     = _JIQ_LANDMAN_JMAP_STAGES;
+            var stageOrder = ['discovery', 'research', 'access', 'watch', 'loyalty'];
+            var pathMap    = _JIQ_LANDMAN_PATH_JMAP[path.rank] || {};
+            var funnelData = _jiqComputePathFunnelData(path);
+
+            var chevCells = stages.map(function(s, sIdx) {
+                var f         = funnelData[sIdx];
+                var isActive  = !!pathMap[stageOrder[sIdx]];
+                var pctInner  = f ? '<span class="chev-funnel-pct">' + f.pct.toFixed(1) + '%</span>' : '';
+                var dropInner = (f && sIdx > 0 && f.drop > 0)
+                    ? '<span class="chev-funnel-drop">-' + f.drop.toFixed(1) + 'pp</span>'
+                    : '';
+                var funnelRow = (pctInner || dropInner)
+                    ? '<div class="chev-funnel-row">' + pctInner + dropInner + '</div>'
+                    : '';
+                var hoverHint = (isActive ? 'STAGE ' + s.num : 'SKIPPED')
+                              + ' · ' + s.label
+                              + (f ? ' · ' + f.pct.toFixed(1) + '% retained' : '')
+                              + (sIdx > 0 && f && f.drop > 0 ? ' (-' + f.drop.toFixed(1) + 'pp)' : '')
+                              + (isActive ? ' · click for detour + win-back' : ' (this path skips this stage)');
+                var clickAttrs = '';
+                if (isActive) {
+                    clickAttrs = ' tabindex="0" role="button"'
+                               + ' onclick="_jiqSelectJmapStage(' + sIdx + ', this);"'
+                               + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();_jiqSelectJmapStage(' + sIdx + ',this);}"'
+                               + ' onmouseenter="_jiqHoverJmapStage(' + sIdx + ',this);"'
+                               + ' onmouseleave="_jiqUnhoverJmapStage(' + sIdx + ',this);"'
+                               + ' onfocus="_jiqHoverJmapStage(' + sIdx + ',this);"'
+                               + ' onblur="_jiqUnhoverJmapStage(' + sIdx + ',this);"';
+                }
+                return '<div class="jiq-jmap-chev ' + s.cls
+                     +   (isActive ? ' is-clickable' : ' is-inactive') + '" '
+                     +   'data-sidx="' + sIdx + '"' + clickAttrs + ' '
+                     +   'title="' + _jiqEsc(hoverHint) + '">'
+                     +   '<div class="chev-num">' + (isActive ? 'STAGE ' + s.num : 'SKIPPED') + '</div>'
+                     +   '<div>' + _jiqEsc(s.label) + '</div>'
+                     +   '<div class="chev-sub">' + _jiqEsc(s.sub) + '</div>'
+                     +   funnelRow
+                     + '</div>';
+            }).join('');
+
+            var topCells = stageOrder.map(function(stageKey, sIdx) {
+                var tpKey    = pathMap[stageKey];
+                var pillHtml = '';
+                if (tpKey) {
+                    var sel = _jiqJmapLookup(tpKey);
+                    if (sel) pillHtml = _jiqRenderJmapTp(sel.tp, tpKey);
+                }
+                return '<div class="jiq-jmap-cluster is-top" data-sidx="' + sIdx + '"'
+                     +     ' onmouseenter="_jiqHoverJmapCluster(' + sIdx + ',this);"'
+                     +     ' onmouseleave="_jiqUnhoverJmapCluster(' + sIdx + ',this);">'
+                     + pillHtml
+                     + '</div>';
+            }).join('');
+
+            // Bottom cluster cells are intentionally empty for the
+            // per-path view (one touchpoint per stage lives in the
+            // top cluster), but we emit the row so the chevron band
+            // stays vertically centered and the hover/spider
+            // handlers can still resolve a "bottom" cluster scoped
+            // to this map.
+            var botCells = stageOrder.map(function(stageKey, sIdx) {
+                return '<div class="jiq-jmap-cluster is-bottom" data-sidx="' + sIdx + '"'
+                     +     ' onmouseenter="_jiqHoverJmapCluster(' + sIdx + ',this);"'
+                     +     ' onmouseleave="_jiqUnhoverJmapCluster(' + sIdx + ',this);">'
+                     + '</div>';
+            }).join('');
+
+            var loyalPct    = funnelData.length ? funnelData[funnelData.length - 1].pct : 0;
+            var lostPct     = (100 - loyalPct).toFixed(1);
+            var summaryLine = ''
+                + '<div class="jiq-jmap-title-summary">'
+                +   '📉 <strong>' + loyalPct.toFixed(1) + '%</strong> of entrants on this path reached loyalty · '
+                +   '<strong style="color:#fca5a5;">-' + lostPct + 'pp</strong> lost along the way · '
+                +   '<em>🖱️ hover an active stage to reveal its touchpoint, click for drop-off + win-back</em>'
+                + '</div>';
+
+            return ''
+                + '<div class="jiq-jmap" data-path-rank="' + path.rank + '">'
+                +   '<div class="jiq-jmap-title">'
+                +     '<span>🧭 ' + _jiqEsc(path.label || 'Path journey') + '</span>'
+                +     '<span class="jiq-jmap-legend">'
+                +       '<span class="leg leg-owned"><span class="leg-dot" style="background:#3b82f6;"></span>On Platform / In Flywheel</span>'
+                +       '<span class="leg leg-earned"><span class="leg-dot" style="background:#f59e0b;"></span>Off Platform / Off Flywheel</span>'
+                +     '</span>'
+                +   '</div>'
+                +   summaryLine
+                +   '<div class="jiq-jmap-grid">' + topCells  + '</div>'
+                +   '<div class="jiq-jmap-band">' + chevCells + '</div>'
+                +   '<div class="jiq-jmap-grid">' + botCells  + '</div>'
+                +   '<div class="jiq-jmap-foot-slot">' + _jiqRenderJmapDefaultFoot(null) + '</div>'
+                + '</div>';
         }
 
         // Synthesized per-path funnel. Returns HTML for a compact
