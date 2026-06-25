@@ -72475,10 +72475,23 @@
             } catch (_) { return fallbackYear || ''; }
         }
 
-        function _applyMultiYearPrefixToCutLabels(items) {
+        // currentKey is passed explicitly because _setupComparisonForCurrentProfile
+        // calls this helper BEFORE writing the new currentKey to
+        // _comparisonRunsState (the state mutation happens in the
+        // subjectChanged branches below). Reading _comparisonRunsState.currentKey
+        // here would return the PREVIOUS profile's key (or '' on first
+        // load), which would make getCachedRunDateRangeYear return ''
+        // and silently skip prefixing cohort-only siblings like
+        // "AVID" / "AVID FEMALE" that have no year in their name.
+        // Original bug repro: Reba profile (Date Range 2025-01-01 -
+        // 2025-12-31) showed 2023/2024 TOTAL UNIVERSE prefixed but
+        // AVID / AVID FEMALE / etc. remained unprefixed.
+        function _applyMultiYearPrefixToCutLabels(items, currentKey) {
             if (!Array.isArray(items) || items.length < 2) return;
-            const currentKey = (typeof _comparisonRunsState !== 'undefined'
-                && _comparisonRunsState && _comparisonRunsState.currentKey) || '';
+            if (!currentKey) {
+                currentKey = (typeof _comparisonRunsState !== 'undefined'
+                    && _comparisonRunsState && _comparisonRunsState.currentKey) || '';
+            }
             const fallbackYear = (typeof getCachedRunDateRangeYear === 'function')
                 ? (getCachedRunDateRangeYear(currentKey) || '') : '';
             const yearOf = (it) => {
@@ -72512,8 +72525,12 @@
                 profile: p
             }));
             // Year-prefix every row when the popover spans 2+ years
-            // (see _applyMultiYearPrefixToCutLabels header).
-            _applyMultiYearPrefixToCutLabels(available);
+            // (see _applyMultiYearPrefixToCutLabels header). Pass
+            // currentKey explicitly - _comparisonRunsState.currentKey
+            // hasn't been updated for THIS call yet (the subjectChanged
+            // branches below write it), so reading it inside the helper
+            // would yield a stale value.
+            _applyMultiYearPrefixToCutLabels(available, currentKey);
             const prevSubject = _comparisonRunsState.subject || '';
             const subjectChanged = (subject || '') !== prevSubject;
             if (subjectChanged) {
@@ -72636,7 +72653,12 @@
                         // the prefix; or it may have arrived in an
                         // already-multi-year popover and needs to inherit
                         // the same year-first format as its siblings.
-                        try { _applyMultiYearPrefixToCutLabels(_comparisonRunsState.availableRuns || []); } catch (_) {}
+                        try {
+                            _applyMultiYearPrefixToCutLabels(
+                                _comparisonRunsState.availableRuns || [],
+                                _comparisonRunsState.currentKey || ''
+                            );
+                        } catch (_) {}
                         const pop = document.getElementById('compareDateRangesPopover');
                         if (pop) {
                             // Re-paint EVERY row's label from the (now
@@ -72778,6 +72800,18 @@
 
             const btn = document.getElementById('dashViewDeltasBtn');
             if (!btn) return;
+            // 2026-06-25: re-run multi-year prefix at popover-open time
+            // as a safety net. _setupComparisonForCurrentProfile is the
+            // primary call site, but if availableRuns was repopulated
+            // by some other path (state restore, manual mutation) the
+            // labels may have lost their year prefix. Idempotent - rows
+            // that already start with a year are left alone.
+            try {
+                _applyMultiYearPrefixToCutLabels(
+                    _comparisonRunsState.availableRuns || [],
+                    _comparisonRunsState.currentKey || ''
+                );
+            } catch (_) {}
             const available = _comparisonRunsState.availableRuns || [];
             const pop = document.createElement('div');
             pop.id = 'compareDateRangesPopover';
