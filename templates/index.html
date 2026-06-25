@@ -14671,12 +14671,13 @@
             color: var(--text-secondary, #94a3b8);
         }
         .jiq-jsel-picker {
-            flex: 1 1 240px;
-            min-width: 200px;
+            flex: 0 1 340px;
+            min-width: 220px;
+            max-width: 340px;
             background: rgba(30, 41, 59, 0.85);
             border: 1px solid rgba(148, 163, 184, 0.25);
             color: var(--text-primary, #e2e8f0);
-            padding: 8px 10px;
+            padding: 7px 10px;
             border-radius: 6px;
             font-size: 13px;
             font-family: inherit;
@@ -53908,6 +53909,12 @@
                     return s + (r.cohort_size || 0);
                 }, 0);
                 var pathCount = (p.paths || []).length;
+                // Cache the paths array so _jiqJsel.catalog() (which
+                // reads _jiqLandmanPaths) can list all 11 archetypal
+                // journeys in the dropdown alongside the aggregate.
+                // Without this assignment the picker only ever shows
+                // the placeholder + "Full journey" entry.
+                _jiqLandmanPaths = p.paths || [];
                 topEl.innerHTML =
                     _jiqRenderJourneySelector()
                   + _jiqCardLead(
