@@ -8845,17 +8845,29 @@ def get_netflix_clickhouse_ranker_data():
     """
     Simple "most watched on Netflix" ranking sourced from ClickHouse
     (netflix.netflix_ranker), independent of the legacy Snowflake-backed
-    Netflix ranker above. Returns Rank / Show / Views / Genre / Runtime.
+    Netflix ranker above. Returns Rank / Show / Type / Season / Episode /
+    Episode Name / Views / Genre / Runtime / Avg Watch Time (placeholder).
 
-    This table is a pre-aggregated, ready-to-rank snapshot - no
-    avg-watch-time field exists here (only total RUN_TIME), so this
-    endpoint intentionally does not return one.
+    netflix_ranker has one row per show PER EPISODE for Shows (SEASON/
+    EPISODE/EPISODE_NAME columns; null for Movies). Earlier versions of
+    this endpoint selected only NAME_OF_SHOW, which made every episode of
+    a multi-episode show look like an identical duplicate row. Fixed by
+    selecting SEASON/EPISODE/EPISODE_NAME directly - each episode is kept
+    as its own ranked row (per explicit product decision: a per-episode
+    view, not a per-show rollup), and the frontend labels each row with
+    its season/episode so they're no longer indistinguishable.
+
+    avg_watch_time is intentionally always null right now - the ClickHouse
+    TIME_ON_PAGE data backing it is known to be unreliable (see
+    netflix_clickstream investigation) and is being cleaned up separately.
+    The column exists in the payload so the frontend can render it as an
+    empty placeholder rather than omitting it.
     """
     try:
         conn = _ch_connect()
         cur = conn.cursor()
         cur.execute("""
-            SELECT NAME_OF_SHOW, VIEW_COUNT, GENRE, RUN_TIME
+            SELECT NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME, VIEW_COUNT, GENRE, RUN_TIME
             FROM netflix.netflix_ranker
             WHERE NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != \'\'
             ORDER BY VIEW_COUNT DESC
@@ -8866,9 +8878,14 @@ def get_netflix_clickhouse_ranker_data():
             {
                 'rank': i + 1,
                 'show': r[0],
-                'views': r[1],
-                'genre': r[2],
-                'runtime': r[3],
+                'type': r[1],
+                'season': r[2],
+                'episode': r[3],
+                'episode_name': r[4],
+                'views': r[5],
+                'genre': r[6],
+                'runtime': r[7],
+                'avg_watch_time': None,
             }
             for i, r in enumerate(rows)
         ]
