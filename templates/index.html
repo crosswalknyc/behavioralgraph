@@ -21119,6 +21119,26 @@
                                 <svg id="bpiqConnectorArrows" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;"></svg>
                             </div>
                         </div>
+                        <!-- 📈 Year-Over-Year Breakdown — only rendered when
+                             the run carries `yearly_breakdown` (multi-year
+                             endorsements). Shows a bar chart of US-projected
+                             reach + brand hits per year, plus a metric
+                             selector for users / hits / conversions / EMV,
+                             plus a per-year summary strip of cards. -->
+                        <div id="bpiqYearlySection" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+                                <div style="flex:1; min-width:260px;">
+                                    <h3 style="margin: 0 0 0.35rem;">📈 Year-Over-Year Breakdown</h3>
+                                    <div style="font-size:0.8rem; color: var(--text-secondary);">How brand engagement, hits, conversions and EMV broke down by calendar year across the campaign window. Click a metric below the chart to switch the series.</div>
+                                </div>
+                                <div style="display:flex; gap:0.4rem; flex-wrap:wrap;" id="bpiqYearlyMetricBtns"></div>
+                            </div>
+                            <div style="position:relative; height:300px; margin-bottom:1rem;">
+                                <canvas id="bpiqYearlyChart"></canvas>
+                            </div>
+                            <div id="bpiqYearlyCards" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:0.65rem;"></div>
+                            <div id="bpiqYearlyTopProps" style="margin-top:1rem;"></div>
+                        </div>
                         <!-- 📡 Earned Media Value - subsumes the legacy
                              "Per-Platform Brand Engagement & Lift" card.
                              The per-platform table IS the EMV math - every
@@ -39036,6 +39056,179 @@
                               +  '</tr>';
                       }).join('')
                     + '</tbody></table>';
+            }
+
+            // ----- 📈 Year-Over-Year Breakdown -----
+            _bpiqRenderYearly(data.yearly_breakdown || []);
+        }
+
+        // Year-Over-Year rendering. Activates only when the run carries
+        // a non-empty `yearly_breakdown` array. Builds:
+        //   - a Chart.js bar chart with a metric switcher
+        //     (Consumers / Brand Hits / Conversions / EMV)
+        //   - a year-card strip with the selected metric callouts
+        //   - a compact "top brand touchpoint by year" table
+        // The chart instance is cached on _bpiqState so successive
+        // renders (e.g. after rate edits) replace cleanly without
+        // canvas-double-paint glitches.
+        var _bpiqYearlyMetric = 'users_projected';
+        var _bpiqYearlyChartInst = null;
+        function _bpiqRenderYearly(years) {
+            var section = document.getElementById('bpiqYearlySection');
+            if (!section) return;
+            if (!Array.isArray(years) || years.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+            section.style.display = '';
+
+            var METRICS = [
+                { id: 'users_projected',             label: 'Consumers Engaged',     color: '#10b981', fmt: function(v){ return _bpiqFmtNum(v); } },
+                { id: 'brand_hits_projected',        label: 'Brand Hits',            color: '#6366f1', fmt: function(v){ return _bpiqFmtNum(v); } },
+                { id: 'conversions_users_projected', label: 'Conversions',           color: '#f59e0b', fmt: function(v){ return _bpiqFmtNum(v); } },
+                { id: 'earned_media_value',         label: 'Earned Media Value ($)', color: '#c8e600', fmt: function(v){ return '$' + _bpiqFmtNum(Math.round(v)); } },
+            ];
+            // metric switcher buttons
+            var btnWrap = document.getElementById('bpiqYearlyMetricBtns');
+            btnWrap.innerHTML = METRICS.map(function(m) {
+                var active = (m.id === _bpiqYearlyMetric);
+                return '<button type="button" data-metric="' + m.id + '" style="'
+                    +   'padding:0.4rem 0.75rem; border-radius:8px; cursor:pointer;'
+                    +   'font-size:11px; font-weight:600; letter-spacing:0.04em;'
+                    +   'border:1px solid ' + (active ? m.color : 'var(--border-color)') + ';'
+                    +   'background:' + (active ? m.color : 'transparent') + ';'
+                    +   'color:' + (active ? '#000' : 'var(--text-secondary)') + ';'
+                    + '">' + m.label + '</button>';
+            }).join('');
+            Array.prototype.forEach.call(btnWrap.querySelectorAll('button'), function(b) {
+                b.addEventListener('click', function() {
+                    _bpiqYearlyMetric = b.getAttribute('data-metric');
+                    _bpiqRenderYearly(years);
+                });
+            });
+
+            var metric = METRICS.find(function(m) { return m.id === _bpiqYearlyMetric; }) || METRICS[0];
+            var labels = years.map(function(y) { return String(y.year); });
+            var values = years.map(function(y) { return Number(y[metric.id] || 0); });
+            var hoverLabels = years.map(function(y) { return y.label || String(y.year); });
+
+            var canvas = document.getElementById('bpiqYearlyChart');
+            if (_bpiqYearlyChartInst) { _bpiqYearlyChartInst.destroy(); _bpiqYearlyChartInst = null; }
+            if (canvas && typeof Chart !== 'undefined') {
+                _bpiqYearlyChartInst = new Chart(canvas.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: metric.label,
+                            data: values,
+                            backgroundColor: values.map(function(_, i) {
+                                var m = years[i].momentum || '';
+                                if (m === 'peak')     return metric.color;
+                                if (m === 'cooling')  return metric.color + 'b3';
+                                if (m === 'trough')   return metric.color + '66';
+                                if (m === 'building') return metric.color + 'cc';
+                                return metric.color;
+                            }),
+                            borderRadius: 6,
+                            borderWidth: 0,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(items) { return hoverLabels[items[0].dataIndex]; },
+                                    label: function(item) { return metric.label + ': ' + metric.fmt(item.parsed.y); },
+                                },
+                            },
+                            datalabels: {
+                                anchor: 'end', align: 'top',
+                                color: 'var(--text-primary)',
+                                font: { size: 11, weight: 600 },
+                                formatter: function(v) { return metric.fmt(v); },
+                            },
+                        },
+                        scales: {
+                            x: { ticks: { font: { size: 11, weight: 600 } }, grid: { display: false } },
+                            y: { beginAtZero: true, ticks: { font: { size: 11 }, callback: function(v) { return metric.fmt(v); } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        },
+                    },
+                });
+            }
+
+            // Per-year summary card strip — always shows ALL metrics per
+            // year (not just the selected chart series), so the cards
+            // double as a tabular cut.
+            var cardsEl = document.getElementById('bpiqYearlyCards');
+            cardsEl.innerHTML = years.map(function(y) {
+                var momLabel = ({
+                    peak:     'Peak ▲',
+                    cooling:  'Cooling',
+                    trough:   'Trough',
+                    building: 'Building ▲',
+                })[y.momentum || ''] || '';
+                var momColor = ({
+                    peak: '#10b981', cooling: '#9ca3af',
+                    trough: '#ef4444', building: '#c8e600',
+                })[y.momentum || ''] || 'var(--text-secondary)';
+                return '<div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:10px; padding:0.85rem;">'
+                    +   '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">'
+                    +     '<div style="font-size:0.95rem; font-weight:700;">' + y.year + '</div>'
+                    +     (momLabel ? '<div style="font-size:0.6rem; font-weight:700; color:' + momColor + '; text-transform:uppercase; letter-spacing:0.06em;">' + momLabel + '</div>' : '')
+                    +   '</div>'
+                    +   '<div style="font-size:10px; color:var(--text-secondary); margin-bottom:0.5rem; min-height:24px;">' + (y.label || '') + '</div>'
+                    +   '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem; font-size:11px;">'
+                    +     '<div><div style="color:var(--text-secondary); font-size:9px; text-transform:uppercase; letter-spacing:0.04em;">Consumers</div><div style="font-weight:700;">' + _bpiqFmtNum(y.users_projected || 0) + '</div></div>'
+                    +     '<div><div style="color:var(--text-secondary); font-size:9px; text-transform:uppercase; letter-spacing:0.04em;">Brand Hits</div><div style="font-weight:700;">' + _bpiqFmtNum(y.brand_hits_projected || 0) + '</div></div>'
+                    +     '<div><div style="color:var(--text-secondary); font-size:9px; text-transform:uppercase; letter-spacing:0.04em;">Conversions</div><div style="font-weight:700;">' + _bpiqFmtNum(y.conversions_users_projected || 0) + '</div></div>'
+                    +     '<div><div style="color:var(--text-secondary); font-size:9px; text-transform:uppercase; letter-spacing:0.04em;">EMV</div><div style="font-weight:700; color:#c8e600;">$' + _bpiqFmtNum(Math.round(y.earned_media_value || 0)) + '</div></div>'
+                    +   '</div>'
+                    + '</div>';
+            }).join('');
+
+            // Per-year top brand touchpoints — compact table where each
+            // column is a year and each row is a brand property (top 5
+            // per year, padded with em-dash when shorter).
+            var topPropsEl = document.getElementById('bpiqYearlyTopProps');
+            var maxRows = Math.max.apply(null, years.map(function(y) { return (y.top_brand_properties || []).length; }).concat([0]));
+            if (maxRows === 0) {
+                topPropsEl.innerHTML = '';
+            } else {
+                topPropsEl.innerHTML =
+                      '<div style="font-size:11px; color:var(--text-secondary); margin-bottom:0.4rem;">'
+                    +   '<strong>Top brand touchpoints by year</strong> — ranked by projected reach within each calendar year.'
+                    + '</div>'
+                    + '<div style="overflow-x:auto;">'
+                    + '<table style="width:100%; border-collapse:collapse; font-size:12px;">'
+                    +   '<thead><tr style="border-bottom:2px solid var(--border-color);">'
+                    +     '<th style="padding:6px 8px; text-align:left; font-size:10px; color:var(--text-secondary); text-transform:uppercase;">Rank</th>'
+                    +     years.map(function(y) { return '<th style="padding:6px 8px; text-align:left;">' + y.year + '</th>'; }).join('')
+                    +   '</tr></thead>'
+                    + '<tbody>'
+                    + (function() {
+                        var rows = '';
+                        for (var i = 0; i < maxRows; i++) {
+                            rows += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">';
+                            rows += '<td style="padding:6px 8px; color:var(--text-secondary);">#' + (i + 1) + '</td>';
+                            years.forEach(function(y) {
+                                var p = (y.top_brand_properties || [])[i];
+                                if (!p) {
+                                    rows += '<td style="padding:6px 8px; color:var(--text-secondary); opacity:0.5;">—</td>';
+                                } else {
+                                    rows += '<td style="padding:6px 8px;"><div style="font-weight:600;">' + (p.common_name || '') + '</div>'
+                                          + '<div style="font-size:10px; color:var(--text-secondary);">' + _bpiqFmtNum(p.hits_projected || 0) + ' reach</div>'
+                                          + '</td>';
+                                }
+                            });
+                            rows += '</tr>';
+                        }
+                        return rows;
+                    })()
+                    + '</tbody></table></div>';
             }
         }
 
