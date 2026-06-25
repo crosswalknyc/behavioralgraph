@@ -51359,8 +51359,8 @@
             var stageId  = stage.cls.replace(/^s-/, '');
             var stageHex = _JIQ_JMAP_STAGE_HEX[stageId] || '#f59e0b';
             var clsDot   = (tp.c === 'owned') ? 'is-owned' : 'is-earned';
-            var classLbl = (tp.c === 'owned') ? '🟦 Paramount-owned · first-party visible'
-                                              : '🟧 Off-Paramount · clickstream-only';
+            var classLbl = (tp.c === 'owned') ? '🟦 On Platform · In Flywheel'
+                                              : '🟧 Off Platform · Off Flywheel';
             var hitPct   = (tp.pct  != null) ? tp.pct.toFixed(1)  + '%' : '-';
             var compPct  = (tp.comp != null) ? tp.comp.toFixed(1) + '%' : '-';
             var dropPct  = (tp.comp != null) ? (100 - tp.comp).toFixed(1) + '%' : '-';
@@ -51427,8 +51427,8 @@
                 + '<div class="jiq-jmap-foot">'
                 +   '<strong>How to read this:</strong> Every dot is one touchpoint in a Landman viewer\'s '
                 +   'journey from first hearing of the show to becoming a repeat viewer. <strong>Blue dots</strong> '
-                +   'are Paramount-owned surfaces your first-party data already sees. <strong style="color:#f59e0b;">Amber dots</strong> '
-                +   'are off-Paramount touchpoints that only clickstream can light up - the part of the funnel '
+                +   'are <strong>On Platform / In Flywheel</strong> surfaces your first-party data already sees. <strong style="color:#f59e0b;">Amber dots</strong> '
+                +   'are <strong style="color:#f59e0b;">Off Platform / Off Flywheel</strong> touchpoints that only clickstream can light up - the part of the funnel '
                 +   'your analytics is currently blind to. <strong style="color:#fbbf24;">Click any dot to drill into '
                 +   'completion rate, abandonment, average days to press-play, the most common next move, and a '
                 +   'tactical action item.</strong> Each of the 11 archetypal paths below is shown as its own '
@@ -51464,8 +51464,8 @@
                 +   '<div class="jiq-jmap-title">'
                 +     '<span>🧭 The full Landman journey - first touch to loyalty</span>'
                 +     '<span class="jiq-jmap-legend">'
-                +       '<span class="leg leg-owned"><span class="leg-dot" style="background:#3b82f6;"></span>Paramount-owned / first-party visible</span>'
-                +       '<span class="leg leg-earned"><span class="leg-dot" style="background:#f59e0b;"></span>Off-Paramount / clickstream-only</span>'
+                +       '<span class="leg leg-owned"><span class="leg-dot" style="background:#3b82f6;"></span>On Platform / In Flywheel</span>'
+                +       '<span class="leg leg-earned"><span class="leg-dot" style="background:#f59e0b;"></span>Off Platform / Off Flywheel</span>'
                 +     '</span>'
                 +   '</div>'
                 +   '<div class="jiq-jmap-grid">' + topCells  + '</div>'
@@ -51660,7 +51660,7 @@
                 +   '<div>'
                 +     '<div class="detail-title">' + _jiqEsc(active.label || '') + '</div>'
                 +     '<div class="detail-channel" style="color:' + color + ';">'
-                +       (isOwned ? '🏠 Paramount-owned surface' : '🌐 Earned / off-Paramount')
+                +       (isOwned ? '🏠 On Platform / In Flywheel' : '🌐 Off Platform / Off Flywheel')
                 +     '</div>'
                 +   '</div>'
                 +   '<div class="detail-stats">'
