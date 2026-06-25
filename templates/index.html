@@ -15073,12 +15073,12 @@
         .jiq-jmap-cluster.is-top    {
             justify-content: flex-end;
             align-self: end;
-            padding-bottom: 0;
+            padding-bottom: 0.35rem;
         }
         .jiq-jmap-cluster.is-bottom {
             justify-content: flex-start;
             align-self: start;
-            padding-top: 0;
+            padding-top: 0.35rem;
         }
 
         .jiq-jmap-tp {
@@ -25780,6 +25780,9 @@
                         {'key': 'OTHER',     'slug': 'other',     'icon': '🗂️', 'label': 'Other',      'desc': 'Profiles whose category does not fall into the buckets above.'},
                     ] -%}
                     {%- for m in IQ_RANKER_MASTERS -%}
+                    {%- if m.slug == 'other' -%}
+                    <button class="tab-btn" onclick="showRankerIQPlatform('netflixch')" id="rankerIQPlatformNetflixch"><span class="tab-icon">🎬</span> Netflix</button>
+                    {%- endif -%}
                     <button class="tab-btn{% if loop.first %} active{% endif %}" onclick="showRankerIQPlatform('{{ m.slug }}')" id="rankerIQPlatform{{ m.slug|capitalize }}"><span class="tab-icon">{{ m.icon }}</span> {{ m.label }}</button>
                     {%- endfor -%}
                 </div>
@@ -25920,6 +25923,32 @@
                         <div id="rankerIQReelshortInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
                         <div id="rankerIQReelshortLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading ReelShort data...</div>
                         <div id="rankerIQReelshortError" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
+                    </div>
+
+                    <!-- Simple ClickHouse-backed "most watched on Netflix" panel.
+                         Independent of the legacy Snowflake-backed Netflix sub-view
+                         above (#rankeriq-netflix) - that one stays untouched/hidden. -->
+                    <div id="rankeriq-netflixch" class="ranker-platform-panel">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <h3 style="margin: 0;">🎬 Most Watched on Netflix</h3>
+                            <button class="btn btn-primary" onclick="loadNetflixChRanker(true)" id="rankerIQNetflixChRefreshBtn">🔄 Refresh</button>
+                        </div>
+                        <div id="rankerIQNetflixChTableWrap" style="overflow-x: auto;">
+                            <table class="rankers-table" style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr>
+                                        <th>Rank</th>
+                                        <th>Show</th>
+                                        <th>Views</th>
+                                        <th>Genre</th>
+                                        <th>Runtime</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rankerIQNetflixChBody"></tbody>
+                            </table>
+                        </div>
+                        <div id="rankerIQNetflixChLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading Netflix data...</div>
+                        <div id="rankerIQNetflixChError" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
                     </div>
 
                     {%- for m in IQ_RANKER_MASTERS %}
@@ -110940,17 +110969,60 @@
         });
 
         function showRankerIQPlatform(id) {
+            document.querySelectorAll('#rankerIQPlatformContent .ranker-platform-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.rankers-container .rankers-platform-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+            // Netflix (ClickHouse) - simple table, not part of the Mentions/EVC/TDL
+            // leaderboard system, so it skips initIQRanker entirely.
+            if (id === 'netflixch') {
+                const panel = document.getElementById('rankeriq-netflixch');
+                const btn = document.getElementById('rankerIQPlatformNetflixch');
+                if (panel) panel.classList.add('active');
+                if (btn) btn.classList.add('active');
+                loadNetflixChRanker();
+                return;
+            }
             // Default to Talent for any unknown id (legacy bookmarks /
             // stray onclicks).
             if (!IQ_RANKER_SLUG_TO_MASTER[id]) id = 'talent';
-            document.querySelectorAll('#rankerIQPlatformContent .ranker-platform-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.rankers-container .rankers-platform-tabs .tab-btn').forEach(b => b.classList.remove('active'));
             const panel = document.getElementById('rankeriq-' + id);
             const btnId = 'rankerIQPlatform' + id.charAt(0).toUpperCase() + id.slice(1);
             const btn = document.getElementById(btnId);
             if (panel) panel.classList.add('active');
             if (btn) btn.classList.add('active');
             initIQRanker(IQ_RANKER_SLUG_TO_MASTER[id]);
+        }
+
+        let _netflixChLoaded = false;
+        async function loadNetflixChRanker(force) {
+            if (_netflixChLoaded && !force) return;
+            const body = document.getElementById('rankerIQNetflixChBody');
+            const loading = document.getElementById('rankerIQNetflixChLoading');
+            const errorEl = document.getElementById('rankerIQNetflixChError');
+            if (!body) return;
+            if (loading) loading.style.display = 'block';
+            if (errorEl) errorEl.style.display = 'none';
+            try {
+                const r = await fetch('/api/rankers/netflix-clickhouse/data', { credentials: 'same-origin' });
+                const d = await r.json();
+                if (!d || !d.success) throw new Error((d && d.error) || 'Failed to load Netflix data');
+                body.innerHTML = (d.rows || []).map(row => `
+                    <tr>
+                        <td>${row.rank}</td>
+                        <td>${_iqEsc(row.show || '')}</td>
+                        <td>${(row.views || 0).toLocaleString()}</td>
+                        <td>${_iqEsc(row.genre || '')}</td>
+                        <td>${_iqEsc(row.runtime || '')}</td>
+                    </tr>
+                `).join('');
+                _netflixChLoaded = true;
+            } catch (e) {
+                if (errorEl) {
+                    errorEl.textContent = 'Error loading Netflix data: ' + e.message;
+                    errorEl.style.display = 'block';
+                }
+            } finally {
+                if (loading) loading.style.display = 'none';
+            }
         }
 
         async function fetchIQRankerCategories() {
