@@ -49238,7 +49238,7 @@
                     '#06b6d4',
                     r.activated_only
                 );
-                if (r.blended_industry_mix) {
+                if (r.blended_industry_mix && (r.pricing.ad_supported_monthly_usd || 0) > 0) {
                     var b = r.blended_industry_mix;
                     var adPct = Math.round((b.ad_share || 0) * 100);
                     var prPct = Math.round((b.premium_share || 0) * 100);
@@ -66730,7 +66730,7 @@
                     const yearlyBlend = monthlyBlend * 12;
                     const blendedRateLabel = `$${blendedRate.toFixed(2)}/mo blended`;
                     const blendedModelText = `${formatNumber(activatedForRevenue)} new subscribers @ ${blendedRateLabel}`;
-                    const hasBlendedRow = hasActivatedRow && blendedRate > 0;
+                    const hasBlendedRow = hasActivatedRow && blendedRate > 0 && ad > 0;
                     subscriptionRevenueContainer.innerHTML = `
                         <div class="executive-summary-card">
                             <div class="exec-summary-header">
