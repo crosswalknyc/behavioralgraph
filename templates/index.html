@@ -15129,39 +15129,93 @@
         }
 
         /* ─── Spider-out hover effect ───────────────────────────────
-           When you hover any stage chevron, the matching column's
-           touchpoint pills "spider out": they brighten, scale up,
-           and slide outward (top cluster slides up, bottom slides
-           down) with a staggered nth-child delay so they fan out in
-           sequence rather than all at once. Pills in other columns
-           dim to ~25% so the eye is led to the relevant column. */
+           Master journey map: touchpoint pills are HIDDEN by default
+           and only pop out (with a staggered fan animation) when you
+           hover the matching stage chevron. Only one stage's pills
+           are visible at a time, so the eye is never overloaded.
+           Mini journey maps (one pill per stage) keep always-visible
+           pills - they ARE the path-at-a-glance view. */
         .jiq-jmap-tp {
             transition: opacity 0.22s ease,
-                        transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
                         filter 0.22s ease,
                         background 0.18s ease,
                         border-color 0.18s ease,
                         box-shadow 0.22s ease;
             will-change: transform, opacity;
         }
-        .jiq-jmap[data-hover-stage] .jiq-jmap-tp {
-            opacity: 0.22;
-            transform: scale(0.94);
-            filter: grayscale(0.55);
+
+        /* Master journey map: default state = pills hidden, pulled
+           in toward the chevron so they look like they live there. */
+        .jiq-jmap:not(.jiq-jmap-mini) .jiq-jmap-tp {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.75) translateY(0);
         }
-        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider .jiq-jmap-tp {
+        .jiq-jmap:not(.jiq-jmap-mini) .jiq-jmap-cluster.is-top .jiq-jmap-tp {
+            transform-origin: 50% 100%;
+            transform: scale(0.7) translateY(14px);
+        }
+        .jiq-jmap:not(.jiq-jmap-mini) .jiq-jmap-cluster.is-bottom .jiq-jmap-tp {
+            transform-origin: 50% 0%;
+            transform: scale(0.7) translateY(-14px);
+        }
+
+        /* Mini journey maps: keep the legacy "dim non-matching, light
+           up matching" behavior so the always-visible pill row still
+           reacts to chevron hover but never disappears. */
+        .jiq-jmap.jiq-jmap-mini[data-hover-stage] .jiq-jmap-tp {
+            opacity: 0.30;
+            filter: grayscale(0.5);
+        }
+        .jiq-jmap.jiq-jmap-mini[data-hover-stage] .jiq-jmap-cluster.is-spider .jiq-jmap-tp {
             opacity: 1;
             filter: none;
+            transform: scale(1.05);
+            background: rgba(255,255,255,0.085);
+            border-color: rgba(255,255,255,0.22);
+            box-shadow: 0 6px 22px rgba(0,0,0,0.45);
+        }
+
+        /* Master map hover: matching column's pills pop out into
+           view with full opacity + clickable; everything else stays
+           invisible (the hidden default already applies). */
+        .jiq-jmap:not(.jiq-jmap-mini)[data-hover-stage] .jiq-jmap-cluster.is-spider .jiq-jmap-tp {
+            opacity: 1;
+            pointer-events: auto;
             background: rgba(255,255,255,0.085);
             border-color: rgba(255,255,255,0.22);
             box-shadow: 0 6px 22px rgba(0,0,0,0.45),
                         0 0 0 1px rgba(255,255,255,0.08);
         }
-        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-top    .jiq-jmap-tp {
+        .jiq-jmap:not(.jiq-jmap-mini)[data-hover-stage] .jiq-jmap-cluster.is-spider.is-top    .jiq-jmap-tp {
             transform: scale(1.05) translateY(-4px);
         }
-        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-bottom .jiq-jmap-tp {
+        .jiq-jmap:not(.jiq-jmap-mini)[data-hover-stage] .jiq-jmap-cluster.is-spider.is-bottom .jiq-jmap-tp {
             transform: scale(1.05) translateY(4px);
+        }
+        /* A subtle hint label sits in the empty cluster area when no
+           stage is hovered so the page never looks broken / blank. */
+        .jiq-jmap:not(.jiq-jmap-mini) .jiq-jmap-cluster.is-top::after,
+        .jiq-jmap:not(.jiq-jmap-mini) .jiq-jmap-cluster.is-bottom::after {
+            content: '· · ·';
+            display: block;
+            text-align: center;
+            font-size: 11px;
+            letter-spacing: 0.4em;
+            color: rgba(255,255,255,0.18);
+            transition: opacity 0.22s ease;
+            pointer-events: none;
+        }
+        .jiq-jmap:not(.jiq-jmap-mini) .jiq-jmap-cluster.is-top::after {
+            margin-top: auto;
+            padding-bottom: 0.3rem;
+        }
+        .jiq-jmap:not(.jiq-jmap-mini) .jiq-jmap-cluster.is-bottom::after {
+            padding-top: 0.3rem;
+        }
+        .jiq-jmap:not(.jiq-jmap-mini)[data-hover-stage] .jiq-jmap-cluster.is-spider::after {
+            opacity: 0;
         }
         /* Stagger - matching pills fan out in sequence rather than
            all snapping at once. Reverse the stagger for the top
@@ -51954,6 +52008,17 @@
         function _jiqClosePopover() {
             var pop = document.getElementById('jiqJmapPopover');
             _jiqClearAllJmapActive();
+            // Also unwind any pinned spider state so popped-out pills
+            // collapse back when the user is done with the popover.
+            document.querySelectorAll('.jiq-jmap[data-hover-stage]').forEach(function(r) {
+                r.removeAttribute('data-hover-stage');
+            });
+            document.querySelectorAll('.jiq-jmap-cluster.is-spider').forEach(function(c) {
+                c.classList.remove('is-spider');
+            });
+            document.querySelectorAll('.jiq-jmap-chev.is-spider-active').forEach(function(c) {
+                c.classList.remove('is-spider-active');
+            });
             if (!pop) return;
             pop.classList.remove('is-open');
         }
@@ -52051,15 +52116,23 @@
         // Scoped via chev.closest('.jiq-jmap') so the master map and
         // every per-path mini-map each manage their own hover state
         // independently.
-        function _jiqHoverJmapStage(stageIdx, chev) {
-            if (!chev) return;
-            var root = chev.closest('.jiq-jmap');
+        //
+        // A short fade-out delay (220ms) means the user can move the
+        // mouse from the chevron up to a popped-out pill without the
+        // pill disappearing mid-travel. Hovering the cluster itself
+        // also keeps the spider active, and clicking a pill (which
+        // adds .has-selection on the root) pins the spider open
+        // until the popover closes.
+        var _jiqSpiderLeaveTimers = new WeakMap();
+
+        function _jiqSetSpiderForStage(root, stageIdx) {
             if (!root) return;
             root.setAttribute('data-hover-stage', String(stageIdx));
             root.querySelectorAll('.jiq-jmap-chev.is-spider-active').forEach(function(c) {
                 c.classList.remove('is-spider-active');
             });
-            chev.classList.add('is-spider-active');
+            var matchingChev = root.querySelector('.jiq-jmap-chev[data-sidx="' + stageIdx + '"]');
+            if (matchingChev) matchingChev.classList.add('is-spider-active');
             root.querySelectorAll('.jiq-jmap-cluster.is-spider').forEach(function(c) {
                 c.classList.remove('is-spider');
             });
@@ -52067,15 +52140,63 @@
                 c.classList.add('is-spider');
             });
         }
-        function _jiqUnhoverJmapStage(stageIdx, chev) {
-            if (!chev) return;
-            var root = chev.closest('.jiq-jmap');
+        function _jiqClearSpider(root) {
             if (!root) return;
+            // Don't unwind if the user has actively clicked into a
+            // pill - the popover is still open and the spider should
+            // remain pinned. Cleared via _jiqClosePopover later.
+            if (root.classList.contains('has-selection')) return;
             root.removeAttribute('data-hover-stage');
-            chev.classList.remove('is-spider-active');
+            root.querySelectorAll('.jiq-jmap-chev.is-spider-active').forEach(function(c) {
+                c.classList.remove('is-spider-active');
+            });
             root.querySelectorAll('.jiq-jmap-cluster.is-spider').forEach(function(c) {
                 c.classList.remove('is-spider');
             });
+        }
+        function _jiqCancelSpiderLeave(root) {
+            if (!root) return;
+            var t = _jiqSpiderLeaveTimers.get(root);
+            if (t) { clearTimeout(t); _jiqSpiderLeaveTimers.delete(root); }
+        }
+        function _jiqScheduleSpiderLeave(root) {
+            if (!root) return;
+            _jiqCancelSpiderLeave(root);
+            var t = setTimeout(function() {
+                _jiqSpiderLeaveTimers.delete(root);
+                _jiqClearSpider(root);
+            }, 220);
+            _jiqSpiderLeaveTimers.set(root, t);
+        }
+
+        function _jiqHoverJmapStage(stageIdx, chev) {
+            if (!chev) return;
+            var root = chev.closest('.jiq-jmap');
+            if (!root) return;
+            _jiqCancelSpiderLeave(root);
+            _jiqSetSpiderForStage(root, stageIdx);
+        }
+        function _jiqUnhoverJmapStage(stageIdx, chev) {
+            if (!chev) return;
+            var root = chev.closest('.jiq-jmap');
+            _jiqScheduleSpiderLeave(root);
+        }
+        // Cluster hover handlers: when the mouse enters the matching
+        // top/bot cluster, keep the spider active (user is moving
+        // toward a pill); when it leaves, schedule the same delayed
+        // fade as the chevron leave.
+        function _jiqHoverJmapCluster(sIdx, cluster) {
+            if (!cluster) return;
+            var root = cluster.closest('.jiq-jmap');
+            if (!root) return;
+            _jiqCancelSpiderLeave(root);
+            if (root.getAttribute('data-hover-stage') !== String(sIdx)) {
+                _jiqSetSpiderForStage(root, sIdx);
+            }
+        }
+        function _jiqUnhoverJmapCluster(sIdx, cluster) {
+            if (!cluster) return;
+            _jiqScheduleSpiderLeave(cluster.closest('.jiq-jmap'));
         }
 
         function _jiqRenderJmapTp(tp, key) {
@@ -52403,14 +52524,18 @@
             }
 
             var topCells = stages.map(function(s, sIdx) {
-                return '<div class="jiq-jmap-cluster is-top" data-sidx="' + sIdx + '">'
+                return '<div class="jiq-jmap-cluster is-top" data-sidx="' + sIdx + '"'
+                     +     ' onmouseenter="_jiqHoverJmapCluster(' + sIdx + ',this);"'
+                     +     ' onmouseleave="_jiqUnhoverJmapCluster(' + sIdx + ',this);">'
                      + s.top.map(function(tp, tIdx) {
                          return _jiqRenderJmapTp(tp, sIdx + '-top-' + tIdx);
                        }).join('')
                      + '</div>';
             }).join('');
             var botCells = stages.map(function(s, sIdx) {
-                return '<div class="jiq-jmap-cluster is-bottom" data-sidx="' + sIdx + '">'
+                return '<div class="jiq-jmap-cluster is-bottom" data-sidx="' + sIdx + '"'
+                     +     ' onmouseenter="_jiqHoverJmapCluster(' + sIdx + ',this);"'
+                     +     ' onmouseleave="_jiqUnhoverJmapCluster(' + sIdx + ',this);">'
                      + s.bot.map(function(tp, tIdx) {
                          return _jiqRenderJmapTp(tp, sIdx + '-bot-' + tIdx);
                        }).join('')
@@ -52430,7 +52555,7 @@
                 + '<div class="jiq-jmap-title-summary">'
                 +   '📉 <strong>' + loyalPct.toFixed(1) + '%</strong> reach loyalty · '
                 +   '<strong style="color:#fca5a5;">-' + lostPct + 'pp</strong> lost along the way · '
-                +   '<em>click any stage for drop-off + off-platform detour + win-back</em>'
+                +   '<em>🖱️ hover a stage to reveal its touchpoints, click for drop-off + win-back</em>'
                 + '</div>';
 
             return ''
