@@ -35823,12 +35823,28 @@ def _run_iq_rankers_load_day_job(job_id, snapshot_date):
 
 
 @app.route('/api/iq-rankers/load-day', methods=['POST'])
-@requires_admin
 def iq_rankers_load_day():
     """Admin-only: queue a background job that loads IQ Rankers daily
     metrics for ONE date across every Profile IQ profile. Returns a
     job_id the UI can poll via /api/job-status/<id>. Defaults to
-    yesterday; pass ?date=YYYY-MM-DD or JSON {date: ...} to override."""
+    yesterday; pass ?date=YYYY-MM-DD or JSON {date: ...} to override.
+
+    Auth: dashboard admin session OR ?secret=$CRON_SECRET (so the
+    nightly cron and CLI scripts can hit this endpoint without holding
+    a session cookie).
+    """
+    secret = (request.args.get('secret') or '').strip()
+    cron_ok = bool(secret) and secret == os.environ.get('CRON_SECRET', '')
+    if not cron_ok:
+        if 'username' not in (session or {}):
+            if request.path.startswith('/api/'):
+                return jsonify({'success': False,
+                                'error': 'Session expired. Please log in again.'}), 401
+            return redirect(url_for('login_page'))
+        user = get_current_user()
+        role = (user or {}).get('role', '') if user else ''
+        if not user or (role != 'admin' and role != 'super_admin'):
+            return jsonify({'success': False, 'error': 'Admin access required'}), 403
     if _iq_rankers is None:
         return jsonify({'success': False, 'error': 'iq_rankers unavailable'}), 500
     snapshot_date = (request.args.get('date') or '').strip()

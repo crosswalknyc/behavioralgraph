@@ -561,6 +561,148 @@ def _term_array_literal(terms: list[str]) -> str:
     return ", ".join(f"'{t}'" for t in cleaned)
 
 
+def _build_ranker_brand_terms(
+    project_name: str,
+    csv_terms: list[str],
+) -> list[str]:
+    """Return profile-specific brand terms for the IQ Ranker daily-metrics SQL.
+
+    Many Profile IQ CSVs were generated from broad panel-study terms (just a
+    first name like "Anthony") because the original study was scoped that
+    way. The CSV's BRAND INPUT row therefore says "Anthony" for every Anthony
+    profile (Mackie, Lapaglia, Carrigan, ...), which makes their daily
+    `multiSearchAny(lower(URL), [...])` filter resolve to the SAME superset
+    of clickstream rows -- so they all end up with identical raw_mentions /
+    unique_uids / projected Engagements. Sentiment IQ trackers keep using the
+    csv_terms (so existing tracker data stays intact); the Ranker overrides
+    them here so each profile's leaderboard signal is actually about that
+    person.
+
+    Strategy:
+    - Multi-word project_name -> emit name variants (space, dash, joined)
+      and drop any csv_term that is a strict substring of the project_name
+      (those are the broad stragglers like bare "Anthony").
+    - Single-word project_name -> fall through to csv_terms as-is. Such
+      profiles are filtered upstream by `_build_covered_single_names()` if
+      they have a multi-word sibling (e.g. bare "Anthony" is dropped from
+      the ranker because "Anthony Mackie" / "Anthony Lapaglia" already cover
+      the same surface area at higher specificity).
+
+    All returned terms are lowercased to match the SQL's lower(URL/COMMON_NAME)
+    side of the comparison.
+    """
+    pn_lc = (project_name or "").strip().lower()
+    pn_clean = re.sub(r"[^a-z0-9 ]+", " ", pn_lc).strip()
+    pn_clean = re.sub(r" +", " ", pn_clean)
+    words = [w for w in pn_clean.split(" ") if w]
+
+    out: list[str] = []
+    if len(words) >= 2:
+        space_form = " ".join(words)
+        dash_form  = "-".join(words)
+        cat_form   = "".join(words)
+        out.append(space_form)
+        if dash_form != space_form:
+            out.append(dash_form)
+        # Only emit the dashless concat for longer names so we don't
+        # false-positive on something like "the rock" -> "therock"
+        # matching unrelated URLs containing "therock" as a brand suffix.
+        if len(cat_form) >= 8:
+            out.append(cat_form)
+    elif len(words) == 1:
+        out.append(words[0])
+
+    pn_full = " ".join(words)
+    for t in (csv_terms or []):
+        tl = (t or "").strip().lower()
+        if not tl:
+            continue
+        # Drop terms that are a strict substring of the project name (the
+        # bare-first-name stragglers). Keep terms that ARE the full project
+        # name or that bring NEW signal (aliases / company brands).
+        if pn_full and tl in pn_full and tl != pn_full:
+            continue
+        if tl not in out:
+            out.append(tl)
+
+    seen: set[str] = set()
+    final: list[str] = []
+    for t in out:
+        if t and t not in seen:
+            seen.add(t)
+            final.append(t)
+    return final
+
+
+def _build_covered_single_names_from_db(*, ch_connect: Callable) -> set[str]:
+    """Same logic as `_build_covered_single_names()` but operates on the
+    distinct (profile_subject, project_name) pairs already in
+    `reference.profile_iq_daily_metrics`. Used by the leaderboard SQL
+    builder so historical rows for covered single-name profiles
+    (computed before the term-resolver fix) disappear from the UI
+    immediately, without waiting for a backfill.
+    """
+    try:
+        conn = ch_connect()
+    except Exception:
+        return set()
+    rows: list[tuple[str, str]] = []
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT DISTINCT profile_subject, anyHeavy(project_name) "
+            "FROM reference.profile_iq_daily_metrics "
+            "GROUP BY profile_subject"
+        )
+        rows = list(cur.fetchall() or [])
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    jobs = [{"profile_subject": (s or ""), "project_name": (p or "")}
+            for s, p in rows]
+    return _build_covered_single_names(jobs)
+
+
+def _build_covered_single_names(jobs: list[dict]) -> set[str]:
+    """Identify single-name Profile IQ profiles that are 'covered' by a
+    multi-word sibling and should therefore be skipped from the IQ Ranker.
+
+    A profile P with project_name = "Joseph" is covered when at least one
+    other profile has project_name starting with "Joseph " (e.g. "Joseph
+    Gordon Levitt"). The bare-"Joseph" profile's URL/COMMON_NAME match
+    superset is identical to its sibling's broad-fallback match, which
+    creates the duplicate-Engagement-count problem the user surfaces in
+    the leaderboard.
+
+    Returns a set of profile_subject values (the canonical grouping key
+    used everywhere else in this module). The Sentiment IQ tracker, the
+    Profile IQ CSV, and any historical metrics rows for these subjects
+    are left intact -- only the Ranker's view filter / nightly cron is
+    affected.
+    """
+    multiword_first_words: set[str] = set()
+    singles_by_word: dict[str, list[str]] = {}
+    for j in jobs or []:
+        pn = (j.get("project_name") or j.get("display_name")
+              or j.get("name") or "").strip()
+        subj = j.get("profile_subject") or ""
+        if not pn or not subj:
+            continue
+        clean = re.sub(r"[^a-zA-Z0-9 ]+", " ", pn).strip()
+        words = [w for w in clean.split() if w]
+        if len(words) >= 2:
+            multiword_first_words.add(words[0].lower())
+        elif len(words) == 1:
+            singles_by_word.setdefault(words[0].lower(), []).append(subj)
+    covered: set[str] = set()
+    for fw, subs in singles_by_word.items():
+        if fw in multiword_first_words:
+            covered.update(subs)
+    return covered
+
+
 def compute_layer1_metrics_for_day(
     *,
     ch_connect: Callable,
@@ -961,7 +1103,15 @@ def _iter_profile_jobs(s3_cache_jobs: list[dict]) -> Iterable[dict]:
     stops computing daily metrics for them; the leaderboard SQL also
     filters them out so any pre-existing rows already in
     `reference.profile_iq_daily_metrics` are hidden from the dashboard.
+
+    Bare-first-name profiles whose name is also the first word of some
+    multi-word sibling (e.g. "Anthony" when "Anthony Mackie" /
+    "Anthony Lapaglia" exist) are also skipped. Their URL/COMMON_NAME
+    match superset is a duplicate of their siblings' fallback match
+    surface and creates the identical-Engagement-count ties seen on
+    the leaderboard.
     """
+    covered_singles = _build_covered_single_names(s3_cache_jobs or [])
     seen: set[str] = set()
     for j in s3_cache_jobs or []:
         s3_key = j.get("s3_key") or j.get("job_id") or ""
@@ -983,6 +1133,8 @@ def _iter_profile_jobs(s3_cache_jobs: list[dict]) -> Iterable[dict]:
         if not subject:
             continue
         if subject in seen:
+            continue
+        if subject in covered_singles:
             continue
         seen.add(subject)
         yield j
@@ -1055,13 +1207,18 @@ def run_daily_for_all_profiles(
         subcategory  = normalize_subcategory(j.get("category"))
         master       = get_master_category(subcategory)
         try:
-            terms = read_brand_input_from_csv(s3_client, s3_bucket, s3_key)
-            if not terms:
-                # Fall back to project name as a single brand term so we still
-                # get *something* for profiles that don't have a BRAND INPUT
-                # row (older runs). Better than skipping silently.
-                if project_name:
-                    terms = [project_name]
+            csv_terms = read_brand_input_from_csv(s3_client, s3_bucket, s3_key)
+            # Sentiment IQ tracker keeps using the CSV's BRAND INPUT terms
+            # (preserves existing tracker behavior for the rest of the app).
+            tracker_terms = list(csv_terms or [])
+            if not tracker_terms and project_name:
+                tracker_terms = [project_name]
+            # Ranker daily metrics use a profile-specific term set so siblings
+            # like "Anthony Mackie" / "Anthony Lapaglia" don't collapse to the
+            # same broad superset. See _build_ranker_brand_terms() docstring.
+            terms = _build_ranker_brand_terms(project_name, csv_terms)
+            if not terms and project_name:
+                terms = [project_name.lower()]
             if not terms:
                 with state_lock:
                     summary["skipped"] += 1
@@ -1075,7 +1232,7 @@ def run_daily_for_all_profiles(
                 profile_subject=subject,
                 project_name=project_name,
                 s3_key=s3_key,
-                brand_terms=terms,
+                brand_terms=tracker_terms,
             )
             tid = (cfg or {}).get("tracker_id") or _tracker_id_for_profile(subject)
 
@@ -1275,6 +1432,32 @@ def aggregate_leaderboard(
         "AND positionCaseInsensitive(project_name, 'avid fan')   = 0"
     )
 
+    # Single-word project names that are also a brand_term in some other
+    # profile's daily-metrics row are duplicates: their pre-fix rows in
+    # `profile_iq_daily_metrics` were computed against the broad "Anthony"
+    # / "Joseph" / "Diane" superset and are byte-identical to their
+    # multi-word siblings' rows (raw_mentions AND raw_unique_uids both
+    # equal). Hide them from the leaderboard at the SQL layer so they
+    # disappear immediately for date ranges that include pre-fix days
+    # (the nightly cron stops writing them via _iter_profile_jobs ->
+    # _build_covered_single_names).
+    #
+    # We compute the covered-singles set lazily here rather than passing
+    # it through every call site. ClickHouse handles the empty-list case
+    # cleanly via tuple([]) -> tuple() = empty.
+    where_no_covered = ""
+    try:
+        covered = _build_covered_single_names_from_db(ch_connect=ch_connect)
+        if covered:
+            covered_lit = ", ".join(
+                "'" + s.replace("'", "''") + "'" for s in sorted(covered)
+            )
+            where_no_covered = f"AND profile_subject NOT IN ({covered_lit})"
+    except Exception:
+        # Degrade gracefully: if the lookup fails we just don't filter,
+        # users see one extra row of legacy duplicates. Better than a 500.
+        where_no_covered = ""
+
     # CW IQ Score across a multi-day window: mention-weighted average so
     # days with very low / partial clickstream data (e.g. yesterday before
     # the nightly pipeline finishes loading) contribute proportionally
@@ -1403,6 +1586,7 @@ def aggregate_leaderboard(
           {where_sub}
           {where_search}
           {where_no_avid}
+          {where_no_covered}
         GROUP BY profile_subject
     ),
     prev AS (
@@ -1431,6 +1615,7 @@ def aggregate_leaderboard(
           AND {where_master}
           {where_sub}
           {where_no_avid}
+          {where_no_covered}
         GROUP BY profile_subject
     )
     SELECT c.profile_subject                          AS profile_subject,
@@ -2019,4 +2204,7 @@ __all__ = [
     "backfill_recent_days",
     "aggregate_leaderboard",
     "fetch_profile_timeseries",
+    "_build_ranker_brand_terms",
+    "_build_covered_single_names",
+    "_build_covered_single_names_from_db",
 ]

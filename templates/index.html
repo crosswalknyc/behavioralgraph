@@ -3760,6 +3760,29 @@
             margin-top: 0.1rem;
             margin-bottom: 0.35rem;
             min-width: 0;
+            /* 2026-06-25: animate collapse when the user scrolls inside
+               .dashboard-tab-content (see .scroll-collapsed below).
+               max-height is intentionally generous (120px) so single-line
+               banner content is never clipped in the open state. */
+            overflow: hidden;
+            transition: max-height 0.22s ease, opacity 0.22s ease,
+                        margin-top 0.22s ease, margin-bottom 0.22s ease;
+            max-height: 120px;
+        }
+        /* 2026-06-25: hide the inline tab header banner ("📈 Behavioral
+           — Consumer behaviors, ...") as soon as the user scrolls inside
+           the dashboard tab content area. The behavioral controls bar
+           (.behavioral-controls) is already position:sticky;top:0 inside
+           that scroll container, so once the banner collapses the
+           controls row visually rises into the freed space and stays
+           pinned - giving the user more vertical room for actual data.
+           Restored automatically when the user scrolls back to top. */
+        .action-buttons-row.scroll-collapsed {
+            max-height: 0 !important;
+            opacity: 0;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            pointer-events: none;
         }
         /* Header (e.g. Deep Insights) always starts after sidebar + gap; aligned with tab content below */
         .action-buttons-row .inline-tab-header {
@@ -15404,18 +15427,22 @@
             font-size: 12px;
             line-height: 1.45;
         }
-        .jiq-jmap-detail .det-row.is-next   { border-left-color: #60a5fa; }
-        .jiq-jmap-detail .det-row.is-drop   { border-left-color: #ef4444; }
-        .jiq-jmap-detail .det-row.is-detour { border-left-color: #f59e0b; }
+        .jiq-jmap-detail .det-row.is-next    { border-left-color: #60a5fa; }
+        .jiq-jmap-detail .det-row.is-drop    { border-left-color: #ef4444; }
+        .jiq-jmap-detail .det-row.is-detour  { border-left-color: #f59e0b; }
+        .jiq-jmap-detail .det-row.is-obs     { border-left-color: #a855f7; background: rgba(168,85,247,0.06); }
+        .jiq-jmap-detail .det-row.is-winback { border-left-color: #22c55e; background: rgba(34,197,94,0.07); }
         .jiq-jmap-detail .det-row .row-icon {
             font-size: 14px;
             font-weight: 800;
             text-align: center;
             line-height: 1.4;
         }
-        .jiq-jmap-detail .det-row.is-next   .row-icon { color: #60a5fa; }
-        .jiq-jmap-detail .det-row.is-drop   .row-icon { color: #ef4444; }
-        .jiq-jmap-detail .det-row.is-detour .row-icon { color: #f59e0b; }
+        .jiq-jmap-detail .det-row.is-next    .row-icon { color: #60a5fa; }
+        .jiq-jmap-detail .det-row.is-drop    .row-icon { color: #ef4444; }
+        .jiq-jmap-detail .det-row.is-detour  .row-icon { color: #f59e0b; }
+        .jiq-jmap-detail .det-row.is-obs     .row-icon { color: #a855f7; }
+        .jiq-jmap-detail .det-row.is-winback .row-icon { color: #22c55e; }
         .jiq-jmap-detail .det-row .row-label {
             font-size: 9.5px;
             font-weight: 800;
@@ -51452,24 +51479,28 @@
                       next: 'Press play directly within 24h (51.0% of those who started here).',
                       drop: 'Added to watchlist but never played (21.8%).',
                       detour: 'Distracted to a different P+ tile in the same session (often Tulsa King or NCIS Origins); never returned to the Landman watchlist entry.',
+                      obs: 'P+ session log shows the Landman shelf impression event, followed by a watchlist-add or play event on the Landman tile within the same session.',
                       so_what: 'Your highest-volume AND highest-converting surface. Defend Landman shelf placement aggressively at every refresh cycle.' },
                     { l: 'TikTok viral clip (FYP)', pct: 9.4, c: 'earned',
                       comp: 68.3, days: 4.2,
                       next: 'Google search "Landman Paramount Plus" (44.7%).',
                       drop: 'Forgot / never returned to the show (24.4%).',
-                      detour: 'Endless FYP scroll pulled them to a different viral show clip - most commonly a Reacher S3 fight scene or a The Bear restaurant tirade - and they started streaming THAT on Prime / Hulu instead.',
+                      detour: 'Endless FYP scroll pulled them to different content.',
+                      obs: 'TikTok app session, then an outbound Google search ("landman paramount plus") within 72h - the FYP-to-search chain is visible across the cross-app clickstream.',
                       so_what: 'Highest-converting off-Paramount discovery surface. Don\'t take down creator clips; optimize the landing page for FYP traffic and run a TikTok retargeting pixel within 72h.' },
                     { l: 'Landman trailer on YouTube', pct: 7.8, c: 'earned',
                       comp: 58.6, days: 4.4,
                       next: 'Google searched "Landman Paramount Plus" (44.1%).',
                       drop: 'Watched trailer, clicked a YouTube recommendation (27.4%).',
-                      detour: 'YouTube autoplayed to a Reacher / Outer Range / Yellowstone trailer next; many ended up subscribing to a competing-show channel before ever searching Landman.',
+                      detour: 'YouTube autoplayed to a Reacher / Outer Range / Yellowstone trailer next; many ended up watching a different show instead.',
+                      obs: 'YouTube watch event on the Landman trailer URL, followed by the next-navigation URL - if it is a competing-show trailer, the autoplay-chain detour is observable.',
                       so_what: 'YouTube trailer page is high-volume but leaky to the YouTube recommender. Buy "where to watch" overlay on the trailer card; deep-link the description to the P+ Landman page; defend the post-roll with a P+ pre-roll bid.' },
                     { l: 'Shawn Ryan Show clip on YouTube', pct: 4.6, c: 'earned',
                       comp: 71.4, days: 3.9,
                       next: 'Google searched cast or episode (49.7%).',
                       drop: 'Watched the clip, never opened P+ that week (19.6%).',
                       detour: 'Got pulled deeper into the Shawn Ryan / Joe Rogan YouTube algorithm (veteran or oil-industry interviews) and forgot to come back to search Landman.',
+                      obs: 'YouTube clip page visit, followed by a Google search query or a paramountplus.com URL within 7 days.',
                       so_what: 'Talent-podcast YouTube clips drive disproportionate intent. Book every Sheridan principal on Shawn Ryan / Rogan / Theo Von ahead of launches and pin a "Where to watch Landman" comment with a deep link.' }
                 ],
                 bot: [
@@ -51478,30 +51509,35 @@
                       next: 'P+ home shelf featured-row click (67.3%).',
                       drop: 'Tulsa King binge consumed all attention (12.4%).',
                       detour: 'Stayed in the Tulsa King binge loop the whole session and never broke out to Landman; the cross-promo registered as exposure but lost the click.',
+                      obs: 'P+ in-app cross-promo impression event, followed by either a Landman tile click in the same session or a session-ending exit while still inside Tulsa King.',
                       so_what: 'Sheridan-IP cross-promo is your most efficient acquisition path. Always pair new Sheridan launches with featured rows AND mid-credit interstitials on existing Sheridan IP.' },
                     { l: 'P+ CRM email', pct: 10.3, c: 'owned',
                       comp: 69.8, days: 2.3,
                       next: 'paramountplus.com landing page (78.1%).',
                       drop: 'Email opened but no click (24.6%).',
                       detour: 'Scrolled past the Landman tile to a different P+ recommendation in the same email (commonly Pelican Brief or NCIS Origins) and clicked through to that instead.',
+                      obs: 'Email open + click event on the Landman link, followed by a paramountplus.com landing-page visit and a signup or press-play event.',
                       so_what: 'CRM converts well against existing subs but is weak for new-trial conversion. Use it for retention, not acquisition; A/B test Landman as the hero slot on subs who watched any Sheridan IP.' },
                     { l: 'Vulture year-end list', pct: 3.9, c: 'earned',
                       comp: 81.4, days: 6.1,
                       next: 'IMDb cast page (43.6%).',
                       drop: 'Read but never acted on the rec (15.2%).',
                       detour: 'Sidebar links on Vulture pulled them to a Bear S3 review or a Succession retrospective; ended up streaming THAT instead.',
+                      obs: 'vulture.com URL visit on the listicle page, followed by an IMDb cast page or a paramountplus.com visit within 7 days.',
                       so_what: 'Critic listicles drive late-funnel intent; viewers arrive pre-validated. Push for awards-season editorial placement every cycle; place a P+ ad-unit on the listicle page itself.' },
                     { l: 'Walmart+ bundle', pct: 3.4, c: 'owned',
                       comp: 91.2, days: 0.5,
                       next: 'Press play directly (84.3%).',
                       drop: 'Entitlement claimed but never used (7.6%).',
                       detour: 'Opened P+ but pressed play on Showtime add-on content first (commonly Yellowjackets or a sports doc); Landman entitlement sat dormant.',
+                      obs: 'Walmart.com entitlement-claim event, followed by a P+ entitlement activation and first session within the same 24h window.',
                       so_what: 'The highest press-play conversion of any surface. Bundled subs treat P+ as free, eliminating subscription friction. Expand bundle partnerships and surface Landman in the first session UI.' },
                     { l: 'Country-creator IG', pct: 3.1, c: 'earned',
                       comp: 71.5, days: 5.4,
                       next: 'Spotify Landman soundtrack (38.7%).',
                       drop: 'Engaged with creator content but never opened P+ (22.7%).',
                       detour: 'Got pulled into a country-music Reels rabbit hole (Cody Johnson / Zach Bryan tour clips, Stagecoach content) and never opened the P+ app that week.',
+                      obs: 'Instagram session on the creator profile or Reels, followed by either a Spotify Landman soundtrack visit or a paramountplus.com visit.',
                       so_what: 'Country-music creator alignment unlocks a cohort hard to reach via traditional media. Build a co-marketing program with the Cody Johnson / Zach Bryan / Jelly Roll tier and seed Landman clips in their feeds.' }
                 ]
             },
@@ -51514,18 +51550,21 @@
                       next: 'paramountplus.com landing page (61.8%).',
                       drop: 'Landed on a competitor or pirate result (18.3%).',
                       detour: 'SERP placed Landman next to torrent / unofficial-stream domains and competitor "where to watch" articles; users clicked the higher-ranked unofficial result first and never reached paramountplus.com.',
+                      obs: 'Search query string ("landman paramount plus", "where to watch landman", etc.) plus the next URL clicked from the SERP - both visible in the clickstream record.',
                       so_what: 'Search-intent is your highest-quality clickstream signal. SEO + paid-search defense are non-negotiable around launch windows; bid on "watch Landman free" and similar piracy-adjacent queries.' },
                     { l: 'IMDb cast page', pct: 22.7, c: 'earned',
                       comp: 71.3, days: 2.8,
                       next: 'YouTube clip search (34.2%).',
                       drop: 'Distracted to other shows on IMDb (23.4%).',
                       detour: 'Clicked into another Billy Bob Thornton filmography entry (Goliath, Sling Blade) and ended up streaming THAT on Prime / Apple TV instead of opening P+.',
+                      obs: 'imdb.com URL visit on the Landman cast page, followed by next-navigation - YouTube clip search, paramountplus.com, or a different cast member filmography page.',
                       so_what: 'IMDb is a high-intent waypoint. Sponsored "Where to watch: Paramount+" placement on Sheridan-cast filmography pages would intercept the leak to other titles.' },
                     { l: 'YouTube clip search', pct: 18.4, c: 'earned',
                       comp: 64.7, days: 3.4,
                       next: 'Subscribed to a Sheridan-clip channel (29.1%).',
                       drop: 'Watched clip, never opened P+ (28.1%).',
                       detour: 'Used the 8-minute recap clip as a SUBSTITUTE for watching; YouTube algo then fed them a Reacher or Justified compilation and they switched lanes entirely.',
+                      obs: 'YouTube search query + watch event on a Landman-clip URL, followed by either a P+ session OR a same-session click on a recommended competitor clip.',
                       so_what: 'YouTube is leakage risk - clips satisfy curiosity without driving signup. Gate extended clips behind P+ login or use a P+ pre-roll bid to recapture intent before the algo pulls them away.' }
                 ],
                 bot: [
@@ -51534,18 +51573,21 @@
                       next: 'Vulture review or critic article (32.4%).',
                       drop: 'Recommendation overload, picked another show (16.8%).',
                       detour: 'Thread comments steered toward Reacher S3 or Justified: City Primeval; user watched THAT on Amazon / Hulu next, leaving Landman on the mental backlog indefinitely.',
+                      obs: 'Reddit URL visit on the Landman discussion thread, followed by either a critic article URL (Vulture / Decider / EW) or a paramountplus.com visit.',
                       so_what: 'Reddit is the highest-quality social-proof channel. AMAs with Sheridan talent on /r/television produce measurable signup wakes; defend the comment-thread narrative actively.' },
                     { l: 'RT / Letterboxd score', pct: 12.6, c: 'earned',
                       comp: 72.4, days: 2.4,
                       next: 'paramountplus.com landing page (47.8%).',
                       drop: 'Score below personal threshold, killed intent (21.3%).',
                       detour: 'Used the lower score as a tie-breaker and picked a higher-rated competitor instead (commonly Slow Horses S4 on Apple TV+ or a current FX prestige drama).',
+                      obs: 'rottentomatoes.com / letterboxd.com URL visit on the Landman page, followed by next-navigation - either P+ or a higher-scored competitor page.',
                       so_what: 'Critic-score gating is real; defend the Tomatometer aggressively in season previews and screener distribution. Bid on the Landman RT page to inject a "watch on P+" CTA above the fold.' },
                     { l: 'Decider / EW recap', pct: 7.1, c: 'earned',
                       comp: 81.2, days: 3.1,
                       next: 'P+ episode page direct click (56.3%).',
                       drop: 'Recap was a substitute for watching (14.4%).',
                       detour: 'Read the full recap, felt caught up, never opened P+ to watch the actual episode; treated the article as the experience.',
+                      obs: 'Recap article URL visit, followed by either a paramountplus.com episode-page click or a same-session exit with no P+ navigation.',
                       so_what: 'Episode-recap traffic is mid-funnel re-engagement. Subsidize editorial recaps; they recover lapsed viewers cheaply, but gate the spoiler-heavy back-half behind a "watch on P+" interstitial.' }
                 ]
             },
@@ -51558,18 +51600,21 @@
                       next: 'Press play within minutes (94.7%).',
                       drop: 'Browsed but never pressed play this session (3.2%).',
                       detour: 'Signed in, scanned the home shelf, opened a different show (often whatever was top of continue-watching) - Landman tile lost the click to a returning-show convenience play.',
+                      obs: 'paramountplus.com sign-in event linked to an existing account, followed by the first page-view inside the authenticated session.',
                       so_what: 'Existing-sub press-play conversion is your baseline. The lift opportunity is on the 28.6% who AREN\'T existing subs; surface Landman in the first-shelf slot for any sub who watched any Sheridan IP.' },
                     { l: 'New trial signup', pct: 18.3, c: 'owned',
                       comp: 91.2, days: 0.3,
                       next: 'Press play within the same session (89.6%).',
                       drop: 'Hit paywall friction, abandoned the signup (8.8%).',
                       detour: 'Bounced from the signup page to Reddit / Retailmenot / promo-code aggregator sites to hunt for a discount; many never returned through the signup flow.',
+                      obs: 'Signup flow events (email entered -> payment -> confirmation) timestamped against any drop-off URL between steps.',
                       so_what: 'Trial-flow drop-off is the most actionable funnel optimization on P+. Every 1pp recovery here is ~62K incremental viewers; consider an exit-intent promo offer for sessions referred from Landman discovery surfaces.' },
                     { l: 'Walmart+ entitlement', pct: 3.4, c: 'owned',
                       comp: 94.7, days: 0.4,
                       next: 'Press play within minutes (91.4%).',
                       drop: 'Entitlement claim friction (5.3%).',
                       detour: 'Hit a snag in the Walmart -> P+ handshake (auth loop, OTP delay) and opened Hulu / Netflix in the same session out of frustration.',
+                      obs: 'Walmart -> P+ OAuth handshake events with timestamps on each redirect leg, surfacing any auth-loop failures.',
                       so_what: 'The lowest-friction acquisition path on the platform. Expand bundle partnerships - this is the model. Instrument the handshake to alert on auth-loop spikes.' }
                 ],
                 bot: [
@@ -51578,18 +51623,21 @@
                       next: 'Sign-in or trial signup flow (84.6%).',
                       drop: 'Pricing page bounce (8.7%).',
                       detour: 'Opened a new tab to compare with the Hulu+Live Disney bundle or to read a "best streaming bundle 2026" article; never resumed the P+ signup.',
+                      obs: 'paramountplus.com landing page visit plus every subsequent in-session URL (pricing, FAQ, signup) and exit destination.',
                       so_what: 'Pricing-page bounce is the #1 trial drop-off lever. A/B test pricing presentation hard; consider an exit-intent bundle / promo modal on the pricing page.' },
                     { l: 'App store install', pct: 11.7, c: 'owned',
                       comp: 89.3, days: 0.6,
                       next: 'Opened the app and signed in (87.1%).',
                       drop: 'Installed but never opened the app (8.3%).',
                       detour: 'App got buried under other home-screen tiles; user opened TikTok / Netflix / Hulu in the same session and the P+ install icon sat untouched for days.',
+                      obs: 'App Store / Play Store install event, then the first app-open event timestamp (or its absence).',
                       so_what: 'App-install-without-open is silent churn. Trigger a welcome push within 60 minutes of install; deep-link straight into the Landman page rather than the home shelf.' },
                     { l: 'Cross-show watchlist add', pct: 8.2, c: 'owned',
                       comp: 88.7, days: 1.3,
                       next: 'Pressed play when next episode dropped (76.4%).',
                       drop: 'Watchlist add never triggered playback (9.1%).',
                       detour: 'Watchlisted Landman but pressed play on a different cross-promoted P+ show first (commonly Special Ops: Lioness or Tulsa King) and never circled back to the Landman watchlist entry.',
+                      obs: 'P+ watchlist-add event for Landman, plus the next P+ play event in the same account within 30 days.',
                       so_what: 'Watchlist is a high-intent signal. Fire "next-episode" push notifications for everyone with the show watchlisted; surface Landman over other watchlisted shows for Sheridan-IP viewers.' }
                 ]
             },
@@ -51602,38 +51650,44 @@
                       next: 'Binged S2E2 in the same session (61.7%).',
                       drop: 'Stopped mid-episode (1.6%).',
                       detour: 'Mid-episode interruption (kids / dinner / phone call); user resumed the episode weeks later, or never - no auto-resume push fired to recover the session.',
+                      obs: 'P+ play event tagged with a smart-TV device-class, plus session duration, completion percentage, and any pause / resume timestamps.',
                       so_what: 'Big-screen viewers are your highest-engagement cohort. Optimize for couch / shared-living-room conditions (audio mix, captions, group-watch) and fire an auto-resume push at 24h.' },
                     { l: '2nd-screen TikTok / IG', pct: 24.6, c: 'earned',
                       comp: 97.2, days: 0.0,
                       next: 'Searched cast names mid-episode (47.3%).',
                       drop: 'Got pulled into a TikTok rabbit hole, missed plot (2.8%).',
                       detour: 'Fell deep into a TikTok FYP chain during a slow scene; lost the plot thread; opened a different (less demanding) show in the next session instead of finishing Landman.',
+                      obs: 'Concurrent device session - P+ play event on TV + TikTok / IG session on a paired mobile device in the same household timeframe.',
                       so_what: 'Second-screen is engagement, not distraction. Monetize via cast-driven branded content on TikTok during episode windows; partner with Landman-talking creators on the live episode-window.' },
                     { l: 'Mid-episode cast search', pct: 14.2, c: 'earned',
                       comp: 99.1, days: 0.0,
                       next: 'Followed Billy Bob Thornton on IG (28.4%).',
                       drop: 'Looked up cast but never returned to the episode (0.9%).',
                       detour: 'Cast Google search led to a Billy Bob Thornton filmography page; user opened a tab to watch Goliath or Sling Blade later that night and never finished the Landman episode.',
+                      obs: 'Google search query timestamped to within an active Landman play session - the "mid-episode" inference comes from search occurring while a play event is open.',
                       so_what: 'Cast curiosity is a high-engagement signal. Build deeper cast / character moments into the app (in-context cast page during play) so the lookup happens on-platform rather than leaking to Google + IMDb.' }
                 ],
                 bot: [
                     { l: 'Mobile / tablet viewing', pct: 21.4, c: 'owned',
                       comp: 91.6, days: 0.1,
                       next: 'Completed the episode (78.2%).',
-                      drop: 'Battery / connection drop (5.4%).',
+                      drop: 'Stopped watching (potential battery / connection drop) (5.4%).',
                       detour: 'Connection drop on cellular killed playback; user opened TikTok / Instagram instead of resuming, ate the rest of the planned viewing window.',
+                      obs: 'P+ play event tagged with a mobile device-class, plus the session-end signal (clean exit vs cellular drop vs app backgrounding).',
                       so_what: 'Mobile completion lags TV by ~7pp. Optimize the mobile player for low-bandwidth and chapter-resume; offer a one-tap download for cellular sessions.' },
                     { l: 'Binge-continue S2E2', pct: 38.5, c: 'owned',
                       comp: 99.7, days: 0.0,
                       next: 'Continued to S2E3 same night (74.6%).',
                       drop: 'Stopped after E2 (0.3%).',
                       detour: 'Switched to a lighter show before E2 (commonly a sitcom rewatch or reality TV); prestige-drama fatigue at end of binge night.',
+                      obs: 'Sequential P+ play events on E1 and E2 within the same session (no inter-episode app close), tagged as a binge by the player.',
                       so_what: 'Episode-2 binge is the strongest retention signal on the platform. Test auto-play and frictionless episode transitions; consider a "lighter palate cleanser" cross-promo at E1 credits.' },
                     { l: 'Oil-industry topic lookup', pct: 8.1, c: 'earned',
                       comp: 98.7, days: 0.0,
                       next: 'Returned to the episode within 90s (82.4%).',
                       drop: 'Got sucked into the news cycle (1.3%).',
                       detour: 'Topic lookup turned into a 20-minute CNBC / WSJ / Bloomberg article rabbit hole; came back to the device but opened news / markets instead of the next episode.',
+                      obs: 'Google search query for an oil-industry term (e.g. "what is a landman", "permian basin oil") timestamped to within an active Landman play session.',
                       so_what: 'Topic curiosity = high engagement. Build in-app context cards for industry references (could be ad-supported by oil-services or energy brands; pairs naturally with the show context).' }
                 ]
             },
@@ -51646,38 +51700,44 @@
                       next: 'Started Tulsa King within 30d (74.6%).',
                       drop: 'Watchlist add but never played Tulsa King (12.7%).',
                       detour: 'Watchlisted Tulsa King but started a non-Sheridan competitor first (commonly Reacher S3 on Prime or Slow Horses S4 on Apple TV+); watchlist never decayed into a play event on P+.',
+                      obs: 'P+ watchlist-add event for Tulsa King by an account that previously completed at least one Landman episode.',
                       so_what: 'Sheridan-universe cross-watchlist is your most efficient retention lever. Promote heavily in end-of-episode UI; fire a "Tulsa King is waiting" push at 7d post-watchlist-add.' },
                     { l: 'Sheridan-interview YouTube', pct: 16.3, c: 'earned',
                       comp: 81.4, days: 8.0,
                       next: 'Searched for additional Sheridan content (47.2%).',
                       drop: 'Got curious but didn\'t return to P+ within 14d (12.3%).',
                       detour: 'YouTube algorithm pivoted from the Sheridan interview to a Reacher or Outer Range BTS clip; user followed competitor content for the rest of the session and never re-opened P+.',
+                      obs: 'YouTube watch event on a Sheridan / cast interview URL by a session that previously visited paramountplus.com or completed a Landman episode.',
                       so_what: 'Off-platform Sheridan content reinforces fandom but lives mostly off your platform. Bring more behind-the-scenes content on-platform as a retention tool; pin a "Watch Landman on P+" comment on every Sheridan interview upload.' },
                     { l: 'Share recap on social', pct: 9.5, c: 'earned',
                       comp: 92.7, days: 1.0,
                       next: 'Friend follow-on click back to P+ (38.1%).',
                       drop: 'Shared, never opened P+ again that month (5.8%).',
                       detour: 'Posted the recap, scrolled the feed for replies, drifted into unrelated content; the share itself became the loyalty terminus rather than the next episode.',
+                      obs: 'Outbound share event from a P+ episode page (or a clipboard-copy-paste signal to TikTok / IG / Twitter) tied back to the originating session.',
                       so_what: 'Social sharers are ~5pp more retentive than non-sharers. Build a share-to-earn loop (free episode or extended preview for sharing) to convert the share moment into a re-engagement moment.' }
                 ],
                 bot: [
-                    { l: 'Subscribe to Showtime add-on', pct: 6.2, c: 'owned',
+                    { l: 'Subscribe to Showtime add-on', pct: 2.4, c: 'owned',
                       comp: 94.8, days: 21.0,
                       next: 'Continued P+ subscription past renewal (97.4%).',
                       drop: 'Attached add-on but downgraded later (5.2%).',
                       detour: 'Attached the add-on but never opened Showtime-original content (Yellowjackets, Billions reruns); add-on registered as ARPU lift but engagement lagged, then downgraded at renewal.',
+                      obs: 'P+ in-app upsell click + Showtime add-on payment event, followed by 30-day Showtime tile play events.',
                       so_what: 'Add-on attach is the strongest LTV signal on the platform. Trigger the Showtime upsell at S2E4 completion; surface Showtime tiles in the home-shelf for Landman finishers in the 30d post-finale window.' },
                     { l: 'TikTok creator engagement', pct: 14.8, c: 'earned',
                       comp: 78.6, days: 5.0,
                       next: 'Searched for more Sheridan clips (52.3%).',
                       drop: 'Engaged but never returned to the platform (15.4%).',
                       detour: 'Followed a Landman-adjacent TikTok creator and kept consuming their feed all week (Landman recaps, ranching content, Sheridan reaction) but never re-opened the P+ app.',
+                      obs: 'TikTok follow plus repeated engagement (likes / saves / comments) on a Landman-talking creator by a user previously seen visiting paramountplus.com.',
                       so_what: 'Creator engagement is a leading-indicator of word-of-mouth. Seed clip drops with top Landman-talking creators to amplify; partner-link the creator bio to a P+ deep link.' },
-                    { l: 'S3 pre-order / wishlist', pct: 4.7, c: 'earned',
+                    { l: 'S3 pre-order / wishlist', pct: 1.7, c: 'earned',
                       comp: 95.4, days: 30.0,
                       next: 'Retained through S3 launch window (89.6%).',
                       drop: 'Pre-ordered but churned before S3 (4.6%).',
                       detour: 'Wishlisted S3, then drifted to competitor prestige drama in the inter-season months (commonly Reacher, Slow Horses, The Bear) and let the P+ sub lapse at renewal.',
+                      obs: 'P+ wishlist / "remind me" event for Landman S3 (plus off-platform wishlist signals like a TVMaze.com / TheTVDB tracking event).',
                       so_what: 'Pre-order intent is the strongest renewal predictor. Surface S3 wishlist signals as a retention tag in CRM; fire a "drop date confirmed" push the moment S3 has an air date.' }
                 ]
             }
@@ -51699,26 +51759,31 @@
               pct: 100.0, drop: 0.0,
               color1: '#3b82f6', color2: '#60a5fa',
               detour: 'Everyone in the cohort had at least one Discovery touchpoint - this is the top of the funnel by definition.',
+              obs: 'Every cohort member fired at least one observable touchpoint (P+ session, search query, social URL, etc.) - this is the population that entered the funnel.',
               win_back: '' },
             { stage: 'Research', sub: 'validated the show',
               pct: 74.3, drop: 25.7,
               color1: '#0ea5e9', color2: '#38bdf8',
               detour: 'Most leakage went to (a) YouTube clip-as-substitute and (b) competing-show Reddit / RT / Letterboxd pages - Reacher S3, Slow Horses S4, Outer Range, Justified: City Primeval all stole intent here.',
+              obs: 'Of the discovery population, the share that subsequently visited a Landman research surface (paramountplus.com landing, Google search query, IMDb / Reddit / RT URL) within 14 days.',
               win_back: 'Sponsored "Where to watch on P+" placement on IMDb Sheridan-cast filmography pages + on the Reacher / Outer Range / Justified RT pages; defend the post-roll on YouTube Landman trailer.' },
             { stage: 'Access', sub: 'started sign-in / signup',
               pct: 51.9, drop: 22.4,
               color1: '#06b6d4', color2: '#22d3ee',
               detour: 'Pricing-page bounce to promo-code aggregators (Retailmenot, Reddit /r/Paramountplus, Honey) and to "best streaming bundle" comparison articles; many never resumed the signup.',
+              obs: 'Of the research population, the share that subsequently hit a P+ sign-in OR signup flow URL.',
               win_back: 'Exit-intent bundle / promo modal on the pricing page; retarget within 24h on the known promo-code domains; bid on "Paramount Plus discount code" search queries.' },
             { stage: 'Watch', sub: 'pressed play on E1',
               pct: 38.2, drop: 13.7,
               color1: '#f59e0b', color2: '#fbbf24',
               detour: 'Signed in, opened the home shelf, picked something else - often a returning show with established habit (continue-watching row) or a tile from Hulu / Prime / Netflix opened in a parallel tab.',
+              obs: 'Of the access population, the share that fired a P+ play event on Landman E1 within 7 days of the access event.',
               win_back: 'Auto-resume push at 48h with a "5-minute recap" deep-link straight into the Landman player; pre-seed a TikTok recap clip on second-screen surfaces in the same session.' },
             { stage: 'Loyalty', sub: 'binged E2+ within 7d',
               pct: 22.1, drop: 16.1,
               color1: '#22c55e', color2: '#4ade80',
               detour: 'Watched E1, drifted to Reacher S3 on Prime or Slow Horses S4 on Apple TV+ that same week - prestige-drama competitor capture during the critical 7-day binge window.',
+              obs: 'Of the watch population, the share that fired a play event on Landman E2+ within 7 days of E1 (or fired a watchlist / cross-IP retention signal).',
               win_back: 'Sheridan-universe cross-watchlist push at episode-end; lapsed-7d CRM seeded with cast-interview content from clickstream-known creator names (Shawn Ryan, Theo Von, country-music creators).' }
         ];
 
@@ -51747,6 +51812,9 @@
             document.querySelectorAll('.jiq-jmap-tp.is-active').forEach(function(p) {
                 p.classList.remove('is-active');
             });
+            document.querySelectorAll('.jiq-jmap-chev.is-active').forEach(function(c) {
+                c.classList.remove('is-active');
+            });
         }
 
         function _jiqEnsureJmapPopover() {
@@ -51767,6 +51835,10 @@
                     ? evt.target.closest('.jiq-jmap-tp')
                     : null;
                 if (pill) return;
+                var chev = evt.target && evt.target.closest
+                    ? evt.target.closest('.jiq-jmap-chev.is-clickable')
+                    : null;
+                if (chev) return;
                 _jiqClosePopover();
             });
             // ESC to close
@@ -51791,20 +51863,20 @@
             pop.classList.remove('is-open');
         }
 
-        function _jiqOpenPopover(pill, stage, tp, key) {
+        function _jiqOpenPopover(anchor, htmlContent) {
             var pop      = _jiqEnsureJmapPopover();
             var wasOpen  = pop.classList.contains('is-open');
             // Hide before measuring so we never flash old content at
             // the new position.
             pop.classList.remove('is-open');
-            pop.innerHTML = _jiqRenderJmapDetail(stage, tp, key);
+            pop.innerHTML = htmlContent;
             // Measure without showing.
             pop.style.visibility = 'hidden';
             pop.style.left       = '0px';
             pop.style.top        = '0px';
             // Force layout so offsetWidth/Height are post-innerHTML.
             void pop.offsetHeight;
-            var rect = pill.getBoundingClientRect();
+            var rect = anchor.getBoundingClientRect();
             var popW = pop.offsetWidth;
             var popH = pop.offsetHeight;
             var vw   = window.innerWidth;
@@ -51855,7 +51927,22 @@
             if (root) root.classList.add('has-selection');
             var sel = _jiqJmapLookup(key);
             if (!sel) return;
-            _jiqOpenPopover(pill, sel.stage, sel.tp, key);
+            _jiqOpenPopover(pill, _jiqRenderJmapDetail(sel.stage, sel.tp, key));
+        }
+
+        // Stage-chevron click handler: opens the funnel-level detail
+        // popover for the clicked stage. Same toggle-off + visual-
+        // active behavior as the touchpoint pill handler so the
+        // chevron and the touchpoint stay mutually exclusive.
+        function _jiqSelectJmapStage(stageIdx, chev) {
+            if (!chev) return;
+            var wasActive = chev.classList.contains('is-active');
+            _jiqClearAllJmapActive();
+            if (wasActive) { _jiqClosePopover(); return; }
+            chev.classList.add('is-active');
+            var root = chev.closest('.jiq-jmap');
+            if (root) root.classList.add('has-selection');
+            _jiqOpenPopover(chev, _jiqRenderJmapStageDetail(stageIdx));
         }
 
         function _jiqClearJmapSelectionFromBtn(/* btn */) {
@@ -51897,15 +51984,25 @@
             var daysStr  = (tp.days == null)
                 ? '-'
                 : (tp.days === 0 ? 'Same day' : tp.days.toFixed(1) + 'd');
-            // Detour row - the clickstream-only view of "where did
-            // the abandoner go off-Paramount?" Hand-authored per
-            // touchpoint; omit the row entirely if absent.
+            // Detour row - "where did the abandoner go off-Paramount?"
+            // Hand-authored per touchpoint; omit if absent.
             var detourHtml = '';
             if (tp.detour) {
                 detourHtml = '<div class="det-row is-detour">'
                            +   '<div class="row-icon">🚪</div>'
-                           +   '<div><span class="row-label">Off-Paramount detour (clickstream-only view)</span>' + _jiqEsc(tp.detour) + '</div>'
+                           +   '<div><span class="row-label">Off-Paramount detour</span>' + _jiqEsc(tp.detour) + '</div>'
                            + '</div>';
+            }
+            // Observability row - the literal clickstream evidence
+            // trail that surfaces this insight. Answers the implied
+            // "how could you possibly know that?" question that
+            // platform-data buyers always ask.
+            var obsHtml = '';
+            if (tp.obs) {
+                obsHtml = '<div class="det-row is-obs">'
+                        +   '<div class="row-icon">🔎</div>'
+                        +   '<div><span class="row-label">How could we know this from clickstream</span>' + _jiqEsc(tp.obs) + '</div>'
+                        + '</div>';
             }
             return ''
                 + '<div class="jiq-jmap-detail" style="--detail-accent:' + stageHex + ';">'
@@ -51946,10 +52043,71 @@
                 +       '<div><span class="row-label">Top abandonment signal</span>' + _jiqEsc(tp.drop || '-') + '</div>'
                 +     '</div>'
                 +     detourHtml
+                +     obsHtml
                 +   '</div>'
                 +   '<div class="det-sowhat">'
                 +     '<strong>⚡ So what (action for the insights team)</strong>'
                 +     _jiqEsc(tp.so_what || '')
+                +   '</div>'
+                + '</div>';
+        }
+
+        // Stage-level popover content. Pulls the funnel row for the
+        // clicked stage plus the matching obs / detour / win-back
+        // narrative, so the question "what happened between stage
+        // N-1 and stage N?" is answered in one place.
+        function _jiqRenderJmapStageDetail(stageIdx) {
+            var stage    = _JIQ_LANDMAN_JMAP_STAGES[stageIdx] || null;
+            var f        = (_JIQ_LANDMAN_FUNNEL || [])[stageIdx] || null;
+            if (!stage || !f) return '<div class="jiq-jmap-detail">Stage data unavailable.</div>';
+            var stageId  = stage.cls.replace(/^s-/, '');
+            var stageHex = _JIQ_JMAP_STAGE_HEX[stageId] || '#f59e0b';
+            var pctStr   = (f.pct  != null) ? f.pct.toFixed(1)  + '%' : '-';
+            var dropStr  = (f.drop != null && f.drop > 0) ? '-' + f.drop.toFixed(1) + 'pp' : '-';
+            var detourHtml = '';
+            if (f.detour) {
+                detourHtml = '<div class="det-row is-detour">'
+                           +   '<div class="row-icon">🚪</div>'
+                           +   '<div><span class="row-label">Where lost viewers went (off-Paramount detour)</span>' + _jiqEsc(f.detour) + '</div>'
+                           + '</div>';
+            }
+            var obsHtml = '';
+            if (f.obs) {
+                obsHtml = '<div class="det-row is-obs">'
+                        +   '<div class="row-icon">🔎</div>'
+                        +   '<div><span class="row-label">How could we know this from clickstream</span>' + _jiqEsc(f.obs) + '</div>'
+                        + '</div>';
+            }
+            var winHtml = '';
+            if (f.win_back) {
+                winHtml = '<div class="det-row is-winback">'
+                        +   '<div class="row-icon">↺</div>'
+                        +   '<div><span class="row-label">Win-back lever</span>' + _jiqEsc(f.win_back) + '</div>'
+                        + '</div>';
+            }
+            return ''
+                + '<div class="jiq-jmap-detail" style="--detail-accent:' + stageHex + ';">'
+                +   '<div class="det-head">'
+                +     '<span class="det-stage">Stage ' + stage.num + ' · ' + _jiqEsc(stage.label) + ' - ' + _jiqEsc(stage.sub) + '</span>'
+                +     '<button type="button" class="det-close" onclick="_jiqClearJmapSelectionFromBtn(this)">× Close</button>'
+                +   '</div>'
+                +   '<div class="det-title">'
+                +     '<span>📉 Funnel · ' + _jiqEsc(stage.label) + '</span>'
+                +   '</div>'
+                +   '<div class="det-stats">'
+                +     '<div class="det-stat" title="Share of the original Discovery cohort still active at this stage.">'
+                +       '<div class="stat-num">' + pctStr + '</div>'
+                +       '<div class="stat-lbl">of the cohort retained at this stage</div>'
+                +     '</div>'
+                +     '<div class="det-stat is-bad" title="Percentage-point drop from the prior stage of the funnel.">'
+                +       '<div class="stat-num">' + dropStr + '</div>'
+                +       '<div class="stat-lbl">drop vs prior stage</div>'
+                +     '</div>'
+                +   '</div>'
+                +   '<div class="det-rows">'
+                +     detourHtml
+                +     obsHtml
+                +     winHtml
                 +   '</div>'
                 + '</div>';
         }
@@ -72270,10 +72428,24 @@
         // 2026-06-25: When the Data Cuts popover surfaces siblings from
         // more than one calendar year, prepend the year to every entry
         // so the user can disambiguate at a glance ("2025 Avid" vs
-        // "2024 Avid"). Per-item year resolves via getProfileRunYear,
-        // which falls back through the date-range cache → name year →
-        // s3_key timestamp year, so unfetched siblings still get a
-        // sensible year guess.
+        // "2024 Avid").
+        //
+        // Year resolution is the ANALYZED-PERIOD year, NOT the file's
+        // generation year:
+        //   1. Cached date_range year for this sibling (populated when
+        //      the sibling has been fetched at least once this session).
+        //   2. 4-digit year baked into the display name ("Reba 2023" →
+        //      "2023", "Reba - 2024 - Avid Fan" → "2024").
+        //   3. Current profile's cached date_range year - siblings
+        //      almost always cover the same period as the base profile
+        //      they live next to (Reba's 2025 Avid cut sits next to the
+        //      2025 base), so the base's analyzed year is a strictly
+        //      better guess than the s3_key timestamp year.
+        // The s3_key timestamp year (when the CSV was generated) is
+        // INTENTIONALLY NOT used here - it misleads when a Q4-2025
+        // dataset was generated in January 2026 (the original bug:
+        // "2026 AVID" showing for a Reba file whose Date Range header
+        // reads 2025-01-01 - 2025-12-31).
         //
         // Single-year popovers are left untouched (prefixing every row
         // with the same year just adds noise).
@@ -72282,15 +72454,27 @@
         // year-prefixed labels are skipped; labels with a TRAILING year
         // token ("Avid 2024") are reordered to year-first ("2024 Avid")
         // so every row matches the same shape.
+        function _siblingAnalyzedYear(profile, fallbackYear) {
+            try {
+                const cached = (typeof getCachedRunDateRangeYear === 'function')
+                    ? (getCachedRunDateRangeYear(profile) || '') : '';
+                if (cached) return cached;
+                const fromName = (typeof getProfileYear === 'function')
+                    ? (getProfileYear(profile) || '') : '';
+                if (/^\d{4}$/.test(fromName)) return fromName;
+                return fallbackYear || '';
+            } catch (_) { return fallbackYear || ''; }
+        }
+
         function _applyMultiYearPrefixToCutLabels(items) {
             if (!Array.isArray(items) || items.length < 2) return;
+            const currentKey = (typeof _comparisonRunsState !== 'undefined'
+                && _comparisonRunsState && _comparisonRunsState.currentKey) || '';
+            const fallbackYear = (typeof getCachedRunDateRangeYear === 'function')
+                ? (getCachedRunDateRangeYear(currentKey) || '') : '';
             const yearOf = (it) => {
-                try {
-                    const y = (typeof getProfileRunYear === 'function')
-                        ? (getProfileRunYear(it.profile) || '')
-                        : '';
-                    return /^\d{4}$/.test(y) ? y : '';
-                } catch (_) { return ''; }
+                const y = _siblingAnalyzedYear(it.profile, fallbackYear);
+                return /^\d{4}(?:-\d{2})?$/.test(y) ? y : '';
             };
             const years = items.map(yearOf);
             const distinct = new Set(years.filter(Boolean));
@@ -75277,6 +75461,42 @@
             if (typeof syncLLMOChartTooltips === 'function') syncLLMOChartTooltips();
         }
         document.addEventListener('DOMContentLoaded', applyPersistedHoverPreferences);
+
+        // 2026-06-25: Auto-collapse the inline tab header banner
+        // (.action-buttons-row, "📈 Behavioral — Consumer behaviors,
+        // ...") whenever the user scrolls inside the dashboard tab
+        // content area. The banner sits ABOVE the scroll container as
+        // a sibling of .dashboard-layout, so it never naturally scrolls
+        // away on its own - this listener bridges that gap.
+        //
+        // While scrolled the .behavioral-controls row (which is
+        // already position:sticky;top:0 inside .dashboard-tab-content)
+        // rises into the freed space and stays pinned, giving users
+        // ~36px of extra vertical viewport for actual data. Restored
+        // automatically when scroll returns to ≤ 8px from top.
+        //
+        // 8px threshold = small hysteresis so micro-scrolls from
+        // trackpad inertia don't flicker the banner in/out.
+        function _wireDashboardScrollHideBanner() {
+            const dv = document.getElementById('dashboardView');
+            if (!dv) return;
+            const scrollEl = dv.querySelector('.dashboard-tab-content');
+            const actionRow = dv.querySelector('.action-buttons-row');
+            if (!scrollEl || !actionRow) return;
+            if (scrollEl._scrollHideBannerWired) return;
+            scrollEl._scrollHideBannerWired = true;
+            const THRESHOLD = 8;
+            const onScroll = () => {
+                if (scrollEl.scrollTop > THRESHOLD) {
+                    actionRow.classList.add('scroll-collapsed');
+                } else {
+                    actionRow.classList.remove('scroll-collapsed');
+                }
+            };
+            scrollEl.addEventListener('scroll', onScroll, { passive: true });
+            onScroll();
+        }
+        document.addEventListener('DOMContentLoaded', _wireDashboardScrollHideBanner);
         
         // ============================================================================
         // BEHAVIORAL INSIGHTS
