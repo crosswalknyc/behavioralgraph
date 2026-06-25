@@ -15019,6 +15019,73 @@
             .jiq-jmap-cluster { min-height: 0; padding: 0.3rem 0; justify-content: flex-start; }
         }
 
+        /* ====== MINI variant (used inside each path row body) ======
+           Same 5-stage skeleton, but:
+             - compact (single top cluster, no bottom cluster)
+             - shorter chevrons
+             - skipped stages render desaturated + dim
+             - empty cluster cells still hold space so columns line up
+        */
+        .jiq-jmap.jiq-jmap-mini {
+            margin: 0 0 0.35rem;
+            padding: 0;
+        }
+        .jiq-jmap-mini .jiq-jmap-cluster {
+            min-height: 44px;
+            gap: 0.3rem;
+            padding: 0 0.3rem 0.3rem;
+        }
+        .jiq-jmap-mini .jiq-jmap-tp {
+            padding: 0.26rem 0.45rem;
+            font-size: 10px;
+        }
+        .jiq-jmap-mini .jiq-jmap-tp .tp-pct { font-size: 9px; }
+        .jiq-jmap-mini .jiq-jmap-chev {
+            padding: 0.55rem 0.35rem 0.55rem 1.4rem;
+            font-size: 0.65rem;
+            letter-spacing: 0.06em;
+            gap: 0.05rem;
+        }
+        .jiq-jmap-mini .jiq-jmap-chev .chev-num {
+            font-size: 8px;
+            letter-spacing: 0.14em;
+        }
+        .jiq-jmap-mini .jiq-jmap-band {
+            margin: 0.15rem 0;
+        }
+        .jiq-jmap-mini .jiq-jmap-foot {
+            margin-top: 0.45rem;
+            padding: 0.5rem 0.75rem;
+            font-size: 10.5px;
+        }
+        .jiq-jmap-mini .jiq-jmap-foot.is-mini {
+            background: rgba(255,255,255,0.025);
+            border-left-color: rgba(255,255,255,0.18);
+            color: var(--text-secondary);
+        }
+        .jiq-jmap-mini .jiq-jmap-foot.is-mini em { font-style: normal; opacity: 0.9; }
+
+        /* Skipped-stage chevron: keep the silhouette so columns align,
+           but desaturate, dim, and remove the gradient so the eye is
+           drawn only to the stages this path actually traverses. */
+        .jiq-jmap-chev.is-inactive {
+            background: rgba(255,255,255,0.05) !important;
+            color: var(--text-secondary) !important;
+            opacity: 0.45;
+            text-shadow: none;
+            filter: grayscale(1);
+        }
+        .jiq-jmap-chev.is-inactive .chev-num {
+            opacity: 0.7;
+            font-style: italic;
+        }
+
+        /* Empty cluster cell - keeps the column wide enough to line
+           up under the chevron even when this path has no touchpoint
+           at that stage. */
+        .jiq-jmap-mini .jiq-jmap-cluster:empty,
+        .jiq-jmap-mini .jiq-jmap-cluster:has(> :only-child:empty) { opacity: 0.35; }
+
         /* ===========================================================
            DISCOVERY PATHS - WAKE VIEW (hero + earned wake cards +
            owned reference strip).
@@ -51079,13 +51146,12 @@
         ];
 
         // ───────────────── interactive state ─────────────────
-        // _jiqJmapSelected is a composite key "sIdx-slot-tIdx" where
-        //   sIdx = stage index in _JIQ_LANDMAN_JMAP_STAGES (0..4)
-        //   slot = 'top' | 'bot'
-        //   tIdx = index in that slot's touchpoint list
-        // null = nothing selected (default "how to read this" caption).
-        var _jiqJmapSelected = null;
-
+        // Selection state is held in the DOM (not a JS variable) so
+        // every .jiq-jmap container - the main map and each of the
+        // 11 path mini-maps - keeps its own independent selection
+        // and renders its own detail panel into its own foot slot.
+        // The pill onclick passes `this` (the element); the handler
+        // walks up to the nearest .jiq-jmap to scope the operation.
         function _jiqJmapLookup(key) {
             if (!key) return null;
             var parts = String(key).split('-');
@@ -51098,44 +51164,48 @@
             return { stage: s, tp: tp };
         }
 
-        function _jiqSelectJmapTp(key) {
-            // toggle off if user clicks the already-active pill
-            if (_jiqJmapSelected === key) { _jiqClearJmapSelection(); return; }
-            _jiqJmapSelected = key;
-            _jiqSyncJmapUI();
-        }
-
-        function _jiqClearJmapSelection() {
-            _jiqJmapSelected = null;
-            _jiqSyncJmapUI();
-        }
-
-        function _jiqSyncJmapUI() {
-            var root = document.querySelector('.jiq-jmap');
+        function _jiqSelectJmapTp(key, pill) {
+            if (!pill) return;
+            var root = pill.closest('.jiq-jmap');
             if (!root) return;
-            // Toggle the parent "has-selection" class - CSS uses it to
-            // dim non-active touchpoints.
-            if (_jiqJmapSelected) root.classList.add('has-selection');
-            else                  root.classList.remove('has-selection');
-            // Refresh per-pill active flag.
-            var pills = root.querySelectorAll('.jiq-jmap-tp');
-            pills.forEach(function(el) {
-                var isActive = (el.getAttribute('data-jmap-id') === _jiqJmapSelected);
-                el.classList.toggle('is-active', isActive);
+            var wasActive = pill.classList.contains('is-active');
+            // Clear any active selection in THIS container
+            root.classList.remove('has-selection');
+            root.querySelectorAll('.jiq-jmap-tp.is-active').forEach(function(el) {
+                el.classList.remove('is-active');
             });
-            // Swap the footer slot - either the default caption or
-            // the detail panel for the selected touchpoint.
-            var footSlot = document.getElementById('jiqJmapFootSlot');
-            if (footSlot) footSlot.innerHTML = _jiqRenderJmapFootSlot();
+            var slot = root.querySelector(':scope > .jiq-jmap-foot-slot');
+            if (slot) slot.innerHTML = _jiqRenderJmapDefaultFoot(root);
+            // Toggle-off if the user clicked the already-active pill
+            if (wasActive) return;
+            // Apply new selection
+            pill.classList.add('is-active');
+            root.classList.add('has-selection');
+            var sel = _jiqJmapLookup(key);
+            if (slot && sel) {
+                slot.innerHTML = _jiqRenderJmapDetail(sel.stage, sel.tp, key);
+            }
+        }
+
+        function _jiqClearJmapSelectionFromBtn(btn) {
+            if (!btn) return;
+            var root = btn.closest('.jiq-jmap');
+            if (!root) return;
+            root.classList.remove('has-selection');
+            root.querySelectorAll('.jiq-jmap-tp.is-active').forEach(function(el) {
+                el.classList.remove('is-active');
+            });
+            var slot = root.querySelector(':scope > .jiq-jmap-foot-slot');
+            if (slot) slot.innerHTML = _jiqRenderJmapDefaultFoot(root);
         }
 
         function _jiqRenderJmapTp(tp, key) {
             var pct    = (tp.pct != null) ? tp.pct.toFixed(1) + '%' : '';
             var clsDot = (tp.c === 'owned') ? 'is-owned' : 'is-earned';
-            // onclick uses string interpolation; key is built from
-            // trusted integers + 'top'/'bot' so injection is N/A.
+            // onclick passes `this` so the handler can scope to the
+            // nearest .jiq-jmap container (main map vs path mini-map).
             return '<div class="jiq-jmap-tp" data-jmap-id="' + key + '"'
-                 +     ' onclick="_jiqSelectJmapTp(\'' + key + '\')"'
+                 +     ' onclick="_jiqSelectJmapTp(\'' + key + '\', this)"'
                  +     ' title="' + _jiqEsc(tp.l) + ' - click for journey detail">'
                  +   '<span class="tp-dot ' + clsDot + '"></span>'
                  +   '<span class="tp-label">' + _jiqEsc(tp.l) + '</span>'
@@ -51168,7 +51238,7 @@
                 + '<div class="jiq-jmap-detail" style="--detail-accent:' + stageHex + ';">'
                 +   '<div class="det-head">'
                 +     '<span class="det-stage">Stage ' + stage.num + ' · ' + _jiqEsc(stage.label) + ' - ' + _jiqEsc(stage.sub) + '</span>'
-                +     '<button type="button" class="det-close" onclick="_jiqClearJmapSelection()">× Close</button>'
+                +     '<button type="button" class="det-close" onclick="_jiqClearJmapSelectionFromBtn(this)">× Close</button>'
                 +   '</div>'
                 +   '<div class="det-title">'
                 +     '<span class="tp-dot ' + clsDot + '"></span>'
@@ -51210,7 +51280,16 @@
                 + '</div>';
         }
 
-        function _jiqRenderJmapDefaultFoot() {
+        function _jiqRenderJmapDefaultFoot(root) {
+            // Mini maps (path rows) get a single one-liner; the full
+            // "how to read this" caption only makes sense on the main
+            // top-of-card journey map.
+            var isMini = root && root.classList && root.classList.contains('jiq-jmap-mini');
+            if (isMini) {
+                return '<div class="jiq-jmap-foot is-mini">'
+                     +   '<em>👆 Click any active touchpoint above to see its completion rate, abandonment, and next move within this specific journey.</em>'
+                     + '</div>';
+            }
             return ''
                 + '<div class="jiq-jmap-foot">'
                 +   '<strong>How to read this:</strong> Every dot is one touchpoint in a Landman viewer\'s '
@@ -51219,14 +51298,9 @@
                 +   'are off-Paramount touchpoints that only clickstream can light up - the part of the funnel '
                 +   'your analytics is currently blind to. <strong style="color:#fbbf24;">Click any dot to drill into '
                 +   'completion rate, abandonment, average days to press-play, the most common next move, and a '
-                +   'tactical action item.</strong>'
+                +   'tactical action item.</strong> Each of the 11 archetypal paths below is shown as its own '
+                +   'mini journey map - skipped stages are grayed out, and every active touchpoint is also clickable.'
                 + '</div>';
-        }
-
-        function _jiqRenderJmapFootSlot() {
-            var sel = _jiqJmapLookup(_jiqJmapSelected);
-            if (!sel) return _jiqRenderJmapDefaultFoot();
-            return _jiqRenderJmapDetail(sel.stage, sel.tp, _jiqJmapSelected);
         }
 
         function _jiqRenderLandmanJourneyMap() {
@@ -51252,9 +51326,6 @@
                        }).join('')
                      + '</div>';
             }).join('');
-            // Reset selection each time the map is (re)rendered so we
-            // don't carry stale state across dashboard refreshes.
-            _jiqJmapSelected = null;
             return ''
                 + '<div class="jiq-jmap">'
                 +   '<div class="jiq-jmap-title">'
@@ -51267,7 +51338,78 @@
                 +   '<div class="jiq-jmap-grid">' + topCells  + '</div>'
                 +   '<div class="jiq-jmap-band">' + chevCells + '</div>'
                 +   '<div class="jiq-jmap-grid">' + botCells  + '</div>'
-                +   '<div id="jiqJmapFootSlot">' + _jiqRenderJmapDefaultFoot() + '</div>'
+                +   '<div class="jiq-jmap-foot-slot">' + _jiqRenderJmapDefaultFoot(null) + '</div>'
+                + '</div>';
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // PATH MINI JOURNEY MAPS (one per archetypal path)
+        // ──────────────────────────────────────────────────────────────
+        // Each of the 11 archetypal paths is rendered as a compact
+        // mini journey map - same 5 canonical stages, but only the
+        // stages this specific path traverses get a vivid chevron and
+        // a touchpoint pill above it. Skipped stages are grayed out
+        // (.is-inactive). Each active touchpoint is fully clickable
+        // and opens an inline detail panel scoped to that mini-map's
+        // foot slot only - so opening detail in path 4 doesn't
+        // disturb a selection in path 7 or in the main map above.
+        //
+        // Mapping rank -> { stageKey: touchpointKey | null }. The
+        // touchpoint key is the same composite "sIdx-slot-tIdx" key
+        // used by the main map, so the SAME _JIQ_LANDMAN_JMAP_STAGES
+        // dataset (with all its per-touchpoint detail fields) backs
+        // every drill-in regardless of which map the user clicks from.
+        var _JIQ_LANDMAN_PATH_JMAP = {
+            1:  { discovery: '0-top-0', research: null,      access: '2-top-0', watch: '3-top-0', loyalty: null      },
+            2:  { discovery: '0-bot-0', research: null,      access: '2-bot-2', watch: '3-top-0', loyalty: '4-top-0' },
+            3:  { discovery: '0-bot-1', research: null,      access: '2-bot-0', watch: '3-top-0', loyalty: null      },
+            4:  { discovery: '0-top-1', research: '1-top-0', access: '2-top-1', watch: '3-top-0', loyalty: '4-top-2' },
+            5:  { discovery: '0-top-2', research: null,      access: '2-top-0', watch: '3-top-0', loyalty: null      },
+            6:  { discovery: null,      research: '1-bot-0', access: '2-bot-0', watch: '3-top-0', loyalty: null      },
+            7:  { discovery: null,      research: '1-bot-0', access: '2-bot-0', watch: '3-top-0', loyalty: '4-bot-1' },
+            8:  { discovery: '0-top-3', research: '1-top-0', access: '2-top-1', watch: '3-top-0', loyalty: null      },
+            9:  { discovery: '0-bot-2', research: '1-top-1', access: '2-bot-0', watch: '3-top-0', loyalty: null      },
+            10: { discovery: '0-bot-3', research: null,      access: '2-top-2', watch: '3-top-0', loyalty: null      },
+            11: { discovery: '0-bot-4', research: '1-top-2', access: '2-bot-0', watch: '3-top-0', loyalty: '4-bot-1' }
+        };
+
+        function _jiqRenderPathMiniJmap(rank) {
+            var pathMap = _JIQ_LANDMAN_PATH_JMAP[rank];
+            if (!pathMap) return '';
+            var stages     = _JIQ_LANDMAN_JMAP_STAGES;
+            var stageOrder = ['discovery', 'research', 'access', 'watch', 'loyalty'];
+            // Touchpoint row (top cluster) - one pill per active
+            // stage, empty placeholder for skipped stages so columns
+            // stay aligned with the chevron row below.
+            var topCells = stageOrder.map(function(stageKey, sIdx) {
+                var tpKey = pathMap[stageKey];
+                var pillHtml = '';
+                if (tpKey) {
+                    var sel = _jiqJmapLookup(tpKey);
+                    if (sel) pillHtml = _jiqRenderJmapTp(sel.tp, tpKey);
+                }
+                return '<div class="jiq-jmap-cluster is-top">' + pillHtml + '</div>';
+            }).join('');
+            // Chevron row - vivid color if the path traverses this
+            // stage, .is-inactive (desaturated, dimmed) if it skips.
+            var chevCells = stages.map(function(s, sIdx) {
+                var stageKey = stageOrder[sIdx];
+                var isActive = !!pathMap[stageKey];
+                return '<div class="jiq-jmap-chev ' + s.cls + (isActive ? '' : ' is-inactive') + '">'
+                     +   '<div class="chev-num">' + (isActive ? 'STAGE ' + s.num : 'SKIPPED') + '</div>'
+                     +   '<div>' + _jiqEsc(s.label) + '</div>'
+                     + '</div>';
+            }).join('');
+            // Default mini-map foot is a one-liner prompt. The real
+            // detail panel slides in when the user clicks a pill.
+            var defaultMiniFoot = '<div class="jiq-jmap-foot is-mini">'
+                + '<em>👆 Click any active touchpoint above to see its completion rate, '
+                + 'abandonment, and next move within this specific journey.</em></div>';
+            return ''
+                + '<div class="jiq-jmap jiq-jmap-mini" data-path-rank="' + rank + '">'
+                +   '<div class="jiq-jmap-grid">' + topCells  + '</div>'
+                +   '<div class="jiq-jmap-band">' + chevCells + '</div>'
+                +   '<div class="jiq-jmap-foot-slot">' + defaultMiniFoot + '</div>'
                 + '</div>';
         }
 
@@ -52176,14 +52318,6 @@
             if (listEl) {
                 var maxCohort = (p.paths || []).reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
                 listEl.innerHTML = (p.paths || []).map(function(r, idx) {
-                    // Click-sequence (rendered in the expanded body)
-                    var stepsHtml = (r.steps || []).map(function(step, i) {
-                        return '<div style="display:flex; gap:0.55rem; align-items:flex-start; padding:3px 0;">'
-                             +   '<div style="flex:none; width:18px; height:18px; border-radius:50%; background:' + ACC + '22; color:' + ACC + ';'
-                             +              ' font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center;">' + (i+1) + '</div>'
-                             +   '<div style="font-size:11.5px; line-height:1.45;">' + _jiqEsc(step) + '</div>'
-                             + '</div>';
-                    }).join('');
                     // Summary (always visible) - rank, label, cohort,
                     // days-to-press-play. Trailing 22px column reserves
                     // room for the caret painted by .jiq-row-caret.
@@ -52205,19 +52339,24 @@
                          +   '</div>'
                          +   '<div></div>'
                          + '</div>';
-                    // Body (expanded) - 2-col: click-sequence on left,
-                    // pattern note + strategic implication on right.
+                    // Body (expanded): mini journey map at top (full
+                    // width, same skeleton as the master map but only
+                    // the stages this path traverses are vivid and
+                    // each active touchpoint is independently
+                    // clickable for inline detail). Below the map,
+                    // 2-col pattern note + strategic implication.
+                    var miniMapHtml = _jiqRenderPathMiniJmap(r.rank);
                     var bodyHtml = ''
-                         + '<div style="display:grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr); gap:1rem;">'
-                         +   '<div>'
-                         +     '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Click-sequence</div>'
-                         +     stepsHtml
-                         +   '</div>'
+                         + miniMapHtml
+                         + '<div style="display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap:1rem; margin-top:0.85rem;">'
                          +   '<div>'
                          +     '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Pattern</div>'
-                         +     '<div style="font-size:11.5px; color: var(--text-secondary); line-height:1.55; margin-bottom:0.55rem; font-style:italic;">' + _jiqEsc(r.note || '') + '</div>'
-                         +     '<div style="font-size:11px; padding:0.5rem 0.65rem; border-radius:4px; background:' + ACC + '14; border-left:2px solid ' + ACC + '88; line-height:1.55;">'
-                         +       '<strong style="color:' + ACC + ';">→ Strategic implication:</strong> ' + _jiqEsc(r.why_it_matters || '')
+                         +     '<div style="font-size:11.5px; color: var(--text-secondary); line-height:1.55; font-style:italic;">' + _jiqEsc(r.note || '') + '</div>'
+                         +   '</div>'
+                         +   '<div>'
+                         +     '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Strategic implication</div>'
+                         +     '<div style="font-size:11.5px; padding:0.5rem 0.65rem; border-radius:4px; background:' + ACC + '14; border-left:2px solid ' + ACC + '88; line-height:1.55;">'
+                         +       _jiqEsc(r.why_it_matters || '')
                          +     '</div>'
                          +   '</div>'
                          + '</div>';
