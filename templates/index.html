@@ -46588,7 +46588,7 @@
                                 : '';
                             // Optional sub-line note (renders under the path pills).
                             var noteLine = p.note
-                                ? '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;font-style:italic;">' + _jiqEsc(p.note) + '</div>'
+                                ? '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;font-style:italic;">For example: ' + _jiqEsc(p.note) + '</div>'
                                 : '';
                             return '<tr style="border-bottom:1px solid var(--border-color);vertical-align:top;">'
                                  + '<td style="padding:8px 4px;text-align:right;font-weight:600;white-space:nowrap;">' + _jiqFmt(p.users) + '</td>'
@@ -50121,7 +50121,7 @@
                      +       '<span class="row-channel" style="color:' + chanColor + ';">' + chanTag + '</span>'
                      +     '</div>'
                      +     _jiqRenderStageFlow(p.steps)
-                     +     '<div class="row-note">' + _jiqEsc(p.note || '') + '</div>'
+                     +     '<div class="row-note">' + (p.note ? 'For example: ' + _jiqEsc(p.note) : '') + '</div>'
                      +   '</td>'
                      + '</tr>';
             }).join('');
