@@ -8839,6 +8839,45 @@ def netflix_ranker_backfill():
     })
 
 
+@app.route('/api/rankers/netflix-clickhouse/data', methods=['GET'])
+@requires_auth
+def get_netflix_clickhouse_ranker_data():
+    """
+    Simple "most watched on Netflix" ranking sourced from ClickHouse
+    (netflix.netflix_ranker), independent of the legacy Snowflake-backed
+    Netflix ranker above. Returns Rank / Show / Views / Genre / Runtime.
+
+    This table is a pre-aggregated, ready-to-rank snapshot - no
+    avg-watch-time field exists here (only total RUN_TIME), so this
+    endpoint intentionally does not return one.
+    """
+    try:
+        conn = _ch_connect()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT NAME_OF_SHOW, VIEW_COUNT, GENRE, RUN_TIME
+            FROM netflix.netflix_ranker
+            WHERE NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != \'\'
+            ORDER BY VIEW_COUNT DESC
+            LIMIT 200
+        """)
+        rows = cur.fetchall()
+        out = [
+            {
+                'rank': i + 1,
+                'show': r[0],
+                'views': r[1],
+                'genre': r[2],
+                'runtime': r[3],
+            }
+            for i, r in enumerate(rows)
+        ]
+        return jsonify({'success': True, 'rows': out})
+    except Exception as e:
+        print(f"[Netflix ClickHouse Ranker] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/rankers/netflix/show-details', methods=['GET'])
 def get_netflix_show_details():
     """
