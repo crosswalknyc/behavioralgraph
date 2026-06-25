@@ -24151,12 +24151,11 @@
                                    + '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.45rem;">Uses the same projection helper as the Assets cards, Performance Q1 rollup, and asset detail view \u2014 numbers ladder up.</div>';
                 }
 
-                // Single 3-column row: donut (share) + funnel comparison (who-won)
-                // + cumulative line chart. minmax(0, *) so flex children with
-                // intrinsic widths don't blow out the line-chart column.
-                var html = '<div style="display: grid; grid-template-columns: 260px minmax(0, 1fr) minmax(0, 1.4fr); gap: 1rem; margin-bottom: 0.85rem; align-items: stretch;">';
-                html +=   '<div class="iiq-card" style="padding:0.75rem 0.85rem;">'
-                    +       '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.35rem;">Share of total measured views</div>'
+                // Row 1: donut (share) + funnel comparison (who-won) across full width.
+                // Row 2: cumulative line chart on its own full-width row.
+                var html = '<div style="display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 1rem; margin-bottom: 0.85rem; align-items: stretch;">';
+                html +=   '<div class="iiq-card" style="padding:0.75rem 0.85rem; display:flex; flex-direction:column; align-items:center;">'
+                    +       '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.35rem; align-self:stretch;">Share of total measured views</div>'
                     +       iiqDonut(donutSlices, { size: 120 })
                     +     '</div>';
                 html +=   '<div class="iiq-card" style="padding:0.75rem 0.95rem;">'
@@ -24166,6 +24165,7 @@
                     +       '</div>'
                     +       funnelCardBody
                     +     '</div>';
+                html += '</div>';
                 var chartHtml = hasFunnelSeries
                     ? iiqLineChartDual(series, rightSeries, {
                         height: 200,
@@ -24176,12 +24176,11 @@
                 var chartCaption = hasFunnelSeries
                     ? 'Left axis: cumulative views (paid vs organic). Right axis: cumulative info-seekers &amp; ticketing visits derived from the same iiqAssetFunnelProjection() helper \u2014 ladders up to the Assets cards.'
                     : '';
-                html +=   '<div class="iiq-card" style="padding:0.75rem 0.85rem; min-width:0;">'
+                html += '<div class="iiq-card" style="padding:0.75rem 0.85rem; margin-bottom: 0.85rem;">'
                     +       '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Cumulative view growth + downstream funnel</div>'
                     +       chartHtml
                     +       (chartCaption ? '<div style="font-size:0.65rem; color: var(--text-secondary); margin-top:0.35rem; line-height:1.35;">' + chartCaption + '</div>' : '')
                     +     '</div>';
-                html += '</div>';
                 if (best.length) {
                     var slug = window.__intentIQ && window.__intentIQ.currentSlug;
                     // Cache the row payloads + slug so the click handler can
