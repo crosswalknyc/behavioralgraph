@@ -52059,20 +52059,63 @@
                 + '</div>';
         }
 
-        function _jiqRenderLandmanJourneyMap() {
+        // Master Landman journey map. Each stage chevron has the
+        // funnel data baked in (% retained, drop vs prior stage) and
+        // is fully clickable - opening a stage-level detail popover
+        // with off-Paramount detour + win-back lever. The standalone
+        // _jiqRenderLandmanFunnel block was removed in favor of this
+        // integrated view (less to scroll, single source of truth).
+        //
+        // Accepts opts.compact - when true, omits the touchpoint
+        // clusters (top + bot rows) and the foot slot, rendering
+        // just the chevron band with funnel data. Used by compare
+        // mode to keep stacked-aggregate rows compact.
+        function _jiqRenderLandmanJourneyMap(opts) {
+            opts = opts || {};
             var stages = _JIQ_LANDMAN_JMAP_STAGES;
+            var funnel = (typeof _JIQ_LANDMAN_FUNNEL === 'object') ? _JIQ_LANDMAN_FUNNEL : [];
+
+            // Chevron renderer - now embeds the per-stage funnel % +
+            // drop badge and a click handler that opens the stage
+            // detail popover. Keyboard accessible (tabindex + Enter
+            // / Space) so the popover is reachable without a mouse.
+            var chevCells = stages.map(function(s, sIdx) {
+                var f          = funnel[sIdx] || null;
+                var pctHtml    = f
+                    ? '<div class="chev-funnel-pct">' + f.pct.toFixed(1) + '%</div>'
+                    : '';
+                var dropHtml   = (f && sIdx > 0 && f.drop > 0)
+                    ? '<div class="chev-funnel-drop">-' + f.drop.toFixed(1) + 'pp</div>'
+                    : '';
+                var hoverHint  = f
+                    ? ('STAGE ' + s.num + ' · ' + s.label + ' · ' + f.pct.toFixed(1)
+                       + '% retained' + (sIdx > 0 && f.drop > 0 ? ' (-' + f.drop.toFixed(1) + 'pp from prior)' : '')
+                       + ' · click for detour + win-back')
+                    : (s.label);
+                return '<div class="jiq-jmap-chev ' + s.cls + ' is-clickable" '
+                     +   'tabindex="0" '
+                     +   'onclick="_jiqSelectJmapStage(' + sIdx + ', this);" '
+                     +   'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();_jiqSelectJmapStage(' + sIdx + ',this);}" '
+                     +   'title="' + _jiqEsc(hoverHint) + '">'
+                     +   '<div class="chev-num">STAGE ' + s.num + '</div>'
+                     +   '<div>' + _jiqEsc(s.label) + '</div>'
+                     +   '<div class="chev-sub">' + _jiqEsc(s.sub) + '</div>'
+                     +   pctHtml
+                     +   dropHtml
+                     + '</div>';
+            }).join('');
+
+            if (opts.compact) {
+                return '<div class="jiq-jmap jiq-jmap-compact">'
+                     +   '<div class="jiq-jmap-band">' + chevCells + '</div>'
+                     + '</div>';
+            }
+
             var topCells = stages.map(function(s, sIdx) {
                 return '<div class="jiq-jmap-cluster is-top">'
                      + s.top.map(function(tp, tIdx) {
                          return _jiqRenderJmapTp(tp, sIdx + '-top-' + tIdx);
                        }).join('')
-                     + '</div>';
-            }).join('');
-            var chevCells = stages.map(function(s) {
-                return '<div class="jiq-jmap-chev ' + s.cls + '">'
-                     +   '<div class="chev-num">STAGE ' + s.num + '</div>'
-                     +   '<div>' + _jiqEsc(s.label) + '</div>'
-                     +   '<div class="chev-sub">' + _jiqEsc(s.sub) + '</div>'
                      + '</div>';
             }).join('');
             var botCells = stages.map(function(s, sIdx) {
@@ -52082,8 +52125,24 @@
                        }).join('')
                      + '</div>';
             }).join('');
+
+            // Topline summary that lives in the journey-map title
+            // bar - tells the headline funnel story at a glance.
+            // Single source of truth for the numbers; clicking any
+            // chevron drills further.
+            var entered  = 100.0;
+            var loyalPct = funnel.length
+                ? funnel[funnel.length - 1].pct
+                : entered;
+            var lostPct  = (entered - loyalPct).toFixed(1);
+            var summaryLine = ''
+                + '<div class="jiq-jmap-title-summary">'
+                +   '📉 <strong>' + loyalPct.toFixed(1) + '%</strong> reach loyalty · '
+                +   '<strong style="color:#fca5a5;">-' + lostPct + 'pp</strong> lost along the way · '
+                +   '<em>click any stage for drop-off + off-platform detour + win-back</em>'
+                + '</div>';
+
             return ''
-                + _jiqRenderLandmanFunnel()
                 + '<div class="jiq-jmap">'
                 +   '<div class="jiq-jmap-title">'
                 +     '<span>🧭 The full Landman journey - first touch to loyalty</span>'
@@ -52092,6 +52151,7 @@
                 +       '<span class="leg leg-earned"><span class="leg-dot" style="background:#f59e0b;"></span>Off Platform / Off Flywheel</span>'
                 +     '</span>'
                 +   '</div>'
+                +   summaryLine
                 +   '<div class="jiq-jmap-grid">' + topCells  + '</div>'
                 +   '<div class="jiq-jmap-band">' + chevCells + '</div>'
                 +   '<div class="jiq-jmap-grid">' + botCells  + '</div>'
@@ -72207,6 +72267,49 @@
             return true;
         }
 
+        // 2026-06-25: When the Data Cuts popover surfaces siblings from
+        // more than one calendar year, prepend the year to every entry
+        // so the user can disambiguate at a glance ("2025 Avid" vs
+        // "2024 Avid"). Per-item year resolves via getProfileRunYear,
+        // which falls back through the date-range cache → name year →
+        // s3_key timestamp year, so unfetched siblings still get a
+        // sensible year guess.
+        //
+        // Single-year popovers are left untouched (prefixing every row
+        // with the same year just adds noise).
+        //
+        // Mutates the items array in place. Idempotent: already
+        // year-prefixed labels are skipped; labels with a TRAILING year
+        // token ("Avid 2024") are reordered to year-first ("2024 Avid")
+        // so every row matches the same shape.
+        function _applyMultiYearPrefixToCutLabels(items) {
+            if (!Array.isArray(items) || items.length < 2) return;
+            const yearOf = (it) => {
+                try {
+                    const y = (typeof getProfileRunYear === 'function')
+                        ? (getProfileRunYear(it.profile) || '')
+                        : '';
+                    return /^\d{4}$/.test(y) ? y : '';
+                } catch (_) { return ''; }
+            };
+            const years = items.map(yearOf);
+            const distinct = new Set(years.filter(Boolean));
+            if (distinct.size < 2) return;
+            items.forEach((it, i) => {
+                const yr = years[i];
+                if (!yr) return;
+                const lbl = String(it.label || '').trim();
+                if (!lbl) { it.label = yr; return; }
+                if (/^20\d{2}\b/.test(lbl)) return;
+                const trailing = lbl.match(/^(.*\S)\s+(20\d{2}(?:-\d{2})?)\s*$/);
+                if (trailing) {
+                    it.label = trailing[2] + ' ' + trailing[1];
+                    return;
+                }
+                it.label = yr + ' ' + lbl;
+            });
+        }
+
         function _setupComparisonForCurrentProfile(subject, currentKey, sameSubjectRuns) {
             const others = (sameSubjectRuns || []).filter(p => (p.s3_key || p.job_id) !== currentKey);
             const sorted = typeof sortRunsForGroup === 'function' ? sortRunsForGroup(others) : others;
@@ -72215,6 +72318,9 @@
                 label: _compactRunLabel(p),
                 profile: p
             }));
+            // Year-prefix every row when the popover spans 2+ years
+            // (see _applyMultiYearPrefixToCutLabels header).
+            _applyMultiYearPrefixToCutLabels(available);
             const prevSubject = _comparisonRunsState.subject || '';
             const subjectChanged = (subject || '') !== prevSubject;
             if (subjectChanged) {
@@ -72329,13 +72435,32 @@
                     try {
                         const avail = (_comparisonRunsState.availableRuns || []).find(a => a.key === key);
                         if (avail) avail.label = preferredLabel;
+                        // 2026-06-25: re-run the year-prefix pass over
+                        // every popover row. The fetched run may have
+                        // just revealed a new year (via date_range
+                        // metadata) that pushes the popover into multi-
+                        // year territory, in which case every row needs
+                        // the prefix; or it may have arrived in an
+                        // already-multi-year popover and needs to inherit
+                        // the same year-first format as its siblings.
+                        try { _applyMultiYearPrefixToCutLabels(_comparisonRunsState.availableRuns || []); } catch (_) {}
                         const pop = document.getElementById('compareDateRangesPopover');
                         if (pop) {
-                            const cb = pop.querySelector('input[data-cmp-key="' + (CSS.escape ? CSS.escape(key) : key.replace(/"/g, '\\"')) + '"]');
-                            if (cb && cb.parentElement) {
-                                const labelEl = cb.parentElement.querySelector('span[data-cmp-label]');
-                                if (labelEl) labelEl.textContent = preferredLabel;
-                            }
+                            // Re-paint EVERY row's label from the (now
+                            // possibly year-prefixed) availableRuns
+                            // entries, not just the row that triggered
+                            // this fetch. A fresh fetch can promote the
+                            // popover into multi-year mode, in which
+                            // case sibling rows that were already on
+                            // screen need their labels reordered too.
+                            (_comparisonRunsState.availableRuns || []).forEach(a => {
+                                const sel = 'input[data-cmp-key="' + (CSS.escape ? CSS.escape(a.key) : a.key.replace(/"/g, '\\"')) + '"]';
+                                const cb = pop.querySelector(sel);
+                                if (cb && cb.parentElement) {
+                                    const labelEl = cb.parentElement.querySelector('span[data-cmp-label]');
+                                    if (labelEl) labelEl.textContent = a.label || '';
+                                }
+                            });
                         }
                     } catch (_) {}
                     console.info('[compare] loaded run', key, '- label:', preferredLabel, '- date_range:', data.date_range, '- demographic categories:', Object.keys(parsed.demographics || {}));
