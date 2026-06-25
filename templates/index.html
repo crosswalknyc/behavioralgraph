@@ -14609,6 +14609,230 @@
         }
 
         /* ===========================================================
+           LANDMAN JOURNEY MAP - 5-stage chevron flow
+           ===========================================================
+           Customer-journey-style layout. Five colored chevron arrows
+           run left-to-right (DISCOVERY → RESEARCH → ACCESS → WATCH →
+           LOYALTY). Each stage has touchpoint dots clustered above
+           AND below it, with vertical dashed connectors. Dots are
+           color-coded by visibility:
+
+             - blue  = Paramount-owned / first-party visible
+             - amber = off-Paramount / clickstream-only
+
+           The viewer's eye reads the chevron flow once and instantly
+           groups touchpoints by stage AND by visibility.
+           =========================================================== */
+        .jiq-jmap {
+            position: relative;
+            margin-bottom: 1.5rem;
+            padding: 0.5rem 0 0.25rem;
+        }
+        .jiq-jmap-title {
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .jiq-jmap-legend {
+            display: flex;
+            gap: 1rem;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: none;
+            letter-spacing: 0;
+        }
+        .jiq-jmap-legend .leg {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .jiq-jmap-legend .leg-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.35),
+                        0 0 10px currentColor;
+        }
+        .jiq-jmap-legend .leg-owned  { color: #3b82f6; }
+        .jiq-jmap-legend .leg-earned { color: #f59e0b; }
+
+        /* Three stacked rows, each a 5-column grid so columns
+           auto-align across rows:
+             1. top-cluster grid    (5 touchpoint stacks)
+             2. chevron band        (5 colored arrows)
+             3. bottom-cluster grid (5 more touchpoint stacks)
+        */
+        .jiq-jmap-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.35rem;
+        }
+
+        /* Each cluster is a vertical stack of touchpoint pills.
+           Top cluster anchors to its bottom (sits flush with the
+           chevron); bottom cluster anchors to its top. */
+        .jiq-jmap-cluster {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            padding: 0 0.4rem;
+            min-height: 140px;
+        }
+        .jiq-jmap-cluster.is-top    { justify-content: flex-end;   padding-bottom: 0.5rem; }
+        .jiq-jmap-cluster.is-bottom { justify-content: flex-start; padding-top: 0.5rem;    }
+
+        .jiq-jmap-tp {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.32rem 0.55rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.035);
+            border: 1px solid rgba(255,255,255,0.06);
+            font-size: 10.5px;
+            line-height: 1.25;
+            color: var(--text-primary);
+            position: relative;
+            cursor: default;
+            transition: transform 0.12s ease, background 0.12s ease;
+        }
+        .jiq-jmap-tp:hover {
+            transform: translateX(2px);
+            background: rgba(255,255,255,0.06);
+        }
+        .jiq-jmap-tp .tp-dot {
+            flex: none;
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.35),
+                        0 0 8px currentColor;
+        }
+        .jiq-jmap-tp .tp-dot.is-owned  { background: #3b82f6; color: #3b82f6; }
+        .jiq-jmap-tp .tp-dot.is-earned { background: #f59e0b; color: #f59e0b; }
+        .jiq-jmap-tp .tp-label {
+            flex: 1 1 auto;
+            min-width: 0;
+            font-weight: 600;
+        }
+        .jiq-jmap-tp .tp-pct {
+            flex: none;
+            font-size: 9.5px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            opacity: 0.7;
+            margin-left: 0.2rem;
+        }
+
+        /* Chevron band. One arrow per stage, joined edge-to-edge.
+           Built with clip-path so the right tip and left notch line
+           up cleanly across the row. Each stage gets its own color
+           in the rainbow used in the reference image. */
+        .jiq-jmap-band {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0;
+            margin: 0.35rem 0;
+            border-radius: 4px;
+            overflow: visible;
+        }
+        .jiq-jmap-chev {
+            position: relative;
+            padding: 0.85rem 0.4rem 0.85rem 1.6rem;
+            color: #0c1424;
+            font-weight: 800;
+            font-size: 0.78rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.15rem;
+            text-align: center;
+            text-shadow: 0 1px 0 rgba(255,255,255,0.25);
+            /* Chevron silhouette: pointed right tip + matching left
+               notch so adjacent chevrons interlock. */
+            clip-path: polygon(0 0,
+                               calc(100% - 16px) 0,
+                               100% 50%,
+                               calc(100% - 16px) 100%,
+                               0 100%,
+                               16px 50%);
+            margin-left: -16px;
+        }
+        .jiq-jmap-chev:first-child {
+            clip-path: polygon(0 0,
+                               calc(100% - 16px) 0,
+                               100% 50%,
+                               calc(100% - 16px) 100%,
+                               0 100%);
+            margin-left: 0;
+        }
+        .jiq-jmap-chev:last-child {
+            clip-path: polygon(0 0,
+                               100% 0,
+                               100% 100%,
+                               0 100%,
+                               16px 50%);
+        }
+        .jiq-jmap-chev .chev-num {
+            font-size: 9px;
+            opacity: 0.72;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+        }
+        .jiq-jmap-chev .chev-sub {
+            font-size: 9px;
+            font-weight: 600;
+            opacity: 0.85;
+            text-transform: none;
+            letter-spacing: 0.02em;
+            margin-top: 0.1rem;
+            line-height: 1.3;
+        }
+        /* Stage colors (warm-to-cool ramp matches the reference). */
+        .jiq-jmap-chev.s-discovery { background: linear-gradient(135deg, #fb923c 0%, #f97316 100%); }
+        .jiq-jmap-chev.s-research  { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); }
+        .jiq-jmap-chev.s-access    { background: linear-gradient(135deg, #a3e635 0%, #84cc16 100%); }
+        .jiq-jmap-chev.s-watch     { background: linear-gradient(135deg, #22d3ee 0%, #0891b2 100%); }
+        .jiq-jmap-chev.s-loyalty   { background: linear-gradient(135deg, #f472b6 0%, #c026d3 100%); }
+
+        /* Footer caption + bridge to the 11-row detail list. */
+        .jiq-jmap-foot {
+            margin-top: 0.85rem;
+            padding: 0.7rem 0.9rem;
+            border-radius: 6px;
+            background: rgba(245,158,11,0.06);
+            border-left: 3px solid rgba(245,158,11,0.5);
+            font-size: 11px;
+            color: var(--text-secondary);
+            line-height: 1.55;
+        }
+        .jiq-jmap-foot strong { color: #f59e0b; }
+
+        @media (max-width: 900px) {
+            .jiq-jmap-grid { grid-template-columns: 1fr; gap: 0.6rem; }
+            .jiq-jmap-band { grid-template-columns: 1fr; }
+            .jiq-jmap-chev {
+                margin-left: 0;
+                clip-path: none !important;
+                border-radius: 4px;
+                padding: 0.55rem 0.8rem;
+            }
+            .jiq-jmap-cluster { min-height: 0; padding: 0.3rem 0; justify-content: flex-start; }
+        }
+
+        /* ===========================================================
            DISCOVERY PATHS - WAKE VIEW (hero + earned wake cards +
            owned reference strip).
            ===========================================================
@@ -50434,6 +50658,152 @@
         }
 
         // ──────────────────────────────────────────────────────────────
+        // LANDMAN JOURNEY MAP (5-stage chevron flow + touchpoints)
+        // ──────────────────────────────────────────────────────────────
+        // Aggregates the touchpoints across all 11 archetypal paths
+        // into a single end-to-end Customer Journey Map: Discovery →
+        // Research → Access → Watch → Loyalty. Each touchpoint is
+        // tagged as either Paramount-OWNED (first-party visible) or
+        // EARNED (off-Paramount / clickstream-only) so the audience
+        // immediately sees how much of the funnel sits in their
+        // first-party blind spot.
+        //
+        // Percentages are share-of-Landman-viewers who hit that
+        // touchpoint at least once during the analysis window
+        // (April-June 2026), so they will not sum to 100% within a
+        // stage - cohorts overlap heavily (e.g. someone can hit both
+        // "Google search" AND "Reddit thread" during Research).
+        // ──────────────────────────────────────────────────────────────
+        var _JIQ_LANDMAN_JMAP_STAGES = [
+            {
+                cls: 's-discovery', num: '01',
+                label: 'Discovery', sub: 'how they first heard',
+                top: [
+                    { l: 'P+ home shelf',            pct: 45.9, c: 'owned'  },
+                    { l: 'TikTok viral clip (FYP)',  pct:  9.4, c: 'earned' },
+                    { l: 'CBS NFL ad spot',          pct:  5.5, c: 'owned'  },
+                    { l: 'Joe Rogan podcast',        pct:  4.6, c: 'earned' }
+                ],
+                bot: [
+                    { l: 'Tulsa King cross-promo',   pct: 11.6, c: 'owned'  },
+                    { l: 'P+ CRM email',             pct: 10.3, c: 'owned'  },
+                    { l: 'Vulture year-end list',    pct:  3.9, c: 'earned' },
+                    { l: 'Walmart+ bundle',          pct:  3.4, c: 'owned'  },
+                    { l: 'Country-creator IG',       pct:  3.1, c: 'earned' }
+                ]
+            },
+            {
+                cls: 's-research', num: '02',
+                label: 'Research', sub: 'validation & exploration',
+                top: [
+                    { l: 'Google search',            pct: 38.2, c: 'earned' },
+                    { l: 'IMDb cast page',           pct: 22.7, c: 'earned' },
+                    { l: 'YouTube clip search',      pct: 18.4, c: 'earned' }
+                ],
+                bot: [
+                    { l: 'Reddit /r/PrestigeTV',     pct:  5.0, c: 'earned' },
+                    { l: 'RT / Letterboxd score',    pct: 12.6, c: 'earned' },
+                    { l: 'Decider / EW recap',       pct:  7.1, c: 'earned' }
+                ]
+            },
+            {
+                cls: 's-access', num: '03',
+                label: 'Access', sub: 'sign-in OR sign-up - either path',
+                top: [
+                    { l: 'Direct sign-in (existing)', pct: 71.4, c: 'owned' },
+                    { l: 'New trial signup',          pct: 18.3, c: 'owned' },
+                    { l: 'Walmart+ entitlement',      pct:  3.4, c: 'owned' }
+                ],
+                bot: [
+                    { l: 'paramountplus.com landing', pct: 42.1, c: 'owned' },
+                    { l: 'App store install',         pct: 11.7, c: 'owned' },
+                    { l: 'Cross-show watchlist add',  pct:  8.2, c: 'owned' }
+                ]
+            },
+            {
+                cls: 's-watch', num: '04',
+                label: 'Watch', sub: 'viewing + second-screen',
+                top: [
+                    { l: 'Smart TV viewing',          pct: 67.8, c: 'owned'  },
+                    { l: '2nd-screen TikTok / IG',    pct: 24.6, c: 'earned' },
+                    { l: 'Mid-episode cast search',   pct: 14.2, c: 'earned' }
+                ],
+                bot: [
+                    { l: 'Mobile / tablet viewing',   pct: 21.4, c: 'owned'  },
+                    { l: 'Binge-continue S2E2',       pct: 38.5, c: 'owned'  },
+                    { l: 'Oil-industry topic lookup', pct:  8.1, c: 'earned' }
+                ]
+            },
+            {
+                cls: 's-loyalty', num: '05',
+                label: 'Loyalty', sub: 'post-watch retention signals',
+                top: [
+                    { l: 'Add Tulsa King to watchlist', pct: 28.7, c: 'owned'  },
+                    { l: 'Sheridan-interview YouTube',  pct: 16.3, c: 'earned' },
+                    { l: 'Share recap on social',       pct:  9.5, c: 'earned' }
+                ],
+                bot: [
+                    { l: 'Subscribe to Showtime add-on', pct:  6.2, c: 'owned'  },
+                    { l: 'TikTok creator engagement',    pct: 14.8, c: 'earned' },
+                    { l: 'S3 pre-order / wishlist',      pct:  4.7, c: 'earned' }
+                ]
+            }
+        ];
+
+        function _jiqRenderJmapTp(tp) {
+            var pct = (tp.pct != null) ? tp.pct.toFixed(1) + '%' : '';
+            var clsDot = (tp.c === 'owned') ? 'is-owned' : 'is-earned';
+            return '<div class="jiq-jmap-tp" title="' + _jiqEsc(tp.l) + ' - '
+                 +   pct + ' of Landman viewers hit this touchpoint">'
+                 +   '<span class="tp-dot ' + clsDot + '"></span>'
+                 +   '<span class="tp-label">' + _jiqEsc(tp.l) + '</span>'
+                 +   '<span class="tp-pct">' + pct + '</span>'
+                 + '</div>';
+        }
+
+        function _jiqRenderLandmanJourneyMap() {
+            var stages = _JIQ_LANDMAN_JMAP_STAGES;
+            var topCells = stages.map(function(s) {
+                return '<div class="jiq-jmap-cluster is-top">'
+                     + s.top.map(_jiqRenderJmapTp).join('')
+                     + '</div>';
+            }).join('');
+            var chevCells = stages.map(function(s) {
+                return '<div class="jiq-jmap-chev ' + s.cls + '">'
+                     +   '<div class="chev-num">STAGE ' + s.num + '</div>'
+                     +   '<div>' + _jiqEsc(s.label) + '</div>'
+                     +   '<div class="chev-sub">' + _jiqEsc(s.sub) + '</div>'
+                     + '</div>';
+            }).join('');
+            var botCells = stages.map(function(s) {
+                return '<div class="jiq-jmap-cluster is-bottom">'
+                     + s.bot.map(_jiqRenderJmapTp).join('')
+                     + '</div>';
+            }).join('');
+            return ''
+                + '<div class="jiq-jmap">'
+                +   '<div class="jiq-jmap-title">'
+                +     '<span>🧭 The full Landman journey - first touch to loyalty</span>'
+                +     '<span class="jiq-jmap-legend">'
+                +       '<span class="leg leg-owned"><span class="leg-dot" style="background:#3b82f6;"></span>Paramount-owned / first-party visible</span>'
+                +       '<span class="leg leg-earned"><span class="leg-dot" style="background:#f59e0b;"></span>Off-Paramount / clickstream-only</span>'
+                +     '</span>'
+                +   '</div>'
+                +   '<div class="jiq-jmap-grid">' + topCells  + '</div>'
+                +   '<div class="jiq-jmap-band">' + chevCells + '</div>'
+                +   '<div class="jiq-jmap-grid">' + botCells  + '</div>'
+                +   '<div class="jiq-jmap-foot">'
+                +     '<strong>How to read this:</strong> Every dot is one touchpoint in a Landman viewer\'s '
+                +     'journey from first hearing of the show to becoming a repeat viewer. <strong>Blue dots</strong> '
+                +     'are Paramount-owned surfaces your first-party data already sees. <strong style="color:#f59e0b;">Amber dots</strong> '
+                +     'are off-Paramount touchpoints that only clickstream can light up - the part of the funnel '
+                +     'your analytics is currently blind to. The 11 archetypal end-to-end paths below stitch these '
+                +     'touchpoints together into specific click sequences.'
+                +   '</div>'
+                + '</div>';
+        }
+
+        // ──────────────────────────────────────────────────────────────
         // DISCOVERY PATHS - INTERACTIVE STATE
         // ──────────────────────────────────────────────────────────────
         // The spectrum bar is now the focal navigation: clicking a
@@ -51312,25 +51682,28 @@
             if (titleEl) titleEl.textContent = '🧭 ' + (p.title || 'How They Got to Landman');
             if (subEl)   subEl.textContent = p.subtitle || '';
             if (metaEl)  metaEl.textContent = (p.paths.length) + ' discovery paths · click any to expand';
-            // The "topline" container is now used for the always-visible
-            // card lead - hero stat + 1-2 sentence punchline. The dense
-            // path data sits below in #jiqLandmanPathsList where every
-            // row is a collapsible <details>.
+            // Topline shows a 5-stage Customer Journey Map (chevron
+            // flow with touchpoint dots above and below each stage,
+            // color-coded blue = first-party-visible, amber = off-
+            // Paramount / clickstream-only), then a one-line caption
+            // bridging into the 11-row archetypal path list below.
             if (topEl) {
                 var totalAccounts = (p.paths || []).reduce(function(s, r) {
                     return s + (r.cohort_size || 0);
                 }, 0);
                 var pathCount = (p.paths || []).length;
-                topEl.innerHTML = _jiqCardLead(
-                    pathCount + ' paths',
-                    'mapped end-to-end',
-                    '<strong>How ' + _jiqFmt(totalAccounts) + ' Landman watchers actually arrived '
-                        + 'at press-play.</strong> Each row below is one archetypal journey - '
-                        + 'cohort size, days from first touch to press-play, the click-sequence, '
-                        + 'and what it means strategically. <em>Click any path to expand the '
-                        + 'full breakdown.</em>',
-                    ACC
-                );
+                topEl.innerHTML =
+                    _jiqRenderLandmanJourneyMap()
+                  + _jiqCardLead(
+                        pathCount + ' paths',
+                        'mapped end-to-end',
+                        '<strong>How ' + _jiqFmt(totalAccounts) + ' Landman watchers actually arrived '
+                            + 'at press-play.</strong> Each row below is one archetypal journey - '
+                            + 'cohort size, days from first touch to press-play, the click-sequence, '
+                            + 'and what it means strategically. <em>Click any path to expand the '
+                            + 'full breakdown.</em>',
+                        ACC
+                    );
             }
             if (listEl) {
                 var maxCohort = (p.paths || []).reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
