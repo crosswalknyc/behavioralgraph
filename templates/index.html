@@ -72270,10 +72270,24 @@
         // 2026-06-25: When the Data Cuts popover surfaces siblings from
         // more than one calendar year, prepend the year to every entry
         // so the user can disambiguate at a glance ("2025 Avid" vs
-        // "2024 Avid"). Per-item year resolves via getProfileRunYear,
-        // which falls back through the date-range cache → name year →
-        // s3_key timestamp year, so unfetched siblings still get a
-        // sensible year guess.
+        // "2024 Avid").
+        //
+        // Year resolution is the ANALYZED-PERIOD year, NOT the file's
+        // generation year:
+        //   1. Cached date_range year for this sibling (populated when
+        //      the sibling has been fetched at least once this session).
+        //   2. 4-digit year baked into the display name ("Reba 2023" →
+        //      "2023", "Reba - 2024 - Avid Fan" → "2024").
+        //   3. Current profile's cached date_range year - siblings
+        //      almost always cover the same period as the base profile
+        //      they live next to (Reba's 2025 Avid cut sits next to the
+        //      2025 base), so the base's analyzed year is a strictly
+        //      better guess than the s3_key timestamp year.
+        // The s3_key timestamp year (when the CSV was generated) is
+        // INTENTIONALLY NOT used here - it misleads when a Q4-2025
+        // dataset was generated in January 2026 (the original bug:
+        // "2026 AVID" showing for a Reba file whose Date Range header
+        // reads 2025-01-01 - 2025-12-31).
         //
         // Single-year popovers are left untouched (prefixing every row
         // with the same year just adds noise).
@@ -72282,15 +72296,27 @@
         // year-prefixed labels are skipped; labels with a TRAILING year
         // token ("Avid 2024") are reordered to year-first ("2024 Avid")
         // so every row matches the same shape.
+        function _siblingAnalyzedYear(profile, fallbackYear) {
+            try {
+                const cached = (typeof getCachedRunDateRangeYear === 'function')
+                    ? (getCachedRunDateRangeYear(profile) || '') : '';
+                if (cached) return cached;
+                const fromName = (typeof getProfileYear === 'function')
+                    ? (getProfileYear(profile) || '') : '';
+                if (/^\d{4}$/.test(fromName)) return fromName;
+                return fallbackYear || '';
+            } catch (_) { return fallbackYear || ''; }
+        }
+
         function _applyMultiYearPrefixToCutLabels(items) {
             if (!Array.isArray(items) || items.length < 2) return;
+            const currentKey = (typeof _comparisonRunsState !== 'undefined'
+                && _comparisonRunsState && _comparisonRunsState.currentKey) || '';
+            const fallbackYear = (typeof getCachedRunDateRangeYear === 'function')
+                ? (getCachedRunDateRangeYear(currentKey) || '') : '';
             const yearOf = (it) => {
-                try {
-                    const y = (typeof getProfileRunYear === 'function')
-                        ? (getProfileRunYear(it.profile) || '')
-                        : '';
-                    return /^\d{4}$/.test(y) ? y : '';
-                } catch (_) { return ''; }
+                const y = _siblingAnalyzedYear(it.profile, fallbackYear);
+                return /^\d{4}(?:-\d{2})?$/.test(y) ? y : '';
             };
             const years = items.map(yearOf);
             const distinct = new Set(years.filter(Boolean));
