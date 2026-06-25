@@ -15062,12 +15062,12 @@
         .jiq-jmap-cluster {
             display: flex;
             flex-direction: column;
-            gap: 0.4rem;
+            gap: 0.3rem;
             padding: 0 0.4rem;
-            min-height: 140px;
+            min-height: 60px;
         }
-        .jiq-jmap-cluster.is-top    { justify-content: flex-end;   padding-bottom: 0.5rem; }
-        .jiq-jmap-cluster.is-bottom { justify-content: flex-start; padding-top: 0.5rem;    }
+        .jiq-jmap-cluster.is-top    { justify-content: flex-end;   padding-bottom: 0.1rem; }
+        .jiq-jmap-cluster.is-bottom { justify-content: flex-start; padding-top: 0.1rem;    }
 
         .jiq-jmap-tp {
             display: flex;
@@ -15209,10 +15209,10 @@
         }
         .jiq-jmap:not(.jiq-jmap-mini) .jiq-jmap-cluster.is-top::after {
             margin-top: auto;
-            padding-bottom: 0.3rem;
+            padding-bottom: 0.1rem;
         }
         .jiq-jmap:not(.jiq-jmap-mini) .jiq-jmap-cluster.is-bottom::after {
-            padding-top: 0.3rem;
+            padding-top: 0.1rem;
         }
         .jiq-jmap:not(.jiq-jmap-mini)[data-hover-stage] .jiq-jmap-cluster.is-spider::after {
             opacity: 0;
@@ -15254,12 +15254,12 @@
             animation: jiq-spider-line 0.34s ease forwards;
         }
         .jiq-jmap-cluster.is-spider.is-top::before {
-            top: 0.4rem;
+            top: 0.15rem;
             bottom: 0;
         }
         .jiq-jmap-cluster.is-spider.is-bottom::before {
             top: 0;
-            bottom: 0.4rem;
+            bottom: 0.15rem;
         }
         @keyframes jiq-spider-line {
             from { opacity: 0; transform: scaleY(0.2); }
@@ -15276,7 +15276,7 @@
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 0;
-            margin: 0.35rem 0;
+            margin: 0.05rem 0;
             border-radius: 4px;
             overflow: visible;
         }
