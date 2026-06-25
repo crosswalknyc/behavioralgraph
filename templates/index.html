@@ -14836,20 +14836,14 @@
         }
         .jiq-jmap-foot strong { color: #f59e0b; }
 
-        /* ====== Interactive detail panel (shown when a touchpoint
-           is selected) ====== */
+        /* ====== Interactive detail panel (rendered inside the
+           floating popover - see .jiq-jmap-popover below) ====== */
         .jiq-jmap-detail {
-            margin-top: 0.85rem;
             border-radius: 10px;
-            background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.015) 100%);
-            border: 1px solid rgba(255,255,255,0.10);
+            background: linear-gradient(180deg, #1a2332 0%, #0f1827 100%);
+            border: 1px solid rgba(255,255,255,0.12);
             border-left: 4px solid var(--detail-accent, #f59e0b);
             padding: 0.95rem 1.1rem 1.05rem;
-            animation: jiqJmapFadeIn 0.18s ease-out;
-        }
-        @keyframes jiqJmapFadeIn {
-            from { opacity: 0; transform: translateY(-4px); }
-            to   { opacity: 1; transform: translateY(0); }
         }
         .jiq-jmap-detail .det-head {
             display: flex;
@@ -15005,6 +14999,59 @@
         }
         @media (max-width: 700px) {
             .jiq-jmap-detail .det-stats { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        /* ====== Floating popover (replaces inline foot-slot
+           rendering of the detail panel). One global popover lives
+           at body level, gets repositioned to whichever pill is
+           clicked, and animates with transform-origin pointed at
+           the pill so it visually "grows" out of the clicked dot.
+           ============================================================ */
+        .jiq-jmap-popover {
+            position: fixed;
+            z-index: 9999;
+            max-width: min(580px, calc(100vw - 24px));
+            width: max-content;
+            max-height: 80vh;
+            overflow: auto;
+            opacity: 0;
+            transform: scale(0.85);
+            transform-origin: var(--anchor-x, 50%) var(--anchor-y, 0%);
+            pointer-events: none;
+            transition: opacity 0.18s ease-out,
+                        transform 0.22s cubic-bezier(0.22, 1.0, 0.36, 1.0);
+            filter: drop-shadow(0 18px 48px rgba(0,0,0,0.55))
+                    drop-shadow(0 4px 12px rgba(0,0,0,0.40));
+        }
+        .jiq-jmap-popover.is-open {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+        }
+        .jiq-jmap-popover .jiq-jmap-detail {
+            margin-top: 0;
+        }
+        /* Small "tail" pointer toward the originating pill. Color
+           matches the panel's top edge so the popover reads as
+           visually anchored. */
+        .jiq-jmap-popover::before {
+            content: '';
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background: #1a2332;
+            border: 1px solid rgba(255,255,255,0.12);
+            transform: rotate(45deg);
+            left: var(--anchor-x, 50%);
+            margin-left: -7px;
+            z-index: -1;
+        }
+        .jiq-jmap-popover[data-arrow-side="top"]::before {
+            top: -1px;
+        }
+        .jiq-jmap-popover[data-arrow-side="bottom"]::before {
+            bottom: -1px;
+            background: #0f1827;
         }
 
         @media (max-width: 900px) {
@@ -51146,12 +51193,11 @@
         ];
 
         // ───────────────── interactive state ─────────────────
-        // Selection state is held in the DOM (not a JS variable) so
-        // every .jiq-jmap container - the main map and each of the
-        // 11 path mini-maps - keeps its own independent selection
-        // and renders its own detail panel into its own foot slot.
-        // The pill onclick passes `this` (the element); the handler
-        // walks up to the nearest .jiq-jmap to scope the operation.
+        // The detail panel is rendered into a single floating
+        // popover at body level, anchored to whichever pill was
+        // clicked. Selection state lives in DOM classes (is-active
+        // on the pill, has-selection on its container) so it's
+        // trivially observable + resettable on close.
         function _jiqJmapLookup(key) {
             if (!key) return null;
             var parts = String(key).split('-');
@@ -51164,39 +51210,126 @@
             return { stage: s, tp: tp };
         }
 
-        function _jiqSelectJmapTp(key, pill) {
-            if (!pill) return;
-            var root = pill.closest('.jiq-jmap');
-            if (!root) return;
-            var wasActive = pill.classList.contains('is-active');
-            // Clear any active selection in THIS container
-            root.classList.remove('has-selection');
-            root.querySelectorAll('.jiq-jmap-tp.is-active').forEach(function(el) {
-                el.classList.remove('is-active');
+        function _jiqClearAllJmapActive() {
+            document.querySelectorAll('.jiq-jmap.has-selection').forEach(function(r) {
+                r.classList.remove('has-selection');
             });
-            var slot = root.querySelector(':scope > .jiq-jmap-foot-slot');
-            if (slot) slot.innerHTML = _jiqRenderJmapDefaultFoot(root);
-            // Toggle-off if the user clicked the already-active pill
-            if (wasActive) return;
-            // Apply new selection
-            pill.classList.add('is-active');
-            root.classList.add('has-selection');
-            var sel = _jiqJmapLookup(key);
-            if (slot && sel) {
-                slot.innerHTML = _jiqRenderJmapDetail(sel.stage, sel.tp, key);
-            }
+            document.querySelectorAll('.jiq-jmap-tp.is-active').forEach(function(p) {
+                p.classList.remove('is-active');
+            });
         }
 
-        function _jiqClearJmapSelectionFromBtn(btn) {
-            if (!btn) return;
-            var root = btn.closest('.jiq-jmap');
-            if (!root) return;
-            root.classList.remove('has-selection');
-            root.querySelectorAll('.jiq-jmap-tp.is-active').forEach(function(el) {
-                el.classList.remove('is-active');
+        function _jiqEnsureJmapPopover() {
+            var pop = document.getElementById('jiqJmapPopover');
+            if (pop) return pop;
+            pop = document.createElement('div');
+            pop.id = 'jiqJmapPopover';
+            pop.className = 'jiq-jmap-popover';
+            document.body.appendChild(pop);
+            // Click outside to close - but ignore clicks on the
+            // popover itself or on any other pill (those have their
+            // own handler that toggles or swaps selection).
+            document.addEventListener('click', function(evt) {
+                var p = document.getElementById('jiqJmapPopover');
+                if (!p || !p.classList.contains('is-open')) return;
+                if (p.contains(evt.target)) return;
+                var pill = evt.target && evt.target.closest
+                    ? evt.target.closest('.jiq-jmap-tp')
+                    : null;
+                if (pill) return;
+                _jiqClosePopover();
             });
-            var slot = root.querySelector(':scope > .jiq-jmap-foot-slot');
-            if (slot) slot.innerHTML = _jiqRenderJmapDefaultFoot(root);
+            // ESC to close
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') _jiqClosePopover();
+            });
+            // Close on scroll outside the popover (fixed positioning
+            // would otherwise drift away from the anchor pill).
+            window.addEventListener('scroll', function(evt) {
+                var p = document.getElementById('jiqJmapPopover');
+                if (!p || !p.classList.contains('is-open')) return;
+                if (p.contains(evt.target)) return;
+                _jiqClosePopover();
+            }, { passive: true, capture: true });
+            return pop;
+        }
+
+        function _jiqClosePopover() {
+            var pop = document.getElementById('jiqJmapPopover');
+            _jiqClearAllJmapActive();
+            if (!pop) return;
+            pop.classList.remove('is-open');
+        }
+
+        function _jiqOpenPopover(pill, stage, tp, key) {
+            var pop      = _jiqEnsureJmapPopover();
+            var wasOpen  = pop.classList.contains('is-open');
+            // Hide before measuring so we never flash old content at
+            // the new position.
+            pop.classList.remove('is-open');
+            pop.innerHTML = _jiqRenderJmapDetail(stage, tp, key);
+            // Measure without showing.
+            pop.style.visibility = 'hidden';
+            pop.style.left       = '0px';
+            pop.style.top        = '0px';
+            // Force layout so offsetWidth/Height are post-innerHTML.
+            void pop.offsetHeight;
+            var rect = pill.getBoundingClientRect();
+            var popW = pop.offsetWidth;
+            var popH = pop.offsetHeight;
+            var vw   = window.innerWidth;
+            var vh   = window.innerHeight;
+            var pad  = 12;
+            // Vertical: prefer below pill; flip above if no room
+            var top, anchorY, arrowSide;
+            if (rect.bottom + 12 + popH < vh - pad) {
+                top       = rect.bottom + 12;
+                anchorY   = '0%';
+                arrowSide = 'top';
+            } else if (rect.top - 12 - popH > pad) {
+                top       = rect.top - 12 - popH;
+                anchorY   = '100%';
+                arrowSide = 'bottom';
+            } else {
+                top       = Math.max(pad, vh - popH - pad);
+                anchorY   = '0%';
+                arrowSide = 'top';
+            }
+            // Horizontal: anchor on pill center, clamp to viewport
+            var centerX = rect.left + rect.width / 2;
+            var left    = centerX - popW / 2;
+            if (left < pad)             left = pad;
+            if (left + popW > vw - pad) left = vw - pad - popW;
+            var anchorX = (centerX - left) + 'px';
+            pop.style.top  = top + 'px';
+            pop.style.left = left + 'px';
+            pop.style.setProperty('--anchor-x', anchorX);
+            pop.style.setProperty('--anchor-y', anchorY);
+            pop.setAttribute('data-arrow-side', arrowSide);
+            pop.style.visibility = '';
+            // Force a reflow so a re-open at a new anchor still
+            // re-runs the scale-from-anchor animation rather than
+            // jumping.
+            if (wasOpen) { void pop.offsetHeight; }
+            requestAnimationFrame(function() { pop.classList.add('is-open'); });
+        }
+
+        function _jiqSelectJmapTp(key, pill) {
+            if (!pill) return;
+            var wasActive = pill.classList.contains('is-active');
+            _jiqClearAllJmapActive();
+            // Toggle-off: clicking the already-active pill closes
+            if (wasActive) { _jiqClosePopover(); return; }
+            pill.classList.add('is-active');
+            var root = pill.closest('.jiq-jmap');
+            if (root) root.classList.add('has-selection');
+            var sel = _jiqJmapLookup(key);
+            if (!sel) return;
+            _jiqOpenPopover(pill, sel.stage, sel.tp, key);
+        }
+
+        function _jiqClearJmapSelectionFromBtn(/* btn */) {
+            _jiqClosePopover();
         }
 
         function _jiqRenderJmapTp(tp, key) {
