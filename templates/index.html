@@ -52423,7 +52423,19 @@
             var listEl     = document.getElementById('jiqLandmanPathsList');
             var rollupEl   = document.getElementById('jiqLandmanPathsRollup');
             if (titleEl) titleEl.textContent = '🧭 ' + (p.title || 'How They Got to Landman');
-            if (subEl)   subEl.textContent = p.subtitle || '';
+            if (subEl) {
+                // Strip the legacy "Five paths are surfaces Paramount
+                // owns ... / six are earned ..." sentence baked into
+                // the deployed payload's subtitle - the new journey
+                // map + blue/amber legend now convey that split
+                // visually, so the prose is redundant.
+                var subtitle = p.subtitle || '';
+                subtitle = subtitle.replace(
+                    /\s*Five paths are surfaces Paramount owns[\s\S]*?country-music creator halo\)\.\s*/,
+                    ' '
+                ).trim();
+                subEl.textContent = subtitle;
+            }
             if (metaEl)  metaEl.textContent = (p.paths.length) + ' discovery paths · click any to expand';
             // Topline shows a 5-stage Customer Journey Map (chevron
             // flow with touchpoint dots above and below each stage,
