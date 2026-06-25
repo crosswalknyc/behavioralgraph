@@ -15128,6 +15128,92 @@
             margin-left: 0.2rem;
         }
 
+        /* ─── Spider-out hover effect ───────────────────────────────
+           When you hover any stage chevron, the matching column's
+           touchpoint pills "spider out": they brighten, scale up,
+           and slide outward (top cluster slides up, bottom slides
+           down) with a staggered nth-child delay so they fan out in
+           sequence rather than all at once. Pills in other columns
+           dim to ~25% so the eye is led to the relevant column. */
+        .jiq-jmap-tp {
+            transition: opacity 0.22s ease,
+                        transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        filter 0.22s ease,
+                        background 0.18s ease,
+                        border-color 0.18s ease,
+                        box-shadow 0.22s ease;
+            will-change: transform, opacity;
+        }
+        .jiq-jmap[data-hover-stage] .jiq-jmap-tp {
+            opacity: 0.22;
+            transform: scale(0.94);
+            filter: grayscale(0.55);
+        }
+        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider .jiq-jmap-tp {
+            opacity: 1;
+            filter: none;
+            background: rgba(255,255,255,0.085);
+            border-color: rgba(255,255,255,0.22);
+            box-shadow: 0 6px 22px rgba(0,0,0,0.45),
+                        0 0 0 1px rgba(255,255,255,0.08);
+        }
+        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-top    .jiq-jmap-tp {
+            transform: scale(1.05) translateY(-4px);
+        }
+        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-bottom .jiq-jmap-tp {
+            transform: scale(1.05) translateY(4px);
+        }
+        /* Stagger - matching pills fan out in sequence rather than
+           all snapping at once. Reverse the stagger for the top
+           cluster so the pill nearest the chevron emerges first. */
+        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-bottom .jiq-jmap-tp:nth-child(1) { transition-delay: 0.00s; }
+        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-bottom .jiq-jmap-tp:nth-child(2) { transition-delay: 0.04s; }
+        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-bottom .jiq-jmap-tp:nth-child(3) { transition-delay: 0.08s; }
+        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-bottom .jiq-jmap-tp:nth-child(4) { transition-delay: 0.12s; }
+        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-bottom .jiq-jmap-tp:nth-child(5) { transition-delay: 0.16s; }
+        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-top    .jiq-jmap-tp:nth-last-child(1) { transition-delay: 0.00s; }
+        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-top    .jiq-jmap-tp:nth-last-child(2) { transition-delay: 0.04s; }
+        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-top    .jiq-jmap-tp:nth-last-child(3) { transition-delay: 0.08s; }
+        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-top    .jiq-jmap-tp:nth-last-child(4) { transition-delay: 0.12s; }
+        .jiq-jmap[data-hover-stage] .jiq-jmap-cluster.is-spider.is-top    .jiq-jmap-tp:nth-last-child(5) { transition-delay: 0.16s; }
+        /* The chevron being hovered gets brighter on top of its
+           existing :hover filter, plus a thin connector line that
+           extends vertically to bridge into both clusters. */
+        .jiq-jmap[data-hover-stage] .jiq-jmap-chev:not(.is-spider-active) {
+            filter: brightness(0.78) saturate(0.7);
+        }
+        .jiq-jmap-chev.is-spider-active {
+            filter: brightness(1.18) saturate(1.12) !important;
+            z-index: 2;
+        }
+        .jiq-jmap-cluster.is-spider {
+            position: relative;
+        }
+        .jiq-jmap-cluster.is-spider::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            width: 0;
+            border-left: 1.5px dashed rgba(255,255,255,0.18);
+            pointer-events: none;
+            opacity: 0;
+            animation: jiq-spider-line 0.34s ease forwards;
+        }
+        .jiq-jmap-cluster.is-spider.is-top::before {
+            top: 0.4rem;
+            bottom: 0;
+        }
+        .jiq-jmap-cluster.is-spider.is-bottom::before {
+            top: 0;
+            bottom: 0.4rem;
+        }
+        @keyframes jiq-spider-line {
+            from { opacity: 0; transform: scaleY(0.2); }
+            to   { opacity: 1; transform: scaleY(1); }
+        }
+        .jiq-jmap-cluster.is-spider.is-top::before    { transform-origin: 50% 100%; }
+        .jiq-jmap-cluster.is-spider.is-bottom::before { transform-origin: 50% 0%;   }
+
         /* Chevron band. One arrow per stage, joined edge-to-edge.
            Built with clip-path so the right tip and left notch line
            up cleanly across the row. Each stage gets its own color
@@ -51958,6 +52044,40 @@
             _jiqClosePopover();
         }
 
+        // ─── Stage-chevron hover: spider out matching pills ─────────
+        // Toggling a data-hover-stage attribute on the journey-map
+        // root + an is-spider class on the matching top/bot clusters
+        // is enough for the CSS to handle the actual animation.
+        // Scoped via chev.closest('.jiq-jmap') so the master map and
+        // every per-path mini-map each manage their own hover state
+        // independently.
+        function _jiqHoverJmapStage(stageIdx, chev) {
+            if (!chev) return;
+            var root = chev.closest('.jiq-jmap');
+            if (!root) return;
+            root.setAttribute('data-hover-stage', String(stageIdx));
+            root.querySelectorAll('.jiq-jmap-chev.is-spider-active').forEach(function(c) {
+                c.classList.remove('is-spider-active');
+            });
+            chev.classList.add('is-spider-active');
+            root.querySelectorAll('.jiq-jmap-cluster.is-spider').forEach(function(c) {
+                c.classList.remove('is-spider');
+            });
+            root.querySelectorAll('.jiq-jmap-cluster[data-sidx="' + stageIdx + '"]').forEach(function(c) {
+                c.classList.add('is-spider');
+            });
+        }
+        function _jiqUnhoverJmapStage(stageIdx, chev) {
+            if (!chev) return;
+            var root = chev.closest('.jiq-jmap');
+            if (!root) return;
+            root.removeAttribute('data-hover-stage');
+            chev.classList.remove('is-spider-active');
+            root.querySelectorAll('.jiq-jmap-cluster.is-spider').forEach(function(c) {
+                c.classList.remove('is-spider');
+            });
+        }
+
         function _jiqRenderJmapTp(tp, key) {
             var pct    = (tp.pct != null) ? tp.pct.toFixed(1) + '%' : '';
             var clsDot = (tp.c === 'owned') ? 'is-owned' : 'is-earned';
@@ -52261,9 +52381,13 @@
                        + ' · click for detour + win-back')
                     : (s.label);
                 return '<div class="jiq-jmap-chev ' + s.cls + ' is-clickable" '
-                     +   'tabindex="0" role="button" '
+                     +   'tabindex="0" role="button" data-sidx="' + sIdx + '" '
                      +   'onclick="_jiqSelectJmapStage(' + sIdx + ', this);" '
                      +   'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();_jiqSelectJmapStage(' + sIdx + ',this);}" '
+                     +   'onmouseenter="_jiqHoverJmapStage(' + sIdx + ',this);" '
+                     +   'onmouseleave="_jiqUnhoverJmapStage(' + sIdx + ',this);" '
+                     +   'onfocus="_jiqHoverJmapStage(' + sIdx + ',this);" '
+                     +   'onblur="_jiqUnhoverJmapStage(' + sIdx + ',this);" '
                      +   'title="' + _jiqEsc(hoverHint) + '">'
                      +   '<div class="chev-num">STAGE ' + s.num + '</div>'
                      +   '<div>' + _jiqEsc(s.label) + '</div>'
@@ -52279,14 +52403,14 @@
             }
 
             var topCells = stages.map(function(s, sIdx) {
-                return '<div class="jiq-jmap-cluster is-top">'
+                return '<div class="jiq-jmap-cluster is-top" data-sidx="' + sIdx + '">'
                      + s.top.map(function(tp, tIdx) {
                          return _jiqRenderJmapTp(tp, sIdx + '-top-' + tIdx);
                        }).join('')
                      + '</div>';
             }).join('');
             var botCells = stages.map(function(s, sIdx) {
-                return '<div class="jiq-jmap-cluster is-bottom">'
+                return '<div class="jiq-jmap-cluster is-bottom" data-sidx="' + sIdx + '">'
                      + s.bot.map(function(tp, tIdx) {
                          return _jiqRenderJmapTp(tp, sIdx + '-bot-' + tIdx);
                        }).join('')
@@ -52725,14 +52849,22 @@
                     var sel = _jiqJmapLookup(tpKey);
                     if (sel) pillHtml = _jiqRenderJmapTp(sel.tp, tpKey);
                 }
-                return '<div class="jiq-jmap-cluster is-top">' + pillHtml + '</div>';
+                return '<div class="jiq-jmap-cluster is-top" data-sidx="' + sIdx + '">' + pillHtml + '</div>';
             }).join('');
             // Chevron row - vivid color if the path traverses this
             // stage, .is-inactive (desaturated, dimmed) if it skips.
+            // Active chevrons get the spider-out hover handlers too
+            // (skipped stages have nothing to spider so they stay
+            // inert and tooltip-only).
             var chevCells = stages.map(function(s, sIdx) {
                 var stageKey = stageOrder[sIdx];
                 var isActive = !!pathMap[stageKey];
-                return '<div class="jiq-jmap-chev ' + s.cls + (isActive ? '' : ' is-inactive') + '">'
+                var hoverAttrs = isActive
+                    ? ' onmouseenter="_jiqHoverJmapStage(' + sIdx + ',this);"'
+                      + ' onmouseleave="_jiqUnhoverJmapStage(' + sIdx + ',this);"'
+                    : '';
+                return '<div class="jiq-jmap-chev ' + s.cls + (isActive ? '' : ' is-inactive') + '" '
+                     +   'data-sidx="' + sIdx + '"' + hoverAttrs + '>'
                      +   '<div class="chev-num">' + (isActive ? 'STAGE ' + s.num : 'SKIPPED') + '</div>'
                      +   '<div>' + _jiqEsc(s.label) + '</div>'
                      + '</div>';
