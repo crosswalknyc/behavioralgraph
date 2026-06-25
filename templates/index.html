@@ -71124,7 +71124,7 @@
                             const label = entry.label || ('Run ' + (idx + 1));
                             span.textContent = label;
                             span.title = label;
-                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.7rem;text-align:right;justify-self:end;font-weight:600;white-space:normal;overflow-wrap:break-word;word-break:normal;line-height:1.15;min-width:0;padding-right:8px;';
+                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.7rem;text-align:right;justify-self:end;align-self:end;font-weight:600;white-space:nowrap;min-width:0;padding-right:8px;';
                             if (gpHeader) intHeader.insertBefore(span, gpHeader);
                             else intHeader.appendChild(span);
                         });
