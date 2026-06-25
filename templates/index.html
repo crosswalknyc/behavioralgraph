@@ -14624,6 +14624,193 @@
            groups touchpoints by stage AND by visibility.
            =========================================================== */
         /* ===========================================================
+           JOURNEY SELECTOR - dropdown picker + tab bar + compare
+           toggle that wraps the master journey map at the top of
+           the "How They Got to Landman" card. Lets the user open
+           the aggregate journey OR any of the 11 archetypal paths
+           in its own tab, switch between them, or stack them in
+           compare mode.
+           =========================================================== */
+        .jiq-jsel {
+            margin: 0 0 1.5rem 0;
+        }
+        .jiq-jsel-bar {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 14px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 10px 10px 0 0;
+            flex-wrap: wrap;
+        }
+        .jiq-jsel-label {
+            font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            color: var(--text-secondary, #94a3b8);
+        }
+        .jiq-jsel-picker {
+            flex: 1 1 240px;
+            min-width: 200px;
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            color: var(--text-primary, #e2e8f0);
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: inherit;
+            cursor: pointer;
+        }
+        .jiq-jsel-picker:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.22);
+        }
+        .jiq-jsel-compare {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 7px 12px;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            color: var(--text-secondary, #94a3b8);
+            border-radius: 6px;
+            font-size: 12px; font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+        .jiq-jsel-compare:hover {
+            background: rgba(30, 41, 59, 0.9);
+            color: var(--text-primary, #e2e8f0);
+        }
+        .jiq-jsel-compare.is-on {
+            background: rgba(34, 197, 94, 0.18);
+            border-color: rgba(34, 197, 94, 0.5);
+            color: #4ade80;
+        }
+        .jiq-jsel-tabs {
+            display: flex; align-items: center; flex-wrap: wrap;
+            gap: 4px;
+            padding: 8px 14px 0;
+            background: rgba(15, 23, 42, 0.4);
+            border-left: 1px solid rgba(148, 163, 184, 0.18);
+            border-right: 1px solid rgba(148, 163, 184, 0.18);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        }
+        .jiq-jsel-tab {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 7px 10px;
+            background: rgba(30, 41, 59, 0.55);
+            color: var(--text-secondary, #94a3b8);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-bottom: none;
+            border-radius: 6px 6px 0 0;
+            font-size: 11.5px; font-weight: 600;
+            cursor: pointer;
+            transition: all 0.12s;
+            margin-bottom: -1px;
+            max-width: 240px;
+        }
+        .jiq-jsel-tab:hover {
+            background: rgba(30, 41, 59, 0.85);
+            color: var(--text-primary, #e2e8f0);
+        }
+        .jiq-jsel-tab.is-active {
+            background: rgba(59, 130, 246, 0.18);
+            border-color: rgba(59, 130, 246, 0.45);
+            color: #93c5fd;
+        }
+        .jiq-jsel-tab.is-selected-compare {
+            background: rgba(34, 197, 94, 0.14);
+            border-color: rgba(34, 197, 94, 0.4);
+            color: #86efac;
+        }
+        .jiq-jsel-tab-rank {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 18px; height: 18px;
+            background: rgba(148, 163, 184, 0.2);
+            border-radius: 4px;
+            font-size: 10px; font-weight: 800;
+            padding: 0 5px;
+        }
+        .jiq-jsel-tab.is-active .jiq-jsel-tab-rank {
+            background: rgba(59, 130, 246, 0.42);
+            color: #dbeafe;
+        }
+        .jiq-jsel-tab.is-selected-compare .jiq-jsel-tab-rank {
+            background: rgba(34, 197, 94, 0.32);
+            color: #dcfce7;
+        }
+        .jiq-jsel-tab-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 180px;
+        }
+        .jiq-jsel-tab-close {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 16px; height: 16px;
+            background: transparent;
+            border: none;
+            color: inherit;
+            opacity: 0.5;
+            cursor: pointer;
+            border-radius: 3px;
+            font-size: 13px; line-height: 1;
+            padding: 0;
+        }
+        .jiq-jsel-tab-close:hover {
+            opacity: 1;
+            background: rgba(248, 113, 113, 0.22);
+            color: #f87171;
+        }
+        .jiq-jsel-content {
+            padding: 16px;
+            background: rgba(15, 23, 42, 0.25);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+        }
+        .jiq-jsel-empty {
+            text-align: center;
+            color: var(--text-secondary, #94a3b8);
+            font-size: 12px;
+            padding: 32px 16px;
+            font-style: italic;
+            background: rgba(30, 41, 59, 0.35);
+            border-radius: 6px;
+            border: 1px dashed rgba(148, 163, 184, 0.2);
+        }
+        .jiq-jsel-compare-block {
+            padding: 14px 0;
+            border-bottom: 1px dashed rgba(148, 163, 184, 0.22);
+            margin-bottom: 14px;
+        }
+        .jiq-jsel-compare-block:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .jiq-jsel-compare-block-hd {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+            font-size: 13px; font-weight: 700;
+            color: var(--text-primary, #e2e8f0);
+        }
+        .jiq-jsel-compare-block-hd-rank {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 24px; height: 24px;
+            background: rgba(34, 197, 94, 0.22);
+            color: #86efac;
+            border-radius: 5px;
+            font-size: 11px; font-weight: 800;
+            padding: 0 8px;
+        }
+        @media (max-width: 600px) {
+            .jiq-jsel-tab { max-width: 180px; }
+            .jiq-jsel-tab-label { max-width: 120px; }
+        }
+
+        /* ===========================================================
            CONVERSION FUNNEL (sits at the top of the master journey-
            map card, before the title). 5 horizontal stacked-bar rows
            - one per stage - showing the % of the original cohort that
@@ -51826,6 +52013,361 @@
         }
 
         // ──────────────────────────────────────────────────────────────
+        // JOURNEY SELECTOR - state machine + dropdown + tabs + compare
+        // ──────────────────────────────────────────────────────────────
+        // Wraps the master journey map at the top of the card in a
+        // dropdown + tabs UI so the user can:
+        //   - open the full aggregate journey OR any of the 11
+        //     archetypal paths as its own tab
+        //   - click a tab to switch between open journeys
+        //   - toggle a Compare mode that stacks every open journey
+        //     vertically so you can read drop-off + detour patterns
+        //     side-by-side
+        //
+        // State is a singleton on _jiqJsel; rendering is fully
+        // re-paint-on-mutation (cheap, all under one card).
+        // ──────────────────────────────────────────────────────────────
+        var _jiqJsel = {
+            state: { tabs: ['full'], active: 'full', compare: false },
+            root: null,
+
+            // Build the journey catalog from the live paths array.
+            // 'full' is always first and pinned (cannot be closed).
+            catalog: function() {
+                var out = [{
+                    id: 'full', rank: '★',
+                    label: 'Full journey (all viewers)',
+                    kind: 'aggregate'
+                }];
+                (_jiqLandmanPaths || []).forEach(function(p) {
+                    out.push({
+                        id: 'path-' + p.rank,
+                        rank: p.rank,
+                        label: p.label || ('Path ' + p.rank),
+                        kind: 'path',
+                        path: p
+                    });
+                });
+                return out;
+            },
+
+            lookup: function(id) {
+                var cat = this.catalog();
+                for (var i = 0; i < cat.length; i++) {
+                    if (cat[i].id === id) return cat[i];
+                }
+                return null;
+            },
+
+            // Add a journey to the tabs (no-op if already open) and
+            // make it the active view. Exits compare mode because
+            // the user explicitly picked a single journey.
+            add: function(id) {
+                if (!id || id === '__placeholder__') return;
+                if (this.state.tabs.indexOf(id) < 0) this.state.tabs.push(id);
+                this.state.active = id;
+                this.state.compare = false;
+                this.renderAll();
+            },
+
+            switchTo: function(id) {
+                if (this.state.tabs.indexOf(id) < 0) return;
+                this.state.active = id;
+                this.state.compare = false;
+                this.renderAll();
+            },
+
+            close: function(id) {
+                if (id === 'full') return;
+                var idx = this.state.tabs.indexOf(id);
+                if (idx < 0) return;
+                this.state.tabs.splice(idx, 1);
+                if (this.state.active === id) {
+                    this.state.active = this.state.tabs[Math.max(0, idx - 1)] || 'full';
+                }
+                this.renderAll();
+            },
+
+            toggleCompare: function() {
+                this.state.compare = !this.state.compare;
+                this.renderAll();
+            },
+
+            init: function(rootEl) {
+                this.root = rootEl;
+                this.renderAll();
+            },
+
+            renderAll: function() {
+                if (!this.root) return;
+                this.root.innerHTML = this.renderBar()
+                                    + this.renderTabs()
+                                    + this.renderContent();
+            },
+
+            renderBar: function() {
+                var compareOn = this.state.compare;
+                var multiOpen = this.state.tabs.length > 1;
+                var cat       = this.catalog();
+                var openSet   = {};
+                this.state.tabs.forEach(function(id) { openSet[id] = true; });
+                var dropdownOpts = ['<option value="__placeholder__">Select a journey to view...</option>'];
+                cat.forEach(function(e) {
+                    var prefix    = (e.kind === 'aggregate') ? '★' : ('#' + e.rank);
+                    var openMark  = openSet[e.id] ? '  ⦿ open' : '';
+                    dropdownOpts.push(
+                        '<option value="' + _jiqEsc(e.id) + '">'
+                            + prefix + '  ·  ' + _jiqEsc(e.label) + openMark
+                          + '</option>'
+                    );
+                });
+                var compareTitle = multiOpen
+                    ? 'Stack all open journeys vertically for side-by-side comparison.'
+                    : 'Add a second journey to enable compare mode.';
+                var compareLabel = compareOn ? '✓ Compare mode (on)' : '⇅ Compare mode';
+                return ''
+                    + '<div class="jiq-jsel-bar">'
+                    +   '<span class="jiq-jsel-label">🧭 Journey</span>'
+                    +   '<select class="jiq-jsel-picker" onchange="_jiqJsel.add(this.value); this.value=\'__placeholder__\';">'
+                    +     dropdownOpts.join('')
+                    +   '</select>'
+                    +   '<button type="button" class="jiq-jsel-compare' + (compareOn ? ' is-on' : '') + '"'
+                    +           ' onclick="_jiqJsel.toggleCompare();"'
+                    +           ' title="' + compareTitle + '">'
+                    +     compareLabel
+                    +   '</button>'
+                    + '</div>';
+            },
+
+            renderTabs: function() {
+                var self = this;
+                var compareOn = this.state.compare;
+                var html = this.state.tabs.map(function(id) {
+                    var e = self.lookup(id);
+                    if (!e) return '';
+                    var cls = 'jiq-jsel-tab';
+                    if (compareOn) {
+                        cls += ' is-selected-compare';
+                    } else if (id === self.state.active) {
+                        cls += ' is-active';
+                    }
+                    var prefix = (e.kind === 'aggregate') ? '★' : ('#' + e.rank);
+                    var closeBtn = (id === 'full')
+                        ? ''
+                        : '<button type="button" class="jiq-jsel-tab-close"'
+                          +       ' onclick="event.stopPropagation(); _jiqJsel.close(\'' + _jiqEsc(id) + '\');"'
+                          +       ' title="Remove this journey from tabs">×</button>';
+                    return '<div class="' + cls + '" onclick="_jiqJsel.switchTo(\'' + _jiqEsc(id) + '\');">'
+                         +   '<span class="jiq-jsel-tab-rank">' + _jiqEsc(prefix) + '</span>'
+                         +   '<span class="jiq-jsel-tab-label">' + _jiqEsc(e.label) + '</span>'
+                         +   closeBtn
+                         + '</div>';
+                }).join('');
+                return '<div class="jiq-jsel-tabs">' + html + '</div>';
+            },
+
+            renderContent: function() {
+                var self = this;
+                if (this.state.compare) {
+                    if (this.state.tabs.length < 2) {
+                        return '<div class="jiq-jsel-content">'
+                             +   '<div class="jiq-jsel-empty">'
+                             +     'Compare mode is on, but only one journey is open. '
+                             +     'Add a second journey from the dropdown to stack them.'
+                             +   '</div>'
+                             + '</div>';
+                    }
+                    var blocks = this.state.tabs.map(function(id) {
+                        var e = self.lookup(id);
+                        if (!e) return '';
+                        var prefix = (e.kind === 'aggregate') ? '★' : ('#' + e.rank);
+                        return '<div class="jiq-jsel-compare-block">'
+                             +   '<div class="jiq-jsel-compare-block-hd">'
+                             +     '<span class="jiq-jsel-compare-block-hd-rank">' + _jiqEsc(prefix) + '</span>'
+                             +     '<span>' + _jiqEsc(e.label) + '</span>'
+                             +   '</div>'
+                             +   self.renderJourney(e, { compact: true })
+                             + '</div>';
+                    }).join('');
+                    return '<div class="jiq-jsel-content">' + blocks + '</div>';
+                }
+                var e = this.lookup(this.state.active);
+                if (!e) {
+                    return '<div class="jiq-jsel-content">'
+                         +   '<div class="jiq-jsel-empty">Select a journey from the dropdown above.</div>'
+                         + '</div>';
+                }
+                return '<div class="jiq-jsel-content">' + this.renderJourney(e, { compact: false }) + '</div>';
+            },
+
+            // Per-journey renderer. In full mode the aggregate shows
+            // funnel + master map; a path shows headline + synth
+            // funnel + mini-map + pattern. In compact mode (used
+            // inside compare blocks) we drop the master map / pattern
+            // block so each row stays compact.
+            renderJourney: function(e, opts) {
+                opts = opts || {};
+                if (e.kind === 'aggregate') {
+                    return opts.compact
+                        ? _jiqRenderLandmanFunnel()
+                        : _jiqRenderLandmanJourneyMap();
+                }
+                return _jiqRenderJourneyPathView(e.path, opts);
+            }
+        };
+
+        // Public entry point - returns the empty container div for
+        // the journey selector. The caller (renderJourneyIqLandmanPaths)
+        // finds this container after mounting innerHTML and calls
+        // _jiqJsel.init(container) to populate it.
+        function _jiqRenderJourneySelector() {
+            return '<div id="jiqJourneySelector" class="jiq-jsel"></div>';
+        }
+
+        // Per-path full view (when a single path tab is the active
+        // view, or rendered inside a compare-mode block).
+        //   - headline strip (rank, label, cohort, days)
+        //   - synthesized per-path conversion funnel
+        //   - the path's mini journey map (already-existing renderer)
+        //   - (full mode only) pattern + strategic implication block
+        function _jiqRenderJourneyPathView(path, opts) {
+            opts = opts || {};
+            if (!path) return '';
+            var ACC = '#3b82f6';
+            var daysStr = (path.avg_days_to_press_play === 0)
+                ? 'Same day'
+                : (path.avg_days_to_press_play || 0) + 'd avg';
+            var headline = ''
+                + '<div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px;'
+                +              ' padding:10px 14px; background:rgba(59,130,246,0.09); border-radius:8px;'
+                +              ' border-left:3px solid ' + ACC + '88;">'
+                +   '<div style="font-size:20px; font-weight:800; color:' + ACC + '; min-width:28px; text-align:center;">'
+                +     _jiqEsc(path.rank) + '</div>'
+                +   '<div style="flex:1; min-width:220px;">'
+                +     '<div style="font-size:13.5px; font-weight:700; color:var(--text-primary); line-height:1.35;">'
+                +       _jiqEsc(path.label || '') + '</div>'
+                +     '<div style="font-size:11px; color:var(--text-secondary); margin-top:3px;">'
+                +       _jiqFmt(path.cohort_size || 0) + ' viewers · '
+                +       (path.pct_of_viewers || 0).toFixed(1) + '% of Landman audience · '
+                +       _jiqEsc(daysStr) + ' to press-play'
+                +     '</div>'
+                +   '</div>'
+                + '</div>';
+            var funnelHtml  = _jiqSynthPathFunnel(path);
+            var miniMapHtml = _jiqRenderPathMiniJmap(path.rank);
+            var patternHtml = '';
+            if (!opts.compact) {
+                patternHtml = ''
+                    + '<div style="display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);'
+                    +              ' gap:1rem; margin-top:14px;">'
+                    +   '<div>'
+                    +     '<div style="font-size:10.5px; font-weight:700; opacity:0.75;'
+                    +                  ' text-transform:uppercase; letter-spacing:0.06em;'
+                    +                  ' margin-bottom:0.45rem;">Pattern</div>'
+                    +     '<div style="font-size:12px; color: var(--text-secondary);'
+                    +                  ' line-height:1.55; font-style:italic;">'
+                    +       _jiqEsc(path.note || '') + '</div>'
+                    +   '</div>'
+                    +   '<div>'
+                    +     '<div style="font-size:10.5px; font-weight:700; opacity:0.75;'
+                    +                  ' text-transform:uppercase; letter-spacing:0.06em;'
+                    +                  ' margin-bottom:0.45rem;">Strategic implication</div>'
+                    +     '<div style="font-size:12px; padding:0.55rem 0.7rem; border-radius:4px;'
+                    +                  ' background:' + ACC + '14;'
+                    +                  ' border-left:2px solid ' + ACC + '88; line-height:1.55;">'
+                    +       _jiqEsc(path.why_it_matters || '')
+                    +     '</div>'
+                    +   '</div>'
+                    + '</div>';
+            }
+            return headline + funnelHtml + miniMapHtml + patternHtml;
+        }
+
+        // Synthesized per-path funnel. Returns HTML for a compact
+        // 5-row funnel anchored on the path's observed days-to-
+        // press-play and its active/skipped stage pattern from
+        // _JIQ_LANDMAN_PATH_JMAP. Skipped stages drop softer
+        // (no in-funnel decision point), longer-dwell paths drop
+        // harder. The numbers are illustrative, not measured -
+        // the production builder doesn't emit per-path funnels,
+        // but the heuristic is deterministic so the same path
+        // always renders the same funnel.
+        function _jiqSynthPathFunnel(path) {
+            var pathMap = (typeof _JIQ_LANDMAN_PATH_JMAP === 'object' && _JIQ_LANDMAN_PATH_JMAP[path.rank]) || {};
+            var stageDefs = [
+                { stage: 'Discovery', sub: 'entered this path',         key: 'discovery',
+                  color1: '#3b82f6', color2: '#60a5fa' },
+                { stage: 'Research',  sub: 'validated the show',        key: 'research',
+                  color1: '#0ea5e9', color2: '#38bdf8' },
+                { stage: 'Access',    sub: 'started sign-in / signup',  key: 'access',
+                  color1: '#06b6d4', color2: '#22d3ee' },
+                { stage: 'Watch',     sub: 'pressed play on E1',        key: 'watch',
+                  color1: '#f59e0b', color2: '#fbbf24' },
+                { stage: 'Loyalty',   sub: 'binged E2+ within 7d',      key: 'loyalty',
+                  color1: '#22c55e', color2: '#4ade80' }
+            ];
+            var days     = path.avg_days_to_press_play || 1;
+            var baseDrop = Math.min(0.30, 0.04 + (days / 30) * 0.18);
+            var prev     = 100.0;
+            var rows     = '';
+            for (var i = 0; i < stageDefs.length; i++) {
+                var s        = stageDefs[i];
+                var isActive = !!pathMap[s.key];
+                var pct;
+                if (i === 0) {
+                    pct = 100.0;
+                } else {
+                    var drop = isActive ? baseDrop : baseDrop * 0.55;
+                    pct = parseFloat((prev * (1 - drop)).toFixed(1));
+                }
+                var sideHtml;
+                if (i === 0) {
+                    sideHtml = '<span class="ok">100% entered</span>';
+                } else {
+                    var lost = (prev - pct).toFixed(1);
+                    sideHtml = '<span class="drop">-' + lost + 'pp lost</span>'
+                             + (isActive
+                                ? '<span class="lost-count">at this active stage</span>'
+                                : '<span class="lost-count">stage skipped on this path</span>');
+                }
+                rows += '<div class="jiq-jmap-funnel-step">'
+                      +   '<div class="jiq-jmap-funnel-step-label">'
+                      +     '<span class="jiq-jmap-funnel-step-name">' + s.stage + '</span>'
+                      +     '<span class="jiq-jmap-funnel-step-sub">'
+                      +       s.sub + (isActive ? '' : ' (skipped)')
+                      +     '</span>'
+                      +   '</div>'
+                      +   '<div class="jiq-jmap-funnel-track">'
+                      +     '<div class="jiq-jmap-funnel-fill" style="width:' + pct
+                      +           + '%; --funnel-c:' + s.color1 + '; --funnel-c2:' + s.color2 + ';">'
+                      +       pct.toFixed(1) + '%'
+                      +     '</div>'
+                      +   '</div>'
+                      +   '<div class="jiq-jmap-funnel-side">' + sideHtml + '</div>'
+                      + '</div>';
+                prev = pct;
+            }
+            var loyalPct = prev;
+            var lostPct  = (100 - loyalPct).toFixed(1);
+            return ''
+                + '<div class="jiq-jmap-funnel">'
+                +   '<div class="jiq-jmap-funnel-hd">'
+                +     '<span class="jiq-jmap-funnel-title">'
+                +       '📉 Path conversion - <span class="pct-loyal">' + loyalPct.toFixed(1) + '%</span>'
+                +       ' of entrants on this path became loyal binge-viewers · '
+                +       '<span class="pct-lost">' + lostPct + 'pp lost</span> along the way'
+                +     '</span>'
+                +     '<span class="jiq-jmap-funnel-headline">'
+                +       'Per-path funnel anchored on this path\'s observed days-to-press-play '
+                +       'and active stages. Skipped stages drop softer because there\'s no '
+                +       'in-funnel decision point on this path.'
+                +     '</span>'
+                +   '</div>'
+                +   '<div class="jiq-jmap-funnel-rows">' + rows + '</div>'
+                + '</div>';
+        }
+
+        // ──────────────────────────────────────────────────────────────
         // PATH MINI JOURNEY MAPS (one per archetypal path)
         // ──────────────────────────────────────────────────────────────
         // Each of the 11 archetypal paths is rendered as a compact
@@ -52798,17 +53340,21 @@
                 }, 0);
                 var pathCount = (p.paths || []).length;
                 topEl.innerHTML =
-                    _jiqRenderLandmanJourneyMap()
+                    _jiqRenderJourneySelector()
                   + _jiqCardLead(
                         pathCount + ' paths',
                         'mapped end-to-end',
                         '<strong>How ' + _jiqFmt(totalAccounts) + ' Landman watchers actually arrived '
-                            + 'at press-play.</strong> Each row below is one archetypal journey - '
-                            + 'cohort size, days from first touch to press-play, the click-sequence, '
-                            + 'and what it means strategically. <em>Click any path to expand the '
-                            + 'full breakdown.</em>',
+                            + 'at press-play.</strong> Pick a journey above to view its funnel + map, '
+                            + 'or toggle Compare mode to stack multiple journeys side-by-side. '
+                            + 'Each row in the list below is one archetypal journey - <em>click any '
+                            + 'path to expand its full breakdown.</em>',
                         ACC
                     );
+                // Init the journey selector now that the container
+                // div from _jiqRenderJourneySelector() is in the DOM.
+                var jselRoot = topEl.querySelector('#jiqJourneySelector');
+                if (jselRoot) _jiqJsel.init(jselRoot);
             }
             if (listEl) {
                 var maxCohort = (p.paths || []).reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
