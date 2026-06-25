@@ -72483,9 +72483,24 @@
         // load), which would make getCachedRunDateRangeYear return ''
         // and silently skip prefixing cohort-only siblings like
         // "AVID" / "AVID FEMALE" that have no year in their name.
-        // Original bug repro: Reba profile (Date Range 2025-01-01 -
-        // 2025-12-31) showed 2023/2024 TOTAL UNIVERSE prefixed but
-        // AVID / AVID FEMALE / etc. remained unprefixed.
+        //
+        // Multi-year detection: BOTH metadata-derived years (from cached
+        // date_range / name year suffix / current-profile fallback) AND
+        // year tokens already visible inside the labels themselves
+        // count. This catches the Reba pattern where the label
+        // "2023 Total Universe" carries the year mid-string (so
+        // getProfileYear's "/(\d{4})$/" regex misses it, since the name
+        // doesn't END with the year). Without the label-side scan, all
+        // siblings collapsed to the same fallback year, distinct.size
+        // would be 1, and the helper would silently no-op.
+        //
+        // Triggering rules (either is sufficient):
+        //   - ≥ 2 distinct derived years across siblings.
+        //   - Mixed labels: at least one row's label already shows a
+        //     year AND at least one row's label doesn't. Even if every
+        //     derived year is the same, we still want the unlabeled
+        //     rows to gain the prefix so the popover reads
+        //     consistently.
         function _applyMultiYearPrefixToCutLabels(items, currentKey) {
             if (!Array.isArray(items) || items.length < 2) return;
             if (!currentKey) {
@@ -72494,13 +72509,26 @@
             }
             const fallbackYear = (typeof getCachedRunDateRangeYear === 'function')
                 ? (getCachedRunDateRangeYear(currentKey) || '') : '';
-            const yearOf = (it) => {
+            // Year token visible ANYWHERE in the label text (start,
+            // middle, or end). "2023 Total Universe" -> "2023".
+            const yearInLabel = items.map(it => {
+                const m = String(it.label || '').match(/\b(20\d{2})\b/);
+                return m ? m[1] : '';
+            });
+            // Per-row derived year: prefer the year already shown in
+            // the label, otherwise resolve via _siblingAnalyzedYear
+            // (cached date_range -> name year -> current-profile
+            // fallback).
+            const years = items.map((it, i) => {
+                if (yearInLabel[i]) return yearInLabel[i];
                 const y = _siblingAnalyzedYear(it.profile, fallbackYear);
                 return /^\d{4}(?:-\d{2})?$/.test(y) ? y : '';
-            };
-            const years = items.map(yearOf);
+            });
             const distinct = new Set(years.filter(Boolean));
-            if (distinct.size < 2) return;
+            const hasLabeledYears = yearInLabel.some(y => !!y);
+            const hasUnlabeled    = yearInLabel.some(y => !y);
+            const multiYear = distinct.size >= 2 || (hasLabeledYears && hasUnlabeled);
+            if (!multiYear) return;
             items.forEach((it, i) => {
                 const yr = years[i];
                 if (!yr) return;
