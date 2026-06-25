@@ -51415,25 +51415,17 @@
 
         function _jiqRenderJmapDefaultFoot(root) {
             // Mini maps (path rows) get a single one-liner; the full
-            // "how to read this" caption only makes sense on the main
-            // top-of-card journey map.
+            // Per-path mini maps keep their tiny one-line caption,
+            // but the master top-of-card journey map shows no foot
+            // caption at all - the legend conveys the color meaning
+            // and the click-to-drill behavior is self-evident.
             var isMini = root && root.classList && root.classList.contains('jiq-jmap-mini');
             if (isMini) {
                 return '<div class="jiq-jmap-foot is-mini">'
                      +   '<em>👆 Click any active touchpoint above to see its completion rate, abandonment, and next move within this specific journey.</em>'
                      + '</div>';
             }
-            return ''
-                + '<div class="jiq-jmap-foot">'
-                +   '<strong>How to read this:</strong> Every dot is one touchpoint in a Landman viewer\'s '
-                +   'journey from first hearing of the show to becoming a repeat viewer. <strong>Blue dots</strong> '
-                +   'are <strong>On Platform / In Flywheel</strong> surfaces your first-party data already sees. <strong style="color:#f59e0b;">Amber dots</strong> '
-                +   'are <strong style="color:#f59e0b;">Off Platform / Off Flywheel</strong> touchpoints that only clickstream can light up - the part of the funnel '
-                +   'your analytics is currently blind to. <strong style="color:#fbbf24;">Click any dot to drill into '
-                +   'completion rate, abandonment, average days to press-play, the most common next move, and a '
-                +   'tactical action item.</strong> Each of the 11 archetypal paths below is shown as its own '
-                +   'mini journey map - skipped stages are grayed out, and every active touchpoint is also clickable.'
-                + '</div>';
+            return '';
         }
 
         function _jiqRenderLandmanJourneyMap() {
