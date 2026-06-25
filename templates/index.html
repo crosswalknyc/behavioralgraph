@@ -15059,16 +15059,27 @@
 
         /* Each cluster is a vertical stack of touchpoint pills.
            Top cluster anchors to its bottom (sits flush with the
-           chevron); bottom cluster anchors to its top. */
+           chevron); bottom cluster anchors to its top. align-self
+           keeps each column sized to its own content + pinned to
+           the chevron edge so the visible pills always hug the
+           chevron even when other (hidden) stage columns are
+           taller. */
         .jiq-jmap-cluster {
             display: flex;
             flex-direction: column;
             gap: 0.3rem;
             padding: 0 0.4rem;
-            min-height: 60px;
         }
-        .jiq-jmap-cluster.is-top    { justify-content: flex-end;   padding-bottom: 0.1rem; }
-        .jiq-jmap-cluster.is-bottom { justify-content: flex-start; padding-top: 0.1rem;    }
+        .jiq-jmap-cluster.is-top    {
+            justify-content: flex-end;
+            align-self: end;
+            padding-bottom: 0;
+        }
+        .jiq-jmap-cluster.is-bottom {
+            justify-content: flex-start;
+            align-self: start;
+            padding-top: 0;
+        }
 
         .jiq-jmap-tp {
             display: flex;
@@ -15190,10 +15201,10 @@
                         0 0 0 1px rgba(255,255,255,0.08);
         }
         .jiq-jmap:not(.jiq-jmap-mini)[data-hover-stage] .jiq-jmap-cluster.is-spider.is-top    .jiq-jmap-tp {
-            transform: scale(1.05) translateY(-4px);
+            transform: scale(1.05) translateY(0);
         }
         .jiq-jmap:not(.jiq-jmap-mini)[data-hover-stage] .jiq-jmap-cluster.is-spider.is-bottom .jiq-jmap-tp {
-            transform: scale(1.05) translateY(4px);
+            transform: scale(1.05) translateY(0);
         }
         /* (Empty-cluster placeholder dots removed - the chevron band
            itself is enough of a visual anchor when no stage is being
