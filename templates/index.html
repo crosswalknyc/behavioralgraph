@@ -24616,9 +24616,6 @@
                         {'key': 'OTHER',     'slug': 'other',     'icon': '🗂️', 'label': 'Other',      'desc': 'Profiles whose category does not fall into the buckets above.'},
                     ] -%}
                     {%- for m in IQ_RANKER_MASTERS -%}
-                    {%- if m.slug == 'other' -%}
-                    <button class="tab-btn" onclick="showRankerIQPlatform('netflixch')" id="rankerIQPlatformNetflixch"><span class="tab-icon">🎬</span> Netflix</button>
-                    {%- endif -%}
                     <button class="tab-btn{% if loop.first %} active{% endif %}" onclick="showRankerIQPlatform('{{ m.slug }}')" id="rankerIQPlatform{{ m.slug|capitalize }}"><span class="tab-icon">{{ m.icon }}</span> {{ m.label }}</button>
                     {%- endfor -%}
                 </div>
@@ -24759,32 +24756,6 @@
                         <div id="rankerIQReelshortInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
                         <div id="rankerIQReelshortLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading ReelShort data...</div>
                         <div id="rankerIQReelshortError" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
-                    </div>
-
-                    <!-- Simple ClickHouse-backed "most watched on Netflix" panel.
-                         Independent of the legacy Snowflake-backed Netflix sub-view
-                         above (#rankeriq-netflix) - that one stays untouched/hidden. -->
-                    <div id="rankeriq-netflixch" class="ranker-platform-panel">
-                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                            <h3 style="margin: 0;">🎬 Most Watched on Netflix</h3>
-                            <button class="btn btn-primary" onclick="loadNetflixChRanker(true)" id="rankerIQNetflixChRefreshBtn">🔄 Refresh</button>
-                        </div>
-                        <div id="rankerIQNetflixChTableWrap" style="overflow-x: auto;">
-                            <table class="rankers-table" style="width: 100%; border-collapse: collapse;">
-                                <thead>
-                                    <tr>
-                                        <th>Rank</th>
-                                        <th>Show</th>
-                                        <th>Views</th>
-                                        <th>Genre</th>
-                                        <th>Runtime</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="rankerIQNetflixChBody"></tbody>
-                            </table>
-                        </div>
-                        <div id="rankerIQNetflixChLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading Netflix data...</div>
-                        <div id="rankerIQNetflixChError" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
                     </div>
 
                     {%- for m in IQ_RANKER_MASTERS %}
@@ -51313,235 +51284,62 @@
             var listEl     = document.getElementById('jiqLandmanPathsList');
             var rollupEl   = document.getElementById('jiqLandmanPathsRollup');
             if (titleEl) titleEl.textContent = '🧭 ' + (p.title || 'How They Got to Landman');
-            // The long prose subtitle is replaced by the focal hero
-            // tile inside topEl, so clear it here so it doesn't
-            // double up with the hero copy.
-            if (subEl)   subEl.textContent = '';
-            if (metaEl)  metaEl.textContent = (p.paths.length) + ' discovery paths · April-June 2026';
-
-            // ── Owned vs Earned color palettes. Owned paths get a
-            // Paramount-blue family (P+ controls these surfaces);
-            // off-Paramount / earned paths get an amber family
-            // (everything Paramount-first-party-data is blind to).
-            // The 5-shade ramps let each of the 5 + 6 paths get its
-            // own distinct fill in the spectrum bar while still
-            // reading as one of two visual buckets.
-            var OWNED_PAL = ['#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'];
-            var EARN_PAL  = ['#7c2d12', '#b45309', '#d97706', '#f59e0b', '#fbbf24', '#fcd34d'];
-            var OWNED_HEX = '#3b82f6';
-            var EARN_HEX  = '#f59e0b';
-
-            // Pre-compute color per path (by channel_class), totals,
-            // owned-vs-earned splits. The renderer reads from these
-            // to draw the spectrum, split tiles, and per-row colors.
-            var paths = p.paths || [];
-            var ownedSeen = 0, earnSeen = 0;
-            var totalAccounts = 0, ownedTotal = 0, earnTotal = 0, ownedCount = 0, earnCount = 0;
-            var pathColor = {};
-            paths.forEach(function(r) {
-                totalAccounts += (r.cohort_size || 0);
-                if (r.channel_class === 'paramount_owned') {
-                    pathColor[r.rank] = OWNED_PAL[ownedSeen % OWNED_PAL.length];
-                    ownedSeen++;
-                    ownedTotal += (r.cohort_size || 0);
-                    ownedCount++;
-                } else {
-                    pathColor[r.rank] = EARN_PAL[earnSeen % EARN_PAL.length];
-                    earnSeen++;
-                    earnTotal += (r.cohort_size || 0);
-                    earnCount++;
-                }
-            });
-            var ownedPct = totalAccounts ? (ownedTotal / totalAccounts * 100) : 0;
-            var earnPct  = totalAccounts ? (earnTotal  / totalAccounts * 100) : 0;
-
-            // Cache state for the interactive helpers
-            // (_jiqSelectPath / _jiqSetPathFilter / _jiqRenderPathSpectrum
-            //  / _jiqRenderPathDetail) so they can repaint without
-            // needing a payload pointer.
-            _jiqLandmanPaths      = paths;
-            _jiqLandmanPathColors = pathColor;
-            // Preserve user's existing active selection across
-            // re-renders (cohort / cut switches) when possible.
-            if (!paths.some(function(r) { return r.rank === _jiqLandmanActiveRank; })) {
-                _jiqLandmanActiveRank = paths.length ? paths[0].rank : 1;
-            }
-
-            // ── FOCAL HERO ──
-            //
-            // The spectrum bar IS the navigation. Click any segment
-            // to update the detail panel directly below. Filter tabs
-            // above let the user reshape the bar to just the
-            // Paramount-owned subset or the earned subset (the bar
-            // smoothly transitions; non-matching segments dim and
-            // shrink to slivers).
-            //
-            // Underneath the spectrum sits the always-visible detail
-            // panel - one path at a time, with the icon ribbon
-            // shown big, plus pattern + strategic implication. Prev /
-            // Next buttons step through whatever filter is active.
-            //
-            // The owned-vs-earned split tiles are integrated into the
-            // filter buttons (each shows its percentage inline).
+            if (subEl)   subEl.textContent = p.subtitle || '';
+            if (metaEl)  metaEl.textContent = (p.paths.length) + ' discovery paths · click any to expand';
+            // The "topline" container is now used for the always-visible
+            // card lead - hero stat + 1-2 sentence punchline. The dense
+            // path data sits below in #jiqLandmanPathsList where every
+            // row is a collapsible <details>.
             if (topEl) {
-                // Sort earned paths by cohort (descending) so the
-                // biggest wake leads. Owned paths are kept in their
-                // original (rank) order for the reference strip.
-                var earnedPaths = paths.filter(function(r) { return r.channel_class !== 'paramount_owned'; });
-                var ownedPaths  = paths.filter(function(r) { return r.channel_class === 'paramount_owned'; });
-                earnedPaths.sort(function(a, b) { return (b.cohort_size || 0) - (a.cohort_size || 0); });
-                ownedPaths.sort(function(a, b) { return (b.cohort_size || 0) - (a.cohort_size || 0); });
-
-                // ── HERO HEADLINE ──
-                // Single giant percent stating the punchline up
-                // front: "X% of viewer-touches happened where your
-                // first-party data is blind. Here are the X named
-                // earned wakes that drove them."
-                var heroHtml = ''
-                    + '<div class="jiq-paths-hero">'
-                    +   '<div class="hero-eyebrow">⚡ The headline</div>'
-                    +   '<div class="hero-pct">' + earnPct.toFixed(0) + '%</div>'
-                    +   '<div class="hero-label">of Landman viewer-touches</div>'
-                    +   '<div class="hero-punch">'
-                    +     'came from off-Paramount flywheels your first-party data doesn\'t capture - '
-                    +     '<strong>' + _jiqFmt(earnTotal) + ' earned touches</strong> '
-                    +     'across ' + earnedPaths.length + ' organic discovery paths.'
-                    +   '</div>'
-                    +   '<div class="hero-sub">'
-                    +     'Below are the ' + earnedPaths.length + ' earned wakes, each with the specific trigger '
-                    +     'event, signup yield, and a recommended next action. The ' + ownedPaths.length + ' '
-                    +     'Paramount-owned paths (already in your dashboards) are summarized at the bottom for context.'
-                    +   '</div>'
-                    + '</div>';
-
-                // ── EARNED WAKE CARDS ──
-                // The focal content. Each card pulls the path's
-                // existing `note` (the striking specific stat) and
-                // `why_it_matters` (the action item) so it reads as
-                // a self-contained mini-story.
-                var wakeCardsHtml = earnedPaths.map(function(r) {
-                    var daysStr = (r.avg_days_to_press_play === 0)
-                        ? 'Same day'
-                        : (r.avg_days_to_press_play || 0) + 'd';
-                    var stageFlow = _jiqRenderStageFlow(r.steps);
-                    // Split label into emoji + clean title.
-                    var emojiMatch = (r.label || '').match(/^\s*(\p{Extended_Pictographic}+)/u);
-                    var emoji      = emojiMatch ? emojiMatch[1] : '🌐';
-                    var cleanTitle = (r.label || '').replace(/^\s*\p{Extended_Pictographic}+\s*/u, '').trim();
-                    return '<div class="jiq-wake-card">'
-                         +   '<div class="wake-head">'
-                         +     '<div class="wake-title">' + _jiqEsc(emoji) + ' ' + _jiqEsc(cleanTitle) + '</div>'
-                         +     '<div class="wake-stats">'
-                         +       '<div class="wake-stat"><div class="wake-stat-num" style="color:#f59e0b;">' + _jiqFmt(r.cohort_size || 0) + '</div><div class="wake-stat-label">Viewers</div></div>'
-                         +       '<div class="wake-stat"><div class="wake-stat-num">' + (r.pct_of_viewers || 0).toFixed(1) + '%</div><div class="wake-stat-label">of Landman</div></div>'
-                         +       '<div class="wake-stat"><div class="wake-stat-num">' + _jiqEsc(daysStr) + '</div><div class="wake-stat-label">to play</div></div>'
-                         +     '</div>'
-                         +   '</div>'
-                         +   '<blockquote class="wake-quote">' + _jiqEsc(r.note || '') + '</blockquote>'
-                         +   '<div class="wake-action">'
-                         +     '<strong>→ What to do next</strong>'
-                         +     _jiqEsc(r.why_it_matters || '')
-                         +   '</div>'
-                         +   '<div class="wake-stages">' + stageFlow + '</div>'
-                         + '</div>';
-                }).join('');
-                var wakeSection = ''
-                    + '<div class="jiq-section-divider">'
-                    +   '<div class="label is-earned">🌐 The ' + earnedPaths.length + ' earned wakes - clickstream-only visibility</div>'
-                    +   '<div class="line"></div>'
-                    + '</div>'
-                    + '<div class="jiq-wake-grid">' + wakeCardsHtml + '</div>';
-
-                // ── OWNED REFERENCE STRIP ──
-                // Deliberately muted - sits at the bottom as "you
-                // already see this" context. Single horizontal bar
-                // broken into the 5 owned segments + a comma-list of
-                // path names underneath.
-                var totalOwnedShare = ownedPaths.reduce(function(s, r) { return s + (r.cohort_size || 0); }, 0);
-                var blueShades = ['#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'];
-                var ownedSegHtml = ownedPaths.map(function(r, i) {
-                    var w = totalOwnedShare ? ((r.cohort_size || 0) / totalOwnedShare * 100) : 0;
-                    var color = blueShades[i % blueShades.length];
-                    return '<div class="owned-seg" style="flex:' + w.toFixed(2) + ' 0 0; background:' + color + ';">'
-                         +   (w >= 8 ? (r.pct_of_viewers || 0).toFixed(0) + '%' : '')
-                         + '</div>';
-                }).join('');
-                var ownedListHtml = ownedPaths.map(function(r) {
-                    var labelClean = (r.label || '').replace(/^\s*\p{Extended_Pictographic}+\s*/u, '');
-                    return '<span class="owned-list-item">'
-                         +   _jiqEsc(labelClean)
-                         +   '<span class="owned-list-pct">' + (r.pct_of_viewers || 0).toFixed(1) + '%</span>'
-                         + '</span>';
-                }).join('');
-                var ownedSection = ''
-                    + '<div class="jiq-section-divider">'
-                    +   '<div class="label">🏠 What\'s already in your first-party view</div>'
-                    +   '<div class="line"></div>'
-                    + '</div>'
-                    + '<div class="jiq-owned-strip">'
-                    +   '<div class="owned-head">'
-                    +     '<div class="owned-title">' + ownedPaths.length + ' Paramount-owned discovery surfaces</div>'
-                    +     '<div class="owned-pct">' + ownedPct.toFixed(0) + '% of viewer-touches</div>'
-                    +   '</div>'
-                    +   '<div class="owned-bar">' + ownedSegHtml + '</div>'
-                    +   '<div class="owned-list">' + ownedListHtml + '</div>'
-                    +   '<div class="owned-note">'
-                    +     'These five paths are already in your first-party dashboards. They\'re shown here for '
-                    +     'context only - the earned wakes above are the part of the discovery funnel that '
-                    +     'clickstream lights up on top of this view.'
-                    +   '</div>'
-                    + '</div>';
-
-                topEl.innerHTML = heroHtml + wakeSection + ownedSection;
+                var totalAccounts = (p.paths || []).reduce(function(s, r) {
+                    return s + (r.cohort_size || 0);
+                }, 0);
+                var pathCount = (p.paths || []).length;
+                topEl.innerHTML = _jiqCardLead(
+                    pathCount + ' paths',
+                    'mapped end-to-end',
+                    '<strong>How ' + _jiqFmt(totalAccounts) + ' Landman watchers actually arrived '
+                        + 'at press-play.</strong> Each row below is one archetypal journey - '
+                        + 'cohort size, days from first touch to press-play, the click-sequence, '
+                        + 'and what it means strategically. <em>Click any path to expand the '
+                        + 'full breakdown.</em>',
+                    ACC
+                );
             }
             if (listEl) {
-                var maxCohort = paths.reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
-                listEl.innerHTML = paths.map(function(r, idx) {
-                    var rowColor = pathColor[r.rank] || ACC;
-                    // Click-sequence (full text, in the expanded body
-                    // for reference). Each step gets the same icon
-                    // that appears in the compact ribbon so the
-                    // pictogram + sentence reinforce each other.
+                var maxCohort = (p.paths || []).reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
+                listEl.innerHTML = (p.paths || []).map(function(r, idx) {
+                    // Click-sequence (rendered in the expanded body)
                     var stepsHtml = (r.steps || []).map(function(step, i) {
-                        var hit  = _jiqPathStepIcon(step);
-                        var icon = hit ? hit.icon : '·';
                         return '<div style="display:flex; gap:0.55rem; align-items:flex-start; padding:3px 0;">'
-                             +   '<div style="flex:none; width:22px; height:22px; border-radius:5px; background:' + rowColor + '22; color:' + rowColor + ';'
-                             +              ' font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center;">' + _jiqEsc(icon) + '</div>'
+                             +   '<div style="flex:none; width:18px; height:18px; border-radius:50%; background:' + ACC + '22; color:' + ACC + ';'
+                             +              ' font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center;">' + (i+1) + '</div>'
                              +   '<div style="font-size:11.5px; line-height:1.45;">' + _jiqEsc(step) + '</div>'
                              + '</div>';
                     }).join('');
-                    // Summary (always visible) - now VISUAL-first:
-                    // colored rank chip, label, then the icon ribbon
-                    // taking the largest column (the click-sequence
-                    // as a pictogram flow), cohort size with mini-bar,
-                    // and days-to-press-play. Trailing 22px column
-                    // reserves space for the .jiq-row-caret.
+                    // Summary (always visible) - rank, label, cohort,
+                    // days-to-press-play. Trailing 22px column reserves
+                    // room for the caret painted by .jiq-row-caret.
                     var daysStr = (r.avg_days_to_press_play === 0)
-                        ? '⚡ Same day'
-                        : '⏱ ' + (r.avg_days_to_press_play || 0) + 'd';
-                    var ribbonHtml = _jiqRenderPathRibbon(r.steps);
+                        ? 'Same day'
+                        : (r.avg_days_to_press_play || 0) + 'd avg';
                     var summaryHtml = ''
-                         + '<div style="display:grid; grid-template-columns: 38px minmax(0, 1.4fr) minmax(0, 1.5fr) 110px 80px 22px; gap:0.7rem; align-items:center;">'
-                         +   '<div style="font-size:0.95rem; font-weight:800; color:#fff; text-align:center; background:' + rowColor + '; border-radius:5px; padding:5px 0;">' + _jiqEsc(r.rank || '') + '</div>'
-                         +   '<div style="font-size:0.9rem; font-weight:700; line-height:1.3;">' + _jiqEsc(r.label || '') + '</div>'
-                         +   '<div>' + ribbonHtml + '</div>'
+                         + '<div style="display:grid; grid-template-columns: 32px minmax(0, 1.6fr) 110px 90px 22px; gap:0.7rem; align-items:center;">'
+                         +   '<div style="font-size:1rem; font-weight:800; color:' + ACC + '; text-align:center;">' + _jiqEsc(r.rank || '') + '</div>'
+                         +   '<div style="font-size:0.92rem; font-weight:700; line-height:1.35;">' + _jiqEsc(r.label || '') + '</div>'
                          +   '<div style="text-align:right;">'
                          +     '<div style="font-size:0.9rem; font-weight:800; color: var(--text-primary);">' + _jiqFmt(r.cohort_size || 0) + '</div>'
                          +     '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">' + (r.pct_of_viewers || 0).toFixed(1) + '% of viewers</div>'
-                         +     '<div style="margin-top:0.25rem;">' + _jiqMiniBar(r.cohort_size, rowColor, maxCohort) + '</div>'
+                         +     '<div style="margin-top:0.25rem;">' + _jiqMiniBar(r.cohort_size, ACC, maxCohort) + '</div>'
                          +   '</div>'
                          +   '<div style="text-align:right;">'
-                         +     '<div style="font-size:0.8rem; font-weight:700; color:' + rowColor + ';">' + _jiqEsc(daysStr) + '</div>'
-                         +     '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">to play</div>'
+                         +     '<div style="font-size:0.85rem; font-weight:700; color:' + ACC + ';">' + _jiqEsc(daysStr) + '</div>'
+                         +     '<div style="font-size:0.6rem; opacity:0.65; margin-top:0.15rem;">to press-play</div>'
                          +   '</div>'
                          +   '<div></div>'
                          + '</div>';
-                    // Body (expanded) - 2-col: full click-sequence on
-                    // the left, pattern note + strategic implication
-                    // on the right. Strategic-implication callout
-                    // borrows the row's color so all path-specific
-                    // chrome stays visually tied to the spectrum bar.
+                    // Body (expanded) - 2-col: click-sequence on left,
+                    // pattern note + strategic implication on right.
                     var bodyHtml = ''
                          + '<div style="display:grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr); gap:1rem;">'
                          +   '<div>'
@@ -51551,24 +51349,16 @@
                          +   '<div>'
                          +     '<div style="font-size:10.5px; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Pattern</div>'
                          +     '<div style="font-size:11.5px; color: var(--text-secondary); line-height:1.55; margin-bottom:0.55rem; font-style:italic;">' + _jiqEsc(r.note || '') + '</div>'
-                         +     '<div style="font-size:11px; padding:0.5rem 0.65rem; border-radius:4px; background:' + rowColor + '14; border-left:2px solid ' + rowColor + '88; line-height:1.55;">'
-                         +       '<strong style="color:' + rowColor + ';">→ Strategic implication:</strong> ' + _jiqEsc(r.why_it_matters || '')
+                         +     '<div style="font-size:11px; padding:0.5rem 0.65rem; border-radius:4px; background:' + ACC + '14; border-left:2px solid ' + ACC + '88; line-height:1.55;">'
+                         +       '<strong style="color:' + ACC + ';">→ Strategic implication:</strong> ' + _jiqEsc(r.why_it_matters || '')
                          +     '</div>'
                          +   '</div>'
                          + '</div>';
-                    // Only the lead path (rank #1) opens by default
-                    // so the user immediately sees what an expanded
-                    // row looks like. data-jiq-path-rank lets the
-                    // spectrum bar's onclick handler find + open
-                    // a specific row when the user clicks a segment.
-                    var rowHtml = _jiqRowDisclose(summaryHtml, bodyHtml, {
-                        open:        idx === 0,
-                        accentColor: rowColor
-                    });
-                    return rowHtml.replace(
-                        '<details class="jiq-row-disclose"',
-                        '<details class="jiq-row-disclose" data-jiq-path-rank="' + r.rank + '"'
-                    );
+                    // Only the lead path (rank #1 / array idx 0) opens
+                    // by default so the user immediately sees what an
+                    // expanded row looks like. The remaining 10 stay
+                    // collapsed - one click reveals them.
+                    return _jiqRowDisclose(summaryHtml, bodyHtml, { open: idx === 0 });
                 }).join('');
             }
             if (rollupEl) {
@@ -108347,60 +108137,17 @@
         });
 
         function showRankerIQPlatform(id) {
-            document.querySelectorAll('#rankerIQPlatformContent .ranker-platform-panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.rankers-container .rankers-platform-tabs .tab-btn').forEach(b => b.classList.remove('active'));
-            // Netflix (ClickHouse) - simple table, not part of the Mentions/EVC/TDL
-            // leaderboard system, so it skips initIQRanker entirely.
-            if (id === 'netflixch') {
-                const panel = document.getElementById('rankeriq-netflixch');
-                const btn = document.getElementById('rankerIQPlatformNetflixch');
-                if (panel) panel.classList.add('active');
-                if (btn) btn.classList.add('active');
-                loadNetflixChRanker();
-                return;
-            }
             // Default to Talent for any unknown id (legacy bookmarks /
             // stray onclicks).
             if (!IQ_RANKER_SLUG_TO_MASTER[id]) id = 'talent';
+            document.querySelectorAll('#rankerIQPlatformContent .ranker-platform-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.rankers-container .rankers-platform-tabs .tab-btn').forEach(b => b.classList.remove('active'));
             const panel = document.getElementById('rankeriq-' + id);
             const btnId = 'rankerIQPlatform' + id.charAt(0).toUpperCase() + id.slice(1);
             const btn = document.getElementById(btnId);
             if (panel) panel.classList.add('active');
             if (btn) btn.classList.add('active');
             initIQRanker(IQ_RANKER_SLUG_TO_MASTER[id]);
-        }
-
-        let _netflixChLoaded = false;
-        async function loadNetflixChRanker(force) {
-            if (_netflixChLoaded && !force) return;
-            const body = document.getElementById('rankerIQNetflixChBody');
-            const loading = document.getElementById('rankerIQNetflixChLoading');
-            const errorEl = document.getElementById('rankerIQNetflixChError');
-            if (!body) return;
-            if (loading) loading.style.display = 'block';
-            if (errorEl) errorEl.style.display = 'none';
-            try {
-                const r = await fetch('/api/rankers/netflix-clickhouse/data', { credentials: 'same-origin' });
-                const d = await r.json();
-                if (!d || !d.success) throw new Error((d && d.error) || 'Failed to load Netflix data');
-                body.innerHTML = (d.rows || []).map(row => `
-                    <tr>
-                        <td>${row.rank}</td>
-                        <td>${_iqEsc(row.show || '')}</td>
-                        <td>${(row.views || 0).toLocaleString()}</td>
-                        <td>${_iqEsc(row.genre || '')}</td>
-                        <td>${_iqEsc(row.runtime || '')}</td>
-                    </tr>
-                `).join('');
-                _netflixChLoaded = true;
-            } catch (e) {
-                if (errorEl) {
-                    errorEl.textContent = 'Error loading Netflix data: ' + e.message;
-                    errorEl.style.display = 'block';
-                }
-            } finally {
-                if (loading) loading.style.display = 'none';
-            }
         }
 
         async function fetchIQRankerCategories() {
