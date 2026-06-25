@@ -21002,7 +21002,6 @@
             </div>
             <div class="iiq-subtab-bar">
                 <button class="iiq-subtab active" data-iiq-subtab="overview" onclick="showIntentIQSubtab('overview')">📊 OVERVIEW</button>
-                <button class="iiq-subtab" data-iiq-subtab="audiences" onclick="showIntentIQSubtab('audiences')">👥 AUDIENCES</button>
                 <button class="iiq-subtab" data-iiq-subtab="assets" onclick="showIntentIQSubtab('assets')">🎞️ ASSETS</button>
                 <button class="iiq-subtab" data-iiq-subtab="questions" onclick="showIntentIQSubtab('questions')">🎯 PERFORMANCE</button>
                 <button class="iiq-subtab" data-iiq-subtab="inflight" onclick="showIntentIQSubtab('inflight')">⚡ IN-FLIGHT</button>
@@ -21013,23 +21012,6 @@
                 <div class="iiq-meta-row" id="iiqOverviewMeta"></div>
                 <h4 style="margin: 1rem 0 0.5rem;">Campaign phase timeline</h4>
                 <div class="iiq-phase-timeline" id="iiqPhaseTimeline"></div>
-            </div>
-
-            <div class="iiq-panel" id="iiqPanel-audiences">
-                <div style="margin-bottom: 0.65rem; display:flex; justify-content:space-between; align-items:end; flex-wrap:wrap; gap:0.5rem;">
-                    <div>
-                        <h4 style="margin:0;">Audiences of interest</h4>
-                        <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title's moviegoing audience. Each card also shows projected campaign exposure (reach, unique pieces seen, total views).</div>
-                    </div>
-                </div>
-                <div class="iiq-cards-grid" id="iiqAudienceCards"></div>
-                <div style="margin: 1.25rem 0 0.5rem; display:flex; justify-content:space-between; align-items:end; flex-wrap:wrap; gap:0.5rem;">
-                    <div>
-                        <h4 style="margin:0;">Moviegoing-frequency cohorts</h4>
-                        <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">How often this slice of US adults goes to the movies. Source: MPAA THEME 2025 + Statista US Moviegoing Frequency Q1 2026.</div>
-                    </div>
-                </div>
-                <div id="iiqCohortGrid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;"></div>
             </div>
 
             <div class="iiq-panel" id="iiqPanel-assets">
@@ -21239,8 +21221,13 @@
                     window.__intentIQ.audiences = rs[1];
                     window.__intentIQ.cohorts = rs[2];
                     renderIntentIQOverview();
-                    renderIntentIQAudiences();
-                    renderIntentIQCohorts();
+                    // Audiences + moviegoing-frequency cohorts now render
+                    // on-demand inside the Performance tab's "Audiences"
+                    // sub-tab (between "Paid vs. Organic" and "Intent to
+                    // Buy"). Data is already cached in
+                    // window.__intentIQ.audiences / .cohorts above; the
+                    // Q-renderer reads from cache when the user clicks the
+                    // sub-tab, so no eager DOM render is needed here.
                     renderIntentIQQuestions();
                     populateAssetFilterDropdowns();
                     reloadIntentIQAssets();
@@ -21596,12 +21583,16 @@
                 };
             }
 
-            function renderIntentIQAudiences() {
+            // Builds the audiences-of-interest section as an HTML string.
+            // Lives separately from the DOM-write wrapper so the Performance
+            // tab's "Audiences" sub-tab can splice the markup directly into
+            // the Q-body without depending on the legacy iiqAudienceCards
+            // container.
+            function iiqBuildAudiencesHtml() {
                 var data = window.__intentIQ.audiences || {};
                 var cards = data.cards || [];
                 if (!cards.length) {
-                    document.getElementById('iiqAudienceCards').innerHTML = '<div class="iiq-empty">No audiences-of-interest configured.</div>';
-                    return;
+                    return '<div class="iiq-empty">No audiences-of-interest configured.</div>';
                 }
                 // Project against total US population (329.9M) - same denominator
                 // used by Profile IQ and the rest of the dashboard.
@@ -21652,7 +21643,7 @@
                     return bv - av;
                 });
                 var maxBp = Math.max.apply(null, sorted.map(function(c) { return Number(c.overlap_bp) || 0; }).concat([0.0001]));
-                document.getElementById('iiqAudienceCards').innerHTML = sorted.map(function(c) {
+                return '<div class="iiq-cards-grid">' + sorted.map(function(c) {
                     var bp = (c.overlap_bp !== null && c.overlap_bp !== undefined) ? Number(c.overlap_bp) : null;
                     var bpStr = bp !== null ? bp.toFixed(2) + '%' : '-';
                     var usPeople = bp !== null ? Math.round(bp / 100 * US_POP) : null;
@@ -21695,13 +21686,15 @@
                             + '</div>'
                         + '</div>'
                         + '</div>';
-                }).join('');
+                }).join('') + '</div>';
             }
 
-            function renderIntentIQCohorts() {
+            // Builds the moviegoing-frequency cohort grid as an HTML string.
+            // Same string-building contract as iiqBuildAudiencesHtml above.
+            function iiqBuildCohortsHtml() {
                 var d = window.__intentIQ.cohorts || {};
                 var cohorts = d.cohorts || [];
-                if (!cohorts.length) { document.getElementById('iiqCohortGrid').innerHTML = '<div class="iiq-empty">No cohorts defined yet (run scripts/build_moviegoing_cohorts.py --apply).</div>'; return; }
+                if (!cohorts.length) { return '<div class="iiq-empty">No cohorts defined yet (run scripts/build_moviegoing_cohorts.py --apply).</div>'; }
                 // Project against total US population (329.9M) - matches the
                 // denominator used everywhere else in the dashboard
                 // (see e.g. Profile IQ category projections).
@@ -21713,7 +21706,7 @@
                     bimonthly:  '#a855f7',
                     occasional: '#f59e0b'
                 };
-                document.getElementById('iiqCohortGrid').innerHTML = cohorts.map(function(c) {
+                return '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;">' + cohorts.map(function(c) {
                     var share = Number(c.gen_pop_share) || 0;
                     var sharePct = (share * 100).toFixed(2);
                     var usPeople = Math.round(share * US_POP);
@@ -21731,7 +21724,25 @@
                             + '<div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + color + ';"></div>'
                         + '</div>'
                         + '</div>';
-                }).join('');
+                }).join('') + '</div>';
+            }
+
+            // Combines the audiences-of-interest cards and the moviegoing-
+            // frequency cohort cards into one HTML blob for the Performance
+            // tab's "Audiences" sub-tab. Includes the two section headers
+            // that used to live in iiqPanel-audiences.
+            function iiqRenderAudiences(_d) {
+                return ''
+                    + '<div style="margin-bottom: 0.65rem;">'
+                    +   '<h4 style="margin:0;">Audiences of interest</h4>'
+                    +   '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title\'s moviegoing audience. Each card also shows projected campaign exposure (reach, unique pieces seen, total views).</div>'
+                    + '</div>'
+                    + iiqBuildAudiencesHtml()
+                    + '<div style="margin: 1.25rem 0 0.5rem;">'
+                    +   '<h4 style="margin:0;">Moviegoing-frequency cohorts</h4>'
+                    +   '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">How often this slice of US adults goes to the movies. Source: MPAA THEME 2025 + Statista US Moviegoing Frequency Q1 2026.</div>'
+                    + '</div>'
+                    + iiqBuildCohortsHtml();
             }
 
             function populateAssetFilterDropdowns() {
@@ -22472,6 +22483,7 @@
             var IIQ_QMETA = {
                 q1: { short: 'Eng x Category',   title: 'Content Engagement by Category',                                   intro: 'Each category compared on three YTD metrics: share of total views (reach), info-seek % (mid-funnel), and ticketing % (bottom-funnel). Scan a row to see whether a category is high reach / low conversion, low reach / high conversion, or both.' },
                 q2: { short: 'Paid vs. Organic', title: 'Paid vs. Organic Performance',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
+                audiences: { short: '👥 Audiences', title: 'Audiences of interest', intro: 'Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title\'s moviegoing audience. Below: how often each slice of US adults goes to the movies.' },
                 q3: { short: 'Intent to Buy',    title: 'How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date - pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement - scaled by industry conversion rates. Nothing here is a forecast.' },
                 q4: { short: 'Talent Attribution', title: 'How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Trailer Performance', title: 'Trailer Performance', intro: 'Daily trailer views with overlaid funnel conversion (% of viewers who became info-seekers or visited a ticketing site within 7 days). Second chart traces the PVOD / SVOD search tail that builds after theatrical, peaking at the 5/15 streaming launch.' },
@@ -24180,7 +24192,7 @@
                 if (body) body.innerHTML = iiqRenderQ6(cached);
             }
 
-            var IIQ_QRENDER = { q1: iiqRenderQ1, q2: iiqRenderQ2, q3: iiqRenderQ3, q4: iiqRenderQ4, q5: iiqRenderQ5, q6: iiqRenderQ6 };
+            var IIQ_QRENDER = { q1: iiqRenderQ1, q2: iiqRenderQ2, audiences: iiqRenderAudiences, q3: iiqRenderQ3, q4: iiqRenderQ4, q5: iiqRenderQ5, q6: iiqRenderQ6 };
             var IIQ_QCACHE = {};
 
             function renderIntentIQQuestions() {
@@ -24220,6 +24232,20 @@
                 var body = document.getElementById('iiqQBody');
                 if (IIQ_QCACHE[qid]) {
                     body.innerHTML = IIQ_QCACHE[qid];
+                    return;
+                }
+                // The Audiences sub-tab reads from data already cached by
+                // reloadIntentIQ() (window.__intentIQ.audiences and
+                // .cohorts), so no /api/intent/<slug>/questions/audiences
+                // fetch -- that endpoint doesn't exist. Render in place.
+                if (qid === 'audiences') {
+                    try {
+                        var html = iiqRenderAudiences();
+                        IIQ_QCACHE[qid] = html;
+                        body.innerHTML = html;
+                    } catch (err) {
+                        body.innerHTML = '<div class="iiq-empty">Render error: ' + escapeHtml(err.message || err) + '</div>';
+                    }
                     return;
                 }
                 body.innerHTML = '<div class="iiq-empty">Loading ' + qid.toUpperCase() + '...</div>';
