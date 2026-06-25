@@ -15142,17 +15142,17 @@
         }
         .jiq-jmap-chev {
             position: relative;
-            padding: 0.85rem 0.4rem 0.85rem 1.6rem;
+            padding: 0.5rem 0.4rem 0.5rem 1.6rem;
             color: #0c1424;
             font-weight: 800;
-            font-size: 0.78rem;
+            font-size: 0.75rem;
             letter-spacing: 0.08em;
             text-transform: uppercase;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 0.15rem;
+            gap: 0.1rem;
             text-align: center;
             text-shadow: 0 1px 0 rgba(255,255,255,0.25);
             /* Chevron silhouette: pointed right tip + matching left
@@ -15192,19 +15192,28 @@
             opacity: 0.85;
             text-transform: none;
             letter-spacing: 0.02em;
-            margin-top: 0.1rem;
-            line-height: 1.3;
+            margin-top: 0.05rem;
+            line-height: 1.25;
         }
         /* Stage-level funnel data baked into each chevron (% retained
            from the original 100% cohort, plus a small "-Xpp lost"
            badge on every chevron after the first). Clicking the
            chevron opens the stage detail popover with detour + win-
-           back narrative. */
+           back narrative. The pct + drop sit on a single horizontal
+           row to keep the chevron compact. */
+        .jiq-jmap-chev .chev-funnel-row {
+            display: inline-flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 0.4rem;
+            margin-top: 0.25rem;
+            flex-wrap: nowrap;
+            white-space: nowrap;
+        }
         .jiq-jmap-chev .chev-funnel-pct {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 900;
             line-height: 1;
-            margin-top: 0.45rem;
             color: #0c1424;
             text-shadow: 0 1px 0 rgba(255,255,255,0.45);
             letter-spacing: 0;
@@ -15217,10 +15226,10 @@
             background: rgba(255,255,255,0.6);
             border-radius: 3px;
             padding: 1px 5px;
-            margin-top: 3px;
             letter-spacing: 0.04em;
             display: inline-block;
             text-transform: none;
+            line-height: 1.2;
         }
         .jiq-jmap-chev.is-clickable {
             cursor: pointer;
@@ -52239,11 +52248,12 @@
             // / Space) so the popover is reachable without a mouse.
             var chevCells = stages.map(function(s, sIdx) {
                 var f          = funnel[sIdx] || null;
-                var pctHtml    = f
-                    ? '<div class="chev-funnel-pct">' + f.pct.toFixed(1) + '%</div>'
+                var pctInner   = f ? '<span class="chev-funnel-pct">' + f.pct.toFixed(1) + '%</span>' : '';
+                var dropInner  = (f && sIdx > 0 && f.drop > 0)
+                    ? '<span class="chev-funnel-drop">-' + f.drop.toFixed(1) + 'pp</span>'
                     : '';
-                var dropHtml   = (f && sIdx > 0 && f.drop > 0)
-                    ? '<div class="chev-funnel-drop">-' + f.drop.toFixed(1) + 'pp</div>'
+                var funnelRow  = (pctInner || dropInner)
+                    ? '<div class="chev-funnel-row">' + pctInner + dropInner + '</div>'
                     : '';
                 var hoverHint  = f
                     ? ('STAGE ' + s.num + ' · ' + s.label + ' · ' + f.pct.toFixed(1)
@@ -52251,15 +52261,14 @@
                        + ' · click for detour + win-back')
                     : (s.label);
                 return '<div class="jiq-jmap-chev ' + s.cls + ' is-clickable" '
-                     +   'tabindex="0" '
+                     +   'tabindex="0" role="button" '
                      +   'onclick="_jiqSelectJmapStage(' + sIdx + ', this);" '
                      +   'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();_jiqSelectJmapStage(' + sIdx + ',this);}" '
                      +   'title="' + _jiqEsc(hoverHint) + '">'
                      +   '<div class="chev-num">STAGE ' + s.num + '</div>'
                      +   '<div>' + _jiqEsc(s.label) + '</div>'
                      +   '<div class="chev-sub">' + _jiqEsc(s.sub) + '</div>'
-                     +   pctHtml
-                     +   dropHtml
+                     +   funnelRow
                      + '</div>';
             }).join('');
 
@@ -72466,10 +72475,23 @@
             } catch (_) { return fallbackYear || ''; }
         }
 
-        function _applyMultiYearPrefixToCutLabels(items) {
+        // currentKey is passed explicitly because _setupComparisonForCurrentProfile
+        // calls this helper BEFORE writing the new currentKey to
+        // _comparisonRunsState (the state mutation happens in the
+        // subjectChanged branches below). Reading _comparisonRunsState.currentKey
+        // here would return the PREVIOUS profile's key (or '' on first
+        // load), which would make getCachedRunDateRangeYear return ''
+        // and silently skip prefixing cohort-only siblings like
+        // "AVID" / "AVID FEMALE" that have no year in their name.
+        // Original bug repro: Reba profile (Date Range 2025-01-01 -
+        // 2025-12-31) showed 2023/2024 TOTAL UNIVERSE prefixed but
+        // AVID / AVID FEMALE / etc. remained unprefixed.
+        function _applyMultiYearPrefixToCutLabels(items, currentKey) {
             if (!Array.isArray(items) || items.length < 2) return;
-            const currentKey = (typeof _comparisonRunsState !== 'undefined'
-                && _comparisonRunsState && _comparisonRunsState.currentKey) || '';
+            if (!currentKey) {
+                currentKey = (typeof _comparisonRunsState !== 'undefined'
+                    && _comparisonRunsState && _comparisonRunsState.currentKey) || '';
+            }
             const fallbackYear = (typeof getCachedRunDateRangeYear === 'function')
                 ? (getCachedRunDateRangeYear(currentKey) || '') : '';
             const yearOf = (it) => {
@@ -72503,8 +72525,12 @@
                 profile: p
             }));
             // Year-prefix every row when the popover spans 2+ years
-            // (see _applyMultiYearPrefixToCutLabels header).
-            _applyMultiYearPrefixToCutLabels(available);
+            // (see _applyMultiYearPrefixToCutLabels header). Pass
+            // currentKey explicitly - _comparisonRunsState.currentKey
+            // hasn't been updated for THIS call yet (the subjectChanged
+            // branches below write it), so reading it inside the helper
+            // would yield a stale value.
+            _applyMultiYearPrefixToCutLabels(available, currentKey);
             const prevSubject = _comparisonRunsState.subject || '';
             const subjectChanged = (subject || '') !== prevSubject;
             if (subjectChanged) {
@@ -72627,7 +72653,12 @@
                         // the prefix; or it may have arrived in an
                         // already-multi-year popover and needs to inherit
                         // the same year-first format as its siblings.
-                        try { _applyMultiYearPrefixToCutLabels(_comparisonRunsState.availableRuns || []); } catch (_) {}
+                        try {
+                            _applyMultiYearPrefixToCutLabels(
+                                _comparisonRunsState.availableRuns || [],
+                                _comparisonRunsState.currentKey || ''
+                            );
+                        } catch (_) {}
                         const pop = document.getElementById('compareDateRangesPopover');
                         if (pop) {
                             // Re-paint EVERY row's label from the (now
@@ -72769,6 +72800,18 @@
 
             const btn = document.getElementById('dashViewDeltasBtn');
             if (!btn) return;
+            // 2026-06-25: re-run multi-year prefix at popover-open time
+            // as a safety net. _setupComparisonForCurrentProfile is the
+            // primary call site, but if availableRuns was repopulated
+            // by some other path (state restore, manual mutation) the
+            // labels may have lost their year prefix. Idempotent - rows
+            // that already start with a year are left alone.
+            try {
+                _applyMultiYearPrefixToCutLabels(
+                    _comparisonRunsState.availableRuns || [],
+                    _comparisonRunsState.currentKey || ''
+                );
+            } catch (_) {}
             const available = _comparisonRunsState.availableRuns || [];
             const pop = document.createElement('div');
             pop.id = 'compareDateRangesPopover';
