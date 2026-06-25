@@ -25928,10 +25928,27 @@
                     <!-- Simple ClickHouse-backed "most watched on Netflix" panel.
                          Independent of the legacy Snowflake-backed Netflix sub-view
                          above (#rankeriq-netflix) - that one stays untouched/hidden. -->
+                    <style>
+                        .rankeriq-netflixch-type-btn { opacity: 0.6; }
+                        .rankeriq-netflixch-type-btn.active { opacity: 1; background: var(--accent-blue, #3b82f6); color: #fff; }
+                    </style>
                     <div id="rankeriq-netflixch" class="ranker-platform-panel">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
                             <h3 style="margin: 0;">🎬 Most Watched on Netflix</h3>
                             <button class="btn btn-primary" onclick="loadNetflixChRanker(true)" id="rankerIQNetflixChRefreshBtn">🔄 Refresh</button>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
+                            <div id="rankerIQNetflixChTypeToggle" role="group" aria-label="Filter by type" style="display: flex; gap: 0.4rem;">
+                                <button type="button" class="btn btn-sm rankeriq-netflixch-type-btn active" data-type="BOTH" onclick="setNetflixChTypeFilter('BOTH')">Both</button>
+                                <button type="button" class="btn btn-sm rankeriq-netflixch-type-btn" data-type="Movie" onclick="setNetflixChTypeFilter('Movie')">Movies</button>
+                                <button type="button" class="btn btn-sm rankeriq-netflixch-type-btn" data-type="Show" onclick="setNetflixChTypeFilter('Show')">Shows</button>
+                            </div>
+                            <select id="rankerIQNetflixChGenreFilter" style="max-width: 260px; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);" onchange="renderNetflixChRanker()">
+                                <option value="">All Genres</option>
+                            </select>
+                        </div>
+                        <div id="rankerIQNetflixChChartWrap" style="min-height: 280px; margin-bottom: 1.5rem;">
+                            <canvas id="rankerIQNetflixChChart"></canvas>
                         </div>
                         <div id="rankerIQNetflixChTableWrap" style="overflow-x: auto;">
                             <table class="rankers-table" style="width: 100%; border-collapse: collapse;">
@@ -25939,9 +25956,13 @@
                                     <tr>
                                         <th>Rank</th>
                                         <th>Show</th>
+                                        <th>Type</th>
+                                        <th>Season</th>
+                                        <th>Episode</th>
                                         <th>Views</th>
                                         <th>Genre</th>
                                         <th>Runtime</th>
+                                        <th title="Placeholder - underlying watch-time data is being cleaned up">Avg Watch Time</th>
                                     </tr>
                                 </thead>
                                 <tbody id="rankerIQNetflixChBody"></tbody>
@@ -111129,28 +111150,27 @@
         }
 
         let _netflixChLoaded = false;
+        let _netflixChRows = [];
+        let _netflixChTypeFilter = 'BOTH';
+        let _netflixChChart = null;
+
         async function loadNetflixChRanker(force) {
-            if (_netflixChLoaded && !force) return;
-            const body = document.getElementById('rankerIQNetflixChBody');
+            if (_netflixChLoaded && !force) {
+                renderNetflixChRanker();
+                return;
+            }
             const loading = document.getElementById('rankerIQNetflixChLoading');
             const errorEl = document.getElementById('rankerIQNetflixChError');
-            if (!body) return;
             if (loading) loading.style.display = 'block';
             if (errorEl) errorEl.style.display = 'none';
             try {
                 const r = await fetch('/api/rankers/netflix-clickhouse/data', { credentials: 'same-origin' });
                 const d = await r.json();
                 if (!d || !d.success) throw new Error((d && d.error) || 'Failed to load Netflix data');
-                body.innerHTML = (d.rows || []).map(row => `
-                    <tr>
-                        <td>${row.rank}</td>
-                        <td>${_iqEsc(row.show || '')}</td>
-                        <td>${(row.views || 0).toLocaleString()}</td>
-                        <td>${_iqEsc(row.genre || '')}</td>
-                        <td>${_iqEsc(row.runtime || '')}</td>
-                    </tr>
-                `).join('');
+                _netflixChRows = d.rows || [];
                 _netflixChLoaded = true;
+                populateNetflixChGenreFilter();
+                renderNetflixChRanker();
             } catch (e) {
                 if (errorEl) {
                     errorEl.textContent = 'Error loading Netflix data: ' + e.message;
@@ -111159,6 +111179,109 @@
             } finally {
                 if (loading) loading.style.display = 'none';
             }
+        }
+
+        function setNetflixChTypeFilter(type) {
+            _netflixChTypeFilter = type;
+            document.querySelectorAll('.rankeriq-netflixch-type-btn').forEach(b => {
+                b.classList.toggle('active', b.getAttribute('data-type') === type);
+            });
+            renderNetflixChRanker();
+        }
+
+        // GENRE is a packed comma-separated string of tags per show
+        // (e.g. "Kids' TV, TV Cartoons, Imaginative"). Split/dedupe/sort
+        // across all loaded rows to build the filter dropdown options.
+        function populateNetflixChGenreFilter() {
+            const sel = document.getElementById('rankerIQNetflixChGenreFilter');
+            if (!sel) return;
+            const tagSet = new Set();
+            _netflixChRows.forEach(row => {
+                (row.genre || '').split(',').forEach(tag => {
+                    const t = tag.trim();
+                    if (t) tagSet.add(t);
+                });
+            });
+            const tags = Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+            const prevValue = sel.value;
+            sel.innerHTML = '<option value="">All Genres</option>' +
+                tags.map(t => `<option value="${_iqEsc(t)}">${_iqEsc(t)}</option>`).join('');
+            if (prevValue && tags.includes(prevValue)) sel.value = prevValue;
+        }
+
+        function _netflixChRowHasGenre(row, genre) {
+            if (!genre) return true;
+            return (row.genre || '').split(',').map(t => t.trim()).includes(genre);
+        }
+
+        function renderNetflixChRanker() {
+            const body = document.getElementById('rankerIQNetflixChBody');
+            if (!body) return;
+            const genreSel = document.getElementById('rankerIQNetflixChGenreFilter');
+            const genre = genreSel ? genreSel.value : '';
+
+            const filtered = _netflixChRows.filter(row => {
+                if (_netflixChTypeFilter !== 'BOTH' && row.type !== _netflixChTypeFilter) return false;
+                return _netflixChRowHasGenre(row, genre);
+            });
+
+            body.innerHTML = filtered.map((row, i) => `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td>${_iqEsc(row.show || '')}${row.episode_name ? ' <span style="color: var(--text-secondary);">&mdash; ' + _iqEsc(row.episode_name) + '</span>' : ''}</td>
+                    <td>${_iqEsc(row.type || '')}</td>
+                    <td>${_iqEsc(row.season || '')}</td>
+                    <td>${row.episode != null && row.episode !== '' ? _iqEsc(String(row.episode)) : ''}</td>
+                    <td>${(row.views || 0).toLocaleString()}</td>
+                    <td>${_iqEsc(row.genre || '')}</td>
+                    <td>${_iqEsc(row.runtime || '')}</td>
+                    <td>${row.avg_watch_time != null ? _iqEsc(String(row.avg_watch_time)) : '<span style="color: var(--text-secondary);">&mdash;</span>'}</td>
+                </tr>
+            `).join('');
+
+            renderNetflixChChart(filtered);
+        }
+
+        // Builds a chart label that disambiguates episodes of the same show,
+        // e.g. "Squid Game (S2E1)", so the bar chart doesn't show repeated
+        // identical labels for multi-episode shows.
+        function _netflixChChartLabel(row) {
+            if (row.season && row.episode != null && row.episode !== '') {
+                const seasonNum = String(row.season).replace(/[^0-9]/g, '') || row.season;
+                return `${row.show || ''} (S${seasonNum}E${row.episode})`;
+            }
+            return row.show || '';
+        }
+
+        function renderNetflixChChart(rows) {
+            const canvas = document.getElementById('rankerIQNetflixChChart');
+            if (!canvas || typeof Chart === 'undefined') return;
+            const top = rows.slice(0, 15);
+            const labels = top.map(_netflixChChartLabel);
+            const data = top.map(r => r.views || 0);
+            if (_netflixChChart) {
+                _netflixChChart.data.labels = labels;
+                _netflixChChart.data.datasets[0].data = data;
+                _netflixChChart.data.datasets[0].label = _netflixChTypeFilter === 'BOTH' ? 'Views (Movies + Shows)' : 'Views (' + _netflixChTypeFilter + 's)';
+                _netflixChChart.update();
+                return;
+            }
+            _netflixChChart = new Chart(canvas.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: _netflixChTypeFilter === 'BOTH' ? 'Views (Movies + Shows)' : 'Views (' + _netflixChTypeFilter + 's)',
+                        data,
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                    }],
+                },
+                options: {
+                    indexAxis: 'y',
+                    plugins: { legend: { display: false } },
+                    scales: { x: { beginAtZero: true } },
+                },
+            });
         }
 
         async function fetchIQRankerCategories() {
