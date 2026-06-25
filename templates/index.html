@@ -4480,6 +4480,7 @@
         .insight-col-header {
             display: flex;
             justify-content: space-between;
+            align-items: flex-end;
             padding: 0 0.5rem;
             margin-bottom: 0.35rem;
             font-size: 0.6rem;
@@ -6215,7 +6216,7 @@
             grid-column: 1 / -1;
             display: grid;
             grid-template-columns: subgrid;
-            align-items: center;
+            align-items: end;
             padding: 0.5rem 0 0.5rem 0;
             position: sticky;
             top: 0;
@@ -6232,7 +6233,7 @@
         .behavioral-table .behavioral-header-row span {
             text-align: left !important;
             justify-self: start;
-            align-self: center;
+            align-self: end;
             min-width: 0;
             box-sizing: border-box;
             /* Allow long headers (e.g. "CASUAL FEMALE", "CASUAL MALE")
@@ -9407,13 +9408,14 @@
             color: var(--text-secondary);
             background: rgba(102, 217, 239, 0.05);
             border-bottom: 2px solid var(--border-color);
+            align-items: end;
         }
 
         .location-row.header span {
             cursor: pointer;
             user-select: none;
             display: flex;
-            align-items: center;
+            align-items: flex-end;
             justify-content: flex-end;
             gap: 0.25rem;
             transition: color 0.2s;
