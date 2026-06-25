@@ -15195,29 +15195,9 @@
         .jiq-jmap:not(.jiq-jmap-mini)[data-hover-stage] .jiq-jmap-cluster.is-spider.is-bottom .jiq-jmap-tp {
             transform: scale(1.05) translateY(4px);
         }
-        /* A subtle hint label sits in the empty cluster area when no
-           stage is hovered so the page never looks broken / blank. */
-        .jiq-jmap:not(.jiq-jmap-mini) .jiq-jmap-cluster.is-top::after,
-        .jiq-jmap:not(.jiq-jmap-mini) .jiq-jmap-cluster.is-bottom::after {
-            content: '· · ·';
-            display: block;
-            text-align: center;
-            font-size: 11px;
-            letter-spacing: 0.4em;
-            color: rgba(255,255,255,0.18);
-            transition: opacity 0.22s ease;
-            pointer-events: none;
-        }
-        .jiq-jmap:not(.jiq-jmap-mini) .jiq-jmap-cluster.is-top::after {
-            margin-top: auto;
-            padding-bottom: 0.1rem;
-        }
-        .jiq-jmap:not(.jiq-jmap-mini) .jiq-jmap-cluster.is-bottom::after {
-            padding-top: 0.1rem;
-        }
-        .jiq-jmap:not(.jiq-jmap-mini)[data-hover-stage] .jiq-jmap-cluster.is-spider::after {
-            opacity: 0;
-        }
+        /* (Empty-cluster placeholder dots removed - the chevron band
+           itself is enough of a visual anchor when no stage is being
+           hovered.) */
         /* Stagger - matching pills fan out in sequence rather than
            all snapping at once. Reverse the stagger for the top
            cluster so the pill nearest the chevron emerges first. */
