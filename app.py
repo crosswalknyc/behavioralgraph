@@ -10981,7 +10981,7 @@ def get_profiles_without_images():
             jobs = s3_cache.get('jobs', [])
             for job in jobs:
                 name = job.get('project_name') or job.get('brand') or job.get('job_id', '')
-                if name:
+                if name and '- Avid Fan' not in name:
                     all_profiles.append({
                         'name': name,
                         'category': job.get('category', 'UNCATEGORIZED'),
@@ -10990,7 +10990,7 @@ def get_profiles_without_images():
         else:
             for f in files:
                 name = f.get('project_name', '')
-                if name:
+                if name and '- Avid Fan' not in name:
                     all_profiles.append({
                         'name': name,
                         'category': f.get('category', 'UNCATEGORIZED'),
