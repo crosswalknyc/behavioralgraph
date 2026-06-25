@@ -14608,6 +14608,568 @@
             line-height: 1;
         }
 
+        /* ===========================================================
+           DISCOVERY PATHS - WAKE VIEW (hero + earned wake cards +
+           owned reference strip).
+           ===========================================================
+           Replaces the multi-view confusion with one focused layout
+           that answers two questions in this exact order:
+
+             1. WHY IS THIS IMPORTANT?  - the giant hero stat at top
+                ("~29% of Landman viewer-touches happened on paths
+                your first-party data doesn't see")
+             2. WHAT AM I LOOKING AT?   - the 6 earned-wake cards,
+                each one a named acquisition flywheel with a hero
+                stat (X signups from a single triggering event), a
+                pull-quote, and a "→ What to do next" action item
+             3. WHAT ABOUT THE REST?    - small owned-paths strip at
+                the bottom for reference, deliberately muted so it
+                doesn't compete with the focal earned wakes
+           =========================================================== */
+        .jiq-paths-hero {
+            text-align: center;
+            padding: 2rem 1.5rem 1.65rem;
+            border-radius: 14px;
+            background: radial-gradient(ellipse at center top,
+                          rgba(245,158,11,0.18) 0%,
+                          rgba(245,158,11,0.04) 55%,
+                          rgba(0,0,0,0) 100%),
+                        linear-gradient(135deg,
+                          rgba(245,158,11,0.10) 0%,
+                          rgba(244,114,182,0.06) 100%);
+            border: 1px solid rgba(245,158,11,0.32);
+            margin-bottom: 1.6rem;
+            position: relative;
+        }
+        .jiq-paths-hero .hero-eyebrow {
+            display: inline-block;
+            padding: 0.3rem 0.85rem;
+            border-radius: 999px;
+            font-size: 9.5px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            background: rgba(245,158,11,0.18);
+            color: #f59e0b;
+            border: 1px solid rgba(245,158,11,0.45);
+            margin-bottom: 0.85rem;
+        }
+        .jiq-paths-hero .hero-pct {
+            font-size: clamp(3.6rem, 9vw, 5.2rem);
+            font-weight: 900;
+            color: #f59e0b;
+            line-height: 0.92;
+            text-shadow: 0 4px 28px rgba(245,158,11,0.50);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.035em;
+        }
+        .jiq-paths-hero .hero-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+            font-weight: 800;
+            color: var(--text-secondary);
+            opacity: 0.85;
+            margin: 0.7rem 0 0.95rem;
+        }
+        .jiq-paths-hero .hero-punch {
+            font-size: 1.05rem;
+            font-weight: 600;
+            line-height: 1.55;
+            max-width: 60ch;
+            margin: 0 auto 0.75rem;
+            color: var(--text-primary);
+        }
+        .jiq-paths-hero .hero-punch strong {
+            color: #f59e0b;
+            font-weight: 800;
+        }
+        .jiq-paths-hero .hero-sub {
+            font-size: 0.78rem;
+            line-height: 1.55;
+            max-width: 58ch;
+            margin: 0 auto;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        /* Section divider strips that frame the earned vs owned
+           sections of the layout. */
+        .jiq-section-divider {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            margin: 1.55rem 0 0.95rem;
+        }
+        .jiq-section-divider .label {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.10em;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .jiq-section-divider .label.is-earned {
+            color: #f59e0b;
+        }
+        .jiq-section-divider .line {
+            flex: 1;
+            height: 1px;
+            background: var(--border-color);
+            opacity: 0.7;
+        }
+
+        /* Earned-wake cards - the focal content. Each card is a
+           self-contained mini-story with stats, quote, action. */
+        .jiq-wake-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(370px, 1fr));
+            gap: 1rem;
+        }
+        .jiq-wake-card {
+            border-radius: 10px;
+            border: 1px solid rgba(245,158,11,0.32);
+            background: linear-gradient(180deg,
+                          rgba(245,158,11,0.05) 0%,
+                          rgba(0,0,0,0) 70%);
+            padding: 1.05rem 1.15rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.7rem;
+            border-left: 4px solid #f59e0b;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .jiq-wake-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(245,158,11,0.10), 0 2px 6px rgba(0,0,0,0.25);
+        }
+        .jiq-wake-card .wake-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+        .jiq-wake-card .wake-title {
+            font-size: 0.95rem;
+            font-weight: 800;
+            line-height: 1.25;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-primary);
+        }
+        .jiq-wake-card .wake-stats {
+            display: flex;
+            gap: 0.95rem;
+            font-variant-numeric: tabular-nums;
+        }
+        .jiq-wake-card .wake-stat {
+            text-align: right;
+        }
+        .jiq-wake-card .wake-stat-num {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+        .jiq-wake-card .wake-stat-label {
+            font-size: 8.5px;
+            opacity: 0.65;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 700;
+            margin-top: 3px;
+        }
+        .jiq-wake-card .wake-quote {
+            font-size: 0.85rem;
+            line-height: 1.55;
+            color: var(--text-primary);
+            border-left: 3px solid #f59e0b;
+            padding: 0.05rem 0 0.05rem 0.85rem;
+            margin: 0;
+        }
+        .jiq-wake-card .wake-action {
+            font-size: 0.78rem;
+            line-height: 1.55;
+            background: rgba(34,197,94,0.10);
+            padding: 0.65rem 0.8rem;
+            border-radius: 6px;
+            border-left: 3px solid #22c55e;
+            color: var(--text-primary);
+        }
+        .jiq-wake-card .wake-action strong {
+            color: #22c55e;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-size: 9.5px;
+            font-weight: 800;
+            display: block;
+            margin-bottom: 0.3rem;
+        }
+        .jiq-wake-card .wake-stages {
+            margin-top: auto;
+            padding-top: 0.65rem;
+            border-top: 1px dashed var(--border-color);
+        }
+        .jiq-wake-card .wake-stages .jiq-stage-flow { font-size: 9.5px; }
+        .jiq-wake-card .wake-stages .jiq-stage-pill {
+            padding: 0.3rem 0.55rem;
+            font-size: 8.5px;
+        }
+
+        /* Owned reference strip - intentionally muted, sits at the
+           bottom as "for context." */
+        .jiq-owned-strip {
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.025);
+            padding: 0.95rem 1.1rem;
+            opacity: 0.92;
+        }
+        .jiq-owned-strip .owned-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin-bottom: 0.55rem;
+            flex-wrap: wrap;
+        }
+        .jiq-owned-strip .owned-title {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+        }
+        .jiq-owned-strip .owned-pct {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #3b82f6;
+            font-variant-numeric: tabular-nums;
+        }
+        .jiq-owned-strip .owned-bar {
+            display: flex;
+            height: 18px;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 0.55rem;
+        }
+        .jiq-owned-strip .owned-seg {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 9.5px;
+            font-weight: 800;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.5);
+            border-right: 1px solid rgba(0,0,0,0.25);
+        }
+        .jiq-owned-strip .owned-seg:last-child { border-right: 0; }
+        .jiq-owned-strip .owned-list {
+            display: flex;
+            gap: 0.85rem;
+            flex-wrap: wrap;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .jiq-owned-strip .owned-list-item {
+            font-weight: 600;
+        }
+        .jiq-owned-strip .owned-list-item .owned-list-pct {
+            font-weight: 800;
+            margin-left: 0.3rem;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-primary);
+        }
+        .jiq-owned-strip .owned-note {
+            font-size: 10.5px;
+            color: var(--text-secondary);
+            font-style: italic;
+            margin-top: 0.7rem;
+            line-height: 1.5;
+            opacity: 0.85;
+        }
+
+        /* ===========================================================
+           DISCOVERY PATHS - WAKE VIEW (hero + earned wake cards +
+           owned reference strip).
+           ===========================================================
+           Replaces the multi-view confusion with one focused layout
+           that answers two questions in this exact order:
+
+             1. WHY IS THIS IMPORTANT?  - the giant hero stat at top
+                ("~29% of Landman viewer-touches happened on paths
+                your first-party data doesn't see")
+             2. WHAT AM I LOOKING AT?   - the 6 earned-wake cards,
+                each one a named acquisition flywheel with a hero
+                stat (X signups from a single triggering event), a
+                pull-quote, and a "→ What to do next" action item
+             3. WHAT ABOUT THE REST?    - small owned-paths strip at
+                the bottom for reference, deliberately muted so it
+                doesn't compete with the focal earned wakes
+           =========================================================== */
+        .jiq-paths-hero {
+            text-align: center;
+            padding: 2rem 1.5rem 1.65rem;
+            border-radius: 14px;
+            background: radial-gradient(ellipse at center top,
+                          rgba(245,158,11,0.18) 0%,
+                          rgba(245,158,11,0.04) 55%,
+                          rgba(0,0,0,0) 100%),
+                        linear-gradient(135deg,
+                          rgba(245,158,11,0.10) 0%,
+                          rgba(244,114,182,0.06) 100%);
+            border: 1px solid rgba(245,158,11,0.32);
+            margin-bottom: 1.6rem;
+            position: relative;
+        }
+        .jiq-paths-hero .hero-eyebrow {
+            display: inline-block;
+            padding: 0.3rem 0.85rem;
+            border-radius: 999px;
+            font-size: 9.5px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            background: rgba(245,158,11,0.18);
+            color: #f59e0b;
+            border: 1px solid rgba(245,158,11,0.45);
+            margin-bottom: 0.85rem;
+        }
+        .jiq-paths-hero .hero-pct {
+            font-size: clamp(3.6rem, 9vw, 5.2rem);
+            font-weight: 900;
+            color: #f59e0b;
+            line-height: 0.92;
+            text-shadow: 0 4px 28px rgba(245,158,11,0.50);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.035em;
+        }
+        .jiq-paths-hero .hero-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+            font-weight: 800;
+            color: var(--text-secondary);
+            opacity: 0.85;
+            margin: 0.7rem 0 0.95rem;
+        }
+        .jiq-paths-hero .hero-punch {
+            font-size: 1.05rem;
+            font-weight: 600;
+            line-height: 1.55;
+            max-width: 60ch;
+            margin: 0 auto 0.75rem;
+            color: var(--text-primary);
+        }
+        .jiq-paths-hero .hero-punch strong {
+            color: #f59e0b;
+            font-weight: 800;
+        }
+        .jiq-paths-hero .hero-sub {
+            font-size: 0.78rem;
+            line-height: 1.55;
+            max-width: 58ch;
+            margin: 0 auto;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        /* Section divider strips that frame the earned vs owned
+           sections of the layout. */
+        .jiq-section-divider {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            margin: 1.55rem 0 0.95rem;
+        }
+        .jiq-section-divider .label {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.10em;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .jiq-section-divider .label.is-earned {
+            color: #f59e0b;
+        }
+        .jiq-section-divider .line {
+            flex: 1;
+            height: 1px;
+            background: var(--border-color);
+            opacity: 0.7;
+        }
+
+        /* Earned-wake cards - the focal content. Each card is a
+           self-contained mini-story with stats, quote, action. */
+        .jiq-wake-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(370px, 1fr));
+            gap: 1rem;
+        }
+        .jiq-wake-card {
+            border-radius: 10px;
+            border: 1px solid rgba(245,158,11,0.32);
+            background: linear-gradient(180deg,
+                          rgba(245,158,11,0.05) 0%,
+                          rgba(0,0,0,0) 70%);
+            padding: 1.05rem 1.15rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.7rem;
+            border-left: 4px solid #f59e0b;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .jiq-wake-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(245,158,11,0.10), 0 2px 6px rgba(0,0,0,0.25);
+        }
+        .jiq-wake-card .wake-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+        .jiq-wake-card .wake-title {
+            font-size: 0.95rem;
+            font-weight: 800;
+            line-height: 1.25;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-primary);
+        }
+        .jiq-wake-card .wake-stats {
+            display: flex;
+            gap: 0.95rem;
+            font-variant-numeric: tabular-nums;
+        }
+        .jiq-wake-card .wake-stat {
+            text-align: right;
+        }
+        .jiq-wake-card .wake-stat-num {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+        .jiq-wake-card .wake-stat-label {
+            font-size: 8.5px;
+            opacity: 0.65;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 700;
+            margin-top: 3px;
+        }
+        .jiq-wake-card .wake-quote {
+            font-size: 0.85rem;
+            line-height: 1.55;
+            color: var(--text-primary);
+            border-left: 3px solid #f59e0b;
+            padding: 0.05rem 0 0.05rem 0.85rem;
+            margin: 0;
+        }
+        .jiq-wake-card .wake-action {
+            font-size: 0.78rem;
+            line-height: 1.55;
+            background: rgba(34,197,94,0.10);
+            padding: 0.65rem 0.8rem;
+            border-radius: 6px;
+            border-left: 3px solid #22c55e;
+            color: var(--text-primary);
+        }
+        .jiq-wake-card .wake-action strong {
+            color: #22c55e;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-size: 9.5px;
+            font-weight: 800;
+            display: block;
+            margin-bottom: 0.3rem;
+        }
+        .jiq-wake-card .wake-stages {
+            margin-top: auto;
+            padding-top: 0.65rem;
+            border-top: 1px dashed var(--border-color);
+        }
+        .jiq-wake-card .wake-stages .jiq-stage-flow { font-size: 9.5px; }
+        .jiq-wake-card .wake-stages .jiq-stage-pill {
+            padding: 0.3rem 0.55rem;
+            font-size: 8.5px;
+        }
+
+        /* Owned reference strip - intentionally muted, sits at the
+           bottom as "for context." */
+        .jiq-owned-strip {
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.025);
+            padding: 0.95rem 1.1rem;
+            opacity: 0.92;
+        }
+        .jiq-owned-strip .owned-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin-bottom: 0.55rem;
+            flex-wrap: wrap;
+        }
+        .jiq-owned-strip .owned-title {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+        }
+        .jiq-owned-strip .owned-pct {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #3b82f6;
+            font-variant-numeric: tabular-nums;
+        }
+        .jiq-owned-strip .owned-bar {
+            display: flex;
+            height: 18px;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 0.55rem;
+        }
+        .jiq-owned-strip .owned-seg {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 9.5px;
+            font-weight: 800;
+            text-shadow: 0 1px 1px rgba(0,0,0,0.5);
+            border-right: 1px solid rgba(0,0,0,0.25);
+        }
+        .jiq-owned-strip .owned-seg:last-child { border-right: 0; }
+        .jiq-owned-strip .owned-list {
+            display: flex;
+            gap: 0.85rem;
+            flex-wrap: wrap;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .jiq-owned-strip .owned-list-item {
+            font-weight: 600;
+        }
+        .jiq-owned-strip .owned-list-item .owned-list-pct {
+            font-weight: 800;
+            margin-left: 0.3rem;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-primary);
+        }
+        .jiq-owned-strip .owned-note {
+            font-size: 10.5px;
+            color: var(--text-secondary);
+            font-style: italic;
+            margin-top: 0.7rem;
+            line-height: 1.5;
+            opacity: 0.85;
+        }
+
         /* ----- BUBBLE VIEW ----- */
         .jiq-bubble-wrap {
             position: relative;
@@ -50751,8 +51313,11 @@
             var listEl     = document.getElementById('jiqLandmanPathsList');
             var rollupEl   = document.getElementById('jiqLandmanPathsRollup');
             if (titleEl) titleEl.textContent = '🧭 ' + (p.title || 'How They Got to Landman');
-            if (subEl)   subEl.textContent = p.subtitle || '';
-            if (metaEl)  metaEl.textContent = (p.paths.length) + ' discovery paths · click any to expand';
+            // The long prose subtitle is replaced by the focal hero
+            // tile inside topEl, so clear it here so it doesn't
+            // double up with the hero copy.
+            if (subEl)   subEl.textContent = '';
+            if (metaEl)  metaEl.textContent = (p.paths.length) + ' discovery paths · April-June 2026';
 
             // ── Owned vs Earned color palettes. Owned paths get a
             // Paramount-blue family (P+ controls these surfaces);
@@ -50819,56 +51384,115 @@
             // The owned-vs-earned split tiles are integrated into the
             // filter buttons (each shows its percentage inline).
             if (topEl) {
-                topEl.innerHTML = ''
-                    // ── View switcher tabs (Stages [default] / Spectrum / Categories / Bubble) ──
-                    + '<div class="jiq-view-switcher" role="tablist">'
-                    +   '<button class="view-btn is-active" data-view="stages"     onclick="_jiqSetPathView(\'stages\')">🏃 Journey Stages</button>'
-                    +   '<button class="view-btn"           data-view="spectrum"   onclick="_jiqSetPathView(\'spectrum\')">🎯 Spectrum + Detail</button>'
-                    +   '<button class="view-btn"           data-view="categories" onclick="_jiqSetPathView(\'categories\')">🗂️ Channel Categories</button>'
-                    +   '<button class="view-btn"           data-view="bubble"     onclick="_jiqSetPathView(\'bubble\')">🫧 Bubble Chart</button>'
-                    + '</div>'
+                // Sort earned paths by cohort (descending) so the
+                // biggest wake leads. Owned paths are kept in their
+                // original (rank) order for the reference strip.
+                var earnedPaths = paths.filter(function(r) { return r.channel_class !== 'paramount_owned'; });
+                var ownedPaths  = paths.filter(function(r) { return r.channel_class === 'paramount_owned'; });
+                earnedPaths.sort(function(a, b) { return (b.cohort_size || 0) - (a.cohort_size || 0); });
+                ownedPaths.sort(function(a, b) { return (b.cohort_size || 0) - (a.cohort_size || 0); });
 
-                    // ── VIEW 1 (DEFAULT): JOURNEY STAGES ──
-                    // Banking-research style stage-flow table. Every
-                    // row is one path; every step normalized into a
-                    // canonical colored pill so vertical scanning is
-                    // instant ("which paths have VALIDATION? which
-                    // skip RESEARCH?").
-                    + '<div data-jiq-pathview="stages" id="jiqPathStagesView"></div>'
-
-                    // ── VIEW 2: SPECTRUM + DETAIL ──
-                    + '<div data-jiq-pathview="spectrum" data-jiq-pathview-hidden="true">'
-                    +   '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.55rem;">'
-                    +     '<div style="font-size:10.5px; font-weight:700; opacity:0.78; text-transform:uppercase; letter-spacing:0.07em;">'
-                    +       '🌈 Path Spectrum <span style="opacity:0.7; font-weight:500; text-transform:none; letter-spacing:0;">- click any segment to drill in</span>'
-                    +     '</div>'
-                    +     '<div class="jiq-spectrum-filter-tabs">'
-                    +       '<button class="filter-btn is-active" data-filter="all" onclick="_jiqSetPathFilter(\'all\')">All <span class="filter-count">' + paths.length + '</span></button>'
-                    +       '<button class="filter-btn" data-filter="owned" onclick="_jiqSetPathFilter(\'owned\')" style="border-left:3px solid ' + OWNED_HEX + ';">🏠 Owned <span class="filter-count">' + ownedCount + ' · ' + ownedPct.toFixed(0) + '%</span></button>'
-                    +       '<button class="filter-btn" data-filter="earned" onclick="_jiqSetPathFilter(\'earned\')" style="border-left:3px solid ' + EARN_HEX + ';">🌐 Earned <span class="filter-count">' + earnCount + ' · ' + earnPct.toFixed(0) + '%</span></button>'
-                    +     '</div>'
+                // ── HERO HEADLINE ──
+                // Single giant percent stating the punchline up
+                // front: "X% of viewer-touches happened where your
+                // first-party data is blind. Here are the X named
+                // earned wakes that drove them."
+                var heroHtml = ''
+                    + '<div class="jiq-paths-hero">'
+                    +   '<div class="hero-eyebrow">⚡ The headline</div>'
+                    +   '<div class="hero-pct">' + earnPct.toFixed(0) + '%</div>'
+                    +   '<div class="hero-label">of Landman viewer-touches</div>'
+                    +   '<div class="hero-punch">'
+                    +     'came from off-Paramount flywheels your first-party data doesn\'t capture - '
+                    +     '<strong>' + _jiqFmt(earnTotal) + ' earned touches</strong> '
+                    +     'across ' + earnedPaths.length + ' organic discovery paths.'
                     +   '</div>'
-                    +   '<div id="jiqPathSpectrum" class="jiq-path-spectrum"></div>'
-                    +   '<div class="jiq-path-spectrum-legend">'
-                    +     '<span><span class="swatch" style="background:' + OWNED_HEX + ';"></span>Paramount-owned (' + ownedCount + ' paths · ' + _jiqFmt(ownedTotal) + ' viewers)</span>'
-                    +     '<span><span class="swatch" style="background:' + EARN_HEX  + ';"></span>Earned / off-Paramount (' + earnCount + ' paths · ' + _jiqFmt(earnTotal) + ' viewers) - first-party blind spot</span>'
+                    +   '<div class="hero-sub">'
+                    +     'Below are the ' + earnedPaths.length + ' earned wakes, each with the specific trigger '
+                    +     'event, signup yield, and a recommended next action. The ' + ownedPaths.length + ' '
+                    +     'Paramount-owned paths (already in your dashboards) are summarized at the bottom for context.'
                     +   '</div>'
-                    +   '<div id="jiqPathDetailPanel" class="jiq-path-detail-panel"></div>'
+                    + '</div>';
+
+                // ── EARNED WAKE CARDS ──
+                // The focal content. Each card pulls the path's
+                // existing `note` (the striking specific stat) and
+                // `why_it_matters` (the action item) so it reads as
+                // a self-contained mini-story.
+                var wakeCardsHtml = earnedPaths.map(function(r) {
+                    var daysStr = (r.avg_days_to_press_play === 0)
+                        ? 'Same day'
+                        : (r.avg_days_to_press_play || 0) + 'd';
+                    var stageFlow = _jiqRenderStageFlow(r.steps);
+                    // Split label into emoji + clean title.
+                    var emojiMatch = (r.label || '').match(/^\s*(\p{Extended_Pictographic}+)/u);
+                    var emoji      = emojiMatch ? emojiMatch[1] : '🌐';
+                    var cleanTitle = (r.label || '').replace(/^\s*\p{Extended_Pictographic}+\s*/u, '').trim();
+                    return '<div class="jiq-wake-card">'
+                         +   '<div class="wake-head">'
+                         +     '<div class="wake-title">' + _jiqEsc(emoji) + ' ' + _jiqEsc(cleanTitle) + '</div>'
+                         +     '<div class="wake-stats">'
+                         +       '<div class="wake-stat"><div class="wake-stat-num" style="color:#f59e0b;">' + _jiqFmt(r.cohort_size || 0) + '</div><div class="wake-stat-label">Viewers</div></div>'
+                         +       '<div class="wake-stat"><div class="wake-stat-num">' + (r.pct_of_viewers || 0).toFixed(1) + '%</div><div class="wake-stat-label">of Landman</div></div>'
+                         +       '<div class="wake-stat"><div class="wake-stat-num">' + _jiqEsc(daysStr) + '</div><div class="wake-stat-label">to play</div></div>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<blockquote class="wake-quote">' + _jiqEsc(r.note || '') + '</blockquote>'
+                         +   '<div class="wake-action">'
+                         +     '<strong>→ What to do next</strong>'
+                         +     _jiqEsc(r.why_it_matters || '')
+                         +   '</div>'
+                         +   '<div class="wake-stages">' + stageFlow + '</div>'
+                         + '</div>';
+                }).join('');
+                var wakeSection = ''
+                    + '<div class="jiq-section-divider">'
+                    +   '<div class="label is-earned">🌐 The ' + earnedPaths.length + ' earned wakes - clickstream-only visibility</div>'
+                    +   '<div class="line"></div>'
                     + '</div>'
+                    + '<div class="jiq-wake-grid">' + wakeCardsHtml + '</div>';
 
-                    // ── VIEW 3: CATEGORIES (lazy-rendered on first click) ──
-                    + '<div data-jiq-pathview="categories" data-jiq-pathview-hidden="true" id="jiqPathCategoriesView"></div>'
+                // ── OWNED REFERENCE STRIP ──
+                // Deliberately muted - sits at the bottom as "you
+                // already see this" context. Single horizontal bar
+                // broken into the 5 owned segments + a comma-list of
+                // path names underneath.
+                var totalOwnedShare = ownedPaths.reduce(function(s, r) { return s + (r.cohort_size || 0); }, 0);
+                var blueShades = ['#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'];
+                var ownedSegHtml = ownedPaths.map(function(r, i) {
+                    var w = totalOwnedShare ? ((r.cohort_size || 0) / totalOwnedShare * 100) : 0;
+                    var color = blueShades[i % blueShades.length];
+                    return '<div class="owned-seg" style="flex:' + w.toFixed(2) + ' 0 0; background:' + color + ';">'
+                         +   (w >= 8 ? (r.pct_of_viewers || 0).toFixed(0) + '%' : '')
+                         + '</div>';
+                }).join('');
+                var ownedListHtml = ownedPaths.map(function(r) {
+                    var labelClean = (r.label || '').replace(/^\s*\p{Extended_Pictographic}+\s*/u, '');
+                    return '<span class="owned-list-item">'
+                         +   _jiqEsc(labelClean)
+                         +   '<span class="owned-list-pct">' + (r.pct_of_viewers || 0).toFixed(1) + '%</span>'
+                         + '</span>';
+                }).join('');
+                var ownedSection = ''
+                    + '<div class="jiq-section-divider">'
+                    +   '<div class="label">🏠 What\'s already in your first-party view</div>'
+                    +   '<div class="line"></div>'
+                    + '</div>'
+                    + '<div class="jiq-owned-strip">'
+                    +   '<div class="owned-head">'
+                    +     '<div class="owned-title">' + ownedPaths.length + ' Paramount-owned discovery surfaces</div>'
+                    +     '<div class="owned-pct">' + ownedPct.toFixed(0) + '% of viewer-touches</div>'
+                    +   '</div>'
+                    +   '<div class="owned-bar">' + ownedSegHtml + '</div>'
+                    +   '<div class="owned-list">' + ownedListHtml + '</div>'
+                    +   '<div class="owned-note">'
+                    +     'These five paths are already in your first-party dashboards. They\'re shown here for '
+                    +     'context only - the earned wakes above are the part of the discovery funnel that '
+                    +     'clickstream lights up on top of this view.'
+                    +   '</div>'
+                    + '</div>';
 
-                    // ── VIEW 4: BUBBLE (lazy-rendered on first click) ──
-                    + '<div data-jiq-pathview="bubble" data-jiq-pathview-hidden="true" id="jiqPathBubbleView"></div>';
-
-                _jiqRenderPathStages();
-                _jiqRenderPathSpectrum();
-                _jiqRenderPathDetail();
-                // The Categories and Bubble views are rendered on
-                // first click (lazy) to avoid up-front DOM weight,
-                // and re-rendered whenever the user clicks back to
-                // them (cheap, the same data + state).
+                topEl.innerHTML = heroHtml + wakeSection + ownedSection;
             }
             if (listEl) {
                 var maxCohort = paths.reduce(function(m, r) { return Math.max(m, r.cohort_size || 0); }, 0);
