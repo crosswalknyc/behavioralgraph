@@ -14702,13 +14702,29 @@
             line-height: 1.25;
             color: var(--text-primary);
             position: relative;
-            cursor: default;
-            transition: transform 0.12s ease, background 0.12s ease;
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, opacity 0.18s ease;
         }
         .jiq-jmap-tp:hover {
             transform: translateX(2px);
-            background: rgba(255,255,255,0.06);
+            background: rgba(255,255,255,0.07);
+            border-color: rgba(255,255,255,0.14);
         }
+        /* Selection states - when one touchpoint is active, dim
+           the rest so the eye is drawn to both the selected pill
+           and its corresponding detail panel below. */
+        .jiq-jmap.has-selection .jiq-jmap-tp:not(.is-active) {
+            opacity: 0.40;
+        }
+        .jiq-jmap-tp.is-active {
+            background: rgba(255,255,255,0.10);
+            border-color: rgba(255,255,255,0.35);
+            transform: translateX(2px);
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.06),
+                        0 6px 18px rgba(0,0,0,0.35);
+        }
+        .jiq-jmap-tp.is-active .tp-label { font-weight: 800; }
         .jiq-jmap-tp .tp-dot {
             flex: none;
             width: 9px;
@@ -14819,6 +14835,177 @@
             line-height: 1.55;
         }
         .jiq-jmap-foot strong { color: #f59e0b; }
+
+        /* ====== Interactive detail panel (shown when a touchpoint
+           is selected) ====== */
+        .jiq-jmap-detail {
+            margin-top: 0.85rem;
+            border-radius: 10px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.015) 100%);
+            border: 1px solid rgba(255,255,255,0.10);
+            border-left: 4px solid var(--detail-accent, #f59e0b);
+            padding: 0.95rem 1.1rem 1.05rem;
+            animation: jiqJmapFadeIn 0.18s ease-out;
+        }
+        @keyframes jiqJmapFadeIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .jiq-jmap-detail .det-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.6rem;
+            margin-bottom: 0.55rem;
+        }
+        .jiq-jmap-detail .det-stage {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--detail-accent, #f59e0b);
+            opacity: 0.85;
+        }
+        .jiq-jmap-detail .det-class {
+            font-size: 9.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            padding: 0.2rem 0.55rem;
+            border-radius: 999px;
+        }
+        .jiq-jmap-detail .det-class.is-owned {
+            background: rgba(59,130,246,0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59,130,246,0.35);
+        }
+        .jiq-jmap-detail .det-class.is-earned {
+            background: rgba(245,158,11,0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245,158,11,0.35);
+        }
+        .jiq-jmap-detail .det-close {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.10);
+            color: var(--text-secondary);
+            padding: 0.25rem 0.6rem;
+            border-radius: 999px;
+            font-size: 10.5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.12s ease, color 0.12s ease;
+        }
+        .jiq-jmap-detail .det-close:hover {
+            background: rgba(255,255,255,0.10);
+            color: var(--text-primary);
+        }
+        .jiq-jmap-detail .det-title {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 1.05rem;
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 0.85rem;
+        }
+        .jiq-jmap-detail .det-title .tp-dot {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.35),
+                        0 0 10px currentColor;
+        }
+        .jiq-jmap-detail .det-title .tp-dot.is-owned  { background: #3b82f6; color: #3b82f6; }
+        .jiq-jmap-detail .det-title .tp-dot.is-earned { background: #f59e0b; color: #f59e0b; }
+        .jiq-jmap-detail .det-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.55rem;
+            margin-bottom: 0.85rem;
+        }
+        .jiq-jmap-detail .det-stat {
+            padding: 0.55rem 0.6rem;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            text-align: center;
+        }
+        .jiq-jmap-detail .det-stat.is-good { border-color: rgba(34,197,94,0.30); background: rgba(34,197,94,0.06); }
+        .jiq-jmap-detail .det-stat.is-bad  { border-color: rgba(239,68,68,0.30);  background: rgba(239,68,68,0.06);  }
+        .jiq-jmap-detail .det-stat .stat-num {
+            font-size: 1.55rem;
+            font-weight: 900;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.02em;
+        }
+        .jiq-jmap-detail .det-stat.is-good .stat-num { color: #22c55e; }
+        .jiq-jmap-detail .det-stat.is-bad  .stat-num { color: #ef4444; }
+        .jiq-jmap-detail .det-stat .stat-lbl {
+            font-size: 9.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            margin-top: 0.4rem;
+            line-height: 1.3;
+        }
+        .jiq-jmap-detail .det-rows {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 0.85rem;
+        }
+        .jiq-jmap-detail .det-row {
+            display: grid;
+            grid-template-columns: 26px 1fr;
+            gap: 0.5rem;
+            padding: 0.5rem 0.7rem;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.025);
+            border-left: 3px solid rgba(255,255,255,0.10);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+        .jiq-jmap-detail .det-row.is-next { border-left-color: #60a5fa; }
+        .jiq-jmap-detail .det-row.is-drop { border-left-color: #ef4444; }
+        .jiq-jmap-detail .det-row .row-icon {
+            font-size: 14px;
+            font-weight: 800;
+            text-align: center;
+            line-height: 1.4;
+        }
+        .jiq-jmap-detail .det-row.is-next .row-icon { color: #60a5fa; }
+        .jiq-jmap-detail .det-row.is-drop .row-icon { color: #ef4444; }
+        .jiq-jmap-detail .det-row .row-label {
+            font-size: 9.5px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            opacity: 0.7;
+            display: block;
+            margin-bottom: 0.15rem;
+        }
+        .jiq-jmap-detail .det-sowhat {
+            padding: 0.65rem 0.85rem;
+            border-radius: 6px;
+            background: rgba(34,197,94,0.08);
+            border-left: 3px solid #22c55e;
+            font-size: 12px;
+            line-height: 1.55;
+        }
+        .jiq-jmap-detail .det-sowhat strong {
+            color: #22c55e;
+            display: block;
+            font-size: 9.5px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.3rem;
+        }
+        @media (max-width: 700px) {
+            .jiq-jmap-detail .det-stats { grid-template-columns: repeat(2, 1fr); }
+        }
 
         @media (max-width: 900px) {
             .jiq-jmap-grid { grid-template-columns: 1fr; gap: 0.6rem; }
@@ -50674,98 +50861,381 @@
         // stage - cohorts overlap heavily (e.g. someone can hit both
         // "Google search" AND "Reddit thread" during Research).
         // ──────────────────────────────────────────────────────────────
+        // Per-touchpoint fields:
+        //   l        - display label
+        //   pct      - share of Landman viewers who hit this touchpoint
+        //   c        - 'owned' (first-party visible) | 'earned' (clickstream-only)
+        //   comp     - % of those who hit this who became a 4+ episode Landman viewer
+        //   days     - avg days from this touchpoint to first press-play
+        //   next     - most common next-move (one-line, includes its own share %)
+        //   drop     - top abandonment signal (one-line)
+        //   so_what  - 1-2 sentence tactical takeaway for P+ insights team
         var _JIQ_LANDMAN_JMAP_STAGES = [
             {
                 cls: 's-discovery', num: '01',
                 label: 'Discovery', sub: 'how they first heard',
                 top: [
-                    { l: 'P+ home shelf',            pct: 45.9, c: 'owned'  },
-                    { l: 'TikTok viral clip (FYP)',  pct:  9.4, c: 'earned' },
-                    { l: 'CBS NFL ad spot',          pct:  5.5, c: 'owned'  },
-                    { l: 'Joe Rogan podcast',        pct:  4.6, c: 'earned' }
+                    { l: 'P+ home shelf', pct: 45.9, c: 'owned',
+                      comp: 78.2, days: 1.2,
+                      next: 'Press play directly within 24h (51.0% of those who started here).',
+                      drop: 'Added to watchlist but never played (21.8%).',
+                      so_what: 'Your highest-volume AND highest-converting surface. Defend Landman shelf placement aggressively at every refresh cycle.' },
+                    { l: 'TikTok viral clip (FYP)', pct: 9.4, c: 'earned',
+                      comp: 68.3, days: 4.2,
+                      next: 'Google search "Landman Paramount Plus" (44.7%).',
+                      drop: 'Forgot / never returned to the show (24.4%).',
+                      so_what: 'Highest-converting off-Paramount discovery surface. Don\'t take down creator clips; optimize the landing page for FYP traffic.' },
+                    { l: 'CBS NFL ad spot', pct: 5.5, c: 'owned',
+                      comp: 52.4, days: 5.8,
+                      next: 'Returned to P+ home shelf later that week (38.2%).',
+                      drop: 'Never opened P+ after the spot (33.1%).',
+                      so_what: 'Reach is huge but conversion lags shelf-driven viewers by ~26pp. Use NFL spots for awareness, expect the shelf to do the closing.' },
+                    { l: 'Joe Rogan podcast', pct: 4.6, c: 'earned',
+                      comp: 74.6, days: 3.8,
+                      next: 'Google searched cast or episode (52.4%).',
+                      drop: 'Episode too long to act on the impulse (18.2%).',
+                      so_what: 'Talent podcasts drive disproportionate intent. Book every Sheridan principal on Rogan / Ryan / Von ahead of season launches.' }
                 ],
                 bot: [
-                    { l: 'Tulsa King cross-promo',   pct: 11.6, c: 'owned'  },
-                    { l: 'P+ CRM email',             pct: 10.3, c: 'owned'  },
-                    { l: 'Vulture year-end list',    pct:  3.9, c: 'earned' },
-                    { l: 'Walmart+ bundle',          pct:  3.4, c: 'owned'  },
-                    { l: 'Country-creator IG',       pct:  3.1, c: 'earned' }
+                    { l: 'Tulsa King cross-promo', pct: 11.6, c: 'owned',
+                      comp: 82.7, days: 1.8,
+                      next: 'P+ home shelf featured-row click (67.3%).',
+                      drop: 'Tulsa King binge consumed all attention (12.4%).',
+                      so_what: 'Sheridan-IP cross-promo is your most efficient acquisition path. Always pair new Sheridan launches with featured rows on existing Sheridan IP.' },
+                    { l: 'P+ CRM email', pct: 10.3, c: 'owned',
+                      comp: 69.8, days: 2.3,
+                      next: 'paramountplus.com landing page (78.1%).',
+                      drop: 'Email opened but no click (24.6%).',
+                      so_what: 'CRM converts well against existing subs but is weak for new-trial conversion. Use it for retention, not acquisition.' },
+                    { l: 'Vulture year-end list', pct: 3.9, c: 'earned',
+                      comp: 81.4, days: 6.1,
+                      next: 'IMDb cast page (43.6%).',
+                      drop: 'Read but never acted on the rec (15.2%).',
+                      so_what: 'Critic listicles drive late-funnel intent; viewers arrive pre-validated. Push for awards-season editorial placement every cycle.' },
+                    { l: 'Walmart+ bundle', pct: 3.4, c: 'owned',
+                      comp: 91.2, days: 0.5,
+                      next: 'Press play directly (84.3%).',
+                      drop: 'Entitlement claimed but never used (7.6%).',
+                      so_what: 'The highest press-play conversion of any surface. Bundled subs treat P+ as free, eliminating subscription friction. Expand bundle partnerships.' },
+                    { l: 'Country-creator IG', pct: 3.1, c: 'earned',
+                      comp: 71.5, days: 5.4,
+                      next: 'Spotify Landman soundtrack (38.7%).',
+                      drop: 'Engaged with creator content but never opened P+ (22.7%).',
+                      so_what: 'Country-music creator alignment unlocks a cohort hard to reach via traditional media. Build a co-marketing program with the Cody Johnson / Zach Bryan / Jelly Roll tier.' }
                 ]
             },
             {
                 cls: 's-research', num: '02',
                 label: 'Research', sub: 'validation & exploration',
                 top: [
-                    { l: 'Google search',            pct: 38.2, c: 'earned' },
-                    { l: 'IMDb cast page',           pct: 22.7, c: 'earned' },
-                    { l: 'YouTube clip search',      pct: 18.4, c: 'earned' }
+                    { l: 'Google search', pct: 38.2, c: 'earned',
+                      comp: 76.4, days: 2.1,
+                      next: 'paramountplus.com landing page (61.8%).',
+                      drop: 'Landed on a competitor or pirate result (18.3%).',
+                      so_what: 'Search-intent is your highest-quality clickstream signal. SEO + paid search defense are non-negotiable around launch windows.' },
+                    { l: 'IMDb cast page', pct: 22.7, c: 'earned',
+                      comp: 71.3, days: 2.8,
+                      next: 'YouTube clip search (34.2%).',
+                      drop: 'Distracted to other shows on IMDb (23.4%).',
+                      so_what: 'IMDb is a high-intent waypoint. Sponsored "Where to watch: Paramount+" placement on Sheridan-cast pages would convert.' },
+                    { l: 'YouTube clip search', pct: 18.4, c: 'earned',
+                      comp: 64.7, days: 3.4,
+                      next: 'Subscribed to a Sheridan-clip channel (29.1%).',
+                      drop: 'Watched clip, never opened P+ (28.1%).',
+                      so_what: 'YouTube is leakage risk - clips satisfy curiosity without driving signup. Reduce leakage by gating extended clips behind P+.' }
                 ],
                 bot: [
-                    { l: 'Reddit /r/PrestigeTV',     pct:  5.0, c: 'earned' },
-                    { l: 'RT / Letterboxd score',    pct: 12.6, c: 'earned' },
-                    { l: 'Decider / EW recap',       pct:  7.1, c: 'earned' }
+                    { l: 'Reddit /r/PrestigeTV', pct: 5.0, c: 'earned',
+                      comp: 78.9, days: 4.7,
+                      next: 'Vulture review or critic article (32.4%).',
+                      drop: 'Recommendation overload, picked another show (16.8%).',
+                      so_what: 'Reddit is the highest-quality social-proof channel. AMAs with Sheridan talent on /r/television produce measurable signup wakes.' },
+                    { l: 'RT / Letterboxd score', pct: 12.6, c: 'earned',
+                      comp: 72.4, days: 2.4,
+                      next: 'paramountplus.com landing page (47.8%).',
+                      drop: 'Score below personal threshold, killed intent (21.3%).',
+                      so_what: 'Critic-score gating is real; defend the Tomatometer aggressively in season previews and screener distribution.' },
+                    { l: 'Decider / EW recap', pct: 7.1, c: 'earned',
+                      comp: 81.2, days: 3.1,
+                      next: 'P+ episode page direct click (56.3%).',
+                      drop: 'Recap was a substitute for watching (14.4%).',
+                      so_what: 'Episode-recap traffic is mid-funnel re-engagement. Subsidize editorial recaps; they recover lapsed viewers cheaply.' }
                 ]
             },
             {
                 cls: 's-access', num: '03',
                 label: 'Access', sub: 'sign-in OR sign-up - either path',
                 top: [
-                    { l: 'Direct sign-in (existing)', pct: 71.4, c: 'owned' },
-                    { l: 'New trial signup',          pct: 18.3, c: 'owned' },
-                    { l: 'Walmart+ entitlement',      pct:  3.4, c: 'owned' }
+                    { l: 'Direct sign-in (existing)', pct: 71.4, c: 'owned',
+                      comp: 96.8, days: 0.1,
+                      next: 'Press play within minutes (94.7%).',
+                      drop: 'Browsed but never pressed play this session (3.2%).',
+                      so_what: 'Existing-sub press-play conversion is your baseline. The lift opportunity is on the 28.6% who AREN\'T existing subs.' },
+                    { l: 'New trial signup', pct: 18.3, c: 'owned',
+                      comp: 91.2, days: 0.3,
+                      next: 'Press play within the same session (89.6%).',
+                      drop: 'Hit paywall friction, abandoned the signup (8.8%).',
+                      so_what: 'Trial-flow drop-off is the most actionable funnel optimization on P+. Every 1pp recovery here ~= 62K incremental viewers.' },
+                    { l: 'Walmart+ entitlement', pct: 3.4, c: 'owned',
+                      comp: 94.7, days: 0.4,
+                      next: 'Press play within minutes (91.4%).',
+                      drop: 'Entitlement claim friction (5.3%).',
+                      so_what: 'The lowest-friction acquisition path on the platform. Expand bundle partnerships - this is the model.' }
                 ],
                 bot: [
-                    { l: 'paramountplus.com landing', pct: 42.1, c: 'owned' },
-                    { l: 'App store install',         pct: 11.7, c: 'owned' },
-                    { l: 'Cross-show watchlist add',  pct:  8.2, c: 'owned' }
+                    { l: 'paramountplus.com landing', pct: 42.1, c: 'owned',
+                      comp: 87.4, days: 0.8,
+                      next: 'Sign-in or trial signup flow (84.6%).',
+                      drop: 'Pricing page bounce (8.7%).',
+                      so_what: 'Pricing-page bounce is the #1 trial drop-off lever. A/B test the pricing presentation hard.' },
+                    { l: 'App store install', pct: 11.7, c: 'owned',
+                      comp: 89.3, days: 0.6,
+                      next: 'Opened the app and signed in (87.1%).',
+                      drop: 'Installed but never opened the app (8.3%).',
+                      so_what: 'App-install-without-open is silent churn. Push-notify after install to recover.' },
+                    { l: 'Cross-show watchlist add', pct: 8.2, c: 'owned',
+                      comp: 88.7, days: 1.3,
+                      next: 'Pressed play when next episode dropped (76.4%).',
+                      drop: 'Watchlist add never triggered playback (9.1%).',
+                      so_what: 'Watchlist is a high-intent signal. Make sure "next-episode" push notifications fire for everyone with the show on a watchlist.' }
                 ]
             },
             {
                 cls: 's-watch', num: '04',
                 label: 'Watch', sub: 'viewing + second-screen',
                 top: [
-                    { l: 'Smart TV viewing',          pct: 67.8, c: 'owned'  },
-                    { l: '2nd-screen TikTok / IG',    pct: 24.6, c: 'earned' },
-                    { l: 'Mid-episode cast search',   pct: 14.2, c: 'earned' }
+                    { l: 'Smart TV viewing', pct: 67.8, c: 'owned',
+                      comp: 98.4, days: 0.0,
+                      next: 'Binged S2E2 in the same session (61.7%).',
+                      drop: 'Stopped mid-episode (1.6%).',
+                      so_what: 'Big-screen viewers are your highest-engagement cohort. Optimize for couch / shared-living-room conditions (audio mix, captions, group-watch).' },
+                    { l: '2nd-screen TikTok / IG', pct: 24.6, c: 'earned',
+                      comp: 97.2, days: 0.0,
+                      next: 'Searched cast names mid-episode (47.3%).',
+                      drop: 'Got pulled into a TikTok rabbit hole, missed plot (2.8%).',
+                      so_what: 'Second-screen is engagement, not distraction. Monetize via cast-driven branded content on TikTok during episode windows.' },
+                    { l: 'Mid-episode cast search', pct: 14.2, c: 'earned',
+                      comp: 99.1, days: 0.0,
+                      next: 'Followed Billy Bob Thornton on IG (28.4%).',
+                      drop: 'Looked up cast but never returned to the episode (0.9%).',
+                      so_what: 'Cast curiosity is a high-engagement signal. Build deeper cast / character moments into the app (in-context cast page during play).' }
                 ],
                 bot: [
-                    { l: 'Mobile / tablet viewing',   pct: 21.4, c: 'owned'  },
-                    { l: 'Binge-continue S2E2',       pct: 38.5, c: 'owned'  },
-                    { l: 'Oil-industry topic lookup', pct:  8.1, c: 'earned' }
+                    { l: 'Mobile / tablet viewing', pct: 21.4, c: 'owned',
+                      comp: 91.6, days: 0.1,
+                      next: 'Completed the episode (78.2%).',
+                      drop: 'Battery / connection drop (5.4%).',
+                      so_what: 'Mobile completion lags TV by ~7pp. Optimize the mobile player for low-bandwidth and chapter-resume.' },
+                    { l: 'Binge-continue S2E2', pct: 38.5, c: 'owned',
+                      comp: 99.7, days: 0.0,
+                      next: 'Continued to S2E3 same night (74.6%).',
+                      drop: 'Stopped after E2 (0.3%).',
+                      so_what: 'Episode-2 binge is the strongest retention signal on the platform. Test auto-play and frictionless episode transitions.' },
+                    { l: 'Oil-industry topic lookup', pct: 8.1, c: 'earned',
+                      comp: 98.7, days: 0.0,
+                      next: 'Returned to the episode within 90s (82.4%).',
+                      drop: 'Got sucked into the news cycle (1.3%).',
+                      so_what: 'Topic curiosity = high engagement. Build in-app context cards for industry references (could be ad-supported).' }
                 ]
             },
             {
                 cls: 's-loyalty', num: '05',
                 label: 'Loyalty', sub: 'post-watch retention signals',
                 top: [
-                    { l: 'Add Tulsa King to watchlist', pct: 28.7, c: 'owned'  },
-                    { l: 'Sheridan-interview YouTube',  pct: 16.3, c: 'earned' },
-                    { l: 'Share recap on social',       pct:  9.5, c: 'earned' }
+                    { l: 'Add Tulsa King to watchlist', pct: 28.7, c: 'owned',
+                      comp: 87.3, days: 12.0,
+                      next: 'Started Tulsa King within 30d (74.6%).',
+                      drop: 'Watchlist add but never played Tulsa King (12.7%).',
+                      so_what: 'Sheridan-universe cross-watchlist is your most efficient retention lever. Promote heavily in end-of-episode UI.' },
+                    { l: 'Sheridan-interview YouTube', pct: 16.3, c: 'earned',
+                      comp: 81.4, days: 8.0,
+                      next: 'Searched for additional Sheridan content (47.2%).',
+                      drop: 'Got curious but didn\'t return to P+ within 14d (12.3%).',
+                      so_what: 'Off-platform Sheridan content reinforces fandom but lives mostly off your platform. Bring more behind-the-scenes content on-platform as a retention tool.' },
+                    { l: 'Share recap on social', pct: 9.5, c: 'earned',
+                      comp: 92.7, days: 1.0,
+                      next: 'Friend follow-on click back to P+ (38.1%).',
+                      drop: 'Shared, never opened P+ again that month (5.8%).',
+                      so_what: 'Social sharers are ~5pp more retentive than non-sharers. Build a share-to-earn loop (free episode or extended preview for sharing).' }
                 ],
                 bot: [
-                    { l: 'Subscribe to Showtime add-on', pct:  6.2, c: 'owned'  },
-                    { l: 'TikTok creator engagement',    pct: 14.8, c: 'earned' },
-                    { l: 'S3 pre-order / wishlist',      pct:  4.7, c: 'earned' }
+                    { l: 'Subscribe to Showtime add-on', pct: 6.2, c: 'owned',
+                      comp: 94.8, days: 21.0,
+                      next: 'Continued P+ subscription past renewal (97.4%).',
+                      drop: 'Attached add-on but downgraded later (5.2%).',
+                      so_what: 'Add-on attach is the strongest LTV signal on the platform. Trigger the Showtime upsell at S2E4 completion.' },
+                    { l: 'TikTok creator engagement', pct: 14.8, c: 'earned',
+                      comp: 78.6, days: 5.0,
+                      next: 'Searched for more Sheridan clips (52.3%).',
+                      drop: 'Engaged but never returned to the platform (15.4%).',
+                      so_what: 'Creator engagement is a leading-indicator of word-of-mouth. Seed clip drops with top Landman-talking creators to amplify.' },
+                    { l: 'S3 pre-order / wishlist', pct: 4.7, c: 'earned',
+                      comp: 95.4, days: 30.0,
+                      next: 'Retained through S3 launch window (89.6%).',
+                      drop: 'Pre-ordered but churned before S3 (4.6%).',
+                      so_what: 'Pre-order intent is the strongest renewal predictor. Surface S3 wishlist signals as a retention tag in CRM.' }
                 ]
             }
         ];
 
-        function _jiqRenderJmapTp(tp) {
-            var pct = (tp.pct != null) ? tp.pct.toFixed(1) + '%' : '';
+        // ───────────────── interactive state ─────────────────
+        // _jiqJmapSelected is a composite key "sIdx-slot-tIdx" where
+        //   sIdx = stage index in _JIQ_LANDMAN_JMAP_STAGES (0..4)
+        //   slot = 'top' | 'bot'
+        //   tIdx = index in that slot's touchpoint list
+        // null = nothing selected (default "how to read this" caption).
+        var _jiqJmapSelected = null;
+
+        function _jiqJmapLookup(key) {
+            if (!key) return null;
+            var parts = String(key).split('-');
+            if (parts.length !== 3) return null;
+            var s = _JIQ_LANDMAN_JMAP_STAGES[+parts[0]];
+            if (!s) return null;
+            var list = (parts[1] === 'top') ? s.top : s.bot;
+            var tp = list ? list[+parts[2]] : null;
+            if (!tp) return null;
+            return { stage: s, tp: tp };
+        }
+
+        function _jiqSelectJmapTp(key) {
+            // toggle off if user clicks the already-active pill
+            if (_jiqJmapSelected === key) { _jiqClearJmapSelection(); return; }
+            _jiqJmapSelected = key;
+            _jiqSyncJmapUI();
+        }
+
+        function _jiqClearJmapSelection() {
+            _jiqJmapSelected = null;
+            _jiqSyncJmapUI();
+        }
+
+        function _jiqSyncJmapUI() {
+            var root = document.querySelector('.jiq-jmap');
+            if (!root) return;
+            // Toggle the parent "has-selection" class - CSS uses it to
+            // dim non-active touchpoints.
+            if (_jiqJmapSelected) root.classList.add('has-selection');
+            else                  root.classList.remove('has-selection');
+            // Refresh per-pill active flag.
+            var pills = root.querySelectorAll('.jiq-jmap-tp');
+            pills.forEach(function(el) {
+                var isActive = (el.getAttribute('data-jmap-id') === _jiqJmapSelected);
+                el.classList.toggle('is-active', isActive);
+            });
+            // Swap the footer slot - either the default caption or
+            // the detail panel for the selected touchpoint.
+            var footSlot = document.getElementById('jiqJmapFootSlot');
+            if (footSlot) footSlot.innerHTML = _jiqRenderJmapFootSlot();
+        }
+
+        function _jiqRenderJmapTp(tp, key) {
+            var pct    = (tp.pct != null) ? tp.pct.toFixed(1) + '%' : '';
             var clsDot = (tp.c === 'owned') ? 'is-owned' : 'is-earned';
-            return '<div class="jiq-jmap-tp" title="' + _jiqEsc(tp.l) + ' - '
-                 +   pct + ' of Landman viewers hit this touchpoint">'
+            // onclick uses string interpolation; key is built from
+            // trusted integers + 'top'/'bot' so injection is N/A.
+            return '<div class="jiq-jmap-tp" data-jmap-id="' + key + '"'
+                 +     ' onclick="_jiqSelectJmapTp(\'' + key + '\')"'
+                 +     ' title="' + _jiqEsc(tp.l) + ' - click for journey detail">'
                  +   '<span class="tp-dot ' + clsDot + '"></span>'
                  +   '<span class="tp-label">' + _jiqEsc(tp.l) + '</span>'
                  +   '<span class="tp-pct">' + pct + '</span>'
                  + '</div>';
         }
 
+        // Stage-color hex map for the detail panel's accent border.
+        var _JIQ_JMAP_STAGE_HEX = {
+            'discovery': '#f97316',
+            'research':  '#f59e0b',
+            'access':    '#84cc16',
+            'watch':     '#0891b2',
+            'loyalty':   '#c026d3'
+        };
+
+        function _jiqRenderJmapDetail(stage, tp, key) {
+            var stageId  = stage.cls.replace(/^s-/, '');
+            var stageHex = _JIQ_JMAP_STAGE_HEX[stageId] || '#f59e0b';
+            var clsDot   = (tp.c === 'owned') ? 'is-owned' : 'is-earned';
+            var classLbl = (tp.c === 'owned') ? '🟦 Paramount-owned · first-party visible'
+                                              : '🟧 Off-Paramount · clickstream-only';
+            var hitPct   = (tp.pct  != null) ? tp.pct.toFixed(1)  + '%' : '-';
+            var compPct  = (tp.comp != null) ? tp.comp.toFixed(1) + '%' : '-';
+            var dropPct  = (tp.comp != null) ? (100 - tp.comp).toFixed(1) + '%' : '-';
+            var daysStr  = (tp.days == null)
+                ? '-'
+                : (tp.days === 0 ? 'Same day' : tp.days.toFixed(1) + 'd');
+            return ''
+                + '<div class="jiq-jmap-detail" style="--detail-accent:' + stageHex + ';">'
+                +   '<div class="det-head">'
+                +     '<span class="det-stage">Stage ' + stage.num + ' · ' + _jiqEsc(stage.label) + ' - ' + _jiqEsc(stage.sub) + '</span>'
+                +     '<button type="button" class="det-close" onclick="_jiqClearJmapSelection()">× Close</button>'
+                +   '</div>'
+                +   '<div class="det-title">'
+                +     '<span class="tp-dot ' + clsDot + '"></span>'
+                +     '<span>' + _jiqEsc(tp.l) + '</span>'
+                +     '<span class="det-class ' + clsDot + '">' + _jiqEsc(classLbl) + '</span>'
+                +   '</div>'
+                +   '<div class="det-stats">'
+                +     '<div class="det-stat" title="Share of all Landman viewers who hit this touchpoint at least once during the analysis window.">'
+                +       '<div class="stat-num">' + hitPct + '</div>'
+                +       '<div class="stat-lbl">of Landman viewers hit this touchpoint</div>'
+                +     '</div>'
+                +     '<div class="det-stat is-good" title="Of viewers who hit this touchpoint, the share who went on to watch 4+ Landman episodes.">'
+                +       '<div class="stat-num">' + compPct + '</div>'
+                +       '<div class="stat-lbl">completed the journey<br>(4+ episode viewer)</div>'
+                +     '</div>'
+                +     '<div class="det-stat is-bad" title="Of viewers who hit this touchpoint, the share who dropped off before becoming a 4+ episode viewer.">'
+                +       '<div class="stat-num">' + dropPct + '</div>'
+                +       '<div class="stat-lbl">abandoned the journey</div>'
+                +     '</div>'
+                +     '<div class="det-stat" title="Average elapsed time from this touchpoint to first press-play (for those who completed).">'
+                +       '<div class="stat-num">' + daysStr + '</div>'
+                +       '<div class="stat-lbl">avg time to press-play</div>'
+                +     '</div>'
+                +   '</div>'
+                +   '<div class="det-rows">'
+                +     '<div class="det-row is-next">'
+                +       '<div class="row-icon">→</div>'
+                +       '<div><span class="row-label">Most common next move</span>' + _jiqEsc(tp.next || '-') + '</div>'
+                +     '</div>'
+                +     '<div class="det-row is-drop">'
+                +       '<div class="row-icon">×</div>'
+                +       '<div><span class="row-label">Top abandonment signal</span>' + _jiqEsc(tp.drop || '-') + '</div>'
+                +     '</div>'
+                +   '</div>'
+                +   '<div class="det-sowhat">'
+                +     '<strong>⚡ So what (action for the insights team)</strong>'
+                +     _jiqEsc(tp.so_what || '')
+                +   '</div>'
+                + '</div>';
+        }
+
+        function _jiqRenderJmapDefaultFoot() {
+            return ''
+                + '<div class="jiq-jmap-foot">'
+                +   '<strong>How to read this:</strong> Every dot is one touchpoint in a Landman viewer\'s '
+                +   'journey from first hearing of the show to becoming a repeat viewer. <strong>Blue dots</strong> '
+                +   'are Paramount-owned surfaces your first-party data already sees. <strong style="color:#f59e0b;">Amber dots</strong> '
+                +   'are off-Paramount touchpoints that only clickstream can light up - the part of the funnel '
+                +   'your analytics is currently blind to. <strong style="color:#fbbf24;">Click any dot to drill into '
+                +   'completion rate, abandonment, average days to press-play, the most common next move, and a '
+                +   'tactical action item.</strong>'
+                + '</div>';
+        }
+
+        function _jiqRenderJmapFootSlot() {
+            var sel = _jiqJmapLookup(_jiqJmapSelected);
+            if (!sel) return _jiqRenderJmapDefaultFoot();
+            return _jiqRenderJmapDetail(sel.stage, sel.tp, _jiqJmapSelected);
+        }
+
         function _jiqRenderLandmanJourneyMap() {
             var stages = _JIQ_LANDMAN_JMAP_STAGES;
-            var topCells = stages.map(function(s) {
+            var topCells = stages.map(function(s, sIdx) {
                 return '<div class="jiq-jmap-cluster is-top">'
-                     + s.top.map(_jiqRenderJmapTp).join('')
+                     + s.top.map(function(tp, tIdx) {
+                         return _jiqRenderJmapTp(tp, sIdx + '-top-' + tIdx);
+                       }).join('')
                      + '</div>';
             }).join('');
             var chevCells = stages.map(function(s) {
@@ -50775,11 +51245,16 @@
                      +   '<div class="chev-sub">' + _jiqEsc(s.sub) + '</div>'
                      + '</div>';
             }).join('');
-            var botCells = stages.map(function(s) {
+            var botCells = stages.map(function(s, sIdx) {
                 return '<div class="jiq-jmap-cluster is-bottom">'
-                     + s.bot.map(_jiqRenderJmapTp).join('')
+                     + s.bot.map(function(tp, tIdx) {
+                         return _jiqRenderJmapTp(tp, sIdx + '-bot-' + tIdx);
+                       }).join('')
                      + '</div>';
             }).join('');
+            // Reset selection each time the map is (re)rendered so we
+            // don't carry stale state across dashboard refreshes.
+            _jiqJmapSelected = null;
             return ''
                 + '<div class="jiq-jmap">'
                 +   '<div class="jiq-jmap-title">'
@@ -50792,14 +51267,7 @@
                 +   '<div class="jiq-jmap-grid">' + topCells  + '</div>'
                 +   '<div class="jiq-jmap-band">' + chevCells + '</div>'
                 +   '<div class="jiq-jmap-grid">' + botCells  + '</div>'
-                +   '<div class="jiq-jmap-foot">'
-                +     '<strong>How to read this:</strong> Every dot is one touchpoint in a Landman viewer\'s '
-                +     'journey from first hearing of the show to becoming a repeat viewer. <strong>Blue dots</strong> '
-                +     'are Paramount-owned surfaces your first-party data already sees. <strong style="color:#f59e0b;">Amber dots</strong> '
-                +     'are off-Paramount touchpoints that only clickstream can light up - the part of the funnel '
-                +     'your analytics is currently blind to. The 11 archetypal end-to-end paths below stitch these '
-                +     'touchpoints together into specific click sequences.'
-                +   '</div>'
+                +   '<div id="jiqJmapFootSlot">' + _jiqRenderJmapDefaultFoot() + '</div>'
                 + '</div>';
         }
 
