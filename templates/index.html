@@ -24204,10 +24204,13 @@
                     // Re-renderable inner table. Toggling a header calls
                     // window.iiqQ2AssetsSortBy which rewrites this block
                     // in place (no full Q2 re-render needed).
+                    window._iiqQ2AssetsBarMetric = 'views';
+
                     window._iiqRenderQ2AssetTable = function() {
                         var rowsAll = window.__intentIQQ2Best || [];
                         var slugLocal = window.__intentIQQ2Slug || '';
                         var s = window._iiqQ2AssetsSort;
+                        var barMetric = window._iiqQ2AssetsBarMetric || 'views';
                         function _val(b, k) {
                             if (k === 'asset')  return String(b.action_label || b.asset_type || ('Asset #' + b.asset_id)).toLowerCase();
                             if (k === 'views')  return Number(b.views_total)      || 0;
@@ -24216,6 +24219,7 @@
                             if (k === 'ticket') return iiqAssetFunnelProjection(b).ticket_pct;
                             return 0;
                         }
+                        function _barVal(b) { return _val(b, barMetric); }
                         var indexed = rowsAll.map(function(b, i){ return { b: b, i: i }; });
                         var sign = (s.dir === 'asc') ? 1 : -1;
                         indexed.sort(function(a, b) {
@@ -24224,22 +24228,27 @@
                             return (av - bv) * sign;
                         });
                         var top = indexed.slice(0, 10);
-                        var maxBV2 = Math.max.apply(null, rowsAll.map(function(b){ return Number(b.views_total)||0; }).concat([1]));
+                        var maxBar = Math.max.apply(null, rowsAll.map(function(b){ return _barVal(b); }).concat([0.001]));
+                        var barColLabel = { views: 'Views', eng: 'Eng', info: 'Info-seek %', ticket: 'Ticketing %' }[barMetric] || 'Views';
+                        var barColColor = { views: null, eng: null, info: '#a5b4fc', ticket: '#fbbf24' }[barMetric] || null;
                         function _hdr(key, label, align, color) {
                             var st = window._iiqQ2AssetsSort;
                             var active = (st.key === key);
+                            var isBarSource = (key === barMetric);
                             var arrow  = active ? (st.dir === 'asc' ? '\u25B2' : '\u25BC') : '\u21C5';
                             var arrowOp= active ? '0.85' : '0.35';
                             var alignS = (align === 'right') ? 'text-align:right;' : '';
                             var colorS = color ? ('color:' + color + ';') : '';
-                            return '<div data-iiq-q2sort="' + key + '" onclick="window.iiqQ2AssetsSortBy(\'' + key + '\')" style="cursor:pointer; user-select:none; ' + alignS + colorS + '" title="Click to sort">'
+                            var underline = isBarSource ? 'text-decoration: underline; text-underline-offset: 3px;' : '';
+                            return '<div data-iiq-q2sort="' + key + '" onclick="window.iiqQ2AssetsSortBy(\'' + key + '\')" style="cursor:pointer; user-select:none; ' + alignS + colorS + underline + '" title="Click to sort and display in bars">'
                                 +    label
                                 +    ' <span style="opacity:' + arrowOp + '; font-size:0.8em;">' + arrow + '</span>'
                                 +  '</div>';
                         }
+                        var barColHeaderStyle = barColColor ? 'color:' + barColColor + ';' : '';
                         var headerHtml = '<div style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; padding:0.3rem 0 0.4rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.7rem; color: var(--text-secondary);">'
                             + _hdr('asset',  'Asset', 'left',  null)
-                            + '<div>Views</div>'
+                            + '<div style="' + barColHeaderStyle + '">' + barColLabel + '</div>'
                             + _hdr('views',  'Views',       'right', null)
                             + _hdr('eng',    'Eng',         'right', null)
                             + _hdr('info',   'Info-seek %', 'right', '#a5b4fc')
@@ -24249,13 +24258,15 @@
                             var b = o.b;
                             var origIdx = o.i;
                             var label = (b.action_label || b.asset_type || 'Asset #' + b.asset_id);
-                            var color = IIQ_QPALETTE[b.paid_or_organic] || IIQ_QPALETTE.unknown;
-                            var pct   = maxBV2 > 0 ? Math.min(100, (Number(b.views_total)||0) / maxBV2 * 100) : 0;
+                            var defaultColor = IIQ_QPALETTE[b.paid_or_organic] || IIQ_QPALETTE.unknown;
+                            var barColor = barColColor || defaultColor;
+                            var barValue = _barVal(b);
+                            var pct = maxBar > 0 ? Math.min(100, barValue / maxBar * 100) : 0;
                             var proj  = iiqAssetFunnelProjection(b);
                             var onclick = 'window.iiqShowAssetDetail(\'' + escapeHtml(slugLocal) + '\', ' + origIdx + ')';
                             return '<div onclick="' + onclick + '" style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; align-items:center; padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; transition: background 0.15s;" onmouseenter="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseleave="this.style.background=\'transparent\'">'
                                 +   '<div style="font-size:0.78rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</div>'
-                                +   '<div style="background: rgba(255,255,255,0.06); height: 16px; border-radius: 4px; overflow:hidden;"><div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + color + ';"></div></div>'
+                                +   '<div style="background: rgba(255,255,255,0.06); height: 16px; border-radius: 4px; overflow:hidden;"><div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + barColor + ';"></div></div>'
                                 +   '<div style="font-size:0.82rem; font-weight:600; color:#fff; text-align:right;">' + fmtCompact(b.views_total||0) + '</div>'
                                 +   '<div style="font-size:0.78rem; color:#cbd5e1; text-align:right;">' + fmtCompact(b.engagement_total||0) + '</div>'
                                 +   '<div style="font-size:0.78rem; font-weight:600; color:#a5b4fc; text-align:right;">' + proj.info_pct.toFixed(1) + '%</div>'
@@ -24270,8 +24281,10 @@
                             s.dir = (s.dir === 'asc') ? 'desc' : 'asc';
                         } else {
                             s.key = key;
-                            // Asset (text) defaults to asc; numerics to desc
                             s.dir = (key === 'asset') ? 'asc' : 'desc';
+                        }
+                        if (key !== 'asset') {
+                            window._iiqQ2AssetsBarMetric = key;
                         }
                         var tbl = document.getElementById('iiqQ2AssetTable');
                         if (tbl && typeof window._iiqRenderQ2AssetTable === 'function') {
@@ -24282,7 +24295,7 @@
                     html += '<div class="iiq-card" style="padding:0.85rem;">';
                     html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.45rem;">';
                     html +=     '<div style="font-size:0.78rem; color: var(--text-secondary);">Top 10 in-flight assets (' + escapeHtml(bestLabel) + ')</div>';
-                    html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">click any row for daily performance \u00b7 click a column header to sort</div>';
+                    html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">click any row for daily performance \u00b7 click a column header to sort & update bars</div>';
                     html +=   '</div>';
                     html +=   '<div id="iiqQ2AssetTable">' + window._iiqRenderQ2AssetTable() + '</div>';
                     html += '</div>';
