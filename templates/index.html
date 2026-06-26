@@ -24084,9 +24084,19 @@
                     });
                 }
 
-                var legend = (leftSeries || []).concat(rightSeries || []).map(function(s) {
-                    return '<span style="display:inline-flex; align-items:center; gap:0.3rem; font-size:0.75rem; color:#cbd5e1; white-space:nowrap;"><span style="width:10px; height:10px; background:' + s.color + '; border-radius:2px; flex:none;"></span>' + escapeHtml(s.name) + '</span>';
-                }).join('');
+                // Series legend chips. Each chip can carry a `total` field
+                // (numeric) that the chart renders as "~12.3M" in a muted
+                // colour next to the name -- same style as the Audience
+                // cards. Lets the user see the underlying volume each
+                // curve represents without crowding the chart itself.
+                function _seriesChip(s) {
+                    var totalSpan = '';
+                    if (s && (typeof s.total === 'number') && isFinite(s.total)) {
+                        totalSpan = '<span style="opacity:0.55; margin-left:0.25rem; font-variant-numeric: tabular-nums;">~' + fmtCompact(s.total) + '</span>';
+                    }
+                    return '<span style="display:inline-flex; align-items:center; gap:0.3rem; font-size:0.75rem; color:#cbd5e1; white-space:nowrap;"><span style="width:10px; height:10px; background:' + s.color + '; border-radius:2px; flex:none;"></span>' + escapeHtml(s.name) + totalSpan + '</span>';
+                }
+                var legend = (leftSeries || []).concat(rightSeries || []).map(_seriesChip).join('');
                 var eventLegend = (Array.isArray(opts.eventLegend) && opts.eventLegend.length)
                     ? opts.eventLegend.map(function(e) {
                           return '<span style="display:inline-flex; align-items:center; gap:0.3rem; font-size:0.7rem; color:#94a3b8; white-space:nowrap;"><span style="width:8px; height:8px; background:' + (e.color || '#94a3b8') + '; border-radius:50%; border:1px solid rgba(15,23,42,0.6); flex:none;"></span>' + escapeHtml(e.label || '') + '</span>';
@@ -24096,10 +24106,18 @@
                 var leftAxisLabel  = opts.leftLabel  ? '<text x="' + (P.l - 46) + '" y="' + (H/2) + '" font-size="10" fill="' + (opts.leftLabelColor  || 'rgba(34,211,238,0.85)')  + '" text-anchor="middle" transform="rotate(-90, ' + (P.l - 46) + ', ' + (H/2) + ')">' + escapeHtml(opts.leftLabel)  + '</text>' : '';
                 var rightAxisLabel = opts.rightLabel ? '<text x="' + (W - P.r + 46) + '" y="' + (H/2) + '" font-size="10" fill="' + (opts.rightLabelColor || 'rgba(251,191,36,0.85)') + '" text-anchor="middle" transform="rotate(90, '  + (W - P.r + 46) + ', ' + (H/2) + ')">' + escapeHtml(opts.rightLabel) + '</text>' : '';
 
+                // Series chips and event-drop chips render on SEPARATE
+                // rows (two-row legend) so the chart card can shrink and
+                // the chips never collide. Each row still wraps inside
+                // itself if there's overflow.
+                var seriesRow = '<div style="display:flex; flex-wrap:wrap; gap:0.3rem 0.85rem;">' + legend + '</div>';
+                var eventRow  = eventLegend
+                    ? '<div style="display:flex; flex-wrap:wrap; gap:0.3rem 0.85rem; margin-top:0.25rem;">' + eventLegend + '</div>'
+                    : '';
                 return '<div style="overflow-x:auto; overflow-y:hidden;"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; max-width:' + W + 'px; display:block;">'
                      + grid + paths + eventsSvg + leftLabels + rightLabels + dateLabels + leftAxisLabel + rightAxisLabel
                      + '</svg></div>'
-                     + '<div style="margin-top:0.45rem; display:flex; flex-wrap:wrap; gap:0.3rem 0.85rem;">' + legend + eventLegend + '</div>';
+                     + '<div style="margin-top:0.45rem;">' + seriesRow + eventRow + '</div>';
             }
 
             function iiqDonut(slices, opts) {
@@ -24439,7 +24457,12 @@
                 });
                 var series = keys.map(function(k) {
                     var pts = allDates.map(function(d) { return { x: d, y: dailySmoothByKey[k][d] || 0 }; });
-                    return { name: k.charAt(0).toUpperCase() + k.slice(1) + ' views (daily)', color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown, points: pts };
+                    return {
+                        name:   k.charAt(0).toUpperCase() + k.slice(1) + ' views (daily)',
+                        color:  IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown,
+                        points: pts,
+                        total:  sumByKey[k] || 0
+                    };
                 });
                 // Top row: slim donut on the left, paid-vs-organic funnel
                 // comparison on the right. Cumulative line chart drops below
@@ -24513,8 +24536,8 @@
                 var tkDailyPts   = allDates.map(function(d, i) { return { x: d, y: tkWeighted[i]   * tkScale   }; });
                 var hasFunnelSeries = (rawInfoSum + rawTkSum) > 0;
                 var rightSeries = hasFunnelSeries ? [
-                    { name: 'Info-seekers (daily)',    color: '#a5b4fc', points: infoDailyPts },
-                    { name: 'Ticketing visits (daily)', color: '#fbbf24', points: tkDailyPts   }
+                    { name: 'Info-seekers (daily)',     color: '#a5b4fc', points: infoDailyPts, total: targetInfo },
+                    { name: 'Ticketing visits (daily)', color: '#fbbf24', points: tkDailyPts,   total: targetTk   }
                 ] : [];
                 var paidColor    = IIQ_QPALETTE.paid;
                 var organicColor = IIQ_QPALETTE.organic;
