@@ -23606,8 +23606,8 @@
                             var proj = c._proj || (v > 0 ? iiqAssetFunnelProjection(c) : null);
                             var infoSeekers = proj ? Math.round(v * proj.info_pct / 100) : 0;
                             var ticketVisits = proj ? Math.round(v * proj.ticket_pct / 100) : 0;
-                            var infoTip = 'Projected % of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people. Calibrated from post-trailer Google Trends + IMDB Pro spike benchmarks for family-animation tentpoles; tilted per asset by phase, channel, paid/organic, and engagement rate.';
-                            var tkTip   = 'Projected % of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people. Calibrated from NATO + Comscore ticketing-page conversion norms; peaks during opening-weekend window (T-0), ramps with tickets-on-sale (1/21), near zero after the 5/15 streaming launch.';
+                            var infoTip = 'Projected % of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people.';
+                            var tkTip   = 'Projected % of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people.';
                             return '<div class="iiq-card" data-asset-id="' + escapeHtml(c.asset_id || '') + '" style="border-left: 3px solid ' + edgeColor + '; transition: box-shadow 0.4s ease, transform 0.2s ease;">'
                                 + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '-') + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
