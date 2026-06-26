@@ -22329,7 +22329,10 @@
                 </div>
 
                 <details id="iiqConvSecretSauce" style="background: rgba(15,23,42,0.55); border:1px solid rgba(245,158,11,0.35); border-radius:8px; padding:0.6rem 0.85rem; margin-bottom:0.85rem;">
-                    <summary style="cursor:pointer; font-size:0.85rem; font-weight:700; color:#fbbf24;">🧪 Secret Sauce &nbsp;<span style="font-weight:400; font-size:0.72rem; color:var(--text-secondary);">(conversion weights)</span></summary>
+                    <summary style="cursor:pointer; font-size:0.85rem; font-weight:700; color:#fbbf24; display:flex; align-items:center; gap:0.55rem;">
+                        <span>🧪 Secret Sauce &nbsp;<span style="font-weight:400; font-size:0.72rem; color:var(--text-secondary);">(conversion weights)</span></span>
+                        <button type="button" onclick="event.preventDefault(); event.stopPropagation(); iiqResetSecretSauce();" title="Reset all Secret Sauce values to their original defaults (Awareness 0.50%, Mid-funnel 8.0%, Intent 22.0%, Full-run × 2.70)." style="margin-left:auto; background: rgba(255,255,255,0.06); color:#fbbf24; border:1px solid rgba(245,158,11,0.4); border-radius:6px; padding:0.25rem 0.7rem; font-size:0.72rem; font-weight:600; cursor:pointer;">↺ Reset to defaults</button>
+                    </summary>
                     <div style="font-size:0.72rem; color: var(--text-secondary); margin: 0.55rem 0 0.7rem;">
                         Each funnel layer converts at its own rate. Layers are <strong>nested</strong> (ticketing visitors ⊂ info-seekers ⊂ reached), so each person is assigned to the deepest layer they reached and that layer's conversion rate is applied. No double-counting.
                     </div>
@@ -22345,7 +22348,7 @@
                             <div style="font-size:0.65rem; color:#64748b; margin-top:0.15rem;">of (info-seekers − ticketing visitors)</div>
                         </div>
                         <div>
-                            <div style="font-size:0.7rem; color:#fbbf24;" title="Already on a ticketing site. Highest conversion (~18–28% for family animation, NATO/Comscore norm).">Bottom-funnel layer %</div>
+                            <div style="font-size:0.7rem; color:#fbbf24;" title="Already on a ticketing site. Highest conversion (~18–28% for family animation, NATO/Comscore norm).">Intent (Bottom funnel) %</div>
                             <input id="iiqConvWtTicketing" type="number" step="0.1" min="0" max="100" value="22.0" style="width:100%; background: rgba(0,0,0,0.4); color:#fbbf24; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:0.4rem 0.5rem; font-size:0.95rem; font-weight:600;">
                             <div style="font-size:0.65rem; color:#64748b; margin-top:0.15rem;">of ticketing-site visitors</div>
                         </div>
@@ -22639,7 +22642,7 @@
                   +       '<th style="text-align:right; padding:0.4rem 0.6rem;">$ contribution</th>'
                   +     '</tr></thead>'
                   +     '<tbody>'
-                  +       layerRow('Bottom-funnel (ticketing visitors)', p.lTick,  p.weights.ticket, '#fbbf24')
+                  +       layerRow('Intent (Bottom funnel) \u2014 ticketing visitors', p.lTick,  p.weights.ticket, '#fbbf24')
                   +       layerRow('Mid-funnel (info-seekers only)',     p.lInfo,  p.weights.info,   '#a5b4fc')
                   +       layerRow('Awareness (reached only)',           p.lAware, p.weights.aware,  '#94a3b8')
                   +     '</tbody>'
@@ -22654,6 +22657,29 @@
                   +   '</table>'
                   + '</div>';
             }
+
+            // Reset the Secret Sauce panel to the GOAT $35.5M-calibrated
+            // defaults. Single source of truth for what counts as "the
+            // originals" -- mirrored from the input value="..." attrs
+            // in the panel markup.
+            window.IIQ_SECRET_SAUCE_DEFAULTS = {
+                iiqConvWtAware:     '0.50',
+                iiqConvWtInfo:      '8.0',
+                iiqConvWtTicketing: '22.0',
+                iiqConvFullRunMult: '2.70'
+            };
+            window.iiqResetSecretSauce = function() {
+                var d = window.IIQ_SECRET_SAUCE_DEFAULTS;
+                Object.keys(d).forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el) el.value = d[id];
+                });
+                // Re-run the projection so the output reflects the reset
+                // values immediately instead of waiting for PROJECT.
+                if (typeof window.iiqProjectConversion === 'function') {
+                    window.iiqProjectConversion();
+                }
+            };
 
             window.iiqProjectConversion = function() {
                 var t = window.__iiqConv && window.__iiqConv.totals;
