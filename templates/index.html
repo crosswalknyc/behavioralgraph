@@ -38722,6 +38722,19 @@
             return '$' + num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
         }
 
+        // Scope chip shown next to editable rates and the per-platform
+        // CPM column header. When the user has sliced the dashboard to
+        // a specific year (year-cut mode), every rate edit is local to
+        // that year - the chip makes that explicit so the user doesn't
+        // think they're touching the headline aggregate. Returns '' in
+        // All Years mode so the table/cards stay clean.
+        function _bpiqScopeChip() {
+            var ay = _bpiqState && _bpiqState.data && _bpiqState.data._bpiq_active_year;
+            if (!ay) return '';
+            var label = (_bpiqState.data._bpiq_active_year_label || ay);
+            return ' <span style="display:inline-block;margin-left:6px;padding:1px 7px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.4);border-radius:10px;color:#c084fc;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;vertical-align:middle;" title="Edits in this view only affect ' + label + '. Switch to All Years to apply across the whole partnership.">' + label + ' only</span>';
+        }
+
         // Brand Lift = relative % change from Pre% to Post%. Replaces the
         // old percentage-point delta formatter. Handles pre=0 specially:
         // post>0 with pre=0 is "∞" (positive growth), post=0 with pre=0
@@ -38868,7 +38881,7 @@
                 + '<th data-bpiq-sort="lift_pp"      style="' + thBase + 'text-align:right;">Brand Lift (pp)'                            + arrow('lift_pp')      + '</th>'
                 + '<th data-bpiq-sort="incr_users"   style="' + thBase + 'text-align:right;" title="Post-campaign incremental brand engagers attributable to this platform (post − pre, projected to US gen pop).">Incremental Consumers' + arrow('incr_users')   + '</th>'
                 + '<th data-bpiq-sort="bench_cpm"    style="' + thBase + 'text-align:right;color:var(--text-secondary);" title="Industry-benchmarked CPM. Display only - does not enter any calculation.">Benchmark CPM' + arrow('bench_cpm') + '</th>'
-                + '<th data-bpiq-sort="cpm"          style="' + thBase + 'text-align:right;">CPM'                                        + arrow('cpm')          + '</th>'
+                + '<th data-bpiq-sort="cpm"          style="' + thBase + 'text-align:right;">CPM'                                        + arrow('cpm')          + _bpiqScopeChip() + '</th>'
                 + '<th data-bpiq-sort="emv"          style="' + thBase + 'text-align:right;" title="Incremental Consumers × CPM = EMV.">EMV (Incr × CPM)' + arrow('emv') + '</th>'
                 + '</tr></thead><tbody>'
                 + rows.map(function(r) {
@@ -38973,18 +38986,39 @@
                                                  + (v.brand_engagement_value || 0)
                                                  + (v.brand_lift_value        || 0)
                                                  + (v.conversion_value        || 0)) * 100) / 100;
-            // Propagate the new CPM rates into every per-year slice so
-            // the YoY chart (Earned Media Value series) and the per-year
-            // summary cards stay in sync with the headline. Same
-            // `incr × rate` formula as above — for year rows the data
-            // side encodes `incremental_users_projected = post_users_projected`
-            // so this yields each year's reach-driven EMV without the
-            // frontend needing to distinguish the two cases.
+            // Propagate the new CPM rates into the right scope:
+            //
+            //   - All Years view: rate edit applies uniformly to every
+            //     year (rate is a "default for the whole partnership").
+            //   - Year-cut view (e.g. user is viewing 2023): rate edit
+            //     affects ONLY the active year — each year carries its
+            //     own rate so the user can model market-CPM evolution
+            //     (2021 TikTok ≠ 2026 TikTok).
+            //
+            // BEV/BLV scalar rates are pulled from each year's
+            // valuation.rates and recomputed against per-year bases so
+            // those edits also stay local in year-cut mode and flow
+            // uniformly in All Years mode.
             var origYears = (_bpiqState.originalData && _bpiqState.originalData.yearly_breakdown) || _bpiqState.data.yearly_breakdown;
+            var activeYear = _bpiqState.data && _bpiqState.data._bpiq_active_year;
             if (Array.isArray(origYears) && origYears.length) {
+                // BEV/BLV/CV rate values to apply this pass. When
+                // editing in year-cut mode, take them from the active
+                // year's valuation.rates (which is what the input
+                // handlers just mutated). When editing in All Years,
+                // take them from the aggregate so all years sync.
+                var ratesSource = activeYear ? (v.rates || {}) : (v.rates || {});
+                var bevRate    = Number(ratesSource.bev_per_user)        || 0;
+                var blvRate    = Number(ratesSource.blv_per_incr_user)   || 0;
+                var convRate   = Number(ratesSource.conv_value_per_user) || 0;
                 origYears.forEach(function(y) {
+                    // Year-cut: skip non-active years so the edit stays
+                    // local. The active year still mutates because its
+                    // valuation reference IS _bpiqState.data.valuation.
+                    if (activeYear && Number(y.year) !== Number(activeYear)) return;
                     var yv = y.valuation;
                     if (!yv) return;
+                    // EMV: re-apply rates to each platform row.
                     var yEmvTotal = 0;
                     (yv.emv_breakdown || []).forEach(function(r) {
                         var incr = r.incremental_users_projected;
@@ -38996,16 +39030,37 @@
                         if (r.emv_value > 0) yEmvTotal += r.emv_value;
                     });
                     yv.earned_media_value = Math.round(yEmvTotal * 100) / 100;
-                    yv.total_brand_value  = Math.round(((yv.earned_media_value      || 0)
-                                                      + (yv.brand_engagement_value || 0)
-                                                      + (yv.brand_lift_value        || 0)
-                                                      + (yv.conversion_value        || 0)) * 100) / 100;
+                    // BEV/BLV: recompute against year-specific base
+                    // counts so each year's contribution to the YoY
+                    // chart reflects the live rate.
+                    var yrRates = yv.rates || (yv.rates = {});
+                    // Same cascade behavior for both modes — what
+                    // differs is the scope (active year only vs all
+                    // years), which is enforced by the guard above.
+                    yrRates.bev_per_user        = bevRate;
+                    yrRates.blv_per_incr_user   = blvRate;
+                    yrRates.conv_value_per_user = convRate;
+                    var yBevBase  = y.users_projected            || 0;
+                    var yBlvBase  = (yv.incremental_users != null)
+                                     ? yv.incremental_users
+                                     : Math.max(0, (y.users_projected || 0) - ((_bpiqState.originalData && _bpiqState.originalData.totals && _bpiqState.originalData.totals.pre_users_projected) || 0));
+                    var yConvBase = (y.conversions && (y.conversions.post_count || y.conversions.post_users_projected))
+                                     || (yv.conv_base || 0);
+                    yv.brand_engagement_value = Math.round(yBevBase  * bevRate  * 100) / 100;
+                    yv.brand_lift_value       = Math.round(yBlvBase  * blvRate  * 100) / 100;
+                    if (convRate > 0 && yConvBase > 0) {
+                        yv.conversion_value   = Math.round(yConvBase * convRate * 100) / 100;
+                    }
+                    yv.total_brand_value      = Math.round(((yv.earned_media_value      || 0)
+                                                          + (yv.brand_engagement_value || 0)
+                                                          + (yv.brand_lift_value        || 0)
+                                                          + (yv.conversion_value        || 0)) * 100) / 100;
                     // Mirror onto the top-level legacy `earned_media_value`
                     // so the YoY chart's "Earned Media Value ($)" series
                     // reads the fresh number.
                     y.earned_media_value = yv.earned_media_value;
                 });
-                _bpiqRenderYearly(origYears, (_bpiqState.data && _bpiqState.data._bpiq_active_year) || null);
+                _bpiqRenderYearly(origYears, activeYear || null);
             }
             _bpiqRenderPerPlatformTable();
             _bpiqRenderValuation(v);
@@ -40436,7 +40491,8 @@
                         { label: 'Post-Campaign Engaged Consumers',
                           value: _bpiqFmtNum(bevCount) },
                         { label: '× $/consumer rate &nbsp;'
-                                 + _bpiqBenchHint(_bm.bev_per_user),
+                                 + _bpiqBenchHint(_bm.bev_per_user)
+                                 + _bpiqScopeChip(),
                           value: '$ ' + _bpiqRateInput('bev', bevRateValue, 'Edit $/consumer - recalculates Brand Engagement Value & Total Brand Value')
                                  + ' <span style="color:var(--text-secondary);font-size:13px;">/consumer</span>' }
                     ],
@@ -40459,7 +40515,8 @@
                         { label: 'Incremental Consumers<br><span style="font-size:12px;">(post − pre · DiD vs Gen Pop)</span>',
                           value: _bpiqFmtNum(blvCount) },
                         { label: '× $/incremental-consumer rate &nbsp;'
-                                 + _bpiqBenchHint(_bm.blv_per_incr_user),
+                                 + _bpiqBenchHint(_bm.blv_per_incr_user)
+                                 + _bpiqScopeChip(),
                           value: '$ ' + _bpiqRateInput('blv', blvRateValue, 'Edit $/incremental consumer - recalculates Brand Lift Value & Total Brand Value')
                                  + ' <span style="color:var(--text-secondary);font-size:13px;">/incr. consumer</span>' }
                     ],
@@ -40485,7 +40542,8 @@
                             { label: 'Post-Campaign Conversions',
                               value: _bpiqFmtNum(convCount) },
                             { label: '× Average Order Value (AOV) &nbsp;'
-                                     + _bpiqBenchHint(_bm.conv_value_per_user),
+                                     + _bpiqBenchHint(_bm.conv_value_per_user)
+                                     + _bpiqScopeChip(),
                               value: '$ ' + _bpiqRateInput('conv', convRateValue, 'Edit $/conversion (AOV) - recalculates Conversion Value & Total Brand Value')
                                      + ' <span style="color:var(--text-secondary);font-size:13px;">/order</span>' }
                         ],
