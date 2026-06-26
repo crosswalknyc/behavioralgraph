@@ -21040,6 +21040,20 @@
                                         <div style="font-weight: 600;">📄 Download as PDF</div>
                                         <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">Opens print dialog (Save as PDF)</div>
                                     </button>
+                                    <div style="height: 1px; background: var(--border-color);"></div>
+                                    <!-- High-design analysis deck. The
+                                         server-side builder lives in
+                                         migration/bpiq_deck_builder.py
+                                         and matches the LISA design
+                                         language + MIDG narrative voice.
+                                         POST returns a .pptx blob. -->
+                                    <button type="button" id="bpiqDeckBtn" onclick="_bpiqExportDeck()"
+                                            style="display: block; width: 100%; text-align: left; padding: 0.7rem 0.95rem;
+                                                   background: transparent; border: 0; cursor: pointer; color: var(--text-primary);
+                                                   font-size: 0.85rem;">
+                                        <div style="font-weight: 600;">🎨 Deck with Analysis (.pptx)</div>
+                                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">Designed by BehaviorGraph · open in PowerPoint or Keynote</div>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -23121,6 +23135,94 @@
                 };
             }
 
+            // ----- Rich hover tooltip for asset-drop dots on Q2 chart -----
+            // Replaces the old SVG <title> tooltip with a floating HTML card
+            // that mirrors the look of the Q2 in-flight asset cards (title,
+            // channel, views, engagement, eng. rate, info-seek %, ticketing
+            // %, posted date, paid/organic tag). Position follows the cursor
+            // and flips when near the viewport edge.
+            window.iiqHideDotTip = function() {
+                var tip = document.getElementById('iiqDotTip');
+                if (tip) tip.style.display = 'none';
+            };
+            function _iiqDotTipHtml(ev) {
+                var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s == null ? '' : s); };
+                var fmtC = (typeof fmtCompact === 'function') ? fmtCompact : function(n){ return String(n); };
+                var color = ev.color || '#94a3b8';
+                var a = ev.asset;
+                if (!a) {
+                    // Fallback for non-asset events (e.g. cum.forEach path
+                    // that only has a date + paid/organic label).
+                    return '<div style="border-left:3px solid ' + color + '; padding-left:0.55rem;">'
+                         + '<div style="font-weight:700; color:#fff; font-size:0.85rem;">' + esc(ev.label || 'Asset drop') + '</div>'
+                         + '<div style="font-size:0.68rem; color:#94a3b8; margin-top:0.2rem;">' + esc(String(ev.x || '').slice(0,10)) + '</div>'
+                         + '</div>';
+                }
+                var po       = (a.paid_or_organic || 'unknown').toLowerCase();
+                var poLabel  = po === 'paid' ? 'paid' : (po === 'organic' || po === 'natural' ? 'organic' : po);
+                var title    = a.action_label || a.asset_type || 'Asset';
+                var channel  = a.channel || '';
+                var assetTp  = a.asset_type || '';
+                var views    = Number(a.ext_view_count) || 0;
+                var eng      = Number(a.ext_engagement_count) || 0;
+                var engRate  = views > 0 ? (eng / views * 100) : 0;
+                var proj     = (typeof iiqAssetFunnelProjection === 'function')
+                                ? iiqAssetFunnelProjection(a)
+                                : { info_pct: 0, ticket_pct: 0 };
+                var posted   = a.posted_date ? String(a.posted_date).slice(0, 10) : '';
+                var phase    = a.phase_name || '';
+                var subLine  = [assetTp, channel].filter(Boolean).join(' \u00b7 ');
+                var poChip   = '<span style="padding:0.1rem 0.45rem; border-radius:8px; background:' + color + '22; color:' + color + '; font-weight:600; text-transform:lowercase; letter-spacing:0.02em;">' + esc(poLabel) + '</span>';
+                var phaseChip = phase
+                    ? '<span style="padding:0.1rem 0.45rem; border-radius:8px; background:rgba(148,163,184,0.15); color:#cbd5e1;">' + esc(phase) + '</span>'
+                    : '';
+                return ''
+                     + '<div style="border-left:3px solid ' + color + '; padding:0.1rem 0 0.1rem 0.6rem;">'
+                     +   '<div style="font-weight:700; color:#fff; font-size:0.92rem; line-height:1.25; margin-bottom:0.1rem;">' + esc(title) + '</div>'
+                     +   (subLine ? '<div style="font-size:0.7rem; color:#94a3b8; margin-bottom:0.55rem;">' + esc(subLine) + '</div>' : '')
+                     +   '<div style="font-size:1.35rem; font-weight:700; color:#fff; line-height:1;">' + fmtC(views) + '</div>'
+                     +   '<div style="font-size:0.65rem; color:#94a3b8; margin-bottom:0.55rem;">views</div>'
+                     +   '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:0.45rem; margin-bottom:0.55rem;">'
+                     +     '<div><div style="font-size:0.85rem; font-weight:700; color:#fff;">' + fmtC(eng) + '</div><div style="font-size:0.6rem; color:#94a3b8;">engagement</div></div>'
+                     +     '<div><div style="font-size:0.85rem; font-weight:700; color:#22d3ee;">' + engRate.toFixed(2) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">eng. rate</div></div>'
+                     +     '<div><div style="font-size:0.85rem; font-weight:700; color:#a5b4fc;">' + proj.info_pct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">info-seek</div></div>'
+                     +     '<div><div style="font-size:0.85rem; font-weight:700; color:#fbbf24;">' + proj.ticket_pct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">ticketing</div></div>'
+                     +   '</div>'
+                     +   '<div style="display:flex; justify-content:space-between; align-items:center; gap:0.4rem; font-size:0.65rem; color:#94a3b8;">'
+                     +     '<span>' + (posted ? 'Posted ' + esc(posted) : '') + '</span>'
+                     +     '<span style="display:inline-flex; gap:0.3rem;">' + poChip + phaseChip + '</span>'
+                     +   '</div>'
+                     + '</div>';
+            }
+            window.iiqShowDotTip = function(e, evId) {
+                try {
+                    var stash = window.__iiqEventStash || {};
+                    var ev = stash[evId];
+                    if (!ev) return;
+                    var tip = document.getElementById('iiqDotTip');
+                    if (!tip) {
+                        tip = document.createElement('div');
+                        tip.id = 'iiqDotTip';
+                        tip.style.cssText = 'position:fixed; z-index:10001; pointer-events:none; '
+                                          + 'background:#0f172a; border:1px solid rgba(255,255,255,0.12); '
+                                          + 'border-radius:8px; padding:0.7rem 0.85rem; '
+                                          + 'box-shadow:0 10px 36px rgba(0,0,0,0.6); '
+                                          + 'width:300px; max-width:300px; font-size:0.78rem; color:#e2e8f0; '
+                                          + 'font-family: inherit;';
+                        document.body.appendChild(tip);
+                    }
+                    tip.innerHTML = _iiqDotTipHtml(ev);
+                    tip.style.display = 'block';
+                    var TIP_W = 300, TIP_H = tip.offsetHeight || 230;
+                    var x = (e && typeof e.clientX === 'number') ? e.clientX + 16 : 20;
+                    var y = (e && typeof e.clientY === 'number') ? e.clientY + 16 : 20;
+                    if (x + TIP_W + 8 > window.innerWidth)  x = Math.max(8, e.clientX - TIP_W - 16);
+                    if (y + TIP_H + 8 > window.innerHeight) y = Math.max(8, e.clientY - TIP_H - 16);
+                    tip.style.left = x + 'px';
+                    tip.style.top  = y + 'px';
+                } catch (err) { /* swallow -- never let tooltip break the chart */ }
+            };
+
             // ----- Calendar-aware funnel multiplier -----
             // Static per-asset rates (iiqAssetFunnelProjection) capture HOW
             // funnel-friendly an asset is, but they don't know what WEEK of
@@ -23854,10 +23956,10 @@
                          + '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />';
                 }).join('');
                 var legend = series.map(function(s) {
-                    return '<span style="display:inline-flex; align-items:center; gap:0.3rem; margin-right:0.85rem; font-size:0.75rem; color:#cbd5e1;"><span style="width:10px; height:10px; background:' + s.color + '; border-radius:2px;"></span>' + escapeHtml(s.name) + '</span>';
+                    return '<span style="display:inline-flex; align-items:center; gap:0.3rem; font-size:0.75rem; color:#cbd5e1; white-space:nowrap;"><span style="width:10px; height:10px; background:' + s.color + '; border-radius:2px; flex:none;"></span>' + escapeHtml(s.name) + '</span>';
                 }).join('');
                 return '<div style="overflow-x:auto;"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; max-width:' + W + 'px; display:block;">' + grid + paths + dateLabels + '</svg></div>'
-                    + '<div style="margin-top:0.45rem;">' + legend + '</div>';
+                    + '<div style="margin-top:0.45rem; display:flex; flex-wrap:wrap; gap:0.3rem 0.85rem;">' + legend + '</div>';
             }
 
             // Dual-Y-axis line chart. Left series share lMax (auto), right
@@ -23927,6 +24029,15 @@
                 // without colliding with the line traces.
                 var eventsSvg = '';
                 if (Array.isArray(opts.events) && opts.events.length) {
+                    // Stash event payloads (incl. full asset object) in a
+                    // module-scope dict keyed by stable ID. The dot's
+                    // onmouseover handler looks the event up by ID, builds
+                    // a rich HTML tooltip (asset title, channel, views,
+                    // engagement, eng. rate, info-seek %, ticketing %,
+                    // posted date, paid/organic tag), and follows the
+                    // cursor. onmouseout dismisses.
+                    window.__iiqEventStash = window.__iiqEventStash || {};
+                    window.__iiqEventSeq   = window.__iiqEventSeq   || 0;
                     var byDay = {};
                     opts.events.forEach(function(ev) {
                         if (!ev || !ev.x) return;
@@ -23945,11 +24056,15 @@
                         list.slice(0, maxStack).forEach(function(ev, i) {
                             var cy = baselineY - i * dotGap;
                             var safeColor = ev.color || '#94a3b8';
-                            var titleTxt  = (ev.label ? (ev.label + ' \u2014 ') : '') + day;
+                            window.__iiqEventSeq += 1;
+                            var evId = 'iiqev_' + window.__iiqEventSeq;
+                            window.__iiqEventStash[evId] = ev;
                             eventsSvg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1)
-                                       + '" r="' + dotR + '" fill="' + safeColor + '" fill-opacity="0.85" stroke="rgba(15,23,42,0.6)" stroke-width="0.6">'
-                                       + '<title>' + escapeHtml(titleTxt) + '</title>'
-                                       + '</circle>';
+                                       + '" r="' + dotR + '" fill="' + safeColor + '" fill-opacity="0.85" stroke="rgba(15,23,42,0.6)" stroke-width="0.6" style="cursor:pointer;"'
+                                       + ' onmouseover="window.iiqShowDotTip&amp;&amp;window.iiqShowDotTip(event,\'' + evId + '\')"'
+                                       + ' onmousemove="window.iiqShowDotTip&amp;&amp;window.iiqShowDotTip(event,\'' + evId + '\')"'
+                                       + ' onmouseout="window.iiqHideDotTip&amp;&amp;window.iiqHideDotTip()"'
+                                       + ' />';
                         });
                         if (list.length > maxStack) {
                             var extra = list.length - maxStack;
@@ -23961,21 +24076,21 @@
                 }
 
                 var legend = (leftSeries || []).concat(rightSeries || []).map(function(s) {
-                    return '<span style="display:inline-flex; align-items:center; gap:0.3rem; margin-right:0.85rem; font-size:0.75rem; color:#cbd5e1;"><span style="width:10px; height:10px; background:' + s.color + '; border-radius:2px;"></span>' + escapeHtml(s.name) + '</span>';
+                    return '<span style="display:inline-flex; align-items:center; gap:0.3rem; font-size:0.75rem; color:#cbd5e1; white-space:nowrap;"><span style="width:10px; height:10px; background:' + s.color + '; border-radius:2px; flex:none;"></span>' + escapeHtml(s.name) + '</span>';
                 }).join('');
                 var eventLegend = (Array.isArray(opts.eventLegend) && opts.eventLegend.length)
                     ? opts.eventLegend.map(function(e) {
-                          return '<span style="display:inline-flex; align-items:center; gap:0.3rem; margin-right:0.85rem; font-size:0.7rem; color:#94a3b8;"><span style="width:8px; height:8px; background:' + (e.color || '#94a3b8') + '; border-radius:50%; border:1px solid rgba(15,23,42,0.6);"></span>' + escapeHtml(e.label || '') + '</span>';
+                          return '<span style="display:inline-flex; align-items:center; gap:0.3rem; font-size:0.7rem; color:#94a3b8; white-space:nowrap;"><span style="width:8px; height:8px; background:' + (e.color || '#94a3b8') + '; border-radius:50%; border:1px solid rgba(15,23,42,0.6); flex:none;"></span>' + escapeHtml(e.label || '') + '</span>';
                       }).join('')
                     : '';
 
                 var leftAxisLabel  = opts.leftLabel  ? '<text x="' + (P.l - 46) + '" y="' + (H/2) + '" font-size="10" fill="' + (opts.leftLabelColor  || 'rgba(34,211,238,0.85)')  + '" text-anchor="middle" transform="rotate(-90, ' + (P.l - 46) + ', ' + (H/2) + ')">' + escapeHtml(opts.leftLabel)  + '</text>' : '';
                 var rightAxisLabel = opts.rightLabel ? '<text x="' + (W - P.r + 46) + '" y="' + (H/2) + '" font-size="10" fill="' + (opts.rightLabelColor || 'rgba(251,191,36,0.85)') + '" text-anchor="middle" transform="rotate(90, '  + (W - P.r + 46) + ', ' + (H/2) + ')">' + escapeHtml(opts.rightLabel) + '</text>' : '';
 
-                return '<div style="overflow-x:auto;"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; max-width:' + W + 'px; display:block;">'
+                return '<div style="overflow-x:auto; overflow-y:hidden;"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; max-width:' + W + 'px; display:block;">'
                      + grid + paths + eventsSvg + leftLabels + rightLabels + dateLabels + leftAxisLabel + rightAxisLabel
                      + '</svg></div>'
-                     + '<div style="margin-top:0.45rem;">' + legend + eventLegend + '</div>';
+                     + '<div style="margin-top:0.45rem; display:flex; flex-wrap:wrap; gap:0.3rem 0.85rem;">' + legend + eventLegend + '</div>';
             }
 
             function iiqDonut(slices, opts) {
@@ -24412,7 +24527,8 @@
                         chartEvents.push({
                             x:     String(a.posted_date).slice(0, 10),
                             color: col,
-                            label: (a.action_label || a.asset_type || 'Asset') + ' \u00b7 ' + (po || 'unknown')
+                            label: (a.action_label || a.asset_type || 'Asset') + ' \u00b7 ' + (po || 'unknown'),
+                            asset: a
                         });
                     });
                 } else {
@@ -24629,18 +24745,26 @@
                     overlay.style.display = 'flex';
                 }
                 var panel = document.createElement('div');
-                panel.style.cssText = 'background: #0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:10px; max-width:1280px; width:100%; max-height:92vh; overflow:auto; padding:1.1rem 1.4rem; box-shadow: 0 24px 64px rgba(0,0,0,0.5);';
-                var chartBig = window.__intentIQQ2ChartRender(1200, 520);
+                panel.style.cssText = 'background: #0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:10px; max-width:1280px; width:100%; max-height:92vh; overflow:auto; padding:1.1rem 1.4rem; box-shadow: 0 24px 64px rgba(0,0,0,0.5); box-sizing:border-box;';
+                // Size the chart to the actual available width inside the
+                // modal so right-axis labels + legend never spill over the
+                // panel edge. Overlay padding = 2rem each side = 64px;
+                // panel padding = 1.4rem each side = ~45px; card padding =
+                // 1rem each side = ~32px. Cap at 1200 so it still looks
+                // good on ultrawide displays.
+                var availW = Math.max(640, Math.min(1200, window.innerWidth - 64 - 45 - 32 - 8));
+                var availH = Math.max(360, Math.min(560, Math.round(availW * 0.44)));
+                var chartBig = window.__intentIQQ2ChartRender(availW, availH);
                 panel.innerHTML =
                     '<div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:0.85rem; gap:1rem;">'
                   +   '<div>'
                   +     '<h3 style="margin:0 0 0.2rem; color:#fff; font-size:1.05rem;">Cumulative view growth + downstream funnel</h3>'
                   +     '<div style="font-size:0.74rem; color: var(--text-secondary);">Paid vs. organic content drops, plus the cumulative info-seek and ticketing funnel that ladders up to the Assets cards.</div>'
                   +   '</div>'
-                  +   '<button type="button" onclick="document.getElementById(\'iiqQ2ChartModal\').remove()" style="background: rgba(255,255,255,0.06); color:#fff; border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:0.35rem 0.7rem; cursor:pointer; font-size:0.85rem;">Close \u2715</button>'
+                  +   '<button type="button" onclick="document.getElementById(\'iiqQ2ChartModal\').remove()" style="background: rgba(255,255,255,0.06); color:#fff; border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:0.35rem 0.7rem; cursor:pointer; font-size:0.85rem; flex:none;">Close \u2715</button>'
                   + '</div>'
-                  + '<div class="iiq-card" style="padding:0.85rem 1rem;">' + chartBig + '</div>'
-                  + (c.caption ? '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.55rem; line-height:1.4;">' + c.caption + ' Hover a dot for the asset label.</div>' : '');
+                  + '<div class="iiq-card" style="padding:0.85rem 1rem; overflow:hidden;">' + chartBig + '</div>'
+                  + (c.caption ? '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.55rem; line-height:1.4;">' + c.caption + ' Hover a dot for the asset name, channel, views, eng. rate, info-seek %, and ticketing %.</div>' : '');
                 overlay.appendChild(panel);
             };
 
@@ -38618,6 +38742,15 @@
                 .then(function(resp) {
                     if (!resp.success || !resp.data) return;
                     _bpiqRenderHeaderImage(resp.image_url);
+                    // Capture admin-managed metadata for downstream
+                    // exporters (e.g. Deck-with-Analysis) - they need
+                    // image_url + category to render the cover slide
+                    // and apply category-specific policy. Stashed on
+                    // _bpiqState alongside the s3_key for round-trip
+                    // back to the export endpoint.
+                    _bpiqState.s3_key    = key;
+                    _bpiqState.image_url = resp.image_url || '';
+                    _bpiqState.category  = resp.category  || '';
                     // Thread admin-managed category onto the data object
                     // so the renderer can apply category-specific policy
                     // (e.g. automotive = never show conversion metrics —
@@ -39746,6 +39879,74 @@
             } else {
                 run();
             }
+        }
+
+        // Deck-with-Analysis export: POSTs the live BPIQ payload to
+        // /api/brand-partnership-iq/export-deck, which returns a .pptx
+        // built by migration/bpiq_deck_builder.py. The server resolves
+        // image_url / category from the metadata sidecar using the
+        // bare s3_key we send alongside the data so the cover slide
+        // gets the admin-uploaded photo and the automotive policy
+        // (no conversion slide) kicks in automatically.
+        function _bpiqExportDeck() {
+            var m = document.getElementById('bpiqExportMenu');
+            if (m) m.style.display = 'none';
+            if (!_bpiqState || !_bpiqState.data) {
+                alert('No BPIQ run loaded. Open a partnership first.');
+                return;
+            }
+            var btn = document.getElementById('bpiqDeckBtn');
+            var origBtnHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.style.opacity = '0.7';
+                btn.innerHTML = '<div style="font-weight:600;">⏳ Designing deck…</div>'
+                              + '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:2px;">Fetching images, laying out slides (10-20s)</div>';
+            }
+            var body = JSON.stringify({
+                data: _bpiqState.data,
+                // The bare key (no prefix) the dashboard remembers from
+                // the result-fetch; falls back to undefined when we
+                // loaded directly without a key.
+                s3_key:   _bpiqState.s3_key   || '',
+                image_url: _bpiqState.image_url || '',
+                category:  _bpiqState.category  || (_bpiqState.data && _bpiqState.data.category) || '',
+            });
+            fetch('/api/brand-partnership-iq/export-deck', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: body,
+            }).then(function(r) {
+                if (!r.ok) {
+                    return r.json().then(function(j) {
+                        throw new Error(j.error || ('HTTP ' + r.status));
+                    }).catch(function() { throw new Error('HTTP ' + r.status); });
+                }
+                return r.blob();
+            }).then(function(blob) {
+                var name = (_bpiqState.data && _bpiqState.data.project_name)
+                           || 'BPIQ_Deck';
+                var safe = String(name).replace(/[^a-zA-Z0-9._-]+/g, '_');
+                var slice = (_bpiqState.data && _bpiqState.data._bpiq_active_year)
+                            ? ('_y' + _bpiqState.data._bpiq_active_year) : '';
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = safe + slice + '_Analysis_Deck.pptx';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(function() { URL.revokeObjectURL(a.href); }, 1500);
+            }).catch(function(err) {
+                console.error('Deck export failed', err);
+                alert('Deck export failed: ' + (err && err.message ? err.message : err));
+            }).finally(function() {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.style.opacity = '';
+                    btn.innerHTML = origBtnHtml;
+                }
+            });
         }
 
         // ----- View-by-Year slicer -----
