@@ -27404,13 +27404,28 @@
                 var html = '';
 
                 // === Audience picker, grouped by category ===
-                html += '<div class="iiq-card" style="padding:0.65rem 0.85rem; margin-bottom:0.6rem;">';
-                html +=   '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem 0.75rem; margin-bottom:0.5rem;">';
-                html +=     '<div style="font-size:0.82rem; color:#e2e8f0; font-weight:600;">Cut by audience</div>';
-                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary); flex:1; min-width:220px;">Pick one or more cohorts. The asset table below shows each cohort\'s views, info-seek %, and ticket % per asset \u2014 same projection helper as the Assets page so values ladder up.</div>';
-                html +=     '<button type="button" onclick="window.iiqQ6SelectAll()" style="background:rgba(34,197,94,0.16); border:1px solid rgba(34,197,94,0.4); color:#86efac; font-size:0.7rem; padding:0.22rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap;">Select all</button>';
-                html +=     '<button type="button" onclick="window.iiqQ6SelectDefault()" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:#cbd5e1; font-size:0.7rem; padding:0.22rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap;">Reset</button>';
-                html +=     '<button type="button" onclick="window.iiqQ6SelectNone()" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:#cbd5e1; font-size:0.7rem; padding:0.22rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap;">Clear</button>';
+                // Wrapped in <details> so it's collapsed by default. The
+                // summary line keeps the title + "N of M selected" badge
+                // visible so the user always knows what's active without
+                // expanding. Action buttons live inside the details body
+                // so they don't accidentally toggle the panel when
+                // clicked.
+                var _stopProp = 'event.stopPropagation();';
+                // Persist open/closed across the full Q6 re-renders that
+                // fire on every chip click. Default = collapsed on the
+                // very first paint (window._iiqQ6PickerOpen undefined).
+                var pickerOpen = !!window._iiqQ6PickerOpen;
+                html += '<details class="iiq-card"' + (pickerOpen ? ' open' : '') + ' ontoggle="window._iiqQ6PickerOpen = this.open;" style="padding:0.65rem 0.85rem; margin-bottom:0.6rem;">';
+                html +=   '<summary style="cursor:pointer; list-style:none; display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem 0.75rem;">';
+                html +=     '<span style="font-size:0.82rem; color:#e2e8f0; font-weight:600;">Cut by audience</span>';
+                html +=     '<span style="font-size:0.68rem; color:#22d3ee; background:rgba(34,211,238,0.12); border:1px solid rgba(34,211,238,0.35); padding:0.1rem 0.45rem; border-radius:10px; white-space:nowrap;">' + selected.length + ' of ' + unified.length + ' selected</span>';
+                html +=     '<span style="font-size:0.7rem; color: var(--text-secondary); flex:1; min-width:180px;">Click to expand and pick cohorts. Asset table below shows each cohort\'s views, info-seek %, and ticket % per asset \u2014 numbers ladder up to the Assets page.</span>';
+                html +=     '<span style="font-size:0.7rem; color: var(--text-secondary); opacity:0.55;">\u25BE</span>';
+                html +=   '</summary>';
+                html +=   '<div style="display:flex; flex-wrap:wrap; gap:0.45rem; margin:0.6rem 0 0.5rem;">';
+                html +=     '<button type="button" onclick="' + _stopProp + ' window.iiqQ6SelectAll()" style="background:rgba(34,197,94,0.16); border:1px solid rgba(34,197,94,0.4); color:#86efac; font-size:0.7rem; padding:0.22rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap;">Select all</button>';
+                html +=     '<button type="button" onclick="' + _stopProp + ' window.iiqQ6SelectDefault()" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:#cbd5e1; font-size:0.7rem; padding:0.22rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap;">Reset</button>';
+                html +=     '<button type="button" onclick="' + _stopProp + ' window.iiqQ6SelectNone()" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:#cbd5e1; font-size:0.7rem; padding:0.22rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap;">Clear</button>';
                 html +=   '</div>';
                 presentCats.forEach(function(cat) {
                     var lst = byCat[cat] || [];
@@ -27436,7 +27451,7 @@
                     html +=   '</div>';
                     html += '</div>';
                 });
-                html += '</div>';
+                html += '</details>';
 
                 // === Asset-type chip bar (global filter -- shared with Q1/Q2/Q4/Assets) ===
                 var assetTypesList = iiqAssetTypesInList(assetsAll);
