@@ -24341,10 +24341,10 @@
                 function _miniBar(val, max, color, suffix) {
                     var pct = max > 0 ? Math.min(100, val / max * 100) : 0;
                     return '<div style="display:flex; align-items:center; gap:0.5rem;">'
+                        +    '<div style="font-size:0.78rem; font-weight:700; color:' + color + '; min-width:54px; text-align:left; font-variant-numeric: tabular-nums;">' + val.toFixed(1) + (suffix || '%') + '</div>'
                         +    '<div style="flex:1; min-width:0; height:14px; background: rgba(255,255,255,0.06); border-radius:3px; overflow:hidden;">'
                         +      '<div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + color + ';"></div>'
                         +    '</div>'
-                        +    '<div style="font-size:0.78rem; font-weight:700; color:#fff; min-width:54px; text-align:right;">' + val.toFixed(1) + (suffix || '%') + '</div>'
                         +  '</div>';
                 }
 
