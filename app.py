@@ -32316,11 +32316,18 @@ def _run_brand_partnership_iq(job_id):
     # ── Valuation rates ────────────────────────────────────────────────
     # All defaults are tunable. They drive the 💰 Brand Partnership
     # Valuation breakdown shown on the dashboard. Sources:
-    #   - Per-platform EMV rates: 2026 industry CPM benchmarks
-    #     (TikTok $5, IG $7.50, YT $10, FB $8, X $6.50, LI $12,
-    #     Snap $9, Reddit $5.50, Pinterest $5) tuned down to a
-    #     per-engaged-user organic value (vs. per-1000 paid impr.)
-    #     using the 2026 EMV-per-engagement industry guide.
+    #   - Per-platform EMV rates ($/incremental-engaged-consumer,
+    #     CPM-equivalent): market-grounded 2026 social media CPM
+    #     benchmarks. Each post-campaign incremental brand engager on
+    #     a platform is valued at that platform's 2026 organic-
+    #     engagement CPM (Instagram $11, Facebook $14, LinkedIn $25,
+    #     TikTok $7, YouTube $3.50, X $6, Pinterest $6, Snap $5,
+    #     Reddit $4, Direct Site $5). These were calibrated against
+    #     2026 platform-published CPM ranges (Hootsuite / Sprout /
+    #     LinkedIn Marketing Solutions / WordStream benchmarks) and
+    #     tuned for organic-engagement equivalence: one observed
+    #     incremental brand engager ≈ one high-quality CPM-paid
+    #     impression on the same platform.
     #   - BEV ($2.50/engaged user): conservative midpoint between low
     #     consumer engagement value and F&B CAC ($30-60).
     #   - BLV ($5.00/incremental user): higher than BEV because these
@@ -32331,21 +32338,26 @@ def _run_brand_partnership_iq(job_id):
         'bev_per_user':           2.50,   # $ per engaged user (any platform)
         'blv_per_incr_user':      5.00,   # $ per incremental brand engager (DiD)
         'conv_value_per_user':   30.00,   # $ per confirmed conversion
-        # Per-platform EMV rates ($/engaged user). Keys here MUST match
-        # the platform labels emitted by the per-platform analyzer so
-        # we can join on `platform` cleanly. "Direct (Brand Site)" is
-        # treated as the highest-intent touch (own-domain visit).
+        # Per-platform EMV rates ($/incremental-engaged-consumer, set
+        # at 2026 CPM-equivalent benchmarks). Keys here MUST match the
+        # platform labels emitted by the per-platform analyzer so we
+        # can join on `platform` cleanly. "Direct (Brand Site)" is
+        # treated as the highest-intent touch (own-domain visit) at
+        # owned-media-traffic value, not a CPM benchmark.
         'emv_per_user': {
-            'TikTok':     3.00,
-            'Instagram':  4.50,
-            'YouTube':    7.50,
-            'Facebook':   2.50,
-            'X':          2.00,
-            'Twitter':    2.00,   # alias
-            'Reddit':     4.00,
-            'Pinterest':  3.00,
-            'Snapchat':   2.50,
-            'LinkedIn':   8.00,
+            'TikTok':       7.00,
+            'Instagram':   11.00,
+            'YouTube':      3.50,
+            'Facebook':    14.00,
+            'X':            6.00,
+            'Twitter':      6.00,   # alias
+            'X (Twitter)':  6.00,   # canonical label emitted by the per-platform analyzer
+            'Reddit':       4.00,
+            'Pinterest':    6.00,
+            'Snapchat':     5.00,
+            'LinkedIn':    25.00,
+            'Threads':     10.00,   # early-2026 premium social CPM
+            'Twitch':      15.00,   # live-video CPM premium
             'Direct (Brand Site)': 5.00,
         },
     }
@@ -33066,11 +33078,11 @@ def _run_brand_partnership_iq(job_id):
                 return tbl[label]
             low = (label or '').lower()
             if 'x (twitter)' in low or low == 'x' or 'twitter' in low:
-                return tbl.get('X', BPIQ_VAL['bev_per_user'])
+                return tbl.get('X (Twitter)') or tbl.get('X') or BPIQ_VAL['bev_per_user']
             if 'threads' in low:
-                return 3.00
+                return tbl.get('Threads', 10.00)
             if 'twitch'  in low:
-                return 5.00
+                return tbl.get('Twitch',  15.00)
             return BPIQ_VAL['bev_per_user']
 
         # 2. Earned Media Value: per-platform INCREMENTAL projected
