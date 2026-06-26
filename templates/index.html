@@ -21124,17 +21124,25 @@
                              endorsements). Shows a bar chart of US-projected
                              reach + brand hits per year, plus a metric
                              selector for users / hits / conversions / EMV,
-                             plus a per-year summary strip of cards. -->
+                             plus a per-year summary strip of cards. The
+                             "View" chip strip lets the user collapse the
+                             whole BPIQ dashboard down to a single year. -->
                         <div id="bpiqYearlySection" class="tab-section" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; display: none;">
                             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; margin-bottom:0.75rem;">
                                 <div style="flex:1; min-width:260px;">
                                     <h3 style="margin: 0 0 0.35rem;">📈 Year-Over-Year Breakdown</h3>
-                                    <div style="font-size:0.8rem; color: var(--text-secondary);">How brand engagement, hits, conversions and EMV broke down by calendar year across the campaign window. Click a metric below the chart to switch the series.</div>
+                                    <div style="font-size:0.8rem; color: var(--text-secondary);">How brand engagement broke down by calendar year. Click <strong>View by Year</strong> below to filter the entire dashboard (headline KPIs, valuation cards, per-platform table, brand touchpoints) to one year only.</div>
                                 </div>
                                 <div style="display:flex; gap:0.4rem; flex-wrap:wrap;" id="bpiqYearlyMetricBtns"></div>
                             </div>
                             <div style="position:relative; height:300px; margin-bottom:1rem;">
                                 <canvas id="bpiqYearlyChart"></canvas>
+                            </div>
+                            <!-- View-by-year chip strip: clicking a chip
+                                 narrows the whole dashboard to that year. -->
+                            <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+                                <span style="font-size:0.7rem; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:0.06em;">View by Year:</span>
+                                <div id="bpiqYearViewChips" style="display:flex; gap:0.4rem; flex-wrap:wrap;"></div>
                             </div>
                             <div id="bpiqYearlyCards" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:0.65rem;"></div>
                             <div id="bpiqYearlyTopProps" style="margin-top:1rem;"></div>
@@ -38675,7 +38683,17 @@
             var poP = data.post_period || {};
 
             document.getElementById('bpiqDashTitle').textContent = data.project_name || 'Brand Partnership Valuation';
-            var meta = 'Campaign: ' + (data.start_date || '') + ' → ' + (data.end_date || '');
+            var meta = '';
+            // When the dashboard is showing a year-cut slice, lead the
+            // meta line with a clear "VIEWING: 2023 · Fast X release"
+            // banner so headline KPIs aren't misread as the full-window
+            // aggregate.
+            if (data._bpiq_active_year) {
+                meta = '<span style="background:#c8e600; color:#000; padding:2px 8px; border-radius:6px; font-weight:700; font-size:0.75rem; letter-spacing:0.04em;">VIEWING: '
+                     + (data._bpiq_active_year_label || data._bpiq_active_year)
+                     + '</span> &nbsp; ';
+            }
+            meta += 'Campaign: ' + (data.start_date || '') + ' → ' + (data.end_date || '');
             meta += ' · Attribution: ' + (data.attribution_window_days || 0) + 'd';
             meta += ' · Pre-window: ' + (preP.start || '') + ' → ' + (preP.end || '') + ' (' + (preP.days || 0) + 'd)';
             meta += ' · Post-window: ' + (evP.start || '') + ' → ' + (poP.end || '') + ' (' + ((evP.days || 0) + (poP.days || 0)) + 'd)';
@@ -38841,6 +38859,14 @@
             // or clicks a column header to sort. The table row data
             // structure & EMV math live there too.
             _bpiqState.data = data;
+            // Cache the pristine "All Years" payload exactly once per run
+            // so the View-by-Year chips can re-slice without re-fetching
+            // from S3. The `_bpiq_active_year` flag identifies year-cut
+            // re-renders so we don't accidentally cache a slice as the
+            // baseline.
+            if (data && !data._bpiq_active_year) {
+                _bpiqState.originalData = data;
+            }
             _bpiqState.rateByPlatform = {};
             ((data.valuation && data.valuation.emv_breakdown) || []).forEach(function(row) {
                 _bpiqState.rateByPlatform[row.platform] = row.emv_per_user_rate || 0;
@@ -39059,7 +39085,102 @@
             }
 
             // ----- 📈 Year-Over-Year Breakdown -----
-            _bpiqRenderYearly(data.yearly_breakdown || []);
+            // The chart + per-year cards always reflect the full
+            // yearly_breakdown (from the cached pristine payload when
+            // we're in a year-cut view, so the chart stays meaningful).
+            var yearlyForChart = (data._bpiq_active_year && _bpiqState.originalData && _bpiqState.originalData.yearly_breakdown)
+                                    ? _bpiqState.originalData.yearly_breakdown
+                                    : (data.yearly_breakdown || []);
+            _bpiqRenderYearly(yearlyForChart, data._bpiq_active_year || null);
+        }
+
+        // ----- View-by-Year slicer -----
+        //
+        // Returns a shallow-cloned `data` payload narrowed to a single
+        // year. Every section the BPIQ dashboard renders (KPI hero,
+        // valuation cards, per-platform table, demographics, top
+        // brand touchpoints) is swapped to point at that year's
+        // sub-tree, which the data side pre-computed in
+        // `yearly_breakdown[i]` during `enrich_years.py`.
+        //
+        // Sections we DON'T narrow (intentional):
+        //   - demographics: stay at aggregate (sample density)
+        //   - conversions: stay at aggregate (already zeroed for cars)
+        //   - control_group: stay at aggregate (size-matched cohort
+        //     is window-wide; a year-cut control is misleading)
+        //   - sentiment: stay at aggregate
+        //   - yearly_breakdown: kept verbatim so the YoY chart stays
+        //     visible while a year is selected.
+        function _bpiqApplyYearCut(orig, yearNum) {
+            if (!orig || !yearNum) return orig;
+            var yrs = orig.yearly_breakdown || [];
+            var y = null;
+            for (var i = 0; i < yrs.length; i++) {
+                if (Number(yrs[i].year) === Number(yearNum)) { y = yrs[i]; break; }
+            }
+            if (!y) return orig;
+            // Build the slice. Object.assign copies top-level keys so
+            // we don't mutate the cached pristine payload.
+            var sliced = Object.assign({}, orig);
+            sliced._bpiq_active_year       = y.year;
+            sliced._bpiq_active_year_label = y.label || String(y.year);
+            sliced.start_date = y.start || orig.start_date;
+            sliced.end_date   = y.end   || orig.end_date;
+            sliced.event_period = { start: y.start, end: y.end, days: y.days };
+            sliced.post_period  = { start: y.end,   end: y.end, days: 0 };
+            // Pre-window stays the same (constant 2020 H2 baseline).
+            sliced.audience_size           = y.audience_size           || orig.audience_size;
+            sliced.projected_audience_size = y.projected_audience_size || orig.projected_audience_size;
+            sliced.totals                  = y.totals       || orig.totals;
+            sliced.per_platform            = y.per_platform || orig.per_platform;
+            sliced.valuation               = y.valuation    || orig.valuation;
+            sliced.top_brand_properties     = y.top_brand_properties     || orig.top_brand_properties;
+            sliced.top_brand_properties_pre = y.top_brand_properties_pre || orig.top_brand_properties_pre;
+            return sliced;
+        }
+
+        // Render the View-by-Year chip strip. "All Years" + one chip
+        // per year. Clicking re-renders the whole BPIQ dashboard
+        // against the year slice (or pristine payload).
+        function _bpiqRenderYearViewChips(years, activeYear) {
+            var host = document.getElementById('bpiqYearViewChips');
+            if (!host) return;
+            if (!Array.isArray(years) || years.length === 0) {
+                host.innerHTML = '';
+                return;
+            }
+            var pillBase = 'padding:0.4rem 0.85rem; border-radius:999px; cursor:pointer;'
+                         + 'font-size:11px; font-weight:600; letter-spacing:0.04em;'
+                         + 'border:1px solid; transition:all 120ms ease;';
+            function pill(label, isActive, color) {
+                var bg     = isActive ? color : 'transparent';
+                var border = isActive ? color : 'var(--border-color)';
+                var fg     = isActive ? '#000' : 'var(--text-secondary)';
+                return pillBase + 'background:' + bg + ';border-color:' + border + ';color:' + fg + ';';
+            }
+            var html = '<button type="button" data-year="" style="' + pill('All Years', !activeYear, '#c8e600') + '">All Years</button>';
+            years.forEach(function(y) {
+                var active = String(activeYear) === String(y.year);
+                html += '<button type="button" data-year="' + y.year + '" title="' + (y.label || y.year) + '" style="' + pill(String(y.year), active, '#c8e600') + '">' + y.year + '</button>';
+            });
+            host.innerHTML = html;
+            Array.prototype.forEach.call(host.querySelectorAll('button'), function(b) {
+                b.addEventListener('click', function() {
+                    var yr = b.getAttribute('data-year');
+                    var orig = _bpiqState.originalData;
+                    if (!orig) return;
+                    if (!yr) {
+                        // Reset to All Years
+                        renderBpiqDashboard(orig);
+                    } else {
+                        renderBpiqDashboard(_bpiqApplyYearCut(orig, Number(yr)));
+                    }
+                    // Bring the dashboard top into view so headline KPIs
+                    // (now in year-cut mode) are immediately visible.
+                    var panels = document.getElementById('bpiqDashboardPanels');
+                    if (panels && panels.scrollTo) panels.scrollTo({top: 0, behavior: 'smooth'});
+                });
+            });
         }
 
         // Year-Over-Year rendering. Activates only when the run carries
@@ -39073,7 +39194,7 @@
         // canvas-double-paint glitches.
         var _bpiqYearlyMetric = 'users_projected';
         var _bpiqYearlyChartInst = null;
-        function _bpiqRenderYearly(years) {
+        function _bpiqRenderYearly(years, activeYear) {
             var section = document.getElementById('bpiqYearlySection');
             if (!section) return;
             if (!Array.isArray(years) || years.length === 0) {
@@ -39081,6 +39202,10 @@
                 return;
             }
             section.style.display = '';
+
+            // View-by-Year chip strip — clicking a chip narrows the
+            // entire dashboard to one year, "All Years" restores.
+            _bpiqRenderYearViewChips(years, activeYear || null);
 
             var ALL_METRICS = [
                 { id: 'users_projected',             label: 'Consumers Engaged',     color: '#10b981', fmt: function(v){ return _bpiqFmtNum(v); } },
@@ -39140,8 +39265,17 @@
                                 if (m === 'building') return metric.color + 'cc';
                                 return metric.color;
                             }),
+                            // Ring the actively-viewed year so the user
+                            // can map the dashboard headline back to
+                            // the chart bar driving it.
+                            borderColor: values.map(function(_, i) {
+                                return (activeYear && Number(years[i].year) === Number(activeYear))
+                                    ? '#ffffff' : 'transparent';
+                            }),
+                            borderWidth: values.map(function(_, i) {
+                                return (activeYear && Number(years[i].year) === Number(activeYear)) ? 2 : 0;
+                            }),
                             borderRadius: 6,
-                            borderWidth: 0,
                         }],
                     },
                     options: {
