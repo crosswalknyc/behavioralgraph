@@ -22888,8 +22888,12 @@
                     var bv = Number(b.overlap_bp) || 0;
                     return bv - av;
                 });
+                // Stash for click-to-drill-down handler so we can look the
+                // card up by its sorted index without round-tripping the
+                // whole object through HTML attributes.
+                window.__intentIQAudCards = sorted;
                 var maxBp = Math.max.apply(null, sorted.map(function(c) { return Number(c.overlap_bp) || 0; }).concat([0.0001]));
-                return '<div class="iiq-cards-grid">' + sorted.map(function(c) {
+                return '<div class="iiq-cards-grid">' + sorted.map(function(c, idx) {
                     var bp = (c.overlap_bp !== null && c.overlap_bp !== undefined) ? Number(c.overlap_bp) : null;
                     var bpStr = bp !== null ? bp.toFixed(2) + '%' : '-';
                     var usPeople = bp !== null ? Math.round(bp / 100 * US_POP) : null;
@@ -22913,8 +22917,8 @@
                     var totalTip  = 'Average TOTAL impressions among reached cohort members (unique pieces \u00d7 frequency per piece). Counts re-watches and repeat exposure. Frequency per unique asset clusters at 1.8\u20132.6\u00d7 for paid-heavy campaigns of this scale.';
                     var infoTipAud = '% of REACHED cohort members who took an info-seeking action (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit) within 7 days of exposure. ~' + fmtCompact(infoSeekersAud) + ' people \u2014 same helper that powers the Assets cards.';
                     var tkTipAud   = '% of REACHED cohort members who visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days of exposure. ~' + fmtCompact(ticketVisitsAud) + ' people \u2014 same helper that powers the Assets cards.';
-                    return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';">'
-                        + '<div class="iiq-card-title">' + escapeHtml(c.display || c.subject_key) + '</div>'
+                    return '<div class="iiq-card" onclick="window.iiqAudOpenDrillDown(' + idx + ')" title="Click to see which content performed best with this audience" style="border-left: 3px solid ' + color + '; cursor:pointer; transition: border-color 0.15s, transform 0.1s;" onmouseover="this.style.borderColor=\'#22d3ee\'; this.style.transform=\'translateY(-1px)\';" onmouseout="this.style.borderColor=\'\'; this.style.borderLeftColor=\'' + color + '\'; this.style.transform=\'\';">'
+                        + '<div class="iiq-card-title" style="display:flex; justify-content:space-between; align-items:center; gap:0.4rem;"><span>' + escapeHtml(c.display || c.subject_key) + '</span><span style="font-size:0.62rem; color:rgba(34,211,238,0.75); font-weight:400; white-space:nowrap;">drill in \u2197</span></div>'
                         + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '-') + '</div>'
                         + '<div style="margin-top:0.65rem;" title="Share of Americans estimated to overlap with both this cohort and the title\'s moviegoing audience. Projection = % × 329.9M US population.">'
                             + '<div style="font-size:1.45rem; font-weight:700; color:#fff; line-height:1;">' + bpStr + '</div>'
@@ -26040,6 +26044,256 @@
                   + (c.caption ? '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.55rem; line-height:1.4;">' + c.caption + ' Hover a dot for the asset name, channel, views, eng. rate, info-seek %, and ticketing %.</div>' : '');
                 overlay.appendChild(panel);
                 _render();
+            };
+
+            // ======================================================
+            // Audience card drill-down: "which content performed best
+            // with this audience?" Click an Audience card -> modal that
+            // ranks every campaign asset by projected cohort-views
+            // (audience_views = asset_views * gen_pop_share * affinity)
+            // and shows the cohort-tilted info-seek % / ticketing % for
+            // each asset. Same iiqAssetCohortProjection() helper that
+            // powers Q6 Cohort Engagement so the numbers ladder up.
+            //
+            // Headers are sortable. Filters: paid/organic + asset type
+            // chips. Top-line tiles show cohort total views, info-seek
+            // count, ticketing count, and best-performing asset type.
+            // ======================================================
+            window._iiqAudDrillState = window._iiqAudDrillState || {};
+            window.iiqAudOpenDrillDown = function(cardIdx) {
+                var card = (window.__intentIQAudCards || [])[cardIdx];
+                if (!card) return;
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                if (!slug) return;
+
+                // Build a Q6-shaped cohort object from the audience card
+                // so iiqAssetCohortProjection sees the same inputs as
+                // Q6 Cohort Engagement.
+                var aslug = 'aud_' + String(card.subject_key || card.display || '').toLowerCase()
+                                       .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+                var cohort = {
+                    slug:          aslug,
+                    display:       card.display || card.subject_key,
+                    category:      String(card.category || 'AUDIENCE').toUpperCase(),
+                    gen_pop_share: (Number(card.overlap_bp) || 0) / 100,
+                    _src:          'audience',
+                    _raw:          card
+                };
+
+                var stKey = aslug;
+                var st = window._iiqAudDrillState[stKey] = window._iiqAudDrillState[stKey] || {
+                    sortKey: 'views',
+                    sortDir: 'desc',
+                    source:  'both',
+                    types:   {},
+                    typesInit: false
+                };
+
+                var overlay = document.getElementById('iiqAudDrillModal');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.id = 'iiqAudDrillModal';
+                    overlay.style.cssText = 'position:fixed; inset:0; background: rgba(0,0,0,0.7); z-index:9999; display:flex; align-items:center; justify-content:center; padding:2rem;';
+                    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+                    document.body.appendChild(overlay);
+                } else {
+                    overlay.innerHTML = '';
+                    overlay.style.display = 'flex';
+                }
+                var panel = document.createElement('div');
+                panel.style.cssText = 'background: #0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:10px; max-width:1180px; width:100%; max-height:92vh; overflow:auto; padding:1.1rem 1.4rem; box-shadow: 0 24px 64px rgba(0,0,0,0.5); box-sizing:border-box;';
+                var headerLabel = escapeHtml(card.display || card.subject_key || 'Audience');
+                var catLabel    = escapeHtml(card.category || '');
+                var bp          = Number(card.overlap_bp) || 0;
+                var US_POP      = 329900000;
+                var cohortPeople = Math.round(bp / 100 * US_POP);
+                panel.innerHTML =
+                    '<div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:0.6rem; gap:1rem;">'
+                  +   '<div>'
+                  +     '<h3 style="margin:0 0 0.25rem; color:#fff; font-size:1.05rem;">' + headerLabel + '</h3>'
+                  +     '<div style="font-size:0.74rem; color: var(--text-secondary);">'
+                  +       catLabel + ' \u00b7 ' + bp.toFixed(2) + '% of Americans (~' + fmtCompact(cohortPeople) + ' people) match this audience. Ranked content shows which campaign assets performed best with them.'
+                  +     '</div>'
+                  +   '</div>'
+                  +   '<button type="button" onclick="document.getElementById(\'iiqAudDrillModal\').remove()" style="background: rgba(255,255,255,0.06); color:#fff; border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:0.35rem 0.7rem; cursor:pointer; font-size:0.85rem; flex:none;">Close \u2715</button>'
+                  + '</div>'
+                  + '<div id="iiqAudDrillBody"><div class="iiq-empty" style="padding:2rem;">Loading assets\u2026</div></div>';
+                overlay.appendChild(panel);
+
+                iiqLoadAssetsForFunnel(slug, function(assets) {
+                    var allAssets = (assets || []).filter(function(a) {
+                        return a && (Number(a.ext_view_count) || 0) > 0;
+                    });
+                    if (!allAssets.length) {
+                        var body0 = document.getElementById('iiqAudDrillBody');
+                        if (body0) body0.innerHTML = '<div class="iiq-empty">No assets available for this title.</div>';
+                        return;
+                    }
+
+                    // Seed asset-type filter on first open: all on
+                    if (!st.typesInit) {
+                        allAssets.forEach(function(a) {
+                            if (a.asset_type && !(a.asset_type in st.types)) st.types[a.asset_type] = true;
+                        });
+                        st.typesInit = true;
+                    } else {
+                        // Pick up any new asset types
+                        allAssets.forEach(function(a) {
+                            if (a.asset_type && !(a.asset_type in st.types)) st.types[a.asset_type] = true;
+                        });
+                    }
+
+                    function _row(a) {
+                        var p = iiqAssetCohortProjection(a, cohort);
+                        return {
+                            asset:           a,
+                            label:           a.action_label || a.asset_type || ('Asset #' + a.asset_id),
+                            asset_type:      a.asset_type || '',
+                            channel:         a.channel || '',
+                            paid_or_organic: (a.paid_or_organic || 'unknown').toLowerCase(),
+                            posted_date:     a.posted_date || '',
+                            total_views:     Number(a.ext_view_count) || 0,
+                            views:           p.views,
+                            info_pct:        p.info_pct,
+                            ticket_pct:      p.ticket_pct,
+                            info_seekers:    p.info_seekers,
+                            ticket_visits:   p.ticket_visits
+                        };
+                    }
+
+                    function _filtered() {
+                        return allAssets.filter(function(a) {
+                            var po = (a.paid_or_organic || '').toLowerCase();
+                            if (st.source === 'paid' && po !== 'paid') return false;
+                            if (st.source === 'organic' && po !== 'organic' && po !== 'natural') return false;
+                            if (a.asset_type && st.types[a.asset_type] === false) return false;
+                            return true;
+                        }).map(_row);
+                    }
+
+                    function _allTypes() {
+                        var s = {};
+                        allAssets.forEach(function(a){ if (a.asset_type) s[a.asset_type] = true; });
+                        return Object.keys(s).sort();
+                    }
+                    var allTypes = _allTypes();
+
+                    window.iiqAudDrillSort = function(k) {
+                        if (st.sortKey === k) st.sortDir = (st.sortDir === 'desc') ? 'asc' : 'desc';
+                        else { st.sortKey = k; st.sortDir = 'desc'; }
+                        _render();
+                    };
+                    window.iiqAudDrillSetSource = function(v) { st.source = v; _render(); };
+                    window.iiqAudDrillToggleType = function(t) { st.types[t] = !st.types[t]; _render(); };
+                    window.iiqAudDrillAllTypes = function(on) { allTypes.forEach(function(t){ st.types[t] = !!on; }); _render(); };
+
+                    function _chip(label, active, onclick, color) {
+                        var bg = active ? 'rgba(34,211,238,0.18)' : 'rgba(255,255,255,0.04)';
+                        var bd = active ? '1px solid rgba(34,211,238,0.55)' : '1px solid rgba(255,255,255,0.1)';
+                        var col = active ? '#22d3ee' : '#cbd5e1';
+                        if (color && active) { bg = 'rgba(255,255,255,0.06)'; bd = '1px solid ' + color; col = color; }
+                        return '<button type="button" onclick="' + onclick + '" style="background:' + bg + '; border:' + bd + '; color:' + col + '; font-size:0.7rem; padding:0.25rem 0.6rem; border-radius:14px; cursor:pointer; white-space:nowrap;">' + escapeHtml(label) + '</button>';
+                    }
+
+                    function _render() {
+                        var rows = _filtered();
+                        rows.sort(function(a, b) {
+                            var av = a[st.sortKey], bv = b[st.sortKey];
+                            if (typeof av === 'string') { av = av.toLowerCase(); bv = (bv || '').toLowerCase(); }
+                            if (av < bv) return st.sortDir === 'asc' ? -1 : 1;
+                            if (av > bv) return st.sortDir === 'asc' ? 1 : -1;
+                            return 0;
+                        });
+                        var totViews = rows.reduce(function(s,r){ return s + r.views;         }, 0);
+                        var totInfo  = rows.reduce(function(s,r){ return s + r.info_seekers;  }, 0);
+                        var totTk    = rows.reduce(function(s,r){ return s + r.ticket_visits; }, 0);
+                        // Top asset type by cohort views
+                        var byType = {};
+                        rows.forEach(function(r) {
+                            var t = r.asset_type || '\u2014';
+                            if (!byType[t]) byType[t] = 0;
+                            byType[t] += r.views;
+                        });
+                        var topType = Object.keys(byType).sort(function(a,b){ return byType[b] - byType[a]; })[0] || '\u2014';
+                        var topTypeShare = totViews > 0 ? (byType[topType] / totViews * 100) : 0;
+
+                        function _th(key, label, alignRight) {
+                            var arrow = st.sortKey === key ? (st.sortDir === 'asc' ? ' \u2191' : ' \u2193') : '';
+                            return '<th onclick="window.iiqAudDrillSort(\'' + key + '\')" style="padding:0.5rem 0.55rem; text-align:' + (alignRight ? 'right' : 'left') + '; cursor:pointer; user-select:none; font-size:0.7rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.03em; border-bottom:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.02); white-space:nowrap;">' + escapeHtml(label) + arrow + '</th>';
+                        }
+
+                        var palette = { paid: '#22d3ee', organic: '#34d399', unknown: '#94a3b8', natural: '#34d399' };
+                        var TOP_N = 30;
+                        var displayRows = rows.slice(0, TOP_N);
+                        var rowsHtml = displayRows.map(function(r, i) {
+                            var dot = '<span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:' + (palette[r.paid_or_organic] || '#94a3b8') + '; margin-right:0.4rem;"></span>';
+                            return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04); background:' + (i % 2 ? 'rgba(255,255,255,0.015)' : 'transparent') + ';">'
+                                +   '<td style="padding:0.45rem 0.55rem; color:#e2e8f0; font-size:0.78rem;">' + dot + escapeHtml(r.label) + '</td>'
+                                +   '<td style="padding:0.45rem 0.55rem; color:#cbd5e1; font-size:0.72rem;">' + escapeHtml(r.asset_type || '\u2014') + '</td>'
+                                +   '<td style="padding:0.45rem 0.55rem; color:#cbd5e1; font-size:0.72rem;">' + escapeHtml(r.channel || '\u2014') + '</td>'
+                                +   '<td style="padding:0.45rem 0.55rem; color:#cbd5e1; font-size:0.72rem;">' + escapeHtml(r.paid_or_organic) + '</td>'
+                                +   '<td style="padding:0.45rem 0.55rem; color:#fff; font-size:0.78rem; text-align:right; font-variant-numeric:tabular-nums;">' + fmtCompact(r.views) + '</td>'
+                                +   '<td style="padding:0.45rem 0.55rem; color:#a5b4fc; font-size:0.78rem; text-align:right; font-variant-numeric:tabular-nums;">' + r.info_pct.toFixed(1) + '%</td>'
+                                +   '<td style="padding:0.45rem 0.55rem; color:#a5b4fc; font-size:0.72rem; text-align:right; font-variant-numeric:tabular-nums;">' + fmtCompact(r.info_seekers) + '</td>'
+                                +   '<td style="padding:0.45rem 0.55rem; color:#fbbf24; font-size:0.78rem; text-align:right; font-variant-numeric:tabular-nums;">' + r.ticket_pct.toFixed(1) + '%</td>'
+                                +   '<td style="padding:0.45rem 0.55rem; color:#fbbf24; font-size:0.72rem; text-align:right; font-variant-numeric:tabular-nums;">' + fmtCompact(r.ticket_visits) + '</td>'
+                                + '</tr>';
+                        }).join('');
+                        var moreNote = rows.length > TOP_N
+                            ? '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.4rem; text-align:center;">Showing top ' + TOP_N + ' of ' + rows.length + ' assets in cut. Adjust filters or sort to surface others.</div>'
+                            : '';
+
+                        var tilesHtml =
+                            '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:0.5rem; margin-bottom:0.7rem;">'
+                          +   iiqSummaryTile(headerLabel + ' views',         fmtCompact(totViews), 'across ' + rows.length + ' assets')
+                          +   iiqSummaryTile('Info-seekers',                 fmtCompact(totInfo),  totViews > 0 ? (totInfo / totViews * 100).toFixed(1) + '% blended rate' : '\u2014')
+                          +   iiqSummaryTile('Ticketing visits',             fmtCompact(totTk),    totViews > 0 ? (totTk   / totViews * 100).toFixed(1) + '% blended rate' : '\u2014')
+                          +   iiqSummaryTile('Top asset type',               escapeHtml(topType),  topTypeShare.toFixed(0) + '% of cohort views')
+                          + '</div>';
+
+                        var sourceChips = ''
+                            + _chip('Both',    st.source === 'both',    'window.iiqAudDrillSetSource(\'both\')')
+                            + ' ' + _chip('Paid',    st.source === 'paid',    'window.iiqAudDrillSetSource(\'paid\')',    palette.paid)
+                            + ' ' + _chip('Organic', st.source === 'organic', 'window.iiqAudDrillSetSource(\'organic\')', palette.organic);
+                        var typeChips = allTypes.map(function(t) {
+                            return _chip(t, !!st.types[t], "window.iiqAudDrillToggleType('" + t.replace(/'/g, "\\'") + "')");
+                        }).join(' ');
+                        var typeBulk = '<button type="button" onclick="window.iiqAudDrillAllTypes(true)" style="background:none; border:none; color:#22d3ee; font-size:0.7rem; cursor:pointer; padding:0 0.4rem;">all</button>'
+                                     + '<button type="button" onclick="window.iiqAudDrillAllTypes(false)" style="background:none; border:none; color:#94a3b8; font-size:0.7rem; cursor:pointer; padding:0 0.4rem;">none</button>';
+                        var labelStyle = 'font-size:0.66rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.25rem;';
+                        var controls =
+                            '<div class="iiq-card" style="padding:0.65rem 0.85rem; margin-bottom:0.6rem; display:flex; flex-wrap:wrap; gap:0.85rem 1.4rem;">'
+                          +   '<div style="flex:0 0 auto;"><div style="' + labelStyle + '">Source</div><div style="display:flex; gap:0.3rem;">' + sourceChips + '</div></div>'
+                          +   (allTypes.length ? ('<div style="flex:1; min-width:240px;"><div style="' + labelStyle + ' display:flex; align-items:center; gap:0.3rem;">Asset type ' + typeBulk + '</div><div style="display:flex; gap:0.3rem; flex-wrap:wrap;">' + typeChips + '</div></div>') : '')
+                          + '</div>';
+
+                        var tableHtml = rows.length
+                            ? ('<div class="iiq-card" style="padding:0; overflow:auto;"><table style="width:100%; border-collapse:collapse;">'
+                               +   '<thead><tr>'
+                               +     _th('label',         'Asset',         false)
+                               +     _th('asset_type',    'Type',          false)
+                               +     _th('channel',       'Channel',       false)
+                               +     _th('paid_or_organic', 'Source',      false)
+                               +     _th('views',         'Cohort views',  true)
+                               +     _th('info_pct',      'Info %',        true)
+                               +     _th('info_seekers',  'Info #',        true)
+                               +     _th('ticket_pct',    'Ticket %',      true)
+                               +     _th('ticket_visits', 'Ticket #',      true)
+                               +   '</tr></thead>'
+                               +   '<tbody>' + rowsHtml + '</tbody>'
+                               + '</table></div>'
+                               + moreNote)
+                            : '<div class="iiq-empty">No assets match the current cut.</div>';
+
+                        var foot = '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.55rem; line-height:1.4;">'
+                                 + 'Cohort views = asset views \u00d7 audience\u2019s share of US adults \u00d7 audience-asset affinity (talent / sport / franchise / genre / demo / moviegoing-frequency tilts). Info-seek % and ticketing % start from the per-asset projection and tilt by audience intent intensity. Same helper that drives the Cohort Engagement tab \u2014 numbers ladder up.'
+                                 + '</div>';
+
+                        var body = document.getElementById('iiqAudDrillBody');
+                        if (body) body.innerHTML = tilesHtml + controls + tableHtml + foot;
+                    }
+                    _render();
+                });
             };
 
             window.iiqShowAssetDetail = function(slug, idxOrAsset) {
