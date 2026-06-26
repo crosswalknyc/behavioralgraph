@@ -38618,6 +38618,13 @@
                 .then(function(resp) {
                     if (!resp.success || !resp.data) return;
                     _bpiqRenderHeaderImage(resp.image_url);
+                    // Thread admin-managed category onto the data object
+                    // so the renderer can apply category-specific policy
+                    // (e.g. automotive = never show conversion metrics —
+                    // car purchases aren't measurable via web panel).
+                    if (resp.category && !resp.data.category) {
+                        resp.data.category = resp.category;
+                    }
                     renderBpiqDashboard(resp.data);
                 }).catch(function() {});
         };
@@ -38997,6 +39004,49 @@
             if (ecPanels) ecPanels.style.display = 'none';
             if (bpEmpty) bpEmpty.style.display = 'none';
             if (bpPanels) bpPanels.style.display = '';
+
+            // ----- Category-driven policy: AUTOMOTIVE -----
+            // Car purchases happen at dealerships, not on the open
+            // web - panel data can't observe a vehicle purchase event,
+            // so any conversion number on an automotive partnership is
+            // misleading by construction. Suppress the entire
+            // conversions surface (hero chip, Pre/Post block, YoY metric
+            // button, Conversion Value card) for any run whose category
+            // is "automotive", regardless of what the data file says.
+            //
+            // This is a defensive guard - the generators should already
+            // strip conversions for auto runs, but this ensures the UI
+            // can never accidentally surface them.
+            var _bpiqCat = ((data && data.category) || '').toString().trim().toLowerCase();
+            if (_bpiqCat === 'automotive') {
+                data.conversions = Object.assign({}, data.conversions || {}, {
+                    enabled: false,
+                    low_signal: true,
+                    pre_count: 0, post_count: 0,
+                    pre_users: 0, post_users: 0,
+                    pre_users_projected: 0, post_users_projected: 0,
+                    lift_pct: 0,
+                    note: 'Conversions suppressed: automotive purchases are not observable via web panel data.'
+                });
+                if (data.valuation) {
+                    data.valuation.conversion_value = 0;
+                    if (data.valuation.rates) data.valuation.rates.conv_value_per_user = 0;
+                }
+                if (Array.isArray(data.yearly_breakdown)) {
+                    data.yearly_breakdown.forEach(function(y) {
+                        y.conversions_users_projected = 0;
+                        if (y.conversions) {
+                            y.conversions.post_count = 0;
+                            y.conversions.post_users_projected = 0;
+                            y.conversions.enabled = false;
+                        }
+                        if (y.valuation) {
+                            y.valuation.conversion_value = 0;
+                            if (y.valuation.rates) y.valuation.rates.conv_value_per_user = 0;
+                        }
+                    });
+                }
+            }
 
             var totals = data.totals || {};
             var preP = data.pre_period || {};
