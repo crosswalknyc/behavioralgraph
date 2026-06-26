@@ -22227,7 +22227,7 @@
                 <div class="iiq-meta-row" id="iiqOverviewMeta"></div>
                 <details style="margin-top: 1rem;">
                     <summary style="cursor: pointer; user-select: none; padding: 0.5rem 0; font-weight: 600; font-size: 1rem; color: var(--text-primary); list-style: none; display: flex; align-items: center; gap: 0.5rem;">
-                        <span style="display:inline-block; transition: transform 0.15s;" class="iiq-disclosure-arrow">\u25B6</span>
+                        <span class="iiq-disclosure-arrow" style="display:inline-block; transition: transform 0.15s;">&#9654;</span>
                         Campaign phase timeline
                     </summary>
                     <div class="iiq-phase-timeline" id="iiqPhaseTimeline" style="margin-top: 0.5rem;"></div>
@@ -38976,7 +38976,7 @@
             var html = '<details class="bpiq-methodology" style="margin-bottom:0.5rem;">'
                 +    '<summary class="bpiq-method-summary">Column definitions &amp; how to use this table</summary>'
                 +    '<div class="bpiq-method-body" style="font-size:11px;">'
-                +      'A consumer is counted on a platform when they had at least 1 visit to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform\'s consumers that ALSO had a brand touchpoint anywhere on the platform during the same window. <strong>Brand Lift</strong> = percentage change between Post % and Pre %. <strong>Incremental Consumers</strong> = the post-campaign incremental brand engagers attributable to that platform, projected to US gen pop. <strong>EMV</strong> = Incremental Consumers × CPM. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site or via a wholesale distributor).'
+                +      'A consumer is counted on a platform when they had at least 1 visit to that platform\'s domain in the window. <strong>Pre %</strong> / <strong>Post %</strong> = share of that platform\'s consumers that ALSO had a brand touchpoint anywhere on the platform during the same window. <strong>Brand Lift</strong> = percentage change between Post % and Pre %. <strong>Incremental Consumers</strong> = the post-campaign incremental brand engagers attributable to that platform, projected to US gen pop. <strong>CPM</strong> = the 2026 market-grounded CPM-equivalent value per incremental engaged consumer on that platform (calibrated against Hootsuite / Sprout / LinkedIn Marketing Solutions / WordStream 2026 social CPM benchmarks). <strong>EMV</strong> = Incremental Consumers × CPM. The "Direct (Brand Site)" row counts brand touchpoints that did not occur on a social platform (e.g. direct visits to the brand\'s own site or via a wholesale distributor); Direct Site value is set to owned-traffic value, not a CPM benchmark.'
                 +      ' <span style="font-style:italic;">Click any column header to sort. Click a CPM cell to edit the rate - every downstream value (per-row EMV, Total Earned Media Value, Total Brand Value) recalculates instantly.</span>'
                 +    '</div>'
                 + '</details>'
