@@ -22165,6 +22165,9 @@
             #intentIQView .iiq-meta-card-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
             #intentIQView .iiq-meta-card-value { font-size: 1.1rem; font-weight: 600; margin-top: 0.25rem; }
             #intentIQView .iiq-phase-timeline { display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; }
+            #intentIQView details > summary::-webkit-details-marker { display: none; }
+            #intentIQView details[open] .iiq-disclosure-arrow { transform: rotate(90deg); }
+            #intentIQView .iiq-disclosure-arrow { font-size: 0.7rem; opacity: 0.7; }
             #intentIQView .iiq-phase-row { display: grid; grid-template-columns: 180px 1fr 160px; gap: 0.75rem; align-items: center; padding: 0.4rem 0.5rem; border-radius: 6px; }
             #intentIQView .iiq-phase-name { font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; gap: 0.4rem; }
             #intentIQView .iiq-phase-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
@@ -22222,8 +22225,13 @@
 
             <div class="iiq-panel active" id="iiqPanel-overview">
                 <div class="iiq-meta-row" id="iiqOverviewMeta"></div>
-                <h4 style="margin: 1rem 0 0.5rem;">Campaign phase timeline</h4>
-                <div class="iiq-phase-timeline" id="iiqPhaseTimeline"></div>
+                <details style="margin-top: 1rem;">
+                    <summary style="cursor: pointer; user-select: none; padding: 0.5rem 0; font-weight: 600; font-size: 1rem; color: var(--text-primary); list-style: none; display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="display:inline-block; transition: transform 0.15s;" class="iiq-disclosure-arrow">\u25B6</span>
+                        Campaign phase timeline
+                    </summary>
+                    <div class="iiq-phase-timeline" id="iiqPhaseTimeline" style="margin-top: 0.5rem;"></div>
+                </details>
             </div>
 
             <div class="iiq-panel" id="iiqPanel-assets">
