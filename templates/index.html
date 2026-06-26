@@ -21003,9 +21003,44 @@
                                  matching the Ticket Sales / Profile IQ
                                  header pattern. -->
                             <div id="bpiqProfileImage" class="dash-profile-image" style="min-width: 80px; width: 120px; min-height: 100px; height: auto; align-self: stretch; flex-shrink: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; overflow: hidden;"><span id="bpiqProfileImagePlaceholder">🤝</span></div>
-                            <div style="display: flex; flex-direction: column; justify-content: center;">
+                            <div style="display: flex; flex-direction: column; justify-content: center; flex: 1; min-width: 200px;">
                                 <h2 id="bpiqDashTitle" style="margin: 0; font-size: 1.35rem;">Brand Partnership Valuation</h2>
                                 <div id="bpiqDashMeta" style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px;"></div>
+                            </div>
+                            <!-- Export menu: CSV (data dump) or PDF
+                                 (print-window from html2canvas snapshot).
+                                 Stays in the page flow on narrow viewports
+                                 by wrapping, otherwise hugs the right
+                                 edge of the header. -->
+                            <div style="position: relative; align-self: center; flex-shrink: 0;">
+                                <button type="button" id="bpiqExportBtn"
+                                        onclick="_bpiqToggleExportMenu(event)"
+                                        style="padding: 0.5rem 0.95rem; border-radius: 8px; cursor: pointer;
+                                               background: #c8e600; color: #000; font-weight: 700;
+                                               font-size: 0.78rem; letter-spacing: 0.04em; border: 1px solid #c8e600;
+                                               display: inline-flex; align-items: center; gap: 0.4rem;">
+                                    <span style="font-size: 0.95rem;">⬇</span> Export
+                                </button>
+                                <div id="bpiqExportMenu"
+                                     style="display: none; position: absolute; top: calc(100% + 6px); right: 0;
+                                            min-width: 200px; background: var(--bg-card); border: 1px solid var(--border-color);
+                                            border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.45); z-index: 50; overflow: hidden;">
+                                    <button type="button" onclick="_bpiqExportCsv()"
+                                            style="display: block; width: 100%; text-align: left; padding: 0.7rem 0.95rem;
+                                                   background: transparent; border: 0; cursor: pointer; color: var(--text-primary);
+                                                   font-size: 0.85rem;">
+                                        <div style="font-weight: 600;">📊 Download as CSV</div>
+                                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">All sections, machine-readable</div>
+                                    </button>
+                                    <div style="height: 1px; background: var(--border-color);"></div>
+                                    <button type="button" onclick="_bpiqExportPdf()"
+                                            style="display: block; width: 100%; text-align: left; padding: 0.7rem 0.95rem;
+                                                   background: transparent; border: 0; cursor: pointer; color: var(--text-primary);
+                                                   font-size: 0.85rem;">
+                                        <div style="font-weight: 600;">📄 Download as PDF</div>
+                                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">Opens print dialog (Save as PDF)</div>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <!-- 💰 Total Brand Value (hero) -->
@@ -23130,6 +23165,58 @@
                 };
             }
 
+            // ---- Calendar-aware multiplier for daily NEW VIEWS on paid /
+            // organic content drops. Mirrors iiqCalendarFunnelMultiplier
+            // but for upper-funnel volume rather than mid/bottom funnel.
+            // Pre-OW the campaign is in full push (1.0). Within ~1 week
+            // post-OW there's still measurable promo + word-of-mouth tail
+            // (0.7). Through the rest of the theatrical run the daily new
+            // content trickle drops sharply (0.10 floor by THEATRICAL_END).
+            // Around the streaming launch (5/15) a Gaussian bump returns:
+            // larger for PAID (TVOD/SVOD promotion buy) than for ORGANIC
+            // (modest, mostly availability chatter). Long tail decays to a
+            // ~0.05 floor.
+            //
+            // Callers renormalize against the LIFETIME view total so this
+            // only redistributes growth across time -- it doesn't change
+            // ladder-up totals on the donut, funnel-comparison card, or
+            // Assets page.
+            function iiqCalendarViewMultiplier(dateIso) {
+                var DAY = 86400000;
+                var dT  = new Date(dateIso + 'T12:00:00Z').getTime();
+                var owT = new Date(IIQ_CAMPAIGN_DATES.OPENING        + 'T12:00:00Z').getTime();
+                var teT = new Date(IIQ_CAMPAIGN_DATES.THEATRICAL_END + 'T12:00:00Z').getTime();
+                var slT = new Date(IIQ_CAMPAIGN_DATES.STREAMING      + 'T12:00:00Z').getTime();
+                var dToOW = (owT - dT) / DAY;
+                var dToSL = (slT - dT) / DAY;
+                var paidBase, orgBase;
+                if (dToOW > 0) {
+                    paidBase = 1.0;
+                    orgBase  = 1.0;
+                } else if (dToOW >= -7) {
+                    paidBase = 0.80;
+                    orgBase  = 0.85;
+                } else if (dT < teT) {
+                    var postOwDays = -dToOW - 7;
+                    var theatrSpan = Math.max(1, (teT - (owT + 7 * DAY)) / DAY);
+                    var prog       = Math.min(1, postOwDays / theatrSpan);
+                    paidBase = 0.80 - 0.70 * prog;
+                    orgBase  = 0.85 - 0.70 * prog;
+                } else {
+                    paidBase = 0.08;
+                    orgBase  = 0.10;
+                }
+                var sigma = 22;
+                var bump = Math.exp(-(dToSL * dToSL) / (2 * sigma * sigma));
+                if (dToOW > -14) bump *= 0.10;
+                var paidStream = 0.55 * bump;
+                var orgStream  = 0.20 * bump;
+                return {
+                    paid_mult:    Math.max(0.04, paidBase + paidStream),
+                    organic_mult: Math.max(0.04, orgBase  + orgStream)
+                };
+            }
+
             // ----- Synthesize a daily progression for one asset -----
             // Used by the asset-detail modal when the backend returns no rows
             // from asset_engagement_daily (most assets in the GOAT pull don't
@@ -23782,17 +23869,62 @@
                 var paths = (leftSeries  || []).map(function(s){ return pathFor(s, syL); }).join('')
                           + (rightSeries || []).map(function(s){ return pathFor(s, syR); }).join('');
 
+                // Optional event markers (asset-drop dots etc.) -- pass via
+                // opts.events = [{x: <isoDate>, color: '#22d3ee', label: '...'}].
+                // Dots cluster by date and stack vertically just above the
+                // x-axis so callers can see "lots of content shipped this day"
+                // without colliding with the line traces.
+                var eventsSvg = '';
+                if (Array.isArray(opts.events) && opts.events.length) {
+                    var byDay = {};
+                    opts.events.forEach(function(ev) {
+                        if (!ev || !ev.x) return;
+                        var key = String(ev.x).slice(0, 10);
+                        if (!byDay[key]) byDay[key] = [];
+                        byDay[key].push(ev);
+                    });
+                    var dotR = opts.eventDotRadius || 2.6;
+                    var dotGap = (dotR * 2) + 1;
+                    var baselineY = H - P.b - 6;
+                    var maxStack = Math.max(1, Math.floor((H - P.t - P.b - 14) / dotGap));
+                    Object.keys(byDay).forEach(function(day) {
+                        var list = byDay[day];
+                        var cx = sx(day);
+                        if (!isFinite(cx)) return;
+                        list.slice(0, maxStack).forEach(function(ev, i) {
+                            var cy = baselineY - i * dotGap;
+                            var safeColor = ev.color || '#94a3b8';
+                            var titleTxt  = (ev.label ? (ev.label + ' \u2014 ') : '') + day;
+                            eventsSvg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1)
+                                       + '" r="' + dotR + '" fill="' + safeColor + '" fill-opacity="0.85" stroke="rgba(15,23,42,0.6)" stroke-width="0.6">'
+                                       + '<title>' + escapeHtml(titleTxt) + '</title>'
+                                       + '</circle>';
+                        });
+                        if (list.length > maxStack) {
+                            var extra = list.length - maxStack;
+                            var cyTxt = baselineY - maxStack * dotGap - 2;
+                            eventsSvg += '<text x="' + cx.toFixed(1) + '" y="' + cyTxt.toFixed(1)
+                                       + '" font-size="8" fill="rgba(226,232,240,0.55)" text-anchor="middle">+' + extra + '</text>';
+                        }
+                    });
+                }
+
                 var legend = (leftSeries || []).concat(rightSeries || []).map(function(s) {
                     return '<span style="display:inline-flex; align-items:center; gap:0.3rem; margin-right:0.85rem; font-size:0.75rem; color:#cbd5e1;"><span style="width:10px; height:10px; background:' + s.color + '; border-radius:2px;"></span>' + escapeHtml(s.name) + '</span>';
                 }).join('');
+                var eventLegend = (Array.isArray(opts.eventLegend) && opts.eventLegend.length)
+                    ? opts.eventLegend.map(function(e) {
+                          return '<span style="display:inline-flex; align-items:center; gap:0.3rem; margin-right:0.85rem; font-size:0.7rem; color:#94a3b8;"><span style="width:8px; height:8px; background:' + (e.color || '#94a3b8') + '; border-radius:50%; border:1px solid rgba(15,23,42,0.6);"></span>' + escapeHtml(e.label || '') + '</span>';
+                      }).join('')
+                    : '';
 
                 var leftAxisLabel  = opts.leftLabel  ? '<text x="' + (P.l - 46) + '" y="' + (H/2) + '" font-size="10" fill="' + (opts.leftLabelColor  || 'rgba(34,211,238,0.85)')  + '" text-anchor="middle" transform="rotate(-90, ' + (P.l - 46) + ', ' + (H/2) + ')">' + escapeHtml(opts.leftLabel)  + '</text>' : '';
                 var rightAxisLabel = opts.rightLabel ? '<text x="' + (W - P.r + 46) + '" y="' + (H/2) + '" font-size="10" fill="' + (opts.rightLabelColor || 'rgba(251,191,36,0.85)') + '" text-anchor="middle" transform="rotate(90, '  + (W - P.r + 46) + ', ' + (H/2) + ')">' + escapeHtml(opts.rightLabel) + '</text>' : '';
 
                 return '<div style="overflow-x:auto;"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; max-width:' + W + 'px; display:block;">'
-                     + grid + paths + leftLabels + rightLabels + dateLabels + leftAxisLabel + rightAxisLabel
+                     + grid + paths + eventsSvg + leftLabels + rightLabels + dateLabels + leftAxisLabel + rightAxisLabel
                      + '</svg></div>'
-                     + '<div style="margin-top:0.45rem;">' + legend + '</div>';
+                     + '<div style="margin-top:0.45rem;">' + legend + eventLegend + '</div>';
             }
 
             function iiqDonut(slices, opts) {
@@ -24063,17 +24195,45 @@
                 var donutSlices = Object.keys(sumByKey).map(function(k) {
                     return { label: k.charAt(0).toUpperCase() + k.slice(1), value: sumByKey[k], color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown };
                 }).sort(function(a,b){ return b.value - a.value; });
-                // Convert daily drops to a running cumulative for the line chart
+                // Convert daily drops to a running cumulative for the line
+                // chart. Apply iiqCalendarViewMultiplier so daily NEW views
+                // drop sharply after theatrical end (when virtually no new
+                // promo content ships) and get a small streaming-launch
+                // bump (TVOD/SVOD promo buys). Then renormalize each series
+                // so the FINAL cumulative total still equals the original
+                // measured total -- this preserves ladder-up to the donut
+                // (share of total views) and the Best-In-Flight aggregates.
                 var dates = Array.from(new Set(cum.map(function(r){ return r.date; }))).sort();
                 var keys = Object.keys(byKey);
                 var dayMapByKey = {};
-                var series = keys.map(function(k) {
-                    var pts = [], run = 0;
+                keys.forEach(function(k) {
                     var dayMap = {};
                     byKey[k].forEach(function(p) { dayMap[p.x] = (dayMap[p.x] || 0) + p.y; });
                     dayMapByKey[k] = dayMap;
+                });
+                var dailyAdjByKey = {};
+                keys.forEach(function(k) {
+                    var origTotal = 0, adjTotal = 0;
+                    var adj = {};
                     dates.forEach(function(d) {
-                        run += (dayMap[d] || 0);
+                        var v = dayMapByKey[k][d] || 0;
+                        origTotal += v;
+                        var mult = iiqCalendarViewMultiplier(d);
+                        var m = (k === 'paid') ? mult.paid_mult
+                              : (k === 'organic' || k === 'natural') ? mult.organic_mult
+                              : (mult.paid_mult + mult.organic_mult) / 2;
+                        var w = v * m;
+                        adj[d] = w;
+                        adjTotal += w;
+                    });
+                    var scale = adjTotal > 0 ? (origTotal / adjTotal) : 1;
+                    dates.forEach(function(d) { adj[d] *= scale; });
+                    dailyAdjByKey[k] = adj;
+                });
+                var series = keys.map(function(k) {
+                    var pts = [], run = 0;
+                    dates.forEach(function(d) {
+                        run += (dailyAdjByKey[k][d] || 0);
                         pts.push({ x: d, y: run });
                     });
                     return { name: k.charAt(0).toUpperCase() + k.slice(1) + ' (cumulative views)', color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown, points: pts };
@@ -39126,6 +39286,289 @@
                                     ? _bpiqState.originalData.yearly_breakdown
                                     : (data.yearly_breakdown || []);
             _bpiqRenderYearly(yearlyForChart, data._bpiq_active_year || null);
+        }
+
+        // ----- Export menu (CSV + PDF) -----
+        //
+        // Always operates against the live, recomputed `_bpiqState.data`
+        // so that any user edits (CPM overrides, valuation rate edits,
+        // view-by-year selection) are reflected in the download. PDF
+        // uses the same html2canvas-→-print-window pattern as the
+        // Profile IQ tab export elsewhere in this file.
+        function _bpiqToggleExportMenu(ev) {
+            if (ev) ev.stopPropagation();
+            var m = document.getElementById('bpiqExportMenu');
+            if (!m) return;
+            var willOpen = (m.style.display === 'none' || !m.style.display);
+            m.style.display = willOpen ? 'block' : 'none';
+            if (willOpen) {
+                // close on next outside click
+                setTimeout(function() {
+                    function close(e) {
+                        if (m.contains(e.target)) return;
+                        m.style.display = 'none';
+                        document.removeEventListener('click', close, true);
+                    }
+                    document.addEventListener('click', close, true);
+                }, 0);
+            }
+        }
+
+        // Build a single CSV file with section dividers covering every
+        // user-visible data point on the BPIQ dashboard.
+        function _bpiqBuildCsv() {
+            var d = _bpiqState.data || {};
+            var orig = _bpiqState.originalData || d;
+            function esc(v) {
+                if (v == null) return '';
+                var s = String(v);
+                if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+                return s;
+            }
+            function row(cells) { return cells.map(esc).join(',') + '\n'; }
+            function section(title) { return '\n# ' + title + '\n'; }
+
+            var out = '';
+
+            // --- Header / metadata
+            out += '# Brand Partnership Valuation — Export\n';
+            out += row(['Project',                d.project_name || '']);
+            out += row(['Brand Partner',          d.brand_partner || '']);
+            out += row(['Qualifier',              (d.qualifier_type || '') + ': ' + (d.qualifier_value || '')]);
+            out += row(['Campaign Start',         d.start_date || '']);
+            out += row(['Campaign End',           d.end_date   || '']);
+            out += row(['Attribution Window (d)', d.attribution_window_days || 0]);
+            if (d._bpiq_active_year) {
+                out += row(['VIEWING SLICE', 'Year ' + d._bpiq_active_year + ' (' + (d._bpiq_active_year_label || '') + ')']);
+            }
+            out += row(['Audience (raw)',         d.audience_size || 0]);
+            out += row(['Audience (US-projected)', d.projected_audience_size || 0]);
+            out += row(['Exported At',            new Date().toISOString()]);
+
+            // --- Headline KPIs (Target)
+            var t = d.totals || {};
+            out += section('Headline KPIs — Target');
+            out += row(['Metric', 'Raw Panel', 'US-Projected', 'Penetration %']);
+            out += row(['Pre-Campaign Consumer Engagement',  t.pre_users  || 0, t.pre_users_projected  || 0, t.audience_pen_pre_pct  || 0]);
+            out += row(['Post-Campaign Consumer Engagement', t.post_users || 0, t.post_users_projected || 0, t.audience_pen_post_pct || 0]);
+            out += row(['Brand Engagement Lift (% users)',   '', '', t.lift_pct_users || 0]);
+            out += row(['Brand Engagement Lift (% hits)',    '', '', t.lift_pct_hits  || 0]);
+
+            // --- Control group
+            var c = d.control_group || {};
+            if (c.enabled) {
+                out += section('Headline KPIs — Control (Gen Pop)');
+                out += row(['Control Cohort Size',           c.control_size || 0, c.projected_control_size || 0, '']);
+                out += row(['Pre-Engagement %',  '', '', c.control_pre_pen_pct  || 0]);
+                out += row(['Post-Engagement %', '', '', c.control_post_pen_pct || 0]);
+                out += row(['Δ pp',              '', '', c.control_delta_pp     || 0]);
+                out += row(['Incremental Lift (pp)',           '', '', c.incremental_lift_pp      || 0]);
+                out += row(['Incremental Lift (relative %)',   '', '', c.incremental_lift_rel_pct || 0]);
+            }
+
+            // --- Valuation
+            var v = d.valuation || {};
+            out += section('Valuation');
+            out += row(['Component', 'Value (USD)']);
+            out += row(['Brand Engagement Value (BEV)', v.brand_engagement_value || 0]);
+            out += row(['Earned Media Value (EMV)',     v.earned_media_value     || 0]);
+            out += row(['Brand Lift Value (BLV)',       v.brand_lift_value       || 0]);
+            out += row(['Conversion Value',             v.conversion_value       || 0]);
+            out += row(['TOTAL BRAND VALUE',            v.total_brand_value      || 0]);
+            out += row(['Incremental Users (US-projected)', v.incremental_users  || 0]);
+            var rates = v.rates || {};
+            out += row(['Rate · BEV $/Consumer',        rates.bev_per_user        || 0]);
+            out += row(['Rate · BLV $/Incremental',     rates.blv_per_incr_user   || 0]);
+            out += row(['Rate · Conversion $/Consumer', rates.conv_value_per_user || 0]);
+
+            // --- Per-platform EMV breakdown
+            out += section('Per-Platform · EMV Breakdown');
+            out += row(['Platform','Pre Users (Proj)','Post Users (Proj)','Incremental (Proj)','CPM ($/Consumer)','EMV (USD)']);
+            (v.emv_breakdown || []).forEach(function(r) {
+                out += row([
+                    r.platform || '',
+                    r.pre_users_projected         || 0,
+                    r.post_users_projected        || 0,
+                    r.incremental_users_projected || 0,
+                    r.emv_per_user_rate           || 0,
+                    r.emv_value                   || 0,
+                ]);
+            });
+
+            // --- Per-platform engagement & lift table
+            out += section('Per-Platform · Brand Engagement & Lift');
+            out += row(['Platform','Pre Users on Platform','Post Users on Platform','Pre Brand Users','Post Brand Users','Pre %','Post %','Brand Lift (%)','Pre Users (Proj)','Post Users (Proj)']);
+            (d.per_platform || []).forEach(function(p) {
+                out += row([
+                    p.platform || '',
+                    p.pre_users_on_platform   || 0,
+                    p.post_users_on_platform  || 0,
+                    p.pre_users               || 0,
+                    p.post_users              || 0,
+                    p.pre_pen_pct             || 0,
+                    p.post_pen_pct            || 0,
+                    p.lift_pct_users          || 0,
+                    p.pre_users_projected     || 0,
+                    p.post_users_projected    || 0,
+                ]);
+            });
+
+            // --- Most Engaged With Brand Touchpoints
+            out += section('Most Engaged With Brand Touchpoints');
+            out += row(['Brand Touchpoint','Pre Reach (Proj)','Post Reach (Proj)','Lift']);
+            var preList  = d.top_brand_properties_pre || [];
+            var postList = d.top_brand_properties     || [];
+            function projHits(t) {
+                if (!t) return 0;
+                return Math.max(0, Math.round(t.hits_projected != null ? t.hits_projected : (t.hits||0) * 1485));
+            }
+            var byName = {};
+            postList.forEach(function(t) { byName[t.common_name] = { name: t.common_name, pre: 0, post: projHits(t) }; });
+            preList.forEach(function(t) {
+                if (!byName[t.common_name]) byName[t.common_name] = { name: t.common_name, pre: 0, post: 0 };
+                byName[t.common_name].pre = projHits(t);
+            });
+            Object.keys(byName).map(function(k) { return byName[k]; })
+                .sort(function(a, b) { return b.post - a.post; })
+                .forEach(function(r) {
+                    var lift = '';
+                    if (r.pre === 0 && r.post > 0)      lift = 'new';
+                    else if (r.post === 0 && r.pre > 0) lift = '-100%';
+                    else if (r.pre > 0)                 lift = (((r.post - r.pre) / r.pre) * 100).toFixed(1) + '%';
+                    out += row([r.name, r.pre, r.post, lift]);
+                });
+
+            // --- Demographics
+            var demo = d.demographics || {};
+            ['gender','age','ethnicity','income'].forEach(function(field) {
+                var pre  = demo.pre  ? (demo.pre[field]  || []) : [];
+                var post = demo.post ? (demo.post[field] || []) : [];
+                if (!pre.length && !post.length) return;
+                out += section('Demographics · ' + field.toUpperCase());
+                out += row(['Value','Pre %','Post %','Δ pp']);
+                var keys = {};
+                pre.forEach(function(x)  { keys[x.value] = true; });
+                post.forEach(function(x) { keys[x.value] = true; });
+                function pctOf(arr, k) {
+                    var hit = arr.filter(function(x){ return x.value === k; })[0];
+                    return hit ? Number(hit.percentage) : 0;
+                }
+                Object.keys(keys).forEach(function(k) {
+                    var pp = pctOf(pre, k), ps = pctOf(post, k);
+                    out += row([k, pp.toFixed(2), ps.toFixed(2), (ps - pp).toFixed(2)]);
+                });
+            });
+
+            // --- Yearly breakdown (uses ORIG so the export carries the
+            //     full picture even when viewing a single year-cut).
+            var years = (orig && orig.yearly_breakdown) || [];
+            if (years.length) {
+                out += section('Year-Over-Year Breakdown');
+                out += row(['Year','Label','Start','End','Days','Consumers (Proj)','Brand Hits (Proj)','Conversions (Proj)','EMV','BEV','BLV','Total Brand Value','Momentum']);
+                years.forEach(function(y) {
+                    var yv = y.valuation || {};
+                    out += row([
+                        y.year       || '',
+                        y.label      || '',
+                        y.start      || '',
+                        y.end        || '',
+                        y.days       || 0,
+                        y.users_projected            || 0,
+                        y.brand_hits_projected       || 0,
+                        y.conversions_users_projected || 0,
+                        yv.earned_media_value        || y.earned_media_value || 0,
+                        yv.brand_engagement_value    || 0,
+                        yv.brand_lift_value          || 0,
+                        yv.total_brand_value         || 0,
+                        y.momentum   || '',
+                    ]);
+                });
+
+                out += section('Year-Over-Year · Top Brand Touchpoints');
+                out += row(['Year','Rank','Brand Touchpoint','Hits (Proj)']);
+                years.forEach(function(y) {
+                    (y.top_brand_properties || []).slice(0, 10).forEach(function(p, i) {
+                        out += row([y.year, i + 1, p.common_name || '', p.hits_projected || 0]);
+                    });
+                });
+            }
+
+            return out;
+        }
+
+        function _bpiqExportCsv() {
+            var m = document.getElementById('bpiqExportMenu');
+            if (m) m.style.display = 'none';
+            try {
+                var csv = _bpiqBuildCsv();
+                var name = (_bpiqState.data && _bpiqState.data.project_name) || 'BPIQ_Run';
+                var slice = (_bpiqState.data && _bpiqState.data._bpiq_active_year) ? ('_y' + _bpiqState.data._bpiq_active_year) : '';
+                var safe = String(name).replace(/[^a-zA-Z0-9._-]+/g, '_');
+                var stamp = new Date().toISOString().slice(0, 10);
+                var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = safe + slice + '_' + stamp + '.csv';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
+            } catch (err) {
+                console.error('BPIQ CSV export failed', err);
+                alert('CSV export failed: ' + (err && err.message ? err.message : err));
+            }
+        }
+
+        // PDF export: capture the dashboard panel area as an image and
+        // open it in a new print window. The user picks "Save as PDF"
+        // in their browser's native print dialog — no jsPDF dep, layout
+        // is whatever the browser chooses (typically auto-paginated).
+        function _bpiqExportPdf() {
+            var m = document.getElementById('bpiqExportMenu');
+            if (m) m.style.display = 'none';
+            var el = document.getElementById('bpiqDashboardPanels');
+            if (!el) return;
+            function run() {
+                window.html2canvas(el, {
+                    backgroundColor: '#0d1117',
+                    scale: 2,
+                    logging: false,
+                    useCORS: true,
+                }).then(function(canvas) {
+                    var imgData = canvas.toDataURL('image/png');
+                    var name = (_bpiqState.data && _bpiqState.data.project_name) || 'BPIQ Run';
+                    var slice = (_bpiqState.data && _bpiqState.data._bpiq_active_year) ? (' · ' + _bpiqState.data._bpiq_active_year_label) : '';
+                    var w = window.open('', '_blank');
+                    if (!w) {
+                        alert('Pop-up blocked. Allow pop-ups for this site and try again.');
+                        return;
+                    }
+                    w.document.write(
+                        '<!DOCTYPE html><html><head><title>' + name + slice + '</title>'
+                      + '<style>'
+                      +   'body{margin:0;padding:20px;background:#0d1117;}'
+                      +   'img{max-width:100%;height:auto;display:block;}'
+                      +   '@media print{ body{background:white;padding:0;} @page { margin: 0.4in; } }'
+                      + '</style></head><body>'
+                      + '<img src="' + imgData + '" />'
+                      + '</body></html>'
+                    );
+                    w.document.close();
+                    setTimeout(function() { w.print(); }, 500);
+                }).catch(function(err) {
+                    console.error('BPIQ PDF capture failed', err);
+                    alert('PDF export failed: ' + (err && err.message ? err.message : err));
+                });
+            }
+            if (typeof window.html2canvas === 'undefined') {
+                var s = document.createElement('script');
+                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                s.onload = run;
+                s.onerror = function() { alert('Could not load PDF capture library.'); };
+                document.head.appendChild(s);
+            } else {
+                run();
+            }
         }
 
         // ----- View-by-Year slicer -----
