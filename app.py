@@ -12925,6 +12925,8 @@ def api_intent_assets(title_slug):
             asset_type=request.args.get('asset_type'),
             paid_or_organic=request.args.get('paid_or_organic'),
             window=request.args.get('window'),
+            from_date=request.args.get('from'),
+            to_date=request.args.get('to'),
         ))
     except Exception as e:
         traceback.print_exc()

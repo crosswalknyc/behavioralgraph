@@ -22245,7 +22245,8 @@
                 <div id="iiqAssetSummary" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;"></div>
                 <div id="iiqAssetTypeFilter"></div>
                 <div class="iiq-asset-filter">
-                    <div><label>Window</label><select id="iiqAssetWindow" onchange="reloadIntentIQAssets()"><option value="ytd" selected>Year-to-date (YTD)</option><option value="14d">Last 14 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option><option value="365d">Last 365 days</option><option value="all">Campaign-to-date</option></select></div>
+                    <div><label>Window</label><select id="iiqAssetWindow" onchange="window.iiqOnAssetWindowChange(this.value)"><option value="ytd" selected>Year-to-date (YTD)</option><option value="14d">Last 14 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option><option value="365d">Last 365 days</option><option value="all">Campaign-to-date</option><option value="custom">Custom range...</option></select></div>
+                    <div id="iiqAssetCustomRange" style="display:none;"><label>From / To</label><div style="display:flex; gap:0.3rem; align-items:center;"><input type="date" id="iiqAssetFrom" onchange="window.iiqApplyCustomRange()" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:0.22rem 0.4rem; font-size:0.72rem;"><span style="color:var(--text-secondary); font-size:0.72rem;">&rarr;</span><input type="date" id="iiqAssetTo" onchange="window.iiqApplyCustomRange()" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:0.22rem 0.4rem; font-size:0.72rem;"></div></div>
                     <div><label>Phase</label><select id="iiqAssetFilterPhase" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
                     <div><label>Type</label><select id="iiqAssetFilterType" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
                     <div><label>Paid / Organic</label><select id="iiqAssetFilterPaid" onchange="reloadIntentIQAssets()"><option value="">All</option><option value="paid">Paid</option><option value="organic">Organic</option><option value="unknown">Unknown</option></select></div>
@@ -23962,11 +23963,15 @@
                         var infoBlendedPct  = totalViews > 0 ? (totalInfoSeekers  / totalViews * 100) : 0;
                         var tkBlendedPct    = totalViews > 0 ? (totalTicketVisits / totalViews * 100) : 0;
 
-                        document.getElementById('iiqAssetMeta').textContent = totalAssets + ' asset' + (totalAssets === 1 ? '' : 's') + ' · ' + winLabel;
+                        var windowedFlag = !!stash.windowed;
+                        var metaPrefix   = totalAssets + ' asset' + (totalAssets === 1 ? '' : 's') + ' \u00b7 ' + winLabel;
+                        var metaSuffix   = windowedFlag ? ' \u00b7 values summed point-in-time within window' : ' \u00b7 lifetime totals';
+                        document.getElementById('iiqAssetMeta').innerHTML = '<span>' + escapeHtml(metaPrefix) + '</span><span style="color:' + (windowedFlag ? '#22d3ee' : 'var(--text-secondary)') + ';">' + escapeHtml(metaSuffix) + '</span>';
+                        var inWindowSub = windowedFlag ? ('point-in-time ' + winLabel) : ('campaign-to-date');
                         document.getElementById('iiqAssetSummary').innerHTML = [
-                            iiqSummaryTile('Total assets', fmtCompact(totalAssets), withViews + ' with measured views · ' + winLabel),
-                            iiqSummaryTile('Total views', fmtCompact(totalViews), 'across measured assets in window'),
-                            iiqSummaryTile('Total engagement', fmtCompact(totalEng), 'likes + comments + shares'),
+                            iiqSummaryTile('Total assets', fmtCompact(totalAssets), withViews + ' with measured views \u00b7 ' + winLabel),
+                            iiqSummaryTile('Total views', fmtCompact(totalViews), inWindowSub),
+                            iiqSummaryTile('Total engagement', fmtCompact(totalEng), 'likes + comments + shares \u00b7 ' + inWindowSub),
                             iiqSummaryTile('Paid / Organic mix', paidCount + ' / ' + orgCount, (topAsset && topAsset.action_label ? 'Top: ' + topAsset.action_label + ' (' + fmtCompact(topAsset.ext_view_count) + ' views)' : '')),
                             iiqSummaryTile('Info-seekers', fmtCompact(totalInfoSeekers), infoBlendedPct.toFixed(1) + '% of viewers \u2014 Google/IMDB/Rotten Tomatoes/official site'),
                             iiqSummaryTile('Ticketing visits', fmtCompact(totalTicketVisits), tkBlendedPct.toFixed(1) + '% of viewers \u2014 Fandango/AMC/Regal/Cinemark/Atom')
@@ -24019,6 +24024,44 @@
                             : '<div class="iiq-empty">No assets match filters.</div>');
             };
 
+            // Show/hide the custom date pickers when the Window dropdown
+            // flips to/from "Custom range...". On any other selection we
+            // also reload immediately. For Custom we wait until both
+            // dates are set (iiqApplyCustomRange) before fetching.
+            window.iiqOnAssetWindowChange = function(val) {
+                var box = document.getElementById('iiqAssetCustomRange');
+                if (val === 'custom') {
+                    if (box) box.style.display = '';
+                    // Default to last-14d range so the user has a sensible
+                    // starting point; they can edit either bound.
+                    var fEl = document.getElementById('iiqAssetFrom');
+                    var tEl = document.getElementById('iiqAssetTo');
+                    if (fEl && !fEl.value) {
+                        var now = new Date();
+                        var lo = new Date(now.getTime() - 14*86400000);
+                        fEl.value = lo.toISOString().slice(0, 10);
+                        if (tEl && !tEl.value) tEl.value = now.toISOString().slice(0, 10);
+                    }
+                    window.iiqApplyCustomRange();
+                    return;
+                }
+                if (box) box.style.display = 'none';
+                window.reloadIntentIQAssets();
+            };
+
+            window.iiqApplyCustomRange = function() {
+                var winEl = document.getElementById('iiqAssetWindow');
+                if (winEl && winEl.value !== 'custom') winEl.value = 'custom';
+                var box = document.getElementById('iiqAssetCustomRange');
+                if (box) box.style.display = '';
+                var fEl = document.getElementById('iiqAssetFrom');
+                var tEl = document.getElementById('iiqAssetTo');
+                var f = fEl ? fEl.value : '';
+                var t = tEl ? tEl.value : '';
+                if (!f && !t) return; // wait for at least one bound
+                window.reloadIntentIQAssets();
+            };
+
             window.reloadIntentIQAssets = function() {
                 var slug = window.__intentIQ.currentSlug;
                 if (!slug) return;
@@ -24026,6 +24069,14 @@
                 var winEl = document.getElementById('iiqAssetWindow');
                 var win = winEl ? winEl.value : 'ytd';
                 params.set('window', win);
+                if (win === 'custom') {
+                    var fEl = document.getElementById('iiqAssetFrom');
+                    var tEl = document.getElementById('iiqAssetTo');
+                    var f = fEl ? fEl.value : '';
+                    var t = tEl ? tEl.value : '';
+                    if (f) params.set('from', f);
+                    if (t) params.set('to', t);
+                }
                 var ph = document.getElementById('iiqAssetFilterPhase').value;
                 var ty = document.getElementById('iiqAssetFilterType').value;
                 var po = document.getElementById('iiqAssetFilterPaid').value;
@@ -24046,7 +24097,11 @@
                             var types = Array.from(new Set(cards.map(function(c) { return c.asset_type; }).filter(Boolean))).sort();
                             types.forEach(function(t) { typeSel.appendChild(new Option(t, t)); });
                         }
-                        window.__intentIQAssetsRaw = { slug: slug, cards: cards, winLabel: winLabel, sortBy: sortBy };
+                        window.__intentIQAssetsRaw = {
+                            slug: slug, cards: cards, winLabel: winLabel,
+                            sortBy: sortBy, windowed: !!d.windowed_totals,
+                            windowFrom: d.window_from || null, windowTo: d.window_to || null
+                        };
                         window._iiqRenderAssetsGrid();
                     })
                     .catch(function(e) {

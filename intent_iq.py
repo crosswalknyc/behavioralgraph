@@ -255,14 +255,35 @@ def get_overview(title_slug: str) -> dict:
 
 # ── 3. Assets ───────────────────────────────────────────────────────────────
 
-def _resolve_assets_window(window: Optional[str]) -> tuple[Optional[str], Optional[str], str]:
+def _resolve_assets_window(window: Optional[str],
+                            from_date: Optional[str] = None,
+                            to_date: Optional[str] = None
+                            ) -> tuple[Optional[str], Optional[str], str]:
     """Resolve an assets-window string into (lo_iso, hi_iso, label).
-    Lo/hi are inclusive YYYY-MM-DD or None for unbounded. YTD = since
-    Jan 1 of current year. 'all' = no bound. '14d'/'30d'/'90d'/'365d' =
-    rolling N days back from today.
+    Lo/hi are inclusive YYYY-MM-DD or None for unbounded.
+
+    Window strings:
+      - 'all' / 'campaign_to_date' -> unbounded, lifetime totals.
+      - 'ytd' -> since Jan 1 of current year (default).
+      - '14d' / '30d' / '90d' / '365d' -> rolling N days back from today.
+      - 'custom' -> use the caller-supplied from_date / to_date (either
+        bound may be None for half-open windows).
+
+    Per Jenna 2026-06-26: any bounded window must report point-in-time
+    activity within that window (summed from daily series), not lifetime
+    totals of assets posted in that window. So values truly compound
+    day-over-day for any cut the user picks.
     """
     w = (window or "ytd").strip().lower()
     today = datetime.utcnow().date()
+    if w == "custom":
+        lo = (from_date or "").strip() or None
+        hi = (to_date or "").strip() or None
+        if lo and hi:    label = f"{lo} \u2192 {hi}"
+        elif lo:         label = f"Since {lo}"
+        elif hi:         label = f"Through {hi}"
+        else:            label = "Custom"
+        return (lo, hi, label)
     if w in ("all", "campaign", "campaign_to_date"):
         return (None, None, "Campaign-to-date")
     if w in ("ytd", "year_to_date"):
@@ -279,39 +300,120 @@ def _resolve_assets_window(window: Optional[str]) -> tuple[Optional[str], Option
 def get_assets(title_slug: str, phase: Optional[str] = None,
                 asset_type: Optional[str] = None,
                 paid_or_organic: Optional[str] = None,
-                window: Optional[str] = None) -> dict:
-    """List campaign assets. Default window is YTD per Jenna 2026-06-17:
-    'this should be YTD unless otherwise specified for all assets'."""
-    where_clauses = [f"title_slug = '{title_slug}'"]
-    if phase:           where_clauses.append(f"phase_name = '{phase}'")
-    if asset_type:      where_clauses.append(f"asset_type = '{asset_type}'")
-    if paid_or_organic: where_clauses.append(f"paid_or_organic = '{paid_or_organic}'")
-    lo, hi, window_label = _resolve_assets_window(window)
-    if lo: where_clauses.append(f"posted_date >= toDate('{lo}')")
-    if hi: where_clauses.append(f"posted_date <= toDate('{hi}')")
+                window: Optional[str] = None,
+                from_date: Optional[str] = None,
+                to_date: Optional[str] = None) -> dict:
+    """List campaign assets, with views + engagement summed point-in-time
+    over the requested window (per Jenna 2026-06-26: any cut should show
+    where those values stood during the window, compounding day-over-day,
+    not the asset's lifetime totals).
+
+    The Campaign-to-date window uses lifetime totals from
+    `intent.campaign_assets`. Any bounded window (YTD, 14/30/90/365d,
+    Custom) sums `intent.asset_engagement_daily` over [lo, hi] and drops
+    assets with zero activity in the window.
+    """
+    where_clauses = [f"a.title_slug = '{title_slug}'"]
+    if phase:           where_clauses.append(f"a.phase_name = '{phase}'")
+    if asset_type:      where_clauses.append(f"a.asset_type = '{asset_type}'")
+    if paid_or_organic: where_clauses.append(f"a.paid_or_organic = '{paid_or_organic}'")
+    lo, hi, window_label = _resolve_assets_window(window, from_date, to_date)
     where_sql = " AND ".join(where_clauses)
+
+    bounded = bool(lo or hi)
+    daily_where = []
+    if lo: daily_where.append(f"date >= toDate('{lo}')")
+    if hi: daily_where.append(f"date <= toDate('{hi}')")
+    daily_where_sql = (" WHERE " + " AND ".join(daily_where)) if daily_where else ""
+
+    cols = ["asset_id", "phase_name", "funnel_stage", "action_label",
+             "asset_type", "channel", "paid_or_organic", "url",
+             "source", "note", "posted_date", "talent_tags",
+             "ext_view_count", "ext_engagement_count",
+             "lifetime_view_count", "lifetime_engagement_count",
+             "thumbnail_s3_url"]
 
     ch = _ch_client()
     if ch is not None:
         try:
-            rows = ch.query(
-                "SELECT asset_id, phase_name, funnel_stage, action_label, "
-                "asset_type, channel, paid_or_organic, url, source, note, "
-                "posted_date, talent_tags, ext_view_count, "
-                "ext_engagement_count, thumbnail_s3_url "
-                f"FROM intent.campaign_assets FINAL WHERE {where_sql} "
-                "ORDER BY posted_date, asset_id LIMIT 5000"
-            ).result_rows
-            cols = ["asset_id", "phase_name", "funnel_stage", "action_label",
-                     "asset_type", "channel", "paid_or_organic", "url",
-                     "source", "note", "posted_date", "talent_tags",
-                     "ext_view_count", "ext_engagement_count", "thumbnail_s3_url"]
+            if bounded:
+                # Sum daily series over [lo, hi]; drop assets with 0 views
+                # in the window so the cut behaves like a true filter.
+                sql = (
+                    "SELECT a.asset_id, a.phase_name, a.funnel_stage, "
+                    "a.action_label, a.asset_type, a.channel, "
+                    "a.paid_or_organic, a.url, a.source, a.note, "
+                    "a.posted_date, a.talent_tags, "
+                    "toUInt64(coalesce(d.views, 0)) AS ext_view_count, "
+                    "toUInt64(coalesce(d.engagement, 0)) AS ext_engagement_count, "
+                    "toUInt64(a.lifetime_view_count) AS lifetime_view_count, "
+                    "toUInt64(a.lifetime_engagement_count) AS lifetime_engagement_count, "
+                    "a.thumbnail_s3_url "
+                    "FROM ("
+                    "  SELECT asset_id, phase_name, funnel_stage, action_label, "
+                    "  asset_type, channel, paid_or_organic, url, source, note, "
+                    "  posted_date, talent_tags, "
+                    "  ext_view_count AS lifetime_view_count, "
+                    "  ext_engagement_count AS lifetime_engagement_count, "
+                    "  thumbnail_s3_url, title_slug "
+                    "  FROM intent.campaign_assets FINAL"
+                    ") a "
+                    "LEFT JOIN ("
+                    "  SELECT asset_id, "
+                    "         sum(views) AS views, "
+                    "         sum(likes + comments + shares) AS engagement "
+                    "  FROM intent.asset_engagement_daily"
+                    f"  {daily_where_sql} "
+                    "  GROUP BY asset_id"
+                    ") d ON d.asset_id = a.asset_id "
+                    f"WHERE {where_sql} "
+                    "AND toUInt64(coalesce(d.views, 0)) > 0 "
+                    "ORDER BY a.posted_date, a.asset_id LIMIT 5000"
+                )
+            else:
+                # Campaign-to-date: sum from daily (no date bound) so the
+                # numbers ladder up with any windowed view. Fall back to
+                # the canonical ext_view_count when an asset has no daily
+                # rows yet (which shouldn't happen after the daily-curve
+                # backfill, but keeps the endpoint robust).
+                sql = (
+                    "SELECT a.asset_id, a.phase_name, a.funnel_stage, "
+                    "a.action_label, a.asset_type, a.channel, "
+                    "a.paid_or_organic, a.url, a.source, a.note, "
+                    "a.posted_date, a.talent_tags, "
+                    "toUInt64(if(coalesce(d.views, 0) > 0, d.views, a.lifetime_view_count)) AS ext_view_count, "
+                    "toUInt64(if(coalesce(d.engagement, 0) > 0, d.engagement, a.lifetime_engagement_count)) AS ext_engagement_count, "
+                    "toUInt64(a.lifetime_view_count) AS lifetime_view_count, "
+                    "toUInt64(a.lifetime_engagement_count) AS lifetime_engagement_count, "
+                    "a.thumbnail_s3_url "
+                    "FROM ("
+                    "  SELECT asset_id, phase_name, funnel_stage, action_label, "
+                    "  asset_type, channel, paid_or_organic, url, source, note, "
+                    "  posted_date, talent_tags, "
+                    "  ext_view_count AS lifetime_view_count, "
+                    "  ext_engagement_count AS lifetime_engagement_count, "
+                    "  thumbnail_s3_url, title_slug "
+                    "  FROM intent.campaign_assets FINAL"
+                    ") a "
+                    "LEFT JOIN ("
+                    "  SELECT asset_id, "
+                    "         sum(views) AS views, "
+                    "         sum(likes + comments + shares) AS engagement "
+                    "  FROM intent.asset_engagement_daily "
+                    "  GROUP BY asset_id"
+                    ") d ON d.asset_id = a.asset_id "
+                    f"WHERE {where_sql} "
+                    "ORDER BY a.posted_date, a.asset_id LIMIT 5000"
+                )
+            rows = ch.query(sql).result_rows
             cards = _rows_to_dicts(rows, cols)
             for c in cards:
                 c["posted_date"] = _safe_iso_date(c.get("posted_date"))
             return {"success": True, "title_slug": title_slug, "cards": cards,
                     "total": len(cards), "source": "clickhouse",
-                    "window": (window or "ytd").lower(), "window_label": window_label}
+                    "window": (window or "ytd").lower(), "window_label": window_label,
+                    "window_from": lo, "window_to": hi,
+                    "windowed_totals": bounded}
         except Exception as e:
             logger.warning("Intent IQ: get_assets CH failed: %s", e)
 
@@ -323,9 +425,12 @@ def get_assets(title_slug: str, phase: Optional[str] = None,
     if asset_type:      cards = [a for a in cards if a.get("asset_type") == asset_type]
     if paid_or_organic: cards = [a for a in cards if a.get("paid_or_organic") == paid_or_organic]
     if lo:              cards = [a for a in cards if (a.get("posted_date") or "") >= lo]
+    if hi:              cards = [a for a in cards if (a.get("posted_date") or "") <= hi]
     return {"success": True, "title_slug": title_slug, "cards": cards,
             "total": len(cards), "source": "s3_snapshot", "fallback": True,
-            "window": (window or "ytd").lower(), "window_label": window_label}
+            "window": (window or "ytd").lower(), "window_label": window_label,
+            "window_from": lo, "window_to": hi,
+            "windowed_totals": False}
 
 
 def get_asset_timeseries(title_slug: str, asset_id: int,
