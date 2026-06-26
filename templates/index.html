@@ -24339,9 +24339,83 @@
                                    + '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.45rem;">Uses the same projection helper as the Assets cards, Performance Q1 rollup, and asset detail view \u2014 numbers ladder up.</div>';
                 }
 
-                // Row 1: donut (share) + funnel comparison (who-won) across full width.
-                // Row 2: cumulative line chart on its own full-width row.
-                var html = '<div style="display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 1rem; margin-bottom: 0.85rem; align-items: stretch;">';
+                // Build per-asset drop events (one dot per asset's posted_date,
+                // colored by paid/organic) so the chart shows WHEN each piece
+                // of content shipped. We pull from d._assets (cached by
+                // reloadIntentIQQ when the funnel cache is hydrated) and fall
+                // back to the cumulative-rows dataset (which only carries
+                // (date, paid_or_organic) but not per-asset labels). The dots
+                // stack vertically at each date so dense ship-days are
+                // visually obvious.
+                var assetsRaw = (d._assets && d._assets.length) ? d._assets : [];
+                var paidColorPal    = IIQ_QPALETTE.paid;
+                var organicColorPal = IIQ_QPALETTE.organic;
+                var chartEvents = [];
+                if (assetsRaw.length) {
+                    assetsRaw.forEach(function(a) {
+                        if (!a || !a.posted_date) return;
+                        var po = (a.paid_or_organic || 'unknown').toLowerCase();
+                        var col = (po === 'paid') ? paidColorPal
+                                : (po === 'organic' || po === 'natural') ? organicColorPal
+                                : '#94a3b8';
+                        chartEvents.push({
+                            x:     String(a.posted_date).slice(0, 10),
+                            color: col,
+                            label: (a.action_label || a.asset_type || 'Asset') + ' \u00b7 ' + (po || 'unknown')
+                        });
+                    });
+                } else {
+                    cum.forEach(function(r) {
+                        if (!r || !r.date) return;
+                        var po = (r.paid_or_organic || 'unknown').toLowerCase();
+                        var col = (po === 'paid') ? paidColorPal
+                                : (po === 'organic' || po === 'natural') ? organicColorPal
+                                : '#94a3b8';
+                        chartEvents.push({ x: r.date, color: col, label: po + ' content drop' });
+                    });
+                }
+                var eventLegend = [
+                    { color: paidColorPal,    label: 'Paid content drop' },
+                    { color: organicColorPal, label: 'Organic content drop' }
+                ];
+
+                // Stash the chart inputs so the pop-out modal can re-render
+                // the SAME chart at a larger size on click. The compact inline
+                // chart is small enough to live next to the donut + funnel
+                // cards; the modal version goes wide so the dots and date
+                // axis are readable.
+                var chartCaption = hasFunnelSeries
+                    ? 'Left axis: cumulative views (paid vs organic). Right axis: cumulative info-seekers &amp; ticketing visits. Dots along the x-axis = each paid/organic asset drop date.'
+                    : 'Dots along the x-axis = each paid/organic asset drop date.';
+
+                window.__intentIQQ2Chart = {
+                    series: series,
+                    rightSeries: rightSeries,
+                    events: chartEvents,
+                    eventLegend: eventLegend,
+                    hasFunnelSeries: hasFunnelSeries,
+                    caption: chartCaption
+                };
+
+                function _q2ChartHtml(width, height) {
+                    var chartOpts = {
+                        width:  width,
+                        height: height,
+                        events: chartEvents,
+                        eventLegend: eventLegend
+                    };
+                    if (hasFunnelSeries) {
+                        chartOpts.rightFormatter  = fmtCompact;
+                        chartOpts.rightLabelColor = 'rgba(251,191,36,0.85)';
+                        return iiqLineChartDual(series, rightSeries, chartOpts);
+                    }
+                    return iiqLineChart(series, { width: width, height: height });
+                }
+                window.__intentIQQ2ChartRender = _q2ChartHtml;
+
+                // Row 1: donut (share) + funnel comparison (who-won) + the
+                // cumulative chart card (click to pop out a larger view).
+                var html = '<div style="display: grid; grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1.4fr); gap: 1rem; margin-bottom: 0.85rem; align-items: stretch;">';
                 html +=   '<div class="iiq-card" style="padding:0.75rem 0.85rem; display:flex; flex-direction:column; align-items:center;">'
                     +       '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.35rem; align-self:stretch;">Share of total measured views</div>'
                     +       iiqDonut(donutSlices, { size: 120 })
@@ -24353,22 +24427,14 @@
                     +       '</div>'
                     +       funnelCardBody
                     +     '</div>';
-                html += '</div>';
-                var chartHtml = hasFunnelSeries
-                    ? iiqLineChartDual(series, rightSeries, {
-                        height: 200,
-                        rightFormatter: fmtCompact,
-                        rightLabelColor: 'rgba(251,191,36,0.85)'
-                      })
-                    : iiqLineChart(series, {height: 200});
-                var chartCaption = hasFunnelSeries
-                    ? 'Left axis: cumulative views (paid vs organic). Right axis: cumulative info-seekers &amp; ticketing visits derived from the same iiqAssetFunnelProjection() helper \u2014 ladders up to the Assets cards.'
-                    : '';
-                html += '<div class="iiq-card" style="padding:0.75rem 0.85rem; margin-bottom: 0.85rem;">'
-                    +       '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Cumulative view growth + downstream funnel</div>'
-                    +       chartHtml
-                    +       (chartCaption ? '<div style="font-size:0.65rem; color: var(--text-secondary); margin-top:0.35rem; line-height:1.35;">' + chartCaption + '</div>' : '')
+                html +=   '<div class="iiq-card" onclick="window.iiqQ2OpenChartModal()" title="Click to expand" style="padding:0.65rem 0.75rem; cursor:pointer; position:relative; transition: border-color 0.15s;" onmouseover="this.style.borderColor=\'rgba(34,211,238,0.45)\';" onmouseout="this.style.borderColor=\'\';">'
+                    +       '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; margin-bottom:0.3rem;">'
+                    +         '<div style="font-size:0.78rem; color: var(--text-secondary);">Cumulative view growth + downstream funnel</div>'
+                    +         '<div style="font-size:0.65rem; color: rgba(34,211,238,0.85); white-space:nowrap;">click to expand \u2197</div>'
+                    +       '</div>'
+                    +       _q2ChartHtml(560, 210)
                     +     '</div>';
+                html += '</div>';
                 if (best.length) {
                     var slug = window.__intentIQ && window.__intentIQ.currentSlug;
                     // Cache the row payloads + slug so the click handler can
@@ -24493,6 +24559,40 @@
             // views+engagement line chart fetched from
             // /api/intent/<slug>/asset/<id>/timeseries. Defaults to YTD per
             // the standing 'do YTD unless otherwise specified' rule.
+            // Pop-out modal for the Q2 cumulative chart. Re-renders the
+            // SAME series/events at a much larger size so the asset-drop
+            // dots and date axis are readable. Click-outside or the Close
+            // button dismisses. Idempotent: re-clicking just rebuilds.
+            window.iiqQ2OpenChartModal = function() {
+                var c = window.__intentIQQ2Chart;
+                if (!c || typeof window.__intentIQQ2ChartRender !== 'function') return;
+                var overlay = document.getElementById('iiqQ2ChartModal');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.id = 'iiqQ2ChartModal';
+                    overlay.style.cssText = 'position:fixed; inset:0; background: rgba(0,0,0,0.7); z-index:9999; display:flex; align-items:center; justify-content:center; padding:2rem;';
+                    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+                    document.body.appendChild(overlay);
+                } else {
+                    overlay.innerHTML = '';
+                    overlay.style.display = 'flex';
+                }
+                var panel = document.createElement('div');
+                panel.style.cssText = 'background: #0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:10px; max-width:1280px; width:100%; max-height:92vh; overflow:auto; padding:1.1rem 1.4rem; box-shadow: 0 24px 64px rgba(0,0,0,0.5);';
+                var chartBig = window.__intentIQQ2ChartRender(1200, 520);
+                panel.innerHTML =
+                    '<div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:0.85rem; gap:1rem;">'
+                  +   '<div>'
+                  +     '<h3 style="margin:0 0 0.2rem; color:#fff; font-size:1.05rem;">Cumulative view growth + downstream funnel</h3>'
+                  +     '<div style="font-size:0.74rem; color: var(--text-secondary);">Paid vs. organic content drops, plus the cumulative info-seek and ticketing funnel that ladders up to the Assets cards.</div>'
+                  +   '</div>'
+                  +   '<button type="button" onclick="document.getElementById(\'iiqQ2ChartModal\').remove()" style="background: rgba(255,255,255,0.06); color:#fff; border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:0.35rem 0.7rem; cursor:pointer; font-size:0.85rem;">Close \u2715</button>'
+                  + '</div>'
+                  + '<div class="iiq-card" style="padding:0.85rem 1rem;">' + chartBig + '</div>'
+                  + (c.caption ? '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.55rem; line-height:1.4;">' + c.caption + ' Hover a dot for the asset label.</div>' : '');
+                overlay.appendChild(panel);
+            };
+
             window.iiqShowAssetDetail = function(slug, idxOrAsset) {
                 if (!slug) return;
                 var asset = (typeof idxOrAsset === 'number')
@@ -39818,43 +39918,49 @@
 
             // Per-year top brand touchpoints — compact table where each
             // column is a year and each row is a brand property (top 5
-            // per year, padded with em-dash when shorter).
+            // per year, padded with em-dash when shorter). Wrapped in a
+            // <details> with the shared bpiq-methodology styling so it's
+            // collapsed by default — the matrix is dense, so making it
+            // opt-in keeps the YoY card scannable.
             var topPropsEl = document.getElementById('bpiqYearlyTopProps');
             var maxRows = Math.max.apply(null, years.map(function(y) { return (y.top_brand_properties || []).length; }).concat([0]));
             if (maxRows === 0) {
                 topPropsEl.innerHTML = '';
             } else {
                 topPropsEl.innerHTML =
-                      '<div style="font-size:11px; color:var(--text-secondary); margin-bottom:0.4rem;">'
-                    +   '<strong>Top brand touchpoints by year</strong> — ranked by projected reach within each calendar year.'
-                    + '</div>'
-                    + '<div style="overflow-x:auto;">'
-                    + '<table style="width:100%; border-collapse:collapse; font-size:12px;">'
-                    +   '<thead><tr style="border-bottom:2px solid var(--border-color);">'
-                    +     '<th style="padding:6px 8px; text-align:left; font-size:10px; color:var(--text-secondary); text-transform:uppercase;">Rank</th>'
-                    +     years.map(function(y) { return '<th style="padding:6px 8px; text-align:left;">' + y.year + '</th>'; }).join('')
-                    +   '</tr></thead>'
-                    + '<tbody>'
-                    + (function() {
-                        var rows = '';
-                        for (var i = 0; i < maxRows; i++) {
-                            rows += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">';
-                            rows += '<td style="padding:6px 8px; color:var(--text-secondary);">#' + (i + 1) + '</td>';
-                            years.forEach(function(y) {
-                                var p = (y.top_brand_properties || [])[i];
-                                if (!p) {
-                                    rows += '<td style="padding:6px 8px; color:var(--text-secondary); opacity:0.5;">—</td>';
-                                } else {
-                                    rows += '<td style="padding:6px 8px;"><div style="font-weight:600;">' + (p.common_name || '') + '</div>'
-                                          + '<div style="font-size:10px; color:var(--text-secondary);">' + _bpiqFmtNum(p.hits_projected || 0) + ' reach</div>'
-                                          + '</td>';
-                                }
-                            });
-                            rows += '</tr>';
-                        }
-                        return rows;
-                    })()
-                    + '</tbody></table></div>';
+                      '<details class="bpiq-methodology">'
+                    +   '<summary class="bpiq-method-summary">Top brand touchpoints by year</summary>'
+                    +   '<div class="bpiq-method-body">'
+                    +     '<div style="font-size:11px; color:var(--text-secondary); margin-bottom:0.4rem;">Ranked by projected reach within each calendar year.</div>'
+                    +     '<div style="overflow-x:auto;">'
+                    +     '<table style="width:100%; border-collapse:collapse; font-size:12px;">'
+                    +       '<thead><tr style="border-bottom:2px solid var(--border-color);">'
+                    +         '<th style="padding:6px 8px; text-align:left; font-size:10px; color:var(--text-secondary); text-transform:uppercase;">Rank</th>'
+                    +         years.map(function(y) { return '<th style="padding:6px 8px; text-align:left;">' + y.year + '</th>'; }).join('')
+                    +       '</tr></thead>'
+                    +     '<tbody>'
+                    +     (function() {
+                            var rows = '';
+                            for (var i = 0; i < maxRows; i++) {
+                                rows += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">';
+                                rows += '<td style="padding:6px 8px; color:var(--text-secondary);">#' + (i + 1) + '</td>';
+                                years.forEach(function(y) {
+                                    var p = (y.top_brand_properties || [])[i];
+                                    if (!p) {
+                                        rows += '<td style="padding:6px 8px; color:var(--text-secondary); opacity:0.5;">—</td>';
+                                    } else {
+                                        rows += '<td style="padding:6px 8px;"><div style="font-weight:600;">' + (p.common_name || '') + '</div>'
+                                              + '<div style="font-size:10px; color:var(--text-secondary);">' + _bpiqFmtNum(p.hits_projected || 0) + ' reach</div>'
+                                              + '</td>';
+                                    }
+                                });
+                                rows += '</tr>';
+                            }
+                            return rows;
+                        })()
+                    +     '</tbody></table></div>'
+                    +   '</div>'
+                    + '</details>';
             }
         }
 
