@@ -33426,7 +33426,21 @@ def export_brand_partnership_iq_deck():
     (image_url, category, display_name). The deck builder lives in
     `migration/bpiq_deck_builder.py`; this endpoint is a thin adapter.
     """
-    from migration.bpiq_deck_builder import build_deck, suggested_filename
+    # Import inside the handler so a missing dependency surfaces as a
+    # readable 503 instead of crashing app startup. (python-pptx +
+    # Pillow are pinned in requirements.txt, but this guards against
+    # build-time/runtime drift on Render.)
+    try:
+        from migration.bpiq_deck_builder import build_deck, suggested_filename
+    except ImportError as exc:
+        return jsonify({
+            'success': False,
+            'error': (
+                'Deck builder is not available on this server '
+                f'({exc.name or exc}). The python-pptx and Pillow '
+                'packages must be installed in the deployment.'
+            ),
+        }), 503
     try:
         payload = request.get_json(force=True, silent=True) or {}
         data = payload.get('data') or {}

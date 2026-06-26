@@ -24,3 +24,8 @@ google-api-python-client==2.118.0
 PyGithub==2.1.1
 yt-dlp>=2025.10.14
 requests>=2.32.0
+# BPIQ "Deck with Analysis" exporter - migration/bpiq_deck_builder.py
+# uses python-pptx for slide construction and Pillow for the
+# Crosswalk wordmark + cover-image center-crop.
+python-pptx>=1.0.0
+Pillow>=10.4.0
