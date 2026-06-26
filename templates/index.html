@@ -22850,12 +22850,6 @@
                 // used by Profile IQ and the rest of the dashboard.
                 var US_POP = 329900000;
                 var srcColor = function(s) { return '#22c55e'; };
-                var srcLabel = function(s) {
-                    if (!s) return '';
-                    if (s.indexOf('panel') === 0) return 'Panel-measured';
-                    if (s.indexOf('external') === 0) return 'External estimate';
-                    return s;
-                };
                 // Strip the "Fans of " prefix / "(Cast)" / "(last 3y)" suffix
                 // so the chip shows the actual subject ("Steph Curry",
                 // "Family Animated Films") instead of the source label
@@ -22905,7 +22899,6 @@
                     var barPct = (bp !== null && maxBp > 0) ? (bp / maxBp * 100) : 0;
                     var color = srcColor(c.source);
                     var descriptor = descriptorFromCard(c);
-                    var sourceTip = srcLabel(c.source);
                     var exp = iiqAudienceExposureProjection(c);
                     // Project absolute count of REACHED cohort members who
                     // then converted, so the tooltip carries a sentence-
@@ -22920,7 +22913,7 @@
                     var totalTip  = 'Average TOTAL impressions among reached cohort members (unique pieces \u00d7 frequency per piece). Counts re-watches and repeat exposure. Frequency per unique asset clusters at 1.8\u20132.6\u00d7 for paid-heavy campaigns of this scale.';
                     var infoTipAud = '% of REACHED cohort members who took an info-seeking action (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit) within 7 days of exposure. ~' + fmtCompact(infoSeekersAud) + ' people \u2014 same helper that powers the Assets cards.';
                     var tkTipAud   = '% of REACHED cohort members who visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days of exposure. ~' + fmtCompact(ticketVisitsAud) + ' people \u2014 same helper that powers the Assets cards.';
-                    return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';" title="' + escapeHtml(sourceTip) + (c.source ? ': ' + escapeHtml(c.source) : '') + '">'
+                    return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';">'
                         + '<div class="iiq-card-title">' + escapeHtml(c.display || c.subject_key) + '</div>'
                         + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '-') + '</div>'
                         + '<div style="margin-top:0.65rem;" title="Share of Americans estimated to overlap with both this cohort and the title\'s moviegoing audience. Projection = % × 329.9M US population.">'
