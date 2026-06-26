@@ -24012,17 +24012,39 @@
                     dateLabels += '<text x="' + dx + '" y="' + (H - 10) + '" font-size="10" fill="rgba(226,232,240,0.6)" text-anchor="middle">' + dLabel + '</text>';
                 }
 
+                // Optional cutoff: split each line into "solid before /
+                // faded-dashed after" so the chart can visually mark a
+                // point-in-time (e.g. the user's Campaign rewind date).
+                // Bridges the gap by prepending the last pre-cutoff point
+                // to the post-cutoff segment so the line stays continuous.
+                var cutoffTs = null;
+                if (opts.cutoff) {
+                    var coDate = new Date(opts.cutoff + 'T23:59:59Z');
+                    if (!isNaN(coDate.getTime())) cutoffTs = coDate.getTime();
+                }
                 function pathFor(s, syFn) {
                     var pts = (s.points || []).slice().sort(function(a,b){ return new Date(a.x) - new Date(b.x); });
                     if (!pts.length) return '';
-                    var d = pts.map(function(p, i){ return (i === 0 ? 'M' : 'L') + sx(p.x).toFixed(1) + ',' + syFn(p.y).toFixed(1); }).join(' ');
+                    function _d(pp) { return pp.map(function(p, i){ return (i === 0 ? 'M' : 'L') + sx(p.x).toFixed(1) + ',' + syFn(p.y).toFixed(1); }).join(' '); }
                     var out = '';
                     if (s.style === 'area') {
-                        var areaD = d + ' L ' + sx(pts[pts.length-1].x).toFixed(1) + ',' + (H - P.b) + ' L ' + sx(pts[0].x).toFixed(1) + ',' + (H - P.b) + ' Z';
+                        var areaD = _d(pts) + ' L ' + sx(pts[pts.length-1].x).toFixed(1) + ',' + (H - P.b) + ' L ' + sx(pts[0].x).toFixed(1) + ',' + (H - P.b) + ' Z';
                         out += '<path d="' + areaD + '" fill="' + s.color + '" fill-opacity="0.10" />';
                     }
                     var dashAttr = s.dash ? ' stroke-dasharray="4,3"' : '';
-                    out += '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + ' />';
+                    if (cutoffTs == null) {
+                        out += '<path d="' + _d(pts) + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + ' />';
+                        return out;
+                    }
+                    var solid = [], faded = [];
+                    pts.forEach(function(p) {
+                        var ts = new Date(p.x).getTime();
+                        if (ts <= cutoffTs) solid.push(p);
+                        else faded.push(p);
+                    });
+                    if (solid.length && faded.length) faded.unshift(solid[solid.length - 1]);
+                    if (solid.length) out += '<path d="' + _d(solid) + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + ' />';
+                    if (faded.length) out += '<path d="' + _d(faded) + '" fill="none" stroke="' + s.color + '" stroke-width="1.5" stroke-opacity="0.22" stroke-dasharray="3,3" stroke-linejoin="round" stroke-linecap="round" />';
                     return out;
                 }
 
@@ -24122,8 +24144,17 @@
                 var eventRow   = eventLegend
                     ? '<div style="' + rowStyle + ' margin-top:0.25rem;">' + eventLegend + '</div>'
                     : '';
+                var cutoffSvg = '';
+                if (cutoffTs != null) {
+                    var cxCut = sx(opts.cutoff);
+                    if (isFinite(cxCut) && cxCut >= P.l && cxCut <= (W - P.r)) {
+                        cutoffSvg = '<rect x="' + cxCut.toFixed(1) + '" y="' + P.t + '" width="' + (W - P.r - cxCut).toFixed(1) + '" height="' + (H - P.t - P.b) + '" fill="rgba(15,23,42,0.45)" />'
+                                  + '<line x1="' + cxCut.toFixed(1) + '" x2="' + cxCut.toFixed(1) + '" y1="' + P.t + '" y2="' + (H - P.b) + '" stroke="rgba(34,211,238,0.7)" stroke-width="1.2" stroke-dasharray="4,3" />'
+                                  + '<text x="' + cxCut.toFixed(1) + '" y="' + (P.t + 10) + '" font-size="9" fill="rgba(34,211,238,0.95)" text-anchor="middle">As of ' + escapeHtml(opts.cutoff) + '</text>';
+                    }
+                }
                 return '<div style="overflow-x:auto; overflow-y:hidden;"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; max-width:' + W + 'px; display:block;">'
-                     + grid + paths + eventsSvg + leftLabels + rightLabels + dateLabels + leftAxisLabel + rightAxisLabel
+                     + grid + cutoffSvg + paths + eventsSvg + leftLabels + rightLabels + dateLabels + leftAxisLabel + rightAxisLabel
                      + '</svg></div>'
                      + '<div style="margin-top:0.45rem;">' + seriesRowL + seriesRowR + eventRow + '</div>';
             }
@@ -24393,9 +24424,10 @@
                 Object.keys(byKey).forEach(function(k) {
                     sumByKey[k] = byKey[k].reduce(function(s, p) { return s + p.y; }, 0);
                 });
-                var donutSlices = Object.keys(sumByKey).map(function(k) {
-                    return { label: k.charAt(0).toUpperCase() + k.slice(1), value: sumByKey[k], color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown };
-                }).sort(function(a,b){ return b.value - a.value; });
+                // Note: donut slices are built later from PIT sums
+                // (sumByKeyPit). sumByKey is still computed above for
+                // ladder-up math but isn't read directly anymore.
+                void sumByKey;
                 // Convert daily drops to a DAILY (not cumulative) curve so
                 // the lines actually drop after theatrical and pick back up
                 // for the PVOD/SVOD window, instead of monotonically
@@ -24543,10 +24575,92 @@
                 var infoDailyPts = allDates.map(function(d, i) { return { x: d, y: infoWeighted[i] * infoScale }; });
                 var tkDailyPts   = allDates.map(function(d, i) { return { x: d, y: tkWeighted[i]   * tkScale   }; });
                 var hasFunnelSeries = (rawInfoSum + rawTkSum) > 0;
-                var rightSeries = hasFunnelSeries ? [
-                    { name: 'Info-seekers (daily)',     color: '#a5b4fc', points: infoDailyPts, total: targetInfo },
-                    { name: 'Ticketing visits (daily)', color: '#fbbf24', points: tkDailyPts,   total: targetTk   }
-                ] : [];
+
+                // ===== Per-key info/ticket daily curves for PIT splits =====
+                // The combined infoDailyPts / tkDailyPts above is what the
+                // chart renders. For the donut + Paid-vs-Organic funnel-
+                // comparison card, we need to be able to ask "what was
+                // paid's info-seekers TOTAL as of <date>?" -- which
+                // requires per-key curves that renormalize to each key's
+                // aggregate. Same pipeline as the combined version, just
+                // scoped to one key at a time.
+                var infoDailyByKey = {}, tkDailyByKey = {};
+                keys.forEach(function(k) {
+                    var infoPerDay = allDates.map(function(d) { return (dayMapByKey[k][d] || 0) * _rateFor(k, 'info'); });
+                    var tkPerDay   = allDates.map(function(d) { return (dayMapByKey[k][d] || 0) * _rateFor(k, 'tk'); });
+                    var rolledI = _rolling(infoPerDay, ROLL_WIN_FUNNEL);
+                    var rolledT = _rolling(tkPerDay,   ROLL_WIN_FUNNEL);
+                    var iW = [], tW = [], iSum = 0, tSum = 0;
+                    allDates.forEach(function(d, i) {
+                        var mult = iiqCalendarFunnelMultiplier(d);
+                        var iV = rolledI[i] * mult.info_mult;
+                        var tV = rolledT[i] * mult.ticket_mult;
+                        iW.push(iV); tW.push(tV);
+                        iSum += iV; tSum += tV;
+                    });
+                    var kBucket = (k === 'paid') ? 'paid' : (k === 'organic' || k === 'natural') ? 'organic' : null;
+                    var targetI = kBucket ? (agg[kBucket].info_seekers  || 0) : 0;
+                    var targetT = kBucket ? (agg[kBucket].ticket_visits || 0) : 0;
+                    var sI = iSum > 0 ? (targetI / iSum) : 0;
+                    var sT = tSum > 0 ? (targetT / tSum) : 0;
+                    var iMap = {}, tMap = {};
+                    allDates.forEach(function(d, i) {
+                        iMap[d] = iW[i] * sI;
+                        tMap[d] = tW[i] * sT;
+                    });
+                    infoDailyByKey[k] = iMap;
+                    tkDailyByKey[k]   = tMap;
+                });
+
+                // ===== Campaign rewind state (point-in-time cursor) =====
+                // The user can scrub through campaign dates to see how
+                // views, downstream funnel, donut share, and the top-10
+                // assets list would have looked at any moment leading up
+                // to (and after) opening weekend. State is slug-scoped so
+                // toggling between titles doesn't carry the cursor over.
+                var maxDate = allDates[allDates.length - 1];
+                var minDate = allDates[0];
+                var _q2Slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
+                var _q2AsOfKey = '_iiqQ2AsOf_' + _q2Slug;
+                var asOf = window[_q2AsOfKey] || maxDate;
+                if (asOf < minDate) asOf = minDate;
+                if (asOf > maxDate) asOf = maxDate;
+                var asOfTs = new Date(asOf + 'T23:59:59Z').getTime();
+
+                // ===== PIT aggregates: sum daily curves up to asOf =====
+                var sumByKeyPit = {};
+                keys.forEach(function(k) {
+                    var s = 0;
+                    allDates.forEach(function(d) {
+                        if (d <= asOf) s += dailySmoothByKey[k][d] || 0;
+                    });
+                    sumByKeyPit[k] = s;
+                });
+                var aggPit = {
+                    paid:    { views: 0, info_seekers: 0, ticket_visits: 0 },
+                    organic: { views: 0, info_seekers: 0, ticket_visits: 0 }
+                };
+                keys.forEach(function(k) {
+                    var bucket = (k === 'paid') ? 'paid' : (k === 'organic' || k === 'natural') ? 'organic' : null;
+                    if (!bucket) return;
+                    allDates.forEach(function(d) {
+                        if (d > asOf) return;
+                        aggPit[bucket].views         += dailySmoothByKey[k][d] || 0;
+                        aggPit[bucket].info_seekers  += infoDailyByKey[k][d]   || 0;
+                        aggPit[bucket].ticket_visits += tkDailyByKey[k][d]     || 0;
+                    });
+                });
+
+                // Window handler -- redraws the whole Q2 view at a new
+                // asOf without re-fetching from the API.
+                window.iiqQ2SetAsOf = function(v) {
+                    if (!v) return;
+                    var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
+                    window['_iiqQ2AsOf_' + slug] = v;
+                    var cached = IIQ_QCACHE.q2;
+                    var body = document.getElementById('iiqQBody');
+                    if (body && cached) body.innerHTML = iiqRenderQ2(cached);
+                };
                 var paidColor    = IIQ_QPALETTE.paid;
                 var organicColor = IIQ_QPALETTE.organic;
                 function _q2WhoWonRow(label, paidVal, organicVal) {
@@ -24570,13 +24684,13 @@
                         +   '</div>'
                         + '</div>';
                 }
-                var hasFunnelData = (agg.paid.info_seekers + agg.organic.info_seekers + agg.paid.ticket_visits + agg.organic.ticket_visits) > 0;
+                var hasFunnelData = (aggPit.paid.info_seekers + aggPit.organic.info_seekers + aggPit.paid.ticket_visits + aggPit.organic.ticket_visits) > 0;
                 var funnelCardBody;
                 if (!hasFunnelData) {
-                    funnelCardBody = '<div class="iiq-empty">Loading asset-level projections\u2026</div>';
+                    funnelCardBody = '<div class="iiq-empty">No downstream funnel activity as of this date yet.</div>';
                 } else {
-                    funnelCardBody = _q2WhoWonRow('Info-seekers', agg.paid.info_seekers, agg.organic.info_seekers)
-                                   + _q2WhoWonRow('Ticketing visits', agg.paid.ticket_visits, agg.organic.ticket_visits)
+                    funnelCardBody = _q2WhoWonRow('Info-seekers', aggPit.paid.info_seekers, aggPit.organic.info_seekers)
+                                   + _q2WhoWonRow('Ticketing visits', aggPit.paid.ticket_visits, aggPit.organic.ticket_visits)
                                    + '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.45rem;">Uses the same projection helper as the Assets cards, Performance Q1 rollup, and asset detail view \u2014 numbers ladder up.</div>';
                 }
 
@@ -24644,7 +24758,8 @@
                         width:  width,
                         height: height,
                         events: chartEvents,
-                        eventLegend: eventLegend
+                        eventLegend: eventLegend,
+                        cutoff: (asOf < maxDate) ? asOf : null
                     };
                     if (hasFunnelSeries) {
                         chartOpts.rightFormatter  = fmtCompact;
@@ -24655,17 +24770,75 @@
                 }
                 window.__intentIQQ2ChartRender = _q2ChartHtml;
 
+                // Donut + chart-card heading reflect PIT cumulative.
+                var donutSlices = Object.keys(sumByKeyPit).map(function(k) {
+                    return { label: k.charAt(0).toUpperCase() + k.slice(1), value: sumByKeyPit[k], color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown };
+                }).filter(function(s){ return s.value > 0; }).sort(function(a,b){ return b.value - a.value; });
+
+                // ===== Campaign rewind bar =====
+                // Date input + preset campaign-moment buttons. Presets are
+                // derived from IIQ_CAMPAIGN_DATES (PRESALE = tickets-on-
+                // sale, OPENING = opening day). Each preset is clamped to
+                // the available data range so the user can never pick a
+                // date outside the campaign's actual coverage.
+                var DAY_MS_RW = 86400000;
+                function _clampDate(s) {
+                    if (s < minDate) return minDate;
+                    if (s > maxDate) return maxDate;
+                    return s;
+                }
+                function _addDays(iso, n) {
+                    var t = new Date(iso + 'T12:00:00Z').getTime() + n * DAY_MS_RW;
+                    return new Date(t).toISOString().slice(0, 10);
+                }
+                var presaleDate = IIQ_CAMPAIGN_DATES.PRESALE;
+                var openingDate = IIQ_CAMPAIGN_DATES.OPENING;
+                var presets = [
+                    { label: '1 mo before tickets', date: _clampDate(_addDays(presaleDate, -30)) },
+                    { label: '2 wks before tickets', date: _clampDate(_addDays(presaleDate, -14)) },
+                    { label: 'Tickets on sale',     date: _clampDate(presaleDate) },
+                    { label: 'Opening day',         date: _clampDate(openingDate) },
+                    { label: 'All data',            date: maxDate }
+                ];
+                function _presetBtn(p) {
+                    var active = (p.date === asOf);
+                    var bg = active ? 'rgba(34,211,238,0.18)' : 'rgba(255,255,255,0.04)';
+                    var bd = active ? '1px solid rgba(34,211,238,0.55)' : '1px solid rgba(255,255,255,0.08)';
+                    var col = active ? '#22d3ee' : '#cbd5e1';
+                    return '<button type="button" onclick="window.iiqQ2SetAsOf(\'' + p.date + '\')" title="' + escapeHtml(p.date) + '" style="background:' + bg + '; border:' + bd + '; color:' + col + '; font-size:0.72rem; padding:0.25rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap;">' + escapeHtml(p.label) + '</button>';
+                }
+                var owTs = new Date(openingDate + 'T12:00:00Z').getTime();
+                var daysFromOW = Math.round((new Date(asOf + 'T12:00:00Z').getTime() - owTs) / DAY_MS_RW);
+                var contextLbl;
+                if (daysFromOW < 0)      contextLbl = Math.abs(daysFromOW) + ' day' + (Math.abs(daysFromOW) === 1 ? '' : 's') + ' BEFORE opening';
+                else if (daysFromOW === 0) contextLbl = 'opening day';
+                else                       contextLbl = daysFromOW + ' day' + (daysFromOW === 1 ? '' : 's') + ' AFTER opening';
+                var html = '';
+                html += '<div class="iiq-card" style="padding:0.65rem 0.85rem; margin-bottom:0.75rem;">'
+                    +     '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.55rem 0.85rem; margin-bottom:0.4rem;">'
+                    +       '<div style="font-size:0.85rem; color:#e2e8f0; font-weight:600;">Campaign rewind</div>'
+                    +       '<div style="font-size:0.72rem; color: var(--text-secondary); flex:1; min-width:200px;">Scrub through the campaign to see how views, downstream funnel, and the top assets looked at any point in time.</div>'
+                    +       '<input type="date" value="' + asOf + '" min="' + minDate + '" max="' + maxDate + '" oninput="window.iiqQ2SetAsOf(this.value)" style="background:rgba(255,255,255,0.06); color:#e2e8f0; border:1px solid rgba(255,255,255,0.1); border-radius:4px; padding:0.3rem 0.45rem; font-size:0.78rem; color-scheme: dark;" />'
+                    +     '</div>'
+                    +     '<div style="display:flex; flex-wrap:wrap; gap:0.35rem;">' + presets.map(_presetBtn).join('') + '</div>'
+                    +     '<div style="margin-top:0.5rem; font-size:0.72rem; color: var(--text-secondary);">Showing data through <span style="color:#22d3ee; font-weight:600;">' + escapeHtml(asOf) + '</span> &middot; <span style="color:#e2e8f0;">' + contextLbl + '</span></div>'
+                    +   '</div>';
+
                 // Row 1: donut (share) + funnel comparison (who-won) + the
                 // cumulative chart card (click to pop out a larger view).
-                var html = '<div style="display: grid; grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1.4fr); gap: 1rem; margin-bottom: 0.85rem; align-items: stretch;">';
+                var asOfChip = '<span style="font-size:0.65rem; color:#22d3ee; background:rgba(34,211,238,0.12); border:1px solid rgba(34,211,238,0.35); padding:0.1rem 0.4rem; border-radius:10px; white-space:nowrap;">as of ' + escapeHtml(asOf) + '</span>';
+                html += '<div style="display: grid; grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1.4fr); gap: 1rem; margin-bottom: 0.85rem; align-items: stretch;">';
                 html +=   '<div class="iiq-card" style="padding:0.75rem 0.85rem; display:flex; flex-direction:column; align-items:center;">'
-                    +       '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.35rem; align-self:stretch;">Share of total measured views</div>'
-                    +       iiqDonut(donutSlices, { size: 120 })
+                    +       '<div style="display:flex; justify-content:space-between; align-items:center; align-self:stretch; gap:0.4rem; margin-bottom:0.35rem;">'
+                    +         '<div style="font-size:0.78rem; color: var(--text-secondary);">Share of total measured views</div>'
+                    +         asOfChip
+                    +       '</div>'
+                    +       (donutSlices.length ? iiqDonut(donutSlices, { size: 120 }) : '<div class="iiq-empty">No views yet as of this date.</div>')
                     +     '</div>';
                 html +=   '<div class="iiq-card" style="padding:0.75rem 0.95rem;">'
                     +       '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.35rem; gap:0.5rem;">'
                     +         '<div style="font-size:0.78rem; color: var(--text-secondary);">Paid vs. Organic: who drove more downstream actions?</div>'
-                    +         '<div style="font-size:0.68rem; color: var(--text-secondary); white-space:nowrap;">view-weighted (YTD)</div>'
+                    +         asOfChip
                     +       '</div>'
                     +       funnelCardBody
                     +     '</div>';
@@ -24698,8 +24871,46 @@
                     // in place (no full Q2 re-render needed).
                     window._iiqQ2AssetsBarMetric = 'views';
 
+                    // Point-in-time decay model for per-asset metrics.
+                    // YouTube / social videos accumulate the bulk of their
+                    // views in the first ~7-14 days after posting. We use
+                    // an exponential ramp (1 - exp(-days/5)) so an asset
+                    // posted today reads ~0% of lifetime views, ~63% by
+                    // day 5, ~95% by day 15, ~99% by day 25.
+                    function _assetPitFactor(b, asOfStr) {
+                        if (!b || !b.posted_date) return 1;
+                        var postT = new Date(String(b.posted_date).slice(0, 10) + 'T12:00:00Z').getTime();
+                        var asT   = new Date(asOfStr + 'T23:59:59Z').getTime();
+                        var days  = (asT - postT) / 86400000;
+                        if (days < 0)   return 0;
+                        if (days > 60)  return 1;
+                        return 1 - Math.exp(-days / 5);
+                    }
                     window._iiqRenderQ2AssetTable = function() {
-                        var rowsAll = window.__intentIQQ2Best || [];
+                        var asOfLocal = asOf;
+                        var rowsRaw = window.__intentIQQ2Best || [];
+                        // PIT: filter to assets posted on/before asOf and
+                        // attach scaled views/eng on a shallow copy so we
+                        // don't mutate the cached payload.
+                        var rowsAll = rowsRaw
+                            .filter(function(b) {
+                                if (!b.posted_date) return true;
+                                return String(b.posted_date).slice(0, 10) <= asOfLocal;
+                            })
+                            .map(function(b) {
+                                var f = _assetPitFactor(b, asOfLocal);
+                                return {
+                                    src:               b,
+                                    asset_id:          b.asset_id,
+                                    asset_type:        b.asset_type,
+                                    action_label:      b.action_label,
+                                    paid_or_organic:   b.paid_or_organic,
+                                    posted_date:       b.posted_date,
+                                    views_total:       (Number(b.views_total)      || 0) * f,
+                                    engagement_total:  (Number(b.engagement_total) || 0) * f,
+                                    _pit_factor:       f
+                                };
+                            });
                         var slugLocal = window.__intentIQQ2Slug || '';
                         var s = window._iiqQ2AssetsSort;
                         var barMetric = window._iiqQ2AssetsBarMetric || 'views';
@@ -24707,12 +24918,22 @@
                             if (k === 'asset')  return String(b.action_label || b.asset_type || ('Asset #' + b.asset_id)).toLowerCase();
                             if (k === 'views')  return Number(b.views_total)      || 0;
                             if (k === 'eng')    return Number(b.engagement_total) || 0;
-                            if (k === 'info')   return iiqAssetFunnelProjection(b).info_pct;
-                            if (k === 'ticket') return iiqAssetFunnelProjection(b).ticket_pct;
+                            if (k === 'info')   return iiqAssetFunnelProjection(b.src || b).info_pct;
+                            if (k === 'ticket') return iiqAssetFunnelProjection(b.src || b).ticket_pct;
                             return 0;
                         }
                         function _barVal(b) { return _val(b, barMetric); }
-                        var indexed = rowsAll.map(function(b, i){ return { b: b, i: i }; });
+                        // For the click-to-detail handler we need the
+                        // index into the ORIGINAL (raw) cache so the
+                        // detail modal looks up the right asset. We
+                        // resolve by asset_id since filtering changed
+                        // positions.
+                        var origIndexById = {};
+                        rowsRaw.forEach(function(rb, i) { if (rb && rb.asset_id != null) origIndexById[String(rb.asset_id)] = i; });
+                        if (!rowsAll.length) {
+                            return '<div class="iiq-empty">No paid or organic assets posted on or before ' + escapeHtml(asOfLocal) + ' yet.</div>';
+                        }
+                        var indexed = rowsAll.map(function(b, i){ return { b: b, i: (origIndexById[String(b.asset_id)] != null ? origIndexById[String(b.asset_id)] : i) }; });
                         var sign = (s.dir === 'asc') ? 1 : -1;
                         indexed.sort(function(a, b) {
                             var av = _val(a.b, s.key), bv = _val(b.b, s.key);
@@ -24749,12 +24970,13 @@
                         var rowsHtml = top.map(function(o) {
                             var b = o.b;
                             var origIdx = o.i;
+                            var src = b.src || b;
                             var label = (b.action_label || b.asset_type || 'Asset #' + b.asset_id);
                             var defaultColor = IIQ_QPALETTE[b.paid_or_organic] || IIQ_QPALETTE.unknown;
                             var barColor = barColColor || defaultColor;
                             var barValue = _barVal(b);
                             var pct = maxBar > 0 ? Math.min(100, barValue / maxBar * 100) : 0;
-                            var proj  = iiqAssetFunnelProjection(b);
+                            var proj  = iiqAssetFunnelProjection(src);
                             var onclick = 'window.iiqShowAssetDetail(\'' + escapeHtml(slugLocal) + '\', ' + origIdx + ')';
                             return '<div onclick="' + onclick + '" style="display:grid; grid-template-columns: 240px 1fr 80px 80px 70px 70px; gap:0.6rem; align-items:center; padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; transition: background 0.15s;" onmouseenter="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseleave="this.style.background=\'transparent\'">'
                                 +   '<div style="font-size:0.78rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</div>'
@@ -24785,9 +25007,12 @@
                     };
 
                     html += '<div class="iiq-card" style="padding:0.85rem;">';
-                    html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.45rem;">';
-                    html +=     '<div style="font-size:0.78rem; color: var(--text-secondary);">Top 10 in-flight assets (' + escapeHtml(bestLabel) + ')</div>';
-                    html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">click any row for daily performance \u00b7 click a column header to sort & update bars</div>';
+                    html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.6rem; margin-bottom:0.45rem;">';
+                    html +=     '<div style="display:flex; align-items:baseline; gap:0.5rem;">';
+                    html +=       '<div style="font-size:0.78rem; color: var(--text-secondary);">Top 10 in-flight assets</div>';
+                    html +=       asOfChip;
+                    html +=     '</div>';
+                    html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">views / eng reflect post-decay accumulation as of this date \u00b7 click any row for the full daily curve</div>';
                     html +=   '</div>';
                     html +=   '<div id="iiqQ2AssetTable">' + window._iiqRenderQ2AssetTable() + '</div>';
                     html += '</div>';
@@ -25810,6 +26035,13 @@
                 IIQ_QCACHE = {}; // reset cache when title changes
                 window._iiqQ6Selection = null; // reset Q6 cohort picks for new title
                 window._iiqQ6Expanded  = null; // reset Q6 category expand state for new title
+                // Clear Q2 campaign-rewind cursors (slug-scoped). When the
+                // user switches titles the rewind defaults back to "all
+                // data" for the new title rather than carrying a stale
+                // date that may sit outside the new title's coverage.
+                Object.keys(window).forEach(function(k) {
+                    if (k.indexOf('_iiqQ2AsOf_') === 0) try { delete window[k]; } catch (e) { window[k] = undefined; }
+                });
                 if (window.__intentIQAssetCache) {
                     delete window.__intentIQAssetCache[slug]; // force re-fetch on title switch
                 }
