@@ -22818,7 +22818,7 @@
                     var descriptor = descriptorFromCard(c);
                     var sourceTip = srcLabel(c.source);
                     var exp = iiqAudienceExposureProjection(c);
-                    var reachTip  = 'Projected % of this cohort who saw ANY piece of campaign content (any asset, any channel) over the campaign-to-date window. Calibrated from tentpole family-animation reach benchmarks; tilted up for cohorts with higher overlap with the title\'s audience profile.';
+                    var reachTip  = 'Projected % of this cohort who saw ANY piece of campaign content (any asset, any channel) over the campaign-to-date window.';
                     var uniqueTip = 'Projected average number of UNIQUE campaign assets reached cohort members encountered (deduped across views). Wider unique counts for talent / fan cohorts (organic share gravity exposes them to more varied content) than for paid-targeted demo cohorts (which see a narrower paid rotation).';
                     var totalTip  = 'Projected average TOTAL impressions among reached cohort members (unique pieces \u00d7 frequency per piece). Counts re-watches and repeat exposure. Frequency per unique asset clusters at 1.8\u20132.6\u00d7 for paid-heavy campaigns of this scale.';
                     return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';" title="' + escapeHtml(sourceTip) + (c.source ? ': ' + escapeHtml(c.source) : '') + '">'
