@@ -24782,6 +24782,17 @@
                 var infoDailyPts = allDates.map(function(d, i) { return { x: d, y: infoWeighted[i] * infoScale }; });
                 var tkDailyPts   = allDates.map(function(d, i) { return { x: d, y: tkWeighted[i]   * tkScale   }; });
                 var hasFunnelSeries = (rawInfoSum + rawTkSum) > 0;
+                // Right-axis series for iiqLineChartDual. These two
+                // lines render on the right Y-axis (downstream funnel
+                // counts) while the paid/organic view-series on the
+                // left axis dominate visually because they're ~20x
+                // larger. Indigo + amber match the info-seek / ticketing
+                // chip colors used on the Assets cards and Q1 rollup so
+                // the eye can ladder up between views.
+                var rightSeries = hasFunnelSeries ? [
+                    { name: 'Info-seekers (daily)',    color: '#a5b4fc', points: infoDailyPts, total: targetInfo },
+                    { name: 'Ticketing visits (daily)', color: '#fbbf24', points: tkDailyPts,   total: targetTk   }
+                ] : [];
 
                 // ===== Per-key info/ticket daily curves for PIT splits =====
                 // The combined infoDailyPts / tkDailyPts above is what the
