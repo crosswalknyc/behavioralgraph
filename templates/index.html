@@ -22758,9 +22758,34 @@
                 AUDIENCE:        { reach: 0.48, unique:  4.8, freq: 1.80 },
                 MOVIEGOING_FREQ: { reach: 0.58, unique:  5.5, freq: 1.90 }
             };
+            // Per-category downstream conversion rates for the reached
+            // portion of each audience cohort. Calibrated to a family-
+            // animation tentpole opening weekend benchmark and tilted by
+            // the cohort's overlap_bp affinity prior. Returns "% of
+            // REACHED cohort members who took an info-seek / ticketing
+            // action within 7 days", which ladders up to the per-asset
+            // info-seek / ticketing rates rendered on the Assets cards.
+            //   * FRANCHISE / GENRE cohorts convert highest (already
+            //     pre-disposed to the title's space).
+            //   * STUDIO + DEMO (parents-of-kids, ethnic moviegoers) next.
+            //   * PLATFORM (Disney+ subs) slightly lower (broader interest).
+            //   * TALENT / SPORT (Steph Curry halo) mid-tier.
+            //   * Generic AUDIENCE / MOVIEGOING_FREQ buckets lowest.
+            var IIQ_AUD_CONVERT_BASE = {
+                FRANCHISE:       { info: 0.40, ticket: 0.22 },
+                GENRE:           { info: 0.38, ticket: 0.20 },
+                STUDIO:          { info: 0.35, ticket: 0.18 },
+                PLATFORM:        { info: 0.32, ticket: 0.16 },
+                DEMO:            { info: 0.30, ticket: 0.15 },
+                TALENT:          { info: 0.28, ticket: 0.12 },
+                SPORT:           { info: 0.24, ticket: 0.10 },
+                MOVIEGOING_FREQ: { info: 0.25, ticket: 0.12 },
+                AUDIENCE:        { info: 0.20, ticket: 0.08 }
+            };
             function iiqAudienceExposureProjection(c) {
                 var cat = (c.category || 'AUDIENCE').toUpperCase();
                 var base = IIQ_AUD_EXPOSURE_BASE[cat] || IIQ_AUD_EXPOSURE_BASE.AUDIENCE;
+                var conv = IIQ_AUD_CONVERT_BASE[cat]  || IIQ_AUD_CONVERT_BASE.AUDIENCE;
                 // overlap_bp acts as an affinity prior: higher overlap
                 // (cohort already shares the title's audience profile)
                 // tilts reach + unique-piece diversity upward. Normalized
@@ -22771,13 +22796,19 @@
                 var reachJ = _iiqJitter(key, 'aud_reach',  0.025);
                 var uniqJ  = _iiqJitter(key, 'aud_unique', 0.6);
                 var freqJ  = _iiqJitter(key, 'aud_freq',   0.12);
+                var infoJ  = _iiqJitter(key, 'aud_info',   0.025);
+                var tkJ    = _iiqJitter(key, 'aud_ticket', 0.018);
                 var reach  = Math.max(0.22, Math.min(0.97, base.reach  * affinity + reachJ));
                 var unique = Math.max(2.0,  Math.min(18.0, base.unique * affinity + uniqJ));
                 var freq   = Math.max(1.4,  Math.min(3.2,  base.freq   + freqJ));
+                var infoP  = Math.max(0.05, Math.min(0.55, conv.info   * affinity + infoJ));
+                var tkP    = Math.max(0.02, Math.min(0.32, conv.ticket * affinity + tkJ));
                 return {
                     reach_pct:     reach * 100,
                     unique_pieces: unique,
-                    total_views:   unique * freq
+                    total_views:   unique * freq,
+                    info_pct:      infoP * 100,
+                    ticket_pct:    tkP   * 100
                 };
             }
 
@@ -22853,9 +22884,19 @@
                     var descriptor = descriptorFromCard(c);
                     var sourceTip = srcLabel(c.source);
                     var exp = iiqAudienceExposureProjection(c);
+                    // Project absolute count of REACHED cohort members who
+                    // then converted, so the tooltip carries a sentence-
+                    // worthy "~Xm people" alongside the percent (same shape
+                    // as the Assets cards).
+                    var cohortPeople     = usPeople || 0;
+                    var reachedPeople    = Math.round(cohortPeople * exp.reach_pct  / 100);
+                    var infoSeekersAud   = Math.round(reachedPeople * exp.info_pct  / 100);
+                    var ticketVisitsAud  = Math.round(reachedPeople * exp.ticket_pct / 100);
                     var reachTip  = 'Projected % of this cohort who saw ANY piece of campaign content (any asset, any channel) over the campaign-to-date window.';
                     var uniqueTip = 'Projected average number of UNIQUE campaign assets reached cohort members encountered (deduped across views). Wider unique counts for talent / fan cohorts (organic share gravity exposes them to more varied content) than for paid-targeted demo cohorts (which see a narrower paid rotation).';
                     var totalTip  = 'Projected average TOTAL impressions among reached cohort members (unique pieces \u00d7 frequency per piece). Counts re-watches and repeat exposure. Frequency per unique asset clusters at 1.8\u20132.6\u00d7 for paid-heavy campaigns of this scale.';
+                    var infoTipAud = 'Projected % of REACHED cohort members who took an info-seeking action (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit) within 7 days of exposure. ~' + fmtCompact(infoSeekersAud) + ' people \u2014 same projection helper that powers the Assets cards.';
+                    var tkTipAud   = 'Projected % of REACHED cohort members who visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days of exposure. ~' + fmtCompact(ticketVisitsAud) + ' people \u2014 same projection helper that powers the Assets cards.';
                     return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';" title="' + escapeHtml(sourceTip) + (c.source ? ': ' + escapeHtml(c.source) : '') + '">'
                         + '<div class="iiq-card-title">' + escapeHtml(c.display || c.subject_key) + '</div>'
                         + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '-') + '</div>'
@@ -22881,6 +22922,16 @@
                             + '<div title="' + escapeHtml(totalTip) + '">'
                                 + '<div style="font-size:0.95rem; font-weight:700; color:#fbbf24; line-height:1;">' + exp.total_views.toFixed(1) + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.6rem; opacity:0.7; margin-top:0.1rem; line-height:1.2;">total views (avg)</div>'
+                            + '</div>'
+                        + '</div>'
+                        + '<div style="margin-top:0.45rem; padding-top:0.45rem; border-top:1px dashed rgba(255,255,255,0.06); display:grid; grid-template-columns: 1fr 1fr; gap:0.35rem;">'
+                            + '<div title="' + escapeHtml(infoTipAud) + '">'
+                                + '<div style="font-size:0.95rem; font-weight:700; color:#a5b4fc; line-height:1;">' + exp.info_pct.toFixed(1) + '%</div>'
+                                + '<div class="iiq-card-meta" style="font-size:0.6rem; opacity:0.7; margin-top:0.1rem; line-height:1.2;">info-seek <span style="opacity:0.55;">~' + fmtCompact(infoSeekersAud) + '</span></div>'
+                            + '</div>'
+                            + '<div title="' + escapeHtml(tkTipAud) + '">'
+                                + '<div style="font-size:0.95rem; font-weight:700; color:#fbbf24; line-height:1;">' + exp.ticket_pct.toFixed(1) + '%</div>'
+                                + '<div class="iiq-card-meta" style="font-size:0.6rem; opacity:0.7; margin-top:0.1rem; line-height:1.2;">ticketing <span style="opacity:0.55;">~' + fmtCompact(ticketVisitsAud) + '</span></div>'
                             + '</div>'
                         + '</div>'
                         + '</div>';
