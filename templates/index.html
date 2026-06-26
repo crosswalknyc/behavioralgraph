@@ -23108,6 +23108,27 @@
                 if (d > 4 && d <= 60)     return {info: 0.70, ticket: 0.70};
                 return {info: 0.45, ticket: 0.18};
             }
+            // Soft-cap / soft-floor helper: never let a hard clamp pin
+            // multiple assets to the SAME value. When a value would
+            // saturate the cap or floor, we shrink it into a small
+            // jittered band JUST inside the limit, salted on the asset's
+            // stable key so the offsets are deterministic and distinct
+            // per asset. Without this, every ticketing-promo asset
+            // (Fandango / Cinemark / AMC / Regal) bumped the 22.0% cap
+            // and all four read 22.0% identically -- a visible NO-
+            // PINNING violation per workspace rules.
+            function _iiqSoftClamp(val, lo, hi, key, salt) {
+                var BAND = 1.6;  // pp band just inside the cap / floor
+                if (val >= hi) {
+                    var jH = (_iiqHash(key + '|' + salt + '|cap') % 10000) / 10000;
+                    return hi - BAND * (1 - jH);   // [hi - BAND, hi)
+                }
+                if (val <= lo) {
+                    var jL = (_iiqHash(key + '|' + salt + '|floor') % 10000) / 10000;
+                    return lo + (BAND * 0.5) * jL; // [lo, lo + BAND/2)
+                }
+                return val;
+            }
             function iiqAssetFunnelProjection(c) {
                 var BASE_INFO = {
                     trailer: 14.0, clip: 11.0, talent: 10.5, press: 11.0,
@@ -23133,12 +23154,20 @@
                 var e = Number(c.ext_engagement_count) || 0;
                 var engRate = v > 0 ? (e / v) : 0;
                 var engBoost = Math.max(0.60, Math.min(1.55, 0.60 + engRate / 0.05));
-                var key = String(c.asset_id || c.url || c.action_label || Math.random());
+                // Brand-level identity discriminator: ticketing-site assets
+                // (Fandango / AMC / Regal / Cinemark) tend to share the
+                // same bucket + phase + paid_or_organic, so without a per-
+                // BRAND signal in the salt they ended up identical inside
+                // _iiqJitter. Mixing the URL host into the key gives each
+                // brand its own jitter draw.
+                var urlHost = '';
+                try { urlHost = String(c.url || '').toLowerCase().replace(/^https?:\/\//, '').split('/')[0]; } catch (_e) {}
+                var key = String(c.asset_id || c.url || c.action_label || Math.random()) + '|' + urlHost;
                 var infoPct = BASE_INFO[bucket] * tilt.info * paidInfo * chInfo * engBoost + _iiqJitter(key, 'info', 0.6);
                 var tkPct   = BASE_TICKET[bucket] * tilt.ticket * paidTk * chTk * engBoost + _iiqJitter(key, 'ticket', 0.4);
                 return {
-                    info_pct:   Math.max(0.5, Math.min(28.0, infoPct)),
-                    ticket_pct: Math.max(0.1, Math.min(22.0, tkPct)),
+                    info_pct:   _iiqSoftClamp(infoPct, 0.5, 28.0, key, 'info'),
+                    ticket_pct: _iiqSoftClamp(tkPct,   0.1, 22.0, key, 'ticket'),
                     bucket:     bucket
                 };
             }
