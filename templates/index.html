@@ -112164,26 +112164,38 @@
         }
 
         let _netflixChLoaded = false;
+        let _netflixChGenresLoaded = false;
         let _netflixChRows = [];
         let _netflixChTypeFilter = 'BOTH';
         let _netflixChChart = null;
 
+        // Filtering (type/genre) now happens server-side against the full
+        // netflix.netflix_ranker table instead of re-filtering a fixed
+        // top-200-by-views client-side cache - that old approach is why
+        // niche combinations (e.g. Anime) used to show only a handful of
+        // rows even though the real table has thousands. Every filter
+        // change now triggers a fresh fetch with the new type/genre/limit
+        // params baked into the query string.
         async function loadNetflixChRanker(force) {
-            if (_netflixChLoaded && !force) {
-                renderNetflixChRanker();
-                return;
+            if (!_netflixChGenresLoaded) {
+                loadNetflixChGenreOptions();
             }
             const loading = document.getElementById('rankerIQNetflixChLoading');
             const errorEl = document.getElementById('rankerIQNetflixChError');
             if (loading) loading.style.display = 'block';
             if (errorEl) errorEl.style.display = 'none';
             try {
-                const r = await fetch('/api/rankers/netflix-clickhouse/data', { credentials: 'same-origin' });
+                const genreSel = document.getElementById('rankerIQNetflixChGenreFilter');
+                const genre = genreSel ? genreSel.value : '';
+                const params = new URLSearchParams();
+                if (_netflixChTypeFilter !== 'BOTH') params.set('type', _netflixChTypeFilter);
+                if (genre) params.set('genre', genre);
+                params.set('limit', '1000');
+                const r = await fetch('/api/rankers/netflix-clickhouse/data?' + params.toString(), { credentials: 'same-origin' });
                 const d = await r.json();
                 if (!d || !d.success) throw new Error((d && d.error) || 'Failed to load Netflix data');
                 _netflixChRows = d.rows || [];
                 _netflixChLoaded = true;
-                populateNetflixChGenreFilter();
                 renderNetflixChRanker();
             } catch (e) {
                 if (errorEl) {
@@ -112200,46 +112212,40 @@
             document.querySelectorAll('.rankeriq-netflixch-type-btn').forEach(b => {
                 b.classList.toggle('active', b.getAttribute('data-type') === type);
             });
-            renderNetflixChRanker();
+            loadNetflixChRanker(true);
         }
 
         // GENRE is a packed comma-separated string of tags per show
-        // (e.g. "Kids' TV, TV Cartoons, Imaginative"). Split/dedupe/sort
-        // across all loaded rows to build the filter dropdown options.
-        function populateNetflixChGenreFilter() {
+        // (e.g. "Kids' TV, TV Cartoons, Imaginative"). The dropdown is
+        // built from a dedicated full-table DISTINCT query (not from the
+        // current page of ranked rows), fetched once, so it always lists
+        // every genre regardless of the active type/genre filter or row
+        // limit - previously it was built only from whatever rows were
+        // currently loaded, so rare genres could be missing entirely.
+        async function loadNetflixChGenreOptions() {
+            _netflixChGenresLoaded = true;
             const sel = document.getElementById('rankerIQNetflixChGenreFilter');
             if (!sel) return;
-            const tagSet = new Set();
-            _netflixChRows.forEach(row => {
-                (row.genre || '').split(',').forEach(tag => {
-                    const t = tag.trim();
-                    if (t) tagSet.add(t);
-                });
-            });
-            const tags = Array.from(tagSet).sort((a, b) => a.localeCompare(b));
-            const prevValue = sel.value;
-            sel.innerHTML = '<option value="">All Genres</option>' +
-                tags.map(t => `<option value="${_iqEsc(t)}">${_iqEsc(t)}</option>`).join('');
-            if (prevValue && tags.includes(prevValue)) sel.value = prevValue;
-        }
-
-        function _netflixChRowHasGenre(row, genre) {
-            if (!genre) return true;
-            return (row.genre || '').split(',').map(t => t.trim()).includes(genre);
+            try {
+                const r = await fetch('/api/rankers/netflix-clickhouse/genres', { credentials: 'same-origin' });
+                const d = await r.json();
+                if (!d || !d.success) return;
+                const tags = d.genres || [];
+                const prevValue = sel.value;
+                sel.innerHTML = '<option value="">All Genres</option>' +
+                    tags.map(t => `<option value="${_iqEsc(t)}">${_iqEsc(t)}</option>`).join('');
+                if (prevValue && tags.includes(prevValue)) sel.value = prevValue;
+            } catch (e) {
+                // Non-fatal - dropdown just stays at "All Genres".
+            }
         }
 
         function renderNetflixChRanker() {
             const body = document.getElementById('rankerIQNetflixChBody');
             if (!body) return;
-            const genreSel = document.getElementById('rankerIQNetflixChGenreFilter');
-            const genre = genreSel ? genreSel.value : '';
 
-            const filtered = _netflixChRows.filter(row => {
-                if (_netflixChTypeFilter !== 'BOTH' && row.type !== _netflixChTypeFilter) return false;
-                return _netflixChRowHasGenre(row, genre);
-            });
-
-            body.innerHTML = filtered.map((row, i) => `
+            // Rows already come pre-filtered by type/genre from the server.
+            body.innerHTML = _netflixChRows.map((row, i) => `
                 <tr>
                     <td>${i + 1}</td>
                     <td>${_iqEsc(row.show || '')}${row.episode_name ? ' <span style="color: var(--text-secondary);">&mdash; ' + _iqEsc(row.episode_name) + '</span>' : ''}</td>
@@ -112253,7 +112259,7 @@
                 </tr>
             `).join('');
 
-            renderNetflixChChart(filtered);
+            renderNetflixChChart(_netflixChRows);
         }
 
         // Builds a chart label that disambiguates episodes of the same show,
