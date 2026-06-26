@@ -25293,25 +25293,41 @@
                     var winner = paidVal > organicVal ? 'Paid' : 'Organic';
                     var diffPp = Math.abs(pPct - oPct);
                     var winnerColor = paidVal > organicVal ? paidColor : organicColor;
-                    return '<div style="margin:0.55rem 0;">'
-                        +   '<div style="display:flex; justify-content:space-between; align-items:baseline; font-size:0.78rem; margin-bottom:0.3rem;">'
+                    return '<div style="margin:0.4rem 0;">'
+                        +   '<div style="display:flex; justify-content:space-between; align-items:baseline; font-size:0.76rem; margin-bottom:0.22rem;">'
                         +     '<span style="color:#e2e8f0; font-weight:600;">' + label + '</span>'
-                        +     '<span style="color: var(--text-secondary); font-size:0.72rem;"><span style="color:' + winnerColor + '; font-weight:600;">' + winner + '</span> drove ' + diffPp.toFixed(1) + 'pp more \u00b7 total ' + fmtCompact(tot) + '</span>'
+                        +     '<span style="color: var(--text-secondary); font-size:0.7rem;"><span style="color:' + winnerColor + '; font-weight:600;">' + winner + '</span> +' + diffPp.toFixed(1) + 'pp \u00b7 ' + fmtCompact(tot) + '</span>'
                         +   '</div>'
-                        +   '<div style="display:flex; height:24px; border-radius:5px; overflow:hidden; background: rgba(255,255,255,0.06);">'
+                        +   '<div style="display:flex; height:22px; border-radius:5px; overflow:hidden; background: rgba(255,255,255,0.06);">'
                         +     '<div style="width:' + oPct.toFixed(1) + '%; background:' + organicColor + '; display:flex; align-items:center; padding:0 0.55rem; color:#0b132b; font-size:0.72rem; font-weight:700; white-space:nowrap; min-width:0; overflow:hidden;" title="Organic: ' + fmtCompact(organicVal) + ' (' + oPct.toFixed(1) + '%)">Organic ' + fmtCompact(organicVal) + '</div>'
                         +     '<div style="width:' + pPct.toFixed(1) + '%; background:' + paidColor + '; display:flex; align-items:center; justify-content:flex-end; padding:0 0.55rem; color:#0b132b; font-size:0.72rem; font-weight:700; white-space:nowrap; min-width:0; overflow:hidden;" title="Paid: ' + fmtCompact(paidVal) + ' (' + pPct.toFixed(1) + '%)">' + fmtCompact(paidVal) + ' Paid</div>'
                         +   '</div>'
                         + '</div>';
                 }
                 var hasFunnelData = (aggPit.paid.info_seekers + aggPit.organic.info_seekers + aggPit.paid.ticket_visits + aggPit.organic.ticket_visits) > 0;
+                var totalViewsPaid = aggPit.paid.views;
+                var totalViewsOrg  = aggPit.organic.views;
+                var hasAnyData = (totalViewsPaid + totalViewsOrg) > 0;
+                function _pctSafe(n, d) { return d > 0 ? (n / d * 100) : 0; }
+                var paidInfoConv = _pctSafe(aggPit.paid.info_seekers,    aggPit.paid.views);
+                var orgInfoConv  = _pctSafe(aggPit.organic.info_seekers, aggPit.organic.views);
+                var paidTkConv   = _pctSafe(aggPit.paid.ticket_visits,   aggPit.paid.views);
+                var orgTkConv    = _pctSafe(aggPit.organic.ticket_visits, aggPit.organic.views);
                 var funnelCardBody;
-                if (!hasFunnelData) {
-                    funnelCardBody = '<div class="iiq-empty">No downstream funnel activity as of this date yet.</div>';
+                if (!hasAnyData) {
+                    funnelCardBody = '<div class="iiq-empty">No measured activity as of this date yet.</div>';
                 } else {
-                    funnelCardBody = _q2WhoWonRow('Info-seekers', aggPit.paid.info_seekers, aggPit.organic.info_seekers)
-                                   + _q2WhoWonRow('Ticketing visits', aggPit.paid.ticket_visits, aggPit.organic.ticket_visits)
-                                   + '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.45rem;">Uses the same projection helper as the Assets cards, Performance Q1 rollup, and asset detail view \u2014 numbers ladder up.</div>';
+                    funnelCardBody = _q2WhoWonRow('Total views',     totalViewsPaid, totalViewsOrg)
+                                   + (hasFunnelData
+                                      ? (_q2WhoWonRow('Info-seekers',     aggPit.paid.info_seekers,  aggPit.organic.info_seekers)
+                                         + _q2WhoWonRow('Ticketing visits', aggPit.paid.ticket_visits, aggPit.organic.ticket_visits))
+                                      : '<div style="font-size:0.72rem; color: var(--text-secondary); padding:0.5rem 0;">No downstream funnel activity as of this date yet.</div>')
+                                   + (hasFunnelData
+                                      ? ('<div style="display:flex; flex-wrap:wrap; gap:0.3rem 1.4rem; font-size:0.68rem; color: var(--text-secondary); margin-top:0.45rem; padding-top:0.45rem; border-top:1px solid rgba(255,255,255,0.06);">'
+                                         +   '<div><span style="color:' + paidColor + '; font-weight:600;">Paid</span> converts views \u2192 info-seek at <span style="color:#a5b4fc; font-weight:600;">' + paidInfoConv.toFixed(1) + '%</span> \u00b7 ticketing at <span style="color:#fbbf24; font-weight:600;">' + paidTkConv.toFixed(1) + '%</span></div>'
+                                         +   '<div><span style="color:' + organicColor + '; font-weight:600;">Organic</span> converts views \u2192 info-seek at <span style="color:#a5b4fc; font-weight:600;">' + orgInfoConv.toFixed(1) + '%</span> \u00b7 ticketing at <span style="color:#fbbf24; font-weight:600;">' + orgTkConv.toFixed(1) + '%</span></div>'
+                                         + '</div>')
+                                      : '');
                 }
 
                 // Build per-asset drop events (one dot per asset's posted_date,
@@ -25450,30 +25466,68 @@
                     +     '<div style="margin-top:0.5rem; font-size:0.72rem; color: var(--text-secondary);">Showing data through <span style="color:#22d3ee; font-weight:600;">' + escapeHtml(asOf) + '</span> &middot; <span style="color:#e2e8f0;">' + contextLbl + '</span></div>'
                     +   '</div>';
 
-                // Row 1: donut (share) + funnel comparison (who-won) + the
-                // cumulative chart card (click to pop out a larger view).
+                // Row 1: combined "Paid vs. Organic summary" card (donut +
+                // who-won bars + per-source conversion-rate context) next
+                // to the cumulative chart card (click to pop out a larger
+                // view). Collapsed from the previous 3-card layout so the
+                // summary content fills the available height instead of
+                // leaving dead space below two thin bars.
                 var asOfChip = '<span style="font-size:0.65rem; color:#22d3ee; background:rgba(34,211,238,0.12); border:1px solid rgba(34,211,238,0.35); padding:0.1rem 0.4rem; border-radius:10px; white-space:nowrap;">as of ' + escapeHtml(asOf) + '</span>';
-                html += '<div style="display: grid; grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1.4fr); gap: 1rem; margin-bottom: 0.85rem; align-items: stretch;">';
-                html +=   '<div class="iiq-card" style="padding:0.75rem 0.85rem; display:flex; flex-direction:column; align-items:center;">'
-                    +       '<div style="display:flex; justify-content:space-between; align-items:center; align-self:stretch; gap:0.4rem; margin-bottom:0.35rem;">'
-                    +         '<div style="font-size:0.78rem; color: var(--text-secondary);">Share of total measured views</div>'
+                function _q2CompactDonut(slices, size) {
+                    var total = slices.reduce(function(s, x) { return s + (Number(x.value) || 0); }, 0);
+                    if (!total) return '';
+                    var r = size / 2, R = r - 4, inner = R * 0.6;
+                    var ang = -Math.PI / 2;
+                    var arcs = slices.map(function(s) {
+                        var v = Number(s.value) || 0;
+                        var sweep = (v / total) * Math.PI * 2;
+                        var a0 = ang, a1 = ang + sweep;
+                        ang = a1;
+                        var x0 = r + R * Math.cos(a0), y0 = r + R * Math.sin(a0);
+                        var x1 = r + R * Math.cos(a1), y1 = r + R * Math.sin(a1);
+                        var xi0 = r + inner * Math.cos(a1), yi0 = r + inner * Math.sin(a1);
+                        var xi1 = r + inner * Math.cos(a0), yi1 = r + inner * Math.sin(a0);
+                        var large = (sweep > Math.PI) ? 1 : 0;
+                        var d = 'M ' + x0 + ' ' + y0
+                            + ' A ' + R + ' ' + R + ' 0 ' + large + ' 1 ' + x1 + ' ' + y1
+                            + ' L ' + xi0 + ' ' + yi0
+                            + ' A ' + inner + ' ' + inner + ' 0 ' + large + ' 0 ' + xi1 + ' ' + yi1 + ' Z';
+                        return '<path d="' + d + '" fill="' + s.color + '" stroke="rgba(0,0,0,0.3)" stroke-width="0.5" />';
+                    }).join('');
+                    var legend = slices.map(function(s) {
+                        var pct = ((s.value / total) * 100).toFixed(1);
+                        return '<div style="display:flex; align-items:center; gap:0.35rem; font-size:0.7rem; line-height:1.1;">'
+                            +   '<span style="width:8px; height:8px; background:' + s.color + '; border-radius:2px; flex:none;"></span>'
+                            +   '<span style="color:#e2e8f0; flex:1;">' + escapeHtml(s.label) + '</span>'
+                            +   '<span style="color:#fff; font-weight:600; font-variant-numeric:tabular-nums;">' + pct + '%</span>'
+                            + '</div>';
+                    }).join('');
+                    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" style="display:block;">' + arcs + '</svg>'
+                         + '<div style="display:flex; flex-direction:column; gap:0.2rem; width:' + size + 'px;">' + legend + '</div>';
+                }
+                var donutBlock = donutSlices.length
+                    ? ('<div style="display:flex; flex-direction:column; align-items:center; gap:0.4rem; flex:0 0 auto;">'
+                       +   '<div style="font-size:0.66rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">Share of views</div>'
+                       +   _q2CompactDonut(donutSlices, 100)
+                       + '</div>')
+                    : '';
+                html += '<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 1rem; margin-bottom: 0.85rem; align-items: stretch;">';
+                html +=   '<div class="iiq-card" style="padding:0.75rem 0.95rem; display:flex; flex-direction:column;">'
+                    +       '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.5rem; gap:0.5rem;">'
+                    +         '<div style="font-size:0.85rem; color:#e2e8f0; font-weight:600;">Paid vs. Organic <span style="color: var(--text-secondary); font-weight:400; font-size:0.74rem;">\u2014 who drove more</span></div>'
                     +         asOfChip
                     +       '</div>'
-                    +       (donutSlices.length ? iiqDonut(donutSlices, { size: 120 }) : '<div class="iiq-empty">No views yet as of this date.</div>')
-                    +     '</div>';
-                html +=   '<div class="iiq-card" style="padding:0.75rem 0.95rem;">'
-                    +       '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.35rem; gap:0.5rem;">'
-                    +         '<div style="font-size:0.78rem; color: var(--text-secondary);">Paid vs. Organic: who drove more downstream actions?</div>'
-                    +         asOfChip
+                    +       '<div style="display:flex; gap:1rem; align-items:center; flex:1;">'
+                    +         donutBlock
+                    +         '<div style="flex:1; min-width:0;">' + funnelCardBody + '</div>'
                     +       '</div>'
-                    +       funnelCardBody
                     +     '</div>';
-                html +=   '<div class="iiq-card" onclick="window.iiqQ2OpenChartModal()" title="Click to expand" style="padding:0.65rem 0.75rem; cursor:pointer; position:relative; transition: border-color 0.15s;" onmouseover="this.style.borderColor=\'rgba(34,211,238,0.45)\';" onmouseout="this.style.borderColor=\'\';">'
+                html +=   '<div class="iiq-card" onclick="window.iiqQ2OpenChartModal()" title="Click to expand" style="padding:0.65rem 0.85rem; cursor:pointer; position:relative; transition: border-color 0.15s; display:flex; flex-direction:column;" onmouseover="this.style.borderColor=\'rgba(34,211,238,0.45)\';" onmouseout="this.style.borderColor=\'\';">'
                     +       '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; margin-bottom:0.3rem;">'
-                    +         '<div style="font-size:0.78rem; color: var(--text-secondary);">Daily activity: views + downstream funnel</div>'
+                    +         '<div style="font-size:0.85rem; color:#e2e8f0; font-weight:600;">Daily activity <span style="color: var(--text-secondary); font-weight:400; font-size:0.74rem;">\u2014 views + downstream funnel</span></div>'
                     +         '<div style="font-size:0.65rem; color: rgba(34,211,238,0.85); white-space:nowrap;">click to expand \u2197</div>'
                     +       '</div>'
-                    +       _q2ChartHtml(560, 210)
+                    +       '<div style="flex:1; min-height:0;">' + _q2ChartHtml(640, 220) + '</div>'
                     +     '</div>';
                 html += '</div>';
                 if (best.length) {
