@@ -26463,6 +26463,106 @@
                 }
             };
 
+            // ===== Q3 point-in-time T-X compare =====
+            // User picks "show every title at T-X days before their own
+            // opening" so the comparison is apples-to-apples instead of
+            // "subject = panel-to-date vs comps = realized opening".
+            // null = realized (default, the historical view); any positive
+            // integer N = scale each title's signals to N days before its
+            // opening using a per-signal buildup curve.
+            window._iiqQ3T = window._iiqQ3T || { offset: null }; // null = Realized
+            window.iiqQ3SetT = function(v) {
+                window._iiqQ3T.offset = (v === null || v === 'null' || v === '') ? null : Number(v);
+                if (window._iiqQ3Sig.payload) {
+                    var host = document.getElementById('iiqQBody');
+                    if (host) host.innerHTML = iiqRenderQ3(window._iiqQ3Sig.payload);
+                }
+            };
+            window.iiqQ3PromptCustomT = function() {
+                var raw = prompt('Days before opening (1\u2013180):', String(window._iiqQ3T.offset != null ? window._iiqQ3T.offset : 14));
+                if (raw == null) return;
+                var n = parseInt(raw, 10);
+                if (!isFinite(n) || n < 0) return;
+                if (n > 180) n = 180;
+                window.iiqQ3SetT(n);
+            };
+            // Per-signal buildup curve. Returns 0-1 multiplier for the
+            // signal's cumulative volume at `d` days BEFORE opening (d=0
+            // means opening day, fully built up). Curves are based on
+            // industry timing patterns for tentpole theatrical:
+            //   - Pre-sale ticketing page: ~zero until tickets go on
+            //     sale (T-23 for most studios), then steep ramp.
+            //   - Deep trailer engagement: first trailer typically T-180
+            //     to T-150, slow build, steepens inside T-30.
+            //   - Cast / talent social: rises steadily from press
+            //     announcements through premiere week.
+            function _iiqQ3InterpPts(d, pts) {
+                // pts sorted by x ascending: [[x, y], ...]
+                if (d <= pts[0][0]) return pts[0][1];
+                if (d >= pts[pts.length - 1][0]) return pts[pts.length - 1][1];
+                for (var i = 0; i < pts.length - 1; i++) {
+                    var x0 = pts[i][0],   y0 = pts[i][1];
+                    var x1 = pts[i+1][0], y1 = pts[i+1][1];
+                    if (d >= x0 && d <= x1) {
+                        var t = (d - x0) / (x1 - x0);
+                        return y0 + (y1 - y0) * t;
+                    }
+                }
+                return pts[pts.length - 1][1];
+            }
+            function iiqQ3SignalBuildup(signalName, daysFromOpening) {
+                // daysFromOpening: 0 = opening day, positive = before opening,
+                // negative = after opening. We clamp negatives to 0 (treat
+                // post-opening as fully realized for buildup purposes).
+                var d = Math.max(0, Number(daysFromOpening) || 0);
+                var n = String(signalName || '').toLowerCase();
+                if (/pre.?sale|ticketing.page/.test(n)) {
+                    // Most studios start pre-sales at T-21 to T-23. Use
+                    // T-23 as the floor of meaningful pre-sale volume.
+                    var pts = [[0, 1.00], [3, 0.86], [7, 0.62], [14, 0.30], [21, 0.05], [23, 0.02], [180, 0.0]];
+                    return _iiqQ3InterpPts(d, pts);
+                }
+                if (/trailer/.test(n)) {
+                    var pts2 = [[0, 1.00], [7, 0.94], [14, 0.86], [30, 0.72], [60, 0.45], [90, 0.25], [150, 0.08], [180, 0.05]];
+                    return _iiqQ3InterpPts(d, pts2);
+                }
+                if (/cast|talent/.test(n)) {
+                    var pts3 = [[0, 1.00], [7, 0.85], [14, 0.73], [30, 0.58], [60, 0.40], [90, 0.25], [150, 0.13], [180, 0.10]];
+                    return _iiqQ3InterpPts(d, pts3);
+                }
+                return 1.0;
+            }
+            function iiqQ3DaysFromOpening(openingIso, refIso) {
+                if (!openingIso) return 0;
+                var op = new Date(openingIso + 'T12:00:00Z').getTime();
+                var ref = refIso ? new Date(refIso + 'T12:00:00Z').getTime() : Date.now();
+                if (!isFinite(op) || !isFinite(ref)) return 0;
+                return Math.round((op - ref) / 86400000);
+            }
+            // Scale a row's bySig dict from its "base" T (=0 for comps,
+            // =today's T offset for subject) to the target T (=window
+            // selection). Preserves conversion_pct; multiplies people
+            // and raw_engagement by buildup(target) / buildup(base).
+            function iiqQ3ScaleRowToT(row, targetT) {
+                var out = {};
+                var baseT = row.isSubject
+                    ? Math.max(0, iiqQ3DaysFromOpening(row.opening_date))
+                    : 0;
+                Object.keys(row.bySig).forEach(function(name) {
+                    var src = row.bySig[name];
+                    if (!src) return;
+                    var bTarget = iiqQ3SignalBuildup(name, targetT);
+                    var bBase   = iiqQ3SignalBuildup(name, baseT);
+                    var scale   = bBase > 0 ? (bTarget / bBase) : 0;
+                    out[name] = {
+                        people:         Math.round((src.people || 0)         * scale),
+                        raw_engagement: Math.round((src.raw_engagement || 0) * scale),
+                        conversion_pct: src.conversion_pct
+                    };
+                });
+                return out;
+            }
+
             function iiqRenderQ3(d) {
                 // Q3 = ticket-buying intent (measurement, no forecasting).
                 // d.subject  -> { display_name, opening_date, opening_weekend_buyers_projected, signals: [...], implied_opening_gross_usd, source }
@@ -26534,13 +26634,14 @@
                         };
                     });
                     combinedRows.push({
-                        isSubject: true,
+                        isSubject:    true,
                         display_name: subj.display_name || 'Subject',
-                        subtitle: 'Subject \u00b7 panel-measured \u00b7 opens ' + (subj.opening_date || '\u2014'),
-                        bySig: goatBySig,
-                        box_office: null,
-                        barColor: '#22d3ee',
-                        textColor: '#22d3ee'
+                        opening_date: subj.opening_date || '',
+                        subtitle:     'Subject \u00b7 panel-measured \u00b7 opens ' + (subj.opening_date || '\u2014'),
+                        bySig:        goatBySig,
+                        box_office:   null,
+                        barColor:     '#22d3ee',
+                        textColor:    '#22d3ee'
                     });
                 }
                 var sortedCompsForSig = comps.slice().sort(function(a,b){
@@ -26552,16 +26653,33 @@
                     var bySig = {};
                     derived.forEach(function(m) { bySig[m.signal] = m; });
                     combinedRows.push({
-                        isSubject: false,
+                        isSubject:    false,
                         display_name: c.display_name,
-                        subtitle: 'opened ' + (c.opening_date || '\u2014') + ' \u00b7 ' + fmtCompact(Number(c.opening_weekend_buyers)||0) + ' OW buyers',
-                        bySig: bySig,
-                        box_office: Number(c.cumulative_usd) || 0,
-                        barColor: '#a855f7',
-                        textColor: '#c4b5fd'
+                        opening_date: c.opening_date || '',
+                        subtitle:     'opened ' + (c.opening_date || '\u2014') + ' \u00b7 ' + fmtCompact(Number(c.opening_weekend_buyers)||0) + ' OW buyers',
+                        bySig:        bySig,
+                        box_office:   Number(c.cumulative_usd) || 0,
+                        barColor:     '#a855f7',
+                        textColor:    '#c4b5fd'
                     });
                 });
                 if (combinedRows.length) {
+                    // Apply point-in-time T-X scaling to every row's bySig
+                    // when the user has selected a window. null = Realized
+                    // (the historical view: subject panel-measured to date,
+                    // comps realized at opening). When targetT is set,
+                    // each row's signals scale to "X days before that
+                    // row's opening" via iiqQ3SignalBuildup, making the
+                    // comparison apples-to-apples across titles.
+                    var targetT = window._iiqQ3T.offset;
+                    if (targetT != null) {
+                        combinedRows.forEach(function(r) {
+                            r.bySig    = iiqQ3ScaleRowToT(r, targetT);
+                            r.subtitle = (r.isSubject
+                                ? ('Subject \u00b7 ' + (targetT === 0 ? 'opening day' : ('T-' + targetT)) + ' \u00b7 opens ' + (r.opening_date || '\u2014'))
+                                : ((targetT === 0 ? 'opening day' : ('T-' + targetT)) + ' \u00b7 opened ' + (r.opening_date || '\u2014')));
+                        });
+                    }
                     var maxBySig = {};
                     SIG_ORDER.forEach(function(s) {
                         maxBySig[s.signal] = Math.max.apply(null, combinedRows.map(function(r){
@@ -26613,10 +26731,50 @@
                             + '<span style="opacity:' + arrowOp + '; font-size:0.8em; margin-left:0.25rem;">' + arrow + '</span>'
                             + '</div>';
                     }
+                    // Time-window chips: "Realized" (default) or T-X
+                    // before opening. Each chip re-renders Q3 with the
+                    // selected offset applied per-row via iiqQ3ScaleRowToT.
+                    var T_OPTS = [
+                        { v: null, label: 'Realized',  tip: 'Subject = panel-measured to date. Comps = realized opening-weekend buyers.' },
+                        { v: 90,   label: 'T-90',      tip: '90 days before each title\u2019s opening.' },
+                        { v: 60,   label: 'T-60',      tip: '60 days before opening.' },
+                        { v: 30,   label: 'T-30',      tip: '30 days before opening (~1 month out).' },
+                        { v: 21,   label: 'T-21',      tip: '21 days before opening (~ticket-sale launch).' },
+                        { v: 14,   label: 'T-14',      tip: '14 days before opening (~2 weeks out).' },
+                        { v: 7,    label: 'T-7',       tip: '7 days before opening (~1 week out).' },
+                        { v: 3,    label: 'T-3',       tip: '3 days before opening (premiere week).' },
+                        { v: 1,    label: 'T-1',       tip: 'Day before opening.' },
+                        { v: 0,    label: 'Opening',   tip: 'Opening day for every title.' }
+                    ];
+                    function _q3TChip(o) {
+                        var active = (window._iiqQ3T.offset === o.v);
+                        var bg  = active ? 'rgba(34,211,238,0.18)' : 'rgba(255,255,255,0.04)';
+                        var bd  = active ? '1px solid rgba(34,211,238,0.55)' : '1px solid rgba(255,255,255,0.1)';
+                        var col = active ? '#22d3ee' : '#cbd5e1';
+                        var arg = (o.v === null) ? 'null' : String(o.v);
+                        return '<button type="button" onclick="window.iiqQ3SetT(' + arg + ')" title="' + escapeHtml(o.tip) + '" style="background:' + bg + '; border:' + bd + '; color:' + col + '; font-size:0.7rem; padding:0.28rem 0.6rem; border-radius:14px; cursor:pointer; white-space:nowrap;">' + escapeHtml(o.label) + '</button>';
+                    }
+                    var customLabel = (window._iiqQ3T.offset != null && T_OPTS.every(function(o){ return o.v !== window._iiqQ3T.offset; }))
+                        ? ('Custom: T-' + window._iiqQ3T.offset)
+                        : 'Custom\u2026';
+                    var customActive = (window._iiqQ3T.offset != null && T_OPTS.every(function(o){ return o.v !== window._iiqQ3T.offset; }));
+                    var customChip = '<button type="button" onclick="window.iiqQ3PromptCustomT()" title="Pick any number of days before opening (1-180)." style="background:' + (customActive ? 'rgba(34,211,238,0.18)' : 'rgba(255,255,255,0.04)') + '; border:' + (customActive ? '1px solid rgba(34,211,238,0.55)' : '1px dashed rgba(255,255,255,0.18)') + '; color:' + (customActive ? '#22d3ee' : '#cbd5e1') + '; font-size:0.7rem; padding:0.28rem 0.6rem; border-radius:14px; cursor:pointer; white-space:nowrap;">' + escapeHtml(customLabel) + '</button>';
+
+                    var bandLabel = (window._iiqQ3T.offset == null)
+                        ? 'Realized (subject panel-measured to date, comps at opening)'
+                        : (window._iiqQ3T.offset === 0
+                            ? 'Every title at opening day'
+                            : ('Every title at T-' + window._iiqQ3T.offset + ' (' + window._iiqQ3T.offset + ' days before its opening)'));
+
                     html += '<div class="iiq-card" style="padding:0.95rem 1rem; margin-bottom:0.85rem;">';
                     html +=   '<div style="margin-bottom:0.55rem;">';
                     html +=     '<div style="font-size:0.95rem; font-weight:700; color:#e2e8f0;">High-intent signals \u2014 ' + escapeHtml(subj.display_name || 'subject') + ' vs comparable titles</div>';
                     html +=     '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every title broken down across the same 3 ticket-buying signals. Bars normalized within each column so smaller signals stay readable. Click a column header to sort \u2014 subject row stays pinned at the top.</div>';
+                    html +=   '</div>';
+                    html +=   '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.4rem 0.55rem; padding:0.55rem 0.6rem; margin-bottom:0.6rem; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:6px;">';
+                    html +=     '<div style="font-size:0.66rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; margin-right:0.2rem;">Compare at</div>';
+                    html +=     T_OPTS.map(_q3TChip).join('') + customChip;
+                    html +=     '<div style="flex:1 1 100%; font-size:0.66rem; color:#94a3b8; margin-top:0.15rem;">Showing: <span style="color:#22d3ee; font-weight:600;">' + escapeHtml(bandLabel) + '</span>. Each title\u2019s signals scale via per-signal buildup curves (pre-sale ramps inside T-23, trailer cumulative from T-180, cast/talent builds throughout) so values are apples-to-apples across titles.</div>';
                     html +=   '</div>';
                     html +=   '<div style="display:grid; grid-template-columns: minmax(190px, 1.3fr) repeat(3, minmax(0, 1fr)) minmax(0, 0.85fr); gap:0.85rem; padding:0 0 0.55rem; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.68rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em;">';
                     html +=     _q3SigHdr('title', 'Title', '', 'Sort alphabetically by title (subject stays pinned).');
