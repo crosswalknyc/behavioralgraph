@@ -25492,91 +25492,12 @@
                 html +=     iiqSummaryTile('Highest peak ever', topAllTime ? topAllTime.display : '-', topAllTime ? topAllTime.peak_engagement_pct.toFixed(1) + '% on ' + topAllTime.peak_date : '');
                 html += '</div>';
 
-                // Cohort picker (grouped by category, with category-color chips)
-                html += '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.85rem;">';
-                html +=   '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">';
-                html +=     '<div style="font-size:0.85rem; font-weight:600; color:#e2e8f0;">Pick cohorts to overlay on the chart</div>';
-                html +=     '<div style="display:flex; gap:0.4rem;">';
-                html +=       '<button onclick="iiqQ6SelectGroup(\'all\')" style="background:rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.1); padding:0.25rem 0.55rem; border-radius:5px; font-size:0.7rem; cursor:pointer;">Select all</button>';
-                html +=       '<button onclick="iiqQ6SelectGroup(\'none\')" style="background:rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.1); padding:0.25rem 0.55rem; border-radius:5px; font-size:0.7rem; cursor:pointer;">Clear</button>';
-                html +=       '<button onclick="iiqQ6SelectGroup(\'default\')" style="background:rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.1); padding:0.25rem 0.55rem; border-radius:5px; font-size:0.7rem; cursor:pointer;">Reset to default</button>';
-                html +=     '</div>';
-                html +=   '</div>';
-
-                var CAT_LABELS = {
-                    MOVIEGOING_FREQ: 'Moviegoing Frequency',
-                    TALENT:          'Talent / Cast',
-                    DEMO:            'Demographics',
-                    FRANCHISE:       'Franchise & Fandom',
-                    GENRE:           'Genre',
-                    STUDIO:          'Studio',
-                    PLATFORM:        'Platform / Streaming',
-                    SPORT:           'Sport',
-                    AUDIENCE:        'Other Audiences',
-                };
-
-                // Initialize the expand/collapse state on first render for
-                // this title: only MOVIEGOING_FREQ is open; every other
-                // category is collapsed. Users open whichever they need.
-                if (!window._iiqQ6Expanded) {
-                    window._iiqQ6Expanded = {};
-                    catOrder.forEach(function(cat) {
-                        window._iiqQ6Expanded[cat] = (cat === 'MOVIEGOING_FREQ');
-                    });
-                }
-                catOrder.forEach(function(cat) {
-                    if (window._iiqQ6Expanded[cat] === undefined) {
-                        window._iiqQ6Expanded[cat] = (cat === 'MOVIEGOING_FREQ');
-                    }
-                });
-
-                catOrder.forEach(function(cat) {
-                    var list = byCat[cat];
-                    if (!list || !list.length) return;
-                    var nSel = list.reduce(function(s, c){ return s + (window._iiqQ6Selection[c.cohort_slug] ? 1 : 0); }, 0);
-                    var nTot = list.length;
-                    var expanded = !!window._iiqQ6Expanded[cat];
-                    var chev = expanded ? '\u25BE' : '\u25B8';
-                    var catEsc = cat.replace(/'/g, "\\'");
-                    var hasSel = nSel > 0;
-                    var headerColor = hasSel ? '#e2e8f0' : 'var(--text-secondary)';
-                    var countBadge = '<span style="font-size:0.65rem; padding:0.1rem 0.4rem; border-radius:10px; background:' + (hasSel ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.05)') + '; color:' + (hasSel ? '#67e8f9' : '#94a3b8') + '; margin-left:0.45rem;">' + nSel + ' of ' + nTot + ' selected</span>';
-
-                    html += '<div style="margin-top:0.45rem; border-top:1px solid rgba(255,255,255,0.05); padding-top:0.45rem;">';
-                    html +=   '<div onclick="iiqQ6ToggleCategory(\'' + catEsc + '\')" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none; padding:0.15rem 0;">';
-                    html +=     '<div style="font-size:0.72rem; color:' + headerColor + '; text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center;">'
-                            +       '<span style="display:inline-block; width:0.85rem; color:var(--text-secondary); font-size:0.85rem;">' + chev + '</span>'
-                            +       escapeHtml(CAT_LABELS[cat] || cat)
-                            +       countBadge
-                            +     '</div>';
-                    html +=     '<div style="font-size:0.65rem; color: var(--text-secondary);">' + (expanded ? 'click to collapse' : 'click to expand') + '</div>';
-                    html +=   '</div>';
-
-                    if (expanded) {
-                        html += '<div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.45rem;">';
-                        list.forEach(function(c) {
-                            var checked = !!window._iiqQ6Selection[c.cohort_slug];
-                            var bgFill = checked ? (c._color + '33') : 'rgba(255,255,255,0.03)';
-                            var border = checked ? c._color : 'rgba(255,255,255,0.1)';
-                            var textC  = checked ? '#fff' : '#94a3b8';
-                            var slugEsc = c.cohort_slug.replace(/'/g, "\\'");
-                            var amer = iiqProjAmericans(c);
-                            var amerFmt = '~' + fmtCompact(amer);
-                            html += '<label onclick="iiqQ6Toggle(\'' + slugEsc + '\')" '
-                                + 'style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; '
-                                + 'background:' + bgFill + '; border:1px solid ' + border + '; '
-                                + 'border-radius:6px; padding:0.3rem 0.55rem; font-size:0.75rem; color:' + textC + ';" '
-                                + 'title="' + escapeHtml(c.display) + ' \u00b7 ' + amerFmt + ' Americans \u00b7 peak ' + c.peak_engagement_pct.toFixed(1) + '% on ' + c.peak_date + '">'
-                                + '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:' + c._color + ';"></span>'
-                                + escapeHtml(c.display)
-                                + ' <span style="opacity:0.6; font-size:0.68rem;">(' + amerFmt + ')</span>'
-                                + '</label>';
-                        });
-                        html += '</div>';
-                    }
-                    html += '</div>';
-                });
-                html += '</div>';
+                // Cohort picker removed per user request 2026-06-25 -- the
+                // chart below renders the default-on cohorts (Moviegoing
+                // Frequency buckets) automatically via the selection-state
+                // initialization above. Toggle handlers
+                // (iiqQ6Toggle / iiqQ6ToggleCategory / iiqQ6SelectGroup)
+                // remain wired but have no UI surface in Q6.
 
                 // Main overlay chart with the SELECTED cohorts
                 var combinedSeries = selected.map(function(c) {
