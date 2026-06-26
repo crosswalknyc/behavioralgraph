@@ -19358,7 +19358,7 @@
                     <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
                         <span id="hoverToggleLabel">HOVER ON</span>
                     </div>
-                    <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers.">
+                    <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. US population numbers.">
                         <span id="dashDisplayLabel">US %</span>
                     </div>
                     <div class="display-mode-toggle has-tooltip" id="toolbarCollapseWrapper" onclick="toggleToolbar()" data-tooltip="Collapse/Expand Toolbar" style="display: flex; align-items: center; gap: 0.2rem; cursor: pointer;">
@@ -22915,11 +22915,11 @@
                     var reachedPeople    = Math.round(cohortPeople * exp.reach_pct  / 100);
                     var infoSeekersAud   = Math.round(reachedPeople * exp.info_pct  / 100);
                     var ticketVisitsAud  = Math.round(reachedPeople * exp.ticket_pct / 100);
-                    var reachTip  = 'Projected % of this cohort who saw ANY piece of campaign content (any asset, any channel) over the campaign-to-date window.';
-                    var uniqueTip = 'Projected average number of UNIQUE campaign assets reached cohort members encountered (deduped across views). Wider unique counts for talent / fan cohorts (organic share gravity exposes them to more varied content) than for paid-targeted demo cohorts (which see a narrower paid rotation).';
-                    var totalTip  = 'Projected average TOTAL impressions among reached cohort members (unique pieces \u00d7 frequency per piece). Counts re-watches and repeat exposure. Frequency per unique asset clusters at 1.8\u20132.6\u00d7 for paid-heavy campaigns of this scale.';
-                    var infoTipAud = 'Projected % of REACHED cohort members who took an info-seeking action (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit) within 7 days of exposure. ~' + fmtCompact(infoSeekersAud) + ' people \u2014 same projection helper that powers the Assets cards.';
-                    var tkTipAud   = 'Projected % of REACHED cohort members who visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days of exposure. ~' + fmtCompact(ticketVisitsAud) + ' people \u2014 same projection helper that powers the Assets cards.';
+                    var reachTip  = '% of this cohort who saw ANY piece of campaign content (any asset, any channel) over the campaign-to-date window.';
+                    var uniqueTip = 'Average number of UNIQUE campaign assets reached cohort members encountered (deduped across views). Wider unique counts for talent / fan cohorts (organic share gravity exposes them to more varied content) than for paid-targeted demo cohorts (which see a narrower paid rotation).';
+                    var totalTip  = 'Average TOTAL impressions among reached cohort members (unique pieces \u00d7 frequency per piece). Counts re-watches and repeat exposure. Frequency per unique asset clusters at 1.8\u20132.6\u00d7 for paid-heavy campaigns of this scale.';
+                    var infoTipAud = '% of REACHED cohort members who took an info-seeking action (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit) within 7 days of exposure. ~' + fmtCompact(infoSeekersAud) + ' people \u2014 same helper that powers the Assets cards.';
+                    var tkTipAud   = '% of REACHED cohort members who visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days of exposure. ~' + fmtCompact(ticketVisitsAud) + ' people \u2014 same helper that powers the Assets cards.';
                     return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';" title="' + escapeHtml(sourceTip) + (c.source ? ': ' + escapeHtml(c.source) : '') + '">'
                         + '<div class="iiq-card-title">' + escapeHtml(c.display || c.subject_key) + '</div>'
                         + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '-') + '</div>'
@@ -23994,8 +23994,8 @@
                             var proj = c._proj || (v > 0 ? iiqAssetFunnelProjection(c) : null);
                             var infoSeekers = proj ? Math.round(v * proj.info_pct / 100) : 0;
                             var ticketVisits = proj ? Math.round(v * proj.ticket_pct / 100) : 0;
-                            var infoTip = 'Projected % of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people.';
-                            var tkTip   = 'Projected % of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people.';
+                            var infoTip = '% of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people.';
+                            var tkTip   = '% of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people.';
                             return '<div class="iiq-card" data-asset-id="' + escapeHtml(c.asset_id || '') + '" style="border-left: 3px solid ' + edgeColor + '; transition: box-shadow 0.4s ease, transform 0.2s ease;">'
                                 + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '-') + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
@@ -26728,7 +26728,7 @@
                          +    '<div style="font-size:0.75rem; color:#e2e8f0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(c.display) + '">' + escapeHtml(c.display) + '</div>'
                          +    '<div style="font-size:0.62rem; color:var(--text-secondary); margin-top:0.1rem;">' + fmtCompact(Math.round(c.gen_pop_share*IIQ_US_POP)) + ' Americans \u00b7 ' + (c.gen_pop_share*100).toFixed(2) + '% of US</div>'
                          +    '<div style="display:flex; justify-content:space-between; margin-top:0.45rem; font-size:0.72rem; gap:0.5rem;">'
-                         +      '<div title="Projected cohort views across filtered assets"><div style="color:#fff; font-weight:700;">' + fmtCompact(r.views) + '</div><div style="font-size:0.6rem; color:var(--text-secondary);">views</div></div>'
+                         +      '<div title="Cohort views across filtered assets"><div style="color:#fff; font-weight:700;">' + fmtCompact(r.views) + '</div><div style="font-size:0.6rem; color:var(--text-secondary);">views</div></div>'
                          +      '<div style="text-align:center;" title="Info-seek conversion rate \u2014 % of cohort viewers who searched the title / visited IMDB / Rotten Tomatoes / official site within 7 days. ~' + fmtCompact(r.info) + ' people."><div style="color:#a5b4fc; font-weight:700;">' + iPct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:var(--text-secondary);">info-seek</div></div>'
                          +      '<div style="text-align:right;" title="Ticketing visit rate \u2014 % of cohort viewers who visited Fandango / AMC / Regal / Cinemark / Atom within 7 days. ~' + fmtCompact(r.ticket) + ' people."><div style="color:#fbbf24; font-weight:700;">' + tPct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:var(--text-secondary);">ticket</div></div>'
                          +    '</div>'
@@ -28026,7 +28026,7 @@
                                 <thead><tr>
                                     <th data-iq-sort="rank"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Rank within the selected window." style="cursor: pointer; width: 2.5rem;">#</th>
                                     <th data-iq-sort="name"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Profile name (click a row to drill down to the profile dashboard)." style="cursor: pointer;">Profile</th>
-                                    <th data-iq-sort="mentions"       data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Total engagements projected to US gen pop (raw × 329.9M / panel size that day, summed across the window)." style="cursor: pointer; text-align: right;">Engagements</th>
+                                    <th data-iq-sort="mentions"       data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Total engagements scaled to US gen pop (raw × 329.9M / panel size that day, summed across the window)." style="cursor: pointer; text-align: right;">Engagements</th>
                                     <th data-iq-sort="delta_mentions" data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Engagements change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ Engagements</th>
                                     <th data-iq-sort="delta_evc"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
                                         <span class="iqr-th-with-info">Δ EVC<button type="button" class="iqr-th-info" title="Show EVC methodology" aria-label="Show EVC methodology" onclick="event.stopPropagation(); toggleIQRankerEVCExplainer('{{ m.key }}')">i</button></span>
@@ -28323,7 +28323,7 @@
                         </div>
                         <div class="dashboard-tabs" id="tstTabsBar" style="margin: 1rem 1.5rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
                             <button class="tab-btn active has-tooltip" id="tstTabSummary" data-tooltip="Summary: Key metrics, audience snapshot, and overview." onclick="showTSTTab('summary')">📊 Summary</button>
-                            <button class="tab-btn has-tooltip" id="tstTabTheaters" data-tooltip="Theaters: Tickets sold and projected sales by theater chain." onclick="showTSTTab('theaters')">🎬 Theaters</button>
+                            <button class="tab-btn has-tooltip" id="tstTabTheaters" data-tooltip="Theaters: Tickets sold and sales by theater chain." onclick="showTSTTab('theaters')">🎬 Theaters</button>
                             <button class="tab-btn has-tooltip" id="tstTabDemographics" data-tooltip="Demographics: Age, gender, income, ethnicity, and location breakdown vs Gen Pop." onclick="showTSTTab('demographics')">👥 Demographics</button>
                         </div>
                         <div id="tstTabContent" style="flex: 1; overflow-y: auto; padding: 1.5rem;">
@@ -28481,7 +28481,7 @@
 
                 <!-- Usage Trend Line Chart -->
                 <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem;">
-                    <h3 class="has-tooltip" data-tooltip="Daily unique users per AI platform, projected to US Gen Pop. Each line is one LLM; top 10 by volume shown. Hover a point to see the exact count." style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Usage Trend (US Gen Pop Unique Users by Date)</h3>
+                    <h3 class="has-tooltip" data-tooltip="Daily unique users per AI platform, scaled to US Gen Pop. Each line is one LLM; top 10 by volume shown. Hover a point to see the exact count." style="margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;">Usage Trend (US Gen Pop Unique Users by Date)</h3>
                     <div style="position: relative; height: 350px;">
                         <canvas id="llmoTrendChart"></canvas>
                     </div>
@@ -28701,7 +28701,7 @@
 
                     <!-- Browser breakdown -->
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem;">
-                        <h3 class="has-tooltip" data-tooltip="Browser distribution of AI-agent sessions (e.g. Chrome, Safari, Edge). Projected to Gen Pop unique users." style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;">Browser</h3>
+                        <h3 class="has-tooltip" data-tooltip="Browser distribution of AI-agent sessions (e.g. Chrome, Safari, Edge). Scaled to Gen Pop unique users." style="margin: 0 0 0.75rem 0; font-size: 1rem; font-weight: 600;">Browser</h3>
                         <canvas id="llmoBrowserChart" style="max-width: 300px; max-height: 260px; margin: 0 auto; display: block;"></canvas>
                     </div>
                 </div>
@@ -40490,7 +40490,7 @@
                 + '<th data-bpiq-sort="post_pen"     style="' + thBase + 'text-align:right;">Post %'                                     + arrow('post_pen')     + '</th>'
                 + '<th data-bpiq-sort="lift_rel_pct" style="' + thBase + 'text-align:right;">Brand Lift'                                 + arrow('lift_rel_pct') + '</th>'
                 + '<th data-bpiq-sort="lift_pp"      style="' + thBase + 'text-align:right;">Brand Lift (pp)'                            + arrow('lift_pp')      + '</th>'
-                + '<th data-bpiq-sort="incr_users"   style="' + thBase + 'text-align:right;" title="Post-campaign incremental brand engagers attributable to this platform (post − pre, projected to US gen pop).">Incremental Consumers' + arrow('incr_users')   + '</th>'
+                + '<th data-bpiq-sort="incr_users"   style="' + thBase + 'text-align:right;" title="Post-campaign incremental brand engagers attributable to this platform (post − pre, scaled to US gen pop).">Incremental Consumers' + arrow('incr_users')   + '</th>'
                 + '<th data-bpiq-sort="bench_cpm"    style="' + thBase + 'text-align:right;color:var(--text-secondary);" title="Industry-benchmarked CPM. Display only - does not enter any calculation.">Benchmark CPM' + arrow('bench_cpm') + '</th>'
                 + '<th data-bpiq-sort="cpm"          style="' + thBase + 'text-align:right;">CPM'                                        + arrow('cpm')          + _bpiqScopeChip() + '</th>'
                 + '<th data-bpiq-sort="emv"          style="' + thBase + 'text-align:right;" title="Incremental Consumers × CPM = EMV.">EMV (Incr × CPM)' + arrow('emv') + '</th>'
@@ -69347,7 +69347,7 @@
                             <div class="exec-metric-label">Reactivated<br>Accounts</div>
                             <div class="exec-metric-value">${reactivatedAccountsDisplay}</div>
                         </div>
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="Total Show Conversion Rate: The percentage of Total Show Watchers who became New Platform Signups, using US projected (Gen Pop) numbers: (NPS projected ÷ Total Show Watchers projected) × 100.">
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Total Show Conversion Rate: The percentage of Total Show Watchers who became New Platform Signups, using US Gen Pop numbers: (NPS ÷ Total Show Watchers) × 100.">
                             <div class="exec-metric-label">Acquired and<br>Reactivated Accounts</div>
                             <div class="exec-metric-value">${conversionPctDisplay}</div>
                         </div>
@@ -69646,7 +69646,7 @@
                             const epLabel = getEpLabel(ep);
                             const projected = epDisplaySignups(ep);
                             return `
-                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="${epLabel}${ep.episode_date ? ' · ' + ep.episode_date : ''}: Drove ${formatNumber(projected)} projected US signups (${pct(ep)} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
+                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="${epLabel}${ep.episode_date ? ' · ' + ep.episode_date : ''}: Drove ${formatNumber(projected)} US signups (${pct(ep)} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
                                 <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-cyan);">${epLabel}</h4>
                                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                                     ${ep.episode_date ? `
@@ -69655,7 +69655,7 @@
                                         <span style="color: var(--text-primary);">${ep.episode_date}</span>
                                     </div>
                                     ` : ''}
-                                    <div class="has-tooltip" data-tooltip="Projected US Gen Pop Signups: Projected number of US signups attributed to this episode (sample / 10M × 329.9M)" style="display: flex; justify-content: space-between;">
+                                    <div class="has-tooltip" data-tooltip="US Gen Pop Signups: Number of US signups attributed to this episode (sample / 10M × 329.9M)" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">Signups:</span>
                                         <span style="font-weight: 700; color: var(--accent-lime);">${formatNumber(projected)}</span>
                                     </div>
@@ -70185,17 +70185,17 @@
                         <div class="timing-metric-value">${avgDaysToSignup !== 'N/A' ? Math.round(parseFloat(avgDaysToSignup)) : 'N/A'}</div>
                         <div class="timing-metric-desc">Mean conversion time</div>
                     </div>
-                    <div class="timing-metric-card has-tooltip" data-tooltip="Early Signups (0-7 days): Percentage and count of subscribers who signed up within the first week after the show became available. High percentages indicate strong premiere impact and urgency-driven acquisition.${subscriberGenPopMode && totalSignupsGenPop > 0 ? ' (Gen Pop projected)' : ''}">
+                    <div class="timing-metric-card has-tooltip" data-tooltip="Early Signups (0-7 days): Percentage and count of subscribers who signed up within the first week after the show became available. High percentages indicate strong premiere impact and urgency-driven acquisition.${subscriberGenPopMode && totalSignupsGenPop > 0 ? ' (Gen Pop)' : ''}">
                         <div class="timing-metric-label">Early Signups (0-7 days)</div>
                         <div class="timing-metric-value">${earlyPct}%</div>
                         <div class="timing-metric-desc">${formatNumber(earlyDisplay)} subscribers</div>
                     </div>
-                    <div class="timing-metric-card has-tooltip" data-tooltip="Mid-Term (8-30 days): Percentage and count of subscribers who signed up between 8-30 days after the show became available. Shows sustained interest and consideration-driven acquisition.${subscriberGenPopMode && totalSignupsGenPop > 0 ? ' (Gen Pop projected)' : ''}">
+                    <div class="timing-metric-card has-tooltip" data-tooltip="Mid-Term (8-30 days): Percentage and count of subscribers who signed up between 8-30 days after the show became available. Shows sustained interest and consideration-driven acquisition.${subscriberGenPopMode && totalSignupsGenPop > 0 ? ' (Gen Pop)' : ''}">
                         <div class="timing-metric-label">Mid-Term (8-30 days)</div>
                         <div class="timing-metric-value">${midPct}%</div>
                         <div class="timing-metric-desc">${formatNumber(midDisplay)} subscribers</div>
                     </div>
-                    <div class="timing-metric-card has-tooltip" data-tooltip="Late Signups (30+ days): Percentage and count of subscribers who signed up more than 30 days after the show became available. Shows long-term discovery and word-of-mouth growth.${subscriberGenPopMode && totalSignupsGenPop > 0 ? ' (Gen Pop projected)' : ''}">
+                    <div class="timing-metric-card has-tooltip" data-tooltip="Late Signups (30+ days): Percentage and count of subscribers who signed up more than 30 days after the show became available. Shows long-term discovery and word-of-mouth growth.${subscriberGenPopMode && totalSignupsGenPop > 0 ? ' (Gen Pop)' : ''}">
                         <div class="timing-metric-label">Late Signups (30+ days)</div>
                         <div class="timing-metric-value">${latePct}%</div>
                         <div class="timing-metric-desc">${formatNumber(lateDisplay)} subscribers</div>
@@ -70445,8 +70445,8 @@
                 
                 const isTotal = t.touchpoint === 'Total';
                 const tooltip = isTotal 
-                    ? 'Total users who watched this show as one of their first 5 views after signup' + (subscriberGenPopMode ? ' (Gen Pop projected)' : '')
-                    : 'Users who watched this show as their ' + (t.touchpoint || '') + ' view after signing up' + (subscriberGenPopMode ? ' (Gen Pop projected)' : '');
+                    ? 'Total users who watched this show as one of their first 5 views after signup' + (subscriberGenPopMode ? ' (Gen Pop)' : '')
+                    : 'Users who watched this show as their ' + (t.touchpoint || '') + ' view after signing up' + (subscriberGenPopMode ? ' (Gen Pop)' : '');
                 return `
                     <div class="view-number-card has-tooltip ${isTotal ? 'view-number-total' : ''}" data-tooltip="${tooltip.replace(/"/g, '&quot;')}">
                         <div class="view-number-label">${label}</div>
@@ -70989,7 +70989,7 @@
                                 <thead>
                                     <tr>
                                         <th class="has-tooltip" data-tooltip="Age Range: Demographic age groups of people who were reactivated or signed up for the platform to watch this show">Age Range</th>
-                                        <th class="has-tooltip" data-tooltip="US projected number of accounts for this age group (scaled to US population)">Accounts (US projected)</th>
+                                        <th class="has-tooltip" data-tooltip="Number of accounts for this age group (scaled to US population)">Accounts (US Gen Pop)</th>
                                         <th class="has-tooltip" data-tooltip="Percentage: This age group's share of total new signups">Percentage</th>
                                     </tr>
                                 </thead>
@@ -71030,7 +71030,7 @@
                                 <thead>
                                     <tr>
                                         <th class="has-tooltip" data-tooltip="Gender: Gender identity of people who were reactivated or signed up for the platform to watch this show">Gender</th>
-                                        <th class="has-tooltip" data-tooltip="US projected number of accounts for this gender (scaled to US population)">Accounts (US projected)</th>
+                                        <th class="has-tooltip" data-tooltip="Number of accounts for this gender (scaled to US population)">Accounts (US Gen Pop)</th>
                                         <th class="has-tooltip" data-tooltip="Percentage: This gender's share of total new signups">Percentage</th>
                                     </tr>
                                 </thead>
@@ -102212,7 +102212,7 @@
                                         return `<td style="color: ${pct >= 50 ? 'var(--accent-lime)' : 'var(--accent-red)'};">${pct}%</td>`;
                                     }).join('')}
                                 </tr>
-                                <tr class="has-tooltip" data-tooltip="Projected US population for this audience segment.">
+                                <tr class="has-tooltip" data-tooltip="US population for this audience segment.">
                                     <td>US Pop</td>
                                     ${benchmarks.map(b => `<td>${formatNumber(b.projectedUS || 0)}</td>`).join('')}
                                 </tr>
