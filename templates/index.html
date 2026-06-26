@@ -25386,7 +25386,22 @@
                     events: chartEvents,
                     eventLegend: eventLegend,
                     hasFunnelSeries: hasFunnelSeries,
-                    caption: chartCaption
+                    caption: chartCaption,
+                    // ----- Interactive-modal inputs -----
+                    // Everything below lets the pop-out modal re-aggregate
+                    // the chart on the fly when the user changes a cut
+                    // (source, asset type, channel, smoothing, etc.).
+                    assetsKeep: assetsKeep,
+                    allDates: allDates,
+                    rates: {
+                        paidInfo:    paidInfoRate,
+                        paidTk:      paidTkRate,
+                        organicInfo: orgInfoRate,
+                        organicTk:   orgTkRate,
+                        blendedInfo: blendedInfoRate,
+                        blendedTk:   blendedTkRate
+                    },
+                    palette: { paid: paidColorPal, organic: organicColorPal }
                 };
 
                 function _q2ChartHtml(width, height) {
@@ -25710,9 +25725,300 @@
             // SAME series/events at a much larger size so the asset-drop
             // dots and date axis are readable. Click-outside or the Close
             // button dismisses. Idempotent: re-clicking just rebuilds.
+            // ======================================================
+            // Q2 pop-out modal: fully interactive cuts of the daily
+            // activity chart. The inline card is a fixed view of the
+            // global-filtered, paid-vs-organic aggregation. The modal
+            // lets the user slice the SAME underlying asset list on
+            // the fly without re-fetching:
+            //
+            //   * Series visibility (show/hide each of the 4 lines)
+            //   * Source filter (Paid / Organic / Both)
+            //   * Asset-type filter (multi-chip, posts, trailers,
+            //     influencer, etc.)
+            //   * Channel filter (multi-chip, YouTube / TikTok / etc.)
+            //   * Smoothing window (3-day / 7-day / 14-day rolling)
+            //   * Asset drop dots on/off
+            //
+            // Each filter change calls _recompute() which re-runs the
+            // SAME pipeline as the inline chart (rolling sum + calendar
+            // multiplier + renormalize-to-subset-total) but scoped to
+            // the filtered asset subset. Funnel rates come from the
+            // per-key rates stashed on __intentIQQ2Chart so the
+            // info-seek / ticketing lines stay calibrated to the
+            // chosen source.
+            // ======================================================
             window.iiqQ2OpenChartModal = function() {
                 var c = window.__intentIQQ2Chart;
-                if (!c || typeof window.__intentIQQ2ChartRender !== 'function') return;
+                if (!c) return;
+                var assets = (c.assetsKeep || []).filter(function(a) { return a && a.posted_date; });
+                var allDates = c.allDates || [];
+                if (!assets.length || !allDates.length) return;
+
+                // Per-slug state so re-opening the modal keeps the
+                // user's last cut. Global asset filter clears it.
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
+                var stateKey = '_iiqQ2ModalState_' + slug;
+                var typeSet  = {};
+                var chanSet  = {};
+                assets.forEach(function(a) {
+                    if (a.asset_type) typeSet[a.asset_type] = true;
+                    if (a.channel)    chanSet[a.channel]    = true;
+                });
+                var allTypes = Object.keys(typeSet).sort();
+                var allChans = Object.keys(chanSet).sort();
+                var st = window[stateKey];
+                if (!st) {
+                    st = {
+                        showOrganicViews: true,
+                        showPaidViews:    true,
+                        showInfoSeekers:  true,
+                        showTicketing:    true,
+                        showEvents:       true,
+                        source:           'both',
+                        types:            {},
+                        chans:            {},
+                        smoothing:        7
+                    };
+                    allTypes.forEach(function(t) { st.types[t] = true; });
+                    allChans.forEach(function(ch) { st.chans[ch] = true; });
+                    window[stateKey] = st;
+                } else {
+                    // Pick up any new asset types / channels (e.g. after
+                    // a global asset-filter change) so they default ON.
+                    allTypes.forEach(function(t) { if (!(t in st.types)) st.types[t] = true; });
+                    allChans.forEach(function(ch) { if (!(ch in st.chans)) st.chans[ch] = true; });
+                }
+
+                function _filteredAssets() {
+                    return assets.filter(function(a) {
+                        var po = (a.paid_or_organic || '').toLowerCase();
+                        var isPaid = (po === 'paid');
+                        var isOrg  = (po === 'organic' || po === 'natural');
+                        if (st.source === 'paid' && !isPaid) return false;
+                        if (st.source === 'organic' && !isOrg) return false;
+                        if (a.asset_type && st.types[a.asset_type] === false) return false;
+                        if (a.channel    && st.chans[a.channel]    === false) return false;
+                        return true;
+                    });
+                }
+                function _rollingSum(arr, win) {
+                    var out = new Array(arr.length), s = 0;
+                    for (var i = 0; i < arr.length; i++) {
+                        s += arr[i];
+                        if (i >= win) s -= arr[i - win];
+                        out[i] = s;
+                    }
+                    return out;
+                }
+                function _rateFor(k, kind) {
+                    var r = c.rates || {};
+                    if (k === 'paid')    return (kind === 'info') ? (r.paidInfo    || 0) : (r.paidTk    || 0);
+                    if (k === 'organic') return (kind === 'info') ? (r.organicInfo || 0) : (r.organicTk || 0);
+                    return (kind === 'info') ? (r.blendedInfo || 0) : (r.blendedTk || 0);
+                }
+                function _compute() {
+                    var subset = _filteredAssets();
+                    var dayMapByKey = { paid: {}, organic: {} };
+                    var totByKey    = { paid: 0,  organic: 0  };
+                    subset.forEach(function(a) {
+                        var po = (a.paid_or_organic || '').toLowerCase();
+                        var k = (po === 'paid') ? 'paid'
+                              : (po === 'organic' || po === 'natural') ? 'organic'
+                              : null;
+                        if (!k) return;
+                        var d = String(a.posted_date || '').slice(0, 10);
+                        if (!d) return;
+                        var v = Number(a.views_total != null ? a.views_total : a.ext_view_count) || 0;
+                        dayMapByKey[k][d] = (dayMapByKey[k][d] || 0) + v;
+                        totByKey[k]      += v;
+                    });
+                    var win = st.smoothing || 7;
+                    var dailyByKey = { paid: {}, organic: {} };
+                    ['paid', 'organic'].forEach(function(k) {
+                        var perDay  = allDates.map(function(d) { return dayMapByKey[k][d] || 0; });
+                        var rolled  = _rollingSum(perDay, win);
+                        var weighted = [], wTot = 0;
+                        allDates.forEach(function(d, i) {
+                            var mult = (typeof iiqCalendarViewMultiplier === 'function') ? iiqCalendarViewMultiplier(d) : { paid_mult: 1, organic_mult: 1 };
+                            var m = (k === 'paid') ? mult.paid_mult : mult.organic_mult;
+                            var w = rolled[i] * m;
+                            weighted.push(w); wTot += w;
+                        });
+                        var scale = wTot > 0 ? (totByKey[k] / wTot) : 0;
+                        allDates.forEach(function(d, i) { dailyByKey[k][d] = weighted[i] * scale; });
+                    });
+                    // Per-key funnel curves
+                    var infoByKey = { paid: {}, organic: {} };
+                    var tkByKey   = { paid: {}, organic: {} };
+                    ['paid', 'organic'].forEach(function(k) {
+                        var infoPerDay = allDates.map(function(d) { return (dayMapByKey[k][d] || 0) * _rateFor(k, 'info'); });
+                        var tkPerDay   = allDates.map(function(d) { return (dayMapByKey[k][d] || 0) * _rateFor(k, 'tk');   });
+                        var rolledI = _rollingSum(infoPerDay, win);
+                        var rolledT = _rollingSum(tkPerDay,   win);
+                        var iW = [], tW = [], iSum = 0, tSum = 0;
+                        allDates.forEach(function(d, i) {
+                            var mult = (typeof iiqCalendarFunnelMultiplier === 'function') ? iiqCalendarFunnelMultiplier(d) : { info_mult: 1, ticket_mult: 1 };
+                            var iV = rolledI[i] * mult.info_mult;
+                            var tV = rolledT[i] * mult.ticket_mult;
+                            iW.push(iV); tW.push(tV);
+                            iSum += iV;  tSum += tV;
+                        });
+                        var targetI = (totByKey[k] || 0) * _rateFor(k, 'info');
+                        var targetT = (totByKey[k] || 0) * _rateFor(k, 'tk');
+                        var sI = iSum > 0 ? (targetI / iSum) : 0;
+                        var sT = tSum > 0 ? (targetT / tSum) : 0;
+                        allDates.forEach(function(d, i) {
+                            infoByKey[k][d] = iW[i] * sI;
+                            tkByKey[k][d]   = tW[i] * sT;
+                        });
+                    });
+                    var paidPts    = allDates.map(function(d) { return { x: d, y: dailyByKey.paid[d]    || 0 }; });
+                    var orgPts     = allDates.map(function(d) { return { x: d, y: dailyByKey.organic[d] || 0 }; });
+                    var infoPts    = allDates.map(function(d) { return { x: d, y: (infoByKey.paid[d] || 0) + (infoByKey.organic[d] || 0) }; });
+                    var tkPts      = allDates.map(function(d) { return { x: d, y: (tkByKey.paid[d]   || 0) + (tkByKey.organic[d]   || 0) }; });
+                    var pal = c.palette || { paid: '#22d3ee', organic: '#34d399' };
+                    var leftS = [], rightS = [];
+                    if (st.showOrganicViews && totByKey.organic > 0) leftS.push({ name: 'Organic views (daily)', color: pal.organic, points: orgPts,  total: totByKey.organic });
+                    if (st.showPaidViews    && totByKey.paid    > 0) leftS.push({ name: 'Paid views (daily)',    color: pal.paid,    points: paidPts, total: totByKey.paid    });
+                    var hasFunnel = (infoPts.some(function(p){ return p.y > 0; }) || tkPts.some(function(p){ return p.y > 0; }));
+                    if (hasFunnel && st.showInfoSeekers) rightS.push({ name: 'Info-seekers (daily)',    color: '#a5b4fc', points: infoPts, total: infoPts.reduce(function(s,p){return s+p.y;}, 0) });
+                    if (hasFunnel && st.showTicketing)   rightS.push({ name: 'Ticketing visits (daily)', color: '#fbbf24', points: tkPts,   total: tkPts.reduce(function(s,p){return s+p.y;},   0) });
+                    var events = [];
+                    if (st.showEvents) {
+                        subset.forEach(function(a) {
+                            if (!a.posted_date) return;
+                            var po = (a.paid_or_organic || '').toLowerCase();
+                            var col = (po === 'paid') ? pal.paid
+                                    : (po === 'organic' || po === 'natural') ? pal.organic
+                                    : '#94a3b8';
+                            events.push({
+                                x:     String(a.posted_date).slice(0, 10),
+                                color: col,
+                                label: (a.action_label || a.asset_type || 'Asset') + ' \u00b7 ' + (po || 'unknown'),
+                                asset: a
+                            });
+                        });
+                    }
+                    return {
+                        leftS:     leftS,
+                        rightS:    rightS,
+                        hasFunnel: hasFunnel,
+                        events:    events,
+                        subset:    subset,
+                        totals:    { paid: totByKey.paid, organic: totByKey.organic }
+                    };
+                }
+
+                // ---------- UI builders ----------
+                function _chip(label, active, onclick, color) {
+                    var bg = active ? (color ? 'rgba(34,211,238,0.18)' : 'rgba(34,211,238,0.18)') : 'rgba(255,255,255,0.04)';
+                    var bd = active ? '1px solid rgba(34,211,238,0.55)' : '1px solid rgba(255,255,255,0.1)';
+                    var col = active ? '#22d3ee' : '#cbd5e1';
+                    if (color && active) { bg = 'rgba(255,255,255,0.06)'; bd = '1px solid ' + color; col = color; }
+                    return '<button type="button" onclick="' + onclick + '" style="background:' + bg + '; border:' + bd + '; color:' + col + '; font-size:0.72rem; padding:0.28rem 0.6rem; border-radius:14px; cursor:pointer; white-space:nowrap;">' + escapeHtml(label) + '</button>';
+                }
+                function _seriesToggle(label, color, active, onclick) {
+                    var op = active ? '1' : '0.35';
+                    var dot = '<span style="display:inline-block; width:10px; height:10px; background:' + color + '; border-radius:2px; margin-right:0.4rem; vertical-align:middle; opacity:' + op + ';"></span>';
+                    return '<label style="display:inline-flex; align-items:center; gap:0.25rem; cursor:pointer; font-size:0.74rem; color:' + (active ? '#e2e8f0' : '#64748b') + '; padding:0.2rem 0.55rem; border-radius:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);">'
+                        +   '<input type="checkbox" ' + (active ? 'checked' : '') + ' onchange="' + onclick + '" style="margin:0; accent-color:#22d3ee;" />'
+                        +   dot + escapeHtml(label)
+                        + '</label>';
+                }
+                function _buildControls() {
+                    var pal = c.palette || { paid: '#22d3ee', organic: '#34d399' };
+                    var sourceChips = ''
+                        + _chip('Both',     st.source === 'both',    'window.iiqQ2ModalSetSource(\'both\')')
+                        + ' ' + _chip('Paid',    st.source === 'paid',    'window.iiqQ2ModalSetSource(\'paid\')',    pal.paid)
+                        + ' ' + _chip('Organic', st.source === 'organic', 'window.iiqQ2ModalSetSource(\'organic\')', pal.organic);
+                    var typeChips = allTypes.map(function(t) {
+                        return _chip(t, !!st.types[t], "window.iiqQ2ModalToggleType('" + t.replace(/'/g, "\\'") + "')");
+                    }).join(' ');
+                    var typeBulk = '<button type="button" onclick="window.iiqQ2ModalAllTypes(true)" style="background:none; border:none; color:#22d3ee; font-size:0.7rem; cursor:pointer; padding:0 0.4rem;">all</button>'
+                                 + '<button type="button" onclick="window.iiqQ2ModalAllTypes(false)" style="background:none; border:none; color:#94a3b8; font-size:0.7rem; cursor:pointer; padding:0 0.4rem;">none</button>';
+                    var chanChips = allChans.map(function(ch) {
+                        return _chip(ch, !!st.chans[ch], "window.iiqQ2ModalToggleChan('" + ch.replace(/'/g, "\\'") + "')");
+                    }).join(' ');
+                    var chanBulk = '<button type="button" onclick="window.iiqQ2ModalAllChans(true)" style="background:none; border:none; color:#22d3ee; font-size:0.7rem; cursor:pointer; padding:0 0.4rem;">all</button>'
+                                 + '<button type="button" onclick="window.iiqQ2ModalAllChans(false)" style="background:none; border:none; color:#94a3b8; font-size:0.7rem; cursor:pointer; padding:0 0.4rem;">none</button>';
+                    var smoothChips = [3, 7, 14, 21].map(function(n) {
+                        return _chip(n + '-day', st.smoothing === n, 'window.iiqQ2ModalSetSmooth(' + n + ')');
+                    }).join(' ');
+                    var seriesRow = ''
+                        + _seriesToggle('Organic views', pal.organic, st.showOrganicViews, 'window.iiqQ2ModalToggleSeries(\'showOrganicViews\')')
+                        + _seriesToggle('Paid views',    pal.paid,    st.showPaidViews,    'window.iiqQ2ModalToggleSeries(\'showPaidViews\')')
+                        + _seriesToggle('Info-seekers',  '#a5b4fc',   st.showInfoSeekers,  'window.iiqQ2ModalToggleSeries(\'showInfoSeekers\')')
+                        + _seriesToggle('Ticketing',     '#fbbf24',   st.showTicketing,    'window.iiqQ2ModalToggleSeries(\'showTicketing\')')
+                        + _seriesToggle('Drop dots',     '#94a3b8',   st.showEvents,       'window.iiqQ2ModalToggleSeries(\'showEvents\')');
+
+                    var labelStyle = 'font-size:0.66rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.25rem;';
+                    return '<div class="iiq-card" style="padding:0.7rem 0.85rem; margin-bottom:0.7rem; display:flex; flex-direction:column; gap:0.55rem;">'
+                        +   '<div style="display:flex; flex-wrap:wrap; gap:1.1rem; align-items:flex-start;">'
+                        +     '<div style="flex:0 0 auto;"><div style="' + labelStyle + '">Source</div><div style="display:flex; gap:0.3rem;">' + sourceChips + '</div></div>'
+                        +     '<div style="flex:0 0 auto;"><div style="' + labelStyle + '">Smoothing</div><div style="display:flex; gap:0.3rem;">' + smoothChips + '</div></div>'
+                        +     '<div style="flex:1 1 320px; min-width:240px;"><div style="' + labelStyle + '">Series</div><div style="display:flex; gap:0.35rem; flex-wrap:wrap;">' + seriesRow + '</div></div>'
+                        +   '</div>'
+                        +   (allTypes.length ? ('<div><div style="' + labelStyle + ' display:flex; align-items:center; gap:0.3rem;">Asset type ' + typeBulk + '</div><div style="display:flex; gap:0.3rem; flex-wrap:wrap;">' + typeChips + '</div></div>') : '')
+                        +   (allChans.length ? ('<div><div style="' + labelStyle + ' display:flex; align-items:center; gap:0.3rem;">Channel ' + chanBulk + '</div><div style="display:flex; gap:0.3rem; flex-wrap:wrap;">' + chanChips + '</div></div>') : '')
+                        + '</div>';
+                }
+
+                function _render() {
+                    var comp = _compute();
+                    var availW = Math.max(640, Math.min(1200, window.innerWidth - 64 - 45 - 32 - 8));
+                    var availH = Math.max(340, Math.min(520, Math.round(availW * 0.40)));
+                    var chartHtml;
+                    if (!comp.leftS.length && !comp.rightS.length) {
+                        chartHtml = '<div class="iiq-empty" style="padding:3rem 1rem;">No data for the current cut. Try toggling Source / Asset type / Channel back on.</div>';
+                    } else if (comp.hasFunnel && comp.rightS.length) {
+                        chartHtml = iiqLineChartDual(comp.leftS, comp.rightS, {
+                            width:            availW,
+                            height:           availH,
+                            events:           comp.events,
+                            eventLegend:      st.showEvents ? c.eventLegend : [],
+                            rightFormatter:   fmtCompact,
+                            rightLabelColor: 'rgba(251,191,36,0.85)'
+                        });
+                    } else if (comp.leftS.length) {
+                        chartHtml = iiqLineChart(comp.leftS, { width: availW, height: availH });
+                    } else {
+                        chartHtml = '<div class="iiq-empty" style="padding:3rem 1rem;">No data for the current cut.</div>';
+                    }
+                    // Subset stats row -- shows how many assets / views
+                    // the current cut covers vs the global filter.
+                    var subTot = (comp.totals.paid + comp.totals.organic);
+                    var allTot = (assets.reduce(function(s,a){ return s + (Number(a.views_total != null ? a.views_total : a.ext_view_count) || 0); }, 0)) || 1;
+                    var pct    = (subTot / allTot * 100);
+                    var stats  = '<div style="display:flex; flex-wrap:wrap; gap:0.85rem 1.4rem; font-size:0.72rem; color: var(--text-secondary); margin-bottom:0.55rem;">'
+                              +   '<div><span style="color:#e2e8f0; font-weight:600;">' + comp.subset.length + '</span> / ' + assets.length + ' assets in cut</div>'
+                              +   '<div><span style="color:#e2e8f0; font-weight:600;">' + fmtCompact(subTot) + '</span> views <span style="opacity:0.7;">(' + pct.toFixed(0) + '% of full)</span></div>'
+                              +   '<div><span style="color:' + (c.palette ? c.palette.organic : '#34d399') + '; font-weight:600;">' + fmtCompact(comp.totals.organic) + '</span> organic &middot; <span style="color:' + (c.palette ? c.palette.paid : '#22d3ee') + '; font-weight:600;">' + fmtCompact(comp.totals.paid) + '</span> paid</div>'
+                              + '</div>';
+                    var body = document.getElementById('iiqQ2ModalBody');
+                    if (body) {
+                        body.innerHTML = _buildControls() + stats + '<div class="iiq-card" style="padding:0.85rem 1rem; overflow:hidden;">' + chartHtml + '</div>';
+                    }
+                }
+
+                // ---------- State mutators (window-scoped so the
+                // inline onclick handlers can hit them) ----------
+                window.iiqQ2ModalSetSource     = function(v) { st.source = v; _render(); };
+                window.iiqQ2ModalSetSmooth     = function(n) { st.smoothing = n; _render(); };
+                window.iiqQ2ModalToggleSeries  = function(k) { st[k] = !st[k]; _render(); };
+                window.iiqQ2ModalToggleType    = function(t) { st.types[t] = !st.types[t]; _render(); };
+                window.iiqQ2ModalToggleChan    = function(ch){ st.chans[ch] = !st.chans[ch]; _render(); };
+                window.iiqQ2ModalAllTypes      = function(on){ allTypes.forEach(function(t){ st.types[t] = !!on; }); _render(); };
+                window.iiqQ2ModalAllChans      = function(on){ allChans.forEach(function(ch){ st.chans[ch] = !!on; }); _render(); };
+                window.iiqQ2ModalReset         = function() {
+                    st.source = 'both'; st.smoothing = 7;
+                    st.showOrganicViews = st.showPaidViews = st.showInfoSeekers = st.showTicketing = st.showEvents = true;
+                    allTypes.forEach(function(t){ st.types[t] = true; });
+                    allChans.forEach(function(ch){ st.chans[ch] = true; });
+                    _render();
+                };
+
+                // ---------- Mount ----------
                 var overlay = document.getElementById('iiqQ2ChartModal');
                 if (!overlay) {
                     overlay = document.createElement('div');
@@ -25726,26 +26032,21 @@
                 }
                 var panel = document.createElement('div');
                 panel.style.cssText = 'background: #0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:10px; max-width:1280px; width:100%; max-height:92vh; overflow:auto; padding:1.1rem 1.4rem; box-shadow: 0 24px 64px rgba(0,0,0,0.5); box-sizing:border-box;';
-                // Size the chart to the actual available width inside the
-                // modal so right-axis labels + legend never spill over the
-                // panel edge. Overlay padding = 2rem each side = 64px;
-                // panel padding = 1.4rem each side = ~45px; card padding =
-                // 1rem each side = ~32px. Cap at 1200 so it still looks
-                // good on ultrawide displays.
-                var availW = Math.max(640, Math.min(1200, window.innerWidth - 64 - 45 - 32 - 8));
-                var availH = Math.max(360, Math.min(560, Math.round(availW * 0.44)));
-                var chartBig = window.__intentIQQ2ChartRender(availW, availH);
                 panel.innerHTML =
                     '<div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:0.85rem; gap:1rem;">'
                   +   '<div>'
-                  +     '<h3 style="margin:0 0 0.2rem; color:#fff; font-size:1.05rem;">Daily activity: views + downstream funnel</h3>'
-                  +     '<div style="font-size:0.74rem; color: var(--text-secondary);">7-day rolling daily activity. Lines ramp into opening weekend, decay through theatrical, and ticketing collapses once the movie leaves theatres. Info-seek bumps again around the 5/15 streaming launch. Totals still ladder up to the Assets cards.</div>'
+                  +     '<h3 style="margin:0 0 0.2rem; color:#fff; font-size:1.05rem;">Daily activity \u2014 explore cuts</h3>'
+                  +     '<div style="font-size:0.74rem; color: var(--text-secondary);">Slice the chart by source, asset type, channel, and smoothing window. Totals always renormalize to the filtered subset so info-seek and ticketing stay calibrated to what you\u2019re looking at.</div>'
                   +   '</div>'
-                  +   '<button type="button" onclick="document.getElementById(\'iiqQ2ChartModal\').remove()" style="background: rgba(255,255,255,0.06); color:#fff; border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:0.35rem 0.7rem; cursor:pointer; font-size:0.85rem; flex:none;">Close \u2715</button>'
+                  +   '<div style="display:flex; gap:0.4rem; flex:none;">'
+                  +     '<button type="button" onclick="window.iiqQ2ModalReset()" style="background: rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:0.35rem 0.7rem; cursor:pointer; font-size:0.75rem;">Reset cuts</button>'
+                  +     '<button type="button" onclick="document.getElementById(\'iiqQ2ChartModal\').remove()" style="background: rgba(255,255,255,0.06); color:#fff; border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:0.35rem 0.7rem; cursor:pointer; font-size:0.85rem;">Close \u2715</button>'
+                  +   '</div>'
                   + '</div>'
-                  + '<div class="iiq-card" style="padding:0.85rem 1rem; overflow:hidden;">' + chartBig + '</div>'
+                  + '<div id="iiqQ2ModalBody"></div>'
                   + (c.caption ? '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.55rem; line-height:1.4;">' + c.caption + ' Hover a dot for the asset name, channel, views, eng. rate, info-seek %, and ticketing %.</div>' : '');
                 overlay.appendChild(panel);
+                _render();
             };
 
             window.iiqShowAssetDetail = function(slug, idxOrAsset) {
