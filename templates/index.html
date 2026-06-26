@@ -38662,6 +38662,40 @@
                                                  + (v.brand_engagement_value || 0)
                                                  + (v.brand_lift_value        || 0)
                                                  + (v.conversion_value        || 0)) * 100) / 100;
+            // Propagate the new CPM rates into every per-year slice so
+            // the YoY chart (Earned Media Value series) and the per-year
+            // summary cards stay in sync with the headline. Same
+            // `incr × rate` formula as above — for year rows the data
+            // side encodes `incremental_users_projected = post_users_projected`
+            // so this yields each year's reach-driven EMV without the
+            // frontend needing to distinguish the two cases.
+            var origYears = (_bpiqState.originalData && _bpiqState.originalData.yearly_breakdown) || _bpiqState.data.yearly_breakdown;
+            if (Array.isArray(origYears) && origYears.length) {
+                origYears.forEach(function(y) {
+                    var yv = y.valuation;
+                    if (!yv) return;
+                    var yEmvTotal = 0;
+                    (yv.emv_breakdown || []).forEach(function(r) {
+                        var incr = r.incremental_users_projected;
+                        if (incr == null) incr = (r.post_users_projected || 0) - (r.pre_users_projected || 0);
+                        var override = _bpiqState.rateByPlatform[r.platform];
+                        var rate = (override != null) ? override : (r.emv_per_user_rate || 0);
+                        r.emv_per_user_rate = rate;
+                        r.emv_value = (incr > 0 ? incr : 0) * rate;
+                        if (r.emv_value > 0) yEmvTotal += r.emv_value;
+                    });
+                    yv.earned_media_value = Math.round(yEmvTotal * 100) / 100;
+                    yv.total_brand_value  = Math.round(((yv.earned_media_value      || 0)
+                                                      + (yv.brand_engagement_value || 0)
+                                                      + (yv.brand_lift_value        || 0)
+                                                      + (yv.conversion_value        || 0)) * 100) / 100;
+                    // Mirror onto the top-level legacy `earned_media_value`
+                    // so the YoY chart's "Earned Media Value ($)" series
+                    // reads the fresh number.
+                    y.earned_media_value = yv.earned_media_value;
+                });
+                _bpiqRenderYearly(origYears, (_bpiqState.data && _bpiqState.data._bpiq_active_year) || null);
+            }
             _bpiqRenderPerPlatformTable();
             _bpiqRenderValuation(v);
         }
