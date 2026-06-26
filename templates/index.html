@@ -22243,6 +22243,7 @@
                     </div>
                 </div>
                 <div id="iiqAssetSummary" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;"></div>
+                <div id="iiqAssetTypeFilter"></div>
                 <div class="iiq-asset-filter">
                     <div><label>Window</label><select id="iiqAssetWindow" onchange="reloadIntentIQAssets()"><option value="ytd" selected>Year-to-date (YTD)</option><option value="14d">Last 14 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option><option value="365d">Last 365 days</option><option value="all">Campaign-to-date</option></select></div>
                     <div><label>Phase</label><select id="iiqAssetFilterPhase" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
@@ -23108,6 +23109,117 @@
                 if (d > 4 && d <= 60)     return {info: 0.70, ticket: 0.70};
                 return {info: 0.45, ticket: 0.18};
             }
+            // ===== Global asset-type filter (Q1 / Q2 / Assets tab) =====
+            // Lets the user hide entire asset_type families (e.g. all
+            // "Trailer" assets) from every chart, donut, funnel
+            // aggregate, top-10 list, and asset card simultaneously.
+            // State is slug-scoped so toggling on one title's view
+            // doesn't carry across to another.
+            window._iiqAssetFilter = window._iiqAssetFilter || {};
+            function iiqAssetFilterState(slug) {
+                var k = slug || (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
+                if (!window._iiqAssetFilter[k]) window._iiqAssetFilter[k] = { off: {} };
+                return window._iiqAssetFilter[k];
+            }
+            function iiqAssetFilterActive(slug) {
+                var st = iiqAssetFilterState(slug);
+                for (var _k in st.off) { if (st.off[_k]) return true; }
+                return false;
+            }
+            function iiqFilterAssets(arr, slug) {
+                if (!arr || !arr.length) return arr || [];
+                var st = iiqAssetFilterState(slug);
+                if (!iiqAssetFilterActive(slug)) return arr;
+                return arr.filter(function(a) {
+                    var t = String((a && a.asset_type) || '').toLowerCase();
+                    return !st.off[t];
+                });
+            }
+            function iiqAssetTypesInList(arr) {
+                var seen = {};
+                var out = [];
+                (arr || []).forEach(function(a) {
+                    var t = (a && a.asset_type) || '';
+                    if (!t) return;
+                    var lo = t.toLowerCase();
+                    if (seen[lo]) return;
+                    seen[lo] = true;
+                    out.push(t);
+                });
+                return out.sort(function(a, b) { return String(a).localeCompare(String(b)); });
+            }
+            window.iiqAssetToggleType = function(typ) {
+                if (typ == null) return;
+                var st = iiqAssetFilterState();
+                var k = String(typ).toLowerCase();
+                if (st.off[k]) delete st.off[k];
+                else st.off[k] = true;
+                iiqRerenderForAssetFilter();
+            };
+            window.iiqAssetFilterReset = function() {
+                var st = iiqAssetFilterState();
+                st.off = {};
+                iiqRerenderForAssetFilter();
+            };
+            window.iiqAssetFilterAllOff = function(assetTypes) {
+                var st = iiqAssetFilterState();
+                (assetTypes || []).forEach(function(t) { st.off[String(t).toLowerCase()] = true; });
+                iiqRerenderForAssetFilter();
+            };
+            function iiqRerenderForAssetFilter() {
+                // Re-render whichever question view is mounted (uses
+                // already-cached payload -- no API re-fetch needed).
+                try {
+                    var body = document.getElementById('iiqQBody');
+                    var currentQ = window.__intentIQ && window.__intentIQ.currentQ;
+                    if (body && currentQ && typeof IIQ_QRENDER === 'object'
+                        && typeof IIQ_QRENDER[currentQ] === 'function'
+                        && IIQ_QCACHE && IIQ_QCACHE[currentQ]) {
+                        body.innerHTML = IIQ_QRENDER[currentQ](IIQ_QCACHE[currentQ]);
+                    }
+                } catch (e) { /* swallow -- per-view renderers handle their own empties */ }
+                // Re-render the Assets tab grid if it's mounted. The
+                // grid renderer reads from the cached cards stash so we
+                // don't need to re-hit the API; the filter is applied at
+                // render time.
+                try {
+                    if (typeof window._iiqRenderAssetsGrid === 'function') {
+                        window._iiqRenderAssetsGrid();
+                    }
+                } catch (e) {}
+            }
+
+            // Build the visible chip-bar UI for the filter. Pass the
+            // list of asset_types the current view actually has data
+            // for, so we don't show toggles for types that aren't even
+            // in this title's payload.
+            function iiqAssetFilterBarHtml(assetTypes, opts) {
+                opts = opts || {};
+                var st = iiqAssetFilterState();
+                var anyOff = iiqAssetFilterActive();
+                var chips = (assetTypes || []).map(function(t) {
+                    var lo = String(t).toLowerCase();
+                    var on = !st.off[lo];
+                    var bg = on ? 'rgba(34,197,94,0.16)' : 'rgba(148,163,184,0.10)';
+                    var bd = on ? '1px solid rgba(34,197,94,0.45)' : '1px solid rgba(148,163,184,0.25)';
+                    var col = on ? '#86efac' : '#94a3b8';
+                    var dec = on ? '' : 'text-decoration: line-through; text-decoration-color: rgba(148,163,184,0.6);';
+                    var safeT = String(t).replace(/'/g, "\\'");
+                    return '<button type="button" onclick="window.iiqAssetToggleType(\'' + safeT + '\')" title="Click to ' + (on ? 'hide' : 'show') + ' ' + escapeHtml(t) + ' assets" style="background:' + bg + '; border:' + bd + '; color:' + col + '; font-size:0.72rem; padding:0.25rem 0.6rem; border-radius:4px; cursor:pointer; white-space:nowrap; ' + dec + '">' + escapeHtml(t) + '</button>';
+                }).join('');
+                var resetBtn = anyOff
+                    ? '<button type="button" onclick="window.iiqAssetFilterReset()" style="background:rgba(34,211,238,0.14); border:1px solid rgba(34,211,238,0.4); color:#22d3ee; font-size:0.7rem; padding:0.25rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap;">Reset (show all)</button>'
+                    : '';
+                return '<div class="iiq-card" style="padding:0.55rem 0.8rem; margin-bottom:' + (opts.marginBottom || '0.75rem') + ';">'
+                    +    '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem 0.65rem;">'
+                    +      '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600;">Filter assets</div>'
+                    +      '<div style="font-size:0.7rem; color: var(--text-secondary); flex:1; min-width:160px;">Click a type to hide it across the chart, donut, funnel, and top assets list.</div>'
+                    +      resetBtn
+                    +    '</div>'
+                    +    '<div style="display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.45rem;">' + chips + '</div>'
+                    +  '</div>';
+            }
+
             // Soft-cap / soft-floor helper: never let a hard clamp pin
             // multiple assets to the SAME value. When a value would
             // saturate the cap or floor, we shrink it into a small
@@ -23800,34 +23912,27 @@
                 });
             }
 
-            window.reloadIntentIQAssets = function() {
-                var slug = window.__intentIQ.currentSlug;
-                if (!slug) return;
-                var params = new URLSearchParams();
-                var winEl = document.getElementById('iiqAssetWindow');
-                var win = winEl ? winEl.value : 'ytd';
-                params.set('window', win);
-                var ph = document.getElementById('iiqAssetFilterPhase').value;
-                var ty = document.getElementById('iiqAssetFilterType').value;
-                var po = document.getElementById('iiqAssetFilterPaid').value;
-                var sortEl = document.getElementById('iiqAssetSort');
-                var sortBy = sortEl ? sortEl.value : 'engagement';
-                if (ph) params.set('phase', ph);
-                if (ty) params.set('asset_type', ty);
-                if (po) params.set('paid_or_organic', po);
-                document.getElementById('iiqAssetMeta').textContent = 'Loading...';
-                fetch('/api/intent/' + slug + '/assets?' + params.toString(), { credentials: 'same-origin' })
-                    .then(function(r) { return r.json(); })
-                    .then(function(d) {
-                        if (!d.success) throw new Error(d.error || 'Failed');
-                        var cards = (d.cards || []).slice();
-                        var winLabel = d.window_label || 'YTD';
-                        var typeSel = document.getElementById('iiqAssetFilterType');
-                        if (typeSel.options.length <= 1) {
-                            var types = Array.from(new Set(cards.map(function(c) { return c.asset_type; }).filter(Boolean))).sort();
-                            types.forEach(function(t) { typeSel.appendChild(new Option(t, t)); });
-                        }
-                        cards.sort(function(a, b) {
+            // Render the Assets tab grid from the cached card payload.
+            // Split out from reloadIntentIQAssets so the global asset-
+            // type filter can re-render without a re-fetch. Reads from
+            // window.__intentIQAssetsRaw which is populated by
+            // reloadIntentIQAssets after each successful fetch.
+            window._iiqRenderAssetsGrid = function() {
+                var stash = window.__intentIQAssetsRaw;
+                if (!stash || !document.getElementById('iiqAssetGrid')) return;
+                var allCards = stash.cards || [];
+                var winLabel = stash.winLabel || 'YTD';
+                var sortBy   = stash.sortBy   || 'engagement';
+                // Render the filter chip bar (one chip per distinct
+                // asset_type in the fetched payload, before filtering).
+                var typeBar = document.getElementById('iiqAssetTypeFilter');
+                if (typeBar) {
+                    var typesAll = iiqAssetTypesInList(allCards);
+                    typeBar.innerHTML = typesAll.length ? iiqAssetFilterBarHtml(typesAll) : '';
+                }
+                // Filter and render.
+                var cards = iiqFilterAssets(allCards).slice();
+                cards.sort(function(a, b) {
                             if (sortBy === 'engagement') return (Number(b.ext_engagement_count)||0) - (Number(a.ext_engagement_count)||0);
                             if (sortBy === 'date_desc') return String(b.posted_date||'').localeCompare(String(a.posted_date||''));
                             if (sortBy === 'date_asc')  return String(a.posted_date||'').localeCompare(String(b.posted_date||''));
@@ -23907,7 +24012,40 @@
                                 + '<div class="iiq-card-meta" style="margin-top:0.5rem; font-size:0.7rem; opacity:0.7;">Posted ' + escapeHtml(c.posted_date || '-') + (c.url ? ' · <a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener" style="color: var(--accent-cyan, #5a9ad9);">Open</a>' : '') + '</div>'
                                 + '<div style="margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.25rem;">' + paidChip + phaseChip + talentBadges + '</div>'
                                 + '</div>';
-                        }).join('') || '<div class="iiq-empty">No assets match filters.</div>';
+                        }).join('') || (iiqAssetFilterActive()
+                            ? '<div class="iiq-empty">No assets match the current type filter. <a href="javascript:void(0)" onclick="window.iiqAssetFilterReset()" style="color:#22d3ee;">Reset filter</a> to show all.</div>'
+                            : '<div class="iiq-empty">No assets match filters.</div>');
+            };
+
+            window.reloadIntentIQAssets = function() {
+                var slug = window.__intentIQ.currentSlug;
+                if (!slug) return;
+                var params = new URLSearchParams();
+                var winEl = document.getElementById('iiqAssetWindow');
+                var win = winEl ? winEl.value : 'ytd';
+                params.set('window', win);
+                var ph = document.getElementById('iiqAssetFilterPhase').value;
+                var ty = document.getElementById('iiqAssetFilterType').value;
+                var po = document.getElementById('iiqAssetFilterPaid').value;
+                var sortEl = document.getElementById('iiqAssetSort');
+                var sortBy = sortEl ? sortEl.value : 'engagement';
+                if (ph) params.set('phase', ph);
+                if (ty) params.set('asset_type', ty);
+                if (po) params.set('paid_or_organic', po);
+                document.getElementById('iiqAssetMeta').textContent = 'Loading...';
+                fetch('/api/intent/' + slug + '/assets?' + params.toString(), { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        if (!d.success) throw new Error(d.error || 'Failed');
+                        var cards = (d.cards || []).slice();
+                        var winLabel = d.window_label || 'YTD';
+                        var typeSel = document.getElementById('iiqAssetFilterType');
+                        if (typeSel.options.length <= 1) {
+                            var types = Array.from(new Set(cards.map(function(c) { return c.asset_type; }).filter(Boolean))).sort();
+                            types.forEach(function(t) { typeSel.appendChild(new Option(t, t)); });
+                        }
+                        window.__intentIQAssetsRaw = { slug: slug, cards: cards, winLabel: winLabel, sortBy: sortBy };
+                        window._iiqRenderAssetsGrid();
                     })
                     .catch(function(e) {
                         document.getElementById('iiqAssetMeta').textContent = 'Failed: ' + (e.message || e);
@@ -24338,9 +24476,14 @@
                 var sortKey = window._iiqQ1.sortKey;
                 var sortDir = window._iiqQ1.sortDir;
 
-                var funnelGroups = iiqQ1FunnelRollup(d._assets || []);
+                var _q1AssetsAll  = (d._assets || []);
+                var _q1AssetsKeep = iiqFilterAssets(_q1AssetsAll);
+                var funnelGroups = iiqQ1FunnelRollup(_q1AssetsKeep);
                 var groupList = Object.keys(funnelGroups).map(function(k) { return funnelGroups[k]; });
                 if (!groupList.length) {
+                    if (iiqAssetFilterActive() && _q1AssetsAll.length) {
+                        return '<div class="iiq-empty">No assets remain after filter. <a href="javascript:void(0)" onclick="window.iiqAssetFilterReset()" style="color:#22d3ee;">Reset filter</a> to show all.</div>';
+                    }
                     return '<div class="iiq-empty">Loading asset-level projections\u2026 (or no YTD assets for this title yet)</div>';
                 }
 
@@ -24385,7 +24528,12 @@
                         + '</div>';
                 }
 
-                var html = '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
+                var html = '';
+                var _q1AssetTypesList = iiqAssetTypesInList(_q1AssetsAll);
+                if (_q1AssetTypesList.length) {
+                    html += iiqAssetFilterBarHtml(_q1AssetTypesList);
+                }
+                html += '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
                     + iiqSummaryTile('Categories ranked', String(groupList.length), 'asset_type \u00d7 paid/organic')
                     + iiqSummaryTile('Total assets (YTD)', String(grandAssets), '')
                     + iiqSummaryTile('Total YTD views', fmtCompact(grandViews), 'sum of ext_view_count across all assets')
@@ -24439,16 +24587,46 @@
 
             function iiqRenderQ2(d) {
                 var cum = d.cumulative || [];
-                var best = d.best_in_flight_ytd || d.best_in_flight_14d || [];
+                var bestRaw = d.best_in_flight_ytd || d.best_in_flight_14d || [];
                 var bestLabel = d.best_in_flight_window_label || 'YTD';
-                if (!cum.length && !best.length) return '<div class="iiq-empty">Q2 has no engagement data yet.</div>';
-                // Build per-day cumulative by paid/organic
+                if (!cum.length && !bestRaw.length) return '<div class="iiq-empty">Q2 has no engagement data yet.</div>';
+
+                // Apply the global asset-type filter. When ANY type is
+                // toggled off we rebuild the per-day per-key view map
+                // from the filtered assets instead of using the
+                // server-provided cum array (which is pre-aggregated
+                // across all types and can't be split after the fact).
+                var assetsAll  = (d._assets || []);
+                var assetsKeep = iiqFilterAssets(assetsAll);
+                var bestKeep   = iiqFilterAssets(bestRaw);
+                var filterActive = iiqAssetFilterActive() && assetsAll.length > 0;
+                var best = bestKeep;
+
+                // Build per-day per-key view map. When the filter is
+                // active (and we have per-asset data to redistribute),
+                // use the filtered _assets; otherwise use cum.
                 var byKey = {};
-                cum.forEach(function(r) {
-                    var k = r.paid_or_organic || 'unknown';
-                    if (!byKey[k]) byKey[k] = [];
-                    byKey[k].push({ x: r.date, y: Number(r.cumulative_views_to_date) || 0 });
-                });
+                if (filterActive) {
+                    assetsKeep.forEach(function(a) {
+                        var k = (a.paid_or_organic || 'unknown').toLowerCase();
+                        if (k === 'natural') k = 'organic';
+                        if (!byKey[k]) byKey[k] = [];
+                        var dt = String(a.posted_date || '').slice(0, 10);
+                        if (!dt) return;
+                        var v = Number(a.ext_view_count) || 0;
+                        if (v <= 0) return;
+                        byKey[k].push({ x: dt, y: v });
+                    });
+                } else {
+                    cum.forEach(function(r) {
+                        var k = r.paid_or_organic || 'unknown';
+                        if (!byKey[k]) byKey[k] = [];
+                        byKey[k].push({ x: r.date, y: Number(r.cumulative_views_to_date) || 0 });
+                    });
+                }
+                if (!Object.keys(byKey).length) {
+                    return '<div class="iiq-empty">No matching assets after filter. <a href="javascript:void(0)" onclick="window.iiqAssetFilterReset()" style="color:#22d3ee;">Reset filter</a> to show all.</div>';
+                }
                 var sumByKey = {};
                 Object.keys(byKey).forEach(function(k) {
                     sumByKey[k] = byKey[k].reduce(function(s, p) { return s + p.y; }, 0);
@@ -24536,7 +24714,7 @@
                 // Top row: slim donut on the left, paid-vs-organic funnel
                 // comparison on the right. Cumulative line chart drops below
                 // to its own full-width card so both top cards stay slim.
-                var agg = iiqQ2PaidOrganicFunnel(d._assets || []);
+                var agg = iiqQ2PaidOrganicFunnel(assetsKeep);
                 // Build cumulative info-seekers + ticketing series on a
                 // RIGHT Y-axis so they're visible alongside cumulative views
                 // (which is ~20x larger). Per-day funnel = sum over series of
@@ -24731,7 +24909,7 @@
                 // (date, paid_or_organic) but not per-asset labels). The dots
                 // stack vertically at each date so dense ship-days are
                 // visually obvious.
-                var assetsRaw = (d._assets && d._assets.length) ? d._assets : [];
+                var assetsRaw = (assetsKeep && assetsKeep.length) ? assetsKeep : [];
                 var paidColorPal    = IIQ_QPALETTE.paid;
                 var organicColorPal = IIQ_QPALETTE.organic;
                 var chartEvents = [];
@@ -24843,6 +25021,12 @@
                 else if (daysFromOW === 0) contextLbl = 'opening day';
                 else                       contextLbl = daysFromOW + ' day' + (daysFromOW === 1 ? '' : 's') + ' AFTER opening';
                 var html = '';
+                // Asset-type filter bar (global across IIQ): show one
+                // chip per distinct asset_type in this title's data.
+                var _assetTypesList = iiqAssetTypesInList(assetsAll);
+                if (_assetTypesList.length) {
+                    html += iiqAssetFilterBarHtml(_assetTypesList);
+                }
                 html += '<div class="iiq-card" style="padding:0.65rem 0.85rem; margin-bottom:0.75rem;">'
                     +     '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.55rem 0.85rem; margin-bottom:0.4rem;">'
                     +       '<div style="font-size:0.85rem; color:#e2e8f0; font-weight:600;">Campaign rewind</div>'
@@ -25570,7 +25754,7 @@
                 var sortDir = window._iiqQ4.sortDir;
                 // Preferred path: per-asset rollup from /api/intent/<slug>/assets
                 // (matches Assets page and Q1 funnel exactly).
-                var rolled = iiqQ4TalentRollupFromAssets(d._assets || []);
+                var rolled = iiqQ4TalentRollupFromAssets(iiqFilterAssets(d._assets || []));
                 var usingAssets = rolled.length > 0;
                 var rows;
                 if (usingAssets) {
@@ -25609,7 +25793,12 @@
                 // regardless of which column the user has chosen to sort by.
                 var top = rows.slice().sort(function(a,b){ return (Number(b.views)||0) - (Number(a.views)||0); })[0];
 
-                var html = '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
+                var html = '';
+                var _q4AssetTypesList = iiqAssetTypesInList(d._assets || []);
+                if (_q4AssetTypesList.length) {
+                    html += iiqAssetFilterBarHtml(_q4AssetTypesList);
+                }
+                html += '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
                     + iiqSummaryTile('Cast members surfaced', String(rows.length), 'in tagged campaign assets')
                     + iiqSummaryTile('Talent-driven views', fmtCompact(totalV), 'across all cast-tagged assets')
                     + iiqSummaryTile('Top contributor', top ? top.talent : '-', top ? fmtCompact(top.views) + ' views · ' + top.asset_count + ' assets' : '')
