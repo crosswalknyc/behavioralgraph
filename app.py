@@ -8862,17 +8862,51 @@ def get_netflix_clickhouse_ranker_data():
     netflix_clickstream investigation) and is being cleaned up separately.
     The column exists in the payload so the frontend can render it as an
     empty placeholder rather than omitting it.
+
+    type/genre/limit query params (added 2026-06): previously this always
+    pulled a single fixed top-200-by-views sample and the frontend
+    filtered that same 200 rows client-side for Movies/Shows/genre. Niche
+    combinations (e.g. Anime) could come back with only a handful of rows
+    even though the full table has thousands, because the filter was
+    starving on a tiny global sample rather than querying the real
+    population. Filtering now happens server-side against the full table,
+    and the row cap is raised well past 200 (default 500, max 2000) so
+    users can actually see more than 200 rows.
     """
+    type_filter = (request.args.get('type') or '').strip()
+    genre_filter = (request.args.get('genre') or '').strip()
+    try:
+        limit = int(request.args.get('limit', 500))
+    except (TypeError, ValueError):
+        limit = 500
+    limit = max(1, min(limit, 2000))
+
+    where_parts = ["NAME_OF_SHOW IS NOT NULL", "TRIM(NAME_OF_SHOW) != ''"]
+    params = {}
+
+    if type_filter in ('Movie', 'Show'):
+        where_parts.append("TYPE = {type_filter:String}")
+        params['type_filter'] = type_filter
+
+    if genre_filter:
+        # GENRE is a packed comma-separated tag string (e.g. "Kids' TV,
+        # TV Cartoons"); match a trimmed exact tag, mirroring the
+        # frontend's old _netflixChRowHasGenre semantics.
+        where_parts.append("arrayExists(t -> trim(t) = {genre_filter:String}, splitByChar(',', GENRE))")
+        params['genre_filter'] = genre_filter
+
+    where_clause = " AND ".join(where_parts)
+
     try:
         conn = _ch_connect()
         cur = conn.cursor()
-        cur.execute("""
+        cur.execute(f"""
             SELECT NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME, VIEW_COUNT, GENRE, RUN_TIME
             FROM netflix.netflix_ranker
-            WHERE NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != \'\'
+            WHERE {where_clause}
             ORDER BY VIEW_COUNT DESC
-            LIMIT 200
-        """)
+            LIMIT {limit}
+        """, params)
         rows = cur.fetchall()
         out = [
             {
@@ -8892,6 +8926,36 @@ def get_netflix_clickhouse_ranker_data():
         return jsonify({'success': True, 'rows': out})
     except Exception as e:
         print(f"[Netflix ClickHouse Ranker] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/rankers/netflix-clickhouse/genres', methods=['GET'])
+@requires_auth
+def get_netflix_clickhouse_genres():
+    """
+    Full distinct list of genre tags across ALL rows in
+    netflix.netflix_ranker - not just whatever made it into the main
+    ranker endpoint's current LIMIT-ed/filtered page. The genre dropdown
+    needs this so it always lists every genre, regardless of the active
+    type filter or row limit (previously it was built from the loaded
+    page of rows, so rare genres could be missing from the dropdown
+    entirely if none of their rows made the top-200-by-views cut).
+    """
+    try:
+        conn = _ch_connect()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT DISTINCT trim(g) AS genre
+            FROM netflix.netflix_ranker
+            ARRAY JOIN splitByChar(',', GENRE) AS g
+            WHERE trim(g) != ''
+            ORDER BY genre
+        """)
+        rows = cur.fetchall()
+        genres = [r[0] for r in rows]
+        return jsonify({'success': True, 'genres': genres})
+    except Exception as e:
+        print(f"[Netflix ClickHouse Genres] Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
