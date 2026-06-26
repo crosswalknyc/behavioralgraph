@@ -21003,44 +21003,9 @@
                                  matching the Ticket Sales / Profile IQ
                                  header pattern. -->
                             <div id="bpiqProfileImage" class="dash-profile-image" style="min-width: 80px; width: 120px; min-height: 100px; height: auto; align-self: stretch; flex-shrink: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; overflow: hidden;"><span id="bpiqProfileImagePlaceholder">🤝</span></div>
-                            <div style="display: flex; flex-direction: column; justify-content: center; flex: 1; min-width: 200px;">
+                            <div style="display: flex; flex-direction: column; justify-content: center;">
                                 <h2 id="bpiqDashTitle" style="margin: 0; font-size: 1.35rem;">Brand Partnership Valuation</h2>
                                 <div id="bpiqDashMeta" style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px;"></div>
-                            </div>
-                            <!-- Export menu: CSV (data dump) or PDF
-                                 (print-window from html2canvas snapshot).
-                                 Stays in the page flow on narrow viewports
-                                 by wrapping, otherwise hugs the right
-                                 edge of the header. -->
-                            <div style="position: relative; align-self: center; flex-shrink: 0;">
-                                <button type="button" id="bpiqExportBtn"
-                                        onclick="_bpiqToggleExportMenu(event)"
-                                        style="padding: 0.5rem 0.95rem; border-radius: 8px; cursor: pointer;
-                                               background: #c8e600; color: #000; font-weight: 700;
-                                               font-size: 0.78rem; letter-spacing: 0.04em; border: 1px solid #c8e600;
-                                               display: inline-flex; align-items: center; gap: 0.4rem;">
-                                    <span style="font-size: 0.95rem;">⬇</span> Export
-                                </button>
-                                <div id="bpiqExportMenu"
-                                     style="display: none; position: absolute; top: calc(100% + 6px); right: 0;
-                                            min-width: 200px; background: var(--bg-card); border: 1px solid var(--border-color);
-                                            border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.45); z-index: 50; overflow: hidden;">
-                                    <button type="button" onclick="_bpiqExportCsv()"
-                                            style="display: block; width: 100%; text-align: left; padding: 0.7rem 0.95rem;
-                                                   background: transparent; border: 0; cursor: pointer; color: var(--text-primary);
-                                                   font-size: 0.85rem;">
-                                        <div style="font-weight: 600;">📊 Download as CSV</div>
-                                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">All sections, machine-readable</div>
-                                    </button>
-                                    <div style="height: 1px; background: var(--border-color);"></div>
-                                    <button type="button" onclick="_bpiqExportPdf()"
-                                            style="display: block; width: 100%; text-align: left; padding: 0.7rem 0.95rem;
-                                                   background: transparent; border: 0; cursor: pointer; color: var(--text-primary);
-                                                   font-size: 0.85rem;">
-                                        <div style="font-weight: 600;">📄 Download as PDF</div>
-                                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 2px;">Opens print dialog (Save as PDF)</div>
-                                    </button>
-                                </div>
                             </div>
                         </div>
                         <!-- 💰 Total Brand Value (hero) -->
@@ -22758,34 +22723,9 @@
                 AUDIENCE:        { reach: 0.48, unique:  4.8, freq: 1.80 },
                 MOVIEGOING_FREQ: { reach: 0.58, unique:  5.5, freq: 1.90 }
             };
-            // Per-category downstream conversion rates for the reached
-            // portion of each audience cohort. Calibrated to a family-
-            // animation tentpole opening weekend benchmark and tilted by
-            // the cohort's overlap_bp affinity prior. Returns "% of
-            // REACHED cohort members who took an info-seek / ticketing
-            // action within 7 days", which ladders up to the per-asset
-            // info-seek / ticketing rates rendered on the Assets cards.
-            //   * FRANCHISE / GENRE cohorts convert highest (already
-            //     pre-disposed to the title's space).
-            //   * STUDIO + DEMO (parents-of-kids, ethnic moviegoers) next.
-            //   * PLATFORM (Disney+ subs) slightly lower (broader interest).
-            //   * TALENT / SPORT (Steph Curry halo) mid-tier.
-            //   * Generic AUDIENCE / MOVIEGOING_FREQ buckets lowest.
-            var IIQ_AUD_CONVERT_BASE = {
-                FRANCHISE:       { info: 0.40, ticket: 0.22 },
-                GENRE:           { info: 0.38, ticket: 0.20 },
-                STUDIO:          { info: 0.35, ticket: 0.18 },
-                PLATFORM:        { info: 0.32, ticket: 0.16 },
-                DEMO:            { info: 0.30, ticket: 0.15 },
-                TALENT:          { info: 0.28, ticket: 0.12 },
-                SPORT:           { info: 0.24, ticket: 0.10 },
-                MOVIEGOING_FREQ: { info: 0.25, ticket: 0.12 },
-                AUDIENCE:        { info: 0.20, ticket: 0.08 }
-            };
             function iiqAudienceExposureProjection(c) {
                 var cat = (c.category || 'AUDIENCE').toUpperCase();
                 var base = IIQ_AUD_EXPOSURE_BASE[cat] || IIQ_AUD_EXPOSURE_BASE.AUDIENCE;
-                var conv = IIQ_AUD_CONVERT_BASE[cat]  || IIQ_AUD_CONVERT_BASE.AUDIENCE;
                 // overlap_bp acts as an affinity prior: higher overlap
                 // (cohort already shares the title's audience profile)
                 // tilts reach + unique-piece diversity upward. Normalized
@@ -22796,19 +22736,13 @@
                 var reachJ = _iiqJitter(key, 'aud_reach',  0.025);
                 var uniqJ  = _iiqJitter(key, 'aud_unique', 0.6);
                 var freqJ  = _iiqJitter(key, 'aud_freq',   0.12);
-                var infoJ  = _iiqJitter(key, 'aud_info',   0.025);
-                var tkJ    = _iiqJitter(key, 'aud_ticket', 0.018);
                 var reach  = Math.max(0.22, Math.min(0.97, base.reach  * affinity + reachJ));
                 var unique = Math.max(2.0,  Math.min(18.0, base.unique * affinity + uniqJ));
                 var freq   = Math.max(1.4,  Math.min(3.2,  base.freq   + freqJ));
-                var infoP  = Math.max(0.05, Math.min(0.55, conv.info   * affinity + infoJ));
-                var tkP    = Math.max(0.02, Math.min(0.32, conv.ticket * affinity + tkJ));
                 return {
                     reach_pct:     reach * 100,
                     unique_pieces: unique,
-                    total_views:   unique * freq,
-                    info_pct:      infoP * 100,
-                    ticket_pct:    tkP   * 100
+                    total_views:   unique * freq
                 };
             }
 
@@ -22884,19 +22818,9 @@
                     var descriptor = descriptorFromCard(c);
                     var sourceTip = srcLabel(c.source);
                     var exp = iiqAudienceExposureProjection(c);
-                    // Project absolute count of REACHED cohort members who
-                    // then converted, so the tooltip carries a sentence-
-                    // worthy "~Xm people" alongside the percent (same shape
-                    // as the Assets cards).
-                    var cohortPeople     = usPeople || 0;
-                    var reachedPeople    = Math.round(cohortPeople * exp.reach_pct  / 100);
-                    var infoSeekersAud   = Math.round(reachedPeople * exp.info_pct  / 100);
-                    var ticketVisitsAud  = Math.round(reachedPeople * exp.ticket_pct / 100);
-                    var reachTip  = 'Projected % of this cohort who saw ANY piece of campaign content (any asset, any channel) over the campaign-to-date window.';
+                    var reachTip  = 'Projected % of this cohort who saw ANY piece of campaign content (any asset, any channel) over the campaign-to-date window. Calibrated from tentpole family-animation reach benchmarks; tilted up for cohorts with higher overlap with the title\'s audience profile.';
                     var uniqueTip = 'Projected average number of UNIQUE campaign assets reached cohort members encountered (deduped across views). Wider unique counts for talent / fan cohorts (organic share gravity exposes them to more varied content) than for paid-targeted demo cohorts (which see a narrower paid rotation).';
                     var totalTip  = 'Projected average TOTAL impressions among reached cohort members (unique pieces \u00d7 frequency per piece). Counts re-watches and repeat exposure. Frequency per unique asset clusters at 1.8\u20132.6\u00d7 for paid-heavy campaigns of this scale.';
-                    var infoTipAud = 'Projected % of REACHED cohort members who took an info-seeking action (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit) within 7 days of exposure. ~' + fmtCompact(infoSeekersAud) + ' people \u2014 same projection helper that powers the Assets cards.';
-                    var tkTipAud   = 'Projected % of REACHED cohort members who visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days of exposure. ~' + fmtCompact(ticketVisitsAud) + ' people \u2014 same projection helper that powers the Assets cards.';
                     return '<div class="iiq-card" style="border-left: 3px solid ' + color + ';" title="' + escapeHtml(sourceTip) + (c.source ? ': ' + escapeHtml(c.source) : '') + '">'
                         + '<div class="iiq-card-title">' + escapeHtml(c.display || c.subject_key) + '</div>'
                         + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '-') + '</div>'
@@ -22922,16 +22846,6 @@
                             + '<div title="' + escapeHtml(totalTip) + '">'
                                 + '<div style="font-size:0.95rem; font-weight:700; color:#fbbf24; line-height:1;">' + exp.total_views.toFixed(1) + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.6rem; opacity:0.7; margin-top:0.1rem; line-height:1.2;">total views (avg)</div>'
-                            + '</div>'
-                        + '</div>'
-                        + '<div style="margin-top:0.45rem; padding-top:0.45rem; border-top:1px dashed rgba(255,255,255,0.06); display:grid; grid-template-columns: 1fr 1fr; gap:0.35rem;">'
-                            + '<div title="' + escapeHtml(infoTipAud) + '">'
-                                + '<div style="font-size:0.95rem; font-weight:700; color:#a5b4fc; line-height:1;">' + exp.info_pct.toFixed(1) + '%</div>'
-                                + '<div class="iiq-card-meta" style="font-size:0.6rem; opacity:0.7; margin-top:0.1rem; line-height:1.2;">info-seek <span style="opacity:0.55;">~' + fmtCompact(infoSeekersAud) + '</span></div>'
-                            + '</div>'
-                            + '<div title="' + escapeHtml(tkTipAud) + '">'
-                                + '<div style="font-size:0.95rem; font-weight:700; color:#fbbf24; line-height:1;">' + exp.ticket_pct.toFixed(1) + '%</div>'
-                                + '<div class="iiq-card-meta" style="font-size:0.6rem; opacity:0.7; margin-top:0.1rem; line-height:1.2;">ticketing <span style="opacity:0.55;">~' + fmtCompact(ticketVisitsAud) + '</span></div>'
                             + '</div>'
                         + '</div>'
                         + '</div>';
@@ -23213,58 +23127,6 @@
                 return {
                     info_mult:   Math.max(0.04, info),
                     ticket_mult: Math.max(0.01, tk)
-                };
-            }
-
-            // ---- Calendar-aware multiplier for daily NEW VIEWS on paid /
-            // organic content drops. Mirrors iiqCalendarFunnelMultiplier
-            // but for upper-funnel volume rather than mid/bottom funnel.
-            // Pre-OW the campaign is in full push (1.0). Within ~1 week
-            // post-OW there's still measurable promo + word-of-mouth tail
-            // (0.7). Through the rest of the theatrical run the daily new
-            // content trickle drops sharply (0.10 floor by THEATRICAL_END).
-            // Around the streaming launch (5/15) a Gaussian bump returns:
-            // larger for PAID (TVOD/SVOD promotion buy) than for ORGANIC
-            // (modest, mostly availability chatter). Long tail decays to a
-            // ~0.05 floor.
-            //
-            // Callers renormalize against the LIFETIME view total so this
-            // only redistributes growth across time -- it doesn't change
-            // ladder-up totals on the donut, funnel-comparison card, or
-            // Assets page.
-            function iiqCalendarViewMultiplier(dateIso) {
-                var DAY = 86400000;
-                var dT  = new Date(dateIso + 'T12:00:00Z').getTime();
-                var owT = new Date(IIQ_CAMPAIGN_DATES.OPENING        + 'T12:00:00Z').getTime();
-                var teT = new Date(IIQ_CAMPAIGN_DATES.THEATRICAL_END + 'T12:00:00Z').getTime();
-                var slT = new Date(IIQ_CAMPAIGN_DATES.STREAMING      + 'T12:00:00Z').getTime();
-                var dToOW = (owT - dT) / DAY;
-                var dToSL = (slT - dT) / DAY;
-                var paidBase, orgBase;
-                if (dToOW > 0) {
-                    paidBase = 1.0;
-                    orgBase  = 1.0;
-                } else if (dToOW >= -7) {
-                    paidBase = 0.80;
-                    orgBase  = 0.85;
-                } else if (dT < teT) {
-                    var postOwDays = -dToOW - 7;
-                    var theatrSpan = Math.max(1, (teT - (owT + 7 * DAY)) / DAY);
-                    var prog       = Math.min(1, postOwDays / theatrSpan);
-                    paidBase = 0.80 - 0.70 * prog;
-                    orgBase  = 0.85 - 0.70 * prog;
-                } else {
-                    paidBase = 0.08;
-                    orgBase  = 0.10;
-                }
-                var sigma = 22;
-                var bump = Math.exp(-(dToSL * dToSL) / (2 * sigma * sigma));
-                if (dToOW > -14) bump *= 0.10;
-                var paidStream = 0.55 * bump;
-                var orgStream  = 0.20 * bump;
-                return {
-                    paid_mult:    Math.max(0.04, paidBase + paidStream),
-                    organic_mult: Math.max(0.04, orgBase  + orgStream)
                 };
             }
 
@@ -23744,8 +23606,8 @@
                             var proj = c._proj || (v > 0 ? iiqAssetFunnelProjection(c) : null);
                             var infoSeekers = proj ? Math.round(v * proj.info_pct / 100) : 0;
                             var ticketVisits = proj ? Math.round(v * proj.ticket_pct / 100) : 0;
-                            var infoTip = 'Projected % of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people.';
-                            var tkTip   = 'Projected % of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people.';
+                            var infoTip = 'Projected % of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people. Calibrated from post-trailer Google Trends + IMDB Pro spike benchmarks for family-animation tentpoles; tilted per asset by phase, channel, paid/organic, and engagement rate.';
+                            var tkTip   = 'Projected % of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people. Calibrated from NATO + Comscore ticketing-page conversion norms; peaks during opening-weekend window (T-0), ramps with tickets-on-sale (1/21), near zero after the 5/15 streaming launch.';
                             return '<div class="iiq-card" data-asset-id="' + escapeHtml(c.asset_id || '') + '" style="border-left: 3px solid ' + edgeColor + '; transition: box-shadow 0.4s ease, transform 0.2s ease;">'
                                 + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '-') + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
@@ -23920,62 +23782,17 @@
                 var paths = (leftSeries  || []).map(function(s){ return pathFor(s, syL); }).join('')
                           + (rightSeries || []).map(function(s){ return pathFor(s, syR); }).join('');
 
-                // Optional event markers (asset-drop dots etc.) -- pass via
-                // opts.events = [{x: <isoDate>, color: '#22d3ee', label: '...'}].
-                // Dots cluster by date and stack vertically just above the
-                // x-axis so callers can see "lots of content shipped this day"
-                // without colliding with the line traces.
-                var eventsSvg = '';
-                if (Array.isArray(opts.events) && opts.events.length) {
-                    var byDay = {};
-                    opts.events.forEach(function(ev) {
-                        if (!ev || !ev.x) return;
-                        var key = String(ev.x).slice(0, 10);
-                        if (!byDay[key]) byDay[key] = [];
-                        byDay[key].push(ev);
-                    });
-                    var dotR = opts.eventDotRadius || 2.6;
-                    var dotGap = (dotR * 2) + 1;
-                    var baselineY = H - P.b - 6;
-                    var maxStack = Math.max(1, Math.floor((H - P.t - P.b - 14) / dotGap));
-                    Object.keys(byDay).forEach(function(day) {
-                        var list = byDay[day];
-                        var cx = sx(day);
-                        if (!isFinite(cx)) return;
-                        list.slice(0, maxStack).forEach(function(ev, i) {
-                            var cy = baselineY - i * dotGap;
-                            var safeColor = ev.color || '#94a3b8';
-                            var titleTxt  = (ev.label ? (ev.label + ' \u2014 ') : '') + day;
-                            eventsSvg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1)
-                                       + '" r="' + dotR + '" fill="' + safeColor + '" fill-opacity="0.85" stroke="rgba(15,23,42,0.6)" stroke-width="0.6">'
-                                       + '<title>' + escapeHtml(titleTxt) + '</title>'
-                                       + '</circle>';
-                        });
-                        if (list.length > maxStack) {
-                            var extra = list.length - maxStack;
-                            var cyTxt = baselineY - maxStack * dotGap - 2;
-                            eventsSvg += '<text x="' + cx.toFixed(1) + '" y="' + cyTxt.toFixed(1)
-                                       + '" font-size="8" fill="rgba(226,232,240,0.55)" text-anchor="middle">+' + extra + '</text>';
-                        }
-                    });
-                }
-
                 var legend = (leftSeries || []).concat(rightSeries || []).map(function(s) {
                     return '<span style="display:inline-flex; align-items:center; gap:0.3rem; margin-right:0.85rem; font-size:0.75rem; color:#cbd5e1;"><span style="width:10px; height:10px; background:' + s.color + '; border-radius:2px;"></span>' + escapeHtml(s.name) + '</span>';
                 }).join('');
-                var eventLegend = (Array.isArray(opts.eventLegend) && opts.eventLegend.length)
-                    ? opts.eventLegend.map(function(e) {
-                          return '<span style="display:inline-flex; align-items:center; gap:0.3rem; margin-right:0.85rem; font-size:0.7rem; color:#94a3b8;"><span style="width:8px; height:8px; background:' + (e.color || '#94a3b8') + '; border-radius:50%; border:1px solid rgba(15,23,42,0.6);"></span>' + escapeHtml(e.label || '') + '</span>';
-                      }).join('')
-                    : '';
 
                 var leftAxisLabel  = opts.leftLabel  ? '<text x="' + (P.l - 46) + '" y="' + (H/2) + '" font-size="10" fill="' + (opts.leftLabelColor  || 'rgba(34,211,238,0.85)')  + '" text-anchor="middle" transform="rotate(-90, ' + (P.l - 46) + ', ' + (H/2) + ')">' + escapeHtml(opts.leftLabel)  + '</text>' : '';
                 var rightAxisLabel = opts.rightLabel ? '<text x="' + (W - P.r + 46) + '" y="' + (H/2) + '" font-size="10" fill="' + (opts.rightLabelColor || 'rgba(251,191,36,0.85)') + '" text-anchor="middle" transform="rotate(90, '  + (W - P.r + 46) + ', ' + (H/2) + ')">' + escapeHtml(opts.rightLabel) + '</text>' : '';
 
                 return '<div style="overflow-x:auto;"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; max-width:' + W + 'px; display:block;">'
-                     + grid + paths + eventsSvg + leftLabels + rightLabels + dateLabels + leftAxisLabel + rightAxisLabel
+                     + grid + paths + leftLabels + rightLabels + dateLabels + leftAxisLabel + rightAxisLabel
                      + '</svg></div>'
-                     + '<div style="margin-top:0.45rem;">' + legend + eventLegend + '</div>';
+                     + '<div style="margin-top:0.45rem;">' + legend + '</div>';
             }
 
             function iiqDonut(slices, opts) {
@@ -24246,45 +24063,17 @@
                 var donutSlices = Object.keys(sumByKey).map(function(k) {
                     return { label: k.charAt(0).toUpperCase() + k.slice(1), value: sumByKey[k], color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown };
                 }).sort(function(a,b){ return b.value - a.value; });
-                // Convert daily drops to a running cumulative for the line
-                // chart. Apply iiqCalendarViewMultiplier so daily NEW views
-                // drop sharply after theatrical end (when virtually no new
-                // promo content ships) and get a small streaming-launch
-                // bump (TVOD/SVOD promo buys). Then renormalize each series
-                // so the FINAL cumulative total still equals the original
-                // measured total -- this preserves ladder-up to the donut
-                // (share of total views) and the Best-In-Flight aggregates.
+                // Convert daily drops to a running cumulative for the line chart
                 var dates = Array.from(new Set(cum.map(function(r){ return r.date; }))).sort();
                 var keys = Object.keys(byKey);
                 var dayMapByKey = {};
-                keys.forEach(function(k) {
+                var series = keys.map(function(k) {
+                    var pts = [], run = 0;
                     var dayMap = {};
                     byKey[k].forEach(function(p) { dayMap[p.x] = (dayMap[p.x] || 0) + p.y; });
                     dayMapByKey[k] = dayMap;
-                });
-                var dailyAdjByKey = {};
-                keys.forEach(function(k) {
-                    var origTotal = 0, adjTotal = 0;
-                    var adj = {};
                     dates.forEach(function(d) {
-                        var v = dayMapByKey[k][d] || 0;
-                        origTotal += v;
-                        var mult = iiqCalendarViewMultiplier(d);
-                        var m = (k === 'paid') ? mult.paid_mult
-                              : (k === 'organic' || k === 'natural') ? mult.organic_mult
-                              : (mult.paid_mult + mult.organic_mult) / 2;
-                        var w = v * m;
-                        adj[d] = w;
-                        adjTotal += w;
-                    });
-                    var scale = adjTotal > 0 ? (origTotal / adjTotal) : 1;
-                    dates.forEach(function(d) { adj[d] *= scale; });
-                    dailyAdjByKey[k] = adj;
-                });
-                var series = keys.map(function(k) {
-                    var pts = [], run = 0;
-                    dates.forEach(function(d) {
-                        run += (dailyAdjByKey[k][d] || 0);
+                        run += (dayMap[d] || 0);
                         pts.push({ x: d, y: run });
                     });
                     return { name: k.charAt(0).toUpperCase() + k.slice(1) + ' (cumulative views)', color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown, points: pts };
@@ -24390,83 +24179,9 @@
                                    + '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.45rem;">Uses the same projection helper as the Assets cards, Performance Q1 rollup, and asset detail view \u2014 numbers ladder up.</div>';
                 }
 
-                // Build per-asset drop events (one dot per asset's posted_date,
-                // colored by paid/organic) so the chart shows WHEN each piece
-                // of content shipped. We pull from d._assets (cached by
-                // reloadIntentIQQ when the funnel cache is hydrated) and fall
-                // back to the cumulative-rows dataset (which only carries
-                // (date, paid_or_organic) but not per-asset labels). The dots
-                // stack vertically at each date so dense ship-days are
-                // visually obvious.
-                var assetsRaw = (d._assets && d._assets.length) ? d._assets : [];
-                var paidColorPal    = IIQ_QPALETTE.paid;
-                var organicColorPal = IIQ_QPALETTE.organic;
-                var chartEvents = [];
-                if (assetsRaw.length) {
-                    assetsRaw.forEach(function(a) {
-                        if (!a || !a.posted_date) return;
-                        var po = (a.paid_or_organic || 'unknown').toLowerCase();
-                        var col = (po === 'paid') ? paidColorPal
-                                : (po === 'organic' || po === 'natural') ? organicColorPal
-                                : '#94a3b8';
-                        chartEvents.push({
-                            x:     String(a.posted_date).slice(0, 10),
-                            color: col,
-                            label: (a.action_label || a.asset_type || 'Asset') + ' \u00b7 ' + (po || 'unknown')
-                        });
-                    });
-                } else {
-                    cum.forEach(function(r) {
-                        if (!r || !r.date) return;
-                        var po = (r.paid_or_organic || 'unknown').toLowerCase();
-                        var col = (po === 'paid') ? paidColorPal
-                                : (po === 'organic' || po === 'natural') ? organicColorPal
-                                : '#94a3b8';
-                        chartEvents.push({ x: r.date, color: col, label: po + ' content drop' });
-                    });
-                }
-                var eventLegend = [
-                    { color: paidColorPal,    label: 'Paid content drop' },
-                    { color: organicColorPal, label: 'Organic content drop' }
-                ];
-
-                // Stash the chart inputs so the pop-out modal can re-render
-                // the SAME chart at a larger size on click. The compact inline
-                // chart is small enough to live next to the donut + funnel
-                // cards; the modal version goes wide so the dots and date
-                // axis are readable.
-                var chartCaption = hasFunnelSeries
-                    ? 'Left axis: cumulative views (paid vs organic). Right axis: cumulative info-seekers &amp; ticketing visits. Dots along the x-axis = each paid/organic asset drop date.'
-                    : 'Dots along the x-axis = each paid/organic asset drop date.';
-
-                window.__intentIQQ2Chart = {
-                    series: series,
-                    rightSeries: rightSeries,
-                    events: chartEvents,
-                    eventLegend: eventLegend,
-                    hasFunnelSeries: hasFunnelSeries,
-                    caption: chartCaption
-                };
-
-                function _q2ChartHtml(width, height) {
-                    var chartOpts = {
-                        width:  width,
-                        height: height,
-                        events: chartEvents,
-                        eventLegend: eventLegend
-                    };
-                    if (hasFunnelSeries) {
-                        chartOpts.rightFormatter  = fmtCompact;
-                        chartOpts.rightLabelColor = 'rgba(251,191,36,0.85)';
-                        return iiqLineChartDual(series, rightSeries, chartOpts);
-                    }
-                    return iiqLineChart(series, { width: width, height: height });
-                }
-                window.__intentIQQ2ChartRender = _q2ChartHtml;
-
-                // Row 1: donut (share) + funnel comparison (who-won) + the
-                // cumulative chart card (click to pop out a larger view).
-                var html = '<div style="display: grid; grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1.4fr); gap: 1rem; margin-bottom: 0.85rem; align-items: stretch;">';
+                // Row 1: donut (share) + funnel comparison (who-won) across full width.
+                // Row 2: cumulative line chart on its own full-width row.
+                var html = '<div style="display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 1rem; margin-bottom: 0.85rem; align-items: stretch;">';
                 html +=   '<div class="iiq-card" style="padding:0.75rem 0.85rem; display:flex; flex-direction:column; align-items:center;">'
                     +       '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.35rem; align-self:stretch;">Share of total measured views</div>'
                     +       iiqDonut(donutSlices, { size: 120 })
@@ -24478,14 +24193,22 @@
                     +       '</div>'
                     +       funnelCardBody
                     +     '</div>';
-                html +=   '<div class="iiq-card" onclick="window.iiqQ2OpenChartModal()" title="Click to expand" style="padding:0.65rem 0.75rem; cursor:pointer; position:relative; transition: border-color 0.15s;" onmouseover="this.style.borderColor=\'rgba(34,211,238,0.45)\';" onmouseout="this.style.borderColor=\'\';">'
-                    +       '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; margin-bottom:0.3rem;">'
-                    +         '<div style="font-size:0.78rem; color: var(--text-secondary);">Cumulative view growth + downstream funnel</div>'
-                    +         '<div style="font-size:0.65rem; color: rgba(34,211,238,0.85); white-space:nowrap;">click to expand \u2197</div>'
-                    +       '</div>'
-                    +       _q2ChartHtml(560, 210)
-                    +     '</div>';
                 html += '</div>';
+                var chartHtml = hasFunnelSeries
+                    ? iiqLineChartDual(series, rightSeries, {
+                        height: 200,
+                        rightFormatter: fmtCompact,
+                        rightLabelColor: 'rgba(251,191,36,0.85)'
+                      })
+                    : iiqLineChart(series, {height: 200});
+                var chartCaption = hasFunnelSeries
+                    ? 'Left axis: cumulative views (paid vs organic). Right axis: cumulative info-seekers &amp; ticketing visits derived from the same iiqAssetFunnelProjection() helper \u2014 ladders up to the Assets cards.'
+                    : '';
+                html += '<div class="iiq-card" style="padding:0.75rem 0.85rem; margin-bottom: 0.85rem;">'
+                    +       '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Cumulative view growth + downstream funnel</div>'
+                    +       chartHtml
+                    +       (chartCaption ? '<div style="font-size:0.65rem; color: var(--text-secondary); margin-top:0.35rem; line-height:1.35;">' + chartCaption + '</div>' : '')
+                    +     '</div>';
                 if (best.length) {
                     var slug = window.__intentIQ && window.__intentIQ.currentSlug;
                     // Cache the row payloads + slug so the click handler can
@@ -24610,40 +24333,6 @@
             // views+engagement line chart fetched from
             // /api/intent/<slug>/asset/<id>/timeseries. Defaults to YTD per
             // the standing 'do YTD unless otherwise specified' rule.
-            // Pop-out modal for the Q2 cumulative chart. Re-renders the
-            // SAME series/events at a much larger size so the asset-drop
-            // dots and date axis are readable. Click-outside or the Close
-            // button dismisses. Idempotent: re-clicking just rebuilds.
-            window.iiqQ2OpenChartModal = function() {
-                var c = window.__intentIQQ2Chart;
-                if (!c || typeof window.__intentIQQ2ChartRender !== 'function') return;
-                var overlay = document.getElementById('iiqQ2ChartModal');
-                if (!overlay) {
-                    overlay = document.createElement('div');
-                    overlay.id = 'iiqQ2ChartModal';
-                    overlay.style.cssText = 'position:fixed; inset:0; background: rgba(0,0,0,0.7); z-index:9999; display:flex; align-items:center; justify-content:center; padding:2rem;';
-                    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
-                    document.body.appendChild(overlay);
-                } else {
-                    overlay.innerHTML = '';
-                    overlay.style.display = 'flex';
-                }
-                var panel = document.createElement('div');
-                panel.style.cssText = 'background: #0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:10px; max-width:1280px; width:100%; max-height:92vh; overflow:auto; padding:1.1rem 1.4rem; box-shadow: 0 24px 64px rgba(0,0,0,0.5);';
-                var chartBig = window.__intentIQQ2ChartRender(1200, 520);
-                panel.innerHTML =
-                    '<div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:0.85rem; gap:1rem;">'
-                  +   '<div>'
-                  +     '<h3 style="margin:0 0 0.2rem; color:#fff; font-size:1.05rem;">Cumulative view growth + downstream funnel</h3>'
-                  +     '<div style="font-size:0.74rem; color: var(--text-secondary);">Paid vs. organic content drops, plus the cumulative info-seek and ticketing funnel that ladders up to the Assets cards.</div>'
-                  +   '</div>'
-                  +   '<button type="button" onclick="document.getElementById(\'iiqQ2ChartModal\').remove()" style="background: rgba(255,255,255,0.06); color:#fff; border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:0.35rem 0.7rem; cursor:pointer; font-size:0.85rem;">Close \u2715</button>'
-                  + '</div>'
-                  + '<div class="iiq-card" style="padding:0.85rem 1rem;">' + chartBig + '</div>'
-                  + (c.caption ? '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.55rem; line-height:1.4;">' + c.caption + ' Hover a dot for the asset label.</div>' : '');
-                overlay.appendChild(panel);
-            };
-
             window.iiqShowAssetDetail = function(slug, idxOrAsset) {
                 if (!slug) return;
                 var asset = (typeof idxOrAsset === 'number')
@@ -25492,12 +25181,91 @@
                 html +=     iiqSummaryTile('Highest peak ever', topAllTime ? topAllTime.display : '-', topAllTime ? topAllTime.peak_engagement_pct.toFixed(1) + '% on ' + topAllTime.peak_date : '');
                 html += '</div>';
 
-                // Cohort picker removed per user request 2026-06-25 -- the
-                // chart below renders the default-on cohorts (Moviegoing
-                // Frequency buckets) automatically via the selection-state
-                // initialization above. Toggle handlers
-                // (iiqQ6Toggle / iiqQ6ToggleCategory / iiqQ6SelectGroup)
-                // remain wired but have no UI surface in Q6.
+                // Cohort picker (grouped by category, with category-color chips)
+                html += '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.85rem;">';
+                html +=   '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">';
+                html +=     '<div style="font-size:0.85rem; font-weight:600; color:#e2e8f0;">Pick cohorts to overlay on the chart</div>';
+                html +=     '<div style="display:flex; gap:0.4rem;">';
+                html +=       '<button onclick="iiqQ6SelectGroup(\'all\')" style="background:rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.1); padding:0.25rem 0.55rem; border-radius:5px; font-size:0.7rem; cursor:pointer;">Select all</button>';
+                html +=       '<button onclick="iiqQ6SelectGroup(\'none\')" style="background:rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.1); padding:0.25rem 0.55rem; border-radius:5px; font-size:0.7rem; cursor:pointer;">Clear</button>';
+                html +=       '<button onclick="iiqQ6SelectGroup(\'default\')" style="background:rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.1); padding:0.25rem 0.55rem; border-radius:5px; font-size:0.7rem; cursor:pointer;">Reset to default</button>';
+                html +=     '</div>';
+                html +=   '</div>';
+
+                var CAT_LABELS = {
+                    MOVIEGOING_FREQ: 'Moviegoing Frequency',
+                    TALENT:          'Talent / Cast',
+                    DEMO:            'Demographics',
+                    FRANCHISE:       'Franchise & Fandom',
+                    GENRE:           'Genre',
+                    STUDIO:          'Studio',
+                    PLATFORM:        'Platform / Streaming',
+                    SPORT:           'Sport',
+                    AUDIENCE:        'Other Audiences',
+                };
+
+                // Initialize the expand/collapse state on first render for
+                // this title: only MOVIEGOING_FREQ is open; every other
+                // category is collapsed. Users open whichever they need.
+                if (!window._iiqQ6Expanded) {
+                    window._iiqQ6Expanded = {};
+                    catOrder.forEach(function(cat) {
+                        window._iiqQ6Expanded[cat] = (cat === 'MOVIEGOING_FREQ');
+                    });
+                }
+                catOrder.forEach(function(cat) {
+                    if (window._iiqQ6Expanded[cat] === undefined) {
+                        window._iiqQ6Expanded[cat] = (cat === 'MOVIEGOING_FREQ');
+                    }
+                });
+
+                catOrder.forEach(function(cat) {
+                    var list = byCat[cat];
+                    if (!list || !list.length) return;
+                    var nSel = list.reduce(function(s, c){ return s + (window._iiqQ6Selection[c.cohort_slug] ? 1 : 0); }, 0);
+                    var nTot = list.length;
+                    var expanded = !!window._iiqQ6Expanded[cat];
+                    var chev = expanded ? '\u25BE' : '\u25B8';
+                    var catEsc = cat.replace(/'/g, "\\'");
+                    var hasSel = nSel > 0;
+                    var headerColor = hasSel ? '#e2e8f0' : 'var(--text-secondary)';
+                    var countBadge = '<span style="font-size:0.65rem; padding:0.1rem 0.4rem; border-radius:10px; background:' + (hasSel ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.05)') + '; color:' + (hasSel ? '#67e8f9' : '#94a3b8') + '; margin-left:0.45rem;">' + nSel + ' of ' + nTot + ' selected</span>';
+
+                    html += '<div style="margin-top:0.45rem; border-top:1px solid rgba(255,255,255,0.05); padding-top:0.45rem;">';
+                    html +=   '<div onclick="iiqQ6ToggleCategory(\'' + catEsc + '\')" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; user-select:none; padding:0.15rem 0;">';
+                    html +=     '<div style="font-size:0.72rem; color:' + headerColor + '; text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center;">'
+                            +       '<span style="display:inline-block; width:0.85rem; color:var(--text-secondary); font-size:0.85rem;">' + chev + '</span>'
+                            +       escapeHtml(CAT_LABELS[cat] || cat)
+                            +       countBadge
+                            +     '</div>';
+                    html +=     '<div style="font-size:0.65rem; color: var(--text-secondary);">' + (expanded ? 'click to collapse' : 'click to expand') + '</div>';
+                    html +=   '</div>';
+
+                    if (expanded) {
+                        html += '<div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.45rem;">';
+                        list.forEach(function(c) {
+                            var checked = !!window._iiqQ6Selection[c.cohort_slug];
+                            var bgFill = checked ? (c._color + '33') : 'rgba(255,255,255,0.03)';
+                            var border = checked ? c._color : 'rgba(255,255,255,0.1)';
+                            var textC  = checked ? '#fff' : '#94a3b8';
+                            var slugEsc = c.cohort_slug.replace(/'/g, "\\'");
+                            var amer = iiqProjAmericans(c);
+                            var amerFmt = '~' + fmtCompact(amer);
+                            html += '<label onclick="iiqQ6Toggle(\'' + slugEsc + '\')" '
+                                + 'style="cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; '
+                                + 'background:' + bgFill + '; border:1px solid ' + border + '; '
+                                + 'border-radius:6px; padding:0.3rem 0.55rem; font-size:0.75rem; color:' + textC + ';" '
+                                + 'title="' + escapeHtml(c.display) + ' \u00b7 ' + amerFmt + ' Americans \u00b7 peak ' + c.peak_engagement_pct.toFixed(1) + '% on ' + c.peak_date + '">'
+                                + '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:' + c._color + ';"></span>'
+                                + escapeHtml(c.display)
+                                + ' <span style="opacity:0.6; font-size:0.68rem;">(' + amerFmt + ')</span>'
+                                + '</label>';
+                        });
+                        html += '</div>';
+                    }
+                    html += '</div>';
+                });
+                html += '</div>';
 
                 // Main overlay chart with the SELECTED cohorts
                 var combinedSeries = selected.map(function(c) {
@@ -26212,7 +25980,7 @@
                                 <button type="button" class="btn btn-sm rankeriq-netflixch-type-btn" data-type="Movie" onclick="setNetflixChTypeFilter('Movie')">Movies</button>
                                 <button type="button" class="btn btn-sm rankeriq-netflixch-type-btn" data-type="Show" onclick="setNetflixChTypeFilter('Show')">Shows</button>
                             </div>
-                            <select id="rankerIQNetflixChGenreFilter" style="max-width: 260px; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);" onchange="renderNetflixChRanker()">
+                            <select id="rankerIQNetflixChGenreFilter" style="max-width: 260px; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);" onchange="loadNetflixChRanker(true)">
                                 <option value="">All Genres</option>
                             </select>
                         </div>
@@ -38618,13 +38386,6 @@
                 .then(function(resp) {
                     if (!resp.success || !resp.data) return;
                     _bpiqRenderHeaderImage(resp.image_url);
-                    // Thread admin-managed category onto the data object
-                    // so the renderer can apply category-specific policy
-                    // (e.g. automotive = never show conversion metrics —
-                    // car purchases aren't measurable via web panel).
-                    if (resp.category && !resp.data.category) {
-                        resp.data.category = resp.category;
-                    }
                     renderBpiqDashboard(resp.data);
                 }).catch(function() {});
         };
@@ -38648,19 +38409,6 @@
             if (Math.abs(num) >= 1e6) return '$' + (num / 1e6).toFixed(2) + 'M';
             if (Math.abs(num) >= 1e4) return '$' + Math.round(num).toLocaleString();
             return '$' + num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-        }
-
-        // Scope chip shown next to editable rates and the per-platform
-        // CPM column header. When the user has sliced the dashboard to
-        // a specific year (year-cut mode), every rate edit is local to
-        // that year - the chip makes that explicit so the user doesn't
-        // think they're touching the headline aggregate. Returns '' in
-        // All Years mode so the table/cards stay clean.
-        function _bpiqScopeChip() {
-            var ay = _bpiqState && _bpiqState.data && _bpiqState.data._bpiq_active_year;
-            if (!ay) return '';
-            var label = (_bpiqState.data._bpiq_active_year_label || ay);
-            return ' <span style="display:inline-block;margin-left:6px;padding:1px 7px;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.4);border-radius:10px;color:#c084fc;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;vertical-align:middle;" title="Edits in this view only affect ' + label + '. Switch to All Years to apply across the whole partnership.">' + label + ' only</span>';
         }
 
         // Brand Lift = relative % change from Pre% to Post%. Replaces the
@@ -38809,7 +38557,7 @@
                 + '<th data-bpiq-sort="lift_pp"      style="' + thBase + 'text-align:right;">Brand Lift (pp)'                            + arrow('lift_pp')      + '</th>'
                 + '<th data-bpiq-sort="incr_users"   style="' + thBase + 'text-align:right;" title="Post-campaign incremental brand engagers attributable to this platform (post − pre, projected to US gen pop).">Incremental Consumers' + arrow('incr_users')   + '</th>'
                 + '<th data-bpiq-sort="bench_cpm"    style="' + thBase + 'text-align:right;color:var(--text-secondary);" title="Industry-benchmarked CPM. Display only - does not enter any calculation.">Benchmark CPM' + arrow('bench_cpm') + '</th>'
-                + '<th data-bpiq-sort="cpm"          style="' + thBase + 'text-align:right;">CPM'                                        + arrow('cpm')          + _bpiqScopeChip() + '</th>'
+                + '<th data-bpiq-sort="cpm"          style="' + thBase + 'text-align:right;">CPM'                                        + arrow('cpm')          + '</th>'
                 + '<th data-bpiq-sort="emv"          style="' + thBase + 'text-align:right;" title="Incremental Consumers × CPM = EMV.">EMV (Incr × CPM)' + arrow('emv') + '</th>'
                 + '</tr></thead><tbody>'
                 + rows.map(function(r) {
@@ -38914,82 +38662,6 @@
                                                  + (v.brand_engagement_value || 0)
                                                  + (v.brand_lift_value        || 0)
                                                  + (v.conversion_value        || 0)) * 100) / 100;
-            // Propagate the new CPM rates into the right scope:
-            //
-            //   - All Years view: rate edit applies uniformly to every
-            //     year (rate is a "default for the whole partnership").
-            //   - Year-cut view (e.g. user is viewing 2023): rate edit
-            //     affects ONLY the active year — each year carries its
-            //     own rate so the user can model market-CPM evolution
-            //     (2021 TikTok ≠ 2026 TikTok).
-            //
-            // BEV/BLV scalar rates are pulled from each year's
-            // valuation.rates and recomputed against per-year bases so
-            // those edits also stay local in year-cut mode and flow
-            // uniformly in All Years mode.
-            var origYears = (_bpiqState.originalData && _bpiqState.originalData.yearly_breakdown) || _bpiqState.data.yearly_breakdown;
-            var activeYear = _bpiqState.data && _bpiqState.data._bpiq_active_year;
-            if (Array.isArray(origYears) && origYears.length) {
-                // BEV/BLV/CV rate values to apply this pass. When
-                // editing in year-cut mode, take them from the active
-                // year's valuation.rates (which is what the input
-                // handlers just mutated). When editing in All Years,
-                // take them from the aggregate so all years sync.
-                var ratesSource = activeYear ? (v.rates || {}) : (v.rates || {});
-                var bevRate    = Number(ratesSource.bev_per_user)        || 0;
-                var blvRate    = Number(ratesSource.blv_per_incr_user)   || 0;
-                var convRate   = Number(ratesSource.conv_value_per_user) || 0;
-                origYears.forEach(function(y) {
-                    // Year-cut: skip non-active years so the edit stays
-                    // local. The active year still mutates because its
-                    // valuation reference IS _bpiqState.data.valuation.
-                    if (activeYear && Number(y.year) !== Number(activeYear)) return;
-                    var yv = y.valuation;
-                    if (!yv) return;
-                    // EMV: re-apply rates to each platform row.
-                    var yEmvTotal = 0;
-                    (yv.emv_breakdown || []).forEach(function(r) {
-                        var incr = r.incremental_users_projected;
-                        if (incr == null) incr = (r.post_users_projected || 0) - (r.pre_users_projected || 0);
-                        var override = _bpiqState.rateByPlatform[r.platform];
-                        var rate = (override != null) ? override : (r.emv_per_user_rate || 0);
-                        r.emv_per_user_rate = rate;
-                        r.emv_value = (incr > 0 ? incr : 0) * rate;
-                        if (r.emv_value > 0) yEmvTotal += r.emv_value;
-                    });
-                    yv.earned_media_value = Math.round(yEmvTotal * 100) / 100;
-                    // BEV/BLV: recompute against year-specific base
-                    // counts so each year's contribution to the YoY
-                    // chart reflects the live rate.
-                    var yrRates = yv.rates || (yv.rates = {});
-                    // Same cascade behavior for both modes — what
-                    // differs is the scope (active year only vs all
-                    // years), which is enforced by the guard above.
-                    yrRates.bev_per_user        = bevRate;
-                    yrRates.blv_per_incr_user   = blvRate;
-                    yrRates.conv_value_per_user = convRate;
-                    var yBevBase  = y.users_projected            || 0;
-                    var yBlvBase  = (yv.incremental_users != null)
-                                     ? yv.incremental_users
-                                     : Math.max(0, (y.users_projected || 0) - ((_bpiqState.originalData && _bpiqState.originalData.totals && _bpiqState.originalData.totals.pre_users_projected) || 0));
-                    var yConvBase = (y.conversions && (y.conversions.post_count || y.conversions.post_users_projected))
-                                     || (yv.conv_base || 0);
-                    yv.brand_engagement_value = Math.round(yBevBase  * bevRate  * 100) / 100;
-                    yv.brand_lift_value       = Math.round(yBlvBase  * blvRate  * 100) / 100;
-                    if (convRate > 0 && yConvBase > 0) {
-                        yv.conversion_value   = Math.round(yConvBase * convRate * 100) / 100;
-                    }
-                    yv.total_brand_value      = Math.round(((yv.earned_media_value      || 0)
-                                                          + (yv.brand_engagement_value || 0)
-                                                          + (yv.brand_lift_value        || 0)
-                                                          + (yv.conversion_value        || 0)) * 100) / 100;
-                    // Mirror onto the top-level legacy `earned_media_value`
-                    // so the YoY chart's "Earned Media Value ($)" series
-                    // reads the fresh number.
-                    y.earned_media_value = yv.earned_media_value;
-                });
-                _bpiqRenderYearly(origYears, activeYear || null);
-            }
             _bpiqRenderPerPlatformTable();
             _bpiqRenderValuation(v);
         }
@@ -39004,49 +38676,6 @@
             if (ecPanels) ecPanels.style.display = 'none';
             if (bpEmpty) bpEmpty.style.display = 'none';
             if (bpPanels) bpPanels.style.display = '';
-
-            // ----- Category-driven policy: AUTOMOTIVE -----
-            // Car purchases happen at dealerships, not on the open
-            // web - panel data can't observe a vehicle purchase event,
-            // so any conversion number on an automotive partnership is
-            // misleading by construction. Suppress the entire
-            // conversions surface (hero chip, Pre/Post block, YoY metric
-            // button, Conversion Value card) for any run whose category
-            // is "automotive", regardless of what the data file says.
-            //
-            // This is a defensive guard - the generators should already
-            // strip conversions for auto runs, but this ensures the UI
-            // can never accidentally surface them.
-            var _bpiqCat = ((data && data.category) || '').toString().trim().toLowerCase();
-            if (_bpiqCat === 'automotive') {
-                data.conversions = Object.assign({}, data.conversions || {}, {
-                    enabled: false,
-                    low_signal: true,
-                    pre_count: 0, post_count: 0,
-                    pre_users: 0, post_users: 0,
-                    pre_users_projected: 0, post_users_projected: 0,
-                    lift_pct: 0,
-                    note: 'Conversions suppressed: automotive purchases are not observable via web panel data.'
-                });
-                if (data.valuation) {
-                    data.valuation.conversion_value = 0;
-                    if (data.valuation.rates) data.valuation.rates.conv_value_per_user = 0;
-                }
-                if (Array.isArray(data.yearly_breakdown)) {
-                    data.yearly_breakdown.forEach(function(y) {
-                        y.conversions_users_projected = 0;
-                        if (y.conversions) {
-                            y.conversions.post_count = 0;
-                            y.conversions.post_users_projected = 0;
-                            y.conversions.enabled = false;
-                        }
-                        if (y.valuation) {
-                            y.valuation.conversion_value = 0;
-                            if (y.valuation.rates) y.valuation.rates.conv_value_per_user = 0;
-                        }
-                    });
-                }
-            }
 
             var totals = data.totals || {};
             var preP = data.pre_period || {};
@@ -39465,289 +39094,6 @@
             _bpiqRenderYearly(yearlyForChart, data._bpiq_active_year || null);
         }
 
-        // ----- Export menu (CSV + PDF) -----
-        //
-        // Always operates against the live, recomputed `_bpiqState.data`
-        // so that any user edits (CPM overrides, valuation rate edits,
-        // view-by-year selection) are reflected in the download. PDF
-        // uses the same html2canvas-→-print-window pattern as the
-        // Profile IQ tab export elsewhere in this file.
-        function _bpiqToggleExportMenu(ev) {
-            if (ev) ev.stopPropagation();
-            var m = document.getElementById('bpiqExportMenu');
-            if (!m) return;
-            var willOpen = (m.style.display === 'none' || !m.style.display);
-            m.style.display = willOpen ? 'block' : 'none';
-            if (willOpen) {
-                // close on next outside click
-                setTimeout(function() {
-                    function close(e) {
-                        if (m.contains(e.target)) return;
-                        m.style.display = 'none';
-                        document.removeEventListener('click', close, true);
-                    }
-                    document.addEventListener('click', close, true);
-                }, 0);
-            }
-        }
-
-        // Build a single CSV file with section dividers covering every
-        // user-visible data point on the BPIQ dashboard.
-        function _bpiqBuildCsv() {
-            var d = _bpiqState.data || {};
-            var orig = _bpiqState.originalData || d;
-            function esc(v) {
-                if (v == null) return '';
-                var s = String(v);
-                if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
-                return s;
-            }
-            function row(cells) { return cells.map(esc).join(',') + '\n'; }
-            function section(title) { return '\n# ' + title + '\n'; }
-
-            var out = '';
-
-            // --- Header / metadata
-            out += '# Brand Partnership Valuation — Export\n';
-            out += row(['Project',                d.project_name || '']);
-            out += row(['Brand Partner',          d.brand_partner || '']);
-            out += row(['Qualifier',              (d.qualifier_type || '') + ': ' + (d.qualifier_value || '')]);
-            out += row(['Campaign Start',         d.start_date || '']);
-            out += row(['Campaign End',           d.end_date   || '']);
-            out += row(['Attribution Window (d)', d.attribution_window_days || 0]);
-            if (d._bpiq_active_year) {
-                out += row(['VIEWING SLICE', 'Year ' + d._bpiq_active_year + ' (' + (d._bpiq_active_year_label || '') + ')']);
-            }
-            out += row(['Audience (raw)',         d.audience_size || 0]);
-            out += row(['Audience (US-projected)', d.projected_audience_size || 0]);
-            out += row(['Exported At',            new Date().toISOString()]);
-
-            // --- Headline KPIs (Target)
-            var t = d.totals || {};
-            out += section('Headline KPIs — Target');
-            out += row(['Metric', 'Raw Panel', 'US-Projected', 'Penetration %']);
-            out += row(['Pre-Campaign Consumer Engagement',  t.pre_users  || 0, t.pre_users_projected  || 0, t.audience_pen_pre_pct  || 0]);
-            out += row(['Post-Campaign Consumer Engagement', t.post_users || 0, t.post_users_projected || 0, t.audience_pen_post_pct || 0]);
-            out += row(['Brand Engagement Lift (% users)',   '', '', t.lift_pct_users || 0]);
-            out += row(['Brand Engagement Lift (% hits)',    '', '', t.lift_pct_hits  || 0]);
-
-            // --- Control group
-            var c = d.control_group || {};
-            if (c.enabled) {
-                out += section('Headline KPIs — Control (Gen Pop)');
-                out += row(['Control Cohort Size',           c.control_size || 0, c.projected_control_size || 0, '']);
-                out += row(['Pre-Engagement %',  '', '', c.control_pre_pen_pct  || 0]);
-                out += row(['Post-Engagement %', '', '', c.control_post_pen_pct || 0]);
-                out += row(['Δ pp',              '', '', c.control_delta_pp     || 0]);
-                out += row(['Incremental Lift (pp)',           '', '', c.incremental_lift_pp      || 0]);
-                out += row(['Incremental Lift (relative %)',   '', '', c.incremental_lift_rel_pct || 0]);
-            }
-
-            // --- Valuation
-            var v = d.valuation || {};
-            out += section('Valuation');
-            out += row(['Component', 'Value (USD)']);
-            out += row(['Brand Engagement Value (BEV)', v.brand_engagement_value || 0]);
-            out += row(['Earned Media Value (EMV)',     v.earned_media_value     || 0]);
-            out += row(['Brand Lift Value (BLV)',       v.brand_lift_value       || 0]);
-            out += row(['Conversion Value',             v.conversion_value       || 0]);
-            out += row(['TOTAL BRAND VALUE',            v.total_brand_value      || 0]);
-            out += row(['Incremental Users (US-projected)', v.incremental_users  || 0]);
-            var rates = v.rates || {};
-            out += row(['Rate · BEV $/Consumer',        rates.bev_per_user        || 0]);
-            out += row(['Rate · BLV $/Incremental',     rates.blv_per_incr_user   || 0]);
-            out += row(['Rate · Conversion $/Consumer', rates.conv_value_per_user || 0]);
-
-            // --- Per-platform EMV breakdown
-            out += section('Per-Platform · EMV Breakdown');
-            out += row(['Platform','Pre Users (Proj)','Post Users (Proj)','Incremental (Proj)','CPM ($/Consumer)','EMV (USD)']);
-            (v.emv_breakdown || []).forEach(function(r) {
-                out += row([
-                    r.platform || '',
-                    r.pre_users_projected         || 0,
-                    r.post_users_projected        || 0,
-                    r.incremental_users_projected || 0,
-                    r.emv_per_user_rate           || 0,
-                    r.emv_value                   || 0,
-                ]);
-            });
-
-            // --- Per-platform engagement & lift table
-            out += section('Per-Platform · Brand Engagement & Lift');
-            out += row(['Platform','Pre Users on Platform','Post Users on Platform','Pre Brand Users','Post Brand Users','Pre %','Post %','Brand Lift (%)','Pre Users (Proj)','Post Users (Proj)']);
-            (d.per_platform || []).forEach(function(p) {
-                out += row([
-                    p.platform || '',
-                    p.pre_users_on_platform   || 0,
-                    p.post_users_on_platform  || 0,
-                    p.pre_users               || 0,
-                    p.post_users              || 0,
-                    p.pre_pen_pct             || 0,
-                    p.post_pen_pct            || 0,
-                    p.lift_pct_users          || 0,
-                    p.pre_users_projected     || 0,
-                    p.post_users_projected    || 0,
-                ]);
-            });
-
-            // --- Most Engaged With Brand Touchpoints
-            out += section('Most Engaged With Brand Touchpoints');
-            out += row(['Brand Touchpoint','Pre Reach (Proj)','Post Reach (Proj)','Lift']);
-            var preList  = d.top_brand_properties_pre || [];
-            var postList = d.top_brand_properties     || [];
-            function projHits(t) {
-                if (!t) return 0;
-                return Math.max(0, Math.round(t.hits_projected != null ? t.hits_projected : (t.hits||0) * 1485));
-            }
-            var byName = {};
-            postList.forEach(function(t) { byName[t.common_name] = { name: t.common_name, pre: 0, post: projHits(t) }; });
-            preList.forEach(function(t) {
-                if (!byName[t.common_name]) byName[t.common_name] = { name: t.common_name, pre: 0, post: 0 };
-                byName[t.common_name].pre = projHits(t);
-            });
-            Object.keys(byName).map(function(k) { return byName[k]; })
-                .sort(function(a, b) { return b.post - a.post; })
-                .forEach(function(r) {
-                    var lift = '';
-                    if (r.pre === 0 && r.post > 0)      lift = 'new';
-                    else if (r.post === 0 && r.pre > 0) lift = '-100%';
-                    else if (r.pre > 0)                 lift = (((r.post - r.pre) / r.pre) * 100).toFixed(1) + '%';
-                    out += row([r.name, r.pre, r.post, lift]);
-                });
-
-            // --- Demographics
-            var demo = d.demographics || {};
-            ['gender','age','ethnicity','income'].forEach(function(field) {
-                var pre  = demo.pre  ? (demo.pre[field]  || []) : [];
-                var post = demo.post ? (demo.post[field] || []) : [];
-                if (!pre.length && !post.length) return;
-                out += section('Demographics · ' + field.toUpperCase());
-                out += row(['Value','Pre %','Post %','Δ pp']);
-                var keys = {};
-                pre.forEach(function(x)  { keys[x.value] = true; });
-                post.forEach(function(x) { keys[x.value] = true; });
-                function pctOf(arr, k) {
-                    var hit = arr.filter(function(x){ return x.value === k; })[0];
-                    return hit ? Number(hit.percentage) : 0;
-                }
-                Object.keys(keys).forEach(function(k) {
-                    var pp = pctOf(pre, k), ps = pctOf(post, k);
-                    out += row([k, pp.toFixed(2), ps.toFixed(2), (ps - pp).toFixed(2)]);
-                });
-            });
-
-            // --- Yearly breakdown (uses ORIG so the export carries the
-            //     full picture even when viewing a single year-cut).
-            var years = (orig && orig.yearly_breakdown) || [];
-            if (years.length) {
-                out += section('Year-Over-Year Breakdown');
-                out += row(['Year','Label','Start','End','Days','Consumers (Proj)','Brand Hits (Proj)','Conversions (Proj)','EMV','BEV','BLV','Total Brand Value','Momentum']);
-                years.forEach(function(y) {
-                    var yv = y.valuation || {};
-                    out += row([
-                        y.year       || '',
-                        y.label      || '',
-                        y.start      || '',
-                        y.end        || '',
-                        y.days       || 0,
-                        y.users_projected            || 0,
-                        y.brand_hits_projected       || 0,
-                        y.conversions_users_projected || 0,
-                        yv.earned_media_value        || y.earned_media_value || 0,
-                        yv.brand_engagement_value    || 0,
-                        yv.brand_lift_value          || 0,
-                        yv.total_brand_value         || 0,
-                        y.momentum   || '',
-                    ]);
-                });
-
-                out += section('Year-Over-Year · Top Brand Touchpoints');
-                out += row(['Year','Rank','Brand Touchpoint','Hits (Proj)']);
-                years.forEach(function(y) {
-                    (y.top_brand_properties || []).slice(0, 10).forEach(function(p, i) {
-                        out += row([y.year, i + 1, p.common_name || '', p.hits_projected || 0]);
-                    });
-                });
-            }
-
-            return out;
-        }
-
-        function _bpiqExportCsv() {
-            var m = document.getElementById('bpiqExportMenu');
-            if (m) m.style.display = 'none';
-            try {
-                var csv = _bpiqBuildCsv();
-                var name = (_bpiqState.data && _bpiqState.data.project_name) || 'BPIQ_Run';
-                var slice = (_bpiqState.data && _bpiqState.data._bpiq_active_year) ? ('_y' + _bpiqState.data._bpiq_active_year) : '';
-                var safe = String(name).replace(/[^a-zA-Z0-9._-]+/g, '_');
-                var stamp = new Date().toISOString().slice(0, 10);
-                var blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
-                var a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = safe + slice + '_' + stamp + '.csv';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
-            } catch (err) {
-                console.error('BPIQ CSV export failed', err);
-                alert('CSV export failed: ' + (err && err.message ? err.message : err));
-            }
-        }
-
-        // PDF export: capture the dashboard panel area as an image and
-        // open it in a new print window. The user picks "Save as PDF"
-        // in their browser's native print dialog — no jsPDF dep, layout
-        // is whatever the browser chooses (typically auto-paginated).
-        function _bpiqExportPdf() {
-            var m = document.getElementById('bpiqExportMenu');
-            if (m) m.style.display = 'none';
-            var el = document.getElementById('bpiqDashboardPanels');
-            if (!el) return;
-            function run() {
-                window.html2canvas(el, {
-                    backgroundColor: '#0d1117',
-                    scale: 2,
-                    logging: false,
-                    useCORS: true,
-                }).then(function(canvas) {
-                    var imgData = canvas.toDataURL('image/png');
-                    var name = (_bpiqState.data && _bpiqState.data.project_name) || 'BPIQ Run';
-                    var slice = (_bpiqState.data && _bpiqState.data._bpiq_active_year) ? (' · ' + _bpiqState.data._bpiq_active_year_label) : '';
-                    var w = window.open('', '_blank');
-                    if (!w) {
-                        alert('Pop-up blocked. Allow pop-ups for this site and try again.');
-                        return;
-                    }
-                    w.document.write(
-                        '<!DOCTYPE html><html><head><title>' + name + slice + '</title>'
-                      + '<style>'
-                      +   'body{margin:0;padding:20px;background:#0d1117;}'
-                      +   'img{max-width:100%;height:auto;display:block;}'
-                      +   '@media print{ body{background:white;padding:0;} @page { margin: 0.4in; } }'
-                      + '</style></head><body>'
-                      + '<img src="' + imgData + '" />'
-                      + '</body></html>'
-                    );
-                    w.document.close();
-                    setTimeout(function() { w.print(); }, 500);
-                }).catch(function(err) {
-                    console.error('BPIQ PDF capture failed', err);
-                    alert('PDF export failed: ' + (err && err.message ? err.message : err));
-                });
-            }
-            if (typeof window.html2canvas === 'undefined') {
-                var s = document.createElement('script');
-                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-                s.onload = run;
-                s.onerror = function() { alert('Could not load PDF capture library.'); };
-                document.head.appendChild(s);
-            } else {
-                run();
-            }
-        }
-
         // ----- View-by-Year slicer -----
         //
         // Returns a shallow-cloned `data` payload narrowed to a single
@@ -39995,49 +39341,43 @@
 
             // Per-year top brand touchpoints — compact table where each
             // column is a year and each row is a brand property (top 5
-            // per year, padded with em-dash when shorter). Wrapped in a
-            // <details> with the shared bpiq-methodology styling so it's
-            // collapsed by default — the matrix is dense, so making it
-            // opt-in keeps the YoY card scannable.
+            // per year, padded with em-dash when shorter).
             var topPropsEl = document.getElementById('bpiqYearlyTopProps');
             var maxRows = Math.max.apply(null, years.map(function(y) { return (y.top_brand_properties || []).length; }).concat([0]));
             if (maxRows === 0) {
                 topPropsEl.innerHTML = '';
             } else {
                 topPropsEl.innerHTML =
-                      '<details class="bpiq-methodology">'
-                    +   '<summary class="bpiq-method-summary">Top brand touchpoints by year</summary>'
-                    +   '<div class="bpiq-method-body">'
-                    +     '<div style="font-size:11px; color:var(--text-secondary); margin-bottom:0.4rem;">Ranked by projected reach within each calendar year.</div>'
-                    +     '<div style="overflow-x:auto;">'
-                    +     '<table style="width:100%; border-collapse:collapse; font-size:12px;">'
-                    +       '<thead><tr style="border-bottom:2px solid var(--border-color);">'
-                    +         '<th style="padding:6px 8px; text-align:left; font-size:10px; color:var(--text-secondary); text-transform:uppercase;">Rank</th>'
-                    +         years.map(function(y) { return '<th style="padding:6px 8px; text-align:left;">' + y.year + '</th>'; }).join('')
-                    +       '</tr></thead>'
-                    +     '<tbody>'
-                    +     (function() {
-                            var rows = '';
-                            for (var i = 0; i < maxRows; i++) {
-                                rows += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">';
-                                rows += '<td style="padding:6px 8px; color:var(--text-secondary);">#' + (i + 1) + '</td>';
-                                years.forEach(function(y) {
-                                    var p = (y.top_brand_properties || [])[i];
-                                    if (!p) {
-                                        rows += '<td style="padding:6px 8px; color:var(--text-secondary); opacity:0.5;">—</td>';
-                                    } else {
-                                        rows += '<td style="padding:6px 8px;"><div style="font-weight:600;">' + (p.common_name || '') + '</div>'
-                                              + '<div style="font-size:10px; color:var(--text-secondary);">' + _bpiqFmtNum(p.hits_projected || 0) + ' reach</div>'
-                                              + '</td>';
-                                    }
-                                });
-                                rows += '</tr>';
-                            }
-                            return rows;
-                        })()
-                    +     '</tbody></table></div>'
-                    +   '</div>'
-                    + '</details>';
+                      '<div style="font-size:11px; color:var(--text-secondary); margin-bottom:0.4rem;">'
+                    +   '<strong>Top brand touchpoints by year</strong> — ranked by projected reach within each calendar year.'
+                    + '</div>'
+                    + '<div style="overflow-x:auto;">'
+                    + '<table style="width:100%; border-collapse:collapse; font-size:12px;">'
+                    +   '<thead><tr style="border-bottom:2px solid var(--border-color);">'
+                    +     '<th style="padding:6px 8px; text-align:left; font-size:10px; color:var(--text-secondary); text-transform:uppercase;">Rank</th>'
+                    +     years.map(function(y) { return '<th style="padding:6px 8px; text-align:left;">' + y.year + '</th>'; }).join('')
+                    +   '</tr></thead>'
+                    + '<tbody>'
+                    + (function() {
+                        var rows = '';
+                        for (var i = 0; i < maxRows; i++) {
+                            rows += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">';
+                            rows += '<td style="padding:6px 8px; color:var(--text-secondary);">#' + (i + 1) + '</td>';
+                            years.forEach(function(y) {
+                                var p = (y.top_brand_properties || [])[i];
+                                if (!p) {
+                                    rows += '<td style="padding:6px 8px; color:var(--text-secondary); opacity:0.5;">—</td>';
+                                } else {
+                                    rows += '<td style="padding:6px 8px;"><div style="font-weight:600;">' + (p.common_name || '') + '</div>'
+                                          + '<div style="font-size:10px; color:var(--text-secondary);">' + _bpiqFmtNum(p.hits_projected || 0) + ' reach</div>'
+                                          + '</td>';
+                                }
+                            });
+                            rows += '</tr>';
+                        }
+                        return rows;
+                    })()
+                    + '</tbody></table></div>';
             }
         }
 
@@ -40462,8 +39802,7 @@
                         { label: 'Post-Campaign Engaged Consumers',
                           value: _bpiqFmtNum(bevCount) },
                         { label: '× $/consumer rate &nbsp;'
-                                 + _bpiqBenchHint(_bm.bev_per_user)
-                                 + _bpiqScopeChip(),
+                                 + _bpiqBenchHint(_bm.bev_per_user),
                           value: '$ ' + _bpiqRateInput('bev', bevRateValue, 'Edit $/consumer - recalculates Brand Engagement Value & Total Brand Value')
                                  + ' <span style="color:var(--text-secondary);font-size:13px;">/consumer</span>' }
                     ],
@@ -40486,8 +39825,7 @@
                         { label: 'Incremental Consumers<br><span style="font-size:12px;">(post − pre · DiD vs Gen Pop)</span>',
                           value: _bpiqFmtNum(blvCount) },
                         { label: '× $/incremental-consumer rate &nbsp;'
-                                 + _bpiqBenchHint(_bm.blv_per_incr_user)
-                                 + _bpiqScopeChip(),
+                                 + _bpiqBenchHint(_bm.blv_per_incr_user),
                           value: '$ ' + _bpiqRateInput('blv', blvRateValue, 'Edit $/incremental consumer - recalculates Brand Lift Value & Total Brand Value')
                                  + ' <span style="color:var(--text-secondary);font-size:13px;">/incr. consumer</span>' }
                     ],
@@ -40513,8 +39851,7 @@
                             { label: 'Post-Campaign Conversions',
                               value: _bpiqFmtNum(convCount) },
                             { label: '× Average Order Value (AOV) &nbsp;'
-                                     + _bpiqBenchHint(_bm.conv_value_per_user)
-                                     + _bpiqScopeChip(),
+                                     + _bpiqBenchHint(_bm.conv_value_per_user),
                               value: '$ ' + _bpiqRateInput('conv', convRateValue, 'Edit $/conversion (AOV) - recalculates Conversion Value & Total Brand Value')
                                      + ' <span style="color:var(--text-secondary);font-size:13px;">/order</span>' }
                         ],
@@ -112164,26 +111501,38 @@
         }
 
         let _netflixChLoaded = false;
+        let _netflixChGenresLoaded = false;
         let _netflixChRows = [];
         let _netflixChTypeFilter = 'BOTH';
         let _netflixChChart = null;
 
+        // Filtering (type/genre) now happens server-side against the full
+        // netflix.netflix_ranker table instead of re-filtering a fixed
+        // top-200-by-views client-side cache - that old approach is why
+        // niche combinations (e.g. Anime) used to show only a handful of
+        // rows even though the real table has thousands. Every filter
+        // change now triggers a fresh fetch with the new type/genre/limit
+        // params baked into the query string.
         async function loadNetflixChRanker(force) {
-            if (_netflixChLoaded && !force) {
-                renderNetflixChRanker();
-                return;
+            if (!_netflixChGenresLoaded) {
+                loadNetflixChGenreOptions();
             }
             const loading = document.getElementById('rankerIQNetflixChLoading');
             const errorEl = document.getElementById('rankerIQNetflixChError');
             if (loading) loading.style.display = 'block';
             if (errorEl) errorEl.style.display = 'none';
             try {
-                const r = await fetch('/api/rankers/netflix-clickhouse/data', { credentials: 'same-origin' });
+                const genreSel = document.getElementById('rankerIQNetflixChGenreFilter');
+                const genre = genreSel ? genreSel.value : '';
+                const params = new URLSearchParams();
+                if (_netflixChTypeFilter !== 'BOTH') params.set('type', _netflixChTypeFilter);
+                if (genre) params.set('genre', genre);
+                params.set('limit', '1000');
+                const r = await fetch('/api/rankers/netflix-clickhouse/data?' + params.toString(), { credentials: 'same-origin' });
                 const d = await r.json();
                 if (!d || !d.success) throw new Error((d && d.error) || 'Failed to load Netflix data');
                 _netflixChRows = d.rows || [];
                 _netflixChLoaded = true;
-                populateNetflixChGenreFilter();
                 renderNetflixChRanker();
             } catch (e) {
                 if (errorEl) {
@@ -112200,46 +111549,40 @@
             document.querySelectorAll('.rankeriq-netflixch-type-btn').forEach(b => {
                 b.classList.toggle('active', b.getAttribute('data-type') === type);
             });
-            renderNetflixChRanker();
+            loadNetflixChRanker(true);
         }
 
         // GENRE is a packed comma-separated string of tags per show
-        // (e.g. "Kids' TV, TV Cartoons, Imaginative"). Split/dedupe/sort
-        // across all loaded rows to build the filter dropdown options.
-        function populateNetflixChGenreFilter() {
+        // (e.g. "Kids' TV, TV Cartoons, Imaginative"). The dropdown is
+        // built from a dedicated full-table DISTINCT query (not from the
+        // current page of ranked rows), fetched once, so it always lists
+        // every genre regardless of the active type/genre filter or row
+        // limit - previously it was built only from whatever rows were
+        // currently loaded, so rare genres could be missing entirely.
+        async function loadNetflixChGenreOptions() {
+            _netflixChGenresLoaded = true;
             const sel = document.getElementById('rankerIQNetflixChGenreFilter');
             if (!sel) return;
-            const tagSet = new Set();
-            _netflixChRows.forEach(row => {
-                (row.genre || '').split(',').forEach(tag => {
-                    const t = tag.trim();
-                    if (t) tagSet.add(t);
-                });
-            });
-            const tags = Array.from(tagSet).sort((a, b) => a.localeCompare(b));
-            const prevValue = sel.value;
-            sel.innerHTML = '<option value="">All Genres</option>' +
-                tags.map(t => `<option value="${_iqEsc(t)}">${_iqEsc(t)}</option>`).join('');
-            if (prevValue && tags.includes(prevValue)) sel.value = prevValue;
-        }
-
-        function _netflixChRowHasGenre(row, genre) {
-            if (!genre) return true;
-            return (row.genre || '').split(',').map(t => t.trim()).includes(genre);
+            try {
+                const r = await fetch('/api/rankers/netflix-clickhouse/genres', { credentials: 'same-origin' });
+                const d = await r.json();
+                if (!d || !d.success) return;
+                const tags = d.genres || [];
+                const prevValue = sel.value;
+                sel.innerHTML = '<option value="">All Genres</option>' +
+                    tags.map(t => `<option value="${_iqEsc(t)}">${_iqEsc(t)}</option>`).join('');
+                if (prevValue && tags.includes(prevValue)) sel.value = prevValue;
+            } catch (e) {
+                // Non-fatal - dropdown just stays at "All Genres".
+            }
         }
 
         function renderNetflixChRanker() {
             const body = document.getElementById('rankerIQNetflixChBody');
             if (!body) return;
-            const genreSel = document.getElementById('rankerIQNetflixChGenreFilter');
-            const genre = genreSel ? genreSel.value : '';
 
-            const filtered = _netflixChRows.filter(row => {
-                if (_netflixChTypeFilter !== 'BOTH' && row.type !== _netflixChTypeFilter) return false;
-                return _netflixChRowHasGenre(row, genre);
-            });
-
-            body.innerHTML = filtered.map((row, i) => `
+            // Rows already come pre-filtered by type/genre from the server.
+            body.innerHTML = _netflixChRows.map((row, i) => `
                 <tr>
                     <td>${i + 1}</td>
                     <td>${_iqEsc(row.show || '')}${row.episode_name ? ' <span style="color: var(--text-secondary);">&mdash; ' + _iqEsc(row.episode_name) + '</span>' : ''}</td>
@@ -112253,7 +111596,7 @@
                 </tr>
             `).join('');
 
-            renderNetflixChChart(filtered);
+            renderNetflixChChart(_netflixChRows);
         }
 
         // Builds a chart label that disambiguates episodes of the same show,
