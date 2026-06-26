@@ -903,10 +903,11 @@ def _slide_emv(prs, ctx: DeckCtx, idx: int, total: int):
               letter_spacing=0.18)
     _add_text(s, callout_x + Inches(0.25), Inches(3.9), Inches(2.5),
               Inches(2.0),
-              f"Every incremental brand consumer is priced at the platform's "
-              f"organic-engagement equivalent of 2026 industry CPM benchmarks. "
-              f"This is the open-market value of the audience the partnership "
-              f"earned for {ctx.brand}.",
+              f"Each incremental brand consumer on a platform is valued at "
+              f"that platform's 2026 market-grounded CPM (Hootsuite / Sprout "
+              f"/ LinkedIn Marketing Solutions benchmarks). This is the "
+              f"open-market dollar equivalent of the social audience the "
+              f"partnership earned for {ctx.brand}.",
               size=10, color=FG_LIGHT, spacing=1.35)
     _add_text(s, Inches(0.6), Inches(6.6), Inches(12), Inches(0.3),
               ctx.sources_line, size=8, italic=True, color=MUTED_DK)
