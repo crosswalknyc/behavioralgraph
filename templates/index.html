@@ -24361,14 +24361,26 @@
                 var donutSlices = Object.keys(sumByKey).map(function(k) {
                     return { label: k.charAt(0).toUpperCase() + k.slice(1), value: sumByKey[k], color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown };
                 }).sort(function(a,b){ return b.value - a.value; });
-                // Convert daily drops to a running cumulative for the line
-                // chart. Apply iiqCalendarViewMultiplier so daily NEW views
-                // drop sharply after theatrical end (when virtually no new
-                // promo content ships) and get a small streaming-launch
-                // bump (TVOD/SVOD promo buys). Then renormalize each series
-                // so the FINAL cumulative total still equals the original
-                // measured total -- this preserves ladder-up to the donut
-                // (share of total views) and the Best-In-Flight aggregates.
+                // Convert daily drops to a DAILY (not cumulative) curve so
+                // the lines actually drop after theatrical and pick back up
+                // for the PVOD/SVOD window, instead of monotonically
+                // flat-lining at peak.
+                //
+                // Pipeline:
+                //   1. Build a continuous daily date range (asset drops are
+                //      bursty -- most days have zero raw activity).
+                //   2. Per-day raw views = sum of that day's drops.
+                //   3. 7-day rolling SUM to spread each drop's measured
+                //      views across the natural ~week of post-drop view
+                //      decay (a YouTube video keeps accruing views for
+                //      ~7-14 days after upload).
+                //   4. Multiply by iiqCalendarViewMultiplier so views drop
+                //      sharply once theatrical ends (no more big paid buys
+                //      and organic traffic dies down) and bump again
+                //      around the 5/15 streaming launch.
+                //   5. Renormalize per series so total area under the
+                //      curve matches the original measured view total --
+                //      preserves ladder-up to the donut and Assets cards.
                 var dates = Array.from(new Set(cum.map(function(r){ return r.date; }))).sort();
                 var keys = Object.keys(byKey);
                 var dayMapByKey = {};
@@ -24377,32 +24389,48 @@
                     byKey[k].forEach(function(p) { dayMap[p.x] = (dayMap[p.x] || 0) + p.y; });
                     dayMapByKey[k] = dayMap;
                 });
-                var dailyAdjByKey = {};
+                var DAY_MS = 86400000;
+                var startMs = new Date(dates[0] + 'T12:00:00Z').getTime();
+                var endMs   = new Date(dates[dates.length - 1] + 'T12:00:00Z').getTime();
+                var allDates = [];
+                for (var t = startMs; t <= endMs; t += DAY_MS) {
+                    allDates.push(new Date(t).toISOString().slice(0, 10));
+                }
+                function _rolling(arr, win) {
+                    var out = new Array(arr.length);
+                    var sum = 0;
+                    for (var i = 0; i < arr.length; i++) {
+                        sum += arr[i];
+                        if (i >= win) sum -= arr[i - win];
+                        out[i] = sum;
+                    }
+                    return out;
+                }
+                var ROLL_WIN_VIEWS = 7;
+                var dailySmoothByKey = {};
                 keys.forEach(function(k) {
-                    var origTotal = 0, adjTotal = 0;
-                    var adj = {};
-                    dates.forEach(function(d) {
-                        var v = dayMapByKey[k][d] || 0;
-                        origTotal += v;
+                    var perDay = allDates.map(function(d) { return dayMapByKey[k][d] || 0; });
+                    var rolled = _rolling(perDay, ROLL_WIN_VIEWS);
+                    var origTotal = 0, weightedTotal = 0;
+                    var weighted = new Array(allDates.length);
+                    allDates.forEach(function(d, i) {
+                        origTotal += (dayMapByKey[k][d] || 0);
                         var mult = iiqCalendarViewMultiplier(d);
                         var m = (k === 'paid') ? mult.paid_mult
                               : (k === 'organic' || k === 'natural') ? mult.organic_mult
                               : (mult.paid_mult + mult.organic_mult) / 2;
-                        var w = v * m;
-                        adj[d] = w;
-                        adjTotal += w;
+                        var w = rolled[i] * m;
+                        weighted[i] = w;
+                        weightedTotal += w;
                     });
-                    var scale = adjTotal > 0 ? (origTotal / adjTotal) : 1;
-                    dates.forEach(function(d) { adj[d] *= scale; });
-                    dailyAdjByKey[k] = adj;
+                    var scale = weightedTotal > 0 ? (origTotal / weightedTotal) : 1;
+                    var adj = {};
+                    allDates.forEach(function(d, i) { adj[d] = weighted[i] * scale; });
+                    dailySmoothByKey[k] = adj;
                 });
                 var series = keys.map(function(k) {
-                    var pts = [], run = 0;
-                    dates.forEach(function(d) {
-                        run += (dailyAdjByKey[k][d] || 0);
-                        pts.push({ x: d, y: run });
-                    });
-                    return { name: k.charAt(0).toUpperCase() + k.slice(1) + ' (cumulative views)', color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown, points: pts };
+                    var pts = allDates.map(function(d) { return { x: d, y: dailySmoothByKey[k][d] || 0 }; });
+                    return { name: k.charAt(0).toUpperCase() + k.slice(1) + ' views (daily)', color: IIQ_QPALETTE[k] || IIQ_QPALETTE.unknown, points: pts };
                 });
                 // Top row: slim donut on the left, paid-vs-organic funnel
                 // comparison on the right. Cumulative line chart drops below
@@ -24429,48 +24457,55 @@
                     if (k === 'organic' || k === 'natural')              return kind === 'info' ? orgInfoRate  : orgTkRate;
                     return kind === 'info' ? blendedInfoRate : blendedTkRate;
                 }
-                // Two-pass cumulative: pass 1 computes raw daily contributions
-                // weighted by the calendar funnel multiplier (so ticketing
-                // goes ~flat after theatrical ends and info-seek has a
-                // second bump around streaming launch). Pass 2 renormalizes
-                // so the FINAL cumulative totals equal the static aggregate
-                // (agg.{paid,organic}.{info_seekers,ticket_visits}) -- this
-                // preserves ladder-up with the Q2 funnel comparison card
-                // and the Assets page totals. The chart shape changes, but
-                // the totals do not.
-                var rawInfoDaily = [];
-                var rawTkDaily   = [];
-                var rawInfoSum = 0, rawTkSum = 0;
-                dates.forEach(function(dDay) {
-                    var mult = iiqCalendarFunnelMultiplier(dDay);
-                    var infoToday = 0, tkToday = 0;
+                // DAILY (not cumulative) info-seek + ticketing curves so
+                // they actually drop after theatrical ends instead of
+                // flat-lining at peak. Same pipeline as the views above:
+                //   1. Per-day raw funnel volume from each day's asset
+                //      drops (sum_k drops_k * rate_k).
+                //   2. 7-day rolling SUM to model the natural week-long
+                //      post-drop info-seek / ticket window.
+                //   3. Apply iiqCalendarFunnelMultiplier so ticketing
+                //      collapses post-theatrical (no tickets left to buy)
+                //      and info-seek picks up a Gaussian bump centered on
+                //      the 5/15 streaming launch ("where can I stream
+                //      this now?" search behavior).
+                //   4. Renormalize so the area under each curve equals
+                //      the static aggregate (agg.{paid,organic}.*) --
+                //      preserves ladder-up to the Paid-vs-Organic funnel
+                //      card and the Assets cards.
+                var ROLL_WIN_FUNNEL = 7;
+                var rawDrops = allDates.map(function(d) {
+                    var info = 0, tk = 0;
                     keys.forEach(function(k) {
-                        var v = (dayMapByKey[k][dDay] || 0);
-                        infoToday += v * _rateFor(k, 'info') * mult.info_mult;
-                        tkToday   += v * _rateFor(k, 'tk')   * mult.ticket_mult;
+                        var v = (dayMapByKey[k][d] || 0);
+                        info += v * _rateFor(k, 'info');
+                        tk   += v * _rateFor(k, 'tk');
                     });
-                    rawInfoDaily.push(infoToday);
-                    rawTkDaily.push(tkToday);
-                    rawInfoSum += infoToday;
-                    rawTkSum   += tkToday;
+                    return { info: info, tk: tk };
+                });
+                var rollInfoSrc = _rolling(rawDrops.map(function(o){ return o.info; }), ROLL_WIN_FUNNEL);
+                var rollTkSrc   = _rolling(rawDrops.map(function(o){ return o.tk;   }), ROLL_WIN_FUNNEL);
+                var infoWeighted = [], tkWeighted = [];
+                var rawInfoSum = 0, rawTkSum = 0;
+                allDates.forEach(function(d, i) {
+                    var mult = iiqCalendarFunnelMultiplier(d);
+                    var iV = rollInfoSrc[i] * mult.info_mult;
+                    var tV = rollTkSrc[i]   * mult.ticket_mult;
+                    infoWeighted.push(iV);
+                    tkWeighted.push(tV);
+                    rawInfoSum += iV;
+                    rawTkSum   += tV;
                 });
                 var targetInfo = agg.paid.info_seekers  + agg.organic.info_seekers;
                 var targetTk   = agg.paid.ticket_visits + agg.organic.ticket_visits;
                 var infoScale  = rawInfoSum > 0 ? (targetInfo / rawInfoSum) : 1;
                 var tkScale    = rawTkSum   > 0 ? (targetTk   / rawTkSum)   : 1;
-                var infoCumPts = [];
-                var tkCumPts   = [];
-                var runInfo = 0, runTk = 0;
-                dates.forEach(function(dDay, i) {
-                    runInfo += rawInfoDaily[i] * infoScale;
-                    runTk   += rawTkDaily[i]   * tkScale;
-                    infoCumPts.push({ x: dDay, y: runInfo });
-                    tkCumPts.push({ x: dDay, y: runTk   });
-                });
-                var hasFunnelSeries = (runInfo + runTk) > 0;
+                var infoDailyPts = allDates.map(function(d, i) { return { x: d, y: infoWeighted[i] * infoScale }; });
+                var tkDailyPts   = allDates.map(function(d, i) { return { x: d, y: tkWeighted[i]   * tkScale   }; });
+                var hasFunnelSeries = (rawInfoSum + rawTkSum) > 0;
                 var rightSeries = hasFunnelSeries ? [
-                    { name: 'Cumulative info-seekers',    color: '#a5b4fc', points: infoCumPts },
-                    { name: 'Cumulative ticketing visits', color: '#fbbf24', points: tkCumPts   }
+                    { name: 'Info-seekers (daily)',    color: '#a5b4fc', points: infoDailyPts },
+                    { name: 'Ticketing visits (daily)', color: '#fbbf24', points: tkDailyPts   }
                 ] : [];
                 var paidColor    = IIQ_QPALETTE.paid;
                 var organicColor = IIQ_QPALETTE.organic;
@@ -24552,7 +24587,7 @@
                 // cards; the modal version goes wide so the dots and date
                 // axis are readable.
                 var chartCaption = hasFunnelSeries
-                    ? 'Left axis: cumulative views (paid vs organic). Right axis: cumulative info-seekers &amp; ticketing visits. Dots along the x-axis = each paid/organic asset drop date.'
+                    ? 'Daily activity (7-day rolling). Left axis: daily paid vs organic views. Right axis: daily info-seekers &amp; ticketing visits. All four lines spike around opening weekend, decay through the theatrical window, and ticketing collapses once the movie leaves theatres. Info-seek picks back up around the 5/15 streaming launch ("where can I stream this?"). Dots along the x-axis = each paid/organic asset drop date.'
                     : 'Dots along the x-axis = each paid/organic asset drop date.';
 
                 window.__intentIQQ2Chart = {
@@ -24596,7 +24631,7 @@
                     +     '</div>';
                 html +=   '<div class="iiq-card" onclick="window.iiqQ2OpenChartModal()" title="Click to expand" style="padding:0.65rem 0.75rem; cursor:pointer; position:relative; transition: border-color 0.15s;" onmouseover="this.style.borderColor=\'rgba(34,211,238,0.45)\';" onmouseout="this.style.borderColor=\'\';">'
                     +       '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; margin-bottom:0.3rem;">'
-                    +         '<div style="font-size:0.78rem; color: var(--text-secondary);">Cumulative view growth + downstream funnel</div>'
+                    +         '<div style="font-size:0.78rem; color: var(--text-secondary);">Daily activity: views + downstream funnel</div>'
                     +         '<div style="font-size:0.65rem; color: rgba(34,211,238,0.85); white-space:nowrap;">click to expand \u2197</div>'
                     +       '</div>'
                     +       _q2ChartHtml(560, 210)
@@ -24758,8 +24793,8 @@
                 panel.innerHTML =
                     '<div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:0.85rem; gap:1rem;">'
                   +   '<div>'
-                  +     '<h3 style="margin:0 0 0.2rem; color:#fff; font-size:1.05rem;">Cumulative view growth + downstream funnel</h3>'
-                  +     '<div style="font-size:0.74rem; color: var(--text-secondary);">Paid vs. organic content drops, plus the cumulative info-seek and ticketing funnel that ladders up to the Assets cards.</div>'
+                  +     '<h3 style="margin:0 0 0.2rem; color:#fff; font-size:1.05rem;">Daily activity: views + downstream funnel</h3>'
+                  +     '<div style="font-size:0.74rem; color: var(--text-secondary);">7-day rolling daily activity. Lines ramp into opening weekend, decay through theatrical, and ticketing collapses once the movie leaves theatres. Info-seek bumps again around the 5/15 streaming launch. Totals still ladder up to the Assets cards.</div>'
                   +   '</div>'
                   +   '<button type="button" onclick="document.getElementById(\'iiqQ2ChartModal\').remove()" style="background: rgba(255,255,255,0.06); color:#fff; border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:0.35rem 0.7rem; cursor:pointer; font-size:0.85rem; flex:none;">Close \u2715</button>'
                   + '</div>'
