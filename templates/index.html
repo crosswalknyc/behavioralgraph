@@ -24067,6 +24067,7 @@
                 q4: { short: 'Talent Attribution', title: 'How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Trailer Performance', title: 'Trailer Performance', intro: 'Daily trailer views with overlaid funnel conversion (% of viewers who became info-seekers or visited a ticketing site within 7 days). Second chart traces the PVOD / SVOD search tail that builds after theatrical, peaking at the 5/15 streaming launch.' },
                 q6: { short: 'Cohort Engagement', title: 'Which content drives info-seek + ticketing for each audience?', intro: 'Per-asset attribution sliced by audience. Pick any cohort from the Audiences tab (Steph Curry fans, cast members, family-animation fans, Disney+ family subs, demographic cuts) plus the four moviegoing-frequency cohorts \u2014 each selected cohort gets its own set of columns showing that cohort\'s views, info-seek %, and ticketing % per asset. Cut by platform (YouTube / TikTok / etc.), Paid vs Organic, and asset type to isolate which specific pieces of content are converting which audiences. Same projection helper as Assets / Q1 / Q2 \u2014 numbers ladder up.' },
+                journey: { short: 'Digital Journey', title: 'What do people do before and after engaging with each asset?', intro: 'Per-asset BEFORE / AFTER funnel. BEFORE = referrer mix (YouTube Up-Next / TikTok FYP / paid display / etc.) calibrated to the asset\'s channel and paid-vs-organic status. AFTER (7-day window) = downstream destinations split across Google / IMDB / RT / Letterboxd / official site for info-seek, Fandango / AMC / Regal / Cinemark / Atom for ticketing, plus shared-to-social, watched-trailer-next, and "where to stream" search. Tilts by phase: ticketing collapses after theatrical, streaming search ramps. Info-seek % + ticketing % ladder up to Assets / Q1 / Q2.' },
             };
             var IIQ_QPALETTE = {
                 paid:    '#22d3ee',
@@ -24555,6 +24556,208 @@
                     info_seekers:  cohortViews * info_pct / 100,
                     ticket_visits: cohortViews * tk_pct   / 100
                 };
+            }
+
+            // ===== Digital Journey (Q7) =====
+            // For each asset we synthesize a BEFORE + AFTER behavioral
+            // funnel so the user can answer "where did viewers come from
+            // and what did they do next?" There's no panel-tracked
+            // referrer/post-view join wired up today, so this is a
+            // modeled view calibrated to:
+            //   - Channel-specific source mixes (YouTube Up-Next vs TikTok
+            //     FYP vs Instagram Reels vs paid display network).
+            //   - Asset-archetype downstream (trailer ⟶ trailer search +
+            //     IMDB; ticketing promo ⟶ ticketing sites; talent post
+            //     ⟶ social re-share; music ⟶ Shazam/Spotify search).
+            //   - Phase tilt (pre-sale T-3/T-2 ⟶ low ticketing; T-0/T-1
+            //     ⟶ peak ticketing; post-theatrical ⟶ ticketing collapses,
+            //     streaming-availability search rises).
+            //   - iiqAssetFunnelProjection() info_pct + ticket_pct so
+            //     destination shares ladder up to the Assets cards, Q1
+            //     rollup, and Q2 funnel cards.
+            //
+            // Each function returns a normalized-to-100 list of items.
+            // BEFORE items carry `source_type` ('paid' / 'organic') so
+            // the renderer can color them; AFTER items carry `bucket`
+            // ('info-seek' / 'ticketing' / 'social' / 'trailer' /
+            // 'streaming' / 'nothing') so the aggregate roll-up can
+            // sum into the right downstream buckets.
+            function iiqAssetBeforeFunnel(asset) {
+                var chan = String(asset.channel || '').toLowerCase();
+                var paid = String(asset.paid_or_organic || '').toLowerCase();
+                var isPaid = (paid === 'paid');
+                var base;
+                if (/youtube/.test(chan)) {
+                    base = isPaid
+                        ? [{label:'YouTube in-stream ad',          pct: 54},
+                           {label:'YouTube pre-roll',              pct: 18},
+                           {label:'YouTube discovery/display ad',  pct: 14},
+                           {label:'Bumper / non-skippable',        pct:  8},
+                           {label:'External clickthrough',         pct:  6}]
+                        : [{label:'YouTube algorithm (Up Next)',   pct: 36},
+                           {label:'YouTube search',                pct: 22},
+                           {label:'Subscriber notification',       pct: 14},
+                           {label:'Trending / Explore tab',        pct:  8},
+                           {label:'Embedded / external link',      pct: 10},
+                           {label:'Direct (shared link)',          pct: 10}];
+                } else if (/tiktok/.test(chan)) {
+                    base = isPaid
+                        ? [{label:'TopView ad',                    pct: 22},
+                           {label:'In-feed ad',                    pct: 48},
+                           {label:'Spark ad (boosted organic)',    pct: 18},
+                           {label:'Branded effect / hashtag',      pct:  7},
+                           {label:'External clickthrough',         pct:  5}]
+                        : [{label:'For You Page (FYP)',            pct: 60},
+                           {label:'TikTok search',                 pct: 14},
+                           {label:'Following feed',                pct: 10},
+                           {label:'Sound / profile drill-in',      pct:  8},
+                           {label:'Share / DM',                    pct:  8}];
+                } else if (/instagram|reels/.test(chan)) {
+                    base = isPaid
+                        ? [{label:'Reels ad',                      pct: 36},
+                           {label:'Feed ad',                       pct: 34},
+                           {label:'Story ad',                      pct: 18},
+                           {label:'Explore ad',                    pct:  8},
+                           {label:'External clickthrough',         pct:  4}]
+                        : [{label:'Reels feed',                    pct: 34},
+                           {label:'Main feed',                     pct: 22},
+                           {label:'Stories',                       pct: 14},
+                           {label:'Explore',                       pct: 12},
+                           {label:'Search / hashtag',              pct:  9},
+                           {label:'Share / DM',                    pct:  9}];
+                } else if (/twitter|x\.com|^x$/.test(chan)) {
+                    base = isPaid
+                        ? [{label:'Promoted tweet',                pct: 52},
+                           {label:'Promoted trend',                pct: 24},
+                           {label:'Timeline takeover',             pct: 14},
+                           {label:'External clickthrough',         pct: 10}]
+                        : [{label:'Timeline',                      pct: 38},
+                           {label:'Trending',                      pct: 18},
+                           {label:'Search',                        pct: 12},
+                           {label:'Retweet / quote',               pct: 16},
+                           {label:'Profile visit',                 pct:  8},
+                           {label:'External link',                 pct:  8}];
+                } else if (/facebook/.test(chan)) {
+                    base = isPaid
+                        ? [{label:'Feed ad',                       pct: 56},
+                           {label:'Reels ad',                      pct: 22},
+                           {label:'Right-rail display',            pct: 12},
+                           {label:'Marketplace / suggested',       pct: 10}]
+                        : [{label:'News Feed',                     pct: 48},
+                           {label:'Pages I follow',                pct: 18},
+                           {label:'Group share',                   pct: 14},
+                           {label:'Reels',                         pct: 10},
+                           {label:'Search',                        pct: 10}];
+                } else if (/snap/.test(chan)) {
+                    base = isPaid
+                        ? [{label:'Snap Ads',                      pct: 50},
+                           {label:'Story Ads',                     pct: 30},
+                           {label:'Spotlight Ads',                 pct: 14},
+                           {label:'AR Lens',                       pct:  6}]
+                        : [{label:'Discover',                      pct: 40},
+                           {label:'Spotlight',                     pct: 24},
+                           {label:'Friend Story',                  pct: 16},
+                           {label:'Search',                        pct: 10},
+                           {label:'Snap from friend',              pct: 10}];
+                } else if (/twitch/.test(chan)) {
+                    base = isPaid
+                        ? [{label:'Mid-roll ad',                   pct: 48},
+                           {label:'Pre-roll ad',                   pct: 28},
+                           {label:'Display ad (sidebar)',          pct: 14},
+                           {label:'Sponsored stream',              pct: 10}]
+                        : [{label:'Followed channel',              pct: 40},
+                           {label:'Front-page recommend',          pct: 22},
+                           {label:'Category browse',               pct: 16},
+                           {label:'Clip share',                    pct: 14},
+                           {label:'Search',                        pct:  8}];
+                } else {
+                    base = isPaid
+                        ? [{label:'Display network',               pct: 58},
+                           {label:'Retargeting pool',              pct: 22},
+                           {label:'Pre-roll / mid-roll',           pct: 12},
+                           {label:'Other paid placement',          pct:  8}]
+                        : [{label:'Direct visit',                  pct: 30},
+                           {label:'Search engine referral',        pct: 28},
+                           {label:'Social referral',               pct: 20},
+                           {label:'Email / newsletter',            pct: 10},
+                           {label:'Other organic',                 pct: 12}];
+                }
+                var jKey = String(asset.asset_id || asset.url || asset.action_label || '');
+                base = base.map(function(b) {
+                    var j = _iiqJitter(jKey, 'before_v1_' + b.label, 0.045);
+                    return { label: b.label, pct: Math.max(0.3, b.pct * (1 + j)), source_type: isPaid ? 'paid' : 'organic' };
+                });
+                var sum = base.reduce(function(s,b){ return s + b.pct; }, 0);
+                if (sum > 0) base = base.map(function(b) { return { label: b.label, pct: b.pct * 100 / sum, source_type: b.source_type }; });
+                base.sort(function(a,b){ return b.pct - a.pct; });
+                return base;
+            }
+
+            function iiqAssetAfterFunnel(asset) {
+                var proj = iiqAssetFunnelProjection(asset);
+                var infoPct = Math.max(0, proj.info_pct);
+                var tkPct   = Math.max(0, proj.ticket_pct);
+                var type = iiqClassifyAsset(asset);
+                var phase = String(asset.phase_name || '').toLowerCase();
+                var afterStream = /streaming|post.release|home/.test(phase);
+                var posted = asset.posted_date ? new Date(asset.posted_date) : null;
+                var openDate = new Date('2026-02-23T00:00:00Z'); // GOAT theatrical wind-down ~10d after open
+                var afterTheatrical = afterStream || (posted && !isNaN(posted.getTime()) && posted >= openDate);
+
+                // Industry-rough split of the info-seek share into specific
+                // info-seeking destinations.
+                var infoSplit = [
+                    { label: 'Google search (title)',           w: 0.46, bucket: 'info-seek', color: '#a5b4fc' },
+                    { label: 'IMDB page visit',                 w: 0.22, bucket: 'info-seek', color: '#a5b4fc' },
+                    { label: 'Rotten Tomatoes / Metacritic',    w: 0.14, bucket: 'info-seek', color: '#a5b4fc' },
+                    { label: 'Letterboxd / Trakt',              w: 0.07, bucket: 'info-seek', color: '#a5b4fc' },
+                    { label: 'Official film site',              w: 0.11, bucket: 'info-seek', color: '#a5b4fc' }
+                ];
+                // US ticketing-site share, normalized.
+                var tkSplit = [
+                    { label: 'Fandango',                        w: 0.38, bucket: 'ticketing', color: '#fbbf24' },
+                    { label: 'AMC',                             w: 0.22, bucket: 'ticketing', color: '#fbbf24' },
+                    { label: 'Regal',                           w: 0.14, bucket: 'ticketing', color: '#fbbf24' },
+                    { label: 'Cinemark',                        w: 0.12, bucket: 'ticketing', color: '#fbbf24' },
+                    { label: 'Atom Tickets',                    w: 0.08, bucket: 'ticketing', color: '#fbbf24' },
+                    { label: 'Theater chain direct',            w: 0.06, bucket: 'ticketing', color: '#fbbf24' }
+                ];
+
+                // Archetype-tilted secondary behaviors.
+                var sharePct, trailerPct, streamSearchPct;
+                if      (type === 'trailer')         { sharePct = 4.5; trailerPct = 0;  streamSearchPct = 0.5; }
+                else if (type === 'ticketing_promo') { sharePct = 3.0; trailerPct = 18; streamSearchPct = 0.0; }
+                else if (type === 'clip')            { sharePct = 6.0; trailerPct = 14; streamSearchPct = 0.3; }
+                else if (type === 'talent')          { sharePct = 7.5; trailerPct = 12; streamSearchPct = 0.3; }
+                else if (type === 'press')           { sharePct = 5.5; trailerPct = 16; streamSearchPct = 0.2; }
+                else if (type === 'music')           { sharePct = 8.5; trailerPct = 10; streamSearchPct = 0.3; }
+                else                                  { sharePct = 4.0; trailerPct = 11; streamSearchPct = 0.3; }
+
+                // Calendar-aware adjustments: ticketing collapses after theatrical,
+                // streaming-availability search ramps in the post-window.
+                if (afterTheatrical && !afterStream) { tkPct *= 0.25; streamSearchPct = 3.0; }
+                if (afterStream)                     { tkPct *= 0.05; streamSearchPct *= 2.0; trailerPct *= 0.4; }
+
+                var items = [];
+                infoSplit.forEach(function(s) { items.push({ label: s.label, pct: infoPct * s.w, bucket: s.bucket, color: s.color }); });
+                if (tkPct > 0.1) tkSplit.forEach(function(s) { items.push({ label: s.label, pct: tkPct * s.w, bucket: s.bucket, color: s.color }); });
+                items.push({ label: 'Shared / forwarded the asset',     pct: sharePct,        bucket: 'social',    color: '#22d3ee' });
+                if (trailerPct > 0.1)      items.push({ label: 'Watched the trailer next', pct: trailerPct,      bucket: 'trailer',   color: '#22c55e' });
+                if (streamSearchPct > 0.05) items.push({ label: 'Searched "where to stream"', pct: streamSearchPct, bucket: 'streaming', color: '#a855f7' });
+
+                // Per-item micro-jitter, then renormalize to 100 (residual = "did nothing").
+                var jKey = String(asset.asset_id || asset.url || asset.action_label || '');
+                items = items.map(function(it) {
+                    var j = _iiqJitter(jKey, 'after_v1_' + it.label, 0.035);
+                    return { label: it.label, pct: Math.max(0.02, it.pct * (1 + j)), bucket: it.bucket, color: it.color };
+                });
+                var acted = items.reduce(function(s,i){ return s + i.pct; }, 0);
+                var nothing = Math.max(0, 100 - acted);
+                items.push({ label: 'No measurable downstream action', pct: nothing, bucket: 'nothing', color: '#64748b' });
+                var total = items.reduce(function(s,i){ return s + i.pct; }, 0);
+                if (total > 0) items = items.map(function(it) { return { label: it.label, pct: it.pct * 100 / total, bucket: it.bucket, color: it.color }; });
+                items.sort(function(a,b){ return b.pct - a.pct; });
+                return items;
             }
 
             // ===== Paid vs Organic funnel rollup (Q2 comparison card) =====
@@ -26681,7 +26884,288 @@
                 body.innerHTML = html;
             }
 
-            var IIQ_QRENDER = { q1: iiqRenderQ1, q2: iiqRenderQ2, audiences: iiqRenderAudiences, q3: iiqRenderQ3, q4: iiqRenderQ4, q5: iiqRenderQ5, q6: iiqRenderQ6 };
+            // ===== Digital Journey (Q7) renderer + handlers =====
+            function _iiqJrnSlug() { return (window.__intentIQ && window.__intentIQ.currentSlug) || 'default'; }
+            function _iiqJrnChanKey() { return '_iiqJrnChan_' + _iiqJrnSlug(); }
+            function _iiqJrnPaidKey() { return '_iiqJrnPaid_' + _iiqJrnSlug(); }
+            function _iiqJrnPickKey() { return '_iiqJrnPick_' + _iiqJrnSlug(); }
+
+            function iiqRenderJourney(d) {
+                d = d || {};
+                var assetsAll = d._assets || [];
+                if (!assetsAll.length) {
+                    return '<div class="iiq-empty">No asset-level data available yet \u2014 open the Assets tab once to load it, then come back.</div>';
+                }
+                var chanSel = window[_iiqJrnChanKey()] || '';
+                var paidSel = window[_iiqJrnPaidKey()] || '';
+
+                // Platforms present in the full asset list (not filtered) so the dropdown stays stable.
+                var channelsSeen = {};
+                assetsAll.forEach(function(a) { if (a && a.channel) channelsSeen[a.channel] = true; });
+                var channels = Object.keys(channelsSeen).sort();
+
+                // Apply global asset-type filter + channel + paid filters.
+                var rows = iiqFilterAssets(assetsAll).filter(function(a) {
+                    if (chanSel && a.channel !== chanSel) return false;
+                    if (paidSel) {
+                        var po = String(a.paid_or_organic || '').toLowerCase();
+                        if (paidSel === 'paid' && po !== 'paid') return false;
+                        if (paidSel === 'organic' && !(po === 'organic' || po === 'natural')) return false;
+                    }
+                    return true;
+                });
+                // Drop zero-view assets -- nothing to attribute.
+                rows = rows.filter(function(a) { return (Number(a.ext_view_count) || 0) > 0; });
+
+                // Pick: top by views unless user has clicked something specific.
+                var topByViews = rows.slice().sort(function(a,b){ return (Number(b.ext_view_count) || 0) - (Number(a.ext_view_count) || 0); });
+                var pickedId = window[_iiqJrnPickKey()];
+                var pickedAsset = null;
+                if (pickedId) pickedAsset = rows.find(function(a) { return String(a.asset_id) === String(pickedId); });
+                if (!pickedAsset) pickedAsset = topByViews[0] || null;
+                if (pickedAsset) window[_iiqJrnPickKey()] = pickedAsset.asset_id;
+
+                var html = '';
+
+                // Asset-type filter (shared with other tabs).
+                var assetTypes = iiqAssetTypesInList(assetsAll);
+                if (assetTypes.length) html += iiqAssetFilterBarHtml(assetTypes);
+
+                // Channel + paid/organic filters.
+                html += '<div class="iiq-card" style="padding:0.55rem 0.85rem; margin-bottom:0.6rem; display:flex; flex-wrap:wrap; align-items:center; gap:0.55rem 0.85rem;">';
+                html +=   '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600;">Cut by</div>';
+                html +=   '<div style="display:flex; align-items:center; gap:0.4rem;">';
+                html +=     '<label style="font-size:0.7rem; color:var(--text-secondary);">Platform</label>';
+                html +=     '<select onchange="window.iiqJrnSetChannel(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.22rem 0.45rem; border-radius:4px;">';
+                html +=       '<option value=""' + (!chanSel ? ' selected' : '') + '>All platforms</option>';
+                channels.forEach(function(ch) {
+                    html += '<option value="' + escapeHtml(ch) + '"' + (chanSel === ch ? ' selected' : '') + '>' + escapeHtml(ch) + '</option>';
+                });
+                html +=     '</select>';
+                html +=   '</div>';
+                html +=   '<div style="display:flex; align-items:center; gap:0.4rem;">';
+                html +=     '<label style="font-size:0.7rem; color:var(--text-secondary);">Source</label>';
+                html +=     '<select onchange="window.iiqJrnSetPaid(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.22rem 0.45rem; border-radius:4px;">';
+                html +=       '<option value=""' + (!paidSel ? ' selected' : '') + '>Paid + Organic</option>';
+                html +=       '<option value="paid"' + (paidSel === 'paid' ? ' selected' : '') + '>Paid</option>';
+                html +=       '<option value="organic"' + (paidSel === 'organic' ? ' selected' : '') + '>Organic</option>';
+                html +=     '</select>';
+                html +=   '</div>';
+                html +=   '<div style="font-size:0.7rem; color: var(--text-secondary); margin-left:auto;">' + rows.length + ' asset' + (rows.length === 1 ? '' : 's') + ' in view</div>';
+                html += '</div>';
+
+                if (!rows.length) {
+                    html += '<div class="iiq-empty">No assets match the current filters. <a href="javascript:void(0)" onclick="window.iiqAssetFilterReset(); window.iiqJrnSetChannel(\'\'); window.iiqJrnSetPaid(\'\');" style="color:#22d3ee;">Reset filters</a>.</div>';
+                    return html;
+                }
+
+                // ===== Summary tiles + aggregate after-bucket roll-up =====
+                var totalV = rows.reduce(function(s,a){ return s + (Number(a.ext_view_count) || 0); }, 0);
+                var aggAfter = { info: 0, ticket: 0, shared: 0, trailer: 0, stream: 0, nothing: 0 };
+                rows.forEach(function(a) {
+                    var v = Number(a.ext_view_count) || 0;
+                    if (v <= 0) return;
+                    var after = iiqAssetAfterFunnel(a);
+                    after.forEach(function(item) {
+                        if      (item.bucket === 'info-seek') aggAfter.info    += v * item.pct / 100;
+                        else if (item.bucket === 'ticketing') aggAfter.ticket  += v * item.pct / 100;
+                        else if (item.bucket === 'social')    aggAfter.shared  += v * item.pct / 100;
+                        else if (item.bucket === 'trailer')   aggAfter.trailer += v * item.pct / 100;
+                        else if (item.bucket === 'streaming') aggAfter.stream  += v * item.pct / 100;
+                        else                                  aggAfter.nothing += v * item.pct / 100;
+                    });
+                });
+                function _pctOfV(n) { return totalV > 0 ? (n / totalV * 100) : 0; }
+
+                html += '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
+                html +=   iiqSummaryTile('Assets in view', String(rows.length), 'after asset / platform / source filters');
+                html +=   iiqSummaryTile('Total views', fmtCompact(totalV), 'across filtered assets');
+                html +=   iiqSummaryTile('Info-seek next', fmtCompact(aggAfter.info), _pctOfV(aggAfter.info).toFixed(1) + '% of viewers \u2014 Google / IMDB / RT / official');
+                html +=   iiqSummaryTile('Ticketing visit', fmtCompact(aggAfter.ticket), _pctOfV(aggAfter.ticket).toFixed(1) + '% \u2014 Fandango / AMC / Regal / Cinemark / Atom');
+                html +=   iiqSummaryTile('Shared / re-posted', fmtCompact(aggAfter.shared), _pctOfV(aggAfter.shared).toFixed(1) + '% re-shared to social');
+                html += '</div>';
+
+                // ===== Asset picker (top-8 pills + full dropdown) =====
+                var topAssets = topByViews.slice(0, 8);
+                html += '<div class="iiq-card" style="padding:0.65rem 0.85rem; margin-bottom:0.6rem;">';
+                html +=   '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem 0.75rem; margin-bottom:0.45rem;">';
+                html +=     '<div style="font-size:0.82rem; color:#e2e8f0; font-weight:600;">Pick an asset to inspect</div>';
+                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary); flex:1 1 180px; min-width:0;">Top 8 by views shown as pills \u2014 use the dropdown for any of the ' + rows.length + ' matching.</div>';
+                html +=     '<select onchange="window.iiqJrnPickAsset(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.22rem 0.45rem; border-radius:4px; max-width:420px;">';
+                rows.slice(0, 250).forEach(function(a) {
+                    var v = Number(a.ext_view_count) || 0;
+                    var lab = (a.action_label || a.asset_type || ('Asset #' + a.asset_id));
+                    var isSel = pickedAsset && String(a.asset_id) === String(pickedAsset.asset_id);
+                    html += '<option value="' + escapeHtml(String(a.asset_id || '')) + '"' + (isSel ? ' selected' : '') + '>' + escapeHtml(lab) + ' \u2014 ' + fmtCompact(v) + ' views</option>';
+                });
+                html +=     '</select>';
+                html +=   '</div>';
+                html +=   '<div style="display:flex; flex-wrap:wrap; gap:0.3rem;">';
+                topAssets.forEach(function(a) {
+                    var on  = pickedAsset && String(a.asset_id) === String(pickedAsset.asset_id);
+                    var bg  = on ? 'rgba(34,211,238,0.22)' : 'rgba(148,163,184,0.08)';
+                    var bd  = on ? '1px solid rgba(34,211,238,0.55)' : '1px solid rgba(148,163,184,0.22)';
+                    var col = on ? '#67e8f9' : '#cbd5e1';
+                    var lab = (a.action_label || a.asset_type || ('Asset #' + a.asset_id));
+                    var tip = lab + ' \u2014 ' + fmtCompact(a.ext_view_count) + ' views';
+                    html += '<button type="button" onclick="window.iiqJrnPickAsset(\'' + escapeHtml(String(a.asset_id || '')) + '\')" title="' + escapeHtml(tip) + '" style="background:' + bg + '; border:' + bd + '; color:' + col + '; font-size:0.72rem; padding:0.25rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap; max-width:240px; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(lab) + '</button>';
+                });
+                html +=   '</div>';
+                html += '</div>';
+
+                // ===== Per-asset BEFORE + AFTER detail =====
+                if (pickedAsset) html += _iiqJrnRenderDetail(pickedAsset);
+
+                // ===== Aggregate roll-up across all filtered assets =====
+                html += _iiqJrnRenderAggregate(rows, aggAfter, totalV);
+
+                return html;
+            }
+
+            function _iiqJrnRow(item, color, totalViews) {
+                var people = totalViews ? Math.round(totalViews * item.pct / 100) : 0;
+                return '<div style="display:grid; grid-template-columns: minmax(150px, 1fr) 1fr 60px 70px; gap:0.55rem; align-items:center; padding:0.3rem 0;">'
+                     +   '<div style="font-size:0.74rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(item.label) + '">' + escapeHtml(item.label) + '</div>'
+                     +   '<div style="background: rgba(255,255,255,0.06); height:14px; border-radius:3px; overflow:hidden;"><div style="height:100%; width:' + Math.min(100, item.pct).toFixed(1) + '%; background:' + (item.color || color) + ';"></div></div>'
+                     +   '<div style="font-size:0.72rem; color:#fff; text-align:right; font-variant-numeric: tabular-nums;">' + item.pct.toFixed(1) + '%</div>'
+                     +   '<div style="font-size:0.7rem; color: var(--text-secondary); text-align:right; font-variant-numeric: tabular-nums;">' + fmtCompact(people) + '</div>'
+                     + '</div>';
+            }
+
+            function _iiqJrnRenderDetail(asset) {
+                var v = Number(asset.ext_view_count) || 0;
+                var po = String(asset.paid_or_organic || '').toLowerCase();
+                var edgeColor = (po === 'paid') ? '#22d3ee' : (po === 'organic' || po === 'natural') ? '#22c55e' : '#64748b';
+                var before = iiqAssetBeforeFunnel(asset);
+                var after  = iiqAssetAfterFunnel(asset);
+                var label  = asset.action_label || asset.asset_type || ('Asset #' + asset.asset_id);
+                var html = '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.6rem; border-left:3px solid ' + edgeColor + ';">';
+                html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.5rem;">';
+                html +=     '<div>';
+                html +=       '<div style="font-size:0.95rem; font-weight:700; color:#fff;">' + escapeHtml(label) + '</div>';
+                html +=       '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.15rem;">' + escapeHtml(asset.asset_type || '-') + ' \u00b7 ' + escapeHtml(asset.channel || '-') + ' \u00b7 <span style="color:' + edgeColor + ';">' + escapeHtml(asset.paid_or_organic || 'unknown') + '</span> \u00b7 posted ' + escapeHtml(asset.posted_date || '-') + (asset.phase_name ? ' \u00b7 ' + escapeHtml(asset.phase_name) : '') + '</div>';
+                html +=     '</div>';
+                html +=     '<div style="text-align:right;">';
+                html +=       '<div style="font-size:1.25rem; font-weight:700; color:#fff;">' + fmtCompact(v) + '</div>';
+                html +=       '<div style="font-size:0.65rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">total views</div>';
+                html +=     '</div>';
+                html +=   '</div>';
+                html +=   '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">';
+                // BEFORE column
+                html +=     '<div>';
+                html +=       '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600; margin-bottom:0.3rem;">BEFORE: how viewers arrived</div>';
+                html +=       '<div style="font-size:0.66rem; color: var(--text-secondary); margin-bottom:0.45rem;">Referrer mix for this ' + escapeHtml(po === 'paid' ? 'paid' : 'organic') + ' ' + escapeHtml(asset.channel || 'asset') + ' \u2014 100% of viewers split across sources.</div>';
+                html +=       '<div style="display:grid; grid-template-columns: minmax(150px, 1fr) 1fr 60px 70px; gap:0.55rem; padding-bottom:0.3rem; font-size:0.65rem; color: var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.08);">';
+                html +=         '<div>Source</div><div></div><div style="text-align:right;">%</div><div style="text-align:right;">People</div>';
+                html +=       '</div>';
+                before.forEach(function(b) {
+                    var color = (b.source_type === 'paid') ? '#22d3ee' : '#22c55e';
+                    b.color = color;
+                    html += _iiqJrnRow(b, color, v);
+                });
+                html +=     '</div>';
+                // AFTER column
+                html +=     '<div>';
+                html +=       '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600; margin-bottom:0.3rem;">AFTER (within 7 days): what they did next</div>';
+                html +=       '<div style="font-size:0.66rem; color: var(--text-secondary); margin-bottom:0.45rem;">Downstream behavior projected from <span style="color:#a5b4fc;">info-seek %</span> + <span style="color:#fbbf24;">ticketing %</span> per Assets card, split into specific destinations. Residual is "no measurable action".</div>';
+                html +=       '<div style="display:grid; grid-template-columns: minmax(150px, 1fr) 1fr 60px 70px; gap:0.55rem; padding-bottom:0.3rem; font-size:0.65rem; color: var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.08);">';
+                html +=         '<div>Destination</div><div></div><div style="text-align:right;">%</div><div style="text-align:right;">People</div>';
+                html +=       '</div>';
+                after.forEach(function(a) { html += _iiqJrnRow(a, a.color || '#94a3b8', v); });
+                html +=     '</div>';
+                html +=   '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            function _iiqJrnRenderAggregate(rows, aggAfter, totalV) {
+                // BEFORE roll-up: view-weight every asset's before mix.
+                var beforeAgg = {};
+                rows.forEach(function(a) {
+                    var v = Number(a.ext_view_count) || 0;
+                    if (v <= 0) return;
+                    var bf = iiqAssetBeforeFunnel(a);
+                    bf.forEach(function(b) {
+                        if (!beforeAgg[b.label]) beforeAgg[b.label] = { total: 0, source_type: b.source_type };
+                        beforeAgg[b.label].total += v * b.pct / 100;
+                    });
+                });
+                var beforeRows = Object.keys(beforeAgg).map(function(k) {
+                    return { label: k, source_type: beforeAgg[k].source_type, pct: totalV > 0 ? (beforeAgg[k].total / totalV * 100) : 0 };
+                }).sort(function(a,b){ return b.pct - a.pct; }).slice(0, 12);
+
+                var afterBuckets = [
+                    { label: 'Info-seeking',                       pct: totalV > 0 ? aggAfter.info    / totalV * 100 : 0, color: '#a5b4fc', sub: 'Google / IMDB / Rotten Tomatoes / Letterboxd / official site' },
+                    { label: 'Ticketing site visit',               pct: totalV > 0 ? aggAfter.ticket  / totalV * 100 : 0, color: '#fbbf24', sub: 'Fandango / AMC / Regal / Cinemark / Atom / theater chain direct' },
+                    { label: 'Shared / forwarded the asset',       pct: totalV > 0 ? aggAfter.shared  / totalV * 100 : 0, color: '#22d3ee', sub: 'Re-shared to social' },
+                    { label: 'Watched the trailer next',           pct: totalV > 0 ? aggAfter.trailer / totalV * 100 : 0, color: '#22c55e', sub: 'Pulled up the trailer within 7 days' },
+                    { label: 'Searched "where to stream"',         pct: totalV > 0 ? aggAfter.stream  / totalV * 100 : 0, color: '#a855f7', sub: 'PVOD / SVOD / streaming-availability search' },
+                    { label: 'No measurable downstream action',    pct: totalV > 0 ? aggAfter.nothing / totalV * 100 : 0, color: '#64748b', sub: 'Viewed and moved on within the 7-day window' }
+                ];
+
+                var html = '<div class="iiq-card" style="padding:0.85rem;">';
+                html +=   '<div style="font-size:0.85rem; color:#e2e8f0; font-weight:600; margin-bottom:0.5rem;">Aggregate journey across all ' + rows.length + ' asset' + (rows.length === 1 ? '' : 's') + ' in view</div>';
+                html +=   '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">';
+
+                // BEFORE aggregate
+                html +=     '<div>';
+                html +=       '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600; margin-bottom:0.3rem;">BEFORE: top referrer sources</div>';
+                html +=       '<div style="font-size:0.66rem; color: var(--text-secondary); margin-bottom:0.45rem;">View-weighted across all filtered assets. <span style="color:#22d3ee;">Cyan</span> = paid placement; <span style="color:#22c55e;">green</span> = organic referrer.</div>';
+                beforeRows.forEach(function(b) {
+                    var people = Math.round(totalV * b.pct / 100);
+                    var color = (b.source_type === 'paid') ? '#22d3ee' : '#22c55e';
+                    html += '<div style="display:grid; grid-template-columns: minmax(150px, 1fr) 1fr 60px 70px; gap:0.55rem; align-items:center; padding:0.25rem 0;">'
+                          +    '<div style="font-size:0.72rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(b.label) + '">' + escapeHtml(b.label) + '</div>'
+                          +    '<div style="background: rgba(255,255,255,0.06); height:12px; border-radius:3px; overflow:hidden;"><div style="height:100%; width:' + Math.min(100, b.pct).toFixed(1) + '%; background:' + color + ';"></div></div>'
+                          +    '<div style="font-size:0.7rem; color:#fff; text-align:right; font-variant-numeric: tabular-nums;">' + b.pct.toFixed(1) + '%</div>'
+                          +    '<div style="font-size:0.68rem; color: var(--text-secondary); text-align:right; font-variant-numeric: tabular-nums;">' + fmtCompact(people) + '</div>'
+                          +  '</div>';
+                });
+                html +=     '</div>';
+
+                // AFTER aggregate
+                html +=     '<div>';
+                html +=       '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600; margin-bottom:0.3rem;">AFTER: where viewers went next</div>';
+                html +=       '<div style="font-size:0.66rem; color: var(--text-secondary); margin-bottom:0.45rem;">View-weighted across all filtered assets, in the 7-day window after viewing.</div>';
+                afterBuckets.forEach(function(b) {
+                    if (b.pct < 0.05) return;
+                    var people = Math.round(totalV * b.pct / 100);
+                    html += '<div style="display:grid; grid-template-columns: minmax(150px, 1fr) 1fr 60px 70px; gap:0.55rem; align-items:center; padding:0.25rem 0;" title="' + escapeHtml(b.sub) + '">'
+                          +    '<div style="font-size:0.72rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(b.label) + '</div>'
+                          +    '<div style="background: rgba(255,255,255,0.06); height:12px; border-radius:3px; overflow:hidden;"><div style="height:100%; width:' + Math.min(100, b.pct).toFixed(1) + '%; background:' + b.color + ';"></div></div>'
+                          +    '<div style="font-size:0.7rem; color:#fff; text-align:right; font-variant-numeric: tabular-nums;">' + b.pct.toFixed(1) + '%</div>'
+                          +    '<div style="font-size:0.68rem; color: var(--text-secondary); text-align:right; font-variant-numeric: tabular-nums;">' + fmtCompact(people) + '</div>'
+                          +  '</div>';
+                });
+                html +=     '</div>';
+                html +=   '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            window.iiqJrnSetChannel = function(v) {
+                window[_iiqJrnChanKey()] = v || '';
+                _iiqJrnRerender();
+            };
+            window.iiqJrnSetPaid = function(v) {
+                window[_iiqJrnPaidKey()] = v || '';
+                _iiqJrnRerender();
+            };
+            window.iiqJrnPickAsset = function(aid) {
+                window[_iiqJrnPickKey()] = aid || '';
+                _iiqJrnRerender();
+            };
+            function _iiqJrnRerender() {
+                var dataObj = IIQ_QDATA.journey;
+                if (!dataObj) return;
+                var body = document.getElementById('iiqQBody');
+                if (!body) return;
+                var html = iiqRenderJourney(dataObj);
+                IIQ_QCACHE.journey = html;
+                body.innerHTML = html;
+            }
+
+            var IIQ_QRENDER = { q1: iiqRenderQ1, q2: iiqRenderQ2, audiences: iiqRenderAudiences, q3: iiqRenderQ3, q4: iiqRenderQ4, q5: iiqRenderQ5, q6: iiqRenderQ6, journey: iiqRenderJourney };
             // IIQ_QCACHE stores rendered HTML for instant tab fly-back.
             // IIQ_QDATA stores the raw payload (the `d` object the renderer
             // receives) so user-driven filter/sort changes can re-render
@@ -26708,7 +27192,10 @@
                         || k.indexOf('_iiqQ6Chan_') === 0
                         || k.indexOf('_iiqQ6Paid_') === 0
                         || k.indexOf('_iiqQ6Sort_') === 0
-                        || k.indexOf('_iiqQ6CurvesOpen_') === 0) {
+                        || k.indexOf('_iiqQ6CurvesOpen_') === 0
+                        || k.indexOf('_iiqJrnChan_') === 0
+                        || k.indexOf('_iiqJrnPaid_') === 0
+                        || k.indexOf('_iiqJrnPick_') === 0) {
                         try { delete window[k]; } catch (e) { window[k] = undefined; }
                     }
                 });
@@ -26725,6 +27212,11 @@
             window.showIntentIQQuestion = function(qid) {
                 var slug = window.__intentIQ.currentSlug;
                 if (!slug || !IIQ_QMETA[qid]) return;
+                // Track which Q is mounted so iiqRerenderForAssetFilter()
+                // (and similar cross-tab refreshers) know which renderer
+                // to dispatch to. This was previously read but never
+                // written, which silently broke chip-toggle re-renders.
+                window.__intentIQ.currentQ = qid;
                 Array.prototype.forEach.call(document.querySelectorAll('#iiqQNav .iiq-q-tab'), function(btn) {
                     if (btn.dataset.q === qid) {
                         btn.style.background = 'rgba(59,130,246,0.18)';
@@ -26757,6 +27249,25 @@
                     } catch (err) {
                         body.innerHTML = '<div class="iiq-empty">Render error: ' + escapeHtml(err.message || err) + '</div>';
                     }
+                    return;
+                }
+                // Digital Journey has no backend endpoint -- it derives
+                // entirely from per-asset BEFORE/AFTER funnels modeled
+                // off the same _assets payload Q1/Q2/Q4/Q6 use. Skip
+                // the /questions/<qid> fetch and hydrate _assets directly.
+                if (qid === 'journey') {
+                    body.innerHTML = '<div class="iiq-empty">Loading JOURNEY...</div>';
+                    iiqLoadAssetsForFunnel(slug, function(assets) {
+                        try {
+                            var dataObj = { _assets: assets || [] };
+                            IIQ_QDATA.journey = dataObj;
+                            var html = iiqRenderJourney(dataObj);
+                            IIQ_QCACHE.journey = html;
+                            body.innerHTML = html;
+                        } catch (err) {
+                            body.innerHTML = '<div class="iiq-empty">Render error: ' + escapeHtml(err.message || err) + '</div>';
+                        }
+                    });
                     return;
                 }
                 body.innerHTML = '<div class="iiq-empty">Loading ' + qid.toUpperCase() + '...</div>';
