@@ -23174,8 +23174,10 @@
                     var currentQ = window.__intentIQ && window.__intentIQ.currentQ;
                     if (body && currentQ && typeof IIQ_QRENDER === 'object'
                         && typeof IIQ_QRENDER[currentQ] === 'function'
-                        && IIQ_QCACHE && IIQ_QCACHE[currentQ]) {
-                        body.innerHTML = IIQ_QRENDER[currentQ](IIQ_QCACHE[currentQ]);
+                        && typeof IIQ_QDATA === 'object' && IIQ_QDATA[currentQ]) {
+                        var newHtml = IIQ_QRENDER[currentQ](IIQ_QDATA[currentQ]);
+                        IIQ_QCACHE[currentQ] = newHtml;
+                        body.innerHTML = newHtml;
                     }
                 } catch (e) { /* swallow -- per-view renderers handle their own empties */ }
                 // Re-render the Assets tab grid if it's mounted. The
@@ -24064,7 +24066,7 @@
                 q3: { short: 'Intent to Buy',    title: 'How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date - pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement - scaled by industry conversion rates. Nothing here is a forecast.' },
                 q4: { short: 'Talent Attribution', title: 'How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Trailer Performance', title: 'Trailer Performance', intro: 'Daily trailer views with overlaid funnel conversion (% of viewers who became info-seekers or visited a ticketing site within 7 days). Second chart traces the PVOD / SVOD search tail that builds after theatrical, peaking at the 5/15 streaming launch.' },
-                q6: { short: 'Cohort Engagement', title: 'How is each audience cohort engaging with GOAT content?', intro: 'For each cohort, the % of that cohort\'s panel that engaged with any GOAT campaign asset (view / like / comment / share) on a given day. Default view is the four moviegoing-frequency cohorts; flip on any audience cohort from the picker (Steph Curry fans, cast members, family-animation fans, Disney+ family subs, demographic cuts) to overlay how they engage. Each cohort\'s curve has its own peak day - talent / franchise cohorts peak earlier (around trailer drops), family / opening cohorts peak on opening weekend, streaming cohorts peak on the 5/15 streaming launch.' },
+                q6: { short: 'Cohort Engagement', title: 'Which content drives info-seek + ticketing for each audience?', intro: 'Per-asset attribution sliced by audience. Pick any cohort from the Audiences tab (Steph Curry fans, cast members, family-animation fans, Disney+ family subs, demographic cuts) plus the four moviegoing-frequency cohorts \u2014 each selected cohort gets its own set of columns showing that cohort\'s views, info-seek %, and ticketing % per asset. Cut by platform (YouTube / TikTok / etc.), Paid vs Organic, and asset type to isolate which specific pieces of content are converting which audiences. Same projection helper as Assets / Q1 / Q2 \u2014 numbers ladder up.' },
             };
             var IIQ_QPALETTE = {
                 paid:    '#22d3ee',
@@ -24415,6 +24417,144 @@
                     g.ticket_pct = g.views > 0 ? g.ticket_visits / g.views * 100 : 0;
                 });
                 return groups;
+            }
+
+            // ===== Per-asset per-cohort attribution (Q6) =====
+            // For a given (asset, cohort) pair we synthesize the cohort's
+            // share of that asset's views plus their downstream info-seek
+            // and ticketing conversion rates. Three pieces:
+            //
+            //   1. iiqCohortAssetAffinity(cohort, asset) - multiplier on
+            //      the cohort's gen-pop share for the cohort's view-share
+            //      of THIS asset. > 1 means the cohort over-indexes on
+            //      this asset (e.g. Steph Curry fans on a Steph-tagged
+            //      talent post). < 1 means under-index (e.g. occasional
+            //      moviegoers on a pre-sale ticketing promo).
+            //
+            //   2. iiqCohortFunnelTilt(cohort, kind) - multiplier on the
+            //      asset's blended info / ticket %. Driven by cohort
+            //      intent intensity (weekly moviegoers convert harder)
+            //      and category (talent / franchise / sport fans warmer
+            //      than demo cuts).
+            //
+            //   3. iiqAssetCohortProjection(asset, cohort) - composes the
+            //      two above with iiqAssetFunnelProjection(asset) to
+            //      return {views, info_pct, ticket_pct, info_seekers,
+            //      ticket_visits} for the pair. Same baseline projection
+            //      helper that powers the Assets cards, Q1 rollup, and
+            //      Q2 funnel comparison -- numbers ladder up.
+            function iiqCohortAssetAffinity(cohort, asset) {
+                var cat   = String(cohort.category || '').toUpperCase();
+                var aType = String(asset.asset_type || '').toLowerCase();
+                var aLabel = String(asset.action_label || '').toLowerCase();
+                var aChan = String(asset.channel || '').toLowerCase();
+                var aTalent = Array.isArray(asset.talent_tags)
+                    ? asset.talent_tags.map(function(t){ return String(t).toLowerCase(); })
+                    : [];
+                var talentJoin = ' ' + aTalent.join(' ') + ' ';
+                var slug = String(cohort.slug || '').toLowerCase();
+                var subj = String((cohort._raw && (cohort._raw.subject_key || cohort._raw.display))
+                                  || cohort.display || '').toLowerCase()
+                                  .replace(/^fans of\s+/, '').replace(/\s*\(.*?\)\s*$/, '').trim();
+                var aff = 1.0;
+                if (cat === 'TALENT' && subj) {
+                    var subjFirst = subj.split(/\s+/)[0];
+                    var hit = (talentJoin.indexOf(' ' + subj + ' ') !== -1)
+                           || (subjFirst.length >= 4 && talentJoin.indexOf(' ' + subjFirst) !== -1);
+                    if (hit) aff *= 2.4;
+                    else if (aLabel.indexOf(subj) !== -1) aff *= 1.7;
+                    else if (/talent|cast|bts|behind|character|spotlight|press|interview/.test(aType + ' ' + aLabel)) aff *= 1.15;
+                    else aff *= 0.82;
+                } else if (cat === 'SPORT') {
+                    if (/curry|nba|basketball|hoop|court|dunk|three.point/.test(aLabel + ' ' + talentJoin)) aff *= 1.85;
+                    else if (/trailer|clip|highlight|teaser/.test(aType + ' ' + aLabel)) aff *= 1.30;
+                    else aff *= 0.95;
+                } else if (cat === 'FRANCHISE' || cat === 'STUDIO') {
+                    if (/trailer/.test(aType + ' ' + aLabel)) aff *= 1.40;
+                    else if (/clip|teaser|scene|sneak/.test(aType + ' ' + aLabel)) aff *= 1.20;
+                    else if (/press|junket|interview|red.carpet/.test(aType + ' ' + aLabel)) aff *= 0.70;
+                    else aff *= 1.0;
+                } else if (cat === 'GENRE') {
+                    if (/trailer|clip|family|animated|kids/.test(aType + ' ' + aLabel)) aff *= 1.30;
+                    else if (/press|interview/.test(aType + ' ' + aLabel)) aff *= 0.85;
+                } else if (cat === 'DEMO') {
+                    if (/jennifer.hudson|aaron.pierre|gabrielle.union|jelly.roll/.test(talentJoin)) aff *= 1.30;
+                    if (/music|soundtrack|song/.test(aType + ' ' + aLabel)) aff *= 1.15;
+                } else if (cat === 'PLATFORM') {
+                    if (/disney|family|sub|kids/.test(slug + ' ' + subj)) {
+                        if (/trailer|clip|family|kids/.test(aType + ' ' + aLabel)) aff *= 1.25;
+                    }
+                } else if (cat === 'MOVIEGOING_FREQ') {
+                    if (slug.indexOf('weekly') !== -1) {
+                        if (/ticket|presale|pre.sale|trailer/.test(aLabel + ' ' + aType)) aff *= 1.55;
+                        else aff *= 1.10;
+                    } else if (slug.indexOf('monthly') !== -1) {
+                        if (/trailer/.test(aLabel + ' ' + aType)) aff *= 1.30;
+                        else aff *= 1.00;
+                    } else if (slug.indexOf('bimonthly') !== -1 || slug.indexOf('every_other') !== -1) {
+                        if (/celebrity|talent|press|interview|premiere/.test(aLabel + ' ' + aType)) aff *= 1.20;
+                        else aff *= 0.85;
+                    } else if (slug.indexOf('few') !== -1 || slug.indexOf('occasional') !== -1 || slug.indexOf('rare') !== -1) {
+                        if (/trailer|tv.?spot|premiere/.test(aLabel + ' ' + aType)) aff *= 0.88;
+                        else aff *= 0.62;
+                    }
+                }
+                // YouTube long-form tilts older / weekly; TikTok short-form
+                // tilts younger / occasional. Tiny channel-aware nudges.
+                if (cat === 'MOVIEGOING_FREQ') {
+                    if (slug.indexOf('weekly') !== -1 && aChan.indexOf('youtube') !== -1) aff *= 1.05;
+                    if (slug.indexOf('occasional') !== -1 && /tiktok|reels|short/.test(aChan)) aff *= 1.08;
+                }
+                // Deterministic micro-jitter so adjacent rows never pin.
+                var jKey = String(cohort.slug || cohort.display || '') + '|' + String(asset.asset_id || asset.url || '');
+                aff *= 1 + _iiqJitter(jKey, 'cohort_aff_v1', 0.06);
+                return Math.max(0.05, aff);
+            }
+            function iiqCohortFunnelTilt(cohort, kind) {
+                var cat  = String(cohort.category || '').toUpperCase();
+                var slug = String(cohort.slug || '').toLowerCase();
+                var info = 1.0, tk = 1.0;
+                if (cat === 'MOVIEGOING_FREQ') {
+                    if (slug.indexOf('weekly') !== -1)      { info = 1.32; tk = 1.78; }
+                    else if (slug.indexOf('monthly') !== -1){ info = 1.12; tk = 1.28; }
+                    else if (slug.indexOf('bimonthly') !== -1 || slug.indexOf('every_other') !== -1) { info = 0.94; tk = 0.82; }
+                    else if (slug.indexOf('few') !== -1 || slug.indexOf('occasional') !== -1 || slug.indexOf('rare') !== -1) { info = 0.78; tk = 0.50; }
+                } else if (cat === 'TALENT' || cat === 'SPORT') {
+                    info = 1.12; tk = 1.18;
+                } else if (cat === 'FRANCHISE' || cat === 'STUDIO') {
+                    info = 1.10; tk = 1.20;
+                } else if (cat === 'GENRE') {
+                    info = 1.05; tk = 1.10;
+                } else if (cat === 'DEMO') {
+                    info = 1.00; tk = 1.00;
+                } else if (cat === 'PLATFORM') {
+                    info = 0.95; tk = 1.00;
+                }
+                // Jitter the tilt by a couple percent so cohorts within the
+                // same category don't pin to identical conversion rates.
+                var j = _iiqJitter(String(cohort.slug || cohort.display || ''), 'cohort_tilt_' + kind, 0.04);
+                if (kind === 'info')   return Math.max(0.4, info * (1 + j));
+                if (kind === 'ticket') return Math.max(0.2, tk   * (1 + j));
+                return 1.0;
+            }
+            function iiqAssetCohortProjection(asset, cohort) {
+                var assetProj = iiqAssetFunnelProjection(asset);
+                var totalViews = Number(asset.ext_view_count) || 0;
+                var aff = iiqCohortAssetAffinity(cohort, asset);
+                var share = (Number(cohort.gen_pop_share) || 0) * aff;
+                if (share > 0.95) share = 0.95;
+                var cohortViews = totalViews * share;
+                var infoTilt = iiqCohortFunnelTilt(cohort, 'info');
+                var tkTilt   = iiqCohortFunnelTilt(cohort, 'ticket');
+                var info_pct = Math.min(92, assetProj.info_pct  * infoTilt);
+                var tk_pct   = Math.min(58, assetProj.ticket_pct * tkTilt);
+                return {
+                    views:         cohortViews,
+                    info_pct:      info_pct,
+                    ticket_pct:    tk_pct,
+                    info_seekers:  cohortViews * info_pct / 100,
+                    ticket_visits: cohortViews * tk_pct   / 100
+                };
             }
 
             // ===== Paid vs Organic funnel rollup (Q2 comparison card) =====
@@ -24875,9 +25015,13 @@
                     if (!v) return;
                     var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
                     window['_iiqQ2AsOf_' + slug] = v;
-                    var cached = IIQ_QCACHE.q2;
+                    var dataObj = IIQ_QDATA.q2;
                     var body = document.getElementById('iiqQBody');
-                    if (body && cached) body.innerHTML = iiqRenderQ2(cached);
+                    if (body && dataObj) {
+                        var html = iiqRenderQ2(dataObj);
+                        IIQ_QCACHE.q2 = html;
+                        body.innerHTML = html;
+                    }
                 };
                 var paidColor    = IIQ_QPALETTE.paid;
                 var organicColor = IIQ_QPALETTE.organic;
@@ -26095,116 +26239,373 @@
             // category starts collapsed and is opened on click.
             window._iiqQ6Expanded = window._iiqQ6Expanded || null;
 
+            // ----- Q6 helpers (slug-scoped state for selection / filters) -----
+            function _iiqQ6Slug() {
+                return (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
+            }
+            function _iiqQ6SelState() {
+                var k = '_iiqQ6Sel_' + _iiqQ6Slug();
+                if (!window[k]) window[k] = null; // null = uninitialized; init defaults on first render
+                return k;
+            }
+            function _iiqQ6ChanState() { return '_iiqQ6Chan_' + _iiqQ6Slug(); }
+            function _iiqQ6PaidState() { return '_iiqQ6Paid_' + _iiqQ6Slug(); }
+            function _iiqQ6SortState() {
+                var k = '_iiqQ6Sort_' + _iiqQ6Slug();
+                if (!window[k]) window[k] = { key: 'views', dir: 'desc', cohort: null };
+                return window[k];
+            }
+            function _iiqQ6CurvesState() { return '_iiqQ6CurvesOpen_' + _iiqQ6Slug(); }
+
             function iiqRenderQ6(d) {
-                var cohorts = d.cohorts || [];
-                if (!cohorts.length) return '<div class="iiq-empty">Q6 has no per-cohort engagement curves yet. Run scripts/synth_goat_all_cohort_engagement.py --apply.</div>';
-                // Project cohort size against full US population (329.9M)
-                // so the "size of cohort" reading matches the rest of the
-                // dashboard's projection convention.
+                d = d || {};
                 var IIQ_US_POP = 329900000;
-                function iiqProjAmericans(c) {
-                    return Math.round((Number(c.gen_pop_share) || 0) * IIQ_US_POP);
+                var cohortsFreq = d.cohorts || [];
+                var audienceData = (window.__intentIQ && window.__intentIQ.audiences) || {};
+                var audCards = (audienceData.cards || []);
+                var assetsAll = d._assets || [];
+
+                if (!cohortsFreq.length && !audCards.length) {
+                    return '<div class="iiq-empty">No cohort data yet. Run scripts/synth_goat_all_cohort_engagement.py --apply and confirm Audiences tab has data.</div>';
                 }
 
-                // Initialize selection: default-on flags from backend (the 4 moviegoing cohorts).
-                // If user has already toggled in this session, preserve their selection but
-                // ignore cohorts no longer present.
-                var validSlugs = {};
-                cohorts.forEach(function(c) { validSlugs[c.cohort_slug] = true; });
-                if (!window._iiqQ6Selection) {
-                    window._iiqQ6Selection = {};
-                    cohorts.forEach(function(c) { window._iiqQ6Selection[c.cohort_slug] = !!c.default_on; });
-                } else {
-                    Object.keys(window._iiqQ6Selection).forEach(function(s) {
-                        if (!validSlugs[s]) delete window._iiqQ6Selection[s];
+                // Build unified cohort list (moviegoing-freq + audience cards)
+                var unified = [];
+                cohortsFreq.forEach(function(c) {
+                    unified.push({
+                        slug: c.cohort_slug,
+                        display: c.display,
+                        category: String(c.category || 'MOVIEGOING_FREQ').toUpperCase(),
+                        gen_pop_share: Number(c.gen_pop_share) || 0,
+                        _src: 'freq',
+                        _raw: c,
+                        _hasCurve: !!(c.points && c.points.length),
+                        _curvePoints: (c.points || []).map(function(p){ return { x: p.date, y: p.engagement_pct }; }),
+                        _peak: c.peak_engagement_pct,
+                        _peakDate: c.peak_date,
+                        _today: c.today_engagement_pct,
+                        _defaultOn: c.default_on !== false
                     });
-                    cohorts.forEach(function(c) {
-                        if (window._iiqQ6Selection[c.cohort_slug] === undefined) {
-                            window._iiqQ6Selection[c.cohort_slug] = !!c.default_on;
-                        }
+                });
+                audCards.forEach(function(a) {
+                    var label = String(a.subject_key || a.display || '');
+                    var aslug = 'aud_' + label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+                    if (!aslug || aslug === 'aud_') return;
+                    unified.push({
+                        slug: aslug,
+                        display: a.display || a.subject_key,
+                        category: String(a.category || 'AUDIENCE').toUpperCase(),
+                        gen_pop_share: (Number(a.overlap_bp) || 0) / 100,
+                        _src: 'audience',
+                        _raw: a,
+                        _hasCurve: false,
+                        _defaultOn: false
                     });
-                }
+                });
 
-                // Group cohorts by category, assign within-category color index
-                var catOrder = d.category_order || ['MOVIEGOING_FREQ','TALENT','DEMO','FRANCHISE','GENRE','STUDIO','PLATFORM','SPORT','AUDIENCE'];
+                // Group + colorize
                 var byCat = {};
-                cohorts.forEach(function(c) {
+                unified.forEach(function(c) {
                     if (!byCat[c.category]) byCat[c.category] = [];
                     byCat[c.category].push(c);
                 });
+                var CAT_ORDER = ['MOVIEGOING_FREQ','TALENT','SPORT','FRANCHISE','STUDIO','GENRE','DEMO','PLATFORM','AUDIENCE'];
+                var presentCats = CAT_ORDER.filter(function(cat) { return byCat[cat] && byCat[cat].length; });
                 Object.keys(byCat).forEach(function(cat) {
-                    byCat[cat].sort(function(a,b){ return (Number(b.gen_pop_share)||0) - (Number(a.gen_pop_share)||0); });
-                    byCat[cat].forEach(function(c, i) { c._color = iiqQ6CohortColor(c, i); });
+                    byCat[cat].sort(function(a,b){ return (b.gen_pop_share||0) - (a.gen_pop_share||0); });
+                    byCat[cat].forEach(function(c, i) { c._color = iiqQ6CohortColor({category: cat}, i); });
                 });
 
-                // Summary tiles
-                var selected = cohorts.filter(function(c){ return window._iiqQ6Selection[c.cohort_slug]; });
-                var totalSelEng = selected.reduce(function(s,c){ return s + (c.total_engagers||0); }, 0);
-                var topToday = cohorts.slice().sort(function(a,b){ return (b.today_engagement_pct||0) - (a.today_engagement_pct||0); })[0];
-                var topAllTime = cohorts.slice().sort(function(a,b){ return (b.peak_engagement_pct||0) - (a.peak_engagement_pct||0); })[0];
-
-                var html = '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
-                html +=     iiqSummaryTile('Most engaged today', topToday ? topToday.display : '-', topToday ? topToday.today_engagement_pct.toFixed(2) + '% of cohort engaged today' : '');
-                html +=     iiqSummaryTile('Highest peak ever', topAllTime ? topAllTime.display : '-', topAllTime ? topAllTime.peak_engagement_pct.toFixed(1) + '% on ' + topAllTime.peak_date : '');
-                html += '</div>';
-
-                // Cohort picker removed per user request 2026-06-25 -- the
-                // chart below renders the default-on cohorts (Moviegoing
-                // Frequency buckets) automatically via the selection-state
-                // initialization above. Toggle handlers
-                // (iiqQ6Toggle / iiqQ6ToggleCategory / iiqQ6SelectGroup)
-                // remain wired but have no UI surface in Q6.
-
-                // Main overlay chart with the SELECTED cohorts
-                var combinedSeries = selected.map(function(c) {
-                    return {
-                        name: c.display,
-                        color: c._color,
-                        points: (c.points || []).map(function(p) { return { x: p.date, y: p.engagement_pct }; }),
-                    };
-                });
-                html += '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.6rem;">';
-                html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.45rem;">';
-                html +=     '<div style="font-size:0.85rem; font-weight:600; color:#e2e8f0;">Daily engagement \u2014 % of each selected cohort that engaged with GOAT content</div>';
-                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary);">Y-axis: % of that cohort\'s panel \u00b7 X-axis: date</div>';
-                html +=   '</div>';
-                if (combinedSeries.length) {
-                    html += iiqLineChart(combinedSeries, {height: 320});
-                    // Inline legend with current peak / today readings
-                    html += '<div style="margin-top:0.6rem; display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:0.4rem;">';
-                    selected.forEach(function(c) {
-                        html += '<div style="display:flex; align-items:center; gap:0.4rem; font-size:0.72rem;">'
-                             +   '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:' + c._color + ';"></span>'
-                             +   '<span style="color:#e2e8f0;">' + escapeHtml(c.display) + '</span>'
-                             +   '<span style="color: var(--text-secondary); margin-left:auto;">peak ' + c.peak_engagement_pct.toFixed(1) + '%</span>'
-                             + '</div>';
-                    });
-                    html += '</div>';
+                // Selection state (slug-scoped). Default = freq cohorts ON, others OFF.
+                var selKey = _iiqQ6SelState();
+                if (!window[selKey]) {
+                    window[selKey] = {};
+                    unified.forEach(function(c) { window[selKey][c.slug] = !!c._defaultOn; });
                 } else {
-                    html += '<div class="iiq-empty">Pick at least one cohort above to draw the chart.</div>';
+                    var valid = {};
+                    unified.forEach(function(c) { valid[c.slug] = true; });
+                    Object.keys(window[selKey]).forEach(function(s) {
+                        if (!valid[s]) delete window[selKey][s];
+                    });
+                    unified.forEach(function(c) {
+                        if (window[selKey][c.slug] === undefined) window[selKey][c.slug] = !!c._defaultOn;
+                    });
                 }
+
+                // Channel + paid filter state
+                var chanSel = window[_iiqQ6ChanState()] || '';
+                var paidSel = window[_iiqQ6PaidState()] || '';
+
+                // Distinct channels from ALL assets (so the dropdown is stable
+                // even when other filters shrink the rows below).
+                var channelsSeen = {};
+                assetsAll.forEach(function(a) { if (a && a.channel) channelsSeen[a.channel] = true; });
+                var channels = Object.keys(channelsSeen).sort();
+
+                // Apply: global asset-type filter, plus Q6's channel + paid
+                var rows = iiqFilterAssets(assetsAll).filter(function(a) {
+                    if (!a) return false;
+                    if (chanSel && a.channel !== chanSel) return false;
+                    if (paidSel) {
+                        var po = String(a.paid_or_organic || '').toLowerCase();
+                        if (paidSel === 'paid' && po !== 'paid') return false;
+                        if (paidSel === 'organic' && !(po === 'organic' || po === 'natural')) return false;
+                        if (paidSel === 'unknown' && (po === 'paid' || po === 'organic' || po === 'natural')) return false;
+                    }
+                    return true;
+                });
+
+                var selected = unified.filter(function(c) { return window[selKey][c.slug]; });
+
+                var html = '';
+
+                // === Audience picker, grouped by category ===
+                html += '<div class="iiq-card" style="padding:0.65rem 0.85rem; margin-bottom:0.6rem;">';
+                html +=   '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem 0.75rem; margin-bottom:0.5rem;">';
+                html +=     '<div style="font-size:0.82rem; color:#e2e8f0; font-weight:600;">Cut by audience</div>';
+                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary); flex:1; min-width:220px;">Pick one or more cohorts. The asset table below shows each cohort\'s views, info-seek %, and ticket % per asset \u2014 same projection helper as the Assets page so values ladder up.</div>';
+                html +=     '<button type="button" onclick="window.iiqQ6SelectAll()" style="background:rgba(34,197,94,0.16); border:1px solid rgba(34,197,94,0.4); color:#86efac; font-size:0.7rem; padding:0.22rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap;">Select all</button>';
+                html +=     '<button type="button" onclick="window.iiqQ6SelectDefault()" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:#cbd5e1; font-size:0.7rem; padding:0.22rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap;">Reset</button>';
+                html +=     '<button type="button" onclick="window.iiqQ6SelectNone()" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:#cbd5e1; font-size:0.7rem; padding:0.22rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap;">Clear</button>';
+                html +=   '</div>';
+                presentCats.forEach(function(cat) {
+                    var lst = byCat[cat] || [];
+                    if (!lst.length) return;
+                    var catLabel = cat.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, function(s){ return s.toUpperCase(); });
+                    html += '<div style="margin-top:0.45rem;">';
+                    html +=   '<div style="font-size:0.65rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.25rem;">' + escapeHtml(catLabel) + '</div>';
+                    html +=   '<div style="display:flex; flex-wrap:wrap; gap:0.3rem;">';
+                    lst.forEach(function(c) {
+                        var on = !!window[selKey][c.slug];
+                        var bg = on ? 'rgba(34,211,238,0.18)' : 'rgba(148,163,184,0.08)';
+                        var bd = on ? '1px solid rgba(34,211,238,0.5)' : '1px solid rgba(148,163,184,0.22)';
+                        var col = on ? '#67e8f9' : '#94a3b8';
+                        var dot = c._color || '#94a3b8';
+                        var safeSlug = c.slug.replace(/'/g, "\\'");
+                        var sharePct = (c.gen_pop_share*100);
+                        var tip = (c.display || '') + ' \u2014 ' + sharePct.toFixed(2) + '% of US (~' + fmtCompact(Math.round(c.gen_pop_share*IIQ_US_POP)) + ' people)';
+                        html += '<button type="button" onclick="window.iiqQ6Toggle(\'' + safeSlug + '\')" title="' + escapeHtml(tip) + '" style="background:'+bg+'; border:'+bd+'; color:'+col+'; font-size:0.72rem; padding:0.25rem 0.55rem; border-radius:4px; cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; gap:0.35rem;">'
+                             +    '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:' + dot + '; opacity:' + (on ? 1 : 0.45) + ';"></span>'
+                             +    escapeHtml(c.display)
+                             +  '</button>';
+                    });
+                    html +=   '</div>';
+                    html += '</div>';
+                });
                 html += '</div>';
 
-                // Per-cohort detail cards (one per SELECTED cohort) - small standalone curves
-                if (selected.length) {
-                    html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 0.6rem;">';
+                // === Asset-type chip bar (global filter -- shared with Q1/Q2/Q4/Assets) ===
+                var assetTypesList = iiqAssetTypesInList(assetsAll);
+                if (assetTypesList.length) html += iiqAssetFilterBarHtml(assetTypesList);
+
+                // === Channel + Paid/Organic filter row ===
+                html += '<div class="iiq-card" style="padding:0.55rem 0.85rem; margin-bottom:0.6rem; display:flex; flex-wrap:wrap; align-items:center; gap:0.55rem 0.85rem;">';
+                html +=   '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600;">Cut by</div>';
+                html +=   '<div style="display:flex; align-items:center; gap:0.4rem;">';
+                html +=     '<label style="font-size:0.7rem; color:var(--text-secondary);">Platform</label>';
+                html +=     '<select onchange="window.iiqQ6SetChannel(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.22rem 0.45rem; border-radius:4px;">';
+                html +=       '<option value=""' + (!chanSel ? ' selected' : '') + '>All platforms</option>';
+                channels.forEach(function(ch) {
+                    html +=   '<option value="' + escapeHtml(ch) + '"' + (chanSel === ch ? ' selected' : '') + '>' + escapeHtml(ch) + '</option>';
+                });
+                html +=     '</select>';
+                html +=   '</div>';
+                html +=   '<div style="display:flex; align-items:center; gap:0.4rem;">';
+                html +=     '<label style="font-size:0.7rem; color:var(--text-secondary);">Source</label>';
+                html +=     '<select onchange="window.iiqQ6SetPaid(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.22rem 0.45rem; border-radius:4px;">';
+                html +=       '<option value=""' + (!paidSel ? ' selected' : '') + '>Paid + Organic</option>';
+                html +=       '<option value="paid"' + (paidSel === 'paid' ? ' selected' : '') + '>Paid</option>';
+                html +=       '<option value="organic"' + (paidSel === 'organic' ? ' selected' : '') + '>Organic</option>';
+                html +=       '<option value="unknown"' + (paidSel === 'unknown' ? ' selected' : '') + '>Unknown</option>';
+                html +=     '</select>';
+                html +=   '</div>';
+                html +=   '<div style="font-size:0.7rem; color: var(--text-secondary); margin-left:auto;">' + rows.length + ' asset' + (rows.length === 1 ? '' : 's') + ' match \u00b7 ' + selected.length + ' cohort' + (selected.length === 1 ? '' : 's') + ' selected</div>';
+                html += '</div>';
+
+                // === Summary tiles ===
+                var rollup = selected.map(function(c) {
+                    var V = 0, I = 0, T = 0;
+                    rows.forEach(function(a) {
+                        var v = Number(a.ext_view_count) || 0;
+                        if (v <= 0) return;
+                        var p = iiqAssetCohortProjection(a, c);
+                        V += p.views; I += p.info_seekers; T += p.ticket_visits;
+                    });
+                    return { cohort: c, views: V, info: I, ticket: T };
+                });
+                var totalV = rollup.reduce(function(s,r){ return s + r.views; }, 0);
+                var totalI = rollup.reduce(function(s,r){ return s + r.info;  }, 0);
+                var totalT = rollup.reduce(function(s,r){ return s + r.ticket;}, 0);
+                var blendedI = totalV > 0 ? (totalI / totalV * 100) : 0;
+                var blendedT = totalV > 0 ? (totalT / totalV * 100) : 0;
+                var topInfo  = rollup.slice().sort(function(a,b){ var ai = a.views>0?a.info/a.views:0, bi = b.views>0?b.info/b.views:0; return bi - ai; })[0];
+                var topTk    = rollup.slice().sort(function(a,b){ var at = a.views>0?a.ticket/a.views:0, bt = b.views>0?b.ticket/b.views:0; return bt - at; })[0];
+
+                html += '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
+                html +=   iiqSummaryTile('Audiences selected', String(selected.length), 'of ' + unified.length + ' available cohorts');
+                html +=   iiqSummaryTile('Assets in view', String(rows.length), 'after asset / platform / source filters');
+                html +=   iiqSummaryTile('Cohort-engaged views', fmtCompact(totalV), 'across selected cohorts \u00d7 filtered assets');
+                html +=   iiqSummaryTile('Best info-seek', topInfo && topInfo.views>0 ? topInfo.cohort.display : '-', topInfo && topInfo.views>0 ? (topInfo.info/topInfo.views*100).toFixed(1) + '% \u2014 highest cohort info-seek rate' : '');
+                html +=   iiqSummaryTile('Best ticketing', topTk && topTk.views>0 ? topTk.cohort.display : '-', topTk && topTk.views>0 ? (topTk.ticket/topTk.views*100).toFixed(1) + '% \u2014 highest cohort ticket rate' : '');
+                html += '</div>';
+
+                if (!selected.length) {
+                    html += '<div class="iiq-empty">Pick at least one audience above to see per-asset attribution.</div>';
+                    return html;
+                }
+                if (!rows.length) {
+                    html += '<div class="iiq-empty">No assets match the current filters. <a href="javascript:void(0)" onclick="window.iiqAssetFilterReset(); window.iiqQ6SetChannel(\'\'); window.iiqQ6SetPaid(\'\')" style="color:#22d3ee;">Reset all filters</a> to show everything.</div>';
+                    return html;
+                }
+
+                // === Per-cohort rollup tile grid ===
+                html += '<div class="iiq-card" style="padding:0.7rem 0.85rem; margin-bottom:0.6rem;">';
+                html +=   '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600; margin-bottom:0.5rem;">Per-cohort rollup across ' + rows.length + ' asset' + (rows.length === 1 ? '' : 's') + ' in view</div>';
+                html +=   '<div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:0.45rem;">';
+                rollup.slice().sort(function(a,b){ return b.views - a.views; }).forEach(function(r) {
+                    var c = r.cohort;
+                    var iPct = r.views > 0 ? r.info/r.views*100 : 0;
+                    var tPct = r.views > 0 ? r.ticket/r.views*100 : 0;
+                    html += '<div style="border-left:3px solid '+c._color+'; padding:0.45rem 0.55rem; background:rgba(255,255,255,0.03); border-radius:3px;">'
+                         +    '<div style="font-size:0.75rem; color:#e2e8f0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(c.display) + '">' + escapeHtml(c.display) + '</div>'
+                         +    '<div style="font-size:0.62rem; color:var(--text-secondary); margin-top:0.1rem;">' + fmtCompact(Math.round(c.gen_pop_share*IIQ_US_POP)) + ' Americans \u00b7 ' + (c.gen_pop_share*100).toFixed(2) + '% of US</div>'
+                         +    '<div style="display:flex; justify-content:space-between; margin-top:0.45rem; font-size:0.72rem; gap:0.5rem;">'
+                         +      '<div title="Projected cohort views across filtered assets"><div style="color:#fff; font-weight:700;">' + fmtCompact(r.views) + '</div><div style="font-size:0.6rem; color:var(--text-secondary);">views</div></div>'
+                         +      '<div style="text-align:center;" title="Info-seek conversion rate \u2014 % of cohort viewers who searched the title / visited IMDB / Rotten Tomatoes / official site within 7 days. ~' + fmtCompact(r.info) + ' people."><div style="color:#a5b4fc; font-weight:700;">' + iPct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:var(--text-secondary);">info-seek</div></div>'
+                         +      '<div style="text-align:right;" title="Ticketing visit rate \u2014 % of cohort viewers who visited Fandango / AMC / Regal / Cinemark / Atom within 7 days. ~' + fmtCompact(r.ticket) + ' people."><div style="color:#fbbf24; font-weight:700;">' + tPct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:var(--text-secondary);">ticket</div></div>'
+                         +    '</div>'
+                         +  '</div>';
+                });
+                html +=   '</div>';
+                html += '</div>';
+
+                // === Main asset attribution table ===
+                var sortSt = _iiqQ6SortState();
+                if (sortSt.cohort && !window[selKey][sortSt.cohort]) sortSt.cohort = null;
+                if (!sortSt.cohort && selected.length) sortSt.cohort = selected[0].slug;
+
+                var tableRows = rows.map(function(a) {
+                    var perCohort = {};
                     selected.forEach(function(c) {
-                        var pts = (c.points || []).map(function(p) { return { x: p.date, y: p.engagement_pct }; });
-                        var amerDetail = iiqProjAmericans(c);
-                        html += '<div class="iiq-card" style="padding:0.7rem; border-left: 3px solid ' + c._color + ';">'
-                            + '<div style="display:flex; justify-content:space-between; align-items:baseline;">'
-                            +   '<div style="font-size:0.88rem; font-weight:600; color:#e2e8f0;">' + escapeHtml(c.display) + '</div>'
-                            +   '<div style="font-size:0.7rem; color: var(--text-secondary);">' + escapeHtml(c.category.replace('_', ' ').toLowerCase()) + '</div>'
-                            + '</div>'
-                            + '<div style="display:flex; justify-content:space-between; font-size:0.7rem; color: var(--text-secondary); margin-top:0.15rem;">'
-                            +   '<span title="Projection = cohort % × 329.9M US population">~' + fmtCompact(amerDetail) + ' Americans</span>'
-                            +   '<span>peak: ' + c.peak_engagement_pct.toFixed(1) + '% on ' + c.peak_date + '</span>'
-                            +   '<span>today: ' + c.today_engagement_pct.toFixed(2) + '%</span>'
-                            + '</div>'
-                            + '<div style="margin-top:0.4rem;">' + iiqLineChart([{name:'', color: c._color, points: pts}], {height: 90, width: 420}) + '</div>'
-                            + '</div>';
+                        perCohort[c.slug] = iiqAssetCohortProjection(a, c);
+                    });
+                    return { asset: a, perCohort: perCohort };
+                });
+                function _rowVal(r, key, cohortSlug) {
+                    var a = r.asset;
+                    if (key === 'asset')       return String(a.action_label || a.asset_type || '').toLowerCase();
+                    if (key === 'type')        return String(a.asset_type || '').toLowerCase();
+                    if (key === 'channel')     return String(a.channel || '').toLowerCase();
+                    if (key === 'paid')        return String(a.paid_or_organic || '').toLowerCase();
+                    if (key === 'posted')      return String(a.posted_date || '');
+                    if (key === 'total_views') return Number(a.ext_view_count) || 0;
+                    var p = cohortSlug && r.perCohort[cohortSlug];
+                    if (!p) return 0;
+                    if (key === 'views')  return p.views;
+                    if (key === 'info')   return p.info_pct;
+                    if (key === 'ticket') return p.ticket_pct;
+                    return 0;
+                }
+                var sign = sortSt.dir === 'asc' ? 1 : -1;
+                tableRows.sort(function(a,b) {
+                    var av = _rowVal(a, sortSt.key, sortSt.cohort);
+                    var bv = _rowVal(b, sortSt.key, sortSt.cohort);
+                    if (typeof av === 'string') return av.localeCompare(bv) * sign;
+                    return (av - bv) * sign;
+                });
+                var ROW_CAP = 50;
+                var topRows = tableRows.slice(0, ROW_CAP);
+
+                function _hdr(key, label, cohortSlug, color, align) {
+                    var active = (sortSt.key === key && ((cohortSlug || null) === (sortSt.cohort || null) || cohortSlug == null));
+                    var arrow = active ? (sortSt.dir === 'desc' ? ' \u25BC' : ' \u25B2') : ' \u2195';
+                    var arrOp = active ? '1' : '0.3';
+                    var colCss = color ? ('color:' + color + ';') : '';
+                    var alignCss = align === 'right' ? 'text-align:right;' : '';
+                    var arg = (cohortSlug != null) ? ('\'' + String(cohortSlug).replace(/'/g, "\\'") + '\'') : 'null';
+                    return '<th onclick="window.iiqQ6SortBy(\'' + key + '\',' + arg + ')" style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); cursor:pointer; user-select:none; ' + colCss + ' ' + alignCss + ' white-space:nowrap;" title="Click to sort by this column. Click again to flip direction.">' + escapeHtml(label) + '<span style="opacity:' + arrOp + '; font-size:0.72rem; margin-left:0.2rem;">' + arrow + '</span></th>';
+                }
+
+                html += '<div class="iiq-card" style="padding:0.85rem; overflow-x:auto;">';
+                html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.5rem;">';
+                html +=     '<div style="font-size:0.85rem; font-weight:600; color:#e2e8f0;">Per-asset attribution \u2014 ' + selected.length + ' cohort' + (selected.length === 1 ? '' : 's') + ' \u00d7 ' + topRows.length + ' asset' + (topRows.length === 1 ? '' : 's') + (tableRows.length > ROW_CAP ? ' (top ' + ROW_CAP + ' shown of ' + tableRows.length + ')' : '') + '</div>';
+                html +=     '<div style="font-size:0.7rem; color:var(--text-secondary);">Same projection helper as Assets cards / Q1 rollup / Q2 funnel cards \u2014 ladders up</div>';
+                html +=   '</div>';
+                html +=   '<table style="width:100%; border-collapse: collapse; font-size:0.72rem; min-width:' + (560 + selected.length * 220) + 'px;">';
+                html +=     '<thead>';
+                html +=       '<tr style="color: var(--text-secondary); text-align:left;">'
+                    + _hdr('asset',  'Asset')
+                    + _hdr('type',   'Type')
+                    + _hdr('channel','Platform')
+                    + _hdr('paid',   'Source')
+                    + _hdr('posted', 'Posted')
+                    + _hdr('total_views', 'Total views', null, '', 'right');
+                selected.forEach(function(c) {
+                    html += '<th colspan="3" style="padding:0.4rem 0.5rem 0.2rem; border-bottom:1px solid rgba(255,255,255,0.04); border-left:2px solid ' + c._color + '; text-align:left;">'
+                         +   '<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:' + c._color + '; margin-right:0.35rem;"></span>'
+                         +   '<span style="color:#e2e8f0; font-weight:600;">' + escapeHtml(c.display) + '</span>'
+                         + '</th>';
+                });
+                html +=       '</tr>';
+                html +=       '<tr style="color: var(--text-secondary); text-align:left; font-size:0.65rem;">'
+                    +   '<th colspan="6" style="border-bottom:1px solid rgba(255,255,255,0.08);"></th>';
+                selected.forEach(function(c) {
+                    html += '<th style="padding:0; border-bottom:1px solid rgba(255,255,255,0.08); border-left:2px solid ' + c._color + ';">' + _hdr('views',  'views',     c.slug, '#cbd5e1', 'right') + '</th>'
+                         +  '<th style="padding:0; border-bottom:1px solid rgba(255,255,255,0.08);">' + _hdr('info',   'info %',    c.slug, '#a5b4fc', 'right') + '</th>'
+                         +  '<th style="padding:0; border-bottom:1px solid rgba(255,255,255,0.08);">' + _hdr('ticket', 'ticket %',  c.slug, '#fbbf24', 'right') + '</th>';
+                });
+                html +=       '</tr>';
+                html +=     '</thead><tbody>';
+                topRows.forEach(function(row) {
+                    var a = row.asset;
+                    var v = Number(a.ext_view_count) || 0;
+                    var po = String(a.paid_or_organic || '').toLowerCase();
+                    var edgeColor = po === 'paid' ? '#22d3ee'
+                                  : (po === 'organic' || po === 'natural') ? '#22c55e' : '#64748b';
+                    var label = a.action_label || a.asset_type || 'Asset';
+                    html += '<tr>'
+                        + '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(label) + '">'
+                        +   '<span style="display:inline-block; width:4px; height:14px; background:' + edgeColor + '; border-radius:2px; margin-right:0.4rem; vertical-align:middle;"></span>'
+                        +   '<span style="color:#e2e8f0;">' + escapeHtml(label) + '</span>'
+                        + '</td>'
+                        + '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); color:var(--text-secondary); white-space:nowrap;">' + escapeHtml(a.asset_type || '-') + '</td>'
+                        + '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); color:var(--text-secondary); white-space:nowrap;">' + escapeHtml(a.channel || '-') + '</td>'
+                        + '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); color:' + edgeColor + '; white-space:nowrap;">' + escapeHtml(a.paid_or_organic || '-') + '</td>'
+                        + '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); color:var(--text-secondary); white-space:nowrap;">' + escapeHtml(a.posted_date || '-') + '</td>'
+                        + '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#fff; font-variant-numeric: tabular-nums;">' + fmtCompact(v) + '</td>';
+                    selected.forEach(function(c) {
+                        var p = row.perCohort[c.slug];
+                        html += '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#cbd5e1; font-variant-numeric: tabular-nums; border-left:2px solid ' + c._color + ';">' + fmtCompact(Math.round(p.views)) + '</td>'
+                             +  '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#a5b4fc; font-variant-numeric: tabular-nums;">' + p.info_pct.toFixed(1) + '%</td>'
+                             +  '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#fbbf24; font-variant-numeric: tabular-nums;">' + p.ticket_pct.toFixed(1) + '%</td>';
+                    });
+                    html += '</tr>';
+                });
+                html +=     '</tbody></table>';
+                html += '</div>';
+
+                // === Optional: cohort engagement curves (moviegoing-freq only) ===
+                var curveCohorts = selected.filter(function(c) { return c._hasCurve; });
+                if (curveCohorts.length) {
+                    var curvesOpen = window[_iiqQ6CurvesState()] === true;
+                    html += '<details ' + (curvesOpen ? 'open ' : '') + 'class="iiq-card" style="margin-top:0.8rem;" ontoggle="window.iiqQ6ToggleCurves(this.open)">';
+                    html +=   '<summary style="cursor:pointer; padding:0.55rem 0.85rem; font-size:0.78rem; color:#e2e8f0; font-weight:600;">Daily engagement curves <span style="color:var(--text-secondary); font-weight:400; font-size:0.7rem;">\u2014 % of each cohort that engaged on each day (moviegoing-frequency cohorts only)</span></summary>';
+                    html +=   '<div style="padding:0.85rem; border-top:1px solid rgba(255,255,255,0.06);">';
+                    var curveSeries = curveCohorts.map(function(c) {
+                        return { name: c.display, color: c._color, points: c._curvePoints };
+                    });
+                    html += iiqLineChart(curveSeries, { height: 280 });
+                    html += '<div style="margin-top:0.5rem; display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:0.35rem;">';
+                    curveCohorts.forEach(function(c) {
+                        html += '<div style="display:flex; align-items:center; gap:0.4rem; font-size:0.7rem;">'
+                             +    '<span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:' + c._color + ';"></span>'
+                             +    '<span style="color:#e2e8f0;">' + escapeHtml(c.display) + '</span>'
+                             +    (typeof c._peak === 'number' ? '<span style="color: var(--text-secondary); margin-left:auto;">peak ' + c._peak.toFixed(1) + '%</span>' : '')
+                             +  '</div>';
                     });
                     html += '</div>';
+                    html +=   '</div>';
+                    html += '</details>';
                 }
 
                 if (d.note) {
@@ -26213,63 +26614,103 @@
                 return html;
             }
 
-            // Cohort picker handlers (module-scoped state lives on window._iiqQ6Selection)
+            // ----- Q6 toggle handlers -----
             window.iiqQ6Toggle = function(slug) {
-                if (!window._iiqQ6Selection) return;
-                window._iiqQ6Selection[slug] = !window._iiqQ6Selection[slug];
+                var k = _iiqQ6SelState();
+                if (!window[k]) return;
+                window[k][slug] = !window[k][slug];
                 _iiqQ6Rerender();
             };
-            window.iiqQ6ToggleCategory = function(cat) {
-                window._iiqQ6Expanded = window._iiqQ6Expanded || {};
-                window._iiqQ6Expanded[cat] = !window._iiqQ6Expanded[cat];
+            window.iiqQ6SelectAll = function() {
+                var k = _iiqQ6SelState();
+                if (!window[k]) return;
+                Object.keys(window[k]).forEach(function(s) { window[k][s] = true; });
                 _iiqQ6Rerender();
             };
-            window.iiqQ6SelectGroup = function(mode) {
-                var cached = IIQ_QCACHE.q6;
-                if (!cached) return;
-                var cohorts = cached.cohorts || [];
-                window._iiqQ6Selection = window._iiqQ6Selection || {};
-                window._iiqQ6Expanded  = window._iiqQ6Expanded  || {};
-                var catsTouched = {};
-                cohorts.forEach(function(c) {
-                    if (mode === 'all')          window._iiqQ6Selection[c.cohort_slug] = true;
-                    else if (mode === 'none')    window._iiqQ6Selection[c.cohort_slug] = false;
-                    else if (mode === 'default') window._iiqQ6Selection[c.cohort_slug] = !!c.default_on;
-                    catsTouched[c.category] = true;
-                });
-                // 'Select all' auto-expands every category so the user can
-                // see all the chips they just turned on. 'Reset to default'
-                // collapses everything back except MOVIEGOING_FREQ. 'Clear'
-                // leaves the expand/collapse state untouched.
-                if (mode === 'all') {
-                    Object.keys(catsTouched).forEach(function(cat) { window._iiqQ6Expanded[cat] = true; });
-                } else if (mode === 'default') {
-                    Object.keys(catsTouched).forEach(function(cat) { window._iiqQ6Expanded[cat] = (cat === 'MOVIEGOING_FREQ'); });
+            window.iiqQ6SelectNone = function() {
+                var k = _iiqQ6SelState();
+                if (!window[k]) return;
+                Object.keys(window[k]).forEach(function(s) { window[k][s] = false; });
+                _iiqQ6Rerender();
+            };
+            window.iiqQ6SelectDefault = function() {
+                // Drop the selection so renderer re-initializes from each
+                // cohort's _defaultOn flag (moviegoing-freq on, audiences off).
+                delete window[_iiqQ6SelState()];
+                _iiqQ6Rerender();
+            };
+            window.iiqQ6SetChannel = function(v) {
+                window[_iiqQ6ChanState()] = v || '';
+                _iiqQ6Rerender();
+            };
+            window.iiqQ6SetPaid = function(v) {
+                window[_iiqQ6PaidState()] = v || '';
+                _iiqQ6Rerender();
+            };
+            window.iiqQ6SortBy = function(key, cohortSlug) {
+                var st = _iiqQ6SortState();
+                var cohort = (cohortSlug === undefined ? null : cohortSlug);
+                if (st.key === key && ((st.cohort || null) === (cohort || null))) {
+                    st.dir = (st.dir === 'desc') ? 'asc' : 'desc';
+                } else {
+                    st.key = key;
+                    st.cohort = cohort;
+                    var textCols = { asset:1, type:1, channel:1, paid:1, posted:1 };
+                    st.dir = textCols[key] ? 'asc' : 'desc';
                 }
                 _iiqQ6Rerender();
             };
+            window.iiqQ6ToggleCurves = function(open) {
+                window[_iiqQ6CurvesState()] = !!open;
+            };
+            // Legacy alias kept so any stale onclick handlers don't blow up.
+            window.iiqQ6SelectGroup = function(mode) {
+                if (mode === 'all')     return window.iiqQ6SelectAll();
+                if (mode === 'none')    return window.iiqQ6SelectNone();
+                if (mode === 'default') return window.iiqQ6SelectDefault();
+            };
+            window.iiqQ6ToggleCategory = function() { /* no-op -- categories no longer collapsible */ };
+
             function _iiqQ6Rerender() {
-                var cached = IIQ_QCACHE.q6;
-                if (!cached) return;
+                var dataObj = IIQ_QDATA.q6;
+                if (!dataObj) return;
                 var body = document.getElementById('iiqQBody');
-                if (body) body.innerHTML = iiqRenderQ6(cached);
+                if (!body) return;
+                var html = iiqRenderQ6(dataObj);
+                IIQ_QCACHE.q6 = html;
+                body.innerHTML = html;
             }
 
             var IIQ_QRENDER = { q1: iiqRenderQ1, q2: iiqRenderQ2, audiences: iiqRenderAudiences, q3: iiqRenderQ3, q4: iiqRenderQ4, q5: iiqRenderQ5, q6: iiqRenderQ6 };
+            // IIQ_QCACHE stores rendered HTML for instant tab fly-back.
+            // IIQ_QDATA stores the raw payload (the `d` object the renderer
+            // receives) so user-driven filter/sort changes can re-render
+            // without re-fetching from the API. Older code mistakenly
+            // passed IIQ_QCACHE entries into renderers as `d` -- that was
+            // a bug; always use IIQ_QDATA for re-renders.
             var IIQ_QCACHE = {};
+            var IIQ_QDATA  = {};
 
             function renderIntentIQQuestions() {
                 var slug = window.__intentIQ.currentSlug;
                 if (!slug) return;
-                IIQ_QCACHE = {}; // reset cache when title changes
-                window._iiqQ6Selection = null; // reset Q6 cohort picks for new title
-                window._iiqQ6Expanded  = null; // reset Q6 category expand state for new title
-                // Clear Q2 campaign-rewind cursors (slug-scoped). When the
-                // user switches titles the rewind defaults back to "all
-                // data" for the new title rather than carrying a stale
-                // date that may sit outside the new title's coverage.
+                IIQ_QCACHE = {}; // reset rendered-HTML cache on title change
+                IIQ_QDATA  = {}; // reset data-payload cache on title change
+                window._iiqQ6Selection = null; // legacy: old global cohort picks
+                window._iiqQ6Expanded  = null; // legacy: old category-expand state
+                // Clear slug-scoped state for Q2 (rewind cursor) and Q6
+                // (cohort selection / channel / paid / sort / curves)
+                // so the new title doesn't carry stale picks from the
+                // previous one.
                 Object.keys(window).forEach(function(k) {
-                    if (k.indexOf('_iiqQ2AsOf_') === 0) try { delete window[k]; } catch (e) { window[k] = undefined; }
+                    if (k.indexOf('_iiqQ2AsOf_') === 0
+                        || k.indexOf('_iiqQ6Sel_') === 0
+                        || k.indexOf('_iiqQ6Chan_') === 0
+                        || k.indexOf('_iiqQ6Paid_') === 0
+                        || k.indexOf('_iiqQ6Sort_') === 0
+                        || k.indexOf('_iiqQ6CurvesOpen_') === 0) {
+                        try { delete window[k]; } catch (e) { window[k] = undefined; }
+                    }
                 });
                 if (window.__intentIQAssetCache) {
                     delete window.__intentIQAssetCache[slug]; // force re-fetch on title switch
@@ -26326,6 +26767,7 @@
                         var renderer = IIQ_QRENDER[qid] || function() { return '<pre>' + escapeHtml(JSON.stringify(d, null, 2)) + '</pre>'; };
                         var renderAndCache = function(dataObj) {
                             try {
+                                IIQ_QDATA[qid] = dataObj;
                                 var html = renderer(dataObj);
                                 IIQ_QCACHE[qid] = html;
                                 body.innerHTML = html;
@@ -26333,11 +26775,14 @@
                                 body.innerHTML = '<div class="iiq-empty">Render error: ' + escapeHtml(err.message || err) + '</div><pre>' + escapeHtml(JSON.stringify(dataObj, null, 2)) + '</pre>';
                             }
                         };
-                        // Q1 + Q4 both roll up per-asset funnel projections,
-                        // so they need the assets payload. We piggyback that
-                        // fetch through the cache so subsequent opens are
-                        // instant and the rollup matches the Assets page.
-                        if (qid === 'q1' || qid === 'q2' || qid === 'q4') {
+                        // Several Q renderers roll up per-asset funnel
+                        // projections so they need the assets payload.
+                        // We piggyback that fetch through the cache so
+                        // subsequent opens are instant and the rollups
+                        // match the Assets page. Q6 (Cohort Engagement)
+                        // also reads from _assets so it can attribute
+                        // per-asset views/info/ticket to each cohort.
+                        if (qid === 'q1' || qid === 'q2' || qid === 'q4' || qid === 'q6') {
                             iiqLoadAssetsForFunnel(slug, function(assets) {
                                 d._assets = assets;
                                 renderAndCache(d);
