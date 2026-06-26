@@ -24026,8 +24026,13 @@
                     return out;
                 }
 
-                var paths = (leftSeries  || []).map(function(s){ return pathFor(s, syL); }).join('')
-                          + (rightSeries || []).map(function(s){ return pathFor(s, syR); }).join('');
+                // Draw RIGHT-axis lines first so LEFT-axis lines render on
+                // top. Without this, the purple info-seekers line covers
+                // the green organic-views line wherever the two cross in
+                // screen space (the left "views" series is the primary
+                // signal, so it deserves z-priority).
+                var paths = (rightSeries || []).map(function(s){ return pathFor(s, syR); }).join('')
+                          + (leftSeries  || []).map(function(s){ return pathFor(s, syL); }).join('');
 
                 // Optional event markers (asset-drop dots etc.) -- pass via
                 // opts.events = [{x: <isoDate>, color: '#22d3ee', label: '...'}].
@@ -24094,7 +24099,8 @@
                     }
                     return '<span style="display:inline-flex; align-items:center; gap:0.3rem; font-size:0.75rem; color:#cbd5e1; white-space:nowrap;"><span style="width:10px; height:10px; background:' + s.color + '; border-radius:2px; flex:none;"></span>' + escapeHtml(s.name) + totalSpan + '</span>';
                 }
-                var legend = (leftSeries || []).concat(rightSeries || []).map(_seriesChip).join('');
+                var leftLegend  = (leftSeries  || []).map(_seriesChip).join('');
+                var rightLegend = (rightSeries || []).map(_seriesChip).join('');
                 var eventLegend = (Array.isArray(opts.eventLegend) && opts.eventLegend.length)
                     ? opts.eventLegend.map(function(e) {
                           return '<span style="display:inline-flex; align-items:center; gap:0.3rem; font-size:0.7rem; color:#94a3b8; white-space:nowrap;"><span style="width:8px; height:8px; background:' + (e.color || '#94a3b8') + '; border-radius:50%; border:1px solid rgba(15,23,42,0.6); flex:none;"></span>' + escapeHtml(e.label || '') + '</span>';
@@ -24104,18 +24110,22 @@
                 var leftAxisLabel  = opts.leftLabel  ? '<text x="' + (P.l - 46) + '" y="' + (H/2) + '" font-size="10" fill="' + (opts.leftLabelColor  || 'rgba(34,211,238,0.85)')  + '" text-anchor="middle" transform="rotate(-90, ' + (P.l - 46) + ', ' + (H/2) + ')">' + escapeHtml(opts.leftLabel)  + '</text>' : '';
                 var rightAxisLabel = opts.rightLabel ? '<text x="' + (W - P.r + 46) + '" y="' + (H/2) + '" font-size="10" fill="' + (opts.rightLabelColor || 'rgba(251,191,36,0.85)') + '" text-anchor="middle" transform="rotate(90, '  + (W - P.r + 46) + ', ' + (H/2) + ')">' + escapeHtml(opts.rightLabel) + '</text>' : '';
 
-                // Series chips and event-drop chips render on SEPARATE
-                // rows (two-row legend) so the chart card can shrink and
-                // the chips never collide. Each row still wraps inside
-                // itself if there's overflow.
-                var seriesRow = '<div style="display:flex; flex-wrap:wrap; gap:0.3rem 0.85rem;">' + legend + '</div>';
-                var eventRow  = eventLegend
-                    ? '<div style="display:flex; flex-wrap:wrap; gap:0.3rem 0.85rem; margin-top:0.25rem;">' + eventLegend + '</div>'
+                // Legend renders as multiple stacked rows so it fills the
+                // card vertically and the chart doesn't sit on top of a
+                // single dense chip line. Row 1 = left-axis series
+                // (views), row 2 = right-axis series (downstream funnel),
+                // row 3 = event-drop chips. Each row still wraps inside
+                // itself on narrow widths.
+                var rowStyle = 'display:flex; flex-wrap:wrap; gap:0.3rem 0.85rem;';
+                var seriesRowL = leftLegend  ? '<div style="' + rowStyle + '">' + leftLegend  + '</div>' : '';
+                var seriesRowR = rightLegend ? '<div style="' + rowStyle + ' margin-top:0.25rem;">' + rightLegend + '</div>' : '';
+                var eventRow   = eventLegend
+                    ? '<div style="' + rowStyle + ' margin-top:0.25rem;">' + eventLegend + '</div>'
                     : '';
                 return '<div style="overflow-x:auto; overflow-y:hidden;"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; max-width:' + W + 'px; display:block;">'
                      + grid + paths + eventsSvg + leftLabels + rightLabels + dateLabels + leftAxisLabel + rightAxisLabel
                      + '</svg></div>'
-                     + '<div style="margin-top:0.45rem;">' + seriesRow + eventRow + '</div>';
+                     + '<div style="margin-top:0.45rem;">' + seriesRowL + seriesRowR + eventRow + '</div>';
             }
 
             function iiqDonut(slices, opts) {
@@ -24151,7 +24161,7 @@
                         + '<span style="color: var(--text-secondary); font-size:0.7rem;">' + fmtCompact(s.value) + '</span>'
                         + '</div>';
                 }).join('');
-                return '<div style="display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap;">'
+                return '<div style="display:flex; gap:1.25rem; align-items:center; justify-content:center; flex-wrap:wrap;">'
                     + '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' + arcs + '</svg>'
                     + '<div style="flex:1; min-width:200px;">' + legend + '</div>'
                     + '</div>';
