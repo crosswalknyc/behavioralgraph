@@ -39082,12 +39082,22 @@
             }
             section.style.display = '';
 
-            var METRICS = [
+            var ALL_METRICS = [
                 { id: 'users_projected',             label: 'Consumers Engaged',     color: '#10b981', fmt: function(v){ return _bpiqFmtNum(v); } },
                 { id: 'brand_hits_projected',        label: 'Brand Hits',            color: '#6366f1', fmt: function(v){ return _bpiqFmtNum(v); } },
                 { id: 'conversions_users_projected', label: 'Conversions',           color: '#f59e0b', fmt: function(v){ return _bpiqFmtNum(v); } },
                 { id: 'earned_media_value',         label: 'Earned Media Value ($)', color: '#c8e600', fmt: function(v){ return '$' + _bpiqFmtNum(Math.round(v)); } },
             ];
+            // Suppress metrics whose every year carries 0 (e.g.
+            // Conversions on automotive runs where purchase data
+            // doesn't apply). Avoids flat-zero charts and dead buttons.
+            var METRICS = ALL_METRICS.filter(function(m) {
+                return years.some(function(y) { return Number(y[m.id] || 0) > 0; });
+            });
+            if (METRICS.length === 0) METRICS = [ALL_METRICS[0]];
+            if (!METRICS.find(function(m) { return m.id === _bpiqYearlyMetric; })) {
+                _bpiqYearlyMetric = METRICS[0].id;
+            }
             // metric switcher buttons
             var btnWrap = document.getElementById('bpiqYearlyMetricBtns');
             btnWrap.innerHTML = METRICS.map(function(m) {
@@ -39160,9 +39170,12 @@
                 });
             }
 
-            // Per-year summary card strip — always shows ALL metrics per
-            // year (not just the selected chart series), so the cards
-            // double as a tabular cut.
+            // Per-year summary card strip — shows the metrics that
+            // carry signal across the run. Conversions are hidden in
+            // categories where order-confirmation pages aren't
+            // observable (e.g. automotive), keyed off the same
+            // all-zero check that hides the YoY chart metric button.
+            var _hasConversions = years.some(function(y) { return Number(y.conversions_users_projected || 0) > 0; });
             var cardsEl = document.getElementById('bpiqYearlyCards');
             cardsEl.innerHTML = years.map(function(y) {
                 var momLabel = ({
@@ -39184,7 +39197,9 @@
                     +   '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem; font-size:11px;">'
                     +     '<div><div style="color:var(--text-secondary); font-size:9px; text-transform:uppercase; letter-spacing:0.04em;">Consumers</div><div style="font-weight:700;">' + _bpiqFmtNum(y.users_projected || 0) + '</div></div>'
                     +     '<div><div style="color:var(--text-secondary); font-size:9px; text-transform:uppercase; letter-spacing:0.04em;">Brand Hits</div><div style="font-weight:700;">' + _bpiqFmtNum(y.brand_hits_projected || 0) + '</div></div>'
-                    +     '<div><div style="color:var(--text-secondary); font-size:9px; text-transform:uppercase; letter-spacing:0.04em;">Conversions</div><div style="font-weight:700;">' + _bpiqFmtNum(y.conversions_users_projected || 0) + '</div></div>'
+                    +     (_hasConversions
+                            ? '<div><div style="color:var(--text-secondary); font-size:9px; text-transform:uppercase; letter-spacing:0.04em;">Conversions</div><div style="font-weight:700;">' + _bpiqFmtNum(y.conversions_users_projected || 0) + '</div></div>'
+                            : '')
                     +     '<div><div style="color:var(--text-secondary); font-size:9px; text-transform:uppercase; letter-spacing:0.04em;">EMV</div><div style="font-weight:700; color:#c8e600;">$' + _bpiqFmtNum(Math.round(y.earned_media_value || 0)) + '</div></div>'
                     +   '</div>'
                     + '</div>';
