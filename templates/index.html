@@ -22251,7 +22251,6 @@
                     <div><label title="Engagement = likes + comments + shares per asset">Sort by</label><select id="iiqAssetSort" onchange="reloadIntentIQAssets()"><option value="engagement" selected>Engagement (high → low)</option><option value="views">Views (high → low)</option><option value="date_desc">Date (newest first)</option><option value="date_asc">Date (oldest first)</option></select></div>
                     <div style="flex:1; text-align:right;"><span id="iiqAssetMeta" style="color: var(--text-secondary); font-size: 0.8rem;"></span></div>
                 </div>
-                <div id="iiqAssetChart" style="margin-bottom: 1rem;"></div>
                 <div class="iiq-cards-grid" id="iiqAssetGrid"></div>
             </div>
 
@@ -23828,7 +23827,6 @@
                         var tkBlendedPct    = totalViews > 0 ? (totalTicketVisits / totalViews * 100) : 0;
 
                         document.getElementById('iiqAssetMeta').textContent = totalAssets + ' asset' + (totalAssets === 1 ? '' : 's') + ' · ' + winLabel;
-                        iiqRenderAssetScatter(cards);
                         document.getElementById('iiqAssetSummary').innerHTML = [
                             iiqSummaryTile('Total assets', fmtCompact(totalAssets), withViews + ' with measured views · ' + winLabel),
                             iiqSummaryTile('Total views', fmtCompact(totalViews), 'across measured assets in window'),
