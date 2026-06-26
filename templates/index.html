@@ -25650,8 +25650,7 @@
                 var topToday = cohorts.slice().sort(function(a,b){ return (b.today_engagement_pct||0) - (a.today_engagement_pct||0); })[0];
                 var topAllTime = cohorts.slice().sort(function(a,b){ return (b.peak_engagement_pct||0) - (a.peak_engagement_pct||0); })[0];
 
-                var html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
-                html +=     iiqSummaryTile('Cohorts available', cohorts.length + ' total', selected.length + ' selected for chart');
+                var html = '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
                 html +=     iiqSummaryTile('Most engaged today', topToday ? topToday.display : '-', topToday ? topToday.today_engagement_pct.toFixed(2) + '% of cohort engaged today' : '');
                 html +=     iiqSummaryTile('Highest peak ever', topAllTime ? topAllTime.display : '-', topAllTime ? topAllTime.peak_engagement_pct.toFixed(1) + '% on ' + topAllTime.peak_date : '');
                 html += '</div>';
