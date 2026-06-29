@@ -102340,16 +102340,14 @@
                     +  '</circle>';
             });
 
-            // Draw labels — full DMA name + pct, font sized to fit the circle
+            // Draw labels — full DMA name + pct, uniform font size
+            var labelSize = 7;
+            var pctLabelSize = 5.5;
             bubbles.forEach(b => {
                 const r = getRadius(b.pct);
                 if (r >= 10) {
-                    var label = b.name;
-                    var fontSize = Math.min(10, Math.max(5, (r * 1.6) / Math.max(1, label.length) * 2.2));
-                    fontSize = Math.round(fontSize * 10) / 10;
-                    var pctSize = Math.max(4, fontSize - 1.5);
-                    svg += '<text x="' + b.x.toFixed(1) + '" y="' + (b.y - pctSize * 0.4).toFixed(1) + '" fill="#fff" font-size="' + fontSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + label + '</text>';
-                    svg += '<text x="' + b.x.toFixed(1) + '" y="' + (b.y + fontSize * 0.8).toFixed(1) + '" fill="rgba(255,255,255,0.8)" font-size="' + pctSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
+                    svg += '<text x="' + b.x.toFixed(1) + '" y="' + (b.y - pctLabelSize * 0.4).toFixed(1) + '" fill="#fff" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + b.name + '</text>';
+                    svg += '<text x="' + b.x.toFixed(1) + '" y="' + (b.y + labelSize * 0.8).toFixed(1) + '" fill="rgba(255,255,255,0.8)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
                 }
             });
 
