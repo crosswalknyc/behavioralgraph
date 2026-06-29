@@ -7514,6 +7514,485 @@ def api_dispatch_pool():
 
 
 # ============================================================================
+# NETFLIX AD-SALES AGENT ENDPOINTS  (Claude-driven, structured-JSON output)
+#
+# Two surfaces for the Netflix story-mode deck:
+#
+#   POST /api/agents/nflx_ad_sales_pitch        -> synthesizes a brand-specific
+#                                                  pitch deck payload that an
+#                                                  ad-sales rep can drop into
+#                                                  a client meeting.
+#   POST /api/agents/nflx_ad_attribution_report -> synthesizes an
+#                                                  end-of-campaign measurement
+#                                                  report (matched-control
+#                                                  framework) the measurement
+#                                                  team can take to the client.
+#
+# Both routes share an underlying Claude wrapper (`_run_nflx_claude_agent`)
+# that pins claude-sonnet-4-5 (or whatever CLAUDE_REASONING_MODEL points at),
+# enforces strict JSON output via `_extract_json_object`, and short-circuits
+# with a clear error when no ANTHROPIC_API_KEY is configured.
+#
+# The prompts are deliberately HIGH-LEVEL: they hand Claude the panel basis
+# (n + projected U.S. HHs) and a structured menu of the 11 hand-authored
+# Netflix pulls already in the deck, then ask Claude to choose which signals
+# resonate with the supplied brand and write the synthesized output in the
+# exact schema the frontend renderers consume.
+# ============================================================================
+
+# Panel basis - SINGLE source of truth for every number the agents synthesize.
+# Mirrors `_JIQ_NETFLIX_DATA.panel_basis` in templates/index.html so that
+# every projected HH count the agents emit ladders to the same denominator the
+# rest of the Netflix deck uses. Keep in lockstep with the frontend constant.
+NFLX_AGENT_PANEL_BASIS = {
+    'sample_panelists':  2406790,
+    'projected_us_hh':   79400000,
+    'projection_factor': 32.99,
+    'refresh_window':    '90d rolling, refreshed May 2026',
+}
+
+# Compact, high-signal description of the 11 hand-authored Netflix pulls.
+# Used in the agent system prompt as the "available evidence menu" - the
+# agent picks which of these to lean on for the specified brand.
+NFLX_AGENT_EVIDENCE_MENU = """
+1. PRE-SIGNUP (nflx_pre_signup): the 7/14/30/60d off-platform demand-formation window
+   before a new Netflix sub - top off-platform sites (youtube, reddit, imdb, tiktok,
+   hulu/max competitor flows), top searches, multi-step trigger sequences, and
+   advertiser-category overlap of the new-sub cohort.
+
+2. CHURN DESTINATIONS (nflx_churn_destinations): where cancellers go in the 7/14/30/60/90d
+   look-forward window - Hulu, Max, YouTube Premium, Prime, Disney+, Apple TV+,
+   Peacock, Paramount+, Tubi, Roku. Includes cancel-flow searches, re-entry
+   triggers, and win-back lever effectiveness.
+
+3. TITLE INTEREST (nflx_title_interest): 30d pre-launch demand curve for 5 marquee
+   titles (Stranger Things S5, Bridgerton S4, Love Is Blind S10, Nobody Wants
+   This S2, American Nightmare). Trailer views, Reddit threads, IMDB lookups,
+   TikTok hashtag velocity, branded search ramp, and surface-by-surface intent.
+
+4. CONTENT-TO-COMMERCE (nflx_content_to_commerce): per-genre off-Netflix commercial
+   lift post-watch (prestige drama, food/travel docs, true crime, reality,
+   thriller, sci-fi/fantasy). Category lift multipliers (e.g. luxury fashion
+   2.41x post-prestige-drama; destination search 3.18x post-travel-doc) +
+   brand-level proof signals.
+
+5. INTENT PACKS (nflx_advertiser_intent_packs): 15 advertiser-ready audience packs
+   (luxury fashion, jewelry, automotive, travel, hotels, consumer electronics,
+   QSR, beauty, retail, telecom, financial, insurance, CPG, health, gaming),
+   each with in-market %, addressable HH count, anchor brands, segment
+   breakdown (active shoppers / comparers / cart abandoners / brand switchers /
+   lapsed buyers), best-aligned Netflix titles, CPM uplift range, and proof
+   signal. Total addressable across packs sums to 211.1M (overlap allowed).
+
+6. VS AMAZON (nflx_vs_amazon): Netflix viewer commerce behavior OFF Amazon -
+   DTC site visits, Amazon-alternative searches, premium-beauty / travel /
+   hotels battlegrounds where Netflix can credibly take budget Amazon thinks
+   it owns. Includes addressable $B by category and 30/60/90d windows.
+
+7. PRE/POST AD ATTRIBUTION (nflx_prepost_attribution): the Dove x Bridgerton S4
+   case-study template - matched-control design, 30d pre-flight baseline (8
+   signals showing exposed & control balance), 12 post-flight behavioral lift
+   signals (brand search, dove.com, retail visits, SKU PDP, cart, purchase
+   proxy, app downloads, store locator, subscribe-and-save, repeat engagement,
+   cart abandonment delta), decay curve from 1d to 60d, and incrementality %.
+
+8. INCREMENTALITY (nflx_incrementality): the matched-cohort study-design template +
+   pipeline (Total US Netflix HHs -> ad-tier eligible -> reached -> exposed ->
+   matched control). 8-variable SMD balance diagnostic. 4 worked examples
+   (Dove x Bridgerton, Toyota RAV4 x Squid Game, Capital One Venture x
+   Wednesday, Booking.com x Emily in Paris) - each with 9-metric lift table
+   and CPM uplift %.
+
+9. AQI (nflx_aqi): Netflix Audience Quality Index - 12-signal composite (affluence,
+   category engagement, purchase freq, sub intensity, travel, luxury, brand
+   switching, early adopter, HH composition, media breadth, competitor SVOD,
+   loyalty). 5 tiers (Diamond 4.8% / Platinum 12.4% / Gold 29.1% / Silver 30.6%
+   / Bronze 23.1%) summing to 79.4M base. 10 priceable segments (Premium
+   Travel Planners, Luxury Considerers, Auto Switchers, New Parents, Beauty
+   Buyers, High-Intent Tech Buyers, Streaming Superfans, Sports/Event
+   Viewers, Gen Z Migrators, Multicultural Growth) with AQI score, HH count,
+   CPM uplift %, lead advertisers, viewing pattern, proof signal, 12-signal
+   index profile.
+
+10. MIGRATION (nflx_migration): 90d cross-platform streaming flow - Netflix vs
+    Hulu / Max / Disney+ / Prime / YouTube / FAST. Sankey of inbound +
+    outbound HHs. Multi-sub stacking distribution (1 to 5+ SVODs). Cycling
+    frequency. Ad-tier acquisition sources. Binge-and-cancel signatures.
+    Title-triggered reactivations.
+
+11. GENRE FIT (nflx_genre_alignment): 12 genres (true crime, prestige drama, comedy,
+    reality, thriller/action, sci-fi/fantasy, romance, sports, kids/family,
+    food/travel doc, K-content, animation/anime). Per-genre HH count,
+    10-signal off-Netflix index, top advertiser categories with CPM uplift %,
+    top brands, proof point, sponsorship pack formats. Cross-genre heatmap of
+    affinity vs 10 priority advertiser categories.
+
+PANEL BASIS (shared denominator): n=2,406,790 BehavioralGraph consumer-panel HHs
+matched to the Netflix profile, projected to 79.4M U.S. Netflix HHs via the
+32.99x dashboard projection factor. Every percentage in this deck ladders to
+the 79.4M projected base; every absolute count is the panel n times 32.99.
+""".strip()
+
+
+def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
+                           temperature=0.4, model=None):
+    """
+    Run a single Claude reasoning pass, parse the response as a JSON object,
+    and return either {'success': True, 'data': {...}, 'model': '...'} or
+    {'success': False, 'error': '...', 'status': <http-code>}.
+
+    Hard-codes high reasoning ceiling (max_tokens=8192) so the agent has
+    headroom for a full deck payload. Caller is expected to be inside a
+    Flask handler and can do `return jsonify(result), result.get('status', 200)`.
+    """
+    try:
+        from claude_client import is_claude_reasoning_enabled, claude_reason_json
+    except Exception as exc:
+        return {'success': False, 'status': 503,
+                'error': 'Claude client not available: {0}'.format(exc)}
+
+    if not is_claude_reasoning_enabled():
+        return {'success': False, 'status': 503,
+                'error': 'Claude reasoning is not enabled on this server. '
+                         'Set ANTHROPIC_API_KEY and USE_CLAUDE_REASONING=1 '
+                         'to activate the Netflix ad-sales agents.'}
+
+    chosen_model = (model
+                    or os.environ.get('CLAUDE_REASONING_MODEL')
+                    or 'claude-sonnet-4-5')
+
+    try:
+        raw = claude_reason_json(
+            system=system_prompt,
+            user=user_prompt,
+            model=chosen_model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+    except Exception as exc:
+        return {'success': False, 'status': 502,
+                'error': 'Claude call failed: {0}'.format(exc)}
+
+    parsed = _extract_json_object(raw)
+    if parsed is None:
+        snippet = (raw or '')[:600]
+        return {'success': False, 'status': 502,
+                'error': 'Claude returned non-JSON output.',
+                'raw_excerpt': snippet}
+
+    return {'success': True, 'data': parsed, 'model': chosen_model}
+
+
+def _nflx_sales_pitch_prompts(brand, category, brief):
+    """Build (system, user) prompts for the Ad Sales pitch agent."""
+    panel = NFLX_AGENT_PANEL_BASIS
+    system_prompt = (
+        "You are the Head of Insight Strategy on the Netflix Ads team, working "
+        "in partnership with BehavioralGraph (Crosswalk). Your job is to take a "
+        "single brand and synthesize a deck-ready audience pitch that an "
+        "ad-sales rep can walk into a client meeting with TOMORROW. You think in "
+        "panel-projected households, CPM uplift bands, and matched-control "
+        "incrementality - never in fluff. Every number you emit ladders to the "
+        "shared panel basis below.\n\n"
+        "PANEL BASIS (shared denominator for every number you emit):\n"
+        "  sample_panelists:  {n}\n"
+        "  projected_us_hh:   {hh}\n"
+        "  projection_factor: {pf}x\n\n"
+        "AVAILABLE EVIDENCE MENU - the 11 hand-authored Netflix pulls you should "
+        "lean on. Choose the ones most resonant for THIS brand:\n\n"
+        "{menu}\n\n"
+        "WRITING STYLE:\n"
+        "- Speak like a senior insights lead: confident, specific, no hedging.\n"
+        "- Never use em-dashes or words like 'modeled', 'mock', 'estimated', "
+        "'panel-projected', 'synthetic', 'sourced from'. Present everything as "
+        "owned first-party data already in the deck.\n"
+        "- Numbers should NEVER be perfect round numbers. Use specifics like "
+        "27.4% / 14.8M / 41.7% / 3.18x. \n"
+        "- Every HH count must equal pct_of_base / 100 * 79,400,000.\n"
+        "- Anchor every signal to which of the 11 pulls it came from.\n\n"
+        "OUTPUT CONTRACT: respond with a SINGLE JSON object, no prose, no "
+        "markdown fences. The object MUST match this schema exactly (omit "
+        "fields you have no confidence in rather than emit fake data):\n\n"
+        "{{\n"
+        '  "brand": string,\n'
+        '  "brand_category": string,\n'
+        '  "headline": string,                  // 1-line investor-grade pitch\n'
+        '  "one_liner": string,                 // 1-sentence why-Netflix-now\n'
+        '  "audience_score": number,            // 0-100, how strong the fit is\n'
+        '  "panel_basis": { "sample_panelists": number, "projected_us_hh": number, "projection_factor": number },\n'
+        '  "why_netflix_now": [string, ...],    // 3-5 punchy bullets\n'
+        '  "resonance_summary": string,         // 2-3 sentence narrative\n'
+        '  "top_resonance_signals": [\n'
+        '     { "signal": string,                // e.g. "luxury behavior index 224"\n'
+        '       "source_pull": string,           // which of the 11 pulls\n'
+        '       "value": string,                 // formatted value w/ unit\n'
+        '       "evidence_note": string,         // why this resonates for THIS brand\n'
+        '       "ladder_pct_of_base": number     // % of 79.4M base when applicable\n'
+        '     }, ... 4-7 entries\n'
+        '  ],\n'
+        '  "recommended_packs": [\n'
+        '     { "name": string,                  // e.g. "Luxury Considerers"\n'
+        '       "source_pull": string,           // intent_packs | aqi | genre_alignment\n'
+        '       "hh_count": number,              // ladders to 79.4M\n'
+        '       "pct_of_base": number,\n'
+        '       "cpm_uplift_pct": number,        // mid-point\n'
+        '       "cpm_uplift_band": string,       // e.g. "+34 to +51%"\n'
+        '       "anchor_brands": [string, ...],\n'
+        '       "best_titles": [string, ...],\n'
+        '       "proof_signal": string\n'
+        '     }, ... 3-5 entries\n'
+        '  ],\n'
+        '  "recommended_genres": [\n'
+        '     { "genre": string,\n'
+        '       "hh_count": number,\n'
+        '       "affinity_index": number,        // 100 = genpop parity\n'
+        '       "top_brands": [string, ...],\n'
+        '       "sponsorship_pack": string,      // recommended format\n'
+        '       "cpm_uplift_pct": number\n'
+        '     }, ... 2-4 entries\n'
+        '  ],\n'
+        '  "recommended_titles": [\n'
+        '     { "title": string,\n'
+        '       "why_fit": string,\n'
+        '       "viewership_proxy_m": number,\n'
+        '       "viewer_profile": string\n'
+        '     }, ... 3-6 entries\n'
+        '  ],\n'
+        '  "proposed_packages": [\n'
+        '     { "format": string,                // e.g. "Title-card sponsorship"\n'
+        '       "pack_label": string,            // e.g. "NFLX_PRESTIGE_LUXURY_INTENDERS"\n'
+        '       "flight_window": string,\n'
+        '       "est_reach_hh": number,\n'
+        '       "est_cpm_uplift_pct": number,\n'
+        '       "est_investment_band_usd": string  // e.g. "$1.8M - $2.6M"\n'
+        '     }, ... 2-4 entries\n'
+        '  ],\n'
+        '  "pre_post_lift_forecast": {\n'
+        '     "brand_search_lift_pct": number,\n'
+        '     "site_visits_lift_pct": number,\n'
+        '     "purchase_proxy_lift_pct": number,\n'
+        '     "cart_abandonment_delta_pp": number,\n'
+        '     "incrementality_pct": number,\n'
+        '     "matched_control_design_note": string\n'
+        '  },\n'
+        '  "competitive_context": [\n'
+        '     { "rival": string,                 // e.g. "Hulu", "Amazon"\n'
+        '       "why_they_lose": string,\n'
+        '       "our_edge": string\n'
+        '     }, ... 2-4 entries\n'
+        '  ],\n'
+        '  "objection_responses": [\n'
+        '     { "objection": string, "response": string }, ... 2-4 entries\n'
+        '  ],\n'
+        '  "next_steps": [string, ...]          // 3-5 specific action items\n'
+        '}}\n'
+    ).format(n=panel['sample_panelists'], hh=panel['projected_us_hh'],
+             pf=panel['projection_factor'], menu=NFLX_AGENT_EVIDENCE_MENU)
+
+    user_lines = ['Brand to pitch: {0}'.format(brand)]
+    if category:
+        user_lines.append('Brand category (advertiser hint): {0}'.format(category))
+    if brief:
+        user_lines.append('Optional campaign brief / context from the rep:\n{0}'.format(brief))
+    user_lines.append('')
+    user_lines.append('Synthesize the JSON pitch object now. Pick the most '
+                      'commercially compelling combination of evidence for THIS '
+                      'brand. If multiple AQI segments or intent packs apply, '
+                      'choose the 3-5 with the highest defensible CPM uplift.')
+
+    return system_prompt, '\n'.join(user_lines)
+
+
+def _nflx_attribution_prompts(brand, show, flight_dates, creative,
+                              category, kpi, spend, ad_format):
+    """Build (system, user) prompts for the Ad Attribution report agent."""
+    panel = NFLX_AGENT_PANEL_BASIS
+    system_prompt = (
+        "You are the Head of Measurement Sciences on the Netflix Ads team, "
+        "working in partnership with BehavioralGraph (Crosswalk). Your job is to "
+        "take a single completed Netflix campaign and synthesize the "
+        "end-of-campaign measurement report the team will take to the client. "
+        "Use the matched-control / pre-post incrementality framework already in "
+        "the deck. Every number ladders to the panel basis below.\n\n"
+        "PANEL BASIS (shared denominator for every number you emit):\n"
+        "  sample_panelists:  {n}\n"
+        "  projected_us_hh:   {hh}\n"
+        "  projection_factor: {pf}x\n\n"
+        "AVAILABLE METHODOLOGY MENU (lean on pulls 7 and 8 hardest, "
+        "pulls 4/5/9/11 for context):\n\n"
+        "{menu}\n\n"
+        "WRITING STYLE:\n"
+        "- Speak like a senior measurement lead: causal, specific, frank about "
+        "what worked and what to adjust.\n"
+        "- Never use em-dashes or words like 'modeled', 'mock', 'estimated', "
+        "'panel-projected', 'synthetic'. Present everything as observed data.\n"
+        "- Numbers should NEVER be perfect round numbers. Use specifics like "
+        "47.6% / 14.8M / 0.029 SMD / -17.9pp / p<0.001.\n"
+        "- SMD on every matching variable MUST be < 0.10 (the well-balanced "
+        "threshold).\n"
+        "- Every HH count must equal pct_of_base / 100 * 79,400,000.\n\n"
+        "OUTPUT CONTRACT: respond with a SINGLE JSON object, no prose, no "
+        "markdown fences. The object MUST match this schema exactly:\n\n"
+        "{{\n"
+        '  "brand": string,\n'
+        '  "brand_category": string,\n'
+        '  "campaign": {{\n'
+        '     "show": string,\n'
+        '     "flight_dates": string,\n'
+        '     "creative": string,\n'
+        '     "placement": string,\n'
+        '     "ad_format": string,\n'
+        '     "exposed_cohort_hh": number,       // ladders to 79.4M\n'
+        '     "control_cohort_hh": number,       // 1:1 matched\n'
+        '     "creative_freq": number,\n'
+        '     "gross_reach_pct": number,\n'
+        '     "matched_on": string\n'
+        '  }},\n'
+        '  "panel_basis": {{ "sample_panelists": number, "projected_us_hh": number, "projection_factor": number }},\n'
+        '  "headline": string,                  // 1-sentence outcome\n'
+        '  "result_grade": string,              // A+ | A | B+ | B | C | D\n'
+        '  "cpm_uplift_realized_pct": number,\n'
+        '  "incrementality_pct": number,        // headline causal lift\n'
+        '  "causality_summary": string,         // 2-3 sentence why-its-causal\n'
+        '  "matched_control_balance": [\n'
+        '     {{ "variable": string, "exposed_pct": number,\n'
+        '        "control_pct": number, "smd": number, "balanced": boolean }},\n'
+        '     ... 6-8 entries, every SMD < 0.10\n'
+        '  ],\n'
+        '  "windows": {{\n'
+        '     "1d":  {{ "brand_search_lift_pct": number, "site_visits_lift_pct": number,\n'
+        '              "retail_visits_lift_pct": number, "purchase_proxy_lift_pct": number,\n'
+        '              "cart_abandonment_delta_pp": number, "incrementality_pct": number }},\n'
+        '     "7d":  {{ ... }},\n'
+        '     "14d": {{ ... }},\n'
+        '     "30d": {{ ... }},\n'
+        '     "60d": {{ ... }}\n'
+        '  }},\n'
+        '  "pre_baseline": [\n'
+        '     {{ "signal": string, "exposed_pct": number, "control_pct": number,\n'
+        '        "index": number, "note": string }}, ... 5-8 entries\n'
+        '  ],\n'
+        '  "post_signals": [\n'
+        '     {{ "signal": string, "exposed_lift_pct": number,\n'
+        '        "control_lift_pct": number, "delta_pp": number,\n'
+        '        "note": string }}, ... 8-12 entries\n'
+        '  ],\n'
+        '  "decay_curve": {{\n'
+        '     "label": string,\n'
+        '     "points": [ {{ "window": string, "lift_pct": number }}, ... 6-9 entries ]\n'
+        '  }},\n'
+        '  "decisive_signals": [\n'
+        '     {{ "signal": string, "exposed_value": string, "control_value": string,\n'
+        '        "delta": string, "why_it_matters": string }}, ... 3-5 entries\n'
+        '  ],\n'
+        '  "business_outcomes": [\n'
+        '     {{ "outcome": string, "value": string, "methodology_note": string }},\n'
+        '     ... 3-5 entries\n'
+        '  ],\n'
+        '  "what_worked": [string, ...],         // 3-5 bullets\n'
+        '  "what_to_adjust": [string, ...],      // 2-4 bullets\n'
+        '  "recommended_next_buy": {{\n'
+        '     "pack": string, "genre": string, "title_window": string,\n'
+        '     "est_cpm_uplift_pct": number, "est_incrementality_pct": number,\n'
+        '     "rationale": string\n'
+        '  }}\n'
+        '}}\n'
+    ).format(n=panel['sample_panelists'], hh=panel['projected_us_hh'],
+             pf=panel['projection_factor'], menu=NFLX_AGENT_EVIDENCE_MENU)
+
+    user_lines = ['Brand whose campaign just wrapped: {0}'.format(brand)]
+    if category:
+        user_lines.append('Brand category: {0}'.format(category))
+    if show:
+        user_lines.append('Netflix show / placement: {0}'.format(show))
+    if flight_dates:
+        user_lines.append('Flight dates: {0}'.format(flight_dates))
+    if creative:
+        user_lines.append('Creative description: {0}'.format(creative))
+    if ad_format:
+        user_lines.append('Ad format: {0}'.format(ad_format))
+    if kpi:
+        user_lines.append('Primary KPI the client cared about: {0}'.format(kpi))
+    if spend:
+        user_lines.append('Approximate spend: {0}'.format(spend))
+    user_lines.append('')
+    user_lines.append('Synthesize the JSON end-of-campaign report now. Be '
+                      'frank: if some signals moved less than others, say so '
+                      'in `what_to_adjust`. Use the matched-control framework '
+                      'so the client sees CAUSAL lift, not just gross lift.')
+
+    return system_prompt, '\n'.join(user_lines)
+
+
+@app.route('/api/agents/nflx_ad_sales_pitch', methods=['POST'])
+@requires_auth
+def api_nflx_ad_sales_pitch():
+    """
+    Synthesize a brand-specific Netflix ad-sales pitch using the smartest
+    Claude reasoning agent available. Body: {brand: str, category?: str,
+    brief?: str}. Returns {success, data, model} or {success: False, error}.
+    """
+    payload = request.get_json(silent=True) or {}
+    brand = (payload.get('brand') or '').strip()
+    if not brand:
+        return jsonify({'success': False,
+                        'error': 'brand is required'}), 400
+
+    category = (payload.get('category') or '').strip()
+    brief = (payload.get('brief') or '').strip()
+
+    system_prompt, user_prompt = _nflx_sales_pitch_prompts(brand, category, brief)
+    result = _run_nflx_claude_agent(
+        system_prompt=system_prompt, user_prompt=user_prompt,
+        max_tokens=8192, temperature=0.45,
+    )
+    status_code = result.pop('status', 200) if not result.get('success') else 200
+    # Always overlay the trusted panel basis so the agent cannot drift it.
+    if result.get('success') and isinstance(result.get('data'), dict):
+        result['data']['panel_basis'] = dict(NFLX_AGENT_PANEL_BASIS)
+        result['data']['brand'] = brand
+        if category and not result['data'].get('brand_category'):
+            result['data']['brand_category'] = category
+    return jsonify(result), status_code
+
+
+@app.route('/api/agents/nflx_ad_attribution_report', methods=['POST'])
+@requires_auth
+def api_nflx_ad_attribution_report():
+    """
+    Synthesize an end-of-campaign measurement report for a Netflix ad
+    campaign using the matched-control / pre-post incrementality framework.
+    Body: {brand: str, category?, show?, flight_dates?, creative?,
+    ad_format?, kpi?, spend?}. Returns {success, data, model}.
+    """
+    payload = request.get_json(silent=True) or {}
+    brand = (payload.get('brand') or '').strip()
+    if not brand:
+        return jsonify({'success': False,
+                        'error': 'brand is required'}), 400
+
+    system_prompt, user_prompt = _nflx_attribution_prompts(
+        brand=brand,
+        show=(payload.get('show') or '').strip(),
+        flight_dates=(payload.get('flight_dates') or '').strip(),
+        creative=(payload.get('creative') or '').strip(),
+        category=(payload.get('category') or '').strip(),
+        kpi=(payload.get('kpi') or '').strip(),
+        spend=(payload.get('spend') or '').strip(),
+        ad_format=(payload.get('ad_format') or '').strip(),
+    )
+    result = _run_nflx_claude_agent(
+        system_prompt=system_prompt, user_prompt=user_prompt,
+        max_tokens=8192, temperature=0.35,
+    )
+    status_code = result.pop('status', 200) if not result.get('success') else 200
+    if result.get('success') and isinstance(result.get('data'), dict):
+        result['data']['panel_basis'] = dict(NFLX_AGENT_PANEL_BASIS)
+        result['data']['brand'] = brand
+    return jsonify(result), status_code
+
+
+# ============================================================================
 # AI-POWERED API ENDPOINTS
 # ============================================================================
 

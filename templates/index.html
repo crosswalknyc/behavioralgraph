@@ -31995,6 +31995,133 @@
                                 background: rgba(251,113,133,0.12); border-left: 3px solid #fb7185; line-height: 1.55;"></div>
                 </div>
 
+                <!-- ════════════════════════════════════════════════════════
+                     NETFLIX AGENT TABS - the two interactive tools that
+                     synthesize a brand-specific pitch (Ad Sales) or a
+                     brand-specific end-of-campaign measurement report (Ad
+                     Attribution). Both POST to /api/agents/nflx_* and
+                     render the Claude-synthesized JSON via the same
+                     visual primitives the 11 hand-authored pulls use.
+                ═══════════════════════════════════════════════════════ -->
+
+                <!-- ─── NETFLIX TAB 12: 💸 Ad Sales (brand-pitch agent) ─── -->
+                <div class="card" id="jiqNflxSalesPitchCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(229,9,20,0.06) 0%, rgba(34,197,94,0.06) 100%);
+                            border: 1px solid rgba(34,197,94,0.32);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 style="margin: 0;">💸 Ad Sales - synthesize a brand pitch</h3>
+                        <div id="jiqNflxSalesMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                        Drop in any brand. The agent reasons across all 11 pulls in this deck and synthesizes the pitch-deck-ready audience packages, recommended packs, sponsorship formats, CPM uplift bands, and pre/post lift forecast an ad-sales rep can walk into a client meeting with tomorrow.
+                    </div>
+
+                    <!-- Input form -->
+                    <div id="jiqNflxSalesForm"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                                gap: 0.6rem; padding: 0.7rem 0.8rem; margin-bottom: 0.65rem;
+                                background: rgba(255,255,255,0.03); border-radius: 6px;
+                                border: 1px solid rgba(255,255,255,0.08);">
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <label for="jiqNflxSalesBrand" style="font-size: 0.62rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Brand to pitch</label>
+                            <input type="text" id="jiqNflxSalesBrand" placeholder="e.g. Cadillac, Louis Vuitton, Booking.com"
+                                   style="padding: 0.45rem 0.6rem; border-radius: 5px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: var(--text-primary); font-size: 0.85rem; font-family: inherit;">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <label for="jiqNflxSalesCategory" style="font-size: 0.62rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Category (optional)</label>
+                            <input type="text" id="jiqNflxSalesCategory" placeholder="e.g. Luxury auto, Travel, QSR"
+                                   style="padding: 0.45rem 0.6rem; border-radius: 5px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: var(--text-primary); font-size: 0.85rem; font-family: inherit;">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem; grid-column: 1 / -1;">
+                            <label for="jiqNflxSalesBrief" style="font-size: 0.62rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Brief / context (optional)</label>
+                            <textarea id="jiqNflxSalesBrief" rows="2" placeholder="e.g. They're launching a new EV in Q4 2026 and want to take share from BMW i / Mercedes EQ. Pitch needs to land an upper-funnel narrative + measurable mid-funnel proof."
+                                      style="padding: 0.45rem 0.6rem; border-radius: 5px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: var(--text-primary); font-size: 0.82rem; font-family: inherit; resize: vertical;"></textarea>
+                        </div>
+                        <div style="display: flex; align-items: end; gap: 0.5rem; grid-column: 1 / -1;">
+                            <button type="button" id="jiqNflxSalesGenerate"
+                                    style="padding: 0.55rem 1.1rem; border-radius: 5px; cursor: pointer;
+                                           background: #e50914; border: 1px solid #e50914; color: #fff;
+                                           font-size: 0.82rem; font-weight: 800; letter-spacing: 0.02em;">
+                                Generate pitch
+                            </button>
+                            <div id="jiqNflxSalesStatus" style="font-size: 0.72rem; opacity: 0.8; align-self: center;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Result panel -->
+                    <div id="jiqNflxSalesResult" style="display: none;"></div>
+                </div>
+
+                <!-- ─── NETFLIX TAB 13: 📊 Ad Attribution (post-campaign agent) ─── -->
+                <div class="card" id="jiqNflxAttributionCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(56,189,248,0.06) 0%, rgba(229,9,20,0.06) 100%);
+                            border: 1px solid rgba(56,189,248,0.32);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 style="margin: 0;">📊 Ad Attribution - synthesize an end-of-campaign report</h3>
+                        <div id="jiqNflxAttribMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                        Drop in a brand whose Netflix campaign just wrapped. The agent runs the matched-control / pre-post incrementality framework already in the deck and synthesizes the end-of-campaign report the measurement team can take to the client.
+                    </div>
+
+                    <!-- Input form -->
+                    <div id="jiqNflxAttribForm"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                                gap: 0.6rem; padding: 0.7rem 0.8rem; margin-bottom: 0.65rem;
+                                background: rgba(255,255,255,0.03); border-radius: 6px;
+                                border: 1px solid rgba(255,255,255,0.08);">
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <label for="jiqNflxAttribBrand" style="font-size: 0.62rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Brand</label>
+                            <input type="text" id="jiqNflxAttribBrand" placeholder="e.g. Dove, Toyota RAV4, Capital One Venture"
+                                   style="padding: 0.45rem 0.6rem; border-radius: 5px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: var(--text-primary); font-size: 0.85rem; font-family: inherit;">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <label for="jiqNflxAttribCategory" style="font-size: 0.62rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Category (optional)</label>
+                            <input type="text" id="jiqNflxAttribCategory" placeholder="e.g. CPG / Beauty, Auto, Financial"
+                                   style="padding: 0.45rem 0.6rem; border-radius: 5px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: var(--text-primary); font-size: 0.85rem; font-family: inherit;">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <label for="jiqNflxAttribShow" style="font-size: 0.62rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Show / placement (optional)</label>
+                            <input type="text" id="jiqNflxAttribShow" placeholder="e.g. Bridgerton S4, Squid Game S3"
+                                   style="padding: 0.45rem 0.6rem; border-radius: 5px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: var(--text-primary); font-size: 0.85rem; font-family: inherit;">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <label for="jiqNflxAttribFlight" style="font-size: 0.62rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Flight dates (optional)</label>
+                            <input type="text" id="jiqNflxAttribFlight" placeholder="e.g. 2026-05-29 → 2026-06-19"
+                                   style="padding: 0.45rem 0.6rem; border-radius: 5px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: var(--text-primary); font-size: 0.85rem; font-family: inherit;">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <label for="jiqNflxAttribFormat" style="font-size: 0.62rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Ad format (optional)</label>
+                            <input type="text" id="jiqNflxAttribFormat" placeholder="e.g. 30s pre-roll + 15s mid-roll"
+                                   style="padding: 0.45rem 0.6rem; border-radius: 5px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: var(--text-primary); font-size: 0.85rem; font-family: inherit;">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <label for="jiqNflxAttribKpi" style="font-size: 0.62rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Primary KPI (optional)</label>
+                            <input type="text" id="jiqNflxAttribKpi" placeholder="e.g. Brand search lift, Purchase proxy, Site visits"
+                                   style="padding: 0.45rem 0.6rem; border-radius: 5px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: var(--text-primary); font-size: 0.85rem; font-family: inherit;">
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem; grid-column: 1 / -1;">
+                            <label for="jiqNflxAttribCreative" style="font-size: 0.62rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Creative description (optional)</label>
+                            <textarea id="jiqNflxAttribCreative" rows="2" placeholder="e.g. Regency-glow 'real skin softness' 30s spot anchored on Dove Body Wash + Dove Cream."
+                                      style="padding: 0.45rem 0.6rem; border-radius: 5px; border: 1px solid rgba(255,255,255,0.14); background: rgba(0,0,0,0.25); color: var(--text-primary); font-size: 0.82rem; font-family: inherit; resize: vertical;"></textarea>
+                        </div>
+                        <div style="display: flex; align-items: end; gap: 0.5rem; grid-column: 1 / -1;">
+                            <button type="button" id="jiqNflxAttribGenerate"
+                                    style="padding: 0.55rem 1.1rem; border-radius: 5px; cursor: pointer;
+                                           background: #38bdf8; border: 1px solid #38bdf8; color: #0b1220;
+                                           font-size: 0.82rem; font-weight: 800; letter-spacing: 0.02em;">
+                                Generate attribution report
+                            </button>
+                            <div id="jiqNflxAttribStatus" style="font-size: 0.72rem; opacity: 0.8; align-self: center;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Result panel -->
+                    <div id="jiqNflxAttribResult" style="display: none;"></div>
+                </div>
+
             </div>
         </div><!-- End journeyIQView -->
 
@@ -48557,6 +48684,8 @@
             _jiqHideCard('jiqNflxAqiCard');
             _jiqHideCard('jiqNflxMigrationCard');
             _jiqHideCard('jiqNflxGenreCard');
+            _jiqHideCard('jiqNflxSalesPitchCard');
+            _jiqHideCard('jiqNflxAttributionCard');
 
             var _isNetflixStory = (_storyMode === 'netflix_ad_sales');
             if (_isNetflixStory) {
@@ -57565,7 +57694,9 @@
             { id: 'increment', cardId: 'jiqNflxIncrementCard', emoji: '🧬', label: 'Incrementality',  sub: 'matched-control' },
             { id: 'aqi',       cardId: 'jiqNflxAqiCard',       emoji: '🏅', label: 'AQI',             sub: 'audience quality rate card' },
             { id: 'migration', cardId: 'jiqNflxMigrationCard', emoji: '🌊', label: 'Migration',       sub: 'cross-platform flow' },
-            { id: 'genre',     cardId: 'jiqNflxGenreCard',     emoji: '🎬', label: 'Genre Fit',       sub: 'genre × advertiser' }
+            { id: 'genre',     cardId: 'jiqNflxGenreCard',     emoji: '🎬', label: 'Genre Fit',       sub: 'genre × advertiser' },
+            { id: 'salespitch',cardId: 'jiqNflxSalesPitchCard', emoji: '💸', label: 'Ad Sales',        sub: 'pitch any brand' },
+            { id: 'attribution',cardId:'jiqNflxAttributionCard',emoji: '📊', label: 'Ad Attribution',  sub: 'measure any campaign' }
         ];
         var _jiqNflxActiveTab = null;
         function _jiqNflxRenderTabBar() {
