@@ -46,7 +46,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 S3_BUCKET   = os.environ.get('BLUE_IQ_CACHE_BUCKET', 'dashboard-inputs')
-S3_PREFIX   = 'blue_iq/issue_paths/v2/'  # v2: banned-term system-prompt clause (2026-06-12)
+S3_PREFIX   = 'blue_iq/issue_paths/v3/'  # v3: impeachment-inquiry relabel clause (2026-06-29)
 CACHE_TTL_S = 24 * 3600
 AGENT_TIMEOUT_S = float(os.environ.get('PATH_AGENT_TIMEOUT', '60'))
 AGENT_MODEL = os.environ.get('PATH_AGENT_MODEL', 'gpt-4o')
@@ -174,6 +174,11 @@ _AGENT_SYSTEM = (
     "If an issue's typical journey would naturally involve such language,\n"
     "frame it via the underlying policy (budget impasse, appropriations,\n"
     "agency funding) WITHOUT using the banned phrase.\n"
+    "\n"
+    "TERM RELABELS — never prefix 'impeachment inquiry' with a personal\n"
+    "name. Write 'impeachment inquiry' (not 'Biden impeachment inquiry',\n"
+    "not 'Trump impeachment inquiry', not 'House Republicans' impeachment\n"
+    "inquiry into Biden'). Same rule for any field.\n"
     "\n"
     "OUTPUT FORMAT: return ONLY a JSON object matching this schema, no\n"
     "markdown fences, no commentary, first char `{`, last char `}`:\n"

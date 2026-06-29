@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 # Sourced from blue_iq.py to keep bucket coherent. Same S3 bucket as the
 # rest of the Blue IQ dashboard cache.
 S3_BUCKET   = os.environ.get('BLUE_IQ_CACHE_BUCKET', 'dashboard-inputs')
-S3_PREFIX   = 'blue_iq/candidates/v3/'  # v3: banned-term system-prompt clause (2026-06-12)
+S3_PREFIX   = 'blue_iq/candidates/v4/'  # v4: impeachment-inquiry relabel clause (2026-06-29)
 CACHE_TTL_S = 24 * 3600                # 24h
 AGENT_TIMEOUT_S = float(os.environ.get('CANDIDATE_AGENT_TIMEOUT', '45'))
 AGENT_MODEL = os.environ.get('CANDIDATE_AGENT_MODEL', 'gpt-4o')
@@ -203,6 +203,10 @@ _AGENT_SYSTEM = (
     "(rationale, race, headline). If a candidate's positioning is built\n"
     "around budget / appropriations / agency funding, describe it via\n"
     "that underlying policy WITHOUT using the banned phrase.\n"
+    "\n"
+    "TERM RELABELS — never prefix 'impeachment inquiry' with a personal\n"
+    "name in ANY field. Write 'impeachment inquiry' (not 'Biden\n"
+    "impeachment inquiry', not 'Trump impeachment inquiry').\n"
     "\n"
     "OUTPUT FORMAT REMINDER:\n"
     "  - Return ONLY the JSON object. No markdown fences. No prose before\n"
@@ -642,6 +646,10 @@ _ENGAGED_SYSTEM = (
     "is genuinely driven by budget / appropriations / agency-funding\n"
     "fights, describe it via that underlying policy WITHOUT using the\n"
     "banned phrase.\n"
+    "\n"
+    "TERM RELABELS — never prefix 'impeachment inquiry' with a personal\n"
+    "name in ANY field. Write 'impeachment inquiry' (not 'Biden\n"
+    "impeachment inquiry', not 'Trump impeachment inquiry').\n"
     "\n"
     "OUTPUT FORMAT REMINDER:\n"
     "  - First character of your response must be `{`. Last `}`.\n"
