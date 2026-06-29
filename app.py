@@ -9455,6 +9455,84 @@ def get_netflix_clickhouse_genres():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/cron/netflix-ranker-daily', methods=['GET', 'POST'])
+def cron_netflix_ranker_daily():
+    """Daily cron entry point. Appends one day's aggregation from
+    netflix.netflix into netflix.netflix_ranker_daily (yesterday's data,
+    by default). Auth via X-Cron-Secret header or ?secret=.
+
+    This is a standalone pipeline feeding the Date/Date Range and
+    previous-ranks-trend features on the Netflix ClickHouse ranker tab.
+    It is separate from netflix_ranker (the legacy all-time flat table
+    with no date dimension, read by /api/rankers/netflix-clickhouse/data
+    above) and from the legacy Snowflake/S3-cached Netflix ranker
+    (/api/rankers/netflix/data) - this route only ever writes to
+    netflix_ranker_daily and never touches either of those tables.
+
+    Idempotent by skip, not by delete: if a day already has rows in
+    netflix_ranker_daily, that day is skipped rather than re-inserted, so
+    an accidental double-fire of the cron can't double-count views. To
+    force a redo of a day that already has data, clear that day's rows
+    in ClickHouse manually first, then call this with ?date=YYYY-MM-DD.
+
+    Optional query params:
+        date=YYYY-MM-DD   run for one specific date instead of yesterday
+        days=N            backfill the last N days ending yesterday (1-90)
+    """
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    if not secret or secret != os.environ.get('CRON_SECRET', ''):
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    date_param = (request.args.get('date') or '').strip()
+    try:
+        days_back = int(request.args.get('days', 1))
+    except (TypeError, ValueError):
+        days_back = 1
+    days_back = max(1, min(days_back, 90))
+
+    if date_param:
+        try:
+            target_dates = [datetime.strptime(date_param, '%Y-%m-%d').date()]
+        except ValueError:
+            return jsonify({'error': 'Invalid date, expected YYYY-MM-DD'}), 400
+    else:
+        yesterday = datetime.utcnow().date() - timedelta(days=1)
+        target_dates = [yesterday - timedelta(days=i) for i in range(days_back)]
+
+    results = {}
+    try:
+        conn = _ch_connect()
+        cur = conn.cursor()
+        for d in target_dates:
+            d_str = d.strftime('%Y-%m-%d')
+            cur.execute(
+                "SELECT count() FROM netflix.netflix_ranker_daily WHERE DAY = {d:Date}",
+                {'d': d_str}
+            )
+            existing = cur.fetchone()[0]
+            if existing:
+                results[d_str] = f'skipped (already has {existing} rows)'
+                continue
+            cur.execute("""
+                INSERT INTO netflix.netflix_ranker_daily
+                SELECT
+                    toDate(VISIT_TS) AS DAY,
+                    ifNull(NAME_OF_SHOW, '') AS NAME_OF_SHOW,
+                    ifNull(SEASON, '') AS SEASON,
+                    ifNull(EPISODE, '') AS EPISODE,
+                    EPISODE_NAME, TYPE, GENRE, RUN_TIME,
+                    count() AS VIEW_COUNT
+                FROM netflix.netflix
+                WHERE AVAILABLE = 'TRUE' AND toDate(VISIT_TS) = {d:Date}
+                GROUP BY DAY, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, TYPE, GENRE, RUN_TIME
+            """, {'d': d_str})
+            results[d_str] = 'inserted'
+        return jsonify({'success': True, 'days': results})
+    except Exception as e:
+        print(f"[Netflix Ranker Daily Cron] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/rankers/netflix/show-details', methods=['GET'])
 def get_netflix_show_details():
     """

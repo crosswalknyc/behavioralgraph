@@ -131,3 +131,23 @@ services:
         value: "https://behavioral-graph.onrender.com"
       - key: CRON_SECRET
         value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"
+
+  # Cron: daily Netflix ranker aggregation - appends yesterday's
+  # show/episode view counts from netflix.netflix into
+  # netflix.netflix_ranker_daily (date-dimensioned table backing the
+  # Date/Date Range + previous-ranks-trend features on the Netflix
+  # ClickHouse ranker tab). 09:10 UTC = shortly after the nightly
+  # clickstream pipeline has landed yesterday's data. Standalone from
+  # iq-rankers-daily-cron above - writes to a different table entirely.
+  - type: cron
+    name: netflix-ranker-daily-cron
+    runtime: python
+    schedule: "10 9 * * *"
+    buildCommand: "true"
+    startCommand: |
+      python -c "import urllib.request,os; r=urllib.request.Request(os.environ['APP_URL'].rstrip('/')+'/api/cron/netflix-ranker-daily?secret='+os.environ['CRON_SECRET'], method='POST'); print(urllib.request.urlopen(r, timeout=600).read().decode())"
+    envVars:
+      - key: APP_URL
+        value: "https://behavioral-graph.onrender.com"
+      - key: CRON_SECRET
+        value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"
