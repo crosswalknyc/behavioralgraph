@@ -31439,6 +31439,20 @@
                      _jiqShowNetflixPitchHeader() helper is now a no-op (its
                      getElementById call returns null), which is by design. -->
 
+                <!-- ─── NETFLIX TAB BAR - one pull per tab ───
+                     Painted + wired by _jiqNflxRenderTabBar() when
+                     meta.story_mode === 'netflix_ad_sales'. Hidden
+                     for every other story mode. Each tab swaps
+                     visibility on a single Netflix card so the
+                     reviewer sees one pull at a time instead of an
+                     11-card scroll. -->
+                <div id="jiqNflxTabBar"
+                     style="display: none; margin-top: 1rem; padding: 0.55rem 0.65rem;
+                            background: linear-gradient(135deg, rgba(229,9,20,0.08) 0%, rgba(15,23,42,0.55) 100%);
+                            border: 1px solid rgba(229,9,20,0.32); border-radius: 8px;
+                            position: sticky; top: 0; z-index: 30;
+                            backdrop-filter: blur(6px);"></div>
+
                 <!-- ─── NETFLIX CARD 1: 🔍 The 30 Days Before Netflix Sign-up ─── -->
                 <div class="card" id="jiqNflxSignupCard"
                      style="padding: 1rem; margin-top: 1rem; display: none;
@@ -48579,6 +48593,15 @@
                 if (typeof renderJourneyIqNflxGenre === 'function') {
                     renderJourneyIqNflxGenre(_pickClickstreamBlock('nflx_genre_alignment'));
                 }
+                // After every card has painted, swap into single-tab
+                // mode so only the active pull is visible. The tab bar
+                // sticks to the top of the dashboard so reviewers can
+                // step through the 11 pulls without scroll fatigue.
+                if (typeof _jiqNflxActivateTab === 'function') {
+                    _jiqNflxActivateTab(_jiqNflxActiveTab || 'signup');
+                }
+            } else {
+                if (typeof _jiqNflxHideTabBar === 'function') _jiqNflxHideTabBar();
             }
 
             // Facts - facts can be plain strings or {label, value} dicts.
@@ -57524,6 +57547,82 @@
             if (!el) return;
             el.innerHTML = _jiqNflxCohortMeta(label, cohortCount);
         }
+        // ──────────────────────────────────────────────────────────────
+        // TOP-LEVEL TAB BAR for the Netflix deck. Lets reviewers see
+        // one pull at a time instead of scrolling through 11 stacked
+        // cards. Hidden for every other story mode. The bar is sticky
+        // at the top of the dashboard so the active tab is always
+        // visible while scrolling within a card.
+        // ──────────────────────────────────────────────────────────────
+        var _JIQ_NFLX_TABS = [
+            { id: 'signup',    cardId: 'jiqNflxSignupCard',    emoji: '🔍', label: 'Pre-Signup',     sub: '30d before sub' },
+            { id: 'churn',     cardId: 'jiqNflxChurnCard',     emoji: '🔄', label: 'Churn',           sub: 'where they go next' },
+            { id: 'title',     cardId: 'jiqNflxTitleCard',     emoji: '📈', label: 'Title Demand',    sub: 'pre-launch curve' },
+            { id: 'commerce',  cardId: 'jiqNflxCommerceCard',  emoji: '🛒', label: 'Commerce Lift',   sub: 'post-watch shopping' },
+            { id: 'intent',    cardId: 'jiqNflxIntentCard',    emoji: '💼', label: 'Intent Packs',    sub: '15 advertiser packs' },
+            { id: 'vsamzn',    cardId: 'jiqNflxVsAmznCard',    emoji: '🆚', label: 'vs. Amazon',      sub: 'off-Amazon spend' },
+            { id: 'prepost',   cardId: 'jiqNflxPrePostCard',   emoji: '🧪', label: 'Pre/Post Ad',     sub: 'Dove × Bridgerton' },
+            { id: 'increment', cardId: 'jiqNflxIncrementCard', emoji: '🧬', label: 'Incrementality',  sub: 'matched-control' },
+            { id: 'aqi',       cardId: 'jiqNflxAqiCard',       emoji: '🏅', label: 'AQI',             sub: 'audience quality rate card' },
+            { id: 'migration', cardId: 'jiqNflxMigrationCard', emoji: '🌊', label: 'Migration',       sub: 'cross-platform flow' },
+            { id: 'genre',     cardId: 'jiqNflxGenreCard',     emoji: '🎬', label: 'Genre Fit',       sub: 'genre × advertiser' }
+        ];
+        var _jiqNflxActiveTab = null;
+        function _jiqNflxRenderTabBar() {
+            var bar = document.getElementById('jiqNflxTabBar');
+            if (!bar) return;
+            bar.style.display = '';
+            var active = _jiqNflxActiveTab || _JIQ_NFLX_TABS[0].id;
+            bar.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:stretch;">'
+                + _JIQ_NFLX_TABS.map(function(t, i) {
+                    var on = (t.id === active);
+                    var bg = on ? 'rgba(229,9,20,0.85)' : 'rgba(255,255,255,0.04)';
+                    var bd = on ? '#e50914'             : 'rgba(255,255,255,0.10)';
+                    var fg = on ? '#ffffff'             : 'var(--text-primary)';
+                    var subFg = on ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)';
+                    return '<button type="button" data-tab="' + t.id + '"'
+                         + ' style="flex:1 1 calc(100%/6 - 0.4rem); min-width:120px; max-width:200px;'
+                         +        ' display:flex; flex-direction:column; align-items:flex-start; justify-content:center;'
+                         +        ' gap:0.1rem; padding:0.4rem 0.6rem; border-radius:6px; cursor:pointer;'
+                         +        ' background:' + bg + '; border:1px solid ' + bd + ';'
+                         +        ' color:' + fg + '; text-align:left;'
+                         +        ' transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;'
+                         +        ' font-family:inherit;">'
+                         +   '<div style="display:flex; align-items:center; gap:0.35rem; font-size:0.74rem; font-weight:800; line-height:1.15;">'
+                         +     '<span style="opacity:0.55; font-size:0.62rem; font-weight:700;">' + (i + 1) + '.</span>'
+                         +     '<span>' + t.emoji + '</span>'
+                         +     '<span>' + _jiqEsc(t.label) + '</span>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.6rem; opacity:' + (on ? '0.9' : '0.6') + '; color:' + subFg + '; padding-left:1.1rem;">' + _jiqEsc(t.sub) + '</div>'
+                         + '</button>';
+                  }).join('')
+                + '</div>';
+            Array.prototype.forEach.call(bar.querySelectorAll('button[data-tab]'), function(btn) {
+                btn.addEventListener('click', function() {
+                    _jiqNflxActivateTab(btn.getAttribute('data-tab'));
+                });
+            });
+        }
+        function _jiqNflxActivateTab(tabId) {
+            var match = _JIQ_NFLX_TABS.filter(function(t) { return t.id === tabId; })[0];
+            if (!match) match = _JIQ_NFLX_TABS[0];
+            _jiqNflxActiveTab = match.id;
+            _JIQ_NFLX_TABS.forEach(function(t) {
+                var el = document.getElementById(t.cardId);
+                if (!el) return;
+                el.style.display = (t.id === match.id) ? '' : 'none';
+            });
+            _jiqNflxRenderTabBar();
+            var bar = document.getElementById('jiqNflxTabBar');
+            if (bar && bar.scrollIntoView) {
+                try { bar.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_e) {}
+            }
+        }
+        function _jiqNflxHideTabBar() {
+            var bar = document.getElementById('jiqNflxTabBar');
+            if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+        }
+
         function _jiqNflxWindowTabs(containerId, windows, activeKey, onChange) {
             var el = document.getElementById(containerId);
             if (!el) return;
