@@ -31425,6 +31425,10 @@
                        jiqNflxCommerceCard     (nflx_content_to_commerce)
                        jiqNflxIntentCard       (nflx_advertiser_intent_packs)
                        jiqNflxVsAmznCard       (nflx_vs_amazon)
+                       jiqNflxPrePostCard      (nflx_prepost_attribution)
+                       jiqNflxIncrementCard    (nflx_incrementality)
+                       jiqNflxAqiCard          (nflx_aqi)
+                       jiqNflxMigrationCard    (nflx_migration)
 
                      Shared section header (jiqNetflixPitchHeader) is
                      revealed by the first card that paints via
@@ -31751,6 +31755,172 @@
                     <div id="jiqNflxVsAmznPitch"
                          style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
                                 background: rgba(255,153,0,0.10); border-left: 3px solid #ff9900; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── NETFLIX CARD 7: 🧪 Pre/Post Ad Attribution - Dove × Bridgerton S4 ─── -->
+                <div class="card" id="jiqNflxPrePostCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(59,130,246,0.07) 0%, rgba(236,72,153,0.06) 100%);
+                            border: 1px solid rgba(59,130,246,0.30);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNflxPrePostTitle" style="margin: 0;">🧪 Pre &amp; post-ad attribution - Dove × Bridgerton S4 (case study)</h3>
+                        <div id="jiqNflxPrePostMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNflxPrePostSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+
+                    <!-- Campaign header strip -->
+                    <div id="jiqNflxPrePostCampaign"
+                         style="padding: 0.75rem 0.9rem; border-radius: 7px; margin-bottom: 0.85rem;
+                                background: linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(236,72,153,0.08) 100%);
+                                border-left: 3px solid #3b82f6;"></div>
+
+                    <!-- Post-exposure window pills -->
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.85rem;">
+                        <span style="font-size: 0.62rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em;">Post-exposure window</span>
+                        <div id="jiqNflxPrePostWindowTabs" style="display: flex; gap: 0.35rem;"></div>
+                    </div>
+
+                    <!-- Hero topline -->
+                    <div id="jiqNflxPrePostTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                                gap: 0.5rem; margin-bottom: 1rem;"></div>
+
+                    <!-- ─── PRE / POST timeline divider ─── -->
+                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 0.7rem; margin: 0.55rem 0 0.9rem;">
+                        <div style="height: 2px; background: linear-gradient(90deg, transparent 0%, #3b82f6 100%);"></div>
+                        <div style="font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; opacity: 0.8; text-transform: uppercase;">— launch day —</div>
+                        <div style="height: 2px; background: linear-gradient(90deg, #ec4899 0%, transparent 100%);"></div>
+                    </div>
+
+                    <!-- PRE: 30d before campaign - exposed-cohort baseline -->
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92; color: #93c5fd;">
+                        ⬅️ PRE-exposure (30d before campaign) - the cohort baseline that proves you targeted well
+                    </h4>
+                    <div id="jiqNflxPrePostBaseline" style="margin-bottom: 1rem;"></div>
+
+                    <!-- POST: behavioral change vs. matched control -->
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92; color: #f9a8d4;">
+                        ➡️ POST-exposure behavioral change vs. matched-control cohort
+                    </h4>
+                    <div id="jiqNflxPrePostSignals" style="margin-bottom: 1rem;"></div>
+
+                    <!-- Lift decay across windows -->
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
+                        📉 Lift decay - how the incremental brand-search lift sustains across the post-exposure window
+                    </h4>
+                    <div id="jiqNflxPrePostDecay" style="margin-bottom: 1rem;"></div>
+
+                    <!-- Headline pitch -->
+                    <div id="jiqNflxPrePostPitch"
+                         style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
+                                background: rgba(59,130,246,0.10); border-left: 3px solid #3b82f6; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── NETFLIX CARD 8: 🧬 Incrementality & matched-control study design ─── -->
+                <div class="card" id="jiqNflxIncrementCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(20,184,166,0.07) 0%, rgba(229,9,20,0.06) 100%);
+                            border: 1px solid rgba(20,184,166,0.30);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNflxIncrementTitle" style="margin: 0;">🧬 Incrementality &amp; matched-control study design</h3>
+                        <div id="jiqNflxIncrementMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNflxIncrementSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+
+                    <!-- Question + method strip -->
+                    <div id="jiqNflxIncrementMethodStrip"
+                         style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 0.7rem;
+                                padding: 0.75rem 0.9rem; border-radius: 7px; margin-bottom: 0.9rem;
+                                background: linear-gradient(135deg, rgba(20,184,166,0.10) 0%, rgba(229,9,20,0.08) 100%);
+                                border-left: 3px solid #14b8a6;"></div>
+
+                    <!-- Matching pipeline (the funnel that produces the matched cohort) -->
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92; color: #5eead4;">
+                        🧪 Matching pipeline - how the exposed and control cohorts get built
+                    </h4>
+                    <div id="jiqNflxIncrementPipeline" style="margin-bottom: 1rem;"></div>
+
+                    <!-- Cohort balance diagnostic - statistical evidence the cohorts are comparable -->
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92; color: #5eead4;">
+                        ⚖️ Cohort-balance diagnostic - exposed vs. control are statistically indistinguishable on the matching variables
+                    </h4>
+                    <div id="jiqNflxIncrementBalance" style="margin-bottom: 1rem;"></div>
+
+                    <!-- Study selector -->
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.7rem;">
+                        <span style="font-size: 0.62rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em;">Mock incrementality studies</span>
+                        <div id="jiqNflxIncrementStudyTabs" style="display: flex; gap: 0.35rem; flex-wrap: wrap;"></div>
+                    </div>
+
+                    <!-- Active study header strip -->
+                    <div id="jiqNflxIncrementStudyHeader"
+                         style="padding: 0.65rem 0.85rem; border-radius: 6px; margin-bottom: 0.8rem;
+                                background: rgba(255,255,255,0.04); border-left: 3px solid #14b8a6;"></div>
+
+                    <!-- 9-metric incrementality table for the active study -->
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92;">
+                        📊 9-metric incrementality readout - the full panel
+                    </h4>
+                    <div id="jiqNflxIncrementMetrics" style="margin-bottom: 1rem;"></div>
+
+                    <!-- Causal decomposition viz - "gross lift = baseline + incremental" -->
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92;">
+                        🔬 Causal decomposition - separating correlation from incremental lift
+                    </h4>
+                    <div id="jiqNflxIncrementDecomp" style="margin-bottom: 1rem;"></div>
+
+                    <!-- Headline pitch -->
+                    <div id="jiqNflxIncrementPitch"
+                         style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
+                                background: rgba(20,184,166,0.12); border-left: 3px solid #14b8a6; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── NETFLIX CARD 9: 🏅 Netflix Audience Quality Index (AQI) ─── -->
+                <div class="card" id="jiqNflxAqiCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(251,191,36,0.07) 0%, rgba(229,9,20,0.06) 100%);
+                            border: 1px solid rgba(251,191,36,0.30);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNflxAqiTitle" style="margin: 0;">🏅 Netflix Audience Quality Index (AQI)</h3>
+                        <div id="jiqNflxAqiMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNflxAqiSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+
+                    <!-- Methodology strip -->
+                    <div id="jiqNflxAqiMethodStrip"
+                         style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 0.7rem;
+                                padding: 0.75rem 0.9rem; border-radius: 7px; margin-bottom: 0.9rem;
+                                background: linear-gradient(135deg, rgba(251,191,36,0.12) 0%, rgba(229,9,20,0.08) 100%);
+                                border-left: 3px solid #fbbf24;"></div>
+
+                    <!-- 12-signal weighting panel -->
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92; color: #fcd34d;">
+                        ⚖️ Composite-score inputs - the 12 behavioral signals that compose the AQI score
+                    </h4>
+                    <div id="jiqNflxAqiSignals" style="margin-bottom: 1rem;"></div>
+
+                    <!-- Tier distribution across U.S. Netflix HHs -->
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92; color: #fcd34d;">
+                        📊 AQI tier distribution - U.S. Netflix ad-tier households scored
+                    </h4>
+                    <div id="jiqNflxAqiTiers" style="margin-bottom: 1rem;"></div>
+
+                    <!-- Segment rate card - 10 priceable audience packs -->
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92;">
+                        🎯 Segment rate card - 10 commercially-priceable Netflix audience packs
+                    </h4>
+                    <div id="jiqNflxAqiSegGrid" style="margin-bottom: 1rem;"></div>
+
+                    <!-- Selected segment deep-dive -->
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92;">
+                        🔬 Segment deep-dive - signal-by-signal indexing, viewing pattern, recommended advertisers
+                    </h4>
+                    <div id="jiqNflxAqiSegDeepDive" style="margin-bottom: 1rem;"></div>
+
+                    <!-- Headline pitch -->
+                    <div id="jiqNflxAqiPitch"
+                         style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
+                                background: rgba(251,191,36,0.12); border-left: 3px solid #fbbf24; line-height: 1.55;"></div>
                 </div>
 
             </div>
@@ -46756,14 +46926,22 @@
                         nflx_content_to_commerce:    _JIQ_NETFLIX_DATA.nflx_content_to_commerce,
                         nflx_advertiser_intent_packs:_JIQ_NETFLIX_DATA.nflx_advertiser_intent_packs,
                         nflx_vs_amazon:              _JIQ_NETFLIX_DATA.nflx_vs_amazon,
+                        nflx_prepost_attribution:    _JIQ_NETFLIX_DATA.nflx_prepost_attribution,
+                        nflx_incrementality:         _JIQ_NETFLIX_DATA.nflx_incrementality,
+                        nflx_aqi:                    _JIQ_NETFLIX_DATA.nflx_aqi,
+                        nflx_migration:              _JIQ_NETFLIX_DATA.nflx_migration,
                         facts: [
-                            { label: 'Headline',  value: 'Netflix sees the signup, the watch, and the cancel. Crosswalk sees the demand formation, the churn destination, the pre-launch demand curve, the post-watch commerce lift, the in-market advertiser-category signals, and the off-Amazon intent path.' },
+                            { label: 'Headline',  value: 'Netflix sees the signup, the watch, and the cancel. Crosswalk sees the demand formation, the churn destination, the pre-launch demand curve, the post-watch commerce lift, the in-market advertiser-category signals, the off-Amazon intent path, the pre/post lift on every campaign, the matched-control incrementality, the audience-quality rate card, AND the full competitive streaming marketplace.' },
                             { label: 'Pre-sub',   value: '62.7% of new Netflix subs are simultaneously in-market for at least one premium advertiser category in the 30d window before signup.' },
                             { label: 'Churn',     value: '56.8% of cancellers subscribe to a competitor within 30d - Hulu, Max, and YouTube Premium lead. Netflix sees zero signal for any of it.' },
                             { label: 'Title',     value: 'The 30d pre-launch demand curve (trailer rewatches, Reddit comments, TikTok hashtag velocity) predicts opening-week viewership weeks before press-play.' },
                             { label: 'Commerce',  value: 'Prestige drama drives 2.41x luxury-fashion lift in the 14d post-binge. Travel doc drives 3.18x destination-search lift in the 7-30d window.' },
                             { label: 'Ad sales',  value: '15 advertiser-ready packs spanning 79.4M U.S. Netflix households, each with a brand-anchored proof signal and a CPM-uplift range.' },
-                            { label: 'Amazon',    value: 'Beauty, travel, luxury fashion, jewelry, and premium spirits all over-index Netflix viewer purchase intent AND have under 30% Amazon category share - the budgets Netflix can credibly take from Amazon.' }
+                            { label: 'Amazon',    value: 'Beauty, travel, luxury fashion, jewelry, and premium spirits all over-index Netflix viewer purchase intent AND have under 30% Amazon category share - the budgets Netflix can credibly take from Amazon.' },
+                            { label: 'Attribution', value: 'Dove × Bridgerton S4 case study: +47.6% brand-search lift, +71.4% dove.com visits, +28.4% purchase-proxy lift, -17.9pp cart abandonment in the 30d window vs. a matched-control cohort. This is the framework that justifies premium CPMs and wins performance dollars.' },
+                            { label: 'Incrementality', value: 'Matched-control study design across 4 mock studies (Dove × Bridgerton, Toyota × Squid Game, Capital One × Wednesday, Booking.com × Emily in Paris) shows 80%+ of the exposed cohort\'s lift is causally attributable to the buy. SMD < 0.10 on all 8 matching variables. Modeled CPM uplift: 38-53% per category.' },
+                            { label: 'AQI',         value: '10 priceable segment packs across 70.3M Diamond + Platinum + Gold Netflix HHs - Premium Travel Planners (AQI 92, CPM +57%), Luxury Considerers (89, +52%), High-Intent Tech Buyers (84, +47%), Auto Switchers (81, +44%), Multicultural Growth (79, +41%), Sports/Event Viewers (77, +37%), Beauty Buyers (76, +35%), New Parents (78, +38%), Streaming Superfans (73, +31%), Gen Z Migrators (71, +28%).' },
+                            { label: 'Migration',   value: '88.6% of U.S. Netflix HHs are multi-platform streamers. 32.9M inbound + 44.5M outbound 90d cross-platform moves. Top outbound: YouTube (12.3M), Hulu (8.4M), Prime (7.2M). Top inbound: YouTube (9.7M), Hulu (7.1M), Prime (5.4M). 14.2M lapsed subs reactivated in 2026 because of a specific Netflix title - Squid Game S3 alone drove 3.4M.' }
                         ]
                     }
                 };
@@ -48301,6 +48479,10 @@
             _jiqHideCard('jiqNflxCommerceCard');
             _jiqHideCard('jiqNflxIntentCard');
             _jiqHideCard('jiqNflxVsAmznCard');
+            _jiqHideCard('jiqNflxPrePostCard');
+            _jiqHideCard('jiqNflxIncrementCard');
+            _jiqHideCard('jiqNflxAqiCard');
+            _jiqHideCard('jiqNflxMigrationCard');
 
             var _isNetflixStory = (_storyMode === 'netflix_ad_sales');
             if (_isNetflixStory) {
@@ -48321,6 +48503,18 @@
                 }
                 if (typeof renderJourneyIqNflxVsAmazon === 'function') {
                     renderJourneyIqNflxVsAmazon(_pickClickstreamBlock('nflx_vs_amazon'));
+                }
+                if (typeof renderJourneyIqNflxPrePost === 'function') {
+                    renderJourneyIqNflxPrePost(_pickClickstreamBlock('nflx_prepost_attribution'));
+                }
+                if (typeof renderJourneyIqNflxIncrement === 'function') {
+                    renderJourneyIqNflxIncrement(_pickClickstreamBlock('nflx_incrementality'));
+                }
+                if (typeof renderJourneyIqNflxAqi === 'function') {
+                    renderJourneyIqNflxAqi(_pickClickstreamBlock('nflx_aqi'));
+                }
+                if (typeof renderJourneyIqNflxMigration === 'function') {
+                    renderJourneyIqNflxMigration(_pickClickstreamBlock('nflx_migration'));
                 }
             }
 
@@ -56258,6 +56452,471 @@
                       detail: '12.1% of Netflix viewers are searching "best place to buy X" or "<brand> official website" in the 60d window. This is the most valuable upper-funnel audience in CPG, and Amazon can\'t prove they\'re reaching it.' }
                 ],
                 pitch: 'Amazon owns the transaction. Netflix + Crosswalk can identify and influence the intent path BEFORE purchase. That\'s the wedge - and it\'s sellable at a premium in every category where Amazon\'s share of off-platform spend is under 50%: beauty, travel, luxury fashion, jewelry, premium spirits, wellness DTC, apparel DTC. Those categories combined are a $200B+ addressable advertiser pool Amazon cannot fully serve from inside its own walled garden.'
+            },
+
+            // ── PULL 7 · PRE/POST AD ATTRIBUTION (Dove × Bridgerton S4) ──
+            nflx_prepost_attribution: {
+                enabled: true,
+                title: 'Pre & post-ad attribution - Dove × Bridgerton S4 (case study)',
+                subtitle: 'Netflix sells exposure. Crosswalk lets Netflix sell measurable behavioral change - matched-cohort lift on brand search, site visits, retail traffic, product-page engagement, cart behavior, and purchase proxies in the 1/7/14/30/60d window after exposure. The framework is reusable for every brand and every show.',
+                campaign: {
+                    brand:           'Dove (Unilever)',
+                    creative:        'Regency-glow / "real skin softness" 30s spot - culturally aligned to Bridgerton\'s Regency aesthetic',
+                    show:            'Bridgerton S4',
+                    flight_dates:    '2026-05-29 → 2026-06-19 (3-week launch flight)',
+                    placement:       'Bridgerton S4 pre-roll + mid-roll on the Netflix ad-tier',
+                    exposed_cohort:  14200000,
+                    control_cohort:  14200000,
+                    matched_on:      'age band, gender, geo, HHI, prior beauty-category indexing, Netflix tenure, ad-tier vs. paid tier',
+                    creative_freq:   3.4,
+                    gross_reach_pct: 32.7,
+                    ad_format:       '30s pre-roll + 15s mid-roll'
+                },
+                window_default: '30d',
+                windows: {
+                    '1d':  { brand_search_lift_pct: 18.4, site_visits_lift_pct: 21.7, retail_visits_lift_pct:  4.1, conversion_proxy_lift_pct:  3.2, abandonment_delta_pp:  -1.4, incrementality_pct: 12.6 },
+                    '7d':  { brand_search_lift_pct: 41.2, site_visits_lift_pct: 56.8, retail_visits_lift_pct: 18.7, conversion_proxy_lift_pct: 14.4, abandonment_delta_pp:  -6.2, incrementality_pct: 31.4 },
+                    '14d': { brand_search_lift_pct: 47.6, site_visits_lift_pct: 71.4, retail_visits_lift_pct: 27.3, conversion_proxy_lift_pct: 22.8, abandonment_delta_pp: -11.7, incrementality_pct: 39.8 },
+                    '30d': { brand_search_lift_pct: 38.7, site_visits_lift_pct: 62.1, retail_visits_lift_pct: 31.6, conversion_proxy_lift_pct: 28.4, abandonment_delta_pp: -17.9, incrementality_pct: 42.7 },
+                    '60d': { brand_search_lift_pct: 24.3, site_visits_lift_pct: 41.7, retail_visits_lift_pct: 26.4, conversion_proxy_lift_pct: 31.8, abandonment_delta_pp: -22.1, incrementality_pct: 38.4 }
+                },
+                pre_baseline: [
+                    { signal: 'Existing premium-beauty category interest',
+                      exposed_pct: 28.7, control_pct: 27.4, index: 105,
+                      note: 'Exposed cohort over-indexed slightly on premium-beauty interest pre-flight - proves the buy was well-targeted, NOT that the lift below is just a baseline effect.' },
+                    { signal: 'Dove brand familiarity (prior 90d site/SKU touch)',
+                      exposed_pct: 41.2, control_pct: 40.6, index: 101,
+                      note: 'Roughly 41% of both cohorts had touched a Dove SKU page or dove.com in the 90d window before the flight - clean baseline.' },
+                    { signal: 'Competitor brand shopping (Olay / Cetaphil / Aveeno)',
+                      exposed_pct: 36.4, control_pct: 35.8, index: 102,
+                      note: 'In-category but not Dove-loyal - the exact win-conversion / category-switcher cohort the campaign was meant to influence.' },
+                    { signal: 'Price-comparison behavior (premium vs. mass beauty)',
+                      exposed_pct: 22.7, control_pct: 22.1, index: 103,
+                      note: 'Active price comparison in beauty - the cohort is "considering" but not committed. Highest-leverage cohort for ad-driven lift.' },
+                    { signal: 'Category entrants (new to premium beauty in 90d)',
+                      exposed_pct: 11.4, control_pct: 11.7, index:  97,
+                      note: 'New-to-category - the long-term LTV cohort. The campaign\'s residual 60d lift over-indexes this segment.' },
+                    { signal: 'Product research / review-site visits',
+                      exposed_pct: 18.6, control_pct: 18.2, index: 102,
+                      note: 'Active research mode - Reddit beauty subs, Sephora reviews, IG creator comparisons. Strong lift candidates.' },
+                    { signal: 'Prior Dove purchase indicators (90d)',
+                      exposed_pct: 14.8, control_pct: 14.6, index: 101,
+                      note: 'Recent Dove buyers - the loyalty / repeat-purchase cohort. The campaign\'s 60d retail-visit lift is concentrated here.' },
+                    { signal: 'Female-skewing premium-content viewers (Bridgerton-adjacent)',
+                      exposed_pct: 47.3, control_pct: 46.9, index: 101,
+                      note: 'Both cohorts skew female / premium-content viewer - the natural Bridgerton audience. Cultural fit was strong before a single ad ran.' }
+                ],
+                post_signals: [
+                    { signal: 'Brand-search lift (dove + dove cream + dove body wash)',
+                      exposed_lift_pct: 47.6, control_lift_pct:  3.4, delta_pp: 44.2,
+                      note: 'Branded-search query volume in the 14d post-window indexes 1.47x the exposed cohort\'s pre-flight baseline vs. +3.4% in control. The cleanest single-signal proof of behavioral change.' },
+                    { signal: 'Dove.com / Unilever brand site visits',
+                      exposed_lift_pct: 71.4, control_lift_pct:  4.2, delta_pp: 67.2,
+                      note: 'Direct dove.com sessions - the most-attributable single signal Netflix can show. Indexes 1.71x the cohort\'s own pre-flight baseline.' },
+                    { signal: 'Competitor brand-search changes (Olay / Cetaphil / Aveeno)',
+                      exposed_lift_pct: -8.3, control_lift_pct:  1.1, delta_pp: -9.4,
+                      note: 'Search share-shift: exposed cohort\'s competitor-brand search volume DROPS 8.3% post-flight while control rises ~1%. The campaign moved share, not just attention.' },
+                    { signal: 'Retail visits (Target / Walgreens / CVS / Walmart)',
+                      exposed_lift_pct: 27.3, control_lift_pct:  2.6, delta_pp: 24.7,
+                      note: 'Beauty-aisle retail-site sessions - Target.com + Walgreens.com + CVS.com + Walmart.com Dove-page traffic, panel-projected.' },
+                    { signal: 'Dove product-page visits (specific SKU pages)',
+                      exposed_lift_pct: 84.6, control_lift_pct:  3.1, delta_pp: 81.5,
+                      note: 'Branded Dove SKU PDP traffic on Target.com / Amazon / Walmart.com - exposed cohort indexes 1.85x baseline.' },
+                    { signal: 'Cart behavior (add-to-cart events, exposed cohort)',
+                      exposed_lift_pct: 51.8, control_lift_pct:  2.4, delta_pp: 49.4,
+                      note: 'Detected Dove-SKU add-to-cart on retailer.com sites. The mid-funnel proof point that converts to retail-data attribution later.' },
+                    { signal: 'Purchase proxy (Target+ pickup / Drizly / Amazon completion)',
+                      exposed_lift_pct: 28.4, control_lift_pct:  1.6, delta_pp: 26.8,
+                      note: '"Order placed" / "thank you" / receipt-page traffic - the closest off-platform purchase signal we can validate without retail-data contracts.' },
+                    { signal: 'Retail-app downloads (Target / Walgreens / CVS)',
+                      exposed_lift_pct: 14.2, control_lift_pct:  1.3, delta_pp: 12.9,
+                      note: 'App-store visits + first-open events for retailer apps - the BOPIS / pickup intent signal that closes the loop offline.' },
+                    { signal: 'Store-locator visits',
+                      exposed_lift_pct: 21.7, control_lift_pct:  1.8, delta_pp: 19.9,
+                      note: 'Dove store-locator queries + retailer "in stock at this store" lookups - leading indicator for in-store conversion.' },
+                    { signal: 'Subscription / auto-replenish signups (Amazon S&S, Target+)',
+                      exposed_lift_pct: 18.6, control_lift_pct:  0.9, delta_pp: 17.7,
+                      note: 'Subscribe & Save / auto-replenish on Dove SKUs - the highest-LTV downstream behavior the campaign can claim.' },
+                    { signal: 'Repeat engagement (multi-week return to brand surfaces)',
+                      exposed_lift_pct: 34.1, control_lift_pct:  1.7, delta_pp: 32.4,
+                      note: 'Users who returned to a Dove brand surface in ≥2 of the 4 weeks post-flight - the sticky-attention metric premium CPMs are paid against.' },
+                    { signal: 'Cart abandonment (lower is better - abandonment DROPPED)',
+                      exposed_lift_pct: -17.9, control_lift_pct:  0.4, delta_pp: -18.3,
+                      note: 'Abandonment rate on Dove SKU carts FELL 17.9 percentage points in the exposed cohort - the creative reduced consideration-stage friction.' }
+                ],
+                decay_chart: {
+                    label: 'Incremental brand-search lift, exposed vs. matched control',
+                    points: [
+                        { window: '1d',  lift_pct: 18.4 },
+                        { window: '3d',  lift_pct: 28.7 },
+                        { window: '7d',  lift_pct: 41.2 },
+                        { window: '10d', lift_pct: 46.1 },
+                        { window: '14d', lift_pct: 47.6 },
+                        { window: '21d', lift_pct: 43.8 },
+                        { window: '30d', lift_pct: 38.7 },
+                        { window: '45d', lift_pct: 31.4 },
+                        { window: '60d', lift_pct: 24.3 }
+                    ]
+                },
+                pitch: 'Netflix today sells exposure. With Crosswalk, Netflix sold Dove an OUTCOME: +47.6% brand-search lift, +71.4% dove.com visits, +28.4% purchase-proxy lift, -17.9pp cart abandonment - all measured against a matched control cohort with identical demographics, viewing, and pre-flight baseline. Run this framework against every advertiser meeting and CPMs stop being "negotiated" and start being "earned." Performance dollars follow.'
+            },
+
+            // ── PULL 8 · INCREMENTALITY & MATCHED-CONTROL STUDY DESIGN ──
+            nflx_incrementality: {
+                enabled: true,
+                title: 'Incrementality & matched-control study design',
+                subtitle: 'The methodology that turns "your ad reached likely buyers" into "your ad created measurable incremental action." Matched-cohort design isolates the CAUSAL lift - the part of the behavioral movement that would NOT have happened without exposure. This is the methodology that justifies CPM expansion.',
+                question: 'Can Netflix prove that ads changed behavior, not just reached people who were already going to act?',
+                method_bullets: [
+                    'Exposed cohort: ad-tier viewers who saw ≥1 in-show impression of the campaign creative',
+                    'Control cohort: behaviorally-similar Netflix HHs that were NOT exposed to the campaign',
+                    'Matched on: pre-flight category interest, brand familiarity, demographic profile, prior competitor behavior, Netflix tenure, ad-tier vs. paid tier, geo, HHI',
+                    'Lift = (exposed-cohort post-flight behavior) − (control-cohort post-flight behavior), measured as a percentage delta vs. each cohort\'s OWN pre-flight baseline',
+                    'Statistical significance via paired-difference test with bootstrapped CIs across 1,000 resamples of the matched pairs'
+                ],
+                pipeline: [
+                    { stage: 'Total U.S. Netflix HHs',         value: 80100000, label: 'panel-projected base' },
+                    { stage: 'Ad-tier eligible HHs',            value: 32700000, label: 'ad-supported plan, opted-in measurement' },
+                    { stage: 'Reached by campaign',             value: 14200000, label: '≥1 in-show ad impression on the flight' },
+                    { stage: 'Exposed cohort (analysis-ready)', value: 14200000, label: 'final exposed set after invalid-traffic exclusion' },
+                    { stage: 'Matched control cohort',          value: 14200000, label: '1:1 nearest-neighbor match on 8 variables' }
+                ],
+                balance: [
+                    { variable: 'Premium-beauty category interest (90d)',    exposed: 28.7, control: 27.4, smd: 0.029, balanced: true },
+                    { variable: 'Brand familiarity (prior 90d touch)',       exposed: 41.2, control: 40.6, smd: 0.012, balanced: true },
+                    { variable: 'Competitor shopping behavior',              exposed: 36.4, control: 35.8, smd: 0.013, balanced: true },
+                    { variable: 'Age band (median, years)',                  exposed: 38.0, control: 38.0, smd: 0.000, balanced: true },
+                    { variable: 'Female composition (%)',                    exposed: 67.4, control: 67.1, smd: 0.006, balanced: true },
+                    { variable: 'HHI > $75K (%)',                            exposed: 52.3, control: 52.0, smd: 0.006, balanced: true },
+                    { variable: 'Netflix tenure (avg years)',                exposed:  4.7, control:  4.6, smd: 0.043, balanced: true },
+                    { variable: 'Premium-content viewing (Bridgerton-like)', exposed: 47.3, control: 46.9, smd: 0.008, balanced: true }
+                ],
+                balance_note: 'All 8 matching variables are within the SMD < 0.10 threshold considered well-balanced in causal-inference literature - meaning the exposed and control cohorts are statistically indistinguishable on the variables we matched on. Any behavioral delta post-flight is therefore attributable to ad exposure, not to baseline differences.',
+
+                studies: [
+                    {
+                        id: 'dove_bridgerton',
+                        label: 'Dove × Bridgerton S4',
+                        category: 'Beauty / CPG',
+                        flight: '2026-05-29 → 2026-06-19',
+                        cohort_size: 14200000,
+                        creative: 'Regency-glow / "real skin softness" 30s spot',
+                        post_window: '30d',
+                        metrics: [
+                            { metric: 'Brand-search lift',         exposed_pct: 47.6, control_pct:  3.4, p_sig: 'p < 0.001' },
+                            { metric: 'Site-visitation lift',      exposed_pct: 71.4, control_pct:  4.2, p_sig: 'p < 0.001' },
+                            { metric: 'Category movement',         exposed_pct: 22.8, control_pct:  2.1, p_sig: 'p < 0.001' },
+                            { metric: 'Competitor switching',      exposed_pct: -8.3, control_pct:  1.1, p_sig: 'p < 0.01'  },
+                            { metric: 'Purchase proxy',            exposed_pct: 28.4, control_pct:  1.6, p_sig: 'p < 0.001' },
+                            { metric: 'Time-to-action (days)',     exposed_pct: -34.7, control_pct: -2.3, p_sig: 'p < 0.001' },
+                            { metric: 'Repeat engagement',         exposed_pct: 34.1, control_pct:  1.7, p_sig: 'p < 0.001' },
+                            { metric: 'Conversion acceleration',   exposed_pct: 41.2, control_pct:  2.8, p_sig: 'p < 0.001' },
+                            { metric: 'Basket / category expansion', exposed_pct: 18.6, control_pct:  1.4, p_sig: 'p < 0.01'  }
+                        ],
+                        headline_metric: 'Brand-search lift',
+                        cpm_uplift_pct: 38.4,
+                        win_summary: 'The cleanest single-campaign proof. Brand-search lift, purchase proxy, and time-to-action all show >10x the lift of the matched-control baseline, with paired-difference significance below the p=0.001 threshold across the 30d window.'
+                    },
+                    {
+                        id: 'toyota_squidgame',
+                        label: 'Toyota RAV4 × Squid Game S3',
+                        category: 'Auto - consideration',
+                        flight: '2026-07-12 → 2026-08-02',
+                        cohort_size: 11800000,
+                        creative: '60s "Built for the unexpected" Hybrid hero spot',
+                        post_window: '30d',
+                        metrics: [
+                            { metric: 'Brand-search lift',          exposed_pct: 31.2, control_pct:  2.7, p_sig: 'p < 0.001' },
+                            { metric: 'Site-visitation lift',       exposed_pct: 44.8, control_pct:  3.6, p_sig: 'p < 0.001' },
+                            { metric: 'Category movement',          exposed_pct: 27.4, control_pct:  3.1, p_sig: 'p < 0.001' },
+                            { metric: 'Competitor switching',       exposed_pct: -12.6, control_pct: 1.7, p_sig: 'p < 0.001' },
+                            { metric: 'Purchase proxy (dealer-locator + build & price)', exposed_pct: 52.8, control_pct: 2.4, p_sig: 'p < 0.001' },
+                            { metric: 'Time-to-action (days)',      exposed_pct: -28.6, control_pct: -1.4, p_sig: 'p < 0.001' },
+                            { metric: 'Repeat engagement',          exposed_pct: 38.7, control_pct:  2.1, p_sig: 'p < 0.001' },
+                            { metric: 'Conversion acceleration',    exposed_pct: 24.3, control_pct:  1.8, p_sig: 'p < 0.001' },
+                            { metric: 'Basket / category expansion (trim upsell visits)', exposed_pct: 31.8, control_pct: 2.6, p_sig: 'p < 0.001' }
+                        ],
+                        headline_metric: 'Purchase proxy (dealer-locator + build & price)',
+                        cpm_uplift_pct: 47.2,
+                        win_summary: 'Auto is a high-CPM, low-baseline-lift category - which makes the +52.8% incremental purchase-proxy lift especially defensible. Dealer-locator visits and Toyota Build-and-Price configurator sessions on the exposed cohort indexed 1.53x the cohort\'s own pre-flight baseline vs. +2.4% in control.'
+                    },
+                    {
+                        id: 'capone_wednesday',
+                        label: 'Capital One Venture × Wednesday S2',
+                        category: 'Financial services',
+                        flight: '2026-09-04 → 2026-09-25',
+                        cohort_size: 16400000,
+                        creative: 'Aubrey Plaza-fronted 30s "What\'s in your wallet?" extension',
+                        post_window: '30d',
+                        metrics: [
+                            { metric: 'Brand-search lift',         exposed_pct: 38.7, control_pct:  3.1, p_sig: 'p < 0.001' },
+                            { metric: 'Site-visitation lift',      exposed_pct: 51.4, control_pct:  4.0, p_sig: 'p < 0.001' },
+                            { metric: 'Category movement',         exposed_pct: 24.1, control_pct:  2.4, p_sig: 'p < 0.001' },
+                            { metric: 'Competitor switching',      exposed_pct: -9.7, control_pct:  1.3, p_sig: 'p < 0.01'  },
+                            { metric: 'Purchase proxy (application start + pre-approval clicks)', exposed_pct: 34.6, control_pct: 1.9, p_sig: 'p < 0.001' },
+                            { metric: 'Time-to-action (days)',     exposed_pct: -31.2, control_pct: -1.8, p_sig: 'p < 0.001' },
+                            { metric: 'Repeat engagement',         exposed_pct: 28.4, control_pct:  1.6, p_sig: 'p < 0.001' },
+                            { metric: 'Conversion acceleration',   exposed_pct: 36.8, control_pct:  2.3, p_sig: 'p < 0.001' },
+                            { metric: 'Basket / category expansion (cross-card consideration)', exposed_pct: 21.4, control_pct: 1.6, p_sig: 'p < 0.01' }
+                        ],
+                        headline_metric: 'Purchase proxy (application start + pre-approval clicks)',
+                        cpm_uplift_pct: 52.6,
+                        win_summary: 'Financial services is the highest-CPM-elasticity category - advertisers pay premiums for proven mid-funnel movement. The +34.6% lift on application-start traffic, with paired significance p<0.001, is the kind of evidence that converts brand budget into performance budget.'
+                    },
+                    {
+                        id: 'booking_emily',
+                        label: 'Booking.com × Emily in Paris S5',
+                        category: 'Travel',
+                        flight: '2026-10-17 → 2026-11-07',
+                        cohort_size: 12700000,
+                        creative: '20s "Plan your own Paris" destination spot',
+                        post_window: '60d',
+                        metrics: [
+                            { metric: 'Brand-search lift',           exposed_pct: 42.1, control_pct:  3.4, p_sig: 'p < 0.001' },
+                            { metric: 'Site-visitation lift',        exposed_pct: 58.7, control_pct:  4.2, p_sig: 'p < 0.001' },
+                            { metric: 'Category movement (destination search)', exposed_pct: 31.8, control_pct: 2.6, p_sig: 'p < 0.001' },
+                            { metric: 'Competitor switching (Expedia / Airbnb)', exposed_pct: -11.4, control_pct: 1.4, p_sig: 'p < 0.001' },
+                            { metric: 'Purchase proxy (date-picker + property-detail views)', exposed_pct: 47.3, control_pct: 2.1, p_sig: 'p < 0.001' },
+                            { metric: 'Time-to-action (days)',       exposed_pct: -23.6, control_pct: -1.2, p_sig: 'p < 0.001' },
+                            { metric: 'Repeat engagement',           exposed_pct: 36.4, control_pct:  1.8, p_sig: 'p < 0.001' },
+                            { metric: 'Conversion acceleration',     exposed_pct: 28.7, control_pct:  2.0, p_sig: 'p < 0.001' },
+                            { metric: 'Basket / category expansion (multi-city + activities)', exposed_pct: 24.8, control_pct: 1.7, p_sig: 'p < 0.01' }
+                        ],
+                        headline_metric: 'Purchase proxy (date-picker + property-detail views)',
+                        cpm_uplift_pct: 44.1,
+                        win_summary: 'Travel has the longest consideration window, which makes the 60d post-flight design essential. The +47.3% lift on Booking.com date-picker and property-detail sessions held through day 60 - proof the cultural pull of the show extends the campaign\'s tail well beyond the flight.'
+                    }
+                ],
+                pitch: 'This is the methodology behind every lift number Netflix + Crosswalk would put in front of an advertiser. The matched-control design rules out the "they were going to buy anyway" objection by construction - because the control cohort is, by every measurable variable, the same audience MINUS the exposure. Whatever the exposed cohort does that the control cohort does NOT do is the incremental impact of the buy. That is the difference between "your ad reached likely buyers" and "your ad created measurable incremental action." That is CPM expansion. And it is repeatable for every advertiser, every show, every quarter.'
+            },
+
+            // ── PULL 9 · NETFLIX AUDIENCE QUALITY INDEX ──
+            nflx_aqi: {
+                enabled: true,
+                title: 'Netflix Audience Quality Index (AQI)',
+                subtitle: 'Not all Netflix viewers are equal. The AQI composites 12 off-Netflix behavioral signals into a 0-100 score, packages the audience into 10 commercially-priceable segments, and recommends a CPM band for each. The rate card that lets Netflix sell quality, not just reach.',
+                question: 'Which Netflix audience segments are most commercially valuable - and what CPM band do they deserve?',
+                method_bullets: [
+                    'Score range: 0-100 composite per Netflix household, refreshed every 30 days',
+                    'Tiers: Diamond (90-100) · Platinum (80-89) · Gold (70-79) · Silver (60-69) · Bronze (<60)',
+                    '12 weighted off-Netflix behavioral signals - none derivable from Netflix\'s own first-party data',
+                    'Signal weights tuned against historical advertiser-outcome data (purchase proxy, retail-visit lift, brand-search lift)',
+                    'Segments are non-mutually-exclusive packs - a single HH can sit in multiple packs at different scores'
+                ],
+                signals: [
+                    { signal: 'Affluence proxy (HHI, premium-retail traffic)',  weight_pct: 12, source_hint: 'panel-projected from premium-retail browsing + ZIP-anchored HHI' },
+                    { signal: 'Product category engagement (depth × breadth)',  weight_pct: 10, source_hint: 'count of distinct retail categories researched in 30d' },
+                    { signal: 'Purchase frequency (events per 30d)',            weight_pct:  9, source_hint: 'order-confirmation / receipt-page traffic across retailers' },
+                    { signal: 'Subscription intensity (active paid SaaS / DTC)',weight_pct:  8, source_hint: 'detected billing portals + recurring brand-site visits' },
+                    { signal: 'Travel behavior (booking + research velocity)',  weight_pct:  7, source_hint: 'OTA + airline + hotel + cruise + destination-search density' },
+                    { signal: 'Luxury behavior (≥$1K-AUR brand surfaces)',     weight_pct:  9, source_hint: 'designer / jewelry / premium-auto / private-bank surfaces' },
+                    { signal: 'Brand switching (cross-brand consideration)',    weight_pct:  9, source_hint: 'distinct competing brands visited within same category in 30d' },
+                    { signal: 'Early-adopter behavior (pre-launch + waitlist)', weight_pct:  8, source_hint: 'pre-order + waitlist + first-day product-page visits' },
+                    { signal: 'Household composition (HH-level cohabitation)',  weight_pct:  7, source_hint: 'multi-device co-presence + family-tier subscription mix' },
+                    { signal: 'Media consumption breadth',                      weight_pct:  8, source_hint: 'distinct content domains visited per week' },
+                    { signal: 'Competitor streaming usage',                     weight_pct:  7, source_hint: 'detected SVOD homepage + login-portal visits' },
+                    { signal: 'Loyalty / churn patterns',                       weight_pct:  6, source_hint: 'cancellation funnel exposure + repeat-purchase persistence' }
+                ],
+                tiers: [
+                    { name: 'Diamond',  range: '90-100', share_pct:  4.8, hh_count:  3840000, cpm_band: '+50 to +75%',  color: '#a78bfa' },
+                    { name: 'Platinum', range: '80-89',  share_pct: 12.4, hh_count:  9920000, cpm_band: '+35 to +50%',  color: '#fbbf24' },
+                    { name: 'Gold',     range: '70-79',  share_pct: 29.1, hh_count: 23300000, cpm_band: '+20 to +35%',  color: '#f59e0b' },
+                    { name: 'Silver',   range: '60-69',  share_pct: 30.6, hh_count: 24500000, cpm_band: 'baseline',     color: '#94a3b8' },
+                    { name: 'Bronze',   range: '<60',    share_pct: 23.1, hh_count: 18500000, cpm_band: '-10 to -20%',  color: '#64748b' }
+                ],
+                segments: [
+                    {
+                        id: 'premium_travel',
+                        name: 'Premium Travel Planners',
+                        tier: 'Diamond',
+                        aqi_score: 92,
+                        hh_count: 4800000,
+                        cpm_uplift_pct: 57,
+                        lead_advertisers: ['Marriott Bonvoy / Hilton Honors', 'Delta One / United Polaris', 'Amex Platinum / Chase Sapphire Reserve', 'Booking.com / Expedia / Virtuoso'],
+                        viewing_pattern: 'Travel docs (Drive to Survive, Down to Earth), prestige drama (The Crown, Bridgerton), foreign-language film, food/wine docs.',
+                        proof_signal: 'Average 4.2 OTA / airline / hotel sessions per week, with 2.7x the genpop Netflix rate of paid-cabin + suite-tier searches.',
+                        signal_index: [
+                            { signal: 'Affluence',          index: 168 }, { signal: 'Category engagement', index: 134 },
+                            { signal: 'Purchase frequency', index: 112 }, { signal: 'Subscription intensity', index: 148 },
+                            { signal: 'Travel behavior',    index: 247 }, { signal: 'Luxury behavior',     index: 192 },
+                            { signal: 'Brand switching',    index:  87 }, { signal: 'Early adopter',       index: 121 },
+                            { signal: 'HH composition',     index:  94 }, { signal: 'Media breadth',       index: 138 },
+                            { signal: 'Competitor SVOD',    index: 116 }, { signal: 'Loyalty patterns',    index: 142 }
+                        ]
+                    },
+                    {
+                        id: 'luxury_considerers',
+                        name: 'Luxury Considerers',
+                        tier: 'Platinum',
+                        aqi_score: 89,
+                        hh_count: 3600000,
+                        cpm_uplift_pct: 52,
+                        lead_advertisers: ['LVMH (Louis Vuitton / Dior / Tiffany)', 'Cartier / Van Cleef', 'Mercedes EQ / BMW i / Genesis', 'Rolex / Patek dealers + grey-market'],
+                        viewing_pattern: 'Bridgerton, The Crown, prestige drama, fashion docs (House of Gucci), red-carpet event coverage.',
+                        proof_signal: '2.4x genpop Netflix rate of designer-brand site visits; 38% touched a $5K+ AUR product-page in the last 30d.',
+                        signal_index: [
+                            { signal: 'Affluence',          index: 184 }, { signal: 'Category engagement', index: 142 },
+                            { signal: 'Purchase frequency', index:  96 }, { signal: 'Subscription intensity', index: 124 },
+                            { signal: 'Travel behavior',    index: 156 }, { signal: 'Luxury behavior',     index: 268 },
+                            { signal: 'Brand switching',    index: 134 }, { signal: 'Early adopter',       index: 118 },
+                            { signal: 'HH composition',     index:  91 }, { signal: 'Media breadth',       index: 122 },
+                            { signal: 'Competitor SVOD',    index: 108 }, { signal: 'Loyalty patterns',    index: 137 }
+                        ]
+                    },
+                    {
+                        id: 'auto_switchers',
+                        name: 'Auto Switchers',
+                        tier: 'Platinum',
+                        aqi_score: 81,
+                        hh_count: 5200000,
+                        cpm_uplift_pct: 44,
+                        lead_advertisers: ['Toyota / Honda / Hyundai (mainstream)', 'Mercedes / BMW / Lexus (premium)', 'Progressive / GEICO / Allstate (insurance)', 'CarMax / Carvana / Autotrader'],
+                        viewing_pattern: 'Action-thriller (Reacher, The Night Agent), sports docs (Drive to Survive, Quarterback), auto-adjacent reality.',
+                        proof_signal: 'Visited 3+ distinct auto-OEM sites in the last 30d. 28% touched a Build-and-Price configurator twice.',
+                        signal_index: [
+                            { signal: 'Affluence',          index: 124 }, { signal: 'Category engagement', index: 148 },
+                            { signal: 'Purchase frequency', index: 102 }, { signal: 'Subscription intensity', index: 108 },
+                            { signal: 'Travel behavior',    index: 112 }, { signal: 'Luxury behavior',     index: 121 },
+                            { signal: 'Brand switching',    index: 187 }, { signal: 'Early adopter',       index: 116 },
+                            { signal: 'HH composition',     index: 138 }, { signal: 'Media breadth',       index: 114 },
+                            { signal: 'Competitor SVOD',    index: 102 }, { signal: 'Loyalty patterns',    index:  84 }
+                        ]
+                    },
+                    {
+                        id: 'new_parents',
+                        name: 'New Parents',
+                        tier: 'Gold',
+                        aqi_score: 78,
+                        hh_count: 6100000,
+                        cpm_uplift_pct: 38,
+                        lead_advertisers: ['Pampers / Huggies / Kirkland', 'Target Baby / buybuy BABY / Babylist', 'Verizon / T-Mobile (family plans)', 'Instacart / Walmart+ / Amazon Family'],
+                        viewing_pattern: 'Kids/family programming, comedy specials, shorter sessions, late-night co-viewing.',
+                        proof_signal: '4.1x genpop rate of diaper-brand + baby-registry site visits; 36% subscribed to a new auto-replenish SKU in 60d.',
+                        signal_index: [
+                            { signal: 'Affluence',          index: 112 }, { signal: 'Category engagement', index: 138 },
+                            { signal: 'Purchase frequency', index: 168 }, { signal: 'Subscription intensity', index: 154 },
+                            { signal: 'Travel behavior',    index:  82 }, { signal: 'Luxury behavior',     index:  74 },
+                            { signal: 'Brand switching',    index: 142 }, { signal: 'Early adopter',       index: 121 },
+                            { signal: 'HH composition',     index: 218 }, { signal: 'Media breadth',       index: 106 },
+                            { signal: 'Competitor SVOD',    index: 124 }, { signal: 'Loyalty patterns',    index: 118 }
+                        ]
+                    },
+                    {
+                        id: 'beauty_buyers',
+                        name: 'Beauty Buyers',
+                        tier: 'Gold',
+                        aqi_score: 76,
+                        hh_count: 9400000,
+                        cpm_uplift_pct: 35,
+                        lead_advertisers: ['L\'Oréal / Estée Lauder / Charlotte Tilbury', 'Sephora / Ulta / Bluemercury', 'Glossier / Rare / Fenty / Tatcha (DTC)', 'CeraVe / La Roche-Posay / Dove'],
+                        viewing_pattern: 'Bridgerton, Emily in Paris, reality TV (Love is Blind, Selling Sunset), creator-adjacent content.',
+                        proof_signal: '5.7 beauty-brand site sessions per month, 2.1x the genpop. 41% visited a TikTok Shop beauty PDP in 30d.',
+                        signal_index: [
+                            { signal: 'Affluence',          index: 118 }, { signal: 'Category engagement', index: 152 },
+                            { signal: 'Purchase frequency', index: 164 }, { signal: 'Subscription intensity', index: 138 },
+                            { signal: 'Travel behavior',    index: 104 }, { signal: 'Luxury behavior',     index: 142 },
+                            { signal: 'Brand switching',    index: 178 }, { signal: 'Early adopter',       index: 148 },
+                            { signal: 'HH composition',     index: 102 }, { signal: 'Media breadth',       index: 134 },
+                            { signal: 'Competitor SVOD',    index: 114 }, { signal: 'Loyalty patterns',    index:  92 }
+                        ]
+                    },
+                    {
+                        id: 'tech_buyers',
+                        name: 'High-Intent Tech Buyers',
+                        tier: 'Platinum',
+                        aqi_score: 84,
+                        hh_count: 4200000,
+                        cpm_uplift_pct: 47,
+                        lead_advertisers: ['Apple / Samsung / Google (devices)', 'Verizon / T-Mobile / AT&T (5G + handset)', 'Nvidia / AMD / Intel (component-tier)', 'Sonos / Bose / Sony (premium audio)'],
+                        viewing_pattern: 'Sci-fi (Stranger Things, 3 Body Problem), tech docs (The Social Dilemma), competitive-gaming content.',
+                        proof_signal: '2.8x genpop rate of pre-order + launch-day product-page visits. 51% pre-ordered ≥1 new device in the last 12 months.',
+                        signal_index: [
+                            { signal: 'Affluence',          index: 142 }, { signal: 'Category engagement', index: 168 },
+                            { signal: 'Purchase frequency', index: 124 }, { signal: 'Subscription intensity', index: 162 },
+                            { signal: 'Travel behavior',    index: 108 }, { signal: 'Luxury behavior',     index: 116 },
+                            { signal: 'Brand switching',    index: 121 }, { signal: 'Early adopter',       index: 234 },
+                            { signal: 'HH composition',     index: 102 }, { signal: 'Media breadth',       index: 146 },
+                            { signal: 'Competitor SVOD',    index: 138 }, { signal: 'Loyalty patterns',    index: 112 }
+                        ]
+                    },
+                    {
+                        id: 'streaming_superfans',
+                        name: 'Streaming Superfans',
+                        tier: 'Gold',
+                        aqi_score: 73,
+                        hh_count: 8700000,
+                        cpm_uplift_pct: 31,
+                        lead_advertisers: ['Hulu / Disney+ / Max (competitive defense)', 'PlayStation / Xbox / Nintendo', 'Spotify / Apple Music / YouTube Premium', 'DoorDash / Uber Eats (couch-commerce)'],
+                        viewing_pattern: 'Highest weekly hours on platform. Broad genre coverage; high overlap with every other tier. The packed-prime cohort.',
+                        proof_signal: 'Average 4.8 active paid SVODs per HH. 71% logged into ≥2 competing SVODs in the last 7 days.',
+                        signal_index: [
+                            { signal: 'Affluence',          index: 108 }, { signal: 'Category engagement', index: 121 },
+                            { signal: 'Purchase frequency', index: 118 }, { signal: 'Subscription intensity', index: 198 },
+                            { signal: 'Travel behavior',    index:  98 }, { signal: 'Luxury behavior',     index:  92 },
+                            { signal: 'Brand switching',    index: 118 }, { signal: 'Early adopter',       index: 124 },
+                            { signal: 'HH composition',     index: 108 }, { signal: 'Media breadth',       index: 182 },
+                            { signal: 'Competitor SVOD',    index: 234 }, { signal: 'Loyalty patterns',    index:  84 }
+                        ]
+                    },
+                    {
+                        id: 'sports_event',
+                        name: 'Sports / Event-Driven Viewers',
+                        tier: 'Gold',
+                        aqi_score: 77,
+                        hh_count: 7300000,
+                        cpm_uplift_pct: 37,
+                        lead_advertisers: ['McDonald\'s / Burger King / Taco Bell (QSR)', 'Bud Light / Modelo / Michelob', 'DraftKings / FanDuel / BetMGM', 'Toyota / Ford / Chevy (sports-anchored)'],
+                        viewing_pattern: 'Live NFL Sundays, F1, boxing/UFC events, sports docs (Quarterback, F1: Drive to Survive, Untold).',
+                        proof_signal: '3.4x genpop rate of sportsbook + ticketing-site sessions on game days. 47% have a sportsbook account.',
+                        signal_index: [
+                            { signal: 'Affluence',          index: 116 }, { signal: 'Category engagement', index: 134 },
+                            { signal: 'Purchase frequency', index: 142 }, { signal: 'Subscription intensity', index: 124 },
+                            { signal: 'Travel behavior',    index: 121 }, { signal: 'Luxury behavior',     index: 102 },
+                            { signal: 'Brand switching',    index: 158 }, { signal: 'Early adopter',       index: 118 },
+                            { signal: 'HH composition',     index: 142 }, { signal: 'Media breadth',       index: 168 },
+                            { signal: 'Competitor SVOD',    index: 132 }, { signal: 'Loyalty patterns',    index:  98 }
+                        ]
+                    },
+                    {
+                        id: 'genz_migrators',
+                        name: 'Gen Z Social-to-Streaming Migrators',
+                        tier: 'Gold',
+                        aqi_score: 71,
+                        hh_count: 11200000,
+                        cpm_uplift_pct: 28,
+                        lead_advertisers: ['Glossier / Rare / Fenty / Topicals', 'SHEIN / PrettyLittleThing / Lulus', 'Cash App / Chime / Robinhood', 'Chipotle / Shake Shack / Sweetgreen'],
+                        viewing_pattern: 'Reality (Love is Blind, Too Hot to Handle), K-content, comedy specials, TikTok-virals that move to Netflix.',
+                        proof_signal: '67% have a TikTok Shop purchase in the last 90d. 2.4x genpop rate of "trending on TikTok" → "watch on Netflix" cross-platform journey.',
+                        signal_index: [
+                            { signal: 'Affluence',          index:  92 }, { signal: 'Category engagement', index: 138 },
+                            { signal: 'Purchase frequency', index: 154 }, { signal: 'Subscription intensity', index: 118 },
+                            { signal: 'Travel behavior',    index: 102 }, { signal: 'Luxury behavior',     index:  87 },
+                            { signal: 'Brand switching',    index: 198 }, { signal: 'Early adopter',       index: 184 },
+                            { signal: 'HH composition',     index:  82 }, { signal: 'Media breadth',       index: 212 },
+                            { signal: 'Competitor SVOD',    index: 142 }, { signal: 'Loyalty patterns',    index:  72 }
+                        ]
+                    },
+                    {
+                        id: 'multicultural_growth',
+                        name: 'Multicultural Growth Audiences',
+                        tier: 'Gold',
+                        aqi_score: 79,
+                        hh_count: 9800000,
+                        cpm_uplift_pct: 41,
+                        lead_advertisers: ['T-Mobile / Verizon (multicultural-anchored)', 'Wells Fargo / Bank of America (financial inclusion)', 'L\'Oréal Multicultural Beauty / Mielle / Pattern', 'McDonald\'s / Popeyes / Chick-fil-A (multicultural creative)'],
+                        viewing_pattern: 'K-content (Squid Game, Physical: 100), Spanish-language drama, telenovela-adjacent, multicultural comedy.',
+                        proof_signal: '2.6x genpop rate of international-content + multicultural-DTC site visits. 38% are early adopters of new fintech apps.',
+                        signal_index: [
+                            { signal: 'Affluence',          index: 108 }, { signal: 'Category engagement', index: 134 },
+                            { signal: 'Purchase frequency', index: 158 }, { signal: 'Subscription intensity', index: 132 },
+                            { signal: 'Travel behavior',    index: 124 }, { signal: 'Luxury behavior',     index: 112 },
+                            { signal: 'Brand switching',    index: 168 }, { signal: 'Early adopter',       index: 152 },
+                            { signal: 'HH composition',     index: 174 }, { signal: 'Media breadth',       index: 158 },
+                            { signal: 'Competitor SVOD',    index: 121 }, { signal: 'Loyalty patterns',    index:  94 }
+                        ]
+                    }
+                ],
+                pitch: 'Netflix today sells reach. With the AQI, Netflix sells a rate card. 10 commercially-priceable audience packs across 70.3M Diamond + Platinum + Gold HHs, each with a defensible composite score, a brand-anchored proof signal, and a CPM band that maps to demonstrated audience quality. Higher quality + better packaging = higher CPMs. This is how Netflix turns "we have great inventory" into "we have a priced rate card for every advertiser in every category."'
             }
         };
 
@@ -56991,6 +57650,1092 @@
 
             paintWindowTabs();
             paint();
+        }
+
+        // ── PULL 7 · PRE/POST AD ATTRIBUTION (Dove × Bridgerton S4)
+        // Case-study card. Reusable framework: any brand, any show.
+        // Methodology: exposed cohort vs. matched-control cohort,
+        // delta on 12 behavioral signals across 1/7/14/30/60d windows,
+        // PLUS a 30d pre-flight baseline that proves the lift is
+        // incremental and not just a baseline category effect.
+        function renderJourneyIqNflxPrePost(p) {
+            var card = document.getElementById('jiqNflxPrePostCard');
+            if (!card) return;
+            var data = (p && p.enabled !== false && p.campaign && p.windows) ? p : _JIQ_NETFLIX_DATA.nflx_prepost_attribution;
+            if (!data || data.enabled === false) { card.style.display = 'none'; return; }
+            _jiqShowNflxCard('jiqNflxPrePostCard');
+
+            var subEl = document.getElementById('jiqNflxPrePostSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+
+            // Campaign header strip - 6-tile compact KPI band.
+            var campEl = document.getElementById('jiqNflxPrePostCampaign');
+            if (campEl) {
+                var c = data.campaign || {};
+                var rowTile = function(label, value) {
+                    return '<div style="display:flex; flex-direction:column; gap:0.15rem;">'
+                         +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">' + _jiqEsc(label) + '</div>'
+                         +   '<div style="font-size:0.85rem; font-weight:700;">' + _jiqEsc(value) + '</div>'
+                         + '</div>';
+                };
+                campEl.innerHTML = ''
+                    + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:0.65rem;">'
+                    +   rowTile('Brand',           c.brand           || '-')
+                    +   rowTile('Show',            c.show            || '-')
+                    +   rowTile('Flight',          c.flight_dates    || '-')
+                    +   rowTile('Format',          c.ad_format       || '-')
+                    +   rowTile('Exposed cohort',  _jiqFmt(c.exposed_cohort || 0) + ' HHs')
+                    +   rowTile('Matched control', _jiqFmt(c.control_cohort || 0) + ' HHs')
+                    + '</div>'
+                    + '<div style="margin-top:0.55rem; padding-top:0.55rem; border-top:1px dashed rgba(255,255,255,0.10);'
+                    +              ' font-size:0.72rem; color:var(--text-secondary); line-height:1.5;">'
+                    +   '<strong style="color:var(--text-primary);">Creative:</strong> ' + _jiqEsc(c.creative || '-') + '. '
+                    +   '<strong style="color:var(--text-primary);">Placement:</strong> ' + _jiqEsc(c.placement || '-') + '. '
+                    +   '<strong style="color:var(--text-primary);">Avg. frequency:</strong> ' + (c.creative_freq || 0).toFixed(1) + 'x · '
+                    +   '<strong style="color:var(--text-primary);">Gross reach:</strong> ' + (c.gross_reach_pct || 0).toFixed(1) + '% of ad-tier HHs. '
+                    +   '<strong style="color:var(--text-primary);">Matched on:</strong> ' + _jiqEsc(c.matched_on || '-') + '.'
+                    + '</div>';
+            }
+
+            // Window-pill state machine
+            var windowKeys  = ['1d', '7d', '14d', '30d', '60d'];
+            var activeWin   = data.window_default || '30d';
+
+            var topEl  = document.getElementById('jiqNflxPrePostTopline');
+            var decEl  = document.getElementById('jiqNflxPrePostDecay');
+            var tabsEl = document.getElementById('jiqNflxPrePostWindowTabs');
+
+            function paintWindowTabs() {
+                if (!tabsEl) return;
+                tabsEl.innerHTML = windowKeys.map(function(k) {
+                    var active = (k === activeWin);
+                    return '<button type="button" data-win="' + k + '" '
+                         + 'style="padding:0.32rem 0.7rem; border-radius:4px; cursor:pointer; '
+                         +        'font-size:0.7rem; font-weight:700; '
+                         +        'background:' + (active ? '#3b82f6' : 'rgba(255,255,255,0.05)') + '; '
+                         +        'color:' + (active ? '#ffffff' : 'var(--text-secondary)') + '; '
+                         +        'border:1px solid ' + (active ? '#3b82f6' : 'rgba(255,255,255,0.10)') + ';">'
+                         +   k
+                         + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(tabsEl.querySelectorAll('button'), function(btn) {
+                    btn.addEventListener('click', function onPrePostWindowChange() {
+                        activeWin = btn.getAttribute('data-win');
+                        paintWindowTabs();
+                        paintTopline();
+                    });
+                });
+            }
+
+            function paintTopline() {
+                if (!topEl) return;
+                var w = (data.windows || {})[activeWin] || {};
+                topEl.innerHTML = ''
+                    + _jiqTile('Brand-search lift',       (w.brand_search_lift_pct      || 0).toFixed(1) + '%',   'incremental vs. control')
+                    + _jiqTile('Dove.com visits lift',    (w.site_visits_lift_pct       || 0).toFixed(1) + '%',   'panel-projected sessions')
+                    + _jiqTile('Retail visits lift',      (w.retail_visits_lift_pct     || 0).toFixed(1) + '%',   'Target / CVS / Walgreens')
+                    + _jiqTile('Conversion-proxy lift',   (w.conversion_proxy_lift_pct  || 0).toFixed(1) + '%',   'receipt / thank-you traffic')
+                    + _jiqTile('Cart-abandonment delta',  (w.abandonment_delta_pp       || 0).toFixed(1) + 'pp',  'lower = better')
+                    + _jiqTile('Net incrementality',      (w.incrementality_pct         || 0).toFixed(1) + '%',   'isolated causal lift');
+            }
+
+            // PRE-baseline rows - exposed vs. control, plus an index
+            // value to show the cohort was well-targeted before a
+            // single ad ran.
+            var baseEl = document.getElementById('jiqNflxPrePostBaseline');
+            if (baseEl) {
+                var rows = data.pre_baseline || [];
+                baseEl.innerHTML = ''
+                    + '<div style="display:grid; grid-template-columns:minmax(0,2.2fr) repeat(3, minmax(80px,0.8fr)) minmax(0,2.4fr);'
+                    +              ' gap:0.5rem; padding:0.4rem 0.55rem; font-size:0.62rem; opacity:0.65;'
+                    +              ' text-transform:uppercase; letter-spacing:0.06em; border-bottom:1px solid rgba(255,255,255,0.08);">'
+                    +   '<div>Pre-flight signal (30d baseline)</div>'
+                    +   '<div style="text-align:right;">Exposed</div>'
+                    +   '<div style="text-align:right;">Control</div>'
+                    +   '<div style="text-align:right;">Index</div>'
+                    +   '<div>Methodology note</div>'
+                    + '</div>'
+                    + rows.map(function(r) {
+                        var idx     = r.index || 100;
+                        var idxBg   = (idx >= 110) ? 'rgba(34,197,94,0.18)' : (idx <= 95 ? 'rgba(248,113,113,0.18)' : 'rgba(255,255,255,0.06)');
+                        var idxFg   = (idx >= 110) ? '#86efac'              : (idx <= 95 ? '#fca5a5'              : 'var(--text-secondary)');
+                        return '<div style="display:grid; grid-template-columns:minmax(0,2.2fr) repeat(3, minmax(80px,0.8fr)) minmax(0,2.4fr);'
+                             +              ' gap:0.5rem; padding:0.45rem 0.55rem; border-bottom:1px solid rgba(255,255,255,0.04);">'
+                             +   '<div style="font-size:0.78rem; font-weight:600;">' + _jiqEsc(r.signal || '') + '</div>'
+                             +   '<div style="text-align:right; font-size:0.78rem; font-weight:700;">' + (r.exposed_pct || 0).toFixed(1) + '%</div>'
+                             +   '<div style="text-align:right; font-size:0.78rem; color:var(--text-secondary);">'  + (r.control_pct || 0).toFixed(1) + '%</div>'
+                             +   '<div style="text-align:right;">'
+                             +     '<span style="display:inline-block; padding:0.15rem 0.45rem; border-radius:4px; font-size:0.72rem; font-weight:700;'
+                             +                  ' background:' + idxBg + '; color:' + idxFg + ';">' + idx + '</span>'
+                             +   '</div>'
+                             +   '<div style="font-size:0.7rem; color:var(--text-secondary); line-height:1.45; font-style:italic;">' + _jiqEsc(r.note || '') + '</div>'
+                             + '</div>';
+                    }).join('');
+            }
+
+            // POST signals - exposed vs. control lift bars + delta
+            // pill. Sorted by delta so the biggest wins are at top.
+            var sigEl = document.getElementById('jiqNflxPrePostSignals');
+            if (sigEl) {
+                var sigs = (data.post_signals || []).slice().sort(function(a, b) {
+                    return Math.abs(b.delta_pp || 0) - Math.abs(a.delta_pp || 0);
+                });
+                var maxAbs = sigs.reduce(function(m, r) { return Math.max(m, Math.abs(r.exposed_lift_pct || 0), Math.abs(r.control_lift_pct || 0)); }, 0) || 1;
+                sigEl.innerHTML = ''
+                    + '<div style="display:grid; grid-template-columns:minmax(0,2.0fr) minmax(0,1.4fr) minmax(0,1.4fr) minmax(80px,0.7fr) minmax(0,2.2fr);'
+                    +              ' gap:0.55rem; padding:0.4rem 0.55rem; font-size:0.62rem; opacity:0.65;'
+                    +              ' text-transform:uppercase; letter-spacing:0.06em; border-bottom:1px solid rgba(255,255,255,0.08);">'
+                    +   '<div>Behavioral signal</div>'
+                    +   '<div>Exposed lift</div>'
+                    +   '<div>Control lift</div>'
+                    +   '<div style="text-align:right;">Net Δ</div>'
+                    +   '<div>What it proves</div>'
+                    + '</div>'
+                    + sigs.map(function(r) {
+                        var ex      = r.exposed_lift_pct || 0;
+                        var co      = r.control_lift_pct || 0;
+                        var delta   = r.delta_pp || (ex - co);
+                        var exColor = ex < 0 ? '#fca5a5' : '#60a5fa';
+                        var coColor = co < 0 ? '#fca5a5' : '#94a3b8';
+                        var dBg     = delta >= 0 ? 'rgba(34,197,94,0.22)' : 'rgba(248,113,113,0.22)';
+                        var dFg     = delta >= 0 ? '#86efac' : '#fca5a5';
+                        var dSign   = delta >= 0 ? '+' : '';
+                        var bar = function(val, color) {
+                            var w = Math.max(2, Math.min(100, (Math.abs(val) / maxAbs) * 100));
+                            return '<div style="display:flex; align-items:center; gap:0.4rem;">'
+                                 +   '<div style="flex:1; height:5px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden;">'
+                                 +     '<div style="width:' + w + '%; height:100%; background:' + color + ';"></div>'
+                                 +   '</div>'
+                                 +   '<div style="font-size:0.72rem; font-weight:700; color:' + color + '; min-width:42px; text-align:right;">'
+                                 +     (val < 0 ? '' : '+') + val.toFixed(1) + '%'
+                                 +   '</div>'
+                                 + '</div>';
+                        };
+                        return '<div style="display:grid; grid-template-columns:minmax(0,2.0fr) minmax(0,1.4fr) minmax(0,1.4fr) minmax(80px,0.7fr) minmax(0,2.2fr);'
+                             +              ' gap:0.55rem; padding:0.5rem 0.55rem; border-bottom:1px solid rgba(255,255,255,0.04);">'
+                             +   '<div style="font-size:0.78rem; font-weight:600;">' + _jiqEsc(r.signal || '') + '</div>'
+                             +   '<div>' + bar(ex, exColor) + '</div>'
+                             +   '<div>' + bar(co, coColor) + '</div>'
+                             +   '<div style="text-align:right;">'
+                             +     '<span style="display:inline-block; padding:0.18rem 0.5rem; border-radius:4px; font-size:0.72rem; font-weight:800;'
+                             +                  ' background:' + dBg + '; color:' + dFg + ';">' + dSign + delta.toFixed(1) + 'pp</span>'
+                             +   '</div>'
+                             +   '<div style="font-size:0.7rem; color:var(--text-secondary); line-height:1.45; font-style:italic;">' + _jiqEsc(r.note || '') + '</div>'
+                             + '</div>';
+                    }).join('');
+            }
+
+            // Lift-decay timeline - vertical-bar minichart across the
+            // post-exposure window so reps can show "the lift sticks."
+            function paintDecay() {
+                if (!decEl) return;
+                var dc = data.decay_chart || {};
+                var pts = dc.points || [];
+                var maxLift = pts.reduce(function(m, r) { return Math.max(m, r.lift_pct || 0); }, 0) || 1;
+                decEl.innerHTML = ''
+                    + '<div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:0.5rem;">' + _jiqEsc(dc.label || '') + '</div>'
+                    + '<div style="display:grid; grid-template-columns:repeat(' + pts.length + ', minmax(0,1fr)); gap:0.4rem; align-items:end; min-height:100px;">'
+                    +   pts.map(function(pt) {
+                            var h = Math.max(6, (pt.lift_pct / maxLift) * 92);
+                            var peak = (pt.lift_pct === maxLift);
+                            return '<div style="display:flex; flex-direction:column; align-items:center; gap:0.25rem;">'
+                                 +   '<div style="font-size:0.68rem; font-weight:700; color:' + (peak ? '#f9a8d4' : '#93c5fd') + ';">+' + (pt.lift_pct || 0).toFixed(1) + '%</div>'
+                                 +   '<div style="width:100%; height:' + h + 'px; border-radius:3px 3px 0 0;'
+                                 +              ' background:linear-gradient(to top, ' + (peak ? '#ec4899' : '#3b82f6') + ' 0%, ' + (peak ? '#f9a8d4' : '#93c5fd') + ' 100%);"></div>'
+                                 +   '<div style="font-size:0.62rem; opacity:0.65;">' + _jiqEsc(pt.window) + '</div>'
+                                 + '</div>';
+                        }).join('')
+                    + '</div>';
+            }
+
+            var pitchEl = document.getElementById('jiqNflxPrePostPitch');
+            if (pitchEl) {
+                pitchEl.innerHTML = '<strong>📣 The pitch:</strong> ' + _jiqEsc(data.pitch || '');
+            }
+
+            paintWindowTabs();
+            paintTopline();
+            paintDecay();
+        }
+
+        // ── PULL 8 · INCREMENTALITY & MATCHED-CONTROL STUDY DESIGN
+        // Methodology-deep companion to Pull 7. Where Pull 7 shows ONE
+        // case study's numbers, this card explains HOW the matched
+        // cohorts are built (pipeline + balance diagnostic) and then
+        // proves the methodology generalizes by running it across 4
+        // mock studies spanning beauty/CPG, auto, financial services,
+        // and travel. Causal-decomposition viz at the bottom translates
+        // the matched-control math into a single picture for execs:
+        // "gross lift = baseline that would have happened anyway +
+        //  incremental lift the buy is actually responsible for."
+        function renderJourneyIqNflxIncrement(p) {
+            var card = document.getElementById('jiqNflxIncrementCard');
+            if (!card) return;
+            var data = (p && p.enabled !== false && p.studies && p.balance) ? p : _JIQ_NETFLIX_DATA.nflx_incrementality;
+            if (!data || data.enabled === false) { card.style.display = 'none'; return; }
+            _jiqShowNflxCard('jiqNflxIncrementCard');
+
+            var subEl = document.getElementById('jiqNflxIncrementSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+
+            // Method strip: the question + the 5 bullets that define
+            // the design. Two-column layout so it reads as a research
+            // brief, not a marketing pitch.
+            var msEl = document.getElementById('jiqNflxIncrementMethodStrip');
+            if (msEl) {
+                var bullets = (data.method_bullets || []).map(function(b) {
+                    return '<li style="margin-bottom:0.32rem;">' + _jiqEsc(b) + '</li>';
+                }).join('');
+                msEl.innerHTML = ''
+                    + '<div>'
+                    +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Question to answer</div>'
+                    +   '<div style="font-size:0.95rem; font-weight:700; line-height:1.45; color:var(--text-primary);">' + _jiqEsc(data.question || '') + '</div>'
+                    + '</div>'
+                    + '<div>'
+                    +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Method</div>'
+                    +   '<ul style="font-size:0.74rem; color:var(--text-secondary); line-height:1.5; padding-left:1rem; margin:0;">' + bullets + '</ul>'
+                    + '</div>';
+            }
+
+            // Matching pipeline funnel - vertical-stack with each row
+            // narrowing visually as the cohort shrinks.
+            var pipeEl = document.getElementById('jiqNflxIncrementPipeline');
+            if (pipeEl) {
+                var stages = data.pipeline || [];
+                var maxV = stages.reduce(function(m, r) { return Math.max(m, r.value || 0); }, 0) || 1;
+                pipeEl.innerHTML = ''
+                    + stages.map(function(s, i) {
+                        var pct  = (s.value / maxV) * 100;
+                        var isFinal = (i === stages.length - 1);
+                        var isExposed = /exposed/i.test(s.stage);
+                        var color = isFinal ? '#14b8a6' : (isExposed ? '#e50914' : 'rgba(94,234,212,0.55)');
+                        return '<div style="display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,2.4fr) minmax(0,1.4fr); align-items:center; gap:0.6rem; padding:0.4rem 0;">'
+                             +   '<div style="font-size:0.78rem; font-weight:600;">' + _jiqEsc(s.stage) + '</div>'
+                             +   '<div style="height:14px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">'
+                             +     '<div style="width:' + pct.toFixed(1) + '%; height:100%; background:' + color + ';"></div>'
+                             +   '</div>'
+                             +   '<div style="font-size:0.74rem; text-align:right;">'
+                             +     '<span style="font-weight:800;">' + _jiqFmt(s.value || 0) + '</span>'
+                             +     ' <span style="color:var(--text-secondary); font-size:0.68rem;">· ' + _jiqEsc(s.label || '') + '</span>'
+                             +   '</div>'
+                             + '</div>';
+                    }).join('');
+            }
+
+            // Cohort balance diagnostic - the table that proves the
+            // matched-pair design actually worked. SMD column is the
+            // standardized-mean-difference, the standard causal-
+            // inference balance metric. Anything < 0.10 is considered
+            // well-balanced.
+            var balEl = document.getElementById('jiqNflxIncrementBalance');
+            if (balEl) {
+                var rows = data.balance || [];
+                balEl.innerHTML = ''
+                    + '<div style="display:grid; grid-template-columns:minmax(0,2.4fr) repeat(3, minmax(80px,0.85fr)) minmax(110px,0.8fr);'
+                    +              ' gap:0.55rem; padding:0.4rem 0.55rem; font-size:0.62rem; opacity:0.65;'
+                    +              ' text-transform:uppercase; letter-spacing:0.06em; border-bottom:1px solid rgba(255,255,255,0.08);">'
+                    +   '<div>Matching variable</div>'
+                    +   '<div style="text-align:right;">Exposed</div>'
+                    +   '<div style="text-align:right;">Control</div>'
+                    +   '<div style="text-align:right;">SMD</div>'
+                    +   '<div style="text-align:right;">Balance</div>'
+                    + '</div>'
+                    + rows.map(function(r) {
+                        var smd = r.smd || 0;
+                        var ok  = !!r.balanced;
+                        var badgeBg = ok ? 'rgba(20,184,166,0.22)' : 'rgba(248,113,113,0.22)';
+                        var badgeFg = ok ? '#5eead4'              : '#fca5a5';
+                        return '<div style="display:grid; grid-template-columns:minmax(0,2.4fr) repeat(3, minmax(80px,0.85fr)) minmax(110px,0.8fr);'
+                             +              ' gap:0.55rem; padding:0.45rem 0.55rem; border-bottom:1px solid rgba(255,255,255,0.04);">'
+                             +   '<div style="font-size:0.78rem; font-weight:600;">' + _jiqEsc(r.variable || '') + '</div>'
+                             +   '<div style="text-align:right; font-size:0.78rem; font-weight:700;">' + (r.exposed || 0).toFixed(1) + '</div>'
+                             +   '<div style="text-align:right; font-size:0.78rem; color:var(--text-secondary);">' + (r.control || 0).toFixed(1) + '</div>'
+                             +   '<div style="text-align:right; font-size:0.78rem; font-family:monospace;">' + smd.toFixed(3) + '</div>'
+                             +   '<div style="text-align:right;">'
+                             +     '<span style="display:inline-block; padding:0.15rem 0.5rem; border-radius:4px; font-size:0.7rem; font-weight:700;'
+                             +                  ' background:' + badgeBg + '; color:' + badgeFg + ';">' + (ok ? '✓ balanced' : '✗ skew') + '</span>'
+                             +   '</div>'
+                             + '</div>';
+                    }).join('')
+                    + (data.balance_note
+                        ? '<div style="margin-top:0.55rem; padding:0.55rem 0.7rem; font-size:0.72rem; line-height:1.5; font-style:italic;'
+                          +            ' color:var(--text-secondary); background:rgba(20,184,166,0.06); border-radius:4px; border-left:2px solid rgba(20,184,166,0.4);">'
+                          +     '<strong style="color:#5eead4; font-style:normal;">Methodology note:</strong> ' + _jiqEsc(data.balance_note)
+                          + '</div>'
+                        : '');
+            }
+
+            // Study switcher - drives the metrics table + decomp viz.
+            var studies = data.studies || [];
+            var activeStudyId = studies.length ? studies[0].id : null;
+
+            var tabsEl   = document.getElementById('jiqNflxIncrementStudyTabs');
+            var hdrEl    = document.getElementById('jiqNflxIncrementStudyHeader');
+            var metricsEl= document.getElementById('jiqNflxIncrementMetrics');
+            var decompEl = document.getElementById('jiqNflxIncrementDecomp');
+
+            function findStudy(id) {
+                for (var i = 0; i < studies.length; i++) {
+                    if (studies[i].id === id) return studies[i];
+                }
+                return studies[0];
+            }
+
+            function paintStudyTabs() {
+                if (!tabsEl) return;
+                tabsEl.innerHTML = studies.map(function(s) {
+                    var active = (s.id === activeStudyId);
+                    return '<button type="button" data-sid="' + _jiqEsc(s.id) + '" '
+                         + 'style="padding:0.34rem 0.7rem; border-radius:4px; cursor:pointer; '
+                         +        'font-size:0.7rem; font-weight:700; '
+                         +        'background:' + (active ? '#14b8a6' : 'rgba(255,255,255,0.05)') + '; '
+                         +        'color:' + (active ? '#0a1a18' : 'var(--text-secondary)') + '; '
+                         +        'border:1px solid ' + (active ? '#14b8a6' : 'rgba(255,255,255,0.10)') + ';">'
+                         +   _jiqEsc(s.label)
+                         + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(tabsEl.querySelectorAll('button'), function(btn) {
+                    btn.addEventListener('click', function onStudyChange() {
+                        activeStudyId = btn.getAttribute('data-sid');
+                        paintStudyTabs();
+                        paintStudyHeader();
+                        paintStudyMetrics();
+                        paintStudyDecomp();
+                    });
+                });
+            }
+
+            function paintStudyHeader() {
+                if (!hdrEl) return;
+                var s = findStudy(activeStudyId);
+                if (!s) { hdrEl.innerHTML = ''; return; }
+                hdrEl.innerHTML = ''
+                    + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:0.5rem;">'
+                    +   '<div><div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">Category</div>'
+                    +     '<div style="font-size:0.85rem; font-weight:700;">' + _jiqEsc(s.category || '-') + '</div></div>'
+                    +   '<div><div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">Flight</div>'
+                    +     '<div style="font-size:0.85rem; font-weight:700;">' + _jiqEsc(s.flight || '-') + '</div></div>'
+                    +   '<div><div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">Exposed cohort</div>'
+                    +     '<div style="font-size:0.85rem; font-weight:700;">' + _jiqFmt(s.cohort_size || 0) + ' HHs</div></div>'
+                    +   '<div><div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">Post window</div>'
+                    +     '<div style="font-size:0.85rem; font-weight:700;">' + _jiqEsc(s.post_window || '-') + '</div></div>'
+                    +   '<div><div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">Modeled CPM uplift</div>'
+                    +     '<div style="font-size:0.85rem; font-weight:800; color:#5eead4;">+' + (s.cpm_uplift_pct || 0).toFixed(1) + '%</div></div>'
+                    + '</div>'
+                    + '<div style="margin-top:0.55rem; padding-top:0.55rem; border-top:1px dashed rgba(255,255,255,0.10);'
+                    +              ' font-size:0.72rem; color:var(--text-secondary); line-height:1.5;">'
+                    +   '<strong style="color:var(--text-primary);">Creative:</strong> ' + _jiqEsc(s.creative || '-') + '. '
+                    +   _jiqEsc(s.win_summary || '')
+                    + '</div>';
+            }
+
+            function paintStudyMetrics() {
+                if (!metricsEl) return;
+                var s = findStudy(activeStudyId);
+                if (!s) { metricsEl.innerHTML = ''; return; }
+                var mets = s.metrics || [];
+                var maxAbs = mets.reduce(function(m, r) {
+                    return Math.max(m, Math.abs(r.exposed_pct || 0), Math.abs(r.control_pct || 0));
+                }, 0) || 1;
+                metricsEl.innerHTML = ''
+                    + '<div style="display:grid; grid-template-columns:minmax(0,1.9fr) minmax(0,1.6fr) minmax(0,1.6fr) minmax(110px,0.9fr) minmax(90px,0.7fr);'
+                    +              ' gap:0.55rem; padding:0.4rem 0.55rem; font-size:0.62rem; opacity:0.65;'
+                    +              ' text-transform:uppercase; letter-spacing:0.06em; border-bottom:1px solid rgba(255,255,255,0.08);">'
+                    +   '<div>Metric</div>'
+                    +   '<div>Exposed lift</div>'
+                    +   '<div>Control lift</div>'
+                    +   '<div style="text-align:right;">Net incremental</div>'
+                    +   '<div style="text-align:right;">Significance</div>'
+                    + '</div>'
+                    + mets.map(function(r) {
+                        var ex     = r.exposed_pct || 0;
+                        var co     = r.control_pct || 0;
+                        var net    = ex - co;
+                        var exClr  = ex < 0 ? '#fca5a5' : '#5eead4';
+                        var coClr  = co < 0 ? '#fca5a5' : '#94a3b8';
+                        var netBg  = net >= 0 ? 'rgba(20,184,166,0.22)' : 'rgba(248,113,113,0.22)';
+                        var netFg  = net >= 0 ? '#5eead4'              : '#fca5a5';
+                        var netSign= net >= 0 ? '+' : '';
+                        var bar = function(val, color) {
+                            var w = Math.max(2, Math.min(100, (Math.abs(val) / maxAbs) * 100));
+                            return '<div style="display:flex; align-items:center; gap:0.4rem;">'
+                                 +   '<div style="flex:1; height:5px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden;">'
+                                 +     '<div style="width:' + w + '%; height:100%; background:' + color + ';"></div>'
+                                 +   '</div>'
+                                 +   '<div style="font-size:0.72rem; font-weight:700; color:' + color + '; min-width:48px; text-align:right;">'
+                                 +     (val < 0 ? '' : '+') + val.toFixed(1) + '%'
+                                 +   '</div>'
+                                 + '</div>';
+                        };
+                        return '<div style="display:grid; grid-template-columns:minmax(0,1.9fr) minmax(0,1.6fr) minmax(0,1.6fr) minmax(110px,0.9fr) minmax(90px,0.7fr);'
+                             +              ' gap:0.55rem; padding:0.5rem 0.55rem; border-bottom:1px solid rgba(255,255,255,0.04);">'
+                             +   '<div style="font-size:0.78rem; font-weight:600;">' + _jiqEsc(r.metric || '') + '</div>'
+                             +   '<div>' + bar(ex, exClr) + '</div>'
+                             +   '<div>' + bar(co, coClr) + '</div>'
+                             +   '<div style="text-align:right;">'
+                             +     '<span style="display:inline-block; padding:0.2rem 0.55rem; border-radius:4px; font-size:0.74rem; font-weight:800;'
+                             +                  ' background:' + netBg + '; color:' + netFg + ';">' + netSign + net.toFixed(1) + 'pp</span>'
+                             +   '</div>'
+                             +   '<div style="text-align:right; font-family:monospace; font-size:0.7rem; color:var(--text-secondary);">' + _jiqEsc(r.p_sig || '') + '</div>'
+                             + '</div>';
+                    }).join('');
+            }
+
+            // Causal decomposition - the headline metric for the
+            // active study split into:
+            //   - "Baseline (would have happened anyway)" → the
+            //     control-cohort lift, the part you cannot claim
+            //   - "Incremental (caused by the buy)" → the delta, the
+            //     part Netflix earned the right to sell
+            // Visualized as a stacked horizontal bar so reps can show
+            // one picture and one sentence: "of the X% lift the
+            // exposed cohort showed, only Y% is yours to claim."
+            function paintStudyDecomp() {
+                if (!decompEl) return;
+                var s = findStudy(activeStudyId);
+                if (!s) { decompEl.innerHTML = ''; return; }
+                var headlineName = s.headline_metric || (s.metrics[0] && s.metrics[0].metric) || '';
+                var m = null;
+                for (var i = 0; i < (s.metrics || []).length; i++) {
+                    if (s.metrics[i].metric === headlineName) { m = s.metrics[i]; break; }
+                }
+                if (!m) m = s.metrics[0] || { exposed_pct: 0, control_pct: 0 };
+                var gross       = m.exposed_pct || 0;
+                var baseline    = m.control_pct || 0;
+                var incremental = gross - baseline;
+                var grossAbs    = Math.abs(gross) || 1;
+                var basePct     = (Math.abs(baseline) / grossAbs) * 100;
+                var incPct      = (Math.abs(incremental) / grossAbs) * 100;
+                var incShare    = gross !== 0 ? (incremental / gross) * 100 : 0;
+                decompEl.innerHTML = ''
+                    + '<div style="padding:0.7rem 0.9rem; background:rgba(255,255,255,0.03); border-radius:6px; border:1px solid rgba(20,184,166,0.18);">'
+                    +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.55rem;">'
+                    +     '<div style="font-size:0.78rem; font-weight:700;">' + _jiqEsc(headlineName) + '</div>'
+                    +     '<div style="font-size:0.7rem; color:var(--text-secondary);">'
+                    +       'Gross exposed lift: <strong style="color:var(--text-primary);">+' + gross.toFixed(1) + '%</strong>'
+                    +     '</div>'
+                    +   '</div>'
+                    +   '<div style="display:flex; height:24px; border-radius:5px; overflow:hidden; background:rgba(255,255,255,0.04);">'
+                    +     '<div title="Baseline (control)" style="width:' + basePct.toFixed(1) + '%; background:#475569; display:flex; align-items:center; justify-content:center;'
+                    +                                      ' font-size:0.66rem; font-weight:700; color:#cbd5e1;">'
+                    +       (basePct > 14 ? ('+' + baseline.toFixed(1) + '%') : '')
+                    +     '</div>'
+                    +     '<div title="Incremental (caused)" style="width:' + incPct.toFixed(1) + '%;'
+                    +                                          ' background:linear-gradient(90deg, #14b8a6 0%, #5eead4 100%);'
+                    +                                          ' display:flex; align-items:center; justify-content:center;'
+                    +                                          ' font-size:0.66rem; font-weight:800; color:#0a1a18;">'
+                    +       (incPct > 14 ? ('+' + incremental.toFixed(1) + '%') : '')
+                    +     '</div>'
+                    +   '</div>'
+                    +   '<div style="display:flex; justify-content:space-between; gap:0.6rem; flex-wrap:wrap; margin-top:0.5rem; font-size:0.72rem;">'
+                    +     '<div><span style="display:inline-block; width:10px; height:10px; background:#475569; border-radius:2px; margin-right:0.35rem;"></span>'
+                    +       '<strong>Baseline (would have happened anyway):</strong> +' + baseline.toFixed(1) + '%</div>'
+                    +     '<div><span style="display:inline-block; width:10px; height:10px; background:#14b8a6; border-radius:2px; margin-right:0.35rem;"></span>'
+                    +       '<strong style="color:#5eead4;">Incremental (caused by the buy): +' + incremental.toFixed(1) + 'pp</strong></div>'
+                    +   '</div>'
+                    +   '<div style="margin-top:0.6rem; padding-top:0.55rem; border-top:1px dashed rgba(255,255,255,0.08);'
+                    +                ' font-size:0.74rem; line-height:1.5; color:var(--text-secondary);">'
+                    +     '🎯 <strong style="color:var(--text-primary);">' + incShare.toFixed(1) + '%</strong> of the lift the exposed cohort showed is <strong style="color:#5eead4;">causally attributable to the buy</strong>. '
+                    +     'The remaining ' + (100 - incShare).toFixed(1) + '% would have happened in this audience anyway - the matched-control design quantifies it and removes it from what Netflix sells. '
+                    +     'That is the difference between correlation and incremental lift.'
+                    +   '</div>'
+                    + '</div>';
+            }
+
+            var pitchEl = document.getElementById('jiqNflxIncrementPitch');
+            if (pitchEl) {
+                pitchEl.innerHTML = '<strong>📣 The pitch:</strong> ' + _jiqEsc(data.pitch || '');
+            }
+
+            paintStudyTabs();
+            paintStudyHeader();
+            paintStudyMetrics();
+            paintStudyDecomp();
+        }
+
+        // ── PULL 9 · NETFLIX AUDIENCE QUALITY INDEX (AQI)
+        // Rate-card-style card: take the 80M-HH addressable base,
+        // composite 12 off-Netflix behavioral signals into a 0-100
+        // score, distribute HHs across 5 tiers, then expose 10
+        // commercially-priceable segment packs each with a CPM band.
+        // Clicking a segment opens a deep-dive: signal-by-signal
+        // indexing (vs. genpop Netflix = 100), viewing pattern, lead
+        // advertisers, and the cohort's single strongest proof point.
+        function renderJourneyIqNflxAqi(p) {
+            var card = document.getElementById('jiqNflxAqiCard');
+            if (!card) return;
+            var data = (p && p.enabled !== false && p.segments && p.signals) ? p : _JIQ_NETFLIX_DATA.nflx_aqi;
+            if (!data || data.enabled === false) { card.style.display = 'none'; return; }
+            _jiqShowNflxCard('jiqNflxAqiCard');
+
+            var subEl = document.getElementById('jiqNflxAqiSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+
+            // Methodology strip - question + design bullets.
+            var msEl = document.getElementById('jiqNflxAqiMethodStrip');
+            if (msEl) {
+                var bullets = (data.method_bullets || []).map(function(b) {
+                    return '<li style="margin-bottom:0.32rem;">' + _jiqEsc(b) + '</li>';
+                }).join('');
+                msEl.innerHTML = ''
+                    + '<div>'
+                    +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Question to answer</div>'
+                    +   '<div style="font-size:0.95rem; font-weight:700; line-height:1.45; color:var(--text-primary);">' + _jiqEsc(data.question || '') + '</div>'
+                    + '</div>'
+                    + '<div>'
+                    +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Scoring method</div>'
+                    +   '<ul style="font-size:0.74rem; color:var(--text-secondary); line-height:1.5; padding-left:1rem; margin:0;">' + bullets + '</ul>'
+                    + '</div>';
+            }
+
+            // 12-signal weighting panel - 2-col grid with weight bars
+            // so reps can show exactly which signals carry the score.
+            var sigEl = document.getElementById('jiqNflxAqiSignals');
+            if (sigEl) {
+                var sigs = data.signals || [];
+                var maxW = sigs.reduce(function(m, r) { return Math.max(m, r.weight_pct || 0); }, 0) || 1;
+                sigEl.innerHTML = ''
+                    + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:0.4rem 1rem;">'
+                    +   sigs.map(function(r, i) {
+                            var w = (r.weight_pct || 0);
+                            var bw = (w / maxW) * 100;
+                            return '<div style="display:grid; grid-template-columns:18px minmax(0,1fr) 50px; gap:0.4rem; align-items:center; padding:0.3rem 0; border-bottom:1px solid rgba(255,255,255,0.04);">'
+                                 +   '<div style="font-size:0.65rem; color:var(--text-secondary); font-family:monospace;">' + (i + 1) + '.</div>'
+                                 +   '<div>'
+                                 +     '<div style="font-size:0.76rem; font-weight:600;">' + _jiqEsc(r.signal) + '</div>'
+                                 +     '<div style="font-size:0.66rem; color:var(--text-secondary); margin-top:0.1rem; font-style:italic;">' + _jiqEsc(r.source_hint || '') + '</div>'
+                                 +     '<div style="margin-top:0.25rem; height:4px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden;">'
+                                 +       '<div style="width:' + bw.toFixed(1) + '%; height:100%; background:linear-gradient(90deg, #f59e0b 0%, #fcd34d 100%);"></div>'
+                                 +     '</div>'
+                                 +   '</div>'
+                                 +   '<div style="font-size:0.78rem; font-weight:800; color:#fcd34d; text-align:right; font-family:monospace;">' + w + '%</div>'
+                                 + '</div>';
+                        }).join('')
+                    + '</div>';
+            }
+
+            // Tier distribution - 5-stop horizontal stacked bar
+            // proportional to HH-share, plus a tier-legend grid
+            // beneath so each tier shows its range + HH count + CPM
+            // band side-by-side.
+            var tierEl = document.getElementById('jiqNflxAqiTiers');
+            if (tierEl) {
+                var tiers = data.tiers || [];
+                tierEl.innerHTML = ''
+                    + '<div style="display:flex; height:30px; border-radius:6px; overflow:hidden; background:rgba(255,255,255,0.04); margin-bottom:0.6rem;">'
+                    +   tiers.map(function(t) {
+                            return '<div title="' + _jiqEsc(t.name) + ' · ' + t.share_pct + '%" '
+                                 + 'style="width:' + (t.share_pct || 0).toFixed(1) + '%; background:' + (t.color || '#94a3b8') + '; '
+                                 +        'display:flex; align-items:center; justify-content:center; '
+                                 +        'font-size:0.66rem; font-weight:800; color:#0a1a18;">'
+                                 +   ((t.share_pct || 0) >= 8 ? _jiqEsc(t.name) : '')
+                                 + '</div>';
+                        }).join('')
+                    + '</div>'
+                    + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:0.5rem;">'
+                    +   tiers.map(function(t) {
+                            return '<div style="padding:0.45rem 0.6rem; border-radius:5px; background:rgba(255,255,255,0.03); border-left:3px solid ' + (t.color || '#94a3b8') + ';">'
+                                 +   '<div style="display:flex; align-items:baseline; justify-content:space-between; gap:0.4rem;">'
+                                 +     '<div style="font-size:0.78rem; font-weight:800; color:' + (t.color || '#94a3b8') + ';">' + _jiqEsc(t.name) + '</div>'
+                                 +     '<div style="font-size:0.66rem; color:var(--text-secondary); font-family:monospace;">' + _jiqEsc(t.range) + '</div>'
+                                 +   '</div>'
+                                 +   '<div style="font-size:0.7rem; margin-top:0.2rem;">' + _jiqFmt(t.hh_count || 0) + ' HHs <span style="opacity:0.6;">(' + t.share_pct + '%)</span></div>'
+                                 +   '<div style="font-size:0.7rem; margin-top:0.15rem; color:#fcd34d; font-weight:700;">CPM ' + _jiqEsc(t.cpm_band) + '</div>'
+                                 + '</div>';
+                        }).join('')
+                    + '</div>';
+            }
+
+            // Segment rate card - clickable grid of priceable packs.
+            // Each tile carries: name, tier badge, AQI score, HH
+            // count, CPM-uplift number, lead-advertiser count, and a
+            // 1-line proof signal. Click sets the active deep-dive.
+            var segs = data.segments || [];
+            var activeSegId = segs.length ? segs[0].id : null;
+
+            var gridEl     = document.getElementById('jiqNflxAqiSegGrid');
+            var deepDiveEl = document.getElementById('jiqNflxAqiSegDeepDive');
+
+            function findSeg(id) {
+                for (var i = 0; i < segs.length; i++) {
+                    if (segs[i].id === id) return segs[i];
+                }
+                return segs[0];
+            }
+            function tierColor(name) {
+                var t = (data.tiers || []).filter(function(x) { return x.name === name; })[0];
+                return t ? (t.color || '#94a3b8') : '#94a3b8';
+            }
+
+            function paintSegGrid() {
+                if (!gridEl) return;
+                gridEl.innerHTML = ''
+                    + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:0.55rem;">'
+                    +   segs.map(function(s) {
+                            var active = (s.id === activeSegId);
+                            var tcol   = tierColor(s.tier);
+                            return '<div data-sid="' + _jiqEsc(s.id) + '" role="button" tabindex="0" '
+                                 +   'onmouseover="this.style.background=\'rgba(251,191,36,0.10)\';" '
+                                 +   'onmouseout="this.style.background=\'' + (active ? 'rgba(251,191,36,0.10)' : 'rgba(255,255,255,0.03)') + '\';" '
+                                 +   'style="cursor:pointer; padding:0.65rem 0.75rem; border-radius:6px; '
+                                 +          'background:' + (active ? 'rgba(251,191,36,0.10)' : 'rgba(255,255,255,0.03)') + '; '
+                                 +          'border:1px solid ' + (active ? '#fbbf24' : 'rgba(255,255,255,0.08)') + '; '
+                                 +          'border-left:3px solid ' + tcol + ';">'
+                                 +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.4rem; margin-bottom:0.3rem;">'
+                                 +     '<div style="font-size:0.82rem; font-weight:700;">' + _jiqEsc(s.name) + '</div>'
+                                 +     '<div style="font-size:0.62rem; padding:0.1rem 0.4rem; border-radius:3px; font-weight:800; '
+                                 +                  'background:' + tcol + '22; color:' + tcol + ';">' + _jiqEsc(s.tier) + '</div>'
+                                 +   '</div>'
+                                 +   '<div style="display:flex; justify-content:space-between; gap:0.5rem; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.35rem;">'
+                                 +     '<div>AQI <strong style="color:var(--text-primary); font-family:monospace;">' + (s.aqi_score || 0) + '</strong></div>'
+                                 +     '<div>' + _jiqFmt(s.hh_count || 0) + ' HHs</div>'
+                                 +     '<div>CPM <strong style="color:#fcd34d;">+' + (s.cpm_uplift_pct || 0) + '%</strong></div>'
+                                 +   '</div>'
+                                 +   '<div style="font-size:0.68rem; color:var(--text-secondary); line-height:1.4; font-style:italic;">'
+                                 +     _jiqEsc((s.lead_advertisers || []).slice(0, 2).join(' · '))
+                                 +     ((s.lead_advertisers || []).length > 2 ? ' + ' + ((s.lead_advertisers || []).length - 2) + ' more' : '')
+                                 +   '</div>'
+                                 + '</div>';
+                        }).join('')
+                    + '</div>';
+
+                Array.prototype.forEach.call(gridEl.querySelectorAll('[data-sid]'), function(tile) {
+                    var setActive = function onSegSelect() {
+                        activeSegId = tile.getAttribute('data-sid');
+                        paintSegGrid();
+                        paintDeepDive();
+                    };
+                    tile.addEventListener('click', setActive);
+                    tile.addEventListener('keydown', function onSegKeydown(e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setActive();
+                        }
+                    });
+                });
+            }
+
+            function paintDeepDive() {
+                if (!deepDiveEl) return;
+                var s = findSeg(activeSegId);
+                if (!s) { deepDiveEl.innerHTML = ''; return; }
+                var tcol = tierColor(s.tier);
+
+                var idxRows = (s.signal_index || []).map(function(r) {
+                    var v = r.index || 100;
+                    // Bar is centered at 100; over/under-index goes
+                    // right/left from the midline.
+                    var devPct = Math.max(-100, Math.min(100, ((v - 100) / 100) * 100));
+                    var leftPct, widthPct, color;
+                    if (devPct >= 0) {
+                        leftPct  = 50;
+                        widthPct = Math.min(50, devPct / 2);
+                        color    = '#fcd34d';
+                    } else {
+                        widthPct = Math.min(50, (-devPct) / 2);
+                        leftPct  = 50 - widthPct;
+                        color    = '#94a3b8';
+                    }
+                    var idxLabel = v + (v >= 150 ? ' ★★★' : (v >= 130 ? ' ★★' : (v >= 115 ? ' ★' : '')));
+                    return '<div style="display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,2fr) 60px; gap:0.5rem; align-items:center; padding:0.28rem 0;">'
+                         +   '<div style="font-size:0.74rem; font-weight:600;">' + _jiqEsc(r.signal) + '</div>'
+                         +   '<div style="position:relative; height:8px; background:rgba(255,255,255,0.05); border-radius:2px;">'
+                         +     '<div style="position:absolute; left:50%; top:-2px; height:12px; width:1px; background:rgba(255,255,255,0.3);"></div>'
+                         +     '<div style="position:absolute; left:' + leftPct.toFixed(2) + '%; width:' + widthPct.toFixed(2) + '%; height:100%; background:' + color + '; border-radius:2px;"></div>'
+                         +   '</div>'
+                         +   '<div style="text-align:right; font-family:monospace; font-size:0.74rem; font-weight:700; color:' + (v >= 115 ? '#fcd34d' : 'var(--text-secondary)') + ';">' + idxLabel + '</div>'
+                         + '</div>';
+                }).join('');
+
+                var advList = (s.lead_advertisers || []).map(function(a) {
+                    return '<li style="margin-bottom:0.22rem;">' + _jiqEsc(a) + '</li>';
+                }).join('');
+
+                deepDiveEl.innerHTML = ''
+                    + '<div style="padding:0.85rem 1rem; border-radius:7px; background:rgba(255,255,255,0.03); border:1px solid rgba(251,191,36,0.18);">'
+                    +   '<div style="display:flex; align-items:baseline; justify-content:space-between; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.6rem;">'
+                    +     '<div style="display:flex; align-items:baseline; gap:0.5rem;">'
+                    +       '<h4 style="margin:0; font-size:1rem;">' + _jiqEsc(s.name) + '</h4>'
+                    +       '<span style="font-size:0.66rem; padding:0.13rem 0.45rem; border-radius:3px; font-weight:800; '
+                    +                    'background:' + tcol + '22; color:' + tcol + ';">' + _jiqEsc(s.tier) + ' · AQI ' + (s.aqi_score || 0) + '</span>'
+                    +     '</div>'
+                    +     '<div style="font-size:0.72rem; color:var(--text-secondary);">'
+                    +       _jiqFmt(s.hh_count || 0) + ' HHs · '
+                    +       '<strong style="color:#fcd34d;">CPM +' + (s.cpm_uplift_pct || 0) + '%</strong> vs. NFLX baseline'
+                    +     '</div>'
+                    +   '</div>'
+                    +   '<div style="display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:0.9rem;">'
+                    +     '<div>'
+                    +       '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.35rem;">'
+                    +         'Signal indexing vs. genpop Netflix (100 = parity)'
+                    +       '</div>'
+                    +       idxRows
+                    +     '</div>'
+                    +     '<div>'
+                    +       '<div style="margin-bottom:0.7rem;">'
+                    +         '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.3rem;">'
+                    +           'Viewing pattern on Netflix'
+                    +         '</div>'
+                    +         '<div style="font-size:0.74rem; line-height:1.5;">' + _jiqEsc(s.viewing_pattern || '') + '</div>'
+                    +       '</div>'
+                    +       '<div style="margin-bottom:0.7rem;">'
+                    +         '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.3rem;">'
+                    +           'Single strongest proof signal'
+                    +         '</div>'
+                    +         '<div style="font-size:0.74rem; padding:0.45rem 0.6rem; border-radius:5px;'
+                    +                      ' background:rgba(251,191,36,0.10); border-left:3px solid #fcd34d; line-height:1.5;">'
+                    +           _jiqEsc(s.proof_signal || '') + '</div>'
+                    +       '</div>'
+                    +       '<div>'
+                    +         '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.3rem;">'
+                    +           'Recommended lead advertisers'
+                    +         '</div>'
+                    +         '<ul style="font-size:0.74rem; line-height:1.5; padding-left:1.1rem; margin:0; color:var(--text-secondary);">'
+                    +           advList + '</ul>'
+                    +       '</div>'
+                    +     '</div>'
+                    +   '</div>'
+                    + '</div>';
+            }
+
+            var pitchEl = document.getElementById('jiqNflxAqiPitch');
+            if (pitchEl) {
+                pitchEl.innerHTML = '<strong>📣 The pitch:</strong> ' + _jiqEsc(data.pitch || '');
+            }
+
+            paintSegGrid();
+            paintDeepDive();
+        }
+
+        // ── PULL 10 · COMPETITIVE STREAMING MIGRATION MAP
+        // Headline view is an SVG-based Sankey: 6 competitor "source"
+        // nodes on the left, Netflix in the middle, the same 6
+        // competitors as "destination" nodes on the right. Cubic-
+        // bezier flow paths carry stroke-width proportional to HH
+        // volume so the picture tells the story without numbers.
+        // Below the Sankey is a lens tab system: 5 secondary views
+        // that translate the six listed signals into clean visuals -
+        // multi-sub stacking, subscription cycling, ad-tier
+        // migration, binge-and-cancel signatures, and title-triggered
+        // reactivations.
+        function renderJourneyIqNflxMigration(p) {
+            var card = document.getElementById('jiqNflxMigrationCard');
+            if (!card) return;
+            var data = (p && p.enabled !== false && p.sankey && p.lenses) ? p : _JIQ_NETFLIX_DATA.nflx_migration;
+            if (!data || data.enabled === false) { card.style.display = 'none'; return; }
+            _jiqShowNflxCard('jiqNflxMigrationCard');
+
+            var subEl = document.getElementById('jiqNflxMigrationSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+
+            // Methodology strip - question + 5 design bullets.
+            var msEl = document.getElementById('jiqNflxMigrationMethodStrip');
+            if (msEl) {
+                var bullets = (data.method_bullets || []).map(function(b) {
+                    return '<li style="margin-bottom:0.32rem;">' + _jiqEsc(b) + '</li>';
+                }).join('');
+                msEl.innerHTML = ''
+                    + '<div>'
+                    +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Question to answer</div>'
+                    +   '<div style="font-size:0.95rem; font-weight:700; line-height:1.45; color:var(--text-primary);">' + _jiqEsc(data.question || '') + '</div>'
+                    + '</div>'
+                    + '<div>'
+                    +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Design</div>'
+                    +   '<ul style="font-size:0.74rem; color:var(--text-secondary); line-height:1.5; padding-left:1rem; margin:0;">' + bullets + '</ul>'
+                    + '</div>';
+            }
+
+            // SVG Sankey diagram. Layout:
+            //   - Left column  : 6 competitor "source" nodes
+            //                    (inbound HHs → Netflix)
+            //   - Middle column: Netflix node (1 big rect)
+            //   - Right column : 6 competitor "destination" nodes
+            //                    (outbound HHs ← Netflix)
+            //   - Flow paths   : cubic beziers, stroke-width
+            //                    proportional to HH count, opacity
+            //                    ~0.4 so overlapping flows still read
+            var sankeyEl = document.getElementById('jiqNflxMigrationSankey');
+            var legendEl = document.getElementById('jiqNflxMigrationSankeyLegend');
+            if (sankeyEl && data.sankey) {
+                var sk        = data.sankey;
+                var competitors = sk.competitors || [];
+                var n         = competitors.length || 1;
+
+                var VW = 1000, VH = 460;
+                var leftX = 40, midX = (VW / 2) - 70, midW = 140, rightX = VW - 40 - 130;
+                var nodeW = 130;
+                var nodeGapY = 6;
+                var nodeH    = (VH - (n - 1) * nodeGapY) / n;
+
+                // Flow stroke-width is proportional to HH count.
+                // Cap at 60px so the biggest flow does not blow out
+                // the layout when other flows are tiny.
+                var maxHH = competitors.reduce(function(m, c) {
+                    return Math.max(m, c.inbound_hh || 0, c.outbound_hh || 0);
+                }, 1);
+                function strokeFor(hh) {
+                    return Math.max(2, Math.min(60, (hh / maxHH) * 60));
+                }
+
+                // Per-competitor source rect on the left + flow into
+                // Netflix.
+                var srcPaths = [];
+                var srcNodes = [];
+                var dstPaths = [];
+                var dstNodes = [];
+
+                // Netflix node centered vertically.
+                var midY = (VH - 200) / 2;
+                var midH = 200;
+
+                for (var i = 0; i < n; i++) {
+                    var c = competitors[i];
+                    var y = i * (nodeH + nodeGapY);
+                    // Left (source / inbound) node + flow
+                    srcNodes.push(''
+                        + '<rect x="' + leftX + '" y="' + y + '" width="' + nodeW + '" height="' + nodeH + '" rx="3" '
+                        +       'fill="' + c.color + '" opacity="0.85"></rect>'
+                        + '<text x="' + (leftX + nodeW - 8) + '" y="' + (y + nodeH / 2 - 2) + '" text-anchor="end" '
+                        +       'fill="#0a0a0a" font-size="13" font-weight="700">' + _jiqEsc(c.label) + '</text>'
+                        + '<text x="' + (leftX + nodeW - 8) + '" y="' + (y + nodeH / 2 + 13) + '" text-anchor="end" '
+                        +       'fill="#0a0a0a" font-size="10" opacity="0.75">' + _jiqFmt(c.inbound_hh) + ' →</text>');
+                    var srcY  = y + nodeH / 2;
+                    var dstYIn = midY + ((i + 0.5) / n) * midH;
+                    var srcCx1 = leftX + nodeW + ((midX - leftX - nodeW) * 0.45);
+                    var srcCx2 = midX - ((midX - leftX - nodeW) * 0.45);
+                    srcPaths.push(''
+                        + '<path d="M ' + (leftX + nodeW) + ' ' + srcY
+                        +        ' C ' + srcCx1 + ' ' + srcY + ', '
+                        +              + srcCx2 + ' ' + dstYIn + ', '
+                        +              + midX + ' ' + dstYIn + '" '
+                        + 'fill="none" stroke="' + c.color + '" stroke-width="' + strokeFor(c.inbound_hh) + '" '
+                        + 'opacity="0.42" stroke-linecap="round"></path>');
+
+                    // Right (destination / outbound) node + flow
+                    dstNodes.push(''
+                        + '<rect x="' + rightX + '" y="' + y + '" width="' + nodeW + '" height="' + nodeH + '" rx="3" '
+                        +       'fill="' + c.color + '" opacity="0.85"></rect>'
+                        + '<text x="' + (rightX + 8) + '" y="' + (y + nodeH / 2 - 2) + '" text-anchor="start" '
+                        +       'fill="#0a0a0a" font-size="13" font-weight="700">' + _jiqEsc(c.label) + '</text>'
+                        + '<text x="' + (rightX + 8) + '" y="' + (y + nodeH / 2 + 13) + '" text-anchor="start" '
+                        +       'fill="#0a0a0a" font-size="10" opacity="0.75">→ ' + _jiqFmt(c.outbound_hh) + '</text>');
+                    var dstY  = y + nodeH / 2;
+                    var srcYOut = midY + ((i + 0.5) / n) * midH;
+                    var dstCx1 = (midX + midW) + ((rightX - (midX + midW)) * 0.45);
+                    var dstCx2 = rightX - ((rightX - (midX + midW)) * 0.45);
+                    dstPaths.push(''
+                        + '<path d="M ' + (midX + midW) + ' ' + srcYOut
+                        +        ' C ' + dstCx1 + ' ' + srcYOut + ', '
+                        +              + dstCx2 + ' ' + dstY + ', '
+                        +              + rightX + ' ' + dstY + '" '
+                        + 'fill="none" stroke="' + c.color + '" stroke-width="' + strokeFor(c.outbound_hh) + '" '
+                        + 'opacity="0.42" stroke-linecap="round"></path>');
+                }
+
+                // Netflix middle node.
+                var nx = sk.netflix || { label: 'Netflix', hh_count: 0, color: '#e50914' };
+                var netflixNode = ''
+                    + '<rect x="' + midX + '" y="' + midY + '" width="' + midW + '" height="' + midH + '" rx="6" '
+                    +       'fill="' + (nx.color || '#e50914') + '" opacity="0.95"></rect>'
+                    + '<text x="' + (midX + midW / 2) + '" y="' + (midY + midH / 2 - 14) + '" text-anchor="middle" '
+                    +       'fill="#ffffff" font-size="20" font-weight="800" letter-spacing="1">' + _jiqEsc(nx.label || 'Netflix') + '</text>'
+                    + '<text x="' + (midX + midW / 2) + '" y="' + (midY + midH / 2 + 10) + '" text-anchor="middle" '
+                    +       'fill="#ffffff" font-size="11" opacity="0.85">' + _jiqFmt(nx.hh_count || 0) + ' U.S. HHs</text>'
+                    + '<text x="' + (midX + midW / 2) + '" y="' + (midY + midH / 2 + 28) + '" text-anchor="middle" '
+                    +       'fill="#ffffff" font-size="9.5" opacity="0.7" font-style="italic">90d rolling base</text>';
+
+                // Column titles
+                var titles = ''
+                    + '<text x="' + (leftX + nodeW / 2) + '" y="' + (VH - 6) + '" text-anchor="middle" '
+                    +       'fill="#cbd5e1" font-size="10" font-weight="700" letter-spacing="1.5">'
+                    +   'INBOUND → NETFLIX'
+                    + '</text>'
+                    + '<text x="' + (rightX + nodeW / 2) + '" y="' + (VH - 6) + '" text-anchor="middle" '
+                    +       'fill="#cbd5e1" font-size="10" font-weight="700" letter-spacing="1.5">'
+                    +   'NETFLIX → OUTBOUND'
+                    + '</text>';
+
+                // Stacked totals strip above netflix node so the
+                // inbound vs outbound asymmetry is unmissable.
+                var inboundTotal  = sk.total_inbound  || 0;
+                var outboundTotal = sk.total_outbound || 0;
+                var netFlow       = sk.net_flow      || (inboundTotal - outboundTotal);
+                var netSign       = netFlow >= 0 ? '+' : '';
+                var netColor      = netFlow >= 0 ? '#86efac' : '#fca5a5';
+                var totalsStrip = ''
+                    + '<text x="' + (midX + midW / 2) + '" y="' + (midY - 18) + '" text-anchor="middle" '
+                    +       'fill="#a5b4fc" font-size="11" font-weight="700">'
+                    +   '↓ INBOUND ' + _jiqFmt(inboundTotal) + ' / ↑ OUTBOUND ' + _jiqFmt(outboundTotal)
+                    + '</text>'
+                    + '<text x="' + (midX + midW / 2) + '" y="' + (midY + midH + 18) + '" text-anchor="middle" '
+                    +       'fill="' + netColor + '" font-size="11" font-weight="800">'
+                    +   'NET 90d FLOW: ' + netSign + _jiqFmt(netFlow) + ' HHs'
+                    + '</text>';
+
+                sankeyEl.innerHTML = ''
+                    + '<div style="background:rgba(255,255,255,0.025); border-radius:8px; padding:0.8rem 0.5rem;">'
+                    +   '<svg viewBox="0 0 ' + VW + ' ' + VH + '" preserveAspectRatio="xMidYMid meet" '
+                    +        'style="width:100%; height:auto; display:block; max-height:520px;">'
+                    +     // Flows behind nodes for proper stacking
+                          srcPaths.join('') + dstPaths.join('')
+                    +     srcNodes.join('') + dstNodes.join('')
+                    +     netflixNode
+                    +     totalsStrip
+                    +     titles
+                    +   '</svg>'
+                    + '</div>';
+
+                if (legendEl) {
+                    legendEl.innerHTML = ''
+                        + competitors.map(function(c) {
+                            return '<span style="display:inline-flex; align-items:center; gap:0.32rem;">'
+                                 +   '<span style="display:inline-block; width:12px; height:12px; border-radius:2px; background:' + c.color + ';"></span>'
+                                 +   '<span style="font-weight:700;">' + _jiqEsc(c.label) + '</span>'
+                                 + '</span>';
+                        }).join('')
+                        + (sk.note
+                            ? '<span style="flex:1; min-width:240px; font-style:italic; color:var(--text-secondary);">'
+                              +     '💡 ' + _jiqEsc(sk.note)
+                              + '</span>'
+                            : '');
+                }
+            }
+
+            // Lens tabs - 5 secondary views below the Sankey.
+            var lenses = data.lenses || [];
+            var activeLensId = lenses.length ? lenses[0].id : null;
+
+            var lensTabsEl = document.getElementById('jiqNflxMigrationLensTabs');
+            var lensPanelEl = document.getElementById('jiqNflxMigrationLensPanel');
+
+            function findLens(id) {
+                for (var i = 0; i < lenses.length; i++) {
+                    if (lenses[i].id === id) return lenses[i];
+                }
+                return lenses[0];
+            }
+
+            function paintLensTabs() {
+                if (!lensTabsEl) return;
+                lensTabsEl.innerHTML = lenses.map(function(l) {
+                    var active = (l.id === activeLensId);
+                    return '<button type="button" data-lid="' + _jiqEsc(l.id) + '" '
+                         + 'style="padding:0.34rem 0.7rem; border-radius:4px; cursor:pointer; '
+                         +        'font-size:0.7rem; font-weight:700; '
+                         +        'background:' + (active ? '#6366f1' : 'rgba(255,255,255,0.05)') + '; '
+                         +        'color:' + (active ? '#ffffff' : 'var(--text-secondary)') + '; '
+                         +        'border:1px solid ' + (active ? '#6366f1' : 'rgba(255,255,255,0.10)') + ';">'
+                         +   _jiqEsc(l.label)
+                         + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(lensTabsEl.querySelectorAll('button'), function(btn) {
+                    btn.addEventListener('click', function onLensChange() {
+                        activeLensId = btn.getAttribute('data-lid');
+                        paintLensTabs();
+                        paintLensPanel();
+                    });
+                });
+            }
+
+            // Bar-style lens renderer - shared by stacking, cycling,
+            // ad-tier, and reactivation lenses.
+            function renderBarLens(lens) {
+                var rows = lens.rows || [];
+                var maxPct = rows.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0) || 1;
+                return ''
+                    + '<div style="padding:0.85rem 1rem; border-radius:7px; background:rgba(255,255,255,0.03); border:1px solid rgba(99,102,241,0.18);">'
+                    +   '<div style="font-size:0.85rem; font-weight:700; margin-bottom:0.6rem;">' + _jiqEsc(lens.title || '') + '</div>'
+                    +   rows.map(function(r) {
+                            var bw = ((r.pct || 0) / maxPct) * 100;
+                            return '<div style="display:grid; grid-template-columns:minmax(0,1.9fr) minmax(0,2.4fr) 90px; gap:0.55rem; align-items:center; padding:0.4rem 0; border-bottom:1px solid rgba(255,255,255,0.04);">'
+                                 +   '<div>'
+                                 +     '<div style="font-size:0.78rem; font-weight:600;">' + _jiqEsc(r.label) + '</div>'
+                                 +     '<div style="font-size:0.66rem; color:var(--text-secondary); margin-top:0.15rem; font-style:italic; line-height:1.4;">' + _jiqEsc(r.note || '') + '</div>'
+                                 +   '</div>'
+                                 +   '<div style="height:8px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden;">'
+                                 +     '<div style="width:' + bw.toFixed(1) + '%; height:100%; background:linear-gradient(90deg, #6366f1 0%, #a5b4fc 100%);"></div>'
+                                 +   '</div>'
+                                 +   '<div style="text-align:right;">'
+                                 +     '<div style="font-size:0.85rem; font-weight:800; color:#a5b4fc;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                                 +     '<div style="font-size:0.65rem; color:var(--text-secondary);">' + _jiqFmt(r.hh_count || 0) + ' HHs</div>'
+                                 +   '</div>'
+                                 + '</div>';
+                        }).join('')
+                    +   (lens.callout
+                        ? '<div style="margin-top:0.65rem; padding:0.55rem 0.7rem; border-radius:5px;'
+                          +            ' background:rgba(99,102,241,0.10); border-left:3px solid #a5b4fc;'
+                          +            ' font-size:0.74rem; line-height:1.5;">'
+                          +     '🎯 <strong>' + _jiqEsc(lens.callout) + '</strong>'
+                          + '</div>'
+                        : '')
+                    + '</div>';
+            }
+
+            // Binge-and-cancel lens renderer - per-title row with
+            // dual-number badges (binge-days + cancel-window) and a
+            // cancellation-rate horizontal bar.
+            function renderBingeLens(lens) {
+                var rows = lens.rows || [];
+                var maxRate = rows.reduce(function(m, r) { return Math.max(m, r.cancel_rate_pct || 0); }, 0) || 1;
+                return ''
+                    + '<div style="padding:0.85rem 1rem; border-radius:7px; background:rgba(255,255,255,0.03); border:1px solid rgba(99,102,241,0.18);">'
+                    +   '<div style="font-size:0.85rem; font-weight:700; margin-bottom:0.6rem;">' + _jiqEsc(lens.title || '') + '</div>'
+                    +   '<div style="display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) minmax(0,2fr) 80px;'
+                    +              ' gap:0.55rem; padding:0.4rem 0; font-size:0.62rem; opacity:0.65;'
+                    +              ' text-transform:uppercase; letter-spacing:0.06em; border-bottom:1px solid rgba(255,255,255,0.08);">'
+                    +     '<div>Title</div>'
+                    +     '<div>Median binge time</div>'
+                    +     '<div>Cancel window</div>'
+                    +     '<div>30d cancel rate</div>'
+                    +     '<div style="text-align:right;">HH cohort</div>'
+                    +   '</div>'
+                    +   rows.map(function(r) {
+                            var bw = ((r.cancel_rate_pct || 0) / maxRate) * 100;
+                            return '<div style="display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) minmax(0,2fr) 80px;'
+                                 +              ' gap:0.55rem; padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.04); align-items:center;">'
+                                 +   '<div>'
+                                 +     '<div style="font-size:0.8rem; font-weight:700;">' + _jiqEsc(r.title) + '</div>'
+                                 +     '<div style="font-size:0.66rem; color:var(--text-secondary); margin-top:0.15rem; font-style:italic; line-height:1.4;">' + _jiqEsc(r.note || '') + '</div>'
+                                 +   '</div>'
+                                 +   '<div style="font-size:0.78rem; font-weight:700; font-family:monospace;">' + r.binge_days + 'd</div>'
+                                 +   '<div style="font-size:0.78rem; font-weight:700; font-family:monospace; color:#fca5a5;">' + r.cancel_window_days + 'd</div>'
+                                 +   '<div style="display:flex; align-items:center; gap:0.4rem;">'
+                                 +     '<div style="flex:1; height:8px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden;">'
+                                 +       '<div style="width:' + bw.toFixed(1) + '%; height:100%; background:linear-gradient(90deg, #f87171 0%, #fca5a5 100%);"></div>'
+                                 +     '</div>'
+                                 +     '<div style="font-size:0.78rem; font-weight:800; color:#fca5a5; min-width:44px; text-align:right;">' + (r.cancel_rate_pct || 0).toFixed(1) + '%</div>'
+                                 +   '</div>'
+                                 +   '<div style="text-align:right; font-size:0.7rem; color:var(--text-secondary);">' + _jiqFmt(r.hh_cohort || 0) + '</div>'
+                                 + '</div>';
+                        }).join('')
+                    +   (lens.callout
+                        ? '<div style="margin-top:0.65rem; padding:0.55rem 0.7rem; border-radius:5px;'
+                          +            ' background:rgba(99,102,241,0.10); border-left:3px solid #a5b4fc;'
+                          +            ' font-size:0.74rem; line-height:1.5;">'
+                          +     '🎯 <strong>' + _jiqEsc(lens.callout) + '</strong>'
+                          + '</div>'
+                        : '')
+                    + '</div>';
+            }
+
+            function paintLensPanel() {
+                if (!lensPanelEl) return;
+                var lens = findLens(activeLensId);
+                if (!lens) { lensPanelEl.innerHTML = ''; return; }
+                if (lens.view === 'binge') {
+                    lensPanelEl.innerHTML = renderBingeLens(lens);
+                } else {
+                    lensPanelEl.innerHTML = renderBarLens(lens);
+                }
+            }
+
+            var pitchEl = document.getElementById('jiqNflxMigrationPitch');
+            if (pitchEl) {
+                pitchEl.innerHTML = '<strong>📣 The pitch:</strong> ' + _jiqEsc(data.pitch || '');
+            }
+
+            paintLensTabs();
+            paintLensPanel();
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -78301,6 +80046,19 @@
                     const trimmed = _stripFanSuffix(info.suffixLabel);
                     return dateRangeYear ? (trimmed + ' ' + dateRangeYear) : trimmed;
                 }
+                // Year-suffixed profiles ("Gen Pop 2023", "Reba McEntire
+                // 2024"): the suffix IS the year. Emit
+                // "<base> YYYY" so the comparison column header /
+                // chip / popover row carries the year even when the
+                // CSV's date_range metadata is empty (as it is for
+                // Gen_Pop_YYYY.csv files - the Gen Pop baseline has
+                // no analyzed-period range). Without this branch the
+                // function falls through to the no-suffix case below,
+                // which loses the year and leaves every Gen Pop cut
+                // labeled "Total Universe" indistinguishably.
+                if (info && info.suffixType === 'year' && info.suffixLabel) {
+                    return _baseCohortLabel() + ' ' + info.suffixLabel;
+                }
             } catch (_) {}
             // No cohort/dash suffix at all - by user convention, an
             // unsuffixed BASE profile represents the broader CASUAL
@@ -79874,6 +81632,33 @@
             const includeCasualFan = _comparisonRunsState.includeCasualFan !== false;
             const hideCF = (series.length > 0 && !includeCasualFan);
 
+            // Year suffix for the currently-loaded profile. Used to
+            // relabel the static .profile-col header from
+            // "Total Universe" -> "Total Universe 2026" when compare
+            // mode surfaces sibling cohort columns whose own labels
+            // already carry years ("Total Universe 2023" /
+            // "Total Universe 2024"). Without this the first column
+            // (the loaded profile) looks indistinguishable from the
+            // cohort columns. Resolution: cached date_range year ->
+            // suffix-year on display name. Empty for non year-
+            // suffixed profiles (Reba McEntire, Dwayne Johnson, etc.)
+            // so their column header stays as the bare base label.
+            const _currentProfileYearForHeader = (function() {
+                try {
+                    const prof = (typeof currentProfileData !== 'undefined') ? currentProfileData : null;
+                    const key  = (typeof currentS3Key !== 'undefined') ? currentS3Key : '';
+                    if (typeof getCachedRunDateRangeYear === 'function') {
+                        const c = getCachedRunDateRangeYear(key || prof);
+                        if (c) return c;
+                    }
+                    if (prof && typeof getProfileSuffixInfo === 'function') {
+                        const info = getProfileSuffixInfo(prof);
+                        if (info && info.suffixType === 'year' && info.suffixLabel) return info.suffixLabel;
+                    }
+                } catch (_) {}
+                return '';
+            })();
+
             // -------- BEHAVIORAL CARDS ----------------------------------
             // Each card has .behavioral-table > .behavioral-header-row +
             // .behavioral-list > .behavioral-item rows. The category name
@@ -79894,6 +81679,20 @@
             }));
             behavioralCards.forEach(table => {
                 _cmpClearInjected(table);
+                // Restore the .profile-col header text to its original
+                // bare label whenever compare clears OR before we
+                // re-apply (the re-apply path below re-stamps it with
+                // the year). Without restoration the previous compare
+                // session's year would persist after the user picks a
+                // non year-suffixed profile.
+                const _hdr = table.querySelector('.behavioral-header-row');
+                if (_hdr) {
+                    const _pcol = _hdr.querySelector('.profile-col');
+                    if (_pcol && _pcol.dataset.cmpOrigText) {
+                        _pcol.textContent = _pcol.dataset.cmpOrigText;
+                        delete _pcol.dataset.cmpOrigText;
+                    }
+                }
                 if (series.length === 0) {
                     table.style.gridTemplateColumns = '';
                     table.classList.remove('cmp-hide-genpop');
@@ -79902,6 +81701,21 @@
                 }
                 table.classList.toggle('cmp-hide-genpop', hideGP);
                 table.classList.toggle('cmp-hide-profile', hideCF);
+                // Append the year to the loaded profile's column header
+                // (e.g. "Total Universe" -> "Total Universe 2026") so
+                // the three Gen Pop columns read "Total Universe 2026
+                // | Total Universe 2023 | Total Universe 2024" instead
+                // of three indistinguishable "Total Universe" labels.
+                if (_currentProfileYearForHeader && _hdr) {
+                    const _pcol2 = _hdr.querySelector('.profile-col');
+                    if (_pcol2) {
+                        const _orig = _pcol2.dataset.cmpOrigText || _pcol2.textContent || '';
+                        if (!_pcol2.dataset.cmpOrigText) _pcol2.dataset.cmpOrigText = _orig;
+                        const _base = (_orig || _baseCohortLabel()).trim();
+                        const _suffix = ' ' + _currentProfileYearForHeader;
+                        _pcol2.textContent = _base.endsWith(_suffix) ? _base : (_base + _suffix);
+                    }
+                }
                 const list = table.querySelector('.behavioral-list');
                 const cat = list && list.dataset.cat;
                 // Recompute grid: rank | name | [profile?] | [N cmps] | [genpop?] | index.
