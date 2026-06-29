@@ -21673,7 +21673,7 @@
                 #blueIQView .bq-day-grid { grid-template-columns: 1fr 1fr; }
                 #blueIQView .bq-day-controls { flex-direction: column; align-items: flex-start; }
             }
-            #blueIQView .blue-iq-card-articles { grid-column: span 6; min-height: 320px; }
+            #blueIQView .blue-iq-card-articles { grid-column: span 4; min-height: 320px; }
             #blueIQView .blue-iq-card-demo     { grid-column: span 6; }
             #blueIQView .blue-iq-card-compare  { grid-column: span 6; }
             #blueIQView .blue-iq-card-title { font-size: 0.92rem; font-weight: 600; margin: 0 0 0.4rem 0; color: var(--text-primary); display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
@@ -35981,6 +35981,44 @@
                   + '<div class="blue-iq-card-body">' + _bqRenderEngagementCard(cards.social_media, { kind: 'social' }) + '</div>'
                   + '</div>';
 
+            // CARD E: Top political articles. Promoted to the first row
+            // alongside Search engines + Social platforms (3-up on a
+            // 12-col grid, span 4 each) so the user sees the editorial
+            // signal next to the channel mix at a glance. Each row
+            // carries reach_share (0-1) computed server-side across the
+            // blended agent + panel + GDELT list. We render it as a
+            // percentage so the meta line reads "source.com · 12.4%"
+            // instead of exposing raw panelist counts. Topic tag
+            // (agent-supplied) renders as a small chip when present.
+            var articles = cards.top_articles || [];
+            var artHtml = articles.length ? articles.slice(0, 15).map(function(a) {
+                var img = a.image
+                    ? ('<div class="blue-iq-article-img" style="background-image: url(' + _bqEscape(a.image) + ');"></div>')
+                    : '<div class="blue-iq-article-img"></div>';
+                var pctLabel = '';
+                if (typeof a.reach_share === 'number' && a.reach_share > 0) {
+                    pctLabel = ' \u00b7 ' + _bqPct(a.reach_share);
+                }
+                var topicChip = a.topic
+                    ? '<span class="bq-article-topic">' + _bqEscape(a.topic) + '</span>'
+                    : '';
+                var summaryHtml = a.summary
+                    ? '<div class="blue-iq-article-summary">' + _bqEscape(a.summary) + '</div>'
+                    : '';
+                return '<div class="blue-iq-article">'
+                     + img
+                     + '<div class="blue-iq-article-body">'
+                     + '<p class="blue-iq-article-title"><a href="' + _bqEscape(a.url) + '" target="_blank" rel="noopener">' + _bqEscape(a.title || a.url) + '</a>' + (topicChip ? ' ' + topicChip : '') + '</p>'
+                     + '<div class="blue-iq-article-meta">' + _bqEscape(a.source || '') + pctLabel + '</div>'
+                     + summaryHtml
+                     + '</div>'
+                     + '</div>';
+            }).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No political articles surfaced for this slice.</div>';
+            html += '<div class="blue-iq-card blue-iq-card-articles">'
+                  + '<h3 class="blue-iq-card-title">Top political articles</h3>'
+                  + '<div class="blue-iq-card-body">' + artHtml + '</div>'
+                  + '</div>';
+
             // CARD F (Turnout intent) intentionally removed - the
             // searched-voter-action-terms surface wasn't carrying
             // enough signal across most slices and was rendering as
@@ -36035,41 +36073,11 @@
                   + '<div class="blue-iq-card-body" id="blueIQCardCandidatesBody"></div>'
                   + '</div>';
 
-            // CARD E: Top articles.
-            // Each row carries reach_share (0-1) computed server-side
-            // across the blended agent + panel + GDELT list. We render
-            // it as a percentage so the meta line reads
-            // "source.com · 12.4%" instead of exposing raw panelist
-            // counts. Topic tag (agent-supplied) renders as a small
-            // chip when present.
-            var articles = cards.top_articles || [];
-            var artHtml = articles.length ? articles.slice(0, 15).map(function(a) {
-                var img = a.image
-                    ? ('<div class="blue-iq-article-img" style="background-image: url(' + _bqEscape(a.image) + ');"></div>')
-                    : '<div class="blue-iq-article-img"></div>';
-                var pctLabel = '';
-                if (typeof a.reach_share === 'number' && a.reach_share > 0) {
-                    pctLabel = ' \u00b7 ' + _bqPct(a.reach_share);
-                }
-                var topicChip = a.topic
-                    ? '<span class="bq-article-topic">' + _bqEscape(a.topic) + '</span>'
-                    : '';
-                var summaryHtml = a.summary
-                    ? '<div class="blue-iq-article-summary">' + _bqEscape(a.summary) + '</div>'
-                    : '';
-                return '<div class="blue-iq-article">'
-                     + img
-                     + '<div class="blue-iq-article-body">'
-                     + '<p class="blue-iq-article-title"><a href="' + _bqEscape(a.url) + '" target="_blank" rel="noopener">' + _bqEscape(a.title || a.url) + '</a>' + (topicChip ? ' ' + topicChip : '') + '</p>'
-                     + '<div class="blue-iq-article-meta">' + _bqEscape(a.source || '') + pctLabel + '</div>'
-                     + summaryHtml
-                     + '</div>'
-                     + '</div>';
-            }).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">No political articles surfaced for this slice.</div>';
-            html += '<div class="blue-iq-card blue-iq-card-articles">'
-                  + '<h3 class="blue-iq-card-title">Top political articles</h3>'
-                  + '<div class="blue-iq-card-body">' + artHtml + '</div>'
-                  + '</div>';
+            // CARD E (Top political articles) intentionally moved up to
+            // the first row alongside Search engines + Social platforms
+            // (see the block right after CARD C above). Kept this anchor
+            // comment so the card-ordering legend (B/C/E/D/D2/T/T2/G/...)
+            // still reads in source order.
 
             // CARD T: "Trending political searches" - rolling 7-day Google
             // Trends, AI/keyword-filtered to political. Geographically
