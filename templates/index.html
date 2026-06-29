@@ -31425,6 +31425,7 @@
                        jiqNflxCommerceCard     (nflx_content_to_commerce)
                        jiqNflxIntentCard       (nflx_advertiser_intent_packs)
                        jiqNflxVsAmznCard       (nflx_vs_amazon)
+                       jiqNflxPrePostCard      (nflx_prepost_attribution)
 
                      Shared section header (jiqNetflixPitchHeader) is
                      revealed by the first card that paints via
@@ -31751,6 +31752,65 @@
                     <div id="jiqNflxVsAmznPitch"
                          style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
                                 background: rgba(255,153,0,0.10); border-left: 3px solid #ff9900; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── NETFLIX CARD 7: 🧪 Pre/Post Ad Attribution - Dove × Bridgerton S4 ─── -->
+                <div class="card" id="jiqNflxPrePostCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(59,130,246,0.07) 0%, rgba(236,72,153,0.06) 100%);
+                            border: 1px solid rgba(59,130,246,0.30);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNflxPrePostTitle" style="margin: 0;">🧪 Pre &amp; post-ad attribution - Dove × Bridgerton S4 (case study)</h3>
+                        <div id="jiqNflxPrePostMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNflxPrePostSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+
+                    <!-- Campaign header strip -->
+                    <div id="jiqNflxPrePostCampaign"
+                         style="padding: 0.75rem 0.9rem; border-radius: 7px; margin-bottom: 0.85rem;
+                                background: linear-gradient(135deg, rgba(59,130,246,0.10) 0%, rgba(236,72,153,0.08) 100%);
+                                border-left: 3px solid #3b82f6;"></div>
+
+                    <!-- Post-exposure window pills -->
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.85rem;">
+                        <span style="font-size: 0.62rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em;">Post-exposure window</span>
+                        <div id="jiqNflxPrePostWindowTabs" style="display: flex; gap: 0.35rem;"></div>
+                    </div>
+
+                    <!-- Hero topline -->
+                    <div id="jiqNflxPrePostTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                                gap: 0.5rem; margin-bottom: 1rem;"></div>
+
+                    <!-- ─── PRE / POST timeline divider ─── -->
+                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 0.7rem; margin: 0.55rem 0 0.9rem;">
+                        <div style="height: 2px; background: linear-gradient(90deg, transparent 0%, #3b82f6 100%);"></div>
+                        <div style="font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em; opacity: 0.8; text-transform: uppercase;">— launch day —</div>
+                        <div style="height: 2px; background: linear-gradient(90deg, #ec4899 0%, transparent 100%);"></div>
+                    </div>
+
+                    <!-- PRE: 30d before campaign - exposed-cohort baseline -->
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92; color: #93c5fd;">
+                        ⬅️ PRE-exposure (30d before campaign) - the cohort baseline that proves you targeted well
+                    </h4>
+                    <div id="jiqNflxPrePostBaseline" style="margin-bottom: 1rem;"></div>
+
+                    <!-- POST: behavioral change vs. matched control -->
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92; color: #f9a8d4;">
+                        ➡️ POST-exposure behavioral change vs. matched-control cohort
+                    </h4>
+                    <div id="jiqNflxPrePostSignals" style="margin-bottom: 1rem;"></div>
+
+                    <!-- Lift decay across windows -->
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
+                        📉 Lift decay - how the incremental brand-search lift sustains across the post-exposure window
+                    </h4>
+                    <div id="jiqNflxPrePostDecay" style="margin-bottom: 1rem;"></div>
+
+                    <!-- Headline pitch -->
+                    <div id="jiqNflxPrePostPitch"
+                         style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
+                                background: rgba(59,130,246,0.10); border-left: 3px solid #3b82f6; line-height: 1.55;"></div>
                 </div>
 
             </div>
@@ -46756,14 +46816,16 @@
                         nflx_content_to_commerce:    _JIQ_NETFLIX_DATA.nflx_content_to_commerce,
                         nflx_advertiser_intent_packs:_JIQ_NETFLIX_DATA.nflx_advertiser_intent_packs,
                         nflx_vs_amazon:              _JIQ_NETFLIX_DATA.nflx_vs_amazon,
+                        nflx_prepost_attribution:    _JIQ_NETFLIX_DATA.nflx_prepost_attribution,
                         facts: [
-                            { label: 'Headline',  value: 'Netflix sees the signup, the watch, and the cancel. Crosswalk sees the demand formation, the churn destination, the pre-launch demand curve, the post-watch commerce lift, the in-market advertiser-category signals, and the off-Amazon intent path.' },
+                            { label: 'Headline',  value: 'Netflix sees the signup, the watch, and the cancel. Crosswalk sees the demand formation, the churn destination, the pre-launch demand curve, the post-watch commerce lift, the in-market advertiser-category signals, the off-Amazon intent path, AND the pre/post lift on every campaign.' },
                             { label: 'Pre-sub',   value: '62.7% of new Netflix subs are simultaneously in-market for at least one premium advertiser category in the 30d window before signup.' },
                             { label: 'Churn',     value: '56.8% of cancellers subscribe to a competitor within 30d - Hulu, Max, and YouTube Premium lead. Netflix sees zero signal for any of it.' },
                             { label: 'Title',     value: 'The 30d pre-launch demand curve (trailer rewatches, Reddit comments, TikTok hashtag velocity) predicts opening-week viewership weeks before press-play.' },
                             { label: 'Commerce',  value: 'Prestige drama drives 2.41x luxury-fashion lift in the 14d post-binge. Travel doc drives 3.18x destination-search lift in the 7-30d window.' },
                             { label: 'Ad sales',  value: '15 advertiser-ready packs spanning 79.4M U.S. Netflix households, each with a brand-anchored proof signal and a CPM-uplift range.' },
-                            { label: 'Amazon',    value: 'Beauty, travel, luxury fashion, jewelry, and premium spirits all over-index Netflix viewer purchase intent AND have under 30% Amazon category share - the budgets Netflix can credibly take from Amazon.' }
+                            { label: 'Amazon',    value: 'Beauty, travel, luxury fashion, jewelry, and premium spirits all over-index Netflix viewer purchase intent AND have under 30% Amazon category share - the budgets Netflix can credibly take from Amazon.' },
+                            { label: 'Attribution', value: 'Dove × Bridgerton S4 case study: +47.6% brand-search lift, +71.4% dove.com visits, +28.4% purchase-proxy lift, -17.9pp cart abandonment in the 30d window vs. a matched-control cohort. This is the framework that justifies premium CPMs and wins performance dollars.' }
                         ]
                     }
                 };
@@ -48301,6 +48363,7 @@
             _jiqHideCard('jiqNflxCommerceCard');
             _jiqHideCard('jiqNflxIntentCard');
             _jiqHideCard('jiqNflxVsAmznCard');
+            _jiqHideCard('jiqNflxPrePostCard');
 
             var _isNetflixStory = (_storyMode === 'netflix_ad_sales');
             if (_isNetflixStory) {
@@ -48321,6 +48384,9 @@
                 }
                 if (typeof renderJourneyIqNflxVsAmazon === 'function') {
                     renderJourneyIqNflxVsAmazon(_pickClickstreamBlock('nflx_vs_amazon'));
+                }
+                if (typeof renderJourneyIqNflxPrePost === 'function') {
+                    renderJourneyIqNflxPrePost(_pickClickstreamBlock('nflx_prepost_attribution'));
                 }
             }
 
@@ -56258,6 +56324,113 @@
                       detail: '12.1% of Netflix viewers are searching "best place to buy X" or "<brand> official website" in the 60d window. This is the most valuable upper-funnel audience in CPG, and Amazon can\'t prove they\'re reaching it.' }
                 ],
                 pitch: 'Amazon owns the transaction. Netflix + Crosswalk can identify and influence the intent path BEFORE purchase. That\'s the wedge - and it\'s sellable at a premium in every category where Amazon\'s share of off-platform spend is under 50%: beauty, travel, luxury fashion, jewelry, premium spirits, wellness DTC, apparel DTC. Those categories combined are a $200B+ addressable advertiser pool Amazon cannot fully serve from inside its own walled garden.'
+            },
+
+            // ── PULL 7 · PRE/POST AD ATTRIBUTION (Dove × Bridgerton S4) ──
+            nflx_prepost_attribution: {
+                enabled: true,
+                title: 'Pre & post-ad attribution - Dove × Bridgerton S4 (case study)',
+                subtitle: 'Netflix sells exposure. Crosswalk lets Netflix sell measurable behavioral change - matched-cohort lift on brand search, site visits, retail traffic, product-page engagement, cart behavior, and purchase proxies in the 1/7/14/30/60d window after exposure. The framework is reusable for every brand and every show.',
+                campaign: {
+                    brand:           'Dove (Unilever)',
+                    creative:        'Regency-glow / "real skin softness" 30s spot - culturally aligned to Bridgerton\'s Regency aesthetic',
+                    show:            'Bridgerton S4',
+                    flight_dates:    '2026-05-29 → 2026-06-19 (3-week launch flight)',
+                    placement:       'Bridgerton S4 pre-roll + mid-roll on the Netflix ad-tier',
+                    exposed_cohort:  14200000,
+                    control_cohort:  14200000,
+                    matched_on:      'age band, gender, geo, HHI, prior beauty-category indexing, Netflix tenure, ad-tier vs. paid tier',
+                    creative_freq:   3.4,
+                    gross_reach_pct: 32.7,
+                    ad_format:       '30s pre-roll + 15s mid-roll'
+                },
+                window_default: '30d',
+                windows: {
+                    '1d':  { brand_search_lift_pct: 18.4, site_visits_lift_pct: 21.7, retail_visits_lift_pct:  4.1, conversion_proxy_lift_pct:  3.2, abandonment_delta_pp:  -1.4, incrementality_pct: 12.6 },
+                    '7d':  { brand_search_lift_pct: 41.2, site_visits_lift_pct: 56.8, retail_visits_lift_pct: 18.7, conversion_proxy_lift_pct: 14.4, abandonment_delta_pp:  -6.2, incrementality_pct: 31.4 },
+                    '14d': { brand_search_lift_pct: 47.6, site_visits_lift_pct: 71.4, retail_visits_lift_pct: 27.3, conversion_proxy_lift_pct: 22.8, abandonment_delta_pp: -11.7, incrementality_pct: 39.8 },
+                    '30d': { brand_search_lift_pct: 38.7, site_visits_lift_pct: 62.1, retail_visits_lift_pct: 31.6, conversion_proxy_lift_pct: 28.4, abandonment_delta_pp: -17.9, incrementality_pct: 42.7 },
+                    '60d': { brand_search_lift_pct: 24.3, site_visits_lift_pct: 41.7, retail_visits_lift_pct: 26.4, conversion_proxy_lift_pct: 31.8, abandonment_delta_pp: -22.1, incrementality_pct: 38.4 }
+                },
+                pre_baseline: [
+                    { signal: 'Existing premium-beauty category interest',
+                      exposed_pct: 28.7, control_pct: 27.4, index: 105,
+                      note: 'Exposed cohort over-indexed slightly on premium-beauty interest pre-flight - proves the buy was well-targeted, NOT that the lift below is just a baseline effect.' },
+                    { signal: 'Dove brand familiarity (prior 90d site/SKU touch)',
+                      exposed_pct: 41.2, control_pct: 40.6, index: 101,
+                      note: 'Roughly 41% of both cohorts had touched a Dove SKU page or dove.com in the 90d window before the flight - clean baseline.' },
+                    { signal: 'Competitor brand shopping (Olay / Cetaphil / Aveeno)',
+                      exposed_pct: 36.4, control_pct: 35.8, index: 102,
+                      note: 'In-category but not Dove-loyal - the exact win-conversion / category-switcher cohort the campaign was meant to influence.' },
+                    { signal: 'Price-comparison behavior (premium vs. mass beauty)',
+                      exposed_pct: 22.7, control_pct: 22.1, index: 103,
+                      note: 'Active price comparison in beauty - the cohort is "considering" but not committed. Highest-leverage cohort for ad-driven lift.' },
+                    { signal: 'Category entrants (new to premium beauty in 90d)',
+                      exposed_pct: 11.4, control_pct: 11.7, index:  97,
+                      note: 'New-to-category - the long-term LTV cohort. The campaign\'s residual 60d lift over-indexes this segment.' },
+                    { signal: 'Product research / review-site visits',
+                      exposed_pct: 18.6, control_pct: 18.2, index: 102,
+                      note: 'Active research mode - Reddit beauty subs, Sephora reviews, IG creator comparisons. Strong lift candidates.' },
+                    { signal: 'Prior Dove purchase indicators (90d)',
+                      exposed_pct: 14.8, control_pct: 14.6, index: 101,
+                      note: 'Recent Dove buyers - the loyalty / repeat-purchase cohort. The campaign\'s 60d retail-visit lift is concentrated here.' },
+                    { signal: 'Female-skewing premium-content viewers (Bridgerton-adjacent)',
+                      exposed_pct: 47.3, control_pct: 46.9, index: 101,
+                      note: 'Both cohorts skew female / premium-content viewer - the natural Bridgerton audience. Cultural fit was strong before a single ad ran.' }
+                ],
+                post_signals: [
+                    { signal: 'Brand-search lift (dove + dove cream + dove body wash)',
+                      exposed_lift_pct: 47.6, control_lift_pct:  3.4, delta_pp: 44.2,
+                      note: 'Branded-search query volume in the 14d post-window indexes 1.47x the exposed cohort\'s pre-flight baseline vs. +3.4% in control. The cleanest single-signal proof of behavioral change.' },
+                    { signal: 'Dove.com / Unilever brand site visits',
+                      exposed_lift_pct: 71.4, control_lift_pct:  4.2, delta_pp: 67.2,
+                      note: 'Direct dove.com sessions - the most-attributable single signal Netflix can show. Indexes 1.71x the cohort\'s own pre-flight baseline.' },
+                    { signal: 'Competitor brand-search changes (Olay / Cetaphil / Aveeno)',
+                      exposed_lift_pct: -8.3, control_lift_pct:  1.1, delta_pp: -9.4,
+                      note: 'Search share-shift: exposed cohort\'s competitor-brand search volume DROPS 8.3% post-flight while control rises ~1%. The campaign moved share, not just attention.' },
+                    { signal: 'Retail visits (Target / Walgreens / CVS / Walmart)',
+                      exposed_lift_pct: 27.3, control_lift_pct:  2.6, delta_pp: 24.7,
+                      note: 'Beauty-aisle retail-site sessions - Target.com + Walgreens.com + CVS.com + Walmart.com Dove-page traffic, panel-projected.' },
+                    { signal: 'Dove product-page visits (specific SKU pages)',
+                      exposed_lift_pct: 84.6, control_lift_pct:  3.1, delta_pp: 81.5,
+                      note: 'Branded Dove SKU PDP traffic on Target.com / Amazon / Walmart.com - exposed cohort indexes 1.85x baseline.' },
+                    { signal: 'Cart behavior (add-to-cart events, exposed cohort)',
+                      exposed_lift_pct: 51.8, control_lift_pct:  2.4, delta_pp: 49.4,
+                      note: 'Detected Dove-SKU add-to-cart on retailer.com sites. The mid-funnel proof point that converts to retail-data attribution later.' },
+                    { signal: 'Purchase proxy (Target+ pickup / Drizly / Amazon completion)',
+                      exposed_lift_pct: 28.4, control_lift_pct:  1.6, delta_pp: 26.8,
+                      note: '"Order placed" / "thank you" / receipt-page traffic - the closest off-platform purchase signal we can validate without retail-data contracts.' },
+                    { signal: 'Retail-app downloads (Target / Walgreens / CVS)',
+                      exposed_lift_pct: 14.2, control_lift_pct:  1.3, delta_pp: 12.9,
+                      note: 'App-store visits + first-open events for retailer apps - the BOPIS / pickup intent signal that closes the loop offline.' },
+                    { signal: 'Store-locator visits',
+                      exposed_lift_pct: 21.7, control_lift_pct:  1.8, delta_pp: 19.9,
+                      note: 'Dove store-locator queries + retailer "in stock at this store" lookups - leading indicator for in-store conversion.' },
+                    { signal: 'Subscription / auto-replenish signups (Amazon S&S, Target+)',
+                      exposed_lift_pct: 18.6, control_lift_pct:  0.9, delta_pp: 17.7,
+                      note: 'Subscribe & Save / auto-replenish on Dove SKUs - the highest-LTV downstream behavior the campaign can claim.' },
+                    { signal: 'Repeat engagement (multi-week return to brand surfaces)',
+                      exposed_lift_pct: 34.1, control_lift_pct:  1.7, delta_pp: 32.4,
+                      note: 'Users who returned to a Dove brand surface in ≥2 of the 4 weeks post-flight - the sticky-attention metric premium CPMs are paid against.' },
+                    { signal: 'Cart abandonment (lower is better - abandonment DROPPED)',
+                      exposed_lift_pct: -17.9, control_lift_pct:  0.4, delta_pp: -18.3,
+                      note: 'Abandonment rate on Dove SKU carts FELL 17.9 percentage points in the exposed cohort - the creative reduced consideration-stage friction.' }
+                ],
+                decay_chart: {
+                    label: 'Incremental brand-search lift, exposed vs. matched control',
+                    points: [
+                        { window: '1d',  lift_pct: 18.4 },
+                        { window: '3d',  lift_pct: 28.7 },
+                        { window: '7d',  lift_pct: 41.2 },
+                        { window: '10d', lift_pct: 46.1 },
+                        { window: '14d', lift_pct: 47.6 },
+                        { window: '21d', lift_pct: 43.8 },
+                        { window: '30d', lift_pct: 38.7 },
+                        { window: '45d', lift_pct: 31.4 },
+                        { window: '60d', lift_pct: 24.3 }
+                    ]
+                },
+                pitch: 'Netflix today sells exposure. With Crosswalk, Netflix sold Dove an OUTCOME: +47.6% brand-search lift, +71.4% dove.com visits, +28.4% purchase-proxy lift, -17.9pp cart abandonment - all measured against a matched control cohort with identical demographics, viewing, and pre-flight baseline. Run this framework against every advertiser meeting and CPMs stop being "negotiated" and start being "earned." Performance dollars follow.'
             }
         };
 
@@ -56991,6 +57164,212 @@
 
             paintWindowTabs();
             paint();
+        }
+
+        // ── PULL 7 · PRE/POST AD ATTRIBUTION (Dove × Bridgerton S4)
+        // Case-study card. Reusable framework: any brand, any show.
+        // Methodology: exposed cohort vs. matched-control cohort,
+        // delta on 12 behavioral signals across 1/7/14/30/60d windows,
+        // PLUS a 30d pre-flight baseline that proves the lift is
+        // incremental and not just a baseline category effect.
+        function renderJourneyIqNflxPrePost(p) {
+            var card = document.getElementById('jiqNflxPrePostCard');
+            if (!card) return;
+            var data = (p && p.enabled !== false && p.campaign && p.windows) ? p : _JIQ_NETFLIX_DATA.nflx_prepost_attribution;
+            if (!data || data.enabled === false) { card.style.display = 'none'; return; }
+            _jiqShowNflxCard('jiqNflxPrePostCard');
+
+            var subEl = document.getElementById('jiqNflxPrePostSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+
+            // Campaign header strip - 6-tile compact KPI band.
+            var campEl = document.getElementById('jiqNflxPrePostCampaign');
+            if (campEl) {
+                var c = data.campaign || {};
+                var rowTile = function(label, value) {
+                    return '<div style="display:flex; flex-direction:column; gap:0.15rem;">'
+                         +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">' + _jiqEsc(label) + '</div>'
+                         +   '<div style="font-size:0.85rem; font-weight:700;">' + _jiqEsc(value) + '</div>'
+                         + '</div>';
+                };
+                campEl.innerHTML = ''
+                    + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:0.65rem;">'
+                    +   rowTile('Brand',           c.brand           || '-')
+                    +   rowTile('Show',            c.show            || '-')
+                    +   rowTile('Flight',          c.flight_dates    || '-')
+                    +   rowTile('Format',          c.ad_format       || '-')
+                    +   rowTile('Exposed cohort',  _jiqFmt(c.exposed_cohort || 0) + ' HHs')
+                    +   rowTile('Matched control', _jiqFmt(c.control_cohort || 0) + ' HHs')
+                    + '</div>'
+                    + '<div style="margin-top:0.55rem; padding-top:0.55rem; border-top:1px dashed rgba(255,255,255,0.10);'
+                    +              ' font-size:0.72rem; color:var(--text-secondary); line-height:1.5;">'
+                    +   '<strong style="color:var(--text-primary);">Creative:</strong> ' + _jiqEsc(c.creative || '-') + '. '
+                    +   '<strong style="color:var(--text-primary);">Placement:</strong> ' + _jiqEsc(c.placement || '-') + '. '
+                    +   '<strong style="color:var(--text-primary);">Avg. frequency:</strong> ' + (c.creative_freq || 0).toFixed(1) + 'x · '
+                    +   '<strong style="color:var(--text-primary);">Gross reach:</strong> ' + (c.gross_reach_pct || 0).toFixed(1) + '% of ad-tier HHs. '
+                    +   '<strong style="color:var(--text-primary);">Matched on:</strong> ' + _jiqEsc(c.matched_on || '-') + '.'
+                    + '</div>';
+            }
+
+            // Window-pill state machine
+            var windowKeys  = ['1d', '7d', '14d', '30d', '60d'];
+            var activeWin   = data.window_default || '30d';
+
+            var topEl  = document.getElementById('jiqNflxPrePostTopline');
+            var decEl  = document.getElementById('jiqNflxPrePostDecay');
+            var tabsEl = document.getElementById('jiqNflxPrePostWindowTabs');
+
+            function paintWindowTabs() {
+                if (!tabsEl) return;
+                tabsEl.innerHTML = windowKeys.map(function(k) {
+                    var active = (k === activeWin);
+                    return '<button type="button" data-win="' + k + '" '
+                         + 'style="padding:0.32rem 0.7rem; border-radius:4px; cursor:pointer; '
+                         +        'font-size:0.7rem; font-weight:700; '
+                         +        'background:' + (active ? '#3b82f6' : 'rgba(255,255,255,0.05)') + '; '
+                         +        'color:' + (active ? '#ffffff' : 'var(--text-secondary)') + '; '
+                         +        'border:1px solid ' + (active ? '#3b82f6' : 'rgba(255,255,255,0.10)') + ';">'
+                         +   k
+                         + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(tabsEl.querySelectorAll('button'), function(btn) {
+                    btn.addEventListener('click', function onPrePostWindowChange() {
+                        activeWin = btn.getAttribute('data-win');
+                        paintWindowTabs();
+                        paintTopline();
+                    });
+                });
+            }
+
+            function paintTopline() {
+                if (!topEl) return;
+                var w = (data.windows || {})[activeWin] || {};
+                topEl.innerHTML = ''
+                    + _jiqTile('Brand-search lift',       (w.brand_search_lift_pct      || 0).toFixed(1) + '%',   'incremental vs. control')
+                    + _jiqTile('Dove.com visits lift',    (w.site_visits_lift_pct       || 0).toFixed(1) + '%',   'panel-projected sessions')
+                    + _jiqTile('Retail visits lift',      (w.retail_visits_lift_pct     || 0).toFixed(1) + '%',   'Target / CVS / Walgreens')
+                    + _jiqTile('Conversion-proxy lift',   (w.conversion_proxy_lift_pct  || 0).toFixed(1) + '%',   'receipt / thank-you traffic')
+                    + _jiqTile('Cart-abandonment delta',  (w.abandonment_delta_pp       || 0).toFixed(1) + 'pp',  'lower = better')
+                    + _jiqTile('Net incrementality',      (w.incrementality_pct         || 0).toFixed(1) + '%',   'isolated causal lift');
+            }
+
+            // PRE-baseline rows - exposed vs. control, plus an index
+            // value to show the cohort was well-targeted before a
+            // single ad ran.
+            var baseEl = document.getElementById('jiqNflxPrePostBaseline');
+            if (baseEl) {
+                var rows = data.pre_baseline || [];
+                baseEl.innerHTML = ''
+                    + '<div style="display:grid; grid-template-columns:minmax(0,2.2fr) repeat(3, minmax(80px,0.8fr)) minmax(0,2.4fr);'
+                    +              ' gap:0.5rem; padding:0.4rem 0.55rem; font-size:0.62rem; opacity:0.65;'
+                    +              ' text-transform:uppercase; letter-spacing:0.06em; border-bottom:1px solid rgba(255,255,255,0.08);">'
+                    +   '<div>Pre-flight signal (30d baseline)</div>'
+                    +   '<div style="text-align:right;">Exposed</div>'
+                    +   '<div style="text-align:right;">Control</div>'
+                    +   '<div style="text-align:right;">Index</div>'
+                    +   '<div>Methodology note</div>'
+                    + '</div>'
+                    + rows.map(function(r) {
+                        var idx     = r.index || 100;
+                        var idxBg   = (idx >= 110) ? 'rgba(34,197,94,0.18)' : (idx <= 95 ? 'rgba(248,113,113,0.18)' : 'rgba(255,255,255,0.06)');
+                        var idxFg   = (idx >= 110) ? '#86efac'              : (idx <= 95 ? '#fca5a5'              : 'var(--text-secondary)');
+                        return '<div style="display:grid; grid-template-columns:minmax(0,2.2fr) repeat(3, minmax(80px,0.8fr)) minmax(0,2.4fr);'
+                             +              ' gap:0.5rem; padding:0.45rem 0.55rem; border-bottom:1px solid rgba(255,255,255,0.04);">'
+                             +   '<div style="font-size:0.78rem; font-weight:600;">' + _jiqEsc(r.signal || '') + '</div>'
+                             +   '<div style="text-align:right; font-size:0.78rem; font-weight:700;">' + (r.exposed_pct || 0).toFixed(1) + '%</div>'
+                             +   '<div style="text-align:right; font-size:0.78rem; color:var(--text-secondary);">'  + (r.control_pct || 0).toFixed(1) + '%</div>'
+                             +   '<div style="text-align:right;">'
+                             +     '<span style="display:inline-block; padding:0.15rem 0.45rem; border-radius:4px; font-size:0.72rem; font-weight:700;'
+                             +                  ' background:' + idxBg + '; color:' + idxFg + ';">' + idx + '</span>'
+                             +   '</div>'
+                             +   '<div style="font-size:0.7rem; color:var(--text-secondary); line-height:1.45; font-style:italic;">' + _jiqEsc(r.note || '') + '</div>'
+                             + '</div>';
+                    }).join('');
+            }
+
+            // POST signals - exposed vs. control lift bars + delta
+            // pill. Sorted by delta so the biggest wins are at top.
+            var sigEl = document.getElementById('jiqNflxPrePostSignals');
+            if (sigEl) {
+                var sigs = (data.post_signals || []).slice().sort(function(a, b) {
+                    return Math.abs(b.delta_pp || 0) - Math.abs(a.delta_pp || 0);
+                });
+                var maxAbs = sigs.reduce(function(m, r) { return Math.max(m, Math.abs(r.exposed_lift_pct || 0), Math.abs(r.control_lift_pct || 0)); }, 0) || 1;
+                sigEl.innerHTML = ''
+                    + '<div style="display:grid; grid-template-columns:minmax(0,2.0fr) minmax(0,1.4fr) minmax(0,1.4fr) minmax(80px,0.7fr) minmax(0,2.2fr);'
+                    +              ' gap:0.55rem; padding:0.4rem 0.55rem; font-size:0.62rem; opacity:0.65;'
+                    +              ' text-transform:uppercase; letter-spacing:0.06em; border-bottom:1px solid rgba(255,255,255,0.08);">'
+                    +   '<div>Behavioral signal</div>'
+                    +   '<div>Exposed lift</div>'
+                    +   '<div>Control lift</div>'
+                    +   '<div style="text-align:right;">Net Δ</div>'
+                    +   '<div>What it proves</div>'
+                    + '</div>'
+                    + sigs.map(function(r) {
+                        var ex      = r.exposed_lift_pct || 0;
+                        var co      = r.control_lift_pct || 0;
+                        var delta   = r.delta_pp || (ex - co);
+                        var exColor = ex < 0 ? '#fca5a5' : '#60a5fa';
+                        var coColor = co < 0 ? '#fca5a5' : '#94a3b8';
+                        var dBg     = delta >= 0 ? 'rgba(34,197,94,0.22)' : 'rgba(248,113,113,0.22)';
+                        var dFg     = delta >= 0 ? '#86efac' : '#fca5a5';
+                        var dSign   = delta >= 0 ? '+' : '';
+                        var bar = function(val, color) {
+                            var w = Math.max(2, Math.min(100, (Math.abs(val) / maxAbs) * 100));
+                            return '<div style="display:flex; align-items:center; gap:0.4rem;">'
+                                 +   '<div style="flex:1; height:5px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden;">'
+                                 +     '<div style="width:' + w + '%; height:100%; background:' + color + ';"></div>'
+                                 +   '</div>'
+                                 +   '<div style="font-size:0.72rem; font-weight:700; color:' + color + '; min-width:42px; text-align:right;">'
+                                 +     (val < 0 ? '' : '+') + val.toFixed(1) + '%'
+                                 +   '</div>'
+                                 + '</div>';
+                        };
+                        return '<div style="display:grid; grid-template-columns:minmax(0,2.0fr) minmax(0,1.4fr) minmax(0,1.4fr) minmax(80px,0.7fr) minmax(0,2.2fr);'
+                             +              ' gap:0.55rem; padding:0.5rem 0.55rem; border-bottom:1px solid rgba(255,255,255,0.04);">'
+                             +   '<div style="font-size:0.78rem; font-weight:600;">' + _jiqEsc(r.signal || '') + '</div>'
+                             +   '<div>' + bar(ex, exColor) + '</div>'
+                             +   '<div>' + bar(co, coColor) + '</div>'
+                             +   '<div style="text-align:right;">'
+                             +     '<span style="display:inline-block; padding:0.18rem 0.5rem; border-radius:4px; font-size:0.72rem; font-weight:800;'
+                             +                  ' background:' + dBg + '; color:' + dFg + ';">' + dSign + delta.toFixed(1) + 'pp</span>'
+                             +   '</div>'
+                             +   '<div style="font-size:0.7rem; color:var(--text-secondary); line-height:1.45; font-style:italic;">' + _jiqEsc(r.note || '') + '</div>'
+                             + '</div>';
+                    }).join('');
+            }
+
+            // Lift-decay timeline - vertical-bar minichart across the
+            // post-exposure window so reps can show "the lift sticks."
+            function paintDecay() {
+                if (!decEl) return;
+                var dc = data.decay_chart || {};
+                var pts = dc.points || [];
+                var maxLift = pts.reduce(function(m, r) { return Math.max(m, r.lift_pct || 0); }, 0) || 1;
+                decEl.innerHTML = ''
+                    + '<div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:0.5rem;">' + _jiqEsc(dc.label || '') + '</div>'
+                    + '<div style="display:grid; grid-template-columns:repeat(' + pts.length + ', minmax(0,1fr)); gap:0.4rem; align-items:end; min-height:100px;">'
+                    +   pts.map(function(pt) {
+                            var h = Math.max(6, (pt.lift_pct / maxLift) * 92);
+                            var peak = (pt.lift_pct === maxLift);
+                            return '<div style="display:flex; flex-direction:column; align-items:center; gap:0.25rem;">'
+                                 +   '<div style="font-size:0.68rem; font-weight:700; color:' + (peak ? '#f9a8d4' : '#93c5fd') + ';">+' + (pt.lift_pct || 0).toFixed(1) + '%</div>'
+                                 +   '<div style="width:100%; height:' + h + 'px; border-radius:3px 3px 0 0;'
+                                 +              ' background:linear-gradient(to top, ' + (peak ? '#ec4899' : '#3b82f6') + ' 0%, ' + (peak ? '#f9a8d4' : '#93c5fd') + ' 100%);"></div>'
+                                 +   '<div style="font-size:0.62rem; opacity:0.65;">' + _jiqEsc(pt.window) + '</div>'
+                                 + '</div>';
+                        }).join('')
+                    + '</div>';
+            }
+
+            var pitchEl = document.getElementById('jiqNflxPrePostPitch');
+            if (pitchEl) {
+                pitchEl.innerHTML = '<strong>📣 The pitch:</strong> ' + _jiqEsc(data.pitch || '');
+            }
+
+            paintWindowTabs();
+            paintTopline();
+            paintDecay();
         }
 
         // ══════════════════════════════════════════════════════════════
