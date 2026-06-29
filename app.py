@@ -8909,7 +8909,7 @@ def get_netflix_clickhouse_ranker_data():
         # GENRE is a packed comma-separated tag string (e.g. "Kids' TV,
         # TV Cartoons"); match a trimmed exact tag, mirroring the
         # frontend's old _netflixChRowHasGenre semantics.
-        where_parts.append("arrayExists(t -> trim(t) = {genre_filter:String}, splitByChar(',', GENRE))")
+        where_parts.append("arrayExists(t -> trim(t) = {genre_filter:String}, splitByChar(',', coalesce(GENRE, '')))")
         params['genre_filter'] = genre_filter
 
     where_clause = " AND ".join(where_parts)
@@ -8964,7 +8964,7 @@ def get_netflix_clickhouse_genres():
         cur.execute("""
             SELECT DISTINCT trim(g) AS genre
             FROM netflix.netflix_ranker
-            ARRAY JOIN splitByChar(',', GENRE) AS g
+            ARRAY JOIN splitByChar(',', coalesce(GENRE, '')) AS g
             WHERE trim(g) != ''
             ORDER BY genre
         """)
