@@ -100927,17 +100927,11 @@
         }
         
         function getHeatColor(value, min, max) {
-            const normalized = (value - min) / (max - min || 1);
-            // Red (low) -> Orange -> Yellow -> Green (high)
-            if (normalized < 0.25) {
-                return `rgba(239, 68, 68, ${0.4 + (1 - normalized) * 0.6})`; // Red
-            } else if (normalized < 0.5) {
-                return `rgba(249, 115, 22, ${0.5 + normalized * 0.5})`; // Orange
-            } else if (normalized < 0.75) {
-                return `rgba(234, 179, 8, ${0.5 + normalized * 0.5})`; // Yellow
-            } else {
-                return `rgba(16, 185, 129, ${0.4 + normalized * 0.6})`; // Green
-            }
+            // Discrete color bands by whole percentage point.
+            // 10%+ = brightest green, stepping through to red at 0%.
+            var step = Math.max(0, Math.min(10, Math.floor(value)));
+            var hue = step * 14; // 0 (red) → 140 (green)
+            return 'hsl(' + hue + ', 72%, 36%)';
         }
         
         function renderHeatmap(locations) {
