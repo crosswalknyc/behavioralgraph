@@ -102298,12 +102298,17 @@
             const W = 959, H = 593;
             let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;max-height:520px;">';
 
+            // Fix SVG paths: after uppercase M x,y, implicit coords must be relative lineto
+            function _fixPath(d) {
+                return d.replace(/(M\s*[\d\.\-]+[,\s][\d\.\-]+)\s+([\d\.\-])/g, '$1 l $2');
+            }
+
             // State outlines (continental)
             _US_STATE_PATHS.forEach(function(d) {
-                svg += '<path d="' + d + '" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="0.7" stroke-linejoin="round"/>';
+                svg += '<path d="' + _fixPath(d) + '" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="0.7" stroke-linejoin="round"/>';
             });
-            svg += '<path d="' + _AK_PATH + '" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="0.7" stroke-linejoin="round"/>';
-            svg += '<path d="' + _HI_PATH + '" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="0.7" stroke-linejoin="round"/>';
+            svg += '<path d="' + _fixPath(_AK_PATH) + '" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="0.7" stroke-linejoin="round"/>';
+            svg += '<path d="' + _fixPath(_HI_PATH) + '" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="0.7" stroke-linejoin="round"/>';
 
             // Draw bubbles (smallest first so large ones don't obscure small)
             const reversed = [...bubbles].reverse();
