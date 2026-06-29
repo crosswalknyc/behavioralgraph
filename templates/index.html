@@ -47021,15 +47021,31 @@
                     opts.push('<optgroup label="🎬 Netflix">');
                     opts.push('<option value="__demo_netflix_ad_sales__">🎬 Netflix Ad-Sales Demand Map &amp; Off-Platform Intel</option>');
                     opts.push('</optgroup>');
-                    runs.forEach(function(r) {
+
+                    // Run picker hide-list. Project / target names listed
+                    // here are filtered out of the dropdown so stale demo
+                    // runs the team has retired do not surface. Match is
+                    // case-insensitive against project_name OR target.
+                    // The S3 payloads are NOT deleted - admins can still
+                    // load them by S3 key directly. To unhide a run just
+                    // pull its name out of this list.
+                    var hiddenRuns = ['backrooms', 'courtside', 'mandalorian', 'breadwinner', 'the_goat'];
+                    function _isHiddenRun(r) {
+                        var name = ((r.project_name || r.target || '') + '').trim().toLowerCase();
+                        return hiddenRuns.indexOf(name) !== -1;
+                    }
+                    var visibleRuns    = runs.filter(function(r)     { return !_isHiddenRun(r); });
+                    var visibleArchived = archived.filter(function(r) { return !_isHiddenRun(r); });
+
+                    visibleRuns.forEach(function(r) {
                         var label = (r.project_name || r.target || 'Journey')
                                   + ' - ' + (r.start_date || '') + '→' + (r.end_date || '');
                         var safe = (r.key || '').replace(/"/g, '&quot;');
                         opts.push('<option value="' + safe + '">' + label + '</option>');
                     });
-                    if (archived.length) {
+                    if (visibleArchived.length) {
                         opts.push('<optgroup label="🗄️ Archived (admin only)">');
-                        archived.forEach(function(r) {
+                        visibleArchived.forEach(function(r) {
                             var label = '[ARCHIVED] ' + (r.project_name || r.target || 'Journey')
                                       + ' - ' + (r.start_date || '') + '→' + (r.end_date || '');
                             var safe = (r.key || '').replace(/"/g, '&quot;');
@@ -47039,7 +47055,7 @@
                     }
                     picker.innerHTML = opts.join('');
 
-                    var combined = runs.concat(archived);
+                    var combined = visibleRuns.concat(visibleArchived);
                     var keyToLoad = preferredKey || (combined[0] && combined[0].key);
                     if (keyToLoad) {
                         picker.value = keyToLoad;
