@@ -384,13 +384,27 @@ def blue_iq_cache_key(filters: dict) -> str:
             from headlines, sample queries, agent outputs, and
             trending rows). v12 payloads carry the un-rewritten
             label; bump forces regeneration so the relabel ships.
+     v14 — 2026-06-29: trending_local now sources from a 7-day
+            snapshot window (was 24h RSS-only). Each row carries
+            new days_trending / first_seen / last_seen fields,
+            score is now peak-day traffic in the window, and the
+            card subtitle was rewritten from "right now" to
+            "past 7 days". v13 payloads don't carry the new
+            fields and would render the persistence chip empty,
+            so bump invalidates them.
+     v15 — 2026-06-29: added trending_overall + trending_overall_meta
+            — top 10 UNFILTERED Google Trends rows for the geo
+            (no political filter). Renders as a sibling card to
+            "Trending political searches" so DNC marketers can see
+            broader cultural context alongside the political view.
+            v14 payloads don't carry these fields; bump invalidates.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   13,
+        'version':   15,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -2350,6 +2364,23 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         'dma_resolved_via':  (DMA_TO_STATE.get(f['geo_value']) if f['geo_type'] == 'DMA' else None),
     }
 
+    # Overall (unfiltered) top trending searches for this geo. Same
+    # Google Trends source as trending_local, but without the political
+    # filter — the user gets a 7-day "what's hot here, period" view
+    # alongside the political one. Surfaces the broader cultural
+    # context a DNC marketer needs (a viral non-political topic in the
+    # geo can still inform creative timing / placement). Capped at 10.
+    trending_overall = raw_trends[:10] if raw_trends else []
+    trending_overall_meta = {
+        'geo_label':        trends_state_label,
+        'geo_type':         f['geo_type'],
+        'geo_value':        f['geo_value'],
+        'raw_trends_count': len(raw_trends),
+        'shown':            len(trending_overall),
+        'is_state_local':   trends_state is not None,
+        'dma_resolved_via': (DMA_TO_STATE.get(f['geo_value']) if f['geo_type'] == 'DMA' else None),
+    }
+
     # Turnout
     turnout_pct = 0.0
     if panel_size > 0 and panel_turnout.get('panelists'):
@@ -2510,8 +2541,10 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         'issue_paths_agent':   issue_paths_agent,
         'playbook_agent':      playbook_agent,
         'issue_geo':           issue_geo,
-        'trending_local':      trending_local,
-        'trending_meta':       trending_meta,
+        'trending_local':         trending_local,
+        'trending_meta':          trending_meta,
+        'trending_overall':       trending_overall,
+        'trending_overall_meta':  trending_overall_meta,
     }
 
     # Editorial term rewrites + banned-term scrub. Both run as the
@@ -2871,6 +2904,10 @@ def _bq_rewrite_cards(cards: dict) -> dict:
         cards.get('trending_local') or [],
         text_keys=('term', 'query'),
     )
+    cards['trending_overall'] = _bq_rewrite_dict_list(
+        cards.get('trending_overall') or [],
+        text_keys=('term', 'query'),
+    )
 
     # Issue × Geo heatmap cells — rewrite sample queries in place.
     igeo = cards.get('issue_geo') or {}
@@ -2942,6 +2979,10 @@ def _bq_scrub_cards(cards: dict) -> dict:
     # Trending Google Trends rows — drop by term.
     cards['trending_local'] = _bq_scrub_dict_list(
         cards.get('trending_local') or [],
+        label_keys=('term', 'query'),
+    )
+    cards['trending_overall'] = _bq_scrub_dict_list(
+        cards.get('trending_overall') or [],
         label_keys=('term', 'query'),
     )
 

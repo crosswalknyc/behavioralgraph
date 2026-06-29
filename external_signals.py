@@ -150,26 +150,67 @@ def _trends_rss_fetch(geo: str) -> str:
         return ''
 
 
-def trends_top_issues(state: Optional[str] = None, lookback_days: int = 7) -> list[dict]:
-    """Top trending search topics in the geo, filtered (downstream) to political.
+# ── Trends RSS 7-day snapshot cache ──────────────────────────────────────
+# Google's RSS daily-trends feed only returns the past ~24h of trending
+# searches per call. To present "past 7 days" in the dashboard we snapshot
+# the live RSS to S3 once per (geo, calendar-day) and aggregate the past
+# N days at request time. Snapshot key:
+#
+#   blue_iq/trends_rss/v1/{geo}/{YYYY-MM-DD}.json
+#
+# Payload is the raw [{term, score, related}, ...] for that geo on that
+# UTC date. Lazy snapshotting: the first caller of any given day writes
+# the snapshot; subsequent callers re-use it from S3. Days older than
+# the lookback window are simply ignored (we don't garbage-collect, so
+# the bucket fills slowly with one small JSON per geo per day).
+_TRENDS_SNAP_BUCKET = os.environ.get('BLUE_IQ_CACHE_BUCKET', 'dashboard-inputs')
+_TRENDS_SNAP_PREFIX = 'blue_iq/trends_rss/v1/'
 
-    Returns `[{ 'term': str, 'score': int, 'related': [str, ...] }, ...]` sorted
-    by score desc. Empty list on failure or no signal.
 
-    state=None -> US-wide trends (geo=US). state='California' -> geo=US-CA.
+def _trends_snap_s3():
+    """boto3 client for the trends-snapshot bucket (lazy import)."""
+    try:
+        import boto3  # type: ignore
+        return boto3.client('s3', region_name='us-east-2')
+    except Exception as e:
+        logger.debug("trends snapshot: boto3 unavailable (%s) — falling back to live-only", e)
+        return None
 
-    NOTE: Google's RSS daily-trends endpoint returns ALL trending topics —
-    political filtering is the caller's job (Blue IQ's _filter_trends_to_political
-    handles it via politician-name matches + civic keyword list + related-query
-    political signal).
 
-    lookback_days is accepted for API compatibility but the RSS feed only
-    returns the past ~24h of trends. Callers asking for longer lookbacks
-    just get what's in the current feed.
-    """
-    name = normalize_state(state)
-    geo = US_STATE_TO_ISO.get(name) if name else 'US'
+def _trends_snap_key(geo: str, day_iso: str) -> str:
+    return f"{_TRENDS_SNAP_PREFIX}{geo}/{day_iso}.json"
 
+
+def _trends_snap_get(geo: str, day_iso: str) -> Optional[list[dict]]:
+    """Read one day's trends snapshot from S3. None on miss / error."""
+    s3 = _trends_snap_s3()
+    if s3 is None:
+        return None
+    try:
+        resp = s3.get_object(Bucket=_TRENDS_SNAP_BUCKET, Key=_trends_snap_key(geo, day_iso))
+        return json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+
+
+def _trends_snap_put(geo: str, day_iso: str, rows: list[dict]) -> None:
+    """Write one day's trends snapshot to S3. Silent on failure."""
+    s3 = _trends_snap_s3()
+    if s3 is None or not rows:
+        return
+    try:
+        s3.put_object(
+            Bucket=_TRENDS_SNAP_BUCKET,
+            Key=_trends_snap_key(geo, day_iso),
+            Body=json.dumps(rows).encode('utf-8'),
+            ContentType='application/json',
+        )
+    except Exception as e:
+        logger.debug("trends snapshot put failed for %s/%s: %s", geo, day_iso, e)
+
+
+def _trends_fetch_today(geo: str) -> list[dict]:
+    """Fetch and parse the live RSS for `geo` (one ~24h snapshot)."""
     body = _trends_rss_fetch(geo)
     if not body:
         return []
@@ -201,12 +242,114 @@ def trends_top_issues(state: Optional[str] = None, lookback_days: int = 7) -> li
                 related.append(t.text.strip())
         out.append({'term': term, 'score': score, 'related': related[:6]})
 
-    # De-dupe by lower-cased term, keep max score
+    # De-dupe within the single-day fetch (RSS sometimes repeats items).
     by_term: dict[str, dict] = {}
     for row in out:
         key = row['term'].lower()
         if key not in by_term or by_term[key]['score'] < row['score']:
             by_term[key] = row
+    return sorted(by_term.values(), key=lambda x: -x['score'])
+
+
+def trends_top_issues(state: Optional[str] = None, lookback_days: int = 7) -> list[dict]:
+    """Top trending search topics in the geo over the past `lookback_days`,
+    filtered downstream to political.
+
+    Returns `[{ 'term': str, 'score': int, 'related': [str, ...],
+                'days_trending': int, 'first_seen': 'YYYY-MM-DD',
+                'last_seen': 'YYYY-MM-DD' }, ...]` sorted by score desc.
+    Empty list on total failure.
+
+    state=None -> US-wide trends (geo=US). state='California' -> geo=US-CA.
+
+    NOTE: Google's RSS daily-trends endpoint only returns the past ~24h
+    of trends per call. To present a multi-day window we snapshot the
+    RSS to S3 once per (geo, UTC-day) and aggregate the past
+    `lookback_days` snapshots on each call:
+
+      - score          = MAX score that term achieved on any day in
+                         the window (matches "peak traffic in last
+                         N days" intuition; doesn't double-count a
+                         term that trended each day).
+      - related        = union of every day's related-news titles,
+                         capped at 6 (newest first).
+      - days_trending  = number of days in the window the term hit
+                         the trending list.
+      - first_seen     = oldest UTC day-iso the term appeared.
+      - last_seen      = newest UTC day-iso the term appeared.
+
+    The first caller on any given day populates today's snapshot to
+    S3 from the live RSS; subsequent callers re-use the snapshot. If
+    S3 is unavailable, falls back gracefully to live-RSS-only (the
+    pre-2026-06-29 behavior).
+    """
+    name = normalize_state(state)
+    geo = US_STATE_TO_ISO.get(name) if name else 'US'
+
+    # 1. Today's snapshot — try cache first, fetch live and persist on miss.
+    today = datetime.now(timezone.utc).date()
+    today_iso = today.isoformat()
+    today_rows = _trends_snap_get(geo, today_iso)
+    if today_rows is None:
+        today_rows = _trends_fetch_today(geo)
+        if today_rows:
+            _trends_snap_put(geo, today_iso, today_rows)
+
+    # 2. Walk backwards through the lookback window, pulling whatever
+    #    snapshots exist. Missing days are silently skipped (the bucket
+    #    only fills as the dashboard is used).
+    per_day: list[tuple[str, list[dict]]] = []
+    if today_rows:
+        per_day.append((today_iso, today_rows))
+    for offset in range(1, max(1, lookback_days)):
+        day_iso = (today - timedelta(days=offset)).isoformat()
+        rows = _trends_snap_get(geo, day_iso)
+        if rows:
+            per_day.append((day_iso, rows))
+
+    if not per_day:
+        return []
+
+    # 3. Aggregate across days: max score, union of related (newest day
+    #    first so newer related-news titles appear first), days_trending
+    #    count, first_seen / last_seen day-iso.
+    by_term: dict[str, dict] = {}
+    for day_iso, rows in per_day:
+        for row in rows:
+            term = (row.get('term') or '').strip()
+            if not term:
+                continue
+            key = term.lower()
+            score = int(row.get('score') or 0)
+            related = list(row.get('related') or [])
+            existing = by_term.get(key)
+            if existing is None:
+                by_term[key] = {
+                    'term':            term,
+                    'score':           score,
+                    'related':         related[:6],
+                    'days_trending':   1,
+                    'first_seen':      day_iso,
+                    'last_seen':       day_iso,
+                }
+                continue
+            if score > existing['score']:
+                existing['score'] = score
+                existing['term']  = term  # prefer casing of peak day
+            existing['days_trending'] += 1
+            if day_iso < existing['first_seen']:
+                existing['first_seen'] = day_iso
+            if day_iso > existing['last_seen']:
+                existing['last_seen'] = day_iso
+            # Merge related, dedupe, keep newest first (per_day is
+            # already iterated newest-first).
+            seen_rel = {r.lower() for r in existing['related']}
+            for r in related:
+                if r.lower() not in seen_rel:
+                    existing['related'].append(r)
+                    seen_rel.add(r.lower())
+            existing['related'] = existing['related'][:6]
+
     return sorted(by_term.values(), key=lambda x: -x['score'])
 
 
