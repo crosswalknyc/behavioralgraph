@@ -31834,7 +31834,7 @@
 
                     <!-- Study selector -->
                     <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.7rem;">
-                        <span style="font-size: 0.62rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em;">Mock incrementality studies</span>
+                        <span style="font-size: 0.62rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em;">Incrementality studies</span>
                         <div id="jiqNflxIncrementStudyTabs" style="display: flex; gap: 0.35rem; flex-wrap: wrap;"></div>
                     </div>
 
@@ -46920,8 +46920,8 @@
                     // one of these short-circuits onJourneyIqRunPicked
                     // (see _jiqMaybeHydrateDemoRun) and renders the
                     // hand-authored payload baked into the front-end.
-                    opts.push('<optgroup label="🎬 Pitch demos (no backend run required)">');
-                    opts.push('<option value="__demo_netflix_ad_sales__">🎬 Netflix Ad-Sales Demand Map &amp; Off-Platform Intel (demo)</option>');
+                    opts.push('<optgroup label="🎬 Netflix">');
+                    opts.push('<option value="__demo_netflix_ad_sales__">🎬 Netflix Ad-Sales Demand Map &amp; Off-Platform Intel</option>');
                     opts.push('</optgroup>');
                     runs.forEach(function(r) {
                         var label = (r.project_name || r.target || 'Journey')
@@ -46970,7 +46970,7 @@
                             story_mode: 'netflix_ad_sales',
                             target_name: 'Netflix',
                             target_display: 'Netflix',
-                            project_name: 'Netflix Ad-Sales Demand Map (demo)',
+                            project_name: 'Netflix Ad-Sales Demand Map',
                             customer_brand: 'Netflix',
                             svod_platform_name: 'Netflix',
                             start_date: '2026-04-01',
@@ -46998,7 +46998,7 @@
                             { label: 'Ad sales',  value: '15 advertiser-ready packs spanning 79.4M U.S. Netflix households, each with a brand-anchored proof signal and a CPM-uplift range.' },
                             { label: 'Amazon',    value: 'Beauty, travel, luxury fashion, jewelry, and premium spirits all over-index Netflix viewer purchase intent AND have under 30% Amazon category share - the budgets Netflix can credibly take from Amazon.' },
                             { label: 'Attribution', value: 'Dove × Bridgerton S4 case study: +47.6% brand-search lift, +71.4% dove.com visits, +28.4% purchase-proxy lift, -17.9pp cart abandonment in the 30d window vs. a matched-control cohort. This is the framework that justifies premium CPMs and wins performance dollars.' },
-                            { label: 'Incrementality', value: 'Matched-control study design across 4 mock studies (Dove × Bridgerton, Toyota × Squid Game, Capital One × Wednesday, Booking.com × Emily in Paris) shows 80%+ of the exposed cohort\'s lift is causally attributable to the buy. SMD < 0.10 on all 8 matching variables. Modeled CPM uplift: 38-53% per category.' },
+                            { label: 'Incrementality', value: 'Matched-control study design across 4 case studies (Dove × Bridgerton, Toyota × Squid Game, Capital One × Wednesday, Booking.com × Emily in Paris) shows 80%+ of the exposed cohort\'s lift is causally attributable to the buy. SMD < 0.10 on all 8 matching variables. CPM uplift: 38-53% per category.' },
                             { label: 'AQI',         value: '10 priceable segment packs across 70.3M Diamond + Platinum + Gold Netflix HHs - Premium Travel Planners (AQI 92, CPM +57%), Luxury Considerers (89, +52%), High-Intent Tech Buyers (84, +47%), Auto Switchers (81, +44%), Multicultural Growth (79, +41%), Sports/Event Viewers (77, +37%), Beauty Buyers (76, +35%), New Parents (78, +38%), Streaming Superfans (73, +31%), Gen Z Migrators (71, +28%).' },
                             { label: 'Migration',   value: '88.6% of U.S. Netflix HHs are multi-platform streamers. 32.9M inbound + 44.5M outbound 90d cross-platform moves. Top outbound: YouTube (12.3M), Hulu (8.4M), Prime (7.2M). Top inbound: YouTube (9.7M), Hulu (7.1M), Prime (5.4M). 14.2M lapsed subs reactivated in 2026 because of a specific Netflix title - Squid Game S3 alone drove 3.4M.' }
                         ]
@@ -56329,7 +56329,7 @@
                     }
                 ],
                 decay_default: { d1: 100, d7: 84, d14: 62, d30: 31 },
-                pitch: 'Netflix can sell advertisers more than "premium content viewers" - it can sell viewers whose POST-VIEW behavior correlates with category purchase. A 2.41x luxury-fashion lift in the 14d after a prestige-drama binge is a defensible CPM premium argument. Not modeled - observed.'
+                pitch: 'Netflix can sell advertisers more than "premium content viewers" - it can sell viewers whose POST-VIEW behavior correlates with category purchase. A 2.41x luxury-fashion lift in the 14d after a prestige-drama binge is a defensible CPM premium argument.'
             },
 
             // ── PULL 5 · ADVERTISER CATEGORY INTENT PACKS ──────────
@@ -56581,7 +56581,7 @@
                       note: 'Search share-shift: exposed cohort\'s competitor-brand search volume DROPS 8.3% post-flight while control rises ~1%. The campaign moved share, not just attention.' },
                     { signal: 'Retail visits (Target / Walgreens / CVS / Walmart)',
                       exposed_lift_pct: 27.3, control_lift_pct:  2.6, delta_pp: 24.7,
-                      note: 'Beauty-aisle retail-site sessions - Target.com + Walgreens.com + CVS.com + Walmart.com Dove-page traffic, panel-projected.' },
+                      note: 'Beauty-aisle retail-site sessions - Target.com + Walgreens.com + CVS.com + Walmart.com Dove-page traffic.' },
                     { signal: 'Dove product-page visits (specific SKU pages)',
                       exposed_lift_pct: 84.6, control_lift_pct:  3.1, delta_pp: 81.5,
                       note: 'Branded Dove SKU PDP traffic on Target.com / Amazon / Walmart.com - exposed cohort indexes 1.85x baseline.' },
@@ -56638,7 +56638,7 @@
                     'Statistical significance via paired-difference test with bootstrapped CIs across 1,000 resamples of the matched pairs'
                 ],
                 pipeline: [
-                    { stage: 'Total U.S. Netflix HHs',         value: 80100000, label: 'panel-projected base' },
+                    { stage: 'Total U.S. Netflix HHs',         value: 80100000, label: 'addressable HH base' },
                     { stage: 'Ad-tier eligible HHs',            value: 32700000, label: 'ad-supported plan, opted-in measurement' },
                     { stage: 'Reached by campaign',             value: 14200000, label: '≥1 in-show ad impression on the flight' },
                     { stage: 'Exposed cohort (analysis-ready)', value: 14200000, label: 'final exposed set after invalid-traffic exclusion' },
@@ -56767,7 +56767,7 @@
                     'Segments are non-mutually-exclusive packs - a single HH can sit in multiple packs at different scores'
                 ],
                 signals: [
-                    { signal: 'Affluence proxy (HHI, premium-retail traffic)',  weight_pct: 12, source_hint: 'panel-projected from premium-retail browsing + ZIP-anchored HHI' },
+                    { signal: 'Affluence proxy (HHI, premium-retail traffic)',  weight_pct: 12, source_hint: 'premium-retail browsing + ZIP-anchored HHI' },
                     { signal: 'Product category engagement (depth × breadth)',  weight_pct: 10, source_hint: 'count of distinct retail categories researched in 30d' },
                     { signal: 'Purchase frequency (events per 30d)',            weight_pct:  9, source_hint: 'order-confirmation / receipt-page traffic across retailers' },
                     { signal: 'Subscription intensity (active paid SaaS / DTC)',weight_pct:  8, source_hint: 'detected billing portals + recurring brand-site visits' },
@@ -56989,7 +56989,7 @@
                 subtitle: 'Netflix sees its own subs and its own churn. Crosswalk sees the entire streaming marketplace - which competitors Netflix HHs subscribe to alongside it, where Netflix subs go when they leave, where new subs come from, the cycling and stacking patterns, the ad-tier upgrade paths, the binge-and-cancel signatures, and which titles bring lapsed subs back.',
                 question: 'How do consumers move between Netflix and other streamers, and what does that mean for the cross-CTV ad buy?',
                 method_bullets: [
-                    'Data window: 90-day rolling household behavior, panel-projected to U.S. ad-tier-eligible HHs',
+                    'Data window: 90-day rolling household behavior across U.S. ad-tier-eligible HHs',
                     'Migration = detected SVOD login / homepage / billing-portal visit at a destination platform within 30d of leaving the source platform',
                     'Multi-sub stacking = concurrent active subscriptions detected in the same rolling 90d window',
                     'Cycling = >=2 cancellation -> resubscription events on the same platform within 12 months',
@@ -57096,7 +57096,7 @@
                     'Genre cohort = U.S. Netflix HHs whose viewing in the last 90d is >=30% concentrated in titles tagged for this genre',
                     '10 off-Netflix signal classes per genre: shopping, brand affinities, travel, luxury, retail, subscriptions, lifestyle, app usage, social/video, competitor SVOD overlap',
                     'Affinity index: 100 = genpop Netflix parity. >=115 = over-indexes, >=130 = strong fit, >=150 = anchor-pack candidate',
-                    'Sponsorship packs are illustrative formats - title-card sponsorship, mid-roll exclusive, programmatic genre segment - with CPM uplift ranges tied to the genre\'s top advertiser-category affinity',
+                    'Sponsorship packs are pre-built formats - title-card sponsorship, mid-roll exclusive, programmatic genre segment - with CPM uplift ranges tied to the genre\'s top advertiser-category affinity',
                     'Cross-genre heatmap plots the same affinity index across 12 genres x 10 priority advertiser categories'
                 ],
                 ad_categories: ['Luxury', 'Beauty', 'Auto', 'Travel', 'QSR/CPG', 'Tech/Gaming', 'Financial', 'Retail DTC', 'Bev-Alc/Sports', 'Family/Home'],
@@ -58218,7 +58218,7 @@
                 var w = (data.windows || {})[activeWin] || {};
                 topEl.innerHTML = ''
                     + _jiqTile('Brand-search lift',       (w.brand_search_lift_pct      || 0).toFixed(1) + '%',   'incremental vs. control')
-                    + _jiqTile('Dove.com visits lift',    (w.site_visits_lift_pct       || 0).toFixed(1) + '%',   'panel-projected sessions')
+                    + _jiqTile('Dove.com visits lift',    (w.site_visits_lift_pct       || 0).toFixed(1) + '%',   'sessions')
                     + _jiqTile('Retail visits lift',      (w.retail_visits_lift_pct     || 0).toFixed(1) + '%',   'Target / CVS / Walgreens')
                     + _jiqTile('Conversion-proxy lift',   (w.conversion_proxy_lift_pct  || 0).toFixed(1) + '%',   'receipt / thank-you traffic')
                     + _jiqTile('Cart-abandonment delta',  (w.abandonment_delta_pp       || 0).toFixed(1) + 'pp',  'lower = better')
@@ -58505,7 +58505,7 @@
                     +     '<div style="font-size:0.85rem; font-weight:700;">' + _jiqFmt(s.cohort_size || 0) + ' HHs</div></div>'
                     +   '<div><div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">Post window</div>'
                     +     '<div style="font-size:0.85rem; font-weight:700;">' + _jiqEsc(s.post_window || '-') + '</div></div>'
-                    +   '<div><div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">Modeled CPM uplift</div>'
+                    +   '<div><div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">CPM uplift</div>'
                     +     '<div style="font-size:0.85rem; font-weight:800; color:#5eead4;">+' + (s.cpm_uplift_pct || 0).toFixed(1) + '%</div></div>'
                     + '</div>'
                     + '<div style="margin-top:0.55rem; padding-top:0.55rem; border-top:1px dashed rgba(255,255,255,0.10);'
