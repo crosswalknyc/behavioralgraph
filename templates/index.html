@@ -9293,44 +9293,6 @@
             margin-bottom: 1rem;
             position: relative;
         }
-        .heatmap-legend {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            margin-bottom: 0.5rem;
-        }
-        .legend-gradient {
-            width: 150px;
-            height: 12px;
-            background: linear-gradient(to right, #10b981, #84cc16, #eab308, #f97316, #ef4444);
-            border-radius: 3px;
-        }
-        .us-heatmap {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-            gap: 0.5rem;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        .state-box {
-            padding: 0.5rem;
-            border-radius: 6px;
-            text-align: center;
-            font-size: 0.75rem;
-            cursor: default;
-        }
-        .state-box .state-name {
-            font-weight: 600;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .state-box .state-pct {
-            font-size: 0.65rem;
-            opacity: 0.8;
-        }
         .regional-breakdown {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
@@ -19882,21 +19844,16 @@
                     <div id="regionalBreakdown" class="regional-grid"></div>
                 </div>
                 
-                <!-- US Heat Map -->
+                <!-- US DMA Bubble Map -->
                 <div class="heatmap-container location-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Heat Map">
                     <h3 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                         <span style="display: flex; align-items: center; gap: 0.3rem;">
                             <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
-                            <span>🗺️ Heat Map</span>
+                            <span>🗺️ DMA Concentration Map</span>
                         </span>
-                        <span class="module-action-btns"><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('location', 'Heat Map')" data-tooltip="Export PNG: Download the geographic heat map as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'Heat Map')" data-tooltip="Add to Deck: Save the heat map to your presentation deck.">➕</button></span>
+                        <span class="module-action-btns"><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('location', 'Heat Map')" data-tooltip="Export PNG: Download the DMA map as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'Heat Map')" data-tooltip="Add to Deck: Save the DMA map to your presentation deck.">➕</button></span>
                     </h3>
-                    <div class="heatmap-legend">
-                        <span class="legend-label">High</span>
-                        <div class="legend-gradient"></div>
-                        <span class="legend-label">Low</span>
-                    </div>
-                    <div id="usHeatmap" class="us-heatmap"></div>
+                    <div id="usHeatmap"></div>
                 </div>
                 
                 <div class="location-grid">
@@ -102091,35 +102048,163 @@
             return { byState, byRegion, byDma };
         }
         
-        function getHeatColor(value, min, max) {
-            // Discrete color bands by whole percentage point.
-            // 10%+ = brightest green, stepping through yellow to red at 0%.
-            // Hand-picked palette avoids muddy brown in the mid-range.
-            var colors = [
-                '#ef4444', // 0%  — bright red
-                '#f97316', // 1%  — vivid orange
-                '#fb923c', // 2%  — light orange
-                '#eab308', // 3%  — golden yellow
-                '#facc15', // 4%  — yellow
-                '#fde047', // 5%  — light yellow
-                '#e2c714', // 6%  — warm yellow
-                '#d4d420', // 7%  — yellow-chartreuse
-                '#84cc16', // 8%  — yellow-green
-                '#22c55e', // 9%  — medium green
-                '#16a34a', // 10%+ — rich green
-            ];
-            var step = Math.max(0, Math.min(10, Math.floor(value)));
-            return colors[step];
+        // DMA lat/lng coordinates for bubble map placement
+        const DMA_COORDS = {
+            "New York":[40.71,-74.01],"Los Angeles":[34.05,-118.24],"Chicago":[41.88,-87.63],
+            "Dallas Fort Worth":[32.78,-96.80],"Philadelphia":[39.95,-75.17],"Houston":[29.76,-95.37],
+            "Atlanta":[33.75,-84.39],"Washington":[38.91,-77.04],
+            "San Francisco Oakland San Jose":[37.77,-122.42],"Boston":[42.36,-71.06],
+            "Tampa St Petersburg":[27.95,-82.46],"Phoenix":[33.45,-112.07],
+            "Seattle Tacoma":[47.61,-122.33],"Detroit":[42.33,-83.05],
+            "Orlando Daytona Beach Melbourne":[28.54,-81.38],"Minneapolis St Paul":[44.98,-93.27],
+            "Denver":[39.74,-104.99],"Miami Ft Lauderdale":[25.76,-80.19],
+            "Cleveland Akron":[41.50,-81.69],"Sacramento Stockton Modesto":[38.58,-121.49],
+            "Charlotte":[35.23,-80.84],"Raleigh Durham":[35.77,-78.64],
+            "Portland":[45.52,-122.68],"St Louis":[38.63,-90.20],
+            "Nashville":[36.16,-86.78],"Indianapolis":[39.77,-86.16],
+            "Salt Lake City":[40.76,-111.89],"Pittsburgh":[40.44,-79.99],
+            "Baltimore":[39.29,-76.61],"San Diego":[32.72,-117.16],
+            "San Antonio":[29.42,-98.49],"Austin":[30.27,-97.74],
+            "Hartford New Haven":[41.76,-72.68],"Columbus":[39.96,-82.99],
+            "Kansas City":[39.10,-94.58],
+            "Greenville Spartanburg Asheville NC Anderson":[34.85,-82.40],
+            "West Palm Beach Ft Pierce":[26.71,-80.05],"Cincinnati":[39.10,-84.51],
+            "Milwaukee":[43.04,-87.91],"Las Vegas":[36.17,-115.14],
+            "Jacksonville":[30.33,-81.66],
+            "Harrisburg Lancaster Lebanon York":[40.27,-76.88],
+            "Grand Rapids Kalamazoo Battle Creek":[42.96,-85.66],
+            "Norfolk Portsmouth Newport News":[36.85,-76.29],
+            "Oklahoma City":[35.47,-97.52],"Birmingham":[33.52,-86.81],
+            "Greensboro High Point Winston Salem":[36.07,-79.79],
+            "Louisville":[38.25,-85.76],"Albuquerque Santa Fe":[35.08,-106.65],
+            "New Orleans":[29.95,-90.07],"Memphis":[35.15,-90.05],
+            "Fort Myers Naples":[26.64,-81.87],
+            "Providence New Bedford MA":[41.82,-71.41],
+            "Richmond Petersburg":[37.54,-77.43],"Buffalo":[42.89,-78.88],
+            "Fresno Visalia":[36.74,-119.77],
+            "Mobile Pensacola FL":[30.69,-88.04],
+            "Wilkes Barre Scranton Hazleton":[41.25,-75.88],
+            "Little Rock Pine Bluff":[34.75,-92.29],
+            "Albany Schenectady Troy":[42.65,-73.76],
+            "Knoxville":[35.96,-83.92],"Tulsa":[36.15,-95.99],
+            "Lexington":[38.04,-84.50],"Tucson":[32.22,-110.93],
+            "Dayton":[39.76,-84.19],"Spokane":[47.66,-117.43],
+            "Des Moines Ames":[41.59,-93.62],"Green Bay Appleton":[44.51,-88.02],
+            "Honolulu":[21.31,-157.86],
+            "Roanoke Lynchburg":[37.27,-79.94],"Omaha":[41.26,-95.94],
+            "Wichita Hutchinson":[37.69,-97.34],
+            "Huntsville Decatur":[34.73,-86.59],"Springfield":[37.22,-93.29],
+            "Flint Saginaw Bay City":[43.01,-83.69],
+            "Columbia":[34.00,-81.03],"Rochester":[43.16,-77.61],
+            "Madison":[43.07,-89.40],"Portland Auburn":[43.66,-70.26],
+            "Harlingen Weslaco Brownsville McAllen":[26.19,-97.70],
+            "Toledo":[41.65,-83.54],
+            "Charleston Huntington":[38.35,-81.63],
+            "Waco Temple Bryan":[31.55,-97.15],
+            "Savannah":[32.08,-81.09],"Charleston":[32.78,-79.93],
+            "Chattanooga":[35.05,-85.31],"Syracuse":[43.05,-76.15],
+            "El Paso":[31.76,-106.49],
+            "Colorado Springs Pueblo":[38.83,-104.82],
+            "Champaign Springfield Decatur":[39.78,-89.65],
+            "Shreveport":[32.53,-93.75],
+            "Paducah Cape Girardeau MO Harrisburg IL":[37.08,-88.60],
+            "Cedar Rapids Waterloo Iowa City Dubuque":[41.98,-91.67],
+            "Burlington Plattsburgh NY":[44.48,-73.21],
+            "Fort Smith Fayetteville Springdale Rogers":[36.07,-94.16],
+            "Baton Rouge":[30.45,-91.19],"Boise":[43.62,-116.21],
+            "Myrtle Beach Florence":[33.69,-78.89],
+            "South Bend Elkhart":[41.68,-86.25],
+            "Jackson MS":[32.30,-90.18],
+            "Tri Cities TN VA":[36.55,-82.56],
+            "Greenville New Bern Washington":[35.61,-77.37],
+            "Reno":[39.53,-119.81],
+            "Tallahassee Thomasville GA":[30.44,-84.28],
+            "Davenport Rock Island Moline IL":[41.52,-90.58],
+            "Lincoln Hastings Kearney":[40.81,-96.70],
+            "Tyler Longview":[32.35,-95.30],
+            "Fort Wayne":[41.08,-85.14],"Evansville":[37.97,-87.56],
+            "Augusta Aiken SC":[33.47,-81.97],
+            "Johnstown Altoona State College":[40.33,-78.92],
+            "Sioux Falls":[43.55,-96.73],"Lansing":[42.73,-84.56],
+            "Fargo":[46.88,-96.79],"Springfield Holyoke":[42.10,-72.59],
+            "Yakima Pasco Richland Kennewick":[46.60,-120.51],
+            "Youngstown":[41.10,-80.65],
+            "Traverse City Cadillac":[44.76,-85.62],
+            "Macon":[32.84,-83.63],"Eugene":[44.05,-123.09],
+            "Bakersfield":[35.37,-119.02],
+            "Peoria Bloomington":[40.69,-89.59],
+            "Santa Barbara Santa Maria San Luis Obispo":[34.42,-119.70],
+            "Lafayette LA":[30.22,-92.02],
+            "Wilmington":[34.24,-77.95],
+            "Columbus Opelika AL":[32.46,-84.99],
+            "Montgomery Selma":[32.38,-86.30],
+            "Monterey Salinas":[36.67,-121.66],
+            "La Crosse Eau Claire":[43.81,-91.25],
+            "Corpus Christi":[27.80,-97.40],
+            "Salisbury":[38.37,-75.60],
+            "Amarillo":[35.22,-101.83],
+            "Wausau Rhinelander":[44.96,-89.63],
+            "Columbia Jefferson City":[38.95,-92.33],
+            "Columbus Tupelo West Point":[33.50,-88.43],
+            "Chico Redding":[40.59,-122.39],
+            "Rockford":[42.27,-89.09],
+            "Medford Klamath Falls":[42.33,-122.87],
+            "Duluth Superior WI":[46.79,-92.10],
+            "Lubbock":[33.58,-101.85],
+            "Topeka":[39.05,-95.68],
+            "Palm Springs":[33.83,-116.55],
+            "Panama City":[30.16,-85.66],
+            "Monroe El Dorado AR":[32.51,-92.12],
+            "Beaumont Port Arthur":[30.08,-94.10],
+            "Odessa Midland":[31.99,-102.08],
+            "Anchorage":[61.22,-149.90],
+            "Bismarck Minot Dickinson":[46.81,-100.78],
+            "Wichita Falls Lawton OK":[34.13,-98.49],
+            "Sioux City":[42.50,-96.40],
+            "Joplin Pittsburg KS":[37.08,-94.51],
+            "Rochester Mason City IA Austin":[44.02,-92.47],
+            "Erie":[42.13,-80.09],
+            "Albany":[31.58,-84.16],
+            "Idaho Falls Pocatello":[43.47,-112.03],
+            "Gainesville":[29.65,-82.32],
+            "Bangor":[44.80,-68.77],
+            "Biloxi Gulfport":[30.40,-89.07],
+            "Terre Haute":[39.47,-87.41],
+            "Missoula":[46.87,-114.00],
+            "Binghamton":[42.10,-75.91],
+            "Billings":[45.78,-108.50],
+            "Rapid City":[44.08,-103.23],
+            "Fairbanks":[64.84,-147.72],
+            "Juneau":[58.30,-134.42],
+            "Helena":[46.59,-112.04],
+            "Great Falls":[47.51,-111.30],
+            "Butte Bozeman":[45.68,-111.04],
+            "Casper Riverton":[42.87,-106.31],
+            "Grand Junction Montrose":[39.06,-108.55],
+            "Bend":[44.06,-121.31],
+            "North Platte":[41.12,-100.77],
+            "Mankato":[44.16,-94.00],
+            "Glendive":[47.11,-104.71],
+        };
+
+        // Simplified US outline path data (viewBox 960×600)
+        const _US_OUTLINE = 'M97,108 L97,84 L190,84 L494,84 L574,84 L574,100 L639,97 L653,107 L665,118 L675,130 L675,155 L667,165 L660,175 L675,175 L718,170 L726,150 L788,125 L834,123 L872,88 L889,93 L900,130 L856,145 L842,155 L842,165 L846,152 L853,145 L870,138 L885,155 L910,145 L912,160 L905,175 L895,180 L885,175 L870,182 L860,195 L850,210 L843,220 L848,232 L855,245 L850,258 L842,268 L830,275 L820,280 L810,288 L800,295 L790,303 L780,310 L770,320 L760,338 L750,355 L745,370 L755,385 L765,400 L775,420 L790,455 L792,470 L780,475 L765,465 L750,450 L738,435 L725,420 L710,412 L695,415 L675,422 L650,428 L620,432 L600,435 L575,440 L550,438 L530,435 L510,437 L490,440 L475,448 L460,460 L445,472 L455,455 L470,440 L480,425 L485,408 L478,392 L465,375 L450,360 L430,350 L405,342 L380,338 L350,345 L320,358 L290,375 L255,390 L225,400 L195,407 L170,408 L145,405 L125,400 L108,385 L95,355 L82,320 L75,285 L72,250 L68,220 L75,185 L85,150 L95,125 Z';
+        const _AK_OUTLINE = 'M75,465 L110,452 L150,448 L185,450 L210,458 L225,470 L220,482 L205,490 L185,495 L170,500 L155,510 L135,515 L115,510 L95,500 L80,490 L72,478 Z';
+        const _HI_OUTLINE = 'M255,498 L262,492 L272,490 L278,494 L275,502 L265,505 Z M282,488 L295,482 L308,484 L315,492 L310,500 L298,502 L285,498 Z';
+
+        function _projectUSA(lat, lng) {
+            var x = 65 + (lng + 124.7) / 57.7 * 835;
+            var y = 80 + (49.4 - lat) / 24.9 * 390;
+            return [x, y];
         }
-        
+
         function renderHeatmap(locations) {
             if (!locations || locations.length === 0) {
                 document.getElementById('usHeatmap').innerHTML = '<p style="color: var(--text-secondary);">No location data</p>';
                 return;
             }
-            
+
             const isGenPopProfile = (currentProfileData?.name || '').toUpperCase().includes('GEN POP') || (currentS3Key || '').toUpperCase().includes('GEN_POP');
-            // Gen Pop: run the exact same logic as profile-simple sum by state/region/DMA, no dedupe, no conversion, no normalize
             const genPopLocations = isGenPopProfile ? locations : (genPopBaselineData && genPopBaselineData.locations) ? genPopBaselineData.locations : null;
             const genPopAgg = { byState: {}, byRegion: {}, byDma: {} };
             if (genPopLocations) {
@@ -102136,15 +102221,12 @@
                 });
             }
             const genPopByDma = genPopAgg.byDma;
-            
-            // Group by state - profile % from current profile's locations (same aggregation as we run on Gen Pop)
+
             const stateData = {};
             locations.forEach(loc => {
                 const state = getStateFromLocation(loc.name);
                 if (state) {
-                    if (!stateData[state]) {
-                        stateData[state] = { pct: 0, genPopPct: 0, index: 0, count: 0, names: [], cities: [] };
-                    }
+                    if (!stateData[state]) stateData[state] = { pct: 0, genPopPct: 0, index: 0, count: 0, names: [], cities: [] };
                     stateData[state].pct += loc.pct;
                     stateData[state].index += loc.index || 100;
                     stateData[state].count++;
@@ -102152,75 +102234,113 @@
                     stateData[state].cities.push({ name: loc.name, pct: loc.pct || 0, index: loc.index || 100 });
                 }
             });
-            
-            // Gen Pop state totals: from same aggregation run on Gen Pop file
             if (isGenPopProfile) {
-                Object.keys(stateData).forEach(state => {
-                    stateData[state].genPopPct = stateData[state].pct;
-                });
+                Object.keys(stateData).forEach(s => { stateData[s].genPopPct = stateData[s].pct; });
             } else {
-                Object.keys(stateData).forEach(state => {
-                    stateData[state].genPopPct = genPopAgg.byState[state] ?? 0;
-                });
+                Object.keys(stateData).forEach(s => { stateData[s].genPopPct = genPopAgg.byState[s] ?? 0; });
             }
             const hasGenPopBaseline = !!genPopLocations;
-            
-            // Calculate average index and sort cities by percentage
-            Object.keys(stateData).forEach(state => {
-                stateData[state].avgIndex = Math.round(stateData[state].index / stateData[state].count);
-                stateData[state].cities.sort((a, b) => b.pct - a.pct);
+            Object.keys(stateData).forEach(s => {
+                stateData[s].avgIndex = Math.round(stateData[s].index / stateData[s].count);
+                stateData[s].cities.sort((a, b) => b.pct - a.pct);
             });
-            
-            // Get min/max for color scaling (keep heat colors for background, but add comparison colors for text)
-            const values = Object.values(stateData).map(s => s.pct);
-            const minVal = Math.min(...values);
-            const maxVal = Math.max(...values);
-            
+            const sortedStates = Object.entries(stateData).sort((a, b) => b[1].pct - a[1].pct);
             const isProjection = dashDisplayMode === 'projection';
             const US_POP = 329900000;
-            
-            // Render state boxes with gen pop comparison
-            const sortedStates = Object.entries(stateData).sort((a, b) => b[1].pct - a[1].pct);
-            
-            document.getElementById('usHeatmap').innerHTML = sortedStates.map(([state, data]) => {
-                // Determine comparison color (green if profile >= gen pop, dark red if under)
-                const isOverIndex = data.pct >= data.genPopPct;
-                const bgColor = getHeatColor(data.pct, minVal, maxVal);
-                // Bright red (#ef4444) for under-indexing, green for over-indexing
-                const comparisonColor = isOverIndex ? '#10b981' : '#ef4444';
-                
-                // Format profile and gen pop displays
-                const profileDisplay = isProjection 
-                    ? (data.pct === 0 || data.pct === null ? 'N/A' : formatNumber(Math.round((data.pct / 100) * US_POP)))
-                    : formatValueOrNA(data.pct, true);
-                
-                const genPopDisplay = !hasGenPopBaseline ? 'N/A' : (isProjection 
-                    ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
-                    : formatValueOrNA(data.genPopPct, true));
-                
-                // Build top 5 cities tooltip - only include cities with DMA numbers
-                const top5Cities = data.cities.filter(c => getDMARank(c.name) != null).slice(0, 5);
-                const citiesText = top5Cities.length > 0 
-                    ? `Top Cities in ${state}:\n${top5Cities.map((c) => {
-                        const gpPct = genPopByDma[(c.name || '').toUpperCase()];
-                        const dmaNum = getDMARank(c.name);
-                        const line = gpPct != null 
-                            ? `${c.name} Profile: ${c.pct.toFixed(2)}% | Gen Pop: ${gpPct.toFixed(2)}%`
-                            : `${c.name} ${c.pct.toFixed(2)}%`;
-                        return `${dmaNum}. ${line}`;
-                    }).join('\n')}`
-                    : `${state}: No city data`;
-                
-                return `
-                <div class="state-box has-tooltip" style="background: ${bgColor};" data-tooltip="${citiesText.replace(/"/g, '&quot;')}">
-                    <div class="state-name" style="color: #000;">${state}</div>
-                    <div class="state-pct" style="color: #000; font-weight: 600;">
-                        ${profileDisplay}
-                        <span style="color: rgba(0,0,0,0.55); font-weight: 400; margin-left: 0.5rem;">(${genPopDisplay})</span>
-                    </div>
-                </div>
-            `;
-            }).join('');
+
+            // Aggregate by DMA — sum pct per DMA name
+            const dmaData = {};
+            locations.forEach(loc => {
+                const name = (loc.name || '').trim();
+                if (!name) return;
+                if (!dmaData[name]) dmaData[name] = { pct: 0, index: 0, count: 0 };
+                dmaData[name].pct += loc.pct || 0;
+                dmaData[name].index += loc.index || 100;
+                dmaData[name].count++;
+            });
+
+            // Filter DMAs over 1% and resolve coordinates
+            const bubbles = [];
+            Object.entries(dmaData).forEach(([name, d]) => {
+                if (d.pct < 1.0) return;
+                // Match to canonical DMA
+                const canon = typeof matchCanonicalDMA === 'function' ? matchCanonicalDMA(name) : name;
+                const coords = DMA_COORDS[canon] || DMA_COORDS[name];
+                if (!coords) return;
+                const dmaInfo = DMA_MASTER[canon] || {};
+                const isAK = dmaInfo.state === 'AK';
+                const isHI = dmaInfo.state === 'HI';
+                let xy;
+                if (isAK) {
+                    xy = [140 + (coords[1] + 170) / 40 * 80, 465 + (71 - coords[0]) / 17 * 45];
+                } else if (isHI) {
+                    xy = [270 + (coords[1] + 160) / 5 * 50, 490 + (22 - coords[0]) / 3 * 15];
+                } else {
+                    xy = _projectUSA(coords[0], coords[1]);
+                }
+                const rank = dmaInfo.rank || 999;
+                const displayName = canon || name;
+                const state = dmaInfo.state || '';
+                bubbles.push({ name: displayName, state, pct: d.pct, x: xy[0], y: xy[1], rank });
+            });
+
+            bubbles.sort((a, b) => b.pct - a.pct);
+
+            // Radius scaling — sqrt for area-proportional, clamped
+            const maxPct = bubbles.length ? bubbles[0].pct : 1;
+            const minR = 6, maxR = 32;
+            function getRadius(pct) {
+                return minR + (maxR - minR) * Math.sqrt(pct / maxPct);
+            }
+
+            // Build SVG
+            const W = 960, H = 600;
+            let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;max-height:520px;">';
+
+            // US outline
+            svg += '<path d="' + _US_OUTLINE + '" fill="none" stroke="rgba(148,163,184,0.4)" stroke-width="1.5" stroke-linejoin="round"/>';
+            svg += '<path d="' + _AK_OUTLINE + '" fill="none" stroke="rgba(148,163,184,0.4)" stroke-width="1.2" stroke-linejoin="round"/>';
+            svg += '<path d="' + _HI_OUTLINE + '" fill="none" stroke="rgba(148,163,184,0.4)" stroke-width="1.2" stroke-linejoin="round"/>';
+
+            // Labels for AK and HI
+            svg += '<text x="148" y="528" fill="rgba(148,163,184,0.5)" font-size="11" text-anchor="middle" font-family="inherit">AK</text>';
+            svg += '<text x="290" y="518" fill="rgba(148,163,184,0.5)" font-size="11" text-anchor="middle" font-family="inherit">HI</text>';
+
+            // Draw bubbles (smallest first so large ones don't obscure small)
+            const reversed = [...bubbles].reverse();
+            reversed.forEach(b => {
+                const r = getRadius(b.pct);
+                const accentH = 187;
+                const opacity = 0.25 + 0.45 * (b.pct / maxPct);
+                svg += '<circle cx="' + b.x.toFixed(1) + '" cy="' + b.y.toFixed(1) + '" r="' + r.toFixed(1) + '" '
+                    +  'fill="hsla(' + accentH + ',80%,55%,' + opacity.toFixed(2) + ')" '
+                    +  'stroke="hsl(' + accentH + ',80%,65%)" stroke-width="1.2" '
+                    +  'style="cursor:default;">'
+                    +  '<title>' + (b.name + (b.state ? ', ' + b.state : '')) + ': ' + b.pct.toFixed(2) + '%</title>'
+                    +  '</circle>';
+            });
+
+            // Draw labels for top bubbles (only where radius is large enough)
+            bubbles.forEach(b => {
+                const r = getRadius(b.pct);
+                if (r >= 12) {
+                    const label = b.state || b.name.substring(0, 3);
+                    const fontSize = r >= 20 ? 10 : 8;
+                    svg += '<text x="' + b.x.toFixed(1) + '" y="' + (b.y - 1).toFixed(1) + '" fill="#fff" font-size="' + fontSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + label + '</text>';
+                    svg += '<text x="' + b.x.toFixed(1) + '" y="' + (b.y + fontSize).toFixed(1) + '" fill="rgba(255,255,255,0.8)" font-size="' + (fontSize - 1.5) + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
+                }
+            });
+
+            svg += '</svg>';
+
+            // Legend
+            let legendHtml = '<div style="display:flex; align-items:center; gap:1rem; margin-top:0.5rem; font-size:0.72rem; color:var(--text-secondary); flex-wrap:wrap;">';
+            legendHtml += '<span>Bubble size = share of audience (DMAs over 1% shown)</span>';
+            legendHtml += '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:hsla(187,80%,55%,0.5); border:1px solid hsl(187,80%,65%);"></span> DMA market</span>';
+            legendHtml += '<span>' + bubbles.length + ' of ' + Object.keys(dmaData).length + ' DMAs shown</span>';
+            legendHtml += '</div>';
+
+            document.getElementById('usHeatmap').innerHTML = svg + legendHtml;
             
             // Location stats
             const totalLocations = locations.length;
