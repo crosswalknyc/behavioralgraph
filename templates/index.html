@@ -102262,11 +102262,9 @@
                 dmaData[name].count++;
             });
 
-            // Filter DMAs over 1% and resolve coordinates
-            const bubbles = [];
+            // Resolve coordinates for all DMAs, then keep top 15
+            const allBubbles = [];
             Object.entries(dmaData).forEach(([name, d]) => {
-                if (d.pct < 1.0) return;
-                // Match to canonical DMA
                 const canon = typeof matchCanonicalDMA === 'function' ? matchCanonicalDMA(name) : name;
                 const coords = DMA_COORDS[canon] || DMA_COORDS[name];
                 if (!coords) return;
@@ -102284,10 +102282,10 @@
                 const rank = dmaInfo.rank || 999;
                 const displayName = canon || name;
                 const state = dmaInfo.state || '';
-                bubbles.push({ name: displayName, state, pct: d.pct, x: xy[0], y: xy[1], rank });
+                allBubbles.push({ name: displayName, state, pct: d.pct, x: xy[0], y: xy[1], rank });
             });
-
-            bubbles.sort((a, b) => b.pct - a.pct);
+            allBubbles.sort((a, b) => b.pct - a.pct);
+            const bubbles = allBubbles.slice(0, 15);
 
             // Radius scaling — sqrt for area-proportional, clamped
             const maxPct = bubbles.length ? bubbles[0].pct : 1;
@@ -102343,7 +102341,7 @@
 
             // Legend
             let legendHtml = '<div style="display:flex; align-items:center; gap:1rem; margin-top:0.5rem; font-size:0.72rem; color:var(--text-secondary); flex-wrap:wrap;">';
-            legendHtml += '<span>Bubble size = share of audience (DMAs over 1% shown)</span>';
+            legendHtml += '<span>Bubble size = share of audience (Top 15 DMAs shown)</span>';
             legendHtml += '<span style="display:inline-flex; align-items:center; gap:0.3rem;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:hsla(187,80%,55%,0.5); border:1px solid hsl(187,80%,65%);"></span> DMA market</span>';
             legendHtml += '<span>' + bubbles.length + ' of ' + Object.keys(dmaData).length + ' DMAs shown</span>';
             legendHtml += '</div>';
