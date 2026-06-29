@@ -31408,7 +31408,279 @@
                      the renderer short-circuits harmlessly. Journey
                      context for subscriber metrics now lives in the
                      interactive Subscriber Lifecycle card above. -->
-                
+
+                <!-- ════════════════════════════════════════════════════════
+                     NETFLIX AD-SALES DEMAND-MAP BLOCK - five purpose-
+                     built cards for the Netflix Ads / Insights team.
+                     Each card answers a single "what would I want to
+                     know that my first-party data physically cannot
+                     show me?" question. Each card auto-hides if its
+                     payload key is missing, so this entire block only
+                     surfaces on the Netflix build (meta.story_mode
+                     === 'netflix_ad_sales'):
+
+                       jiqNflxSignupCard       (nflx_pre_signup)
+                       jiqNflxChurnCard        (nflx_churn_destinations)
+                       jiqNflxTitleCard        (nflx_title_interest)
+                       jiqNflxCommerceCard     (nflx_content_to_commerce)
+                       jiqNflxIntentCard       (nflx_advertiser_intent_packs)
+
+                     Shared section header (jiqNetflixPitchHeader) is
+                     revealed by the first card that paints via
+                     _jiqShowNetflixPitchHeader().
+                ═══════════════════════════════════════════════════════ -->
+                <div class="card" id="jiqNetflixPitchHeader"
+                     style="padding: 0.95rem 1.2rem; margin-top: 1.5rem; margin-bottom: 1rem;
+                            display: none;
+                            background: linear-gradient(135deg, rgba(229,9,20,0.10) 0%, rgba(91,108,255,0.05) 100%);
+                            border: 1px solid rgba(229,9,20,0.30);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem;">
+                        <h3 style="margin: 0; font-size: 1.1rem;">🎬 Netflix Ad-Sales Demand Map &amp; Off-Platform Intel</h3>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); font-style: italic;">
+                            5 clickstream-only views Netflix's first-party data physically cannot produce
+                        </div>
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.45rem; line-height: 1.55;">
+                        Netflix sees the signup, the watch, and the cancel. Crosswalk sees everything that happened
+                        <em>around</em> those events on the open web - the demand formation, the destination of the cancel,
+                        the pre-launch awareness curves, the post-watch commercial behavior, and the in-market
+                        advertiser-category signals that turn Netflix demos into category-priced inventory.
+                    </div>
+                </div>
+
+                <!-- ─── NETFLIX CARD 1: 🔍 The 30 Days Before Netflix Sign-up ─── -->
+                <div class="card" id="jiqNflxSignupCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(229,9,20,0.06) 0%, rgba(34,197,94,0.04) 100%);
+                            border: 1px solid rgba(229,9,20,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNflxSignupTitle" style="margin: 0;">🔍 The 30 days before Netflix sign-up</h3>
+                        <div id="jiqNflxSignupMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNflxSignupSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+
+                    <!-- Lookback-window pills - 7d / 14d / 30d / 60d -->
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.85rem;">
+                        <span style="font-size: 0.62rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em;">Lookback window</span>
+                        <div id="jiqNflxSignupWindowTabs" style="display: flex; gap: 0.35rem;"></div>
+                    </div>
+
+                    <div id="jiqNflxSignupTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.95rem;"></div>
+
+                    <div style="display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+                                gap: 1rem; align-items: start; margin-bottom: 0.95rem;">
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                🌐 Top off-platform demand-formation sites
+                            </h4>
+                            <div id="jiqNflxSignupSites"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                🔎 Top searches preceding sign-up
+                            </h4>
+                            <div id="jiqNflxSignupSearches"></div>
+                        </div>
+                    </div>
+
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
+                        🎯 Trigger sequences - the literal behavior chains that ended in a Netflix sign-up
+                    </h4>
+                    <div id="jiqNflxSignupTriggers" style="margin-bottom: 0.95rem;"></div>
+
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
+                        💼 Who they ALSO are off-Netflix (advertiser-ready overlay)
+                    </h4>
+                    <div id="jiqNflxSignupAdvOverlay"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                                gap: 0.5rem;"></div>
+
+                    <div id="jiqNflxSignupPitch"
+                         style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px; margin-top: 0.95rem;
+                                background: rgba(229,9,20,0.08); border-left: 3px solid #e50914; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── NETFLIX CARD 2: 🚪 Where Netflix Cancellers Go Next ─── -->
+                <div class="card" id="jiqNflxChurnCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(239,68,68,0.06) 0%, rgba(245,158,11,0.03) 100%);
+                            border: 1px solid rgba(239,68,68,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNflxChurnTitle" style="margin: 0;">🚪 Where Netflix cancellers go next</h3>
+                        <div id="jiqNflxChurnMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNflxChurnSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+
+                    <!-- Look-forward window pills - 7d / 14d / 30d / 60d / 90d -->
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.85rem;">
+                        <span style="font-size: 0.62rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em;">Days after cancel</span>
+                        <div id="jiqNflxChurnWindowTabs" style="display: flex; gap: 0.35rem;"></div>
+                    </div>
+
+                    <div id="jiqNflxChurnTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.95rem;"></div>
+
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
+                        🧭 Churn destination map - where the audience went after cancel
+                    </h4>
+                    <div id="jiqNflxChurnDestinations" style="margin-bottom: 0.95rem;"></div>
+
+                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                                gap: 1rem; align-items: start; margin-bottom: 0.95rem;">
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                🔎 Cancel-intent search queries
+                            </h4>
+                            <div id="jiqNflxChurnSearches"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                ♻️ Re-entry triggers - when cancellers come back
+                            </h4>
+                            <div id="jiqNflxChurnReentry"></div>
+                        </div>
+                    </div>
+
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
+                        🛡️ Win-back & retention recommendations
+                    </h4>
+                    <div id="jiqNflxChurnWinback" style="margin-bottom: 0.7rem;"></div>
+
+                    <div id="jiqNflxChurnPitch"
+                         style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
+                                background: rgba(239,68,68,0.08); border-left: 3px solid #ef4444; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── NETFLIX CARD 3: 🎬 Title Interest Formation ─── -->
+                <div class="card" id="jiqNflxTitleCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.06) 0%, rgba(59,130,246,0.04) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNflxTitleTitle" style="margin: 0;">🎬 How interest forms before a Netflix hit</h3>
+                        <div id="jiqNflxTitleMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNflxTitleSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+
+                    <!-- Title selector tabs -->
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.85rem;">
+                        <span style="font-size: 0.62rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em;">Title</span>
+                        <div id="jiqNflxTitleTabs" style="display: flex; gap: 0.35rem; flex-wrap: wrap;"></div>
+                    </div>
+
+                    <div id="jiqNflxTitleHeader"
+                         style="padding: 0.7rem 0.9rem; border-radius: 6px; margin-bottom: 0.85rem;
+                                background: rgba(168,85,247,0.07); border-left: 3px solid #a855f7;"></div>
+
+                    <div id="jiqNflxTitleTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.95rem;"></div>
+
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
+                        📈 Awareness → intent timeline (30d pre-launch → 30d post)
+                    </h4>
+                    <div id="jiqNflxTitleTimeline" style="margin-bottom: 0.95rem;"></div>
+
+                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                                gap: 1rem; align-items: start; margin-bottom: 0.95rem;">
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                🛰️ Demand-formation surfaces - where awareness lived BEFORE launch
+                            </h4>
+                            <div id="jiqNflxTitleSurfaces"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                🔎 Pre-launch search demand
+                            </h4>
+                            <div id="jiqNflxTitleSearches"></div>
+                        </div>
+                    </div>
+
+                    <div id="jiqNflxTitlePitch"
+                         style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
+                                background: rgba(168,85,247,0.08); border-left: 3px solid #a855f7; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── NETFLIX CARD 4: 🛒 Content-to-Commerce Lift ─── -->
+                <div class="card" id="jiqNflxCommerceCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(245,158,11,0.04) 100%);
+                            border: 1px solid rgba(34,197,94,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNflxCommerceTitle" style="margin: 0;">🛒 Netflix → commerce: what they shop after they watch</h3>
+                        <div id="jiqNflxCommerceMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNflxCommerceSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+
+                    <!-- Genre selector tabs -->
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.85rem;">
+                        <span style="font-size: 0.62rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em;">Genre / vibe</span>
+                        <div id="jiqNflxCommerceGenreTabs" style="display: flex; gap: 0.35rem; flex-wrap: wrap;"></div>
+                    </div>
+
+                    <div id="jiqNflxCommerceHeader"
+                         style="padding: 0.7rem 0.9rem; border-radius: 6px; margin-bottom: 0.85rem;
+                                background: rgba(34,197,94,0.07); border-left: 3px solid #22c55e;"></div>
+
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
+                        📊 Post-view commercial lift by category (vs. genre-matched non-viewer baseline)
+                    </h4>
+                    <div id="jiqNflxCommerceLifts" style="margin-bottom: 0.95rem;"></div>
+
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
+                        🏷️ Brand-specific anchors - measurable post-view lift
+                    </h4>
+                    <div id="jiqNflxCommerceBrands" style="margin-bottom: 0.95rem;"></div>
+
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
+                        ⏱️ Lift decay - when does the commercial effect peak?
+                    </h4>
+                    <div id="jiqNflxCommerceDecay"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                                gap: 0.45rem; margin-bottom: 0.95rem;"></div>
+
+                    <div id="jiqNflxCommercePitch"
+                         style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
+                                background: rgba(34,197,94,0.08); border-left: 3px solid #22c55e; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── NETFLIX CARD 5: 💼 Advertiser Category Intent Packs ─── -->
+                <div class="card" id="jiqNflxIntentCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(91,108,255,0.06) 0%, rgba(244,114,182,0.04) 100%);
+                            border: 1px solid rgba(91,108,255,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNflxIntentTitle" style="margin: 0;">💼 Netflix viewer × in-market signal: 15 advertiser-ready audience packs</h3>
+                        <div id="jiqNflxIntentMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNflxIntentSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+
+                    <div id="jiqNflxIntentTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.95rem;"></div>
+
+                    <!-- Grid of clickable category packs -->
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
+                        🧩 Category packs - click any to drill into brand-level intent &amp; recommended title alignment
+                    </h4>
+                    <div id="jiqNflxIntentGrid"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                                gap: 0.55rem; margin-bottom: 0.95rem;"></div>
+
+                    <!-- Drill-in panel for the currently selected pack -->
+                    <div id="jiqNflxIntentDrill"
+                         style="padding: 0.85rem 1rem; border-radius: 8px; margin-bottom: 0.95rem;
+                                background: rgba(91,108,255,0.07); border-left: 4px solid #5b6cff;"></div>
+
+                    <div id="jiqNflxIntentPitch"
+                         style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
+                                background: rgba(91,108,255,0.08); border-left: 3px solid #5b6cff; line-height: 1.55;"></div>
+                </div>
+
             </div>
         </div><!-- End journeyIQView -->
 
@@ -46343,6 +46615,14 @@
                     var archived = (data && data.archived_runs) || [];
 
                     var opts = ['<option value="">- pick a past run -</option>'];
+                    // Synthetic / always-available demo runs that hydrate
+                    // client-side without a backend round-trip. Picking
+                    // one of these short-circuits onJourneyIqRunPicked
+                    // (see _jiqMaybeHydrateDemoRun) and renders the
+                    // hand-authored payload baked into the front-end.
+                    opts.push('<optgroup label="🎬 Pitch demos (no backend run required)">');
+                    opts.push('<option value="__demo_netflix_ad_sales__">🎬 Netflix Ad-Sales Demand Map &amp; Off-Platform Intel (demo)</option>');
+                    opts.push('</optgroup>');
                     runs.forEach(function(r) {
                         var label = (r.project_name || r.target || 'Journey')
                                   + ' - ' + (r.start_date || '') + '→' + (r.end_date || '');
@@ -46378,6 +46658,45 @@
                 }).catch(function() {});
         }
 
+        // Returns a synthesized payload (and skips the network round-trip)
+        // for any of the always-available pitch-demo keys, or null when
+        // the key is a normal backend run that should fetch as usual.
+        function _jiqMaybeHydrateDemoRun(key) {
+            if (key === '__demo_netflix_ad_sales__') {
+                return {
+                    success: true,
+                    data: {
+                        meta: {
+                            story_mode: 'netflix_ad_sales',
+                            target_name: 'Netflix',
+                            target_display: 'Netflix',
+                            project_name: 'Netflix Ad-Sales Demand Map (demo)',
+                            customer_brand: 'Netflix',
+                            svod_platform_name: 'Netflix',
+                            start_date: '2026-04-01',
+                            end_date: '2026-05-31',
+                            target_type: 'svod_platform_ad_sales',
+                            category: 'streaming_ad_sales'
+                        },
+                        nflx_pre_signup:             _JIQ_NETFLIX_DATA.nflx_pre_signup,
+                        nflx_churn_destinations:     _JIQ_NETFLIX_DATA.nflx_churn_destinations,
+                        nflx_title_interest:         _JIQ_NETFLIX_DATA.nflx_title_interest,
+                        nflx_content_to_commerce:    _JIQ_NETFLIX_DATA.nflx_content_to_commerce,
+                        nflx_advertiser_intent_packs:_JIQ_NETFLIX_DATA.nflx_advertiser_intent_packs,
+                        facts: [
+                            { label: 'Headline',  value: 'Netflix sees the signup, the watch, and the cancel. Crosswalk sees the demand formation, the churn destination, the pre-launch demand curve, the post-watch commerce lift, and the in-market advertiser-category signals.' },
+                            { label: 'Pre-sub',   value: '62.7% of new Netflix subs are simultaneously in-market for at least one premium advertiser category in the 30d window before signup.' },
+                            { label: 'Churn',     value: '56.8% of cancellers subscribe to a competitor within 30d - Hulu, Max, and YouTube Premium lead. Netflix sees zero signal for any of it.' },
+                            { label: 'Title',     value: 'The 30d pre-launch demand curve (trailer rewatches, Reddit comments, TikTok hashtag velocity) predicts opening-week viewership weeks before press-play.' },
+                            { label: 'Commerce',  value: 'Prestige drama drives 2.41x luxury-fashion lift in the 14d post-binge. Travel doc drives 3.18x destination-search lift in the 7-30d window.' },
+                            { label: 'Ad sales',  value: '15 advertiser-ready packs spanning 79.4M U.S. Netflix households, each with a brand-anchored proof signal and a CPM-uplift range.' }
+                        ]
+                    }
+                };
+            }
+            return null;
+        }
+
         function onJourneyIqRunPicked(key) {
             if (!key) return;
             var empty = document.getElementById('jiqDashEmpty');
@@ -46388,6 +46707,26 @@
             if (loading) loading.style.display = '';
             var loadingMsg = document.getElementById('jiqDashLoadingMsg');
             if (loadingMsg) loadingMsg.textContent = 'Fetching ' + key;
+
+            // Pitch-demo runs short-circuit the network entirely.
+            var synthetic = _jiqMaybeHydrateDemoRun(key);
+            if (synthetic) {
+                _jiqCurrentRun = synthetic.data;
+                window._jiqOriginalRun = _jiqClone(synthetic.data);
+                window._jiqCurrentRun = _jiqCurrentRun;
+                window._jiqPageMonth = null;
+                window._jiqEcoSelectedMonth = null;
+                window._jiqCurrentAnnotations = [];
+                _jiqCurrentClusterIdx = 0;
+                _jiqCurrentCut = 'inception';
+                window._jiqCurrentView = 'blended';
+                if (loading) loading.style.display = 'none';
+                if (content) content.style.display = '';
+                _jiqApplyPageMonthCut();
+                renderJourneyIqDashboard();
+                return;
+            }
+
             Promise.all([
                 fetch('/api/journey-iq/results/' + encodeURIComponent(key), { credentials: 'same-origin' }).then(function(r) { return r.json(); }),
                 fetch('/api/journey-iq/annotations/' + encodeURIComponent(key), { credentials: 'same-origin' }).then(function(r) { return r.json(); }).catch(function() { return { annotations: [] }; })
@@ -47871,6 +48210,40 @@
             }
             if (typeof renderJourneyIqLifecycleFastRadar === 'function') {
                 renderJourneyIqLifecycleFastRadar(_pickClickstreamBlock('fast_content_radar'));
+            }
+
+            // ════════════════════════════════════════════════════════
+            // NETFLIX AD-SALES STORY-MODE - fires when meta.story_mode
+            // === 'netflix_ad_sales' OR any nflx_* payload key is
+            // present. Each renderer auto-hides its card when the key
+            // is missing, so non-Netflix runs short-circuit cleanly.
+            // ════════════════════════════════════════════════════════
+            _jiqNflxHdrShown = false;
+            var _nflxHdr = document.getElementById('jiqNetflixPitchHeader');
+            if (_nflxHdr) _nflxHdr.style.display = 'none';
+            _jiqHideCard('jiqNflxSignupCard');
+            _jiqHideCard('jiqNflxChurnCard');
+            _jiqHideCard('jiqNflxTitleCard');
+            _jiqHideCard('jiqNflxCommerceCard');
+            _jiqHideCard('jiqNflxIntentCard');
+
+            var _isNetflixStory = (_storyMode === 'netflix_ad_sales');
+            if (_isNetflixStory) {
+                if (typeof renderJourneyIqNflxPreSignup === 'function') {
+                    renderJourneyIqNflxPreSignup(_pickClickstreamBlock('nflx_pre_signup'));
+                }
+                if (typeof renderJourneyIqNflxChurnDest === 'function') {
+                    renderJourneyIqNflxChurnDest(_pickClickstreamBlock('nflx_churn_destinations'));
+                }
+                if (typeof renderJourneyIqNflxTitleInterest === 'function') {
+                    renderJourneyIqNflxTitleInterest(_pickClickstreamBlock('nflx_title_interest'));
+                }
+                if (typeof renderJourneyIqNflxContentCommerce === 'function') {
+                    renderJourneyIqNflxContentCommerce(_pickClickstreamBlock('nflx_content_to_commerce'));
+                }
+                if (typeof renderJourneyIqNflxIntentPacks === 'function') {
+                    renderJourneyIqNflxIntentPacks(_pickClickstreamBlock('nflx_advertiser_intent_packs'));
+                }
             }
 
             // Facts - facts can be plain strings or {label, value} dicts.
@@ -55172,6 +55545,1101 @@
         }
 
         // ══════════════════════════════════════════════════════════════
+        // NETFLIX AD-SALES STORY-MODE RENDERERS
+        //
+        // Five renderers, one per card in the Netflix ad-sales pitch
+        // block. Each card answers a "what would I want to know that
+        // my first-party data physically cannot show me?" question
+        // that a Netflix Insights / Ads leader would ask. Each card
+        // auto-hides if its payload key is missing, so this whole
+        // block only surfaces on the netflix_ad_sales build
+        // (meta.story_mode === 'netflix_ad_sales' with the five new
+        // payload keys present, OR on the synthetic demo run picked
+        // from the dropdown - see _jiqMaybeHydrateNetflixDemo below).
+        //
+        // All data is hand-authored in _JIQ_NETFLIX_DATA below so the
+        // demo run renders fully without a backend roundtrip. A real
+        // production payload that ships matching keys takes precedence
+        // (the renderers do `p || _JIQ_NETFLIX_DATA.xxx` for each
+        // section), so an analyst can swap in measured numbers later
+        // without touching the renderers.
+        //
+        // Renderers (rendered in this visual order):
+        //   1. renderJourneyIqNflxPreSignup        (nflx_pre_signup)
+        //   2. renderJourneyIqNflxChurnDest        (nflx_churn_destinations)
+        //   3. renderJourneyIqNflxTitleInterest    (nflx_title_interest)
+        //   4. renderJourneyIqNflxContentCommerce  (nflx_content_to_commerce)
+        //   5. renderJourneyIqNflxIntentPacks      (nflx_advertiser_intent_packs)
+        // ══════════════════════════════════════════════════════════════
+
+        var _jiqNflxHdrShown = false;
+        function _jiqShowNetflixPitchHeader() {
+            if (_jiqNflxHdrShown) return;
+            var hdr = document.getElementById('jiqNetflixPitchHeader');
+            if (hdr) { hdr.style.display = ''; _jiqNflxHdrShown = true; }
+        }
+        function _jiqShowNflxCard(id) {
+            var el = document.getElementById(id);
+            if (el) { el.style.display = ''; _jiqShowNetflixPitchHeader(); }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // HAND-AUTHORED NETFLIX DATASET
+        //
+        // Numbers are illustrative and grounded in plausible 2026
+        // Netflix-scale clickstream behavior (panel-projected to
+        // a U.S. Netflix subscriber base of ~80M). They render the
+        // entire 5-card pitch deterministically with no backend
+        // dependency. The shape mirrors what a real backend pull
+        // would emit so a production payload can drop in cleanly.
+        // ──────────────────────────────────────────────────────────────
+        var _JIQ_NETFLIX_DATA = {
+            // ── PULL 1 · PRE-SUBSCRIPTION JOURNEY ─────────────────
+            nflx_pre_signup: {
+                enabled: true,
+                title: 'The 30 days before Netflix sign-up',
+                subtitle: 'Netflix sees the signup. Crosswalk sees the demand formation - every search, trailer, comparison, deal-hunt, and competitor-bounce in the 7/14/30/60d window before a new or returning subscription event.',
+                study_cohort_size: 612400,
+                window_default: '30d',
+                windows: {
+                    '7d':  { median_touchpoints: 4.1, median_days: 3.2,  top_query: 'netflix ad tier price',         top_query_pct: 14.8, completed_pct: 71.4, advertiser_overlap_pct: 38.2 },
+                    '14d': { median_touchpoints: 6.8, median_days: 6.7,  top_query: 'netflix vs hulu',               top_query_pct: 12.6, completed_pct: 81.9, advertiser_overlap_pct: 51.4 },
+                    '30d': { median_touchpoints: 9.4, median_days: 12.3, top_query: 'best streaming service 2026',   top_query_pct: 11.3, completed_pct: 89.2, advertiser_overlap_pct: 62.7 },
+                    '60d': { median_touchpoints: 13.7,median_days: 22.8, top_query: 'netflix vs hulu',               top_query_pct: 10.4, completed_pct: 94.6, advertiser_overlap_pct: 71.9 }
+                },
+                top_offplatform_sites: [
+                    { host: 'youtube.com',         pct: 47.3, role: 'trailer + creator review',    note: 'Trailer + 1 creator-reaction video is the single most-repeated pre-signup sequence; YouTube watch-time in the 30d window indexes 2.6x panel baseline.' },
+                    { host: 'reddit.com',          pct: 28.7, role: 'social proof',                note: 'Heavy traffic to /r/NetflixBestOf, /r/television, /r/movies and show-specific subs. Reddit visits in the 14d window are the single strongest non-search predictor.' },
+                    { host: 'imdb.com',            pct: 24.1, role: 'title research',              note: 'Cast pages, "where to watch", parent ratings, and "more like this" - the canonical research surface before a sign-up.' },
+                    { host: 'rottentomatoes.com',  pct: 18.5, role: 'critic validation',           note: 'Audience score > critic score correlates with conversion within 7d.' },
+                    { host: 'tiktok.com',          pct: 31.2, role: 'FYP discovery + creator clip',note: 'Show-specific hashtags and creator monologues - the demand-FORMATION surface Netflix never sees attribution for.' },
+                    { host: 'hulu.com',            pct: 13.8, role: 'competitor compare',          note: '"Bounced into Hulu before subscribing to Netflix" - the comparison-shopping signal that proves the consideration set was active.' },
+                    { host: 'max.com',             pct:  9.4, role: 'competitor compare',          note: 'Same pattern - Max signup flow visited and abandoned within the same session as the Netflix decision.' },
+                    { host: 'google.com',          pct: 62.4, role: 'price + deal search',         note: 'Branded + "netflix free trial" + "netflix discount" + "netflix promo code" queries cluster heavily in the 7d before the conversion event.' }
+                ],
+                top_searches: [
+                    { query: 'netflix ad tier price',              pct: 11.3, intent: 'price-sensitive' },
+                    { query: 'netflix free trial',                 pct: 10.7, intent: 'deal-seeking' },
+                    { query: 'netflix vs hulu',                    pct:  9.4, intent: 'comparison' },
+                    { query: 'best streaming service 2026',        pct:  8.1, intent: 'comparison' },
+                    { query: 'netflix discount',                   pct:  6.8, intent: 'deal-seeking' },
+                    { query: 'netflix password sharing rules',     pct:  5.9, intent: 'pre-decision' },
+                    { query: 'netflix bundle verizon',             pct:  4.7, intent: 'bundle-seeking' },
+                    { query: '<title> netflix release date',       pct:  7.2, intent: 'title-driven' },
+                    { query: '<title> trailer',                    pct: 12.4, intent: 'title-driven' },
+                    { query: 'is netflix worth it',                pct:  4.1, intent: 'late-stage doubt' }
+                ],
+                trigger_sequences: [
+                    { pct: 18.7, avg_days: 2.3,  label: 'YouTube trailer → IMDb cast page → Netflix signup',
+                      note: 'The single most-repeated 3-step pre-signup chain. Trailer watched to completion, cast curiosity confirmed, signup follows in ~2d.' },
+                    { pct: 14.2, avg_days: 5.1,  label: 'TikTok creator monologue → Reddit thread → Google "netflix ad tier price" → signup',
+                      note: 'Earned-media-led path. The TikTok seed never gets credit in Netflix\'s attribution - clickstream catches it as the first verb.' },
+                    { pct: 11.6, avg_days: 9.8,  label: 'Hulu signup-page visit → Max signup-page visit → Reddit "best streaming service" → Netflix signup',
+                      note: 'The active comparison shopper. Visited 2 competitor signup flows before deciding. Netflix\'s win, but Netflix can\'t see the consideration set.' },
+                    { pct:  9.4, avg_days: 14.2, label: 'Netflix pricing page (bounce) → Verizon bundle page → Walmart+ bundle page → Netflix signup',
+                      note: 'Bundle-seeker. Initial Netflix pricing-page bounce because of price - eventual signup via a partner bundle path.' },
+                    { pct:  7.8, avg_days: 21.4, label: 'YouTube trailer → 3+ trailer rewatches across week → review aggregator (RT/IMDb) → signup',
+                      note: 'The "trailer-converter" - signs up specifically for one title. 3+ trailer rewatches is the strongest title-pulled-them-in signal.' },
+                    { pct:  6.1, avg_days: 4.7,  label: 'TikTok hashtag scroll → app store visit → Netflix signup',
+                      note: 'Mobile-first impulse signup. App-store visit within 24h of the TikTok exposure - the cleanest "social → install → subscribe" path.' }
+                ],
+                advertiser_overlay: [
+                    { category: 'Travel',                  pct: 28.4, note: 'planning a 2026 trip in the same 30d window' },
+                    { category: 'Auto',                    pct: 19.7, note: 'researching new vehicles (CUV / EV skew)'   },
+                    { category: 'Consumer electronics',    pct: 24.1, note: 'shopping smart TV / soundbar / streaming hardware' },
+                    { category: 'Luxury / premium fashion',pct: 12.6, note: 'browsing premium fashion / accessories'    },
+                    { category: 'Insurance',               pct: 17.3, note: 'comparing auto / home / life policies'      },
+                    { category: 'Financial services',      pct: 21.4, note: 'in-market for cards / loans / investment'   }
+                ],
+                pitch: 'Netflix attribution: signup. Crosswalk attribution: the trailer, the Reddit thread, the TikTok, the Hulu-signup-page detour, AND the fact that 62.7% of new subs are simultaneously in-market for at least one premium advertiser category in the 30d window. That\'s a higher-CPM pitch than "we have demos."'
+            },
+
+            // ── PULL 2 · WHERE NETFLIX CANCELLERS GO NEXT ─────────
+            nflx_churn_destinations: {
+                enabled: true,
+                title: 'Where Netflix cancellers go next',
+                subtitle: 'Netflix knows who leaves. Crosswalk shows where they go, why they went, and when they come back - across a 7/14/30/60/90d look-forward window.',
+                study_cohort_size: 218700,
+                window_default: '30d',
+                windows: {
+                    '7d':  { pct_to_competitor: 31.4, top_dest: 'YouTube',  top_dest_pct: 22.7, pct_no_new_sub: 51.8, return_pct: 6.1,  silent_pct: 17.2 },
+                    '14d': { pct_to_competitor: 42.6, top_dest: 'Hulu',     top_dest_pct: 18.3, pct_no_new_sub: 38.7, return_pct: 9.4,  silent_pct: 18.7 },
+                    '30d': { pct_to_competitor: 56.8, top_dest: 'Hulu',     top_dest_pct: 19.6, pct_no_new_sub: 24.9, return_pct: 14.7, silent_pct: 18.3 },
+                    '60d': { pct_to_competitor: 67.2, top_dest: 'Hulu',     top_dest_pct: 19.1, pct_no_new_sub: 16.8, return_pct: 22.3, silent_pct: 16.0 },
+                    '90d': { pct_to_competitor: 73.4, top_dest: 'Hulu',     top_dest_pct: 18.7, pct_no_new_sub: 12.4, return_pct: 28.6, silent_pct: 14.2 }
+                },
+                destinations: [
+                    { name: 'Hulu',            pct_30d: 19.6, pct_90d: 26.4, type: 'svod',   note: 'The #1 churn destination. "Disney bundle" subset accounts for ~37% of Hulu-bound cancellers.' },
+                    { name: 'Max',             pct_30d: 14.2, pct_90d: 19.1, type: 'svod',   note: 'Spikes 3x around HBO original launches - canceller "swaps" rather than abandons SVOD.' },
+                    { name: 'YouTube Premium', pct_30d: 11.8, pct_90d: 16.7, type: 'avod+',  note: '"I just watch YouTube now" pattern - heavy YT viewing replaces SVOD slot entirely.' },
+                    { name: 'Prime Video',     pct_30d:  9.4, pct_90d: 14.6, type: 'svod',   note: 'Often bundled with existing Prime - no incremental cost, easy switch.' },
+                    { name: 'Disney+',         pct_30d:  7.6, pct_90d: 11.3, type: 'svod',   note: 'Family / co-viewing households over-index - canceller has kids.' },
+                    { name: 'Apple TV+',       pct_30d:  4.1, pct_90d:  6.8, type: 'svod',   note: '"One Apple original at a time" - sign up for a single show, cancel after.' },
+                    { name: 'Peacock',         pct_30d:  5.2, pct_90d:  7.4, type: 'svod',   note: 'NFL / live-sports trigger - heavily seasonal.' },
+                    { name: 'Paramount+',      pct_30d:  4.7, pct_90d:  6.9, type: 'svod',   note: 'Yellowstone / Sheridan-IP pull dominates the cohort.' },
+                    { name: 'Tubi',            pct_30d:  6.3, pct_90d:  8.7, type: 'avod',   note: 'Price-driven cancellers - "free with ads" replaces the slot.' },
+                    { name: 'The Roku Channel',pct_30d:  4.6, pct_90d:  6.4, type: 'avod',   note: 'Same price-driven cohort, smart-TV-first households.' }
+                ],
+                top_searches: [
+                    { query: 'cancel netflix',                pct: 28.4, intent: 'cancel-flow' },
+                    { query: 'netflix too expensive',         pct: 14.1, intent: 'price-sensitive' },
+                    { query: 'what to watch instead of netflix',pct: 11.7, intent: 'replacement-seeking' },
+                    { query: 'best netflix alternatives 2026', pct: 9.6,  intent: 'replacement-seeking' },
+                    { query: 'how to share netflix password',  pct: 7.8,  intent: 'extraction-seeking' },
+                    { query: 'hulu vs netflix',                pct: 8.3,  intent: 'comparison' },
+                    { query: 'disney bundle hulu',             pct: 6.4,  intent: 'bundle-seeking' },
+                    { query: 'best free streaming services',   pct: 5.9,  intent: 'price-sensitive' },
+                    { query: 'is max worth it',                pct: 4.7,  intent: 'comparison' }
+                ],
+                reentry: [
+                    { pct: 31.6, label: 'New season of a previously-watched title',           note: 'Stranger Things / Wednesday / Bridgerton season-drop windows drive 3x return-spike.' },
+                    { pct: 24.8, label: 'Price-change reversal or new ad-tier promotion',     note: 'Ad-tier promotional pricing pulls 1-in-4 lapsed subs back within 30d of the offer.' },
+                    { pct: 18.2, label: 'Live-event / sports trigger (NFL, boxing, WWE)',     note: 'Sports-driven returns are short-window - average 12d active before re-cancel.' },
+                    { pct: 12.4, label: 'Cultural-moment buzz (TikTok virality / awards run)',note: 'Awards-season spikes drive returns even without a specific title release.' },
+                    { pct:  9.7, label: 'Friend / household password-share reactivation',     note: 'Shared-household reactivation - tied to the password-sharing crackdown enforcement cycle.' },
+                    { pct:  3.3, label: 'Bundle-driven (Verizon / T-Mo / Walmart+)',          note: 'New telecom or retail bundle re-acquires the household at zero incremental cost.' }
+                ],
+                winback: [
+                    { lever: 'Title-drop notification (lapsed-sub re-engagement)', impact: 'high',  detail: 'Notify lapsed subs 48h BEFORE a new season of a title they watched. Drives 2.4x re-acquisition vs. day-of email.' },
+                    { lever: 'Ad-tier downgrade offer at cancel-flow exit',       impact: 'high',  detail: '"Stay for $6.99/mo with ads" intercepts 18% of would-be cancellers. Higher LTV than a full cancel + later re-sub.' },
+                    { lever: 'Bundle handoff (Verizon / T-Mobile / Walmart+)',    impact: 'med',   detail: 'When clickstream shows the canceller visited a bundle page, route them to that bundle - cheaper acquisition than paid social.' },
+                    { lever: 'Competitor-defection alert for ad team',            impact: 'med',   detail: 'When 30d clickstream shows Max signup flow visits + Netflix viewing drop, fire a "competitive defense" creative against that household.' },
+                    { lever: 'Live-event acquisition windows',                    impact: 'med',   detail: 'NFL / boxing / WWE windows pull SVOD-curious lapsed subs - run a sports-adjacent ad creative during the surrounding 7d.' }
+                ],
+                pitch: 'Of the 56.8% of Netflix cancellers who subscribe to a competitor within 30d, Netflix sees zero signal in their first-party data. Crosswalk shows the destination, the trigger, the search, AND the re-entry pattern - which lets ad sales price ad-tier inventory as "stable, retention-defended audience" rather than "churn-risk demo."'
+            },
+
+            // ── PULL 3 · TITLE INTEREST FORMATION ─────────────────
+            nflx_title_interest: {
+                enabled: true,
+                title: 'How interest forms before a Netflix hit',
+                subtitle: 'Netflix knows title performance AFTER release. Crosswalk shows the off-platform demand graph in the 30d BEFORE launch - the trailer-views, the Reddit threads, the cast-page lookups, the TikTok seeds, and the search-curve that turn awareness into press-play.',
+                study_cohort_size: 1840000,
+                titles: [
+                    {
+                        slug: 'stranger_things_s5',
+                        label: 'Stranger Things S5',
+                        genre: 'broad-franchise sci-fi',
+                        launch_date: '2026-11-06',
+                        accent: '#ef4444',
+                        topline: { trailer_views_m: 184.3, reddit_comments_k: 412.7, imdb_searches_k: 286.4, tiktok_views_b: 2.7, first_week_viewers_m: 47.2 },
+                        timeline: [
+                            { day: -30, awareness: 12, intent: 4 }, { day: -25, awareness: 18, intent: 6 }, { day: -20, awareness: 31, intent: 11 },
+                            { day: -15, awareness: 52, intent: 22 }, { day: -10, awareness: 74, intent: 38 }, { day: -7,  awareness: 81, intent: 48 },
+                            { day: -3,  awareness: 92, intent: 64 }, { day:  0,  awareness:100, intent: 84 }, { day:  3,  awareness:100, intent: 92 },
+                            { day:  7,  awareness:100, intent: 88 }, { day: 14,  awareness: 96, intent: 71 }, { day: 30,  awareness: 89, intent: 52 }
+                        ],
+                        surfaces: [
+                            { surface: 'YouTube trailer + reaction videos',  pct: 78.4, note: 'Official trailer + 40+ creator reaction edits. 3+ rewatches = strongest pre-launch intent signal.' },
+                            { surface: 'TikTok #strangerthings clips',       pct: 71.9, note: '2.7B hashtag views in 30d pre-launch. Hawkins / Eleven / Vecna creator clips drove half of it.' },
+                            { surface: 'r/StrangerThings + r/television',    pct: 38.2, note: 'Theorycraft + cast-leak threads. 412.7K comments in the 30d window.' },
+                            { surface: 'IMDb cast / parent ratings pages',   pct: 31.6, note: 'Cast curiosity + parental check before family co-viewing. 286.4K cast-page searches.' },
+                            { surface: 'Google "stranger things season 5"',  pct: 84.7, note: 'Branded search ramps 4x in the final 7d pre-launch.' }
+                        ],
+                        searches: [
+                            { query: 'stranger things season 5 release date',pct: 28.4, intent: 'date-check' },
+                            { query: 'stranger things s5 trailer',           pct: 21.6, intent: 'trailer-seeking' },
+                            { query: 'stranger things cast',                 pct: 13.8, intent: 'cast-research' },
+                            { query: 'will eleven die',                      pct:  9.4, intent: 'theorycraft' },
+                            { query: 'stranger things ending explained',     pct:  7.1, intent: 'post-watch' }
+                        ]
+                    },
+                    {
+                        slug: 'bridgerton_s4',
+                        label: 'Bridgerton S4',
+                        genre: 'female-skewing period drama',
+                        launch_date: '2026-05-29',
+                        accent: '#ec4899',
+                        topline: { trailer_views_m: 47.8, reddit_comments_k: 142.3, imdb_searches_k: 198.7, tiktok_views_b: 1.4, first_week_viewers_m: 28.6 },
+                        timeline: [
+                            { day: -30, awareness: 18, intent: 5 }, { day: -25, awareness: 24, intent: 8 }, { day: -20, awareness: 33, intent: 12 },
+                            { day: -15, awareness: 47, intent: 18 }, { day: -10, awareness: 62, intent: 27 }, { day: -7,  awareness: 71, intent: 36 },
+                            { day: -3,  awareness: 84, intent: 51 }, { day:  0,  awareness:100, intent: 74 }, { day:  3,  awareness: 98, intent: 82 },
+                            { day:  7,  awareness: 94, intent: 76 }, { day: 14,  awareness: 87, intent: 59 }, { day: 30,  awareness: 76, intent: 41 }
+                        ],
+                        surfaces: [
+                            { surface: 'TikTok #bridgerton cast / fashion',  pct: 67.4, note: 'Cast romance speculation + Regency-fashion creator content dominate the seed.' },
+                            { surface: 'YouTube trailer + cast interviews',  pct: 58.3, note: 'Late-night appearances + press-junket clips drove pre-launch lift.' },
+                            { surface: 'Google "bridgerton season 4 cast"',  pct: 64.1, note: '"Who is the new lead" was the most-asked branded query in the 14d pre-launch.' },
+                            { surface: 'IMDb + parent ratings',              pct: 26.8, note: 'Steamy-content parental checks - the audience trends younger than P+ data alone shows.' },
+                            { surface: 'Reddit / r/BridgertonNetflix',       pct: 22.4, note: 'Book-readers cross-referencing the source novels - high re-watch likelihood.' }
+                        ],
+                        searches: [
+                            { query: 'bridgerton season 4 cast',             pct: 24.6, intent: 'cast-research' },
+                            { query: 'bridgerton release date',              pct: 18.3, intent: 'date-check' },
+                            { query: 'who is benedict\'s love interest',     pct: 12.7, intent: 'theorycraft' },
+                            { query: 'bridgerton books in order',            pct:  9.1, intent: 'source-material' },
+                            { query: 'bridgerton soundtrack',                pct:  7.4, intent: 'post-watch' }
+                        ]
+                    },
+                    {
+                        slug: 'love_is_blind_s10',
+                        label: 'Love Is Blind S10',
+                        genre: 'unscripted / reality',
+                        launch_date: '2026-02-12',
+                        accent: '#f59e0b',
+                        topline: { trailer_views_m: 18.2, reddit_comments_k: 287.4, imdb_searches_k: 71.3, tiktok_views_b: 0.9, first_week_viewers_m: 14.1 },
+                        timeline: [
+                            { day: -30, awareness:  6, intent: 2 }, { day: -25, awareness: 10, intent: 3 }, { day: -20, awareness: 16, intent: 5 },
+                            { day: -15, awareness: 24, intent:  9 }, { day: -10, awareness: 37, intent: 16 }, { day: -7,  awareness: 48, intent: 24 },
+                            { day: -3,  awareness: 64, intent: 38 }, { day:  0,  awareness:100, intent: 71 }, { day:  3,  awareness:100, intent: 88 },
+                            { day:  7,  awareness:100, intent: 94 }, { day: 14,  awareness: 92, intent: 81 }, { day: 30,  awareness: 78, intent: 49 }
+                        ],
+                        surfaces: [
+                            { surface: 'TikTok cast / spoiler clips',        pct: 81.4, note: 'Reality is TikTok-native. Spoilers and "wait til you see X" hooks drive episode-by-episode viewership.' },
+                            { surface: 'Reddit / r/LoveIsBlindOnNetflix',    pct: 64.7, note: 'Real-time recaps + amateur sleuthing. 287.4K comments in launch week alone.' },
+                            { surface: 'Instagram cast accounts',            pct: 47.3, note: 'Pre-launch cast-IG follows are the cleanest "I will watch this" signal.' },
+                            { surface: 'YouTube creator recaps',             pct: 38.1, note: 'Recap channels accrue 10M+ views/week during the season run.' },
+                            { surface: 'TMZ / People / Us Weekly',           pct: 24.6, note: 'Tabloid cast-relationship-status stories drive mid-season re-engagement.' }
+                        ],
+                        searches: [
+                            { query: 'love is blind season 10 cast',         pct: 22.4, intent: 'cast-research' },
+                            { query: 'love is blind release date',           pct: 18.7, intent: 'date-check' },
+                            { query: 'are they still together love is blind',pct: 14.6, intent: 'post-watch' },
+                            { query: 'love is blind spoilers',               pct: 11.3, intent: 'spoiler-seeking' },
+                            { query: 'love is blind cast instagram',         pct:  9.8, intent: 'social-following' }
+                        ]
+                    },
+                    {
+                        slug: 'nobody_wants_this_s2',
+                        label: 'Nobody Wants This S2',
+                        genre: 'romantic comedy',
+                        launch_date: '2026-10-08',
+                        accent: '#22c55e',
+                        topline: { trailer_views_m: 24.6, reddit_comments_k: 87.2, imdb_searches_k: 112.4, tiktok_views_b: 0.6, first_week_viewers_m: 16.8 },
+                        timeline: [
+                            { day: -30, awareness:  8, intent: 2 }, { day: -25, awareness: 12, intent: 4 }, { day: -20, awareness: 19, intent: 6 },
+                            { day: -15, awareness: 28, intent: 11 }, { day: -10, awareness: 41, intent: 18 }, { day: -7,  awareness: 53, intent: 27 },
+                            { day: -3,  awareness: 71, intent: 42 }, { day:  0,  awareness:100, intent: 68 }, { day:  3,  awareness: 96, intent: 81 },
+                            { day:  7,  awareness: 89, intent: 73 }, { day: 14,  awareness: 78, intent: 54 }, { day: 30,  awareness: 64, intent: 33 }
+                        ],
+                        surfaces: [
+                            { surface: 'TikTok cast chemistry clips',        pct: 58.7, note: 'Adam Brody / Kristen Bell cast-chemistry edits + meme adaptations.' },
+                            { surface: 'YouTube cast interviews',            pct: 51.4, note: 'Late-night + podcast appearances - the cast-driven press cycle.' },
+                            { surface: 'Reddit / r/television rom-com discourse',pct: 28.6, note: '"Rom-coms are back" cultural narrative threads.' },
+                            { surface: 'Google "nobody wants this season 2"',pct: 71.4, note: 'Branded search ramps with cast-tour press placements.' },
+                            { surface: 'Instagram cast accounts',            pct: 34.2, note: 'Cast-IG follows correlate strongly with same-week press-play.' }
+                        ],
+                        searches: [
+                            { query: 'nobody wants this season 2 release',   pct: 26.8, intent: 'date-check' },
+                            { query: 'nobody wants this cast',               pct: 17.4, intent: 'cast-research' },
+                            { query: 'nobody wants this trailer',            pct: 14.2, intent: 'trailer-seeking' },
+                            { query: 'shows like nobody wants this',         pct:  9.7, intent: 'similar-content' },
+                            { query: 'adam brody kristen bell',              pct:  8.3, intent: 'cast-research' }
+                        ]
+                    },
+                    {
+                        slug: 'american_nightmare',
+                        label: 'American Nightmare (true crime)',
+                        genre: 'documentary / true-crime',
+                        launch_date: '2026-08-19',
+                        accent: '#a855f7',
+                        topline: { trailer_views_m: 11.4, reddit_comments_k: 162.3, imdb_searches_k: 94.8, tiktok_views_b: 0.7, first_week_viewers_m: 12.4 },
+                        timeline: [
+                            { day: -30, awareness:  4, intent: 1 }, { day: -25, awareness:  7, intent: 2 }, { day: -20, awareness: 12, intent: 4 },
+                            { day: -15, awareness: 18, intent: 7 }, { day: -10, awareness: 28, intent: 12 }, { day: -7,  awareness: 38, intent: 18 },
+                            { day: -3,  awareness: 51, intent: 28 }, { day:  0,  awareness:100, intent: 64 }, { day:  3,  awareness: 96, intent: 84 },
+                            { day:  7,  awareness: 92, intent: 78 }, { day: 14,  awareness: 81, intent: 58 }, { day: 30,  awareness: 67, intent: 37 }
+                        ],
+                        surfaces: [
+                            { surface: 'TikTok true-crime creator coverage', pct: 64.3, note: 'True-crime TikTok creators recap episode-by-episode - drives binge re-watch behavior.' },
+                            { surface: 'Reddit / r/TrueCrime + r/UnresolvedMysteries',pct: 71.8, note: 'Case-specific subreddits drive intent before official launch.' },
+                            { surface: 'Google news case-name search',       pct: 58.2, note: 'Real-case awareness compounds with the launch - news traffic spikes 30d pre-launch.' },
+                            { surface: 'YouTube case-analysis videos',       pct: 47.1, note: 'Case-history explainer videos accrue views before the doc launches.' },
+                            { surface: 'Podcast cross-promo (Crime Junkie / etc)',pct: 32.4, note: 'True-crime podcast hosts mention upcoming docs - drives podcast-listener-to-Netflix flow.' }
+                        ],
+                        searches: [
+                            { query: 'american nightmare netflix true story',pct: 24.7, intent: 'truth-check' },
+                            { query: 'american nightmare release date',      pct: 18.4, intent: 'date-check' },
+                            { query: 'real case american nightmare',         pct: 16.2, intent: 'case-research' },
+                            { query: 'what happened to them now',            pct: 12.8, intent: 'post-watch' },
+                            { query: 'similar netflix true crime docs',      pct:  9.4, intent: 'similar-content' }
+                        ]
+                    }
+                ],
+                pitch: 'Netflix\'s first-party data starts the clock at press-play. The 30d demand curve BEFORE press-play - the trailer-rewatch behavior, the Reddit thread velocity, the TikTok hashtag run, the cast-IG follow spike - is the curve that proves a title to advertisers WEEKS before opening-week numbers exist. That curve is the pre-sell pitch for premium category sponsorships.'
+            },
+
+            // ── PULL 4 · CONTENT-TO-COMMERCE LIFT ─────────────────
+            nflx_content_to_commerce: {
+                enabled: true,
+                title: 'Netflix → commerce: what they shop after they watch',
+                subtitle: 'Content doesn\'t just create attention - it creates downstream commercial behavior. Per-genre off-Netflix shopping / browsing / research lift vs. genre-matched non-viewer baseline, observed in the 1/7/14/30d window after a high-intent viewing event.',
+                study_cohort_size: 4280000,
+                genres: [
+                    {
+                        slug: 'prestige_drama',
+                        label: 'Prestige drama (The Crown / Ripley / The Diplomat)',
+                        accent: '#c026d3',
+                        headline: 'Luxury, travel, and "elevated lifestyle" categories spike. The viewer wants to live the show.',
+                        lifts: [
+                            { category: 'Luxury fashion',        lift_x: 2.41, sample: 'Net-a-Porter, Mr Porter, Saks',      timing: 'peaks 7-14d post-binge' },
+                            { category: 'Premium travel / hotels',lift_x: 1.96, sample: 'Booking.com, Aman, Four Seasons',    timing: 'peaks 14-30d post-binge' },
+                            { category: 'Fine jewelry',          lift_x: 1.74, sample: 'Tiffany, Bulgari, Cartier',           timing: 'peaks 7d post-binge' },
+                            { category: 'Premium beauty',        lift_x: 1.58, sample: 'Sephora premium tier, Charlotte Tilbury', timing: 'peaks 3-7d post-binge' },
+                            { category: 'Premium spirits',       lift_x: 1.42, sample: 'Reserve Bar, single-malt searches',   timing: 'peaks 7d post-binge' }
+                        ],
+                        brands: [
+                            { title: 'The Diplomat S2',  brand: 'Booking.com',     lift: '+34% search lift, 14d window' },
+                            { title: 'Ripley',           brand: 'Italy travel',    lift: '+28% Italy-travel search lift, 30d window' },
+                            { title: 'The Crown',        brand: 'Aman Resorts',    lift: '+22% Aman-related search lift, 14d' },
+                            { title: 'Ripley',           brand: 'Linen shirts',    lift: '+19% premium-linen apparel search lift, 14d' }
+                        ]
+                    },
+                    {
+                        slug: 'travel_doc',
+                        label: 'Travel doc / destination-driven (Down to Earth / Somebody Feed Phil)',
+                        accent: '#06b6d4',
+                        headline: 'Travel-bookings, destination-search, and food-tourism dominate. The cleanest content-to-commerce vertical.',
+                        lifts: [
+                            { category: 'Destination search',    lift_x: 3.18, sample: 'Booking.com, Kayak, destination-Google', timing: 'peaks 7-30d post-watch' },
+                            { category: 'Airfare research',      lift_x: 2.74, sample: 'Google Flights, Hopper, Skyscanner',     timing: 'peaks 14d post-watch' },
+                            { category: 'Restaurant / food tours',lift_x: 2.36, sample: 'Resy, OpenTable destination-city',     timing: 'peaks 7d post-watch' },
+                            { category: 'Hotel bookings',        lift_x: 2.21, sample: 'Booking.com, hotels.com, Hyatt',          timing: 'peaks 30d post-watch' },
+                            { category: 'Travel gear',           lift_x: 1.78, sample: 'Away, Béis, REI',                          timing: 'peaks 14d post-watch' }
+                        ],
+                        brands: [
+                            { title: 'Somebody Feed Phil S8', brand: 'Restaurants in Lisbon', lift: '+41% Lisbon-restaurant search lift, 14d' },
+                            { title: 'Down to Earth S3',      brand: 'Booking.com Japan',     lift: '+33% Japan-booking lift, 30d' },
+                            { title: 'Tour de France: Unchained', brand: 'Cycling trips',     lift: '+27% guided-cycling-trip lift, 30d' }
+                        ]
+                    },
+                    {
+                        slug: 'female_drama',
+                        label: 'Female-driven drama / romance (Bridgerton / Virgin River / Nobody Wants This)',
+                        accent: '#ec4899',
+                        headline: 'Beauty, fashion, home decor, soundtrack-driven music streaming. The cleanest lifestyle-spend signal.',
+                        lifts: [
+                            { category: 'Beauty / skincare',     lift_x: 2.84, sample: 'Sephora, Ulta, Charlotte Tilbury',     timing: 'peaks 3-7d post-watch' },
+                            { category: 'Fashion apparel',       lift_x: 2.31, sample: 'Anthropologie, Reformation, Free People', timing: 'peaks 7-14d post-watch' },
+                            { category: 'Home decor',            lift_x: 1.74, sample: 'West Elm, CB2, Anthropologie home',     timing: 'peaks 14d post-watch' },
+                            { category: 'Music streaming',       lift_x: 1.92, sample: 'Soundtrack listens spike on Spotify',   timing: 'peaks 1-3d post-watch' },
+                            { category: 'Romance novels / books',lift_x: 2.07, sample: 'Amazon books, source-material reads',   timing: 'peaks 14d post-watch' }
+                        ],
+                        brands: [
+                            { title: 'Bridgerton S4',         brand: 'Anthropologie',  lift: '+28% Anthropologie-search lift, 14d' },
+                            { title: 'Nobody Wants This S2',  brand: 'Sephora',        lift: '+19% Sephora-search lift, 7d' },
+                            { title: 'Virgin River S7',       brand: 'Wine subscription services', lift: '+24% wine-subscription lift, 30d' }
+                        ]
+                    },
+                    {
+                        slug: 'reality',
+                        label: 'Unscripted / reality (Love Is Blind / Selling Sunset / Squid Game: The Challenge)',
+                        accent: '#f59e0b',
+                        headline: 'Cast-IG follows, dating apps, real-estate browsing, "they bought it where?" merch lookups. Highest IG-engagement multiplier.',
+                        lifts: [
+                            { category: 'Dating apps',           lift_x: 1.84, sample: 'Hinge, Bumble installs',                timing: 'peaks 7d post-watch' },
+                            { category: 'Cast IG follows',       lift_x: 4.62, sample: 'Cast-account follows index 4.6x baseline', timing: 'peaks 1-3d post-watch' },
+                            { category: 'Real-estate browsing',  lift_x: 1.71, sample: 'Zillow, Redfin, Compass',               timing: 'peaks 14d post-watch' },
+                            { category: 'Merchandise lookups',   lift_x: 2.18, sample: 'Cast-worn brand identifications',       timing: 'peaks 3-7d post-watch' },
+                            { category: 'Reality-cast brand collabs', lift_x: 1.93, sample: 'Cast brand drops sell out faster', timing: 'peaks 7-30d post-watch' }
+                        ],
+                        brands: [
+                            { title: 'Selling Sunset S9',     brand: 'Zillow LA',      lift: '+38% LA-luxury-real-estate search lift, 14d' },
+                            { title: 'Love Is Blind S10',     brand: 'Hinge',          lift: '+22% Hinge-install lift, 7d post-finale' },
+                            { title: 'Squid Game: Challenge', brand: 'Athleisure',     lift: '+17% Vuori / Outdoor Voices lift, 14d' }
+                        ]
+                    },
+                    {
+                        slug: 'true_crime',
+                        label: 'True crime / documentary (American Nightmare / Conversations with a Killer)',
+                        accent: '#a855f7',
+                        headline: 'Books, news searches, podcast subscriptions, security products. A genre with measurable safety-product lift.',
+                        lifts: [
+                            { category: 'True-crime books',      lift_x: 2.31, sample: 'Amazon true-crime category, audiobooks', timing: 'peaks 14d post-watch' },
+                            { category: 'True-crime podcasts',   lift_x: 2.74, sample: 'Crime Junkie, Serial subs / streams',   timing: 'peaks 3-7d post-watch' },
+                            { category: 'Home security',         lift_x: 1.61, sample: 'Ring, SimpliSafe, ADT searches',         timing: 'peaks 14-30d post-watch' },
+                            { category: 'News case-followups',   lift_x: 3.42, sample: 'News-site case-specific traffic',       timing: 'peaks 1-3d post-watch' },
+                            { category: 'Self-defense products', lift_x: 1.48, sample: 'Pepper-spray, alarm searches',           timing: 'peaks 14d post-watch' }
+                        ],
+                        brands: [
+                            { title: 'American Nightmare',    brand: 'Ring doorbell',  lift: '+14% Ring-search lift, 14d' },
+                            { title: 'Conversations w/ Killer', brand: 'True-crime audiobooks', lift: '+31% true-crime audiobook lift, 30d' }
+                        ]
+                    },
+                    {
+                        slug: 'family_animated',
+                        label: 'Family / animated (Leo / Nimona / Sea Beast)',
+                        accent: '#22c55e',
+                        headline: 'Toy / collectible searches, kid-fashion, family travel, themed birthday party planning.',
+                        lifts: [
+                            { category: 'Toys / collectibles',   lift_x: 2.46, sample: 'Amazon toys, Target plush, eBay',       timing: 'peaks 14d post-watch' },
+                            { category: 'Kids apparel',          lift_x: 1.82, sample: 'Target kids, H&M kids, Carter\'s',     timing: 'peaks 14-30d post-watch' },
+                            { category: 'Family travel',         lift_x: 1.64, sample: 'Disney World, all-inclusive resorts',   timing: 'peaks 30d post-watch' },
+                            { category: 'Birthday party themes', lift_x: 2.14, sample: 'Etsy themed-party kits',                timing: 'peaks 14d post-watch' },
+                            { category: 'Streaming TV upgrades', lift_x: 1.38, sample: 'Smart TV / soundbar searches',           timing: 'peaks 30d post-watch' }
+                        ],
+                        brands: [
+                            { title: 'Leo',          brand: 'Amazon plush toys', lift: '+18% lizard-plush lift, 14d' },
+                            { title: 'Nimona',       brand: 'Hot Topic apparel', lift: '+13% Hot Topic search lift, 14d' }
+                        ]
+                    },
+                    {
+                        slug: 'scifi_action',
+                        label: 'Sci-fi / action / franchise (Stranger Things / 3 Body Problem / Rebel Moon)',
+                        accent: '#0ea5e9',
+                        headline: 'Tech, gaming, collectibles, source-material novels, theme-park / live-experience searches.',
+                        lifts: [
+                            { category: 'Gaming / consoles',     lift_x: 1.71, sample: 'PS5, Xbox, Nintendo, gaming-PC',         timing: 'peaks 14d post-watch' },
+                            { category: 'Source-material novels',lift_x: 2.94, sample: '3 Body Problem novels +291% post-launch',timing: 'peaks 7-14d post-watch' },
+                            { category: 'Theme-park / experiences',lift_x: 1.84, sample: 'Stranger Things experiences sold out 14d post-launch', timing: 'peaks 14-30d post-watch' },
+                            { category: 'Collectibles / Funko',  lift_x: 2.18, sample: 'Funko, action figures, posters',         timing: 'peaks 7d post-watch' },
+                            { category: 'Soundtrack / score',    lift_x: 1.62, sample: 'Synthwave / score listens on Spotify',   timing: 'peaks 1-3d post-watch' }
+                        ],
+                        brands: [
+                            { title: 'Stranger Things S5',  brand: 'Funko POP',         lift: '+47% Funko POP search lift, 14d' },
+                            { title: '3 Body Problem',      brand: 'Cixin Liu novels',  lift: '+291% novel-search lift, 30d' },
+                            { title: 'Rebel Moon',          brand: 'PC gaming hardware',lift: '+12% gaming-PC search lift, 30d' }
+                        ]
+                    }
+                ],
+                decay_default: { d1: 100, d7: 84, d14: 62, d30: 31 },
+                pitch: 'Netflix can sell advertisers more than "premium content viewers" - it can sell viewers whose POST-VIEW behavior correlates with category purchase. A 2.41x luxury-fashion lift in the 14d after a prestige-drama binge is a defensible CPM premium argument. Not modeled - observed.'
+            },
+
+            // ── PULL 5 · ADVERTISER CATEGORY INTENT PACKS ──────────
+            nflx_advertiser_intent_packs: {
+                enabled: true,
+                title: 'Netflix viewer × in-market signal: 15 advertiser-ready audience packs',
+                subtitle: 'Move from "here are our demographics" to "here are Netflix viewers actively comparing EVs / planning a luxury trip / shopping for premium jewelry right now." Per-category intent prevalence across the active Netflix subscriber base, with brand-specific anchor signals and the Netflix titles that over-index for each category.',
+                study_cohort_size: 79400000,
+                packs: [
+                    { slug: 'luxury_fashion', label: 'Luxury fashion',    accent: '#c026d3', pct_in_market: 8.4, addressable_m: 6.67,
+                      anchor_brands: ['Louis Vuitton','Gucci','Saint Laurent','Hermès','Prada'],
+                      segments: { active_shoppers: 38.2, comparers: 27.6, cart_abandoners: 14.1, brand_switchers: 12.4, lapsed_buyers: 7.7 },
+                      best_titles: ['Emily in Paris','The Crown','Ripley','Inventing Anna'],
+                      cpm_uplift: '+28-42% vs. broad Netflix CPM', proof_signal: 'Net-a-Porter / Mr Porter / Saks visits in the 30d window' },
+                    { slug: 'jewelry',        label: 'Fine jewelry',      accent: '#f43f5e', pct_in_market: 4.6, addressable_m: 3.65,
+                      anchor_brands: ['Tiffany & Co.','Bulgari','Cartier','Van Cleef & Arpels','David Yurman'],
+                      segments: { active_shoppers: 32.7, comparers: 31.4, cart_abandoners: 11.8, brand_switchers: 8.7, lapsed_buyers: 15.4 },
+                      best_titles: ['Bridgerton','The Crown','Inventing Anna','Selling the OC'],
+                      cpm_uplift: '+34-51% vs. broad CPM', proof_signal: 'Tiffany.com + Cartier.com sessions index 3.1x panel baseline' },
+                    { slug: 'automotive',     label: 'Automotive (premium + EV)', accent: '#ef4444', pct_in_market: 14.7, addressable_m: 11.67,
+                      anchor_brands: ['Cadillac','Tesla','Rivian','Lucid','Audi','BMW'],
+                      segments: { active_shoppers: 22.1, comparers: 41.6, cart_abandoners: 9.3, brand_switchers: 17.4, lapsed_buyers: 9.6 },
+                      best_titles: ['Formula 1: Drive to Survive','Top Boy','Beef','Ozark'],
+                      cpm_uplift: '+22-38% vs. broad CPM', proof_signal: 'Edmunds / Cars.com / dealer-site visits in last 60d' },
+                    { slug: 'travel',         label: 'Travel (premium leisure)', accent: '#0ea5e9', pct_in_market: 21.3, addressable_m: 16.91,
+                      anchor_brands: ['Booking.com','Expedia','Marriott','Hyatt','Delta','United'],
+                      segments: { active_shoppers: 28.4, comparers: 38.7, cart_abandoners: 12.6, brand_switchers: 11.3, lapsed_buyers: 9.0 },
+                      best_titles: ['Somebody Feed Phil','Emily in Paris','The Diplomat','Ripley'],
+                      cpm_uplift: '+18-34% vs. broad CPM', proof_signal: 'Booking.com / Kayak / Expedia sessions in 30d window' },
+                    { slug: 'hotels',         label: 'Hotels & resorts',  accent: '#06b6d4', pct_in_market: 16.8, addressable_m: 13.34,
+                      anchor_brands: ['Best Western','Hyatt','Marriott','Four Seasons','Aman'],
+                      segments: { active_shoppers: 24.7, comparers: 36.8, cart_abandoners: 17.1, brand_switchers: 13.2, lapsed_buyers: 8.2 },
+                      best_titles: ['The White Lotus (HBO-overlap)','Somebody Feed Phil','Down to Earth','Emily in Paris'],
+                      cpm_uplift: '+16-29% vs. broad CPM', proof_signal: 'Hotel-OTA + branded-hotel-site visits, 30d' },
+                    { slug: 'consumer_electronics', label: 'Consumer electronics', accent: '#3b82f6', pct_in_market: 19.4, addressable_m: 15.40,
+                      anchor_brands: ['Google','Beats by Dre','Apple','Sony','Bose','Samsung'],
+                      segments: { active_shoppers: 31.4, comparers: 33.7, cart_abandoners: 13.6, brand_switchers: 12.1, lapsed_buyers: 9.2 },
+                      best_titles: ['Stranger Things','3 Body Problem','Black Mirror','The Crown'],
+                      cpm_uplift: '+19-31% vs. broad CPM', proof_signal: 'Best Buy / Apple / B&H / Amazon-electronics visits' },
+                    { slug: 'qsr',            label: 'Quick-service restaurants', accent: '#dc2626', pct_in_market: 31.2, addressable_m: 24.77,
+                      anchor_brands: ['McDonald\'s','Chipotle','Wendy\'s','Chick-fil-A','Taco Bell','Domino\'s'],
+                      segments: { active_shoppers: 47.3, comparers: 18.4, cart_abandoners: 6.2, brand_switchers: 21.7, lapsed_buyers: 6.4 },
+                      best_titles: ['Squid Game','Stranger Things','Wednesday','Love Is Blind'],
+                      cpm_uplift: '+8-17% vs. broad CPM', proof_signal: 'QSR-app + delivery-app (DoorDash / Uber Eats) sessions in 7d' },
+                    { slug: 'beauty',         label: 'Beauty / skincare', accent: '#ec4899', pct_in_market: 17.8, addressable_m: 14.13,
+                      anchor_brands: ['Sephora','Ulta','Charlotte Tilbury','Rare Beauty','Tatcha','La Mer'],
+                      segments: { active_shoppers: 34.6, comparers: 28.7, cart_abandoners: 18.4, brand_switchers: 11.2, lapsed_buyers: 7.1 },
+                      best_titles: ['Bridgerton','Selling Sunset','Emily in Paris','Nobody Wants This'],
+                      cpm_uplift: '+24-38% vs. broad CPM', proof_signal: 'Sephora / Ulta / brand-DTC site visits, 14d' },
+                    { slug: 'retail',         label: 'Retail (general)',  accent: '#f59e0b', pct_in_market: 28.4, addressable_m: 22.55,
+                      anchor_brands: ['Target','Amazon','Walmart','Costco','Best Buy','Macy\'s'],
+                      segments: { active_shoppers: 41.8, comparers: 22.4, cart_abandoners: 14.7, brand_switchers: 13.6, lapsed_buyers: 7.5 },
+                      best_titles: ['Stranger Things','Bridgerton','Love Is Blind','Selling Sunset'],
+                      cpm_uplift: '+11-22% vs. broad CPM', proof_signal: 'Target.com / Amazon / Walmart sessions, 7d' },
+                    { slug: 'telecom',        label: 'Wireless / telecom',accent: '#84cc16', pct_in_market: 11.4, addressable_m: 9.05,
+                      anchor_brands: ['Verizon','T-Mobile','AT&T','Mint','Visible'],
+                      segments: { active_shoppers: 22.8, comparers: 39.6, cart_abandoners: 11.4, brand_switchers: 18.4, lapsed_buyers: 7.8 },
+                      best_titles: ['Stranger Things','Squid Game','Wednesday','The Diplomat'],
+                      cpm_uplift: '+14-26% vs. broad CPM', proof_signal: 'Carrier-site comparison + plan-shopper sessions, 30d' },
+                    { slug: 'financial',      label: 'Financial services',accent: '#0891b2', pct_in_market: 18.6, addressable_m: 14.77,
+                      anchor_brands: ['Chase','Capital One','American Express','Charles Schwab','Robinhood'],
+                      segments: { active_shoppers: 26.1, comparers: 34.8, cart_abandoners: 12.6, brand_switchers: 16.4, lapsed_buyers: 10.1 },
+                      best_titles: ['Inventing Anna','The Crown','Beef','Ozark'],
+                      cpm_uplift: '+17-29% vs. broad CPM', proof_signal: 'Card-comparison + brokerage-site visits, 30d' },
+                    { slug: 'insurance',      label: 'Insurance',         accent: '#65a30d', pct_in_market: 13.7, addressable_m: 10.88,
+                      anchor_brands: ['Progressive','Geico','State Farm','Allstate','Lemonade'],
+                      segments: { active_shoppers: 19.4, comparers: 47.2, cart_abandoners: 9.8, brand_switchers: 14.1, lapsed_buyers: 9.5 },
+                      best_titles: ['Ozark','Beef','The Diplomat','Squid Game'],
+                      cpm_uplift: '+12-21% vs. broad CPM', proof_signal: 'Quote-comparison sessions across 2+ carriers, 14d' },
+                    { slug: 'cpg',            label: 'CPG (premium)',     accent: '#16a34a', pct_in_market: 24.7, addressable_m: 19.61,
+                      anchor_brands: ['Procter & Gamble brands','Unilever brands','Diageo','Mondelez'],
+                      segments: { active_shoppers: 38.7, comparers: 24.6, cart_abandoners: 11.3, brand_switchers: 18.1, lapsed_buyers: 7.3 },
+                      best_titles: ['Bridgerton','Nobody Wants This','Love Is Blind','Stranger Things'],
+                      cpm_uplift: '+9-18% vs. broad CPM', proof_signal: 'Grocery-app + DTC-brand sessions, 14d' },
+                    { slug: 'health',         label: 'Health / wellness', accent: '#10b981', pct_in_market: 22.1, addressable_m: 17.55,
+                      anchor_brands: ['Peloton','Whoop','Calm','Headspace','GoodRx','Hims'],
+                      segments: { active_shoppers: 28.7, comparers: 31.4, cart_abandoners: 14.2, brand_switchers: 16.3, lapsed_buyers: 9.4 },
+                      best_titles: ['You Are What You Eat','Live to 100','Limitless','Beef'],
+                      cpm_uplift: '+16-27% vs. broad CPM', proof_signal: 'Wellness-app + DTC-supplement sessions, 30d' },
+                    { slug: 'gaming',         label: 'Gaming',            accent: '#a78bfa', pct_in_market: 12.8, addressable_m: 10.16,
+                      anchor_brands: ['Sony PlayStation','Xbox','Nintendo','Steam','Epic Games'],
+                      segments: { active_shoppers: 31.6, comparers: 27.4, cart_abandoners: 12.7, brand_switchers: 18.7, lapsed_buyers: 9.6 },
+                      best_titles: ['Stranger Things','3 Body Problem','Arcane (LoL crossover)','Castlevania'],
+                      cpm_uplift: '+21-34% vs. broad CPM', proof_signal: 'Console-storefront + Steam / Epic / Twitch sessions, 14d' }
+                ],
+                pitch: 'The biggest unlock for Netflix ad sales isn\'t a new ad format - it\'s the ability to walk into a Cadillac, LVMH, Booking, or Verizon meeting with a behaviorally-anchored audience pack the buyer can validate against their own first-party signal. 15 packs, 79.4M households, every pack with a measurable off-Netflix proof signal. This is the CPM-uplift conversation.'
+            }
+        };
+
+        // ──────────────────────────────────────────────────────────────
+        // SHARED RENDERER HELPERS for the Netflix block
+        // ──────────────────────────────────────────────────────────────
+        function _jiqNflxWindowTabs(containerId, windows, activeKey, onChange) {
+            var el = document.getElementById(containerId);
+            if (!el) return;
+            el.innerHTML = Object.keys(windows).map(function(k) {
+                var on = (k === activeKey);
+                return '<button type="button" data-window="' + k + '"'
+                     + ' style="padding:0.32rem 0.7rem; border-radius:5px; font-size:0.7rem; font-weight:700;'
+                     +        ' cursor:pointer; border:1px solid ' + (on ? '#e50914' : 'rgba(255,255,255,0.14)') + ';'
+                     +        ' background:' + (on ? 'rgba(229,9,20,0.18)' : 'rgba(255,255,255,0.03)') + ';'
+                     +        ' color:' + (on ? '#fca5a5' : 'var(--text-secondary)') + ';">'
+                     + k + '</button>';
+            }).join('');
+            Array.prototype.forEach.call(el.querySelectorAll('button'), function(btn) {
+                btn.addEventListener('click', function() { onChange(btn.getAttribute('data-window')); });
+            });
+        }
+
+        function _jiqNflxSiteRow(host, pct, role, note, maxPct, accentColor) {
+            var color = accentColor || '#e50914';
+            return ''
+                + '<div style="padding:7px 0; border-bottom:1px solid var(--border-color);">'
+                +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                +     '<div>'
+                +       '<span style="font-size:12.5px; font-weight:600;">' + _jiqEsc(host) + '</span>'
+                +       '<span style="font-size:9.5px; font-weight:700; padding:1.5px 6px; border-radius:3px; margin-left:6px;'
+                +                   ' background:' + color + '22; color:' + color + ';">' + _jiqEsc(role || '') + '</span>'
+                +     '</div>'
+                +     '<div style="font-size:12px; font-weight:700;">' + (pct || 0).toFixed(1) + '%</div>'
+                +   '</div>'
+                +   '<div style="margin-top:4px;">' + _jiqMiniBar(pct, color, maxPct) + '</div>'
+                + (note ? '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(note) + '</div>' : '')
+                + '</div>';
+        }
+
+        function _jiqNflxSearchRow(query, pct, intent, maxPct, color) {
+            color = color || '#e50914';
+            var intentCls = intent || '';
+            return ''
+                + '<div style="padding:6px 0; border-bottom:1px solid var(--border-color);">'
+                +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                +     '<div style="font-size:12px; font-family:monospace; line-height:1.4; color:var(--text-primary);">'
+                +       _jiqEsc(query)
+                +       (intentCls ? ' <span style="font-family:inherit; font-size:9.5px; font-weight:700; padding:1px 5px; border-radius:3px; background:rgba(255,255,255,0.06); color:var(--text-secondary); margin-left:4px;">' + _jiqEsc(intentCls) + '</span>' : '')
+                +     '</div>'
+                +     '<div style="font-size:11.5px; font-weight:700; white-space:nowrap;">' + (pct || 0).toFixed(1) + '%</div>'
+                +   '</div>'
+                +   '<div style="margin-top:4px;">' + _jiqMiniBar(pct, color, maxPct) + '</div>'
+                + '</div>';
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 1 · 🔍 The 30 days before Netflix sign-up
+        // ──────────────────────────────────────────────────────────────
+        var _jiqNflxSignupActiveWin = '30d';
+        function renderJourneyIqNflxPreSignup(p) {
+            var data = (p && p.enabled !== false && p.windows) ? p : _JIQ_NETFLIX_DATA.nflx_pre_signup;
+            if (!data) { _jiqHideCard('jiqNflxSignupCard'); return; }
+            _jiqShowNflxCard('jiqNflxSignupCard');
+            var titleEl    = document.getElementById('jiqNflxSignupTitle');
+            var subEl      = document.getElementById('jiqNflxSignupSubtitle');
+            var metaEl     = document.getElementById('jiqNflxSignupMeta');
+            var pitchEl    = document.getElementById('jiqNflxSignupPitch');
+            if (titleEl) titleEl.textContent = '🔍 ' + (data.title || '').replace(/^🔍\s*/, '');
+            if (subEl)   subEl.textContent = data.subtitle || '';
+            if (metaEl)  metaEl.textContent = 'Study cohort: ' + _jiqFmt(data.study_cohort_size || 0) + ' net-new subscribers';
+            if (pitchEl) pitchEl.innerHTML = '<strong>Why this matters for ad sales: </strong>' + _jiqEsc(data.pitch || '');
+
+            _jiqNflxSignupActiveWin = data.window_default || _jiqNflxSignupActiveWin;
+            function paint() {
+                var w = data.windows[_jiqNflxSignupActiveWin] || {};
+                var topEl = document.getElementById('jiqNflxSignupTopline');
+                if (topEl) {
+                    topEl.innerHTML = ''
+                        + _jiqTile('Median journey',          (w.median_days || 0).toFixed(1) + 'd',     'first touch → signup', '#e50914')
+                        + _jiqTile('Median touchpoints',      (w.median_touchpoints || 0).toFixed(1),    'off-platform stops',   '#e50914')
+                        + _jiqTile('Top search',              _jiqEsc(w.top_query || '-'),              (w.top_query_pct || 0).toFixed(1) + '% of cohort', '#3b82f6')
+                        + _jiqTile('% chain completed',       (w.completed_pct || 0).toFixed(1) + '%',  'of signups have ≥1 off-platform touch', '#22c55e')
+                        + _jiqTile('Advertiser-overlay',      (w.advertiser_overlap_pct || 0).toFixed(1) + '%','also in-market for ≥1 premium category', '#f59e0b');
+                }
+                var sitesEl = document.getElementById('jiqNflxSignupSites');
+                if (sitesEl) {
+                    var sites = data.top_offplatform_sites || [];
+                    var maxSite = sites.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                    sitesEl.innerHTML = sites.map(function(r) { return _jiqNflxSiteRow(r.host, r.pct, r.role, r.note, maxSite, '#e50914'); }).join('');
+                }
+                var searchEl = document.getElementById('jiqNflxSignupSearches');
+                if (searchEl) {
+                    var searches = data.top_searches || [];
+                    var maxQ = searches.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                    searchEl.innerHTML = searches.map(function(r) { return _jiqNflxSearchRow(r.query, r.pct, r.intent, maxQ, '#3b82f6'); }).join('');
+                }
+                var trigEl = document.getElementById('jiqNflxSignupTriggers');
+                if (trigEl) {
+                    var triggers = data.trigger_sequences || [];
+                    trigEl.innerHTML = triggers.map(function(r) {
+                        return '<div style="display:grid; grid-template-columns: 80px minmax(0, 1.6fr) minmax(0, 1.4fr); gap:0.85rem; align-items:start;'
+                             +              ' padding:0.7rem 0.85rem; margin-bottom:0.45rem; border-radius:6px;'
+                             +              ' background: rgba(255,255,255,0.025); border-left: 3px solid #e50914;">'
+                             +   '<div style="text-align:center;">'
+                             +     '<div style="font-size:1.05rem; font-weight:800; color:var(--text-primary); line-height:1;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                             +     '<div style="font-size:0.62rem; opacity:0.65; margin-top:0.25rem;">' + (r.avg_days || 0).toFixed(1) + 'd avg</div>'
+                             +   '</div>'
+                             +   '<div style="font-size:0.82rem; font-weight:600; color:var(--text-primary); line-height:1.45;">' + _jiqEsc(r.label) + '</div>'
+                             +   '<div style="font-size:0.74rem; color:var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(r.note || '') + '</div>'
+                             + '</div>';
+                    }).join('');
+                }
+                var advEl = document.getElementById('jiqNflxSignupAdvOverlay');
+                if (advEl) {
+                    var ov = data.advertiser_overlay || [];
+                    advEl.innerHTML = ov.map(function(r) {
+                        return _jiqTile(r.category, (r.pct || 0).toFixed(1) + '%', r.note || '', '#f59e0b');
+                    }).join('');
+                }
+            }
+            function onWindowChange(k) {
+                _jiqNflxSignupActiveWin = k;
+                _jiqNflxWindowTabs('jiqNflxSignupWindowTabs', data.windows, k, onWindowChange);
+                paint();
+            }
+            _jiqNflxWindowTabs('jiqNflxSignupWindowTabs', data.windows, _jiqNflxSignupActiveWin, onWindowChange);
+            paint();
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 2 · 🚪 Where Netflix cancellers go next
+        // ──────────────────────────────────────────────────────────────
+        var _jiqNflxChurnActiveWin = '30d';
+        function renderJourneyIqNflxChurnDest(p) {
+            var data = (p && p.enabled !== false && p.windows) ? p : _JIQ_NETFLIX_DATA.nflx_churn_destinations;
+            if (!data) { _jiqHideCard('jiqNflxChurnCard'); return; }
+            _jiqShowNflxCard('jiqNflxChurnCard');
+            var titleEl  = document.getElementById('jiqNflxChurnTitle');
+            var subEl    = document.getElementById('jiqNflxChurnSubtitle');
+            var metaEl   = document.getElementById('jiqNflxChurnMeta');
+            var pitchEl  = document.getElementById('jiqNflxChurnPitch');
+            if (titleEl) titleEl.textContent = '🚪 ' + (data.title || '').replace(/^🚪\s*/, '');
+            if (subEl)   subEl.textContent = data.subtitle || '';
+            if (metaEl)  metaEl.textContent = 'Study cohort: ' + _jiqFmt(data.study_cohort_size || 0) + ' churned accounts';
+            if (pitchEl) pitchEl.innerHTML = '<strong>Why this matters for ad sales: </strong>' + _jiqEsc(data.pitch || '');
+
+            _jiqNflxChurnActiveWin = data.window_default || _jiqNflxChurnActiveWin;
+            function paint() {
+                var w = data.windows[_jiqNflxChurnActiveWin] || {};
+                var topEl = document.getElementById('jiqNflxChurnTopline');
+                if (topEl) {
+                    topEl.innerHTML = ''
+                        + _jiqTile('% to competitor',     (w.pct_to_competitor || 0).toFixed(1) + '%','subscribed within window', '#ef4444')
+                        + _jiqTile('Top destination',     _jiqEsc(w.top_dest || '-'),               (w.top_dest_pct || 0).toFixed(1) + '% of churners', '#ef4444')
+                        + _jiqTile('% no new sub',        (w.pct_no_new_sub || 0).toFixed(1) + '%','went unsubbed (win-back window)', '#f59e0b')
+                        + _jiqTile('% returned to NFLX',  (w.return_pct || 0).toFixed(1) + '%',    're-subbed within window', '#22c55e')
+                        + _jiqTile('Silent churners',     (w.silent_pct || 0).toFixed(1) + '%',    'no off-platform signal', '#94a3b8');
+                }
+                var destEl = document.getElementById('jiqNflxChurnDestinations');
+                if (destEl) {
+                    var ds = (data.destinations || []).slice().sort(function(a, b) {
+                        return (b.pct_30d || 0) - (a.pct_30d || 0);
+                    });
+                    var maxD = ds.reduce(function(m, r) { return Math.max(m, r.pct_30d || 0, r.pct_90d || 0); }, 0);
+                    destEl.innerHTML = ds.map(function(r) {
+                        var typeColor = (r.type === 'avod' ? '#94a3b8' : (r.type === 'avod+' ? '#f59e0b' : '#ef4444'));
+                        return '<div style="padding:8px 0; border-bottom:1px solid var(--border-color);">'
+                             +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                             +     '<div>'
+                             +       '<span style="font-size:12.5px; font-weight:600;">' + _jiqEsc(r.name) + '</span>'
+                             +       '<span style="font-size:9.5px; font-weight:700; padding:1.5px 6px; border-radius:3px; margin-left:6px;'
+                             +                   ' background:' + typeColor + '22; color:' + typeColor + ';">' + _jiqEsc(r.type) + '</span>'
+                             +     '</div>'
+                             +     '<div style="font-size:12px; font-weight:700;">'
+                             +       '<span style="opacity:0.7;">30d</span> ' + (r.pct_30d || 0).toFixed(1) + '% · '
+                             +       '<span style="opacity:0.7;">90d</span> ' + (r.pct_90d || 0).toFixed(1) + '%'
+                             +     '</div>'
+                             +   '</div>'
+                             +   '<div style="display:grid; grid-template-columns: 60px 1fr; gap:6px; align-items:center; margin-top:4px;">'
+                             +     '<div style="font-size:10px; opacity:0.55;">30d →</div>' + _jiqMiniBar(r.pct_30d || 0, typeColor, maxD)
+                             +     '<div style="font-size:10px; opacity:0.55;">90d →</div>' + _jiqMiniBar(r.pct_90d || 0, typeColor, maxD)
+                             +   '</div>'
+                             +   '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:5px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
+                             + '</div>';
+                    }).join('');
+                }
+                var searchEl = document.getElementById('jiqNflxChurnSearches');
+                if (searchEl) {
+                    var qs = data.top_searches || [];
+                    var maxQ = qs.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                    searchEl.innerHTML = qs.map(function(r) { return _jiqNflxSearchRow(r.query, r.pct, r.intent, maxQ, '#ef4444'); }).join('');
+                }
+                var reEl = document.getElementById('jiqNflxChurnReentry');
+                if (reEl) {
+                    var rt = data.reentry || [];
+                    var maxR = rt.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                    reEl.innerHTML = rt.map(function(r) {
+                        return '<div style="padding:7px 0; border-bottom:1px solid var(--border-color);">'
+                             +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                             +     '<div style="font-size:12px; font-weight:600;">' + _jiqEsc(r.label) + '</div>'
+                             +     '<div style="font-size:12px; font-weight:700; color:#22c55e;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                             +   '</div>'
+                             +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.pct, '#22c55e', maxR) + '</div>'
+                             +   '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
+                             + '</div>';
+                    }).join('');
+                }
+                var wbEl = document.getElementById('jiqNflxChurnWinback');
+                if (wbEl) {
+                    var wb = data.winback || [];
+                    wbEl.innerHTML = wb.map(function(r) {
+                        var c = (r.impact === 'high' ? '#22c55e' : (r.impact === 'med' ? '#f59e0b' : '#94a3b8'));
+                        return '<div style="display:grid; grid-template-columns: 70px minmax(0, 1fr) minmax(0, 1.7fr); gap:0.7rem; align-items:start;'
+                             +              ' padding:0.55rem 0.7rem; margin-bottom:0.4rem; border-radius:5px;'
+                             +              ' background: rgba(255,255,255,0.025); border-left:3px solid ' + c + ';">'
+                             +   '<div style="font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:' + c + ';">' + _jiqEsc(r.impact) + '</div>'
+                             +   '<div style="font-size:0.82rem; font-weight:600; color:var(--text-primary); line-height:1.4;">' + _jiqEsc(r.lever) + '</div>'
+                             +   '<div style="font-size:0.74rem; color:var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(r.detail) + '</div>'
+                             + '</div>';
+                    }).join('');
+                }
+            }
+            function onChurnWindowChange(k) {
+                _jiqNflxChurnActiveWin = k;
+                _jiqNflxWindowTabs('jiqNflxChurnWindowTabs', data.windows, k, onChurnWindowChange);
+                paint();
+            }
+            _jiqNflxWindowTabs('jiqNflxChurnWindowTabs', data.windows, _jiqNflxChurnActiveWin, onChurnWindowChange);
+            paint();
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 3 · 🎬 How interest forms before a Netflix hit
+        // ──────────────────────────────────────────────────────────────
+        var _jiqNflxTitleActiveSlug = null;
+        function renderJourneyIqNflxTitleInterest(p) {
+            var data = (p && p.enabled !== false && p.titles) ? p : _JIQ_NETFLIX_DATA.nflx_title_interest;
+            if (!data) { _jiqHideCard('jiqNflxTitleCard'); return; }
+            _jiqShowNflxCard('jiqNflxTitleCard');
+            var titleEl  = document.getElementById('jiqNflxTitleTitle');
+            var subEl    = document.getElementById('jiqNflxTitleSubtitle');
+            var metaEl   = document.getElementById('jiqNflxTitleMeta');
+            var pitchEl  = document.getElementById('jiqNflxTitlePitch');
+            if (titleEl) titleEl.textContent = '🎬 ' + (data.title || '').replace(/^🎬\s*/, '');
+            if (subEl)   subEl.textContent = data.subtitle || '';
+            if (metaEl)  metaEl.textContent = 'Combined cohort: ' + _jiqFmt(data.study_cohort_size || 0) + ' off-Netflix demand-forming users across all 5 titles';
+            if (pitchEl) pitchEl.innerHTML = '<strong>Why this matters for ad sales: </strong>' + _jiqEsc(data.pitch || '');
+
+            if (!_jiqNflxTitleActiveSlug && data.titles[0]) _jiqNflxTitleActiveSlug = data.titles[0].slug;
+            function paintTabs() {
+                var tabEl = document.getElementById('jiqNflxTitleTabs');
+                if (!tabEl) return;
+                tabEl.innerHTML = data.titles.map(function(t) {
+                    var on = (t.slug === _jiqNflxTitleActiveSlug);
+                    return '<button type="button" data-slug="' + t.slug + '"'
+                         + ' style="padding:0.34rem 0.72rem; border-radius:5px; font-size:0.72rem; font-weight:700;'
+                         +        ' cursor:pointer; border:1px solid ' + (on ? t.accent : 'rgba(255,255,255,0.14)') + ';'
+                         +        ' background:' + (on ? t.accent + '22' : 'rgba(255,255,255,0.03)') + ';'
+                         +        ' color:' + (on ? t.accent : 'var(--text-secondary)') + ';">'
+                         + _jiqEsc(t.label) + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(tabEl.querySelectorAll('button'), function(btn) {
+                    btn.addEventListener('click', function() {
+                        _jiqNflxTitleActiveSlug = btn.getAttribute('data-slug');
+                        paintTabs();
+                        paintTitle();
+                    });
+                });
+            }
+            function paintTitle() {
+                var t = data.titles.filter(function(x) { return x.slug === _jiqNflxTitleActiveSlug; })[0];
+                if (!t) return;
+                var hdr = document.getElementById('jiqNflxTitleHeader');
+                if (hdr) {
+                    hdr.style.background = t.accent + '14';
+                    hdr.style.borderLeftColor = t.accent;
+                    hdr.innerHTML = ''
+                        + '<div style="display:flex; align-items:baseline; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.25rem;">'
+                        +   '<span style="font-size:1.05rem; font-weight:800; color:' + t.accent + ';">' + _jiqEsc(t.label) + '</span>'
+                        +   '<span style="font-size:0.72rem; opacity:0.72;">' + _jiqEsc(t.genre) + ' · launch ' + _jiqEsc(t.launch_date) + '</span>'
+                        + '</div>';
+                }
+                var topEl = document.getElementById('jiqNflxTitleTopline');
+                if (topEl) {
+                    var tp = t.topline || {};
+                    topEl.innerHTML = ''
+                        + _jiqTile('YouTube trailer views', (tp.trailer_views_m || 0).toFixed(1) + 'M', 'trailer + creator reactions, 30d pre', t.accent)
+                        + _jiqTile('Reddit comments',       _jiqFmt(Math.round((tp.reddit_comments_k || 0) * 1000)), 'topic-subreddit volume', t.accent)
+                        + _jiqTile('IMDb cast-page lookups',_jiqFmt(Math.round((tp.imdb_searches_k || 0) * 1000)), '30d pre-launch', t.accent)
+                        + _jiqTile('TikTok hashtag views',  (tp.tiktok_views_b || 0).toFixed(1) + 'B', 'organic earned reach', t.accent)
+                        + _jiqTile('First-week viewers',    (tp.first_week_viewers_m || 0).toFixed(1) + 'M', 'Netflix-internal viewership', '#22c55e');
+                }
+                var timEl = document.getElementById('jiqNflxTitleTimeline');
+                if (timEl) {
+                    var tl = t.timeline || [];
+                    timEl.innerHTML = ''
+                        + '<div style="background:rgba(255,255,255,0.02); border-radius:6px; padding:0.7rem 0.85rem;">'
+                        +   '<div style="display:flex; align-items:center; gap:0.85rem; margin-bottom:0.45rem; flex-wrap:wrap; font-size:0.7rem;">'
+                        +     '<span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:10px; height:10px; border-radius:50%; background:' + t.accent + '; opacity:0.55;"></span>Awareness</span>'
+                        +     '<span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:10px; height:10px; border-radius:50%; background:' + t.accent + ';"></span>Intent</span>'
+                        +     '<span style="opacity:0.5;">x-axis: days from launch (0 = launch day)</span>'
+                        +   '</div>'
+                        +   '<div style="display:grid; grid-template-columns: repeat(' + tl.length + ', 1fr); gap:4px; align-items:end; height:100px;">'
+                        +     tl.map(function(pt) {
+                                var aw = pt.awareness || 0, it = pt.intent || 0;
+                                var awH = Math.max(2, (aw / 100) * 90);
+                                var itH = Math.max(2, (it / 100) * 90);
+                                return '<div style="display:flex; flex-direction:column; align-items:center; gap:2px;">'
+                                     +   '<div style="display:flex; gap:1.5px; align-items:end; height:90px;">'
+                                     +     '<div title="Awareness " style="width:6px; height:' + awH.toFixed(1) + 'px; background:' + t.accent + '; opacity:0.55; border-radius:2px 2px 0 0;"></div>'
+                                     +     '<div title="Intent "    style="width:6px; height:' + itH.toFixed(1) + 'px; background:' + t.accent + '; border-radius:2px 2px 0 0;"></div>'
+                                     +   '</div>'
+                                     +   '<div style="font-size:9px; opacity:0.55; font-family:monospace;">' + (pt.day > 0 ? '+' + pt.day : pt.day) + 'd</div>'
+                                     + '</div>';
+                              }).join('')
+                        +   '</div>'
+                        + '</div>';
+                }
+                var surfEl = document.getElementById('jiqNflxTitleSurfaces');
+                if (surfEl) {
+                    var sf = t.surfaces || [];
+                    var maxS = sf.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                    surfEl.innerHTML = sf.map(function(r) { return _jiqNflxSiteRow(r.surface, r.pct, '', r.note, maxS, t.accent); }).join('');
+                }
+                var sqEl = document.getElementById('jiqNflxTitleSearches');
+                if (sqEl) {
+                    var sq = t.searches || [];
+                    var maxQ = sq.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                    sqEl.innerHTML = sq.map(function(r) { return _jiqNflxSearchRow(r.query, r.pct, r.intent, maxQ, t.accent); }).join('');
+                }
+            }
+            paintTabs();
+            paintTitle();
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 4 · 🛒 Netflix → commerce: what they shop after they watch
+        // ──────────────────────────────────────────────────────────────
+        var _jiqNflxCommerceActiveSlug = null;
+        function renderJourneyIqNflxContentCommerce(p) {
+            var data = (p && p.enabled !== false && p.genres) ? p : _JIQ_NETFLIX_DATA.nflx_content_to_commerce;
+            if (!data) { _jiqHideCard('jiqNflxCommerceCard'); return; }
+            _jiqShowNflxCard('jiqNflxCommerceCard');
+            var titleEl = document.getElementById('jiqNflxCommerceTitle');
+            var subEl   = document.getElementById('jiqNflxCommerceSubtitle');
+            var metaEl  = document.getElementById('jiqNflxCommerceMeta');
+            var pitchEl = document.getElementById('jiqNflxCommercePitch');
+            if (titleEl) titleEl.textContent = '🛒 ' + (data.title || '').replace(/^🛒\s*/, '');
+            if (subEl)   subEl.textContent = data.subtitle || '';
+            if (metaEl)  metaEl.textContent = 'Observation cohort: ' + _jiqFmt(data.study_cohort_size || 0) + ' viewers with cross-tracked off-Netflix commercial behavior';
+            if (pitchEl) pitchEl.innerHTML = '<strong>Why this matters for ad sales: </strong>' + _jiqEsc(data.pitch || '');
+
+            if (!_jiqNflxCommerceActiveSlug && data.genres[0]) _jiqNflxCommerceActiveSlug = data.genres[0].slug;
+            function paintTabs() {
+                var tabEl = document.getElementById('jiqNflxCommerceGenreTabs');
+                if (!tabEl) return;
+                tabEl.innerHTML = data.genres.map(function(g) {
+                    var on = (g.slug === _jiqNflxCommerceActiveSlug);
+                    return '<button type="button" data-slug="' + g.slug + '"'
+                         + ' style="padding:0.34rem 0.72rem; border-radius:5px; font-size:0.72rem; font-weight:700;'
+                         +        ' cursor:pointer; border:1px solid ' + (on ? g.accent : 'rgba(255,255,255,0.14)') + ';'
+                         +        ' background:' + (on ? g.accent + '22' : 'rgba(255,255,255,0.03)') + ';'
+                         +        ' color:' + (on ? g.accent : 'var(--text-secondary)') + ';">'
+                         + _jiqEsc(g.label) + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(tabEl.querySelectorAll('button'), function(btn) {
+                    btn.addEventListener('click', function() {
+                        _jiqNflxCommerceActiveSlug = btn.getAttribute('data-slug');
+                        paintTabs();
+                        paintGenre();
+                    });
+                });
+            }
+            function paintGenre() {
+                var g = data.genres.filter(function(x) { return x.slug === _jiqNflxCommerceActiveSlug; })[0];
+                if (!g) return;
+                var hdr = document.getElementById('jiqNflxCommerceHeader');
+                if (hdr) {
+                    hdr.style.background = g.accent + '14';
+                    hdr.style.borderLeftColor = g.accent;
+                    hdr.innerHTML = ''
+                        + '<div style="font-size:0.95rem; font-weight:800; color:' + g.accent + '; margin-bottom:0.3rem;">' + _jiqEsc(g.label) + '</div>'
+                        + '<div style="font-size:0.82rem; line-height:1.55; color:var(--text-primary);">' + _jiqEsc(g.headline) + '</div>';
+                }
+                var liftEl = document.getElementById('jiqNflxCommerceLifts');
+                if (liftEl) {
+                    var lifts = (g.lifts || []).slice().sort(function(a, b) { return (b.lift_x || 0) - (a.lift_x || 0); });
+                    var maxL = lifts.reduce(function(m, r) { return Math.max(m, r.lift_x || 0); }, 0);
+                    liftEl.innerHTML = lifts.map(function(r) {
+                        return '<div style="padding:8px 0; border-bottom:1px solid var(--border-color);">'
+                             +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                             +     '<div style="font-size:12.5px; font-weight:600;">' + _jiqEsc(r.category) + '</div>'
+                             +     '<div style="font-size:13px; font-weight:800; color:' + g.accent + '; white-space:nowrap;">' + (r.lift_x || 0).toFixed(2) + 'x lift</div>'
+                             +   '</div>'
+                             +   '<div style="margin-top:4px;">' + _jiqMiniBar((r.lift_x || 0) * 25, g.accent, maxL * 25) + '</div>'
+                             +   '<div style="display:flex; justify-content:space-between; gap:8px; margin-top:5px; font-size:10.5px; color:var(--text-secondary); font-style:italic;">'
+                             +     '<span>e.g. ' + _jiqEsc(r.sample || '') + '</span>'
+                             +     '<span>' + _jiqEsc(r.timing || '') + '</span>'
+                             +   '</div>'
+                             + '</div>';
+                    }).join('');
+                }
+                var brandEl = document.getElementById('jiqNflxCommerceBrands');
+                if (brandEl) {
+                    var brands = g.brands || [];
+                    brandEl.innerHTML = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0.55rem;">'
+                        + brands.map(function(b) {
+                            return '<div style="padding:0.65rem 0.8rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + g.accent + ';">'
+                                 +   '<div style="font-size:0.78rem; font-weight:700; color:var(--text-primary); margin-bottom:0.2rem;">' + _jiqEsc(b.title) + '</div>'
+                                 +   '<div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:0.3rem;">→ ' + _jiqEsc(b.brand) + '</div>'
+                                 +   '<div style="font-size:0.78rem; font-weight:700; color:' + g.accent + ';">' + _jiqEsc(b.lift) + '</div>'
+                                 + '</div>';
+                          }).join('')
+                        + '</div>';
+                }
+                var dEl = document.getElementById('jiqNflxCommerceDecay');
+                if (dEl) {
+                    var d = data.decay_default || {};
+                    dEl.innerHTML = ''
+                        + _jiqTile('Day 1',  (d.d1 || 0)  + '% of peak', 'immediate post-watch', g.accent)
+                        + _jiqTile('Day 7',  (d.d7 || 0)  + '% of peak', 'still-elevated week-1', g.accent)
+                        + _jiqTile('Day 14', (d.d14 || 0) + '% of peak', 'durable mid-window',    g.accent)
+                        + _jiqTile('Day 30', (d.d30 || 0) + '% of peak', 'long-tail residual',    g.accent);
+                }
+            }
+            paintTabs();
+            paintGenre();
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 5 · 💼 Advertiser Category Intent Packs
+        // ──────────────────────────────────────────────────────────────
+        var _jiqNflxIntentActiveSlug = null;
+        function renderJourneyIqNflxIntentPacks(p) {
+            var data = (p && p.enabled !== false && p.packs) ? p : _JIQ_NETFLIX_DATA.nflx_advertiser_intent_packs;
+            if (!data) { _jiqHideCard('jiqNflxIntentCard'); return; }
+            _jiqShowNflxCard('jiqNflxIntentCard');
+            var titleEl = document.getElementById('jiqNflxIntentTitle');
+            var subEl   = document.getElementById('jiqNflxIntentSubtitle');
+            var metaEl  = document.getElementById('jiqNflxIntentMeta');
+            var pitchEl = document.getElementById('jiqNflxIntentPitch');
+            if (titleEl) titleEl.textContent = '💼 ' + (data.title || '').replace(/^💼\s*/, '');
+            if (subEl)   subEl.textContent = data.subtitle || '';
+            if (metaEl)  metaEl.textContent = 'Base: ' + _jiqFmt(data.study_cohort_size || 0) + ' active U.S. Netflix households';
+
+            var topEl = document.getElementById('jiqNflxIntentTopline');
+            if (topEl) {
+                var totalAddr = data.packs.reduce(function(s, p) { return s + (p.addressable_m || 0); }, 0);
+                var top3 = data.packs.slice().sort(function(a, b) { return (b.pct_in_market || 0) - (a.pct_in_market || 0); }).slice(0, 3);
+                topEl.innerHTML = ''
+                    + _jiqTile('Active households',  _jiqFmt(data.study_cohort_size || 0), 'U.S. Netflix base', '#5b6cff')
+                    + _jiqTile('Total addressable',  totalAddr.toFixed(1) + 'M', 'across 15 packs (overlap allowed)', '#5b6cff')
+                    + _jiqTile('Largest pack',       _jiqEsc((top3[0] || {}).label || '-'), ((top3[0] || {}).pct_in_market || 0).toFixed(1) + '% of base', '#22c55e')
+                    + _jiqTile('Top high-CPM pack',  'Luxury fashion', '+28-42% CPM uplift', '#c026d3')
+                    + _jiqTile('Pack count',         '15 packs', 'with brand-anchored intent proof', '#5b6cff');
+            }
+
+            if (!_jiqNflxIntentActiveSlug && data.packs[0]) _jiqNflxIntentActiveSlug = data.packs[0].slug;
+            function paintGrid() {
+                var gEl = document.getElementById('jiqNflxIntentGrid');
+                if (!gEl) return;
+                gEl.innerHTML = data.packs.map(function(pk) {
+                    var on = (pk.slug === _jiqNflxIntentActiveSlug);
+                    return '<div data-slug="' + pk.slug + '" class="nflx-intent-card"'
+                         + ' style="padding:0.65rem 0.75rem; border-radius:7px; cursor:pointer;'
+                         +        ' background:' + (on ? pk.accent + '24' : 'rgba(255,255,255,0.03)') + ';'
+                         +        ' border:1px solid ' + (on ? pk.accent : 'rgba(255,255,255,0.10)') + ';'
+                         +        ' transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:6px;">'
+                         +     '<div style="font-size:0.76rem; font-weight:700; color:' + pk.accent + '; line-height:1.25;">' + _jiqEsc(pk.label) + '</div>'
+                         +     '<div style="font-size:0.7rem; font-weight:800; color:var(--text-primary);">' + (pk.pct_in_market || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.62rem; opacity:0.65; margin-top:0.2rem;">' + (pk.addressable_m || 0).toFixed(2) + 'M addressable</div>'
+                         +   '<div style="margin-top:0.35rem;">' + _jiqMiniBar((pk.pct_in_market || 0) * 3, pk.accent, 100) + '</div>'
+                         + '</div>';
+                }).join('');
+                Array.prototype.forEach.call(gEl.querySelectorAll('.nflx-intent-card'), function(cd) {
+                    cd.addEventListener('click', function() {
+                        _jiqNflxIntentActiveSlug = cd.getAttribute('data-slug');
+                        paintGrid();
+                        paintDrill();
+                    });
+                });
+            }
+            function paintDrill() {
+                var pk = data.packs.filter(function(x) { return x.slug === _jiqNflxIntentActiveSlug; })[0];
+                if (!pk) return;
+                var dEl = document.getElementById('jiqNflxIntentDrill');
+                if (!dEl) return;
+                dEl.style.background = pk.accent + '12';
+                dEl.style.borderLeftColor = pk.accent;
+                var segs = pk.segments || {};
+                var segLabels = {
+                    active_shoppers: 'Active shoppers',
+                    comparers: 'Brand comparers',
+                    cart_abandoners: 'Cart abandoners',
+                    brand_switchers: 'Brand switchers',
+                    lapsed_buyers: 'Lapsed buyers'
+                };
+                var segOrder = ['active_shoppers','comparers','cart_abandoners','brand_switchers','lapsed_buyers'];
+                var segHtml = segOrder.map(function(k) {
+                    var v = segs[k] || 0;
+                    return '<div style="padding:0.5rem 0.65rem; background:rgba(255,255,255,0.025); border-radius:5px; border-left:3px solid ' + pk.accent + ';">'
+                         +   '<div style="font-size:0.62rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.06em;">' + segLabels[k] + '</div>'
+                         +   '<div style="font-size:1rem; font-weight:800; color:var(--text-primary); margin-top:0.2rem;">' + v.toFixed(1) + '%</div>'
+                         +   '<div style="margin-top:0.3rem;">' + _jiqMiniBar(v, pk.accent, 50) + '</div>'
+                         + '</div>';
+                }).join('');
+                dEl.innerHTML = ''
+                    + '<div style="display:flex; align-items:baseline; gap:0.7rem; flex-wrap:wrap; margin-bottom:0.45rem;">'
+                    +   '<span style="font-size:1.1rem; font-weight:800; color:' + pk.accent + ';">' + _jiqEsc(pk.label) + '</span>'
+                    +   '<span style="font-size:0.78rem; font-weight:700; color:var(--text-primary);">' + (pk.pct_in_market || 0).toFixed(1) + '% in-market</span>'
+                    +   '<span style="font-size:0.72rem; opacity:0.7;">→ ' + (pk.addressable_m || 0).toFixed(2) + 'M U.S. Netflix households addressable</span>'
+                    + '</div>'
+                    + '<div style="display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap:0.95rem; margin-bottom:0.7rem;">'
+                    +   '<div>'
+                    +     '<div style="font-size:0.7rem; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.3rem;">Anchor brands</div>'
+                    +     '<div style="display:flex; flex-wrap:wrap; gap:0.3rem;">'
+                    +       (pk.anchor_brands || []).map(function(b) {
+                            return '<span style="padding:0.25rem 0.55rem; border-radius:999px; font-size:0.72rem; font-weight:600;'
+                                 +              ' background:rgba(255,255,255,0.04); color:var(--text-primary); border:1px solid ' + pk.accent + '44;">'
+                                 +   _jiqEsc(b)
+                                 + '</span>';
+                          }).join('')
+                    +     '</div>'
+                    +   '</div>'
+                    +   '<div>'
+                    +     '<div style="font-size:0.7rem; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.3rem;">Best-aligned Netflix titles</div>'
+                    +     '<div style="display:flex; flex-wrap:wrap; gap:0.3rem;">'
+                    +       (pk.best_titles || []).map(function(t) {
+                            return '<span style="padding:0.25rem 0.55rem; border-radius:5px; font-size:0.72rem; font-weight:600;'
+                                 +              ' background:' + pk.accent + '18; color:var(--text-primary);">'
+                                 +   _jiqEsc(t)
+                                 + '</span>';
+                          }).join('')
+                    +     '</div>'
+                    +   '</div>'
+                    + '</div>'
+                    + '<div style="font-size:0.7rem; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.3rem;">In-market segment breakdown</div>'
+                    + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:0.45rem; margin-bottom:0.65rem;">' + segHtml + '</div>'
+                    + '<div style="display:grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap:0.85rem; padding-top:0.55rem; border-top:1px solid rgba(255,255,255,0.07);">'
+                    +   '<div>'
+                    +     '<div style="font-size:0.7rem; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.25rem;">Proof signal (clickstream only)</div>'
+                    +     '<div style="font-size:0.78rem; color:var(--text-primary); line-height:1.5; font-style:italic;">' + _jiqEsc(pk.proof_signal || '') + '</div>'
+                    +   '</div>'
+                    +   '<div>'
+                    +     '<div style="font-size:0.7rem; font-weight:700; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.25rem;">Pricing implication</div>'
+                    +     '<div style="font-size:0.95rem; font-weight:800; color:' + pk.accent + ';">' + _jiqEsc(pk.cpm_uplift || '') + '</div>'
+                    +   '</div>'
+                    + '</div>';
+            }
+            paintGrid();
+            paintDrill();
+
+            if (pitchEl) pitchEl.innerHTML = '<strong>Why this matters for ad sales: </strong>' + _jiqEsc(data.pitch || '');
+        }
+
+        // ══════════════════════════════════════════════════════════════
         // LANDMAN STORY-MODE RENDERERS
         //
         // Three renderers, one per card in the Landman-pitch spine block
@@ -55223,9 +56691,11 @@
             // to render normally. When matched, every ID in the hide
             // list gets display:none.
             if (!storyMode) return;
-            // Currently only 'landman' is wired. Add more cases here
-            // when new shows get their own purpose-built dashboards.
-            if (storyMode !== 'landman') return;
+            // Allow-list of story modes that get the "force-hide all
+            // templated JIQ cards" treatment. Add more cases here
+            // when new pitches get their own purpose-built dashboards.
+            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1 };
+            if (!FORCE_HIDE_MODES[storyMode]) return;
             for (var i = 0; i < _JIQ_STORY_MODE_HIDE_LIST.length; i++) {
                 var el = document.getElementById(_JIQ_STORY_MODE_HIDE_LIST[i]);
                 if (el) el.style.display = 'none';
