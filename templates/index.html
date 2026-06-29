@@ -31096,10 +31096,8 @@
                      short-circuit harmlessly. -->
                 
 
-                <div class="card" style="padding: 1rem; margin-top: 1rem;" id="jiqFactsCard">
-                    <h3 style="margin: 0 0 0.5rem;">✨ Interesting Facts</h3>
-                    <div id="jiqFacts"></div>
-                </div>
+                <!-- "Interesting Facts" card removed per design - too templated;
+                     each Netflix story card now carries its own narrative -->
 
                 <!-- ════════════════════════════════════════════════════════
                      SUBSCRIBER IQ SUMMARY cards - mirrors of the same
@@ -31429,29 +31427,17 @@
                        jiqNflxIncrementCard    (nflx_incrementality)
                        jiqNflxAqiCard          (nflx_aqi)
                        jiqNflxMigrationCard    (nflx_migration)
+                       jiqNflxGenreCard        (nflx_genre_alignment)
 
                      Shared section header (jiqNetflixPitchHeader) is
                      revealed by the first card that paints via
                      _jiqShowNetflixPitchHeader().
                 ═══════════════════════════════════════════════════════ -->
-                <div class="card" id="jiqNetflixPitchHeader"
-                     style="padding: 0.95rem 1.2rem; margin-top: 1.5rem; margin-bottom: 1rem;
-                            display: none;
-                            background: linear-gradient(135deg, rgba(229,9,20,0.10) 0%, rgba(91,108,255,0.05) 100%);
-                            border: 1px solid rgba(229,9,20,0.30);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem;">
-                        <h3 style="margin: 0; font-size: 1.1rem;">🎬 Netflix Ad-Sales Demand Map &amp; Off-Platform Intel</h3>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); font-style: italic;">
-                            6 clickstream-only views Netflix's first-party data physically cannot produce
-                        </div>
-                    </div>
-                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.45rem; line-height: 1.55;">
-                        Netflix sees the signup, the watch, and the cancel. Crosswalk sees everything that happened
-                        <em>around</em> those events on the open web - the demand formation, the destination of the cancel,
-                        the pre-launch awareness curves, the post-watch commercial behavior, and the in-market
-                        advertiser-category signals that turn Netflix demos into category-priced inventory.
-                    </div>
-                </div>
+                <!-- Netflix pitch header card removed per design - each Netflix
+                     story card now opens with its own title + question; the
+                     redundant umbrella header was crowding the story. The
+                     _jiqShowNetflixPitchHeader() helper is now a no-op (its
+                     getElementById call returns null), which is by design. -->
 
                 <!-- ─── NETFLIX CARD 1: 🔍 The 30 Days Before Netflix Sign-up ─── -->
                 <div class="card" id="jiqNflxSignupCard"
@@ -31921,6 +31907,78 @@
                     <div id="jiqNflxAqiPitch"
                          style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
                                 background: rgba(251,191,36,0.12); border-left: 3px solid #fbbf24; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── NETFLIX CARD 10: 🌊 Competitive Streaming Migration Map ─── -->
+                <div class="card" id="jiqNflxMigrationCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(99,102,241,0.07) 0%, rgba(229,9,20,0.06) 100%);
+                            border: 1px solid rgba(99,102,241,0.30);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNflxMigrationTitle" style="margin: 0;">🌊 Competitive streaming migration map</h3>
+                        <div id="jiqNflxMigrationMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNflxMigrationSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+
+                    <div id="jiqNflxMigrationMethodStrip"
+                         style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 0.7rem;
+                                padding: 0.75rem 0.9rem; border-radius: 7px; margin-bottom: 0.9rem;
+                                background: linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(229,9,20,0.08) 100%);
+                                border-left: 3px solid #6366f1;"></div>
+
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92; color: #a5b4fc;">
+                        🌊 90-day rolling streaming flow - U.S. household migration into and out of Netflix
+                    </h4>
+                    <div id="jiqNflxMigrationSankey" style="margin-bottom: 0.6rem;"></div>
+                    <div id="jiqNflxMigrationSankeyLegend"
+                         style="display:flex; gap:0.8rem; flex-wrap:wrap; margin-bottom: 1rem;
+                                padding: 0.5rem 0.7rem; background: rgba(255,255,255,0.03); border-radius: 5px;
+                                font-size: 0.7rem;"></div>
+
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.7rem;">
+                        <span style="font-size: 0.62rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em;">Lens</span>
+                        <div id="jiqNflxMigrationLensTabs" style="display: flex; gap: 0.35rem; flex-wrap: wrap;"></div>
+                    </div>
+
+                    <div id="jiqNflxMigrationLensPanel" style="margin-bottom: 1rem;"></div>
+
+                    <div id="jiqNflxMigrationPitch"
+                         style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
+                                background: rgba(99,102,241,0.12); border-left: 3px solid #6366f1; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── NETFLIX CARD 11: 🎬 Genre-to-Advertiser Alignment ─── -->
+                <div class="card" id="jiqNflxGenreCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(251,113,133,0.08) 0%, rgba(229,9,20,0.06) 100%);
+                            border: 1px solid rgba(251,113,133,0.32);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNflxGenreTitle" style="margin: 0;">🎬 Genre-to-advertiser alignment</h3>
+                        <div id="jiqNflxGenreMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNflxGenreSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+
+                    <div id="jiqNflxGenreMethodStrip"
+                         style="display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 0.7rem;
+                                padding: 0.75rem 0.9rem; border-radius: 7px; margin-bottom: 0.9rem;
+                                background: linear-gradient(135deg, rgba(251,113,133,0.12) 0%, rgba(229,9,20,0.08) 100%);
+                                border-left: 3px solid #fb7185;"></div>
+
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92; color: #fda4af;">
+                        🎭 12-genre selector - click a genre to drill into its advertiser-alignment profile
+                    </h4>
+                    <div id="jiqNflxGenreGrid" style="margin-bottom: 1rem;"></div>
+
+                    <div id="jiqNflxGenreDeepDive" style="margin-bottom: 1rem;"></div>
+
+                    <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92;">
+                        🔥 Cross-genre alignment matrix - heatmap of advertiser-category affinity (100 = genpop parity)
+                    </h4>
+                    <div id="jiqNflxGenreMatrix" style="margin-bottom: 1rem; overflow-x: auto;"></div>
+
+                    <div id="jiqNflxGenrePitch"
+                         style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
+                                background: rgba(251,113,133,0.12); border-left: 3px solid #fb7185; line-height: 1.55;"></div>
                 </div>
 
             </div>
@@ -46930,6 +46988,7 @@
                         nflx_incrementality:         _JIQ_NETFLIX_DATA.nflx_incrementality,
                         nflx_aqi:                    _JIQ_NETFLIX_DATA.nflx_aqi,
                         nflx_migration:              _JIQ_NETFLIX_DATA.nflx_migration,
+                        nflx_genre_alignment:        _JIQ_NETFLIX_DATA.nflx_genre_alignment,
                         facts: [
                             { label: 'Headline',  value: 'Netflix sees the signup, the watch, and the cancel. Crosswalk sees the demand formation, the churn destination, the pre-launch demand curve, the post-watch commerce lift, the in-market advertiser-category signals, the off-Amazon intent path, the pre/post lift on every campaign, the matched-control incrementality, the audience-quality rate card, AND the full competitive streaming marketplace.' },
                             { label: 'Pre-sub',   value: '62.7% of new Netflix subs are simultaneously in-market for at least one premium advertiser category in the 30d window before signup.' },
@@ -48483,6 +48542,7 @@
             _jiqHideCard('jiqNflxIncrementCard');
             _jiqHideCard('jiqNflxAqiCard');
             _jiqHideCard('jiqNflxMigrationCard');
+            _jiqHideCard('jiqNflxGenreCard');
 
             var _isNetflixStory = (_storyMode === 'netflix_ad_sales');
             if (_isNetflixStory) {
@@ -48515,6 +48575,9 @@
                 }
                 if (typeof renderJourneyIqNflxMigration === 'function') {
                     renderJourneyIqNflxMigration(_pickClickstreamBlock('nflx_migration'));
+                }
+                if (typeof renderJourneyIqNflxGenre === 'function') {
+                    renderJourneyIqNflxGenre(_pickClickstreamBlock('nflx_genre_alignment'));
                 }
             }
 
@@ -56917,6 +56980,429 @@
                     }
                 ],
                 pitch: 'Netflix today sells reach. With the AQI, Netflix sells a rate card. 10 commercially-priceable audience packs across 70.3M Diamond + Platinum + Gold HHs, each with a defensible composite score, a brand-anchored proof signal, and a CPM band that maps to demonstrated audience quality. Higher quality + better packaging = higher CPMs. This is how Netflix turns "we have great inventory" into "we have a priced rate card for every advertiser in every category."'
+            },
+
+            // ── PULL 10 · COMPETITIVE STREAMING MIGRATION MAP ──
+            nflx_migration: {
+                enabled: true,
+                title: 'Competitive streaming migration map',
+                subtitle: 'Netflix sees its own subs and its own churn. Crosswalk sees the entire streaming marketplace - which competitors Netflix HHs subscribe to alongside it, where Netflix subs go when they leave, where new subs come from, the cycling and stacking patterns, the ad-tier upgrade paths, the binge-and-cancel signatures, and which titles bring lapsed subs back.',
+                question: 'How do consumers move between Netflix and other streamers, and what does that mean for the cross-CTV ad buy?',
+                method_bullets: [
+                    'Data window: 90-day rolling household behavior, panel-projected to U.S. ad-tier-eligible HHs',
+                    'Migration = detected SVOD login / homepage / billing-portal visit at a destination platform within 30d of leaving the source platform',
+                    'Multi-sub stacking = concurrent active subscriptions detected in the same rolling 90d window',
+                    'Cycling = >=2 cancellation -> resubscription events on the same platform within 12 months',
+                    'Title-triggered reactivation = previously-lapsed Netflix HH whose first reactivation session was within 7d of a major title premiere'
+                ],
+                sankey: {
+                    netflix: { label: 'Netflix', hh_count: 80100000, color: '#e50914' },
+                    competitors: [
+                        { id: 'hulu',    label: 'Hulu',           color: '#1ce783', inbound_hh: 7100000,  outbound_hh: 8400000  },
+                        { id: 'max',     label: 'Max',            color: '#a78bfa', inbound_hh: 3800000,  outbound_hh: 5700000  },
+                        { id: 'dplus',   label: 'Disney+',        color: '#3b82f6', inbound_hh: 4600000,  outbound_hh: 6100000  },
+                        { id: 'prime',   label: 'Prime Video',    color: '#00a8e1', inbound_hh: 5400000,  outbound_hh: 7200000  },
+                        { id: 'youtube', label: 'YouTube',        color: '#ff6b35', inbound_hh: 9700000,  outbound_hh: 12300000 },
+                        { id: 'fast',    label: 'Tubi / Roku / FAST', color: '#fa541c', inbound_hh: 2300000, outbound_hh: 4800000 }
+                    ],
+                    total_inbound:  32900000,
+                    total_outbound: 44500000,
+                    net_flow:       -11600000,
+                    note: 'Net 90d outbound exceeds inbound by ~11.6M HHs - the cross-platform "share-shift" gap Netflix can close by 1) marketing into competitor-tier ad-aware audiences and 2) selling its own ad-tier as a cross-CTV complement rather than a competitor.'
+                },
+                lenses: [
+                    {
+                        id: 'stacking',
+                        label: 'Multi-sub stacking',
+                        title: 'How many active paid SVODs Netflix HHs subscribe to in a rolling 90d window',
+                        view: 'bar',
+                        rows: [
+                            { label: '1 SVOD (Netflix-only)',    pct: 11.4, hh_count:  9150000, note: 'Netflix exclusives - the cohort most-at-risk for cycling out if engagement drops.' },
+                            { label: '2 SVODs',                  pct: 27.8, hh_count: 22300000, note: 'Most common stack. Usually Netflix + (Hulu or Prime). Highest cross-CTV ad reach.' },
+                            { label: '3 SVODs',                  pct: 31.2, hh_count: 25000000, note: 'The "core" stack: Netflix + 2 of {Hulu, Max, Prime, Disney+}.' },
+                            { label: '4 SVODs',                  pct: 18.6, hh_count: 14900000, note: 'Premium stackers - over-index on the AQI Diamond + Platinum tiers.' },
+                            { label: '5+ SVODs',                 pct: 11.0, hh_count:  8800000, note: 'Super-stackers - 71% logged into >=2 competing SVODs in last 7d. Streaming Superfans cohort.' }
+                        ],
+                        callout: '88.6% of U.S. Netflix HHs are multi-platform streamers. Selling Netflix as part of a cross-CTV plan is more accurate to user behavior than selling it as a walled garden.'
+                    },
+                    {
+                        id: 'cycling',
+                        label: 'Subscription cycling',
+                        title: 'Frequency of cancel -> resubscribe cycles on Netflix, last 12 months',
+                        view: 'bar',
+                        rows: [
+                            { label: '0 cycles (continuous sub)',         pct: 64.3, hh_count: 51500000, note: 'Steady-state subs - the loyalty-discount + bundle cohort.' },
+                            { label: '1 cycle (cancel once, came back)',  pct: 17.4, hh_count: 13900000, note: 'Title-triggered reactivators - see "Title-triggered reactivations" lens.' },
+                            { label: '2 cycles',                          pct:  9.1, hh_count:  7300000, note: 'On / off / on / off - cancel after binge, return for next big drop.' },
+                            { label: '3 cycles',                          pct:  4.8, hh_count:  3800000, note: 'High-churn - the ad-tier conversion target.' },
+                            { label: '4+ cycles',                         pct:  4.4, hh_count:  3500000, note: 'Promo-hopper / serial canceler - usually shopping for the lowest active price.' }
+                        ],
+                        callout: '35.7% of U.S. Netflix HHs cycled in or out at least once in the last 12 months. The cycling cohort is twice as large as Netflix\'s lifetime-cancel base.'
+                    },
+                    {
+                        id: 'adtier',
+                        label: 'Ad-tier migration',
+                        title: 'Where Netflix ad-tier subscribers came from (90d look-back)',
+                        view: 'bar',
+                        rows: [
+                            { label: 'Upgrade from "lapsed paid Netflix"',           pct: 40.6, hh_count: 7500000, note: 'Resubscribed at the ad-tier price point - the lowest-friction reactivation funnel.' },
+                            { label: 'New trial - never previously a Netflix sub',   pct: 22.8, hh_count: 4200000, note: 'Ad-tier-first - usually price-sensitive Gen Z + multicultural HHs.' },
+                            { label: 'Downgrade from competitor SVOD',               pct: 18.4, hh_count: 3400000, note: 'Direct share-shift - usually from Hulu, Max, or Disney+ ad-tier.' },
+                            { label: 'Downgrade from paid Netflix tier',             pct: 11.2, hh_count: 2070000, note: 'Existing subs trading down for price - the margin-pressure cohort.' },
+                            { label: 'Bundle activation (Verizon / T-Mobile / partner)', pct: 7.0, hh_count: 1290000, note: 'Telco + retailer bundle activations - the partner-channel acquisition funnel.' }
+                        ],
+                        callout: '~18.5M Netflix ad-tier HHs in the U.S. today. 41% of new ad-tier signups are lapsed paid Netflix subs returning at the lower price - a defensible ARPU story when paired with ad-revenue uplift.'
+                    },
+                    {
+                        id: 'binge_cancel',
+                        label: 'Binge-and-cancel',
+                        title: 'Top binge-and-cancel signatures - titles with highest 30d post-finale cancellation rates',
+                        view: 'binge',
+                        rows: [
+                            { title: 'Squid Game S3',       binge_days: 3, cancel_window_days: 11, cancel_rate_pct: 22.1, hh_cohort: 18400000, note: 'Bingeable in a single weekend, cancelled before the next bill cycle. Highest binge-cancel rate of any 2026 release.' },
+                            { title: 'Stranger Things S5',  binge_days: 4, cancel_window_days: 14, cancel_rate_pct: 18.4, hh_cohort: 24700000, note: 'Final season - "I came for this, I\'m done" signature. Highest cohort size.' },
+                            { title: 'Wednesday S2',        binge_days: 5, cancel_window_days: 21, cancel_rate_pct: 17.6, hh_cohort: 16800000, note: 'Bingeable family-co-viewing release. Cancel cohort skews younger / first-time-sub Gen Z.' },
+                            { title: 'Bridgerton S4',       binge_days: 6, cancel_window_days: 28, cancel_rate_pct: 16.3, hh_cohort: 14200000, note: 'Slow-roll over 4 weeks. The 28-day cancel signature is the Dove x Bridgerton ad-flight tail.' },
+                            { title: 'The Crown S6',        binge_days: 9, cancel_window_days: 30, cancel_rate_pct: 14.7, hh_cohort:  9300000, note: 'Prestige drama - slower pace, slower cancel. The most "engaged" cohort of the 5.' }
+                        ],
+                        callout: 'Binge-and-cancel is a 17.8% average signature across Netflix\'s 2026 tentpole drops. The ad-tier price point reduces the cancel rate ~6pp because the bill cycle "matters less."'
+                    },
+                    {
+                        id: 'reactivation',
+                        label: 'Title-triggered reactivations',
+                        title: 'Which titles brought lapsed Netflix subscribers back, 7-day reactivation window',
+                        view: 'bar',
+                        rows: [
+                            { label: 'Squid Game S3 launch',           pct: 31.2, hh_count: 3400000, note: 'Largest single-title reactivation event of 2026. 67% of reactivations chose ad-tier on return.' },
+                            { label: 'Stranger Things S5 launch',      pct: 25.7, hh_count: 2800000, note: 'Final-season pull - drove the highest paid-tier reactivation share (54%).' },
+                            { label: 'Wednesday S2 launch',            pct: 19.3, hh_count: 2100000, note: 'Skewed younger - 71% of reactivations chose ad-tier.' },
+                            { label: 'Bridgerton S4 launch',           pct: 17.4, hh_count: 1900000, note: 'Adult / female-skewing. Drove the most ad-tier -> paid-tier upgrades inside 30d.' },
+                            { label: 'Knives Out 3 (Mar 2026)',        pct: 14.7, hh_count: 1600000, note: 'Single-film release - shorter reactivation tail, higher single-day spike.' },
+                            { label: 'Other tentpole drops (combined)', pct: 22.0, hh_count: 2400000, note: 'F1: The Movie, Glass Onion 3, K-drama originals - collectively reactivated 2.4M lapsed subs.' }
+                        ],
+                        callout: '~14.2M lapsed Netflix subscribers reactivated in 2026 because of a specific title. Crosswalk identifies the title-by-title attribution Netflix\'s own data cannot disambiguate from organic resub volume.'
+                    }
+                ],
+                pitch: 'Netflix sees who subscribes to Netflix. Crosswalk sees who subscribes to Netflix AND Hulu AND Prime AND YouTube - and who left Netflix for Max last quarter and came back for Squid Game this quarter. That whole-marketplace view is the wedge for the cross-CTV ad buy. Advertisers do not want to negotiate Netflix in isolation; they want a Netflix audience plan that complements their Hulu / Prime / Max plans.'
+            },
+
+            // ── PULL 11 · GENRE-TO-ADVERTISER ALIGNMENT ──
+            nflx_genre_alignment: {
+                enabled: true,
+                title: 'Genre-to-advertiser alignment',
+                subtitle: 'Netflix today sells generic show sponsorships. Crosswalk lets Netflix sell behaviorally-supported category alignment: every genre profiled across 10 off-Netflix signal classes, mapped to the advertiser categories and brands that over-index on its audience, and packaged into sponsorship + programmatic units that come priced.',
+                question: 'Which advertiser categories align with specific Netflix genres - and what are the sponsorship + programmatic packages that turn that alignment into revenue?',
+                method_bullets: [
+                    'Genre cohort = U.S. Netflix HHs whose viewing in the last 90d is >=30% concentrated in titles tagged for this genre',
+                    '10 off-Netflix signal classes per genre: shopping, brand affinities, travel, luxury, retail, subscriptions, lifestyle, app usage, social/video, competitor SVOD overlap',
+                    'Affinity index: 100 = genpop Netflix parity. >=115 = over-indexes, >=130 = strong fit, >=150 = anchor-pack candidate',
+                    'Sponsorship packs are illustrative formats - title-card sponsorship, mid-roll exclusive, programmatic genre segment - with CPM uplift ranges tied to the genre\'s top advertiser-category affinity',
+                    'Cross-genre heatmap plots the same affinity index across 12 genres x 10 priority advertiser categories'
+                ],
+                ad_categories: ['Luxury', 'Beauty', 'Auto', 'Travel', 'QSR/CPG', 'Tech/Gaming', 'Financial', 'Retail DTC', 'Bev-Alc/Sports', 'Family/Home'],
+                genres: [
+                    {
+                        id: 'true_crime', name: 'True crime', emoji: '🕵️', hh_count: 18400000,
+                        marquee_titles: 'Mindhunter, Making a Murderer, Dahmer, Indian Predator',
+                        top_categories: [
+                            { name: 'Home security / smart home', affinity_index: 168, cpm_uplift_pct: 42 },
+                            { name: 'Insurance (auto + home)',    affinity_index: 142, cpm_uplift_pct: 28 },
+                            { name: 'Audio / podcast subs',       affinity_index: 138, cpm_uplift_pct: 26 },
+                            { name: 'Streaming hardware (Roku / Apple TV)', affinity_index: 124, cpm_uplift_pct: 18 }
+                        ],
+                        top_brands: ['Ring', 'ADT / SimpliSafe', 'Allstate / GEICO', 'Spotify / Pocket Casts', 'Audible'],
+                        proof: 'Average 2.4 home-security site sessions per month, 2.1x the genpop. 41% have >=1 smart-home device subscription.',
+                        signals: [
+                            { signal: 'Shopping', index: 112 }, { signal: 'Brand affinities', index: 128 },
+                            { signal: 'Travel', index: 88 },    { signal: 'Luxury behavior', index: 92 },
+                            { signal: 'Retail', index: 108 },   { signal: 'Subscriptions', index: 148 },
+                            { signal: 'Lifestyle', index: 134 },{ signal: 'App usage', index: 158 },
+                            { signal: 'Social / video', index: 122 }, { signal: 'Competitor SVOD', index: 138 }
+                        ],
+                        sponsorship_packs: [
+                            { format: 'Title-card sponsorship',     pack: 'True-crime tentpole pre-roll exclusive', cpm_uplift_pct: 42 },
+                            { format: 'Mid-roll category lock',     pack: 'Home-security category lockout (8wk)',   cpm_uplift_pct: 31 },
+                            { format: 'Programmatic genre segment', pack: 'NFLX_TRUE_CRIME_HOME_SECURITY_AFF',      cpm_uplift_pct: 22 }
+                        ],
+                        category_indices: { 'Luxury':  92, 'Beauty':  98, 'Auto': 112, 'Travel':  88, 'QSR/CPG': 108, 'Tech/Gaming': 124, 'Financial': 142, 'Retail DTC': 108, 'Bev-Alc/Sports': 102, 'Family/Home': 168 }
+                    },
+                    {
+                        id: 'prestige_drama', name: 'Prestige drama', emoji: '👑', hh_count: 22300000,
+                        marquee_titles: 'Bridgerton, The Crown, Wednesday, The Diplomat, Ozark',
+                        top_categories: [
+                            { name: 'Luxury fashion + jewelry',   affinity_index: 192, cpm_uplift_pct: 58 },
+                            { name: 'Premium beauty',             affinity_index: 168, cpm_uplift_pct: 47 },
+                            { name: 'Premium travel + hotels',    affinity_index: 158, cpm_uplift_pct: 41 },
+                            { name: 'Premium spirits / champagne',affinity_index: 152, cpm_uplift_pct: 38 }
+                        ],
+                        top_brands: ['Dior / LVMH', 'La Mer / Charlotte Tilbury', 'Marriott Bonvoy / Four Seasons', 'Veuve Clicquot', 'Cartier'],
+                        proof: '2.4x genpop rate of designer-brand site visits; 38% touched a $5K+ AUR product-page in 30d. Dove x Bridgerton S4 case-study cohort.',
+                        signals: [
+                            { signal: 'Shopping', index: 138 }, { signal: 'Brand affinities', index: 168 },
+                            { signal: 'Travel', index: 158 },   { signal: 'Luxury behavior', index: 224 },
+                            { signal: 'Retail', index: 134 },   { signal: 'Subscriptions', index: 142 },
+                            { signal: 'Lifestyle', index: 148 },{ signal: 'App usage', index: 118 },
+                            { signal: 'Social / video', index: 132 }, { signal: 'Competitor SVOD', index: 122 }
+                        ],
+                        sponsorship_packs: [
+                            { format: 'Title-card sponsorship',     pack: 'Bridgerton-style title-card luxury anchor', cpm_uplift_pct: 58 },
+                            { format: 'Multi-title prestige pack',  pack: '4-title prestige-drama category lockout',   cpm_uplift_pct: 47 },
+                            { format: 'Programmatic genre segment', pack: 'NFLX_PRESTIGE_LUXURY_INTENDERS',            cpm_uplift_pct: 38 }
+                        ],
+                        category_indices: { 'Luxury': 192, 'Beauty': 168, 'Auto': 124, 'Travel': 158, 'QSR/CPG':  98, 'Tech/Gaming': 112, 'Financial': 138, 'Retail DTC': 134, 'Bev-Alc/Sports': 142, 'Family/Home': 102 }
+                    },
+                    {
+                        id: 'comedy', name: 'Comedy', emoji: '😂', hh_count: 28700000,
+                        marquee_titles: 'Stand-up specials, Old Enough, Nobody Wants This, Beef',
+                        top_categories: [
+                            { name: 'QSR (Taco Bell, McD, Wendy\'s)', affinity_index: 158, cpm_uplift_pct: 38 },
+                            { name: 'Beer + RTD cocktails',           affinity_index: 152, cpm_uplift_pct: 36 },
+                            { name: 'Food delivery apps',             affinity_index: 168, cpm_uplift_pct: 42 },
+                            { name: 'Casual fashion (Levi\'s / Nike)', affinity_index: 124, cpm_uplift_pct: 21 }
+                        ],
+                        top_brands: ['Taco Bell', 'Bud Light / White Claw', 'DoorDash / Uber Eats', 'Levi\'s', 'Nike'],
+                        proof: '3.2x genpop rate of food-delivery app sessions during 7-11pm primetime. The "couch-commerce" cohort.',
+                        signals: [
+                            { signal: 'Shopping', index: 132 }, { signal: 'Brand affinities', index: 124 },
+                            { signal: 'Travel', index: 108 },   { signal: 'Luxury behavior', index:  88 },
+                            { signal: 'Retail', index: 128 },   { signal: 'Subscriptions', index: 138 },
+                            { signal: 'Lifestyle', index: 152 },{ signal: 'App usage', index: 182 },
+                            { signal: 'Social / video', index: 148 }, { signal: 'Competitor SVOD', index: 132 }
+                        ],
+                        sponsorship_packs: [
+                            { format: 'Comedy-special title sponsor', pack: 'Stand-up special pre-roll exclusive',     cpm_uplift_pct: 38 },
+                            { format: 'Couch-commerce mid-roll',      pack: 'QSR + delivery primetime category pack',  cpm_uplift_pct: 36 },
+                            { format: 'Programmatic genre segment',   pack: 'NFLX_COMEDY_DELIVERY_HEAVY',              cpm_uplift_pct: 24 }
+                        ],
+                        category_indices: { 'Luxury':  88, 'Beauty': 112, 'Auto': 118, 'Travel': 108, 'QSR/CPG': 168, 'Tech/Gaming': 124, 'Financial': 102, 'Retail DTC': 132, 'Bev-Alc/Sports': 152, 'Family/Home': 122 }
+                    },
+                    {
+                        id: 'reality', name: 'Reality / unscripted', emoji: '💍', hh_count: 24100000,
+                        marquee_titles: 'Love is Blind, Selling Sunset, Too Hot to Handle, Bling Empire',
+                        top_categories: [
+                            { name: 'Beauty DTC + fragrance',     affinity_index: 172, cpm_uplift_pct: 46 },
+                            { name: 'Fast fashion + DTC apparel', affinity_index: 168, cpm_uplift_pct: 42 },
+                            { name: 'Dating apps',                affinity_index: 158, cpm_uplift_pct: 38 },
+                            { name: 'Premium beauty (Sephora / Ulta)', affinity_index: 148, cpm_uplift_pct: 34 }
+                        ],
+                        top_brands: ['Glossier / Rare / Tatcha', 'SHEIN / PLT / Lulus', 'Hinge / Bumble', 'Maison Margiela / Le Labo', 'Sephora'],
+                        proof: '5.7 beauty-brand sessions per month, 41% visited a TikTok Shop beauty PDP in 30d. The "see-it-here, buy-it-tomorrow" cohort.',
+                        signals: [
+                            { signal: 'Shopping', index: 168 }, { signal: 'Brand affinities', index: 162 },
+                            { signal: 'Travel', index: 124 },   { signal: 'Luxury behavior', index: 134 },
+                            { signal: 'Retail', index: 158 },   { signal: 'Subscriptions', index: 142 },
+                            { signal: 'Lifestyle', index: 138 },{ signal: 'App usage', index: 178 },
+                            { signal: 'Social / video', index: 198 }, { signal: 'Competitor SVOD', index: 124 }
+                        ],
+                        sponsorship_packs: [
+                            { format: 'Reality-franchise season sponsor', pack: 'Love is Blind / Selling Sunset season-long sponsor', cpm_uplift_pct: 46 },
+                            { format: 'Beauty + DTC category lockout',    pack: 'Beauty + DTC apparel category pack (12wk)',          cpm_uplift_pct: 38 },
+                            { format: 'Programmatic genre segment',       pack: 'NFLX_REALITY_BEAUTY_SHOPPERS',                       cpm_uplift_pct: 28 }
+                        ],
+                        category_indices: { 'Luxury': 124, 'Beauty': 172, 'Auto':  92, 'Travel': 124, 'QSR/CPG': 132, 'Tech/Gaming': 108, 'Financial': 112, 'Retail DTC': 168, 'Bev-Alc/Sports': 118, 'Family/Home':  98 }
+                    },
+                    {
+                        id: 'sports_live', name: 'Sports / live events', emoji: '🏈', hh_count: 14700000,
+                        marquee_titles: 'NFL Christmas Day, F1 races, boxing / UFC, Quarterback, F1: Drive to Survive',
+                        top_categories: [
+                            { name: 'QSR + delivery',          affinity_index: 168, cpm_uplift_pct: 42 },
+                            { name: 'Beer + spirits',          affinity_index: 174, cpm_uplift_pct: 44 },
+                            { name: 'Sportsbooks + ticketing', affinity_index: 198, cpm_uplift_pct: 54 },
+                            { name: 'Auto + insurance',        affinity_index: 142, cpm_uplift_pct: 31 }
+                        ],
+                        top_brands: ['McDonald\'s / Wingstop', 'Bud Light / Modelo / Michelob', 'DraftKings / FanDuel / BetMGM', 'Ford / Chevy / Toyota Tundra', 'GEICO / Progressive'],
+                        proof: '3.4x genpop rate of sportsbook + ticketing sessions on game days. 47% have a sportsbook account.',
+                        signals: [
+                            { signal: 'Shopping', index: 132 }, { signal: 'Brand affinities', index: 138 },
+                            { signal: 'Travel', index: 128 },   { signal: 'Luxury behavior', index: 102 },
+                            { signal: 'Retail', index: 124 },   { signal: 'Subscriptions', index: 128 },
+                            { signal: 'Lifestyle', index: 162 },{ signal: 'App usage', index: 184 },
+                            { signal: 'Social / video', index: 158 }, { signal: 'Competitor SVOD', index: 142 }
+                        ],
+                        sponsorship_packs: [
+                            { format: 'Live-event title sponsor',  pack: 'NFL Christmas Day presenting sponsor',    cpm_uplift_pct: 54 },
+                            { format: 'Game-day category pack',    pack: 'QSR + beer + sportsbook game-day window', cpm_uplift_pct: 44 },
+                            { format: 'Programmatic genre segment',pack: 'NFLX_SPORTS_GAMEDAY_QSR_AFF',             cpm_uplift_pct: 32 }
+                        ],
+                        category_indices: { 'Luxury': 102, 'Beauty':  88, 'Auto': 142, 'Travel': 128, 'QSR/CPG': 168, 'Tech/Gaming': 124, 'Financial': 118, 'Retail DTC': 112, 'Bev-Alc/Sports': 198, 'Family/Home': 118 }
+                    },
+                    {
+                        id: 'anime', name: 'Anime', emoji: '🎌', hh_count: 9800000,
+                        marquee_titles: 'Anime catalog, Castlevania, Devil May Cry, Cyberpunk: Edgerunners',
+                        top_categories: [
+                            { name: 'Gaming hardware + games',     affinity_index: 198, cpm_uplift_pct: 52 },
+                            { name: 'Energy drinks + caffeine',    affinity_index: 174, cpm_uplift_pct: 44 },
+                            { name: 'Premium streaming subs',      affinity_index: 168, cpm_uplift_pct: 41 },
+                            { name: 'Consumer tech (audio / wearables)', affinity_index: 152, cpm_uplift_pct: 36 }
+                        ],
+                        top_brands: ['PlayStation / Xbox / Nintendo', 'Red Bull / Monster / Celsius', 'Crunchyroll', 'Sony WH / Bose / Sonos', 'Discord Nitro'],
+                        proof: '4.1x genpop rate of competitive-gaming + Twitch sessions. 68% are active on Discord >=3 days a week.',
+                        signals: [
+                            { signal: 'Shopping', index: 138 }, { signal: 'Brand affinities', index: 152 },
+                            { signal: 'Travel', index: 102 },   { signal: 'Luxury behavior', index: 108 },
+                            { signal: 'Retail', index: 118 },   { signal: 'Subscriptions', index: 188 },
+                            { signal: 'Lifestyle', index: 132 },{ signal: 'App usage', index: 212 },
+                            { signal: 'Social / video', index: 178 }, { signal: 'Competitor SVOD', index: 168 }
+                        ],
+                        sponsorship_packs: [
+                            { format: 'Anime title sponsor',           pack: 'Marquee anime release pre-roll exclusive', cpm_uplift_pct: 52 },
+                            { format: 'Gaming + energy category pack', pack: 'Gaming hardware + energy-drink lockout',   cpm_uplift_pct: 44 },
+                            { format: 'Programmatic genre segment',    pack: 'NFLX_ANIME_GAMER_HIGH_INTENT',             cpm_uplift_pct: 36 }
+                        ],
+                        category_indices: { 'Luxury': 108, 'Beauty':  92, 'Auto':  98, 'Travel': 102, 'QSR/CPG': 132, 'Tech/Gaming': 198, 'Financial': 118, 'Retail DTC': 124, 'Bev-Alc/Sports': 174, 'Family/Home':  88 }
+                    },
+                    {
+                        id: 'family', name: 'Family / kids', emoji: '👨‍👩‍👧', hh_count: 17400000,
+                        marquee_titles: 'CoComelon, Spirit Riding Free, Wednesday (co-view), kids movies',
+                        top_categories: [
+                            { name: 'CPG + grocery delivery',     affinity_index: 174, cpm_uplift_pct: 44 },
+                            { name: 'Toys + kids retail',         affinity_index: 198, cpm_uplift_pct: 52 },
+                            { name: 'Family travel + theme parks',affinity_index: 162, cpm_uplift_pct: 41 },
+                            { name: 'Telco family plans + mobile devices', affinity_index: 142, cpm_uplift_pct: 31 }
+                        ],
+                        top_brands: ['Pampers / Huggies / Kirkland', 'Target / buybuy BABY / Babylist', 'Disney World / Universal / Great Wolf', 'Verizon / T-Mobile (family plans)', 'Instacart / Walmart+ / Amazon Family'],
+                        proof: '4.1x genpop rate of diaper + baby-registry sessions. 36% subscribed to a new auto-replenish SKU in 60d.',
+                        signals: [
+                            { signal: 'Shopping', index: 162 }, { signal: 'Brand affinities', index: 128 },
+                            { signal: 'Travel', index: 138 },   { signal: 'Luxury behavior', index:  82 },
+                            { signal: 'Retail', index: 174 },   { signal: 'Subscriptions', index: 158 },
+                            { signal: 'Lifestyle', index: 168 },{ signal: 'App usage', index: 142 },
+                            { signal: 'Social / video', index: 112 }, { signal: 'Competitor SVOD', index: 124 }
+                        ],
+                        sponsorship_packs: [
+                            { format: 'Kids-content title sponsor',  pack: 'Kids tentpole co-view pre-roll',           cpm_uplift_pct: 52 },
+                            { format: 'Family-CPG category pack',    pack: 'Diapers + CPG + grocery-delivery lockout', cpm_uplift_pct: 41 },
+                            { format: 'Programmatic genre segment',  pack: 'NFLX_FAMILY_CPG_HEAVY_BUYERS',             cpm_uplift_pct: 31 }
+                        ],
+                        category_indices: { 'Luxury':  82, 'Beauty': 108, 'Auto': 108, 'Travel': 138, 'QSR/CPG': 174, 'Tech/Gaming': 102, 'Financial': 128, 'Retail DTC': 158, 'Bev-Alc/Sports':  92, 'Family/Home': 198 }
+                    },
+                    {
+                        id: 'documentary', name: 'Documentary', emoji: '🎥', hh_count: 16200000,
+                        marquee_titles: 'Our Planet, The Social Dilemma, food docs, true-event docs',
+                        top_categories: [
+                            { name: 'Premium travel + experiential',     affinity_index: 168, cpm_uplift_pct: 42 },
+                            { name: 'Financial services (wealth + cards)', affinity_index: 152, cpm_uplift_pct: 36 },
+                            { name: 'Premium media subscriptions',       affinity_index: 174, cpm_uplift_pct: 44 },
+                            { name: 'Education + EdTech',                affinity_index: 138, cpm_uplift_pct: 28 }
+                        ],
+                        top_brands: ['National Geographic', 'Chase Sapphire / Amex Platinum', 'NYT / Bloomberg / WSJ', 'Audible / MasterClass', 'Coursera / Khan Academy'],
+                        proof: '2.7x genpop rate of premium-media subscription homepage visits. 38% have >=2 paid news/long-form subs.',
+                        signals: [
+                            { signal: 'Shopping', index: 124 }, { signal: 'Brand affinities', index: 142 },
+                            { signal: 'Travel', index: 168 },   { signal: 'Luxury behavior', index: 132 },
+                            { signal: 'Retail', index: 112 },   { signal: 'Subscriptions', index: 178 },
+                            { signal: 'Lifestyle', index: 152 },{ signal: 'App usage', index: 138 },
+                            { signal: 'Social / video', index: 124 }, { signal: 'Competitor SVOD', index: 142 }
+                        ],
+                        sponsorship_packs: [
+                            { format: 'Doc-tentpole title sponsor',  pack: 'Premium doc series presenting sponsor', cpm_uplift_pct: 44 },
+                            { format: 'Premium-media category pack', pack: 'Premium media + financial co-anchor',   cpm_uplift_pct: 36 },
+                            { format: 'Programmatic genre segment',  pack: 'NFLX_DOC_PREMIUM_INTELLECTUAL',         cpm_uplift_pct: 28 }
+                        ],
+                        category_indices: { 'Luxury': 132, 'Beauty':  98, 'Auto': 118, 'Travel': 168, 'QSR/CPG': 102, 'Tech/Gaming': 118, 'Financial': 152, 'Retail DTC': 124, 'Bev-Alc/Sports': 108, 'Family/Home': 112 }
+                    },
+                    {
+                        id: 'romance', name: 'Romance', emoji: '💖', hh_count: 13800000,
+                        marquee_titles: 'Bridgerton, Virgin River, rom-coms, K-drama romance',
+                        top_categories: [
+                            { name: 'Beauty + fragrance',       affinity_index: 178, cpm_uplift_pct: 47 },
+                            { name: 'Jewelry + gifting',        affinity_index: 168, cpm_uplift_pct: 42 },
+                            { name: 'Romantic travel + hotels', affinity_index: 162, cpm_uplift_pct: 41 },
+                            { name: 'Dating apps + companion',  affinity_index: 142, cpm_uplift_pct: 31 }
+                        ],
+                        top_brands: ['Tiffany / Pandora / Mejuri', 'Le Labo / Maison Margiela / Diptyque', 'Marriott Bonvoy / Auberge', 'Sephora / Ulta', 'Hinge / Bumble'],
+                        proof: '2.6x genpop rate of fragrance brand site visits in the 14d pre-Valentine\'s window. The "occasion-purchase" cohort.',
+                        signals: [
+                            { signal: 'Shopping', index: 158 }, { signal: 'Brand affinities', index: 148 },
+                            { signal: 'Travel', index: 138 },   { signal: 'Luxury behavior', index: 142 },
+                            { signal: 'Retail', index: 152 },   { signal: 'Subscriptions', index: 128 },
+                            { signal: 'Lifestyle', index: 138 },{ signal: 'App usage', index: 138 },
+                            { signal: 'Social / video', index: 142 }, { signal: 'Competitor SVOD', index: 118 }
+                        ],
+                        sponsorship_packs: [
+                            { format: 'Romance-tentpole title sponsor', pack: 'Bridgerton-style romance season sponsor', cpm_uplift_pct: 47 },
+                            { format: 'Beauty + gifting category pack', pack: 'Beauty + jewelry + fragrance lockout',    cpm_uplift_pct: 42 },
+                            { format: 'Programmatic genre segment',     pack: 'NFLX_ROMANCE_GIFTING_INTENDERS',          cpm_uplift_pct: 31 }
+                        ],
+                        category_indices: { 'Luxury': 168, 'Beauty': 178, 'Auto':  92, 'Travel': 138, 'QSR/CPG': 108, 'Tech/Gaming':  88, 'Financial': 122, 'Retail DTC': 152, 'Bev-Alc/Sports':  98, 'Family/Home': 118 }
+                    },
+                    {
+                        id: 'action', name: 'Action / franchise', emoji: '💥', hh_count: 19600000,
+                        marquee_titles: 'Knives Out, Glass Onion, The Gray Man, Extraction, Reacher-adjacent',
+                        top_categories: [
+                            { name: 'Auto + performance brands',         affinity_index: 168, cpm_uplift_pct: 42 },
+                            { name: 'Premium men\'s grooming + watches', affinity_index: 152, cpm_uplift_pct: 36 },
+                            { name: 'Premium tech (audio / smart home)', affinity_index: 158, cpm_uplift_pct: 38 },
+                            { name: 'Premium spirits',                   affinity_index: 142, cpm_uplift_pct: 31 }
+                        ],
+                        top_brands: ['Tesla / Porsche / BMW M', 'TAG Heuer / Tudor / Omega', 'Bose / Sonos / Apple', 'Patron / Casamigos / Macallan', 'Harry\'s / Manscaped / Beard Brand'],
+                        proof: '2.2x genpop rate of performance-auto + premium-watch site visits. 38% touched a $5K+ AUR product page in 30d.',
+                        signals: [
+                            { signal: 'Shopping', index: 138 }, { signal: 'Brand affinities', index: 158 },
+                            { signal: 'Travel', index: 132 },   { signal: 'Luxury behavior', index: 168 },
+                            { signal: 'Retail', index: 132 },   { signal: 'Subscriptions', index: 142 },
+                            { signal: 'Lifestyle', index: 158 },{ signal: 'App usage', index: 152 },
+                            { signal: 'Social / video', index: 138 }, { signal: 'Competitor SVOD', index: 142 }
+                        ],
+                        sponsorship_packs: [
+                            { format: 'Franchise title sponsor',     pack: 'Knives Out / Glass Onion presenting sponsor', cpm_uplift_pct: 42 },
+                            { format: 'Premium-men category pack',   pack: 'Auto + watches + premium-grooming lockout',   cpm_uplift_pct: 38 },
+                            { format: 'Programmatic genre segment',  pack: 'NFLX_ACTION_PREMIUM_MEN_AFFINITY',            cpm_uplift_pct: 32 }
+                        ],
+                        category_indices: { 'Luxury': 168, 'Beauty':  92, 'Auto': 168, 'Travel': 132, 'QSR/CPG': 118, 'Tech/Gaming': 158, 'Financial': 138, 'Retail DTC': 124, 'Bev-Alc/Sports': 142, 'Family/Home': 108 }
+                    },
+                    {
+                        id: 'food_lifestyle', name: 'Food / lifestyle', emoji: '🍷', hh_count: 11400000,
+                        marquee_titles: 'Chef\'s Table, Salt Fat Acid Heat, Cooked, Street Food, Drink Masters',
+                        top_categories: [
+                            { name: 'Cookware + kitchen retail',       affinity_index: 178, cpm_uplift_pct: 47 },
+                            { name: 'Grocery delivery + meal kits',    affinity_index: 158, cpm_uplift_pct: 38 },
+                            { name: 'Culinary travel + experiences',   affinity_index: 168, cpm_uplift_pct: 42 },
+                            { name: 'Premium pantry + specialty food', affinity_index: 152, cpm_uplift_pct: 36 }
+                        ],
+                        top_brands: ['Williams Sonoma / Le Creuset / Staub', 'HelloFresh / Blue Apron / Sunbasket', 'Eataly / La Cornue', 'Trader Joe\'s / Whole Foods', 'Ottolenghi / King Arthur'],
+                        proof: '2.8x genpop rate of premium-cookware + specialty-grocery sessions. 47% have a meal-kit subscription.',
+                        signals: [
+                            { signal: 'Shopping', index: 152 }, { signal: 'Brand affinities', index: 138 },
+                            { signal: 'Travel', index: 148 },   { signal: 'Luxury behavior', index: 138 },
+                            { signal: 'Retail', index: 158 },   { signal: 'Subscriptions', index: 162 },
+                            { signal: 'Lifestyle', index: 178 },{ signal: 'App usage', index: 132 },
+                            { signal: 'Social / video', index: 128 }, { signal: 'Competitor SVOD', index: 122 }
+                        ],
+                        sponsorship_packs: [
+                            { format: 'Food-doc title sponsor',     pack: 'Chef\'s Table season presenting sponsor', cpm_uplift_pct: 47 },
+                            { format: 'Kitchen + delivery pack',    pack: 'Cookware + meal-kit + grocery lockout',   cpm_uplift_pct: 38 },
+                            { format: 'Programmatic genre segment', pack: 'NFLX_FOOD_PREMIUM_HOME_CHEFS',            cpm_uplift_pct: 31 }
+                        ],
+                        category_indices: { 'Luxury': 138, 'Beauty': 118, 'Auto':  98, 'Travel': 148, 'QSR/CPG': 158, 'Tech/Gaming':  98, 'Financial': 128, 'Retail DTC': 178, 'Bev-Alc/Sports': 142, 'Family/Home': 158 }
+                    },
+                    {
+                        id: 'international', name: 'International content', emoji: '🌏', hh_count: 21800000,
+                        marquee_titles: 'Squid Game, Physical: 100, Money Heist, telenovelas, K-content catalog',
+                        top_categories: [
+                            { name: 'Multicultural beauty + haircare',          affinity_index: 174, cpm_uplift_pct: 44 },
+                            { name: 'Telco + mobile (multicultural-anchored)',  affinity_index: 162, cpm_uplift_pct: 41 },
+                            { name: 'Multicultural food + QSR',                 affinity_index: 158, cpm_uplift_pct: 38 },
+                            { name: 'Fintech + financial inclusion',            affinity_index: 152, cpm_uplift_pct: 36 }
+                        ],
+                        top_brands: ['Mielle / Pattern / SheaMoisture', 'T-Mobile / Verizon (multicultural)', 'Goya / Maruchan / Nongshim', 'Cash App / Chime / Mercury', 'L\'Oréal Multicultural Beauty'],
+                        proof: '2.6x genpop rate of international-content + multicultural-DTC site visits. 38% are early adopters of new fintech apps.',
+                        signals: [
+                            { signal: 'Shopping', index: 148 }, { signal: 'Brand affinities', index: 142 },
+                            { signal: 'Travel', index: 132 },   { signal: 'Luxury behavior', index: 118 },
+                            { signal: 'Retail', index: 138 },   { signal: 'Subscriptions', index: 152 },
+                            { signal: 'Lifestyle', index: 162 },{ signal: 'App usage', index: 168 },
+                            { signal: 'Social / video', index: 174 }, { signal: 'Competitor SVOD', index: 138 }
+                        ],
+                        sponsorship_packs: [
+                            { format: 'K-content title sponsor',     pack: 'Squid Game / K-drama presenting sponsor', cpm_uplift_pct: 44 },
+                            { format: 'Multicultural category pack', pack: 'Multicultural beauty + telco + fintech',  cpm_uplift_pct: 41 },
+                            { format: 'Programmatic genre segment',  pack: 'NFLX_INTL_MULTICULTURAL_GROWTH',          cpm_uplift_pct: 32 }
+                        ],
+                        category_indices: { 'Luxury': 118, 'Beauty': 174, 'Auto': 112, 'Travel': 132, 'QSR/CPG': 158, 'Tech/Gaming': 138, 'Financial': 152, 'Retail DTC': 148, 'Bev-Alc/Sports': 122, 'Family/Home': 138 }
+                    }
+                ],
+                pitch: 'Today Netflix sells a sponsorship as "show X, $Y CPM." With Crosswalk, Netflix sells "show X + the 4 advertiser categories that over-index on that genre\'s audience, in 3 pre-packaged formats, with affinity indices that justify a CPM premium." Twelve genres x ten advertiser categories = 120 priceable alignment plays. That is the move from generic sponsorship pitching to programmatic + sponsorship rate-card selling.'
             }
         };
 
@@ -58736,6 +59222,272 @@
 
             paintLensTabs();
             paintLensPanel();
+        }
+
+        // ── PULL 11 · GENRE-TO-ADVERTISER ALIGNMENT
+        // Clickable 12-genre grid → per-genre deep-dive (10-signal
+        // indexing chart, top advertiser categories with CPM uplift,
+        // top brand affinities, ready-to-pitch sponsorship/programmatic
+        // packs) → cross-genre × ad-category heatmap matrix. The
+        // "sponsorship rate card" that turns generic show sponsorships
+        // into behaviorally-supported category alignment plays.
+        function renderJourneyIqNflxGenre(p) {
+            var card = document.getElementById('jiqNflxGenreCard');
+            if (!card) return;
+            var data = (p && p.enabled !== false && p.genres && p.ad_categories) ? p : _JIQ_NETFLIX_DATA.nflx_genre_alignment;
+            if (!data || data.enabled === false) { card.style.display = 'none'; return; }
+            _jiqShowNflxCard('jiqNflxGenreCard');
+
+            var subEl = document.getElementById('jiqNflxGenreSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+
+            var msEl = document.getElementById('jiqNflxGenreMethodStrip');
+            if (msEl) {
+                var bullets = (data.method_bullets || []).map(function(b) {
+                    return '<li style="margin-bottom:0.32rem;">' + _jiqEsc(b) + '</li>';
+                }).join('');
+                msEl.innerHTML = ''
+                    + '<div>'
+                    +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Question to answer</div>'
+                    +   '<div style="font-size:0.95rem; font-weight:700; line-height:1.45; color:var(--text-primary);">' + _jiqEsc(data.question || '') + '</div>'
+                    + '</div>'
+                    + '<div>'
+                    +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Methodology</div>'
+                    +   '<ul style="font-size:0.74rem; color:var(--text-secondary); line-height:1.5; padding-left:1rem; margin:0;">' + bullets + '</ul>'
+                    + '</div>';
+            }
+
+            var genres = data.genres || [];
+            var activeGenreId = genres.length ? genres[0].id : null;
+
+            var gridEl     = document.getElementById('jiqNflxGenreGrid');
+            var deepDiveEl = document.getElementById('jiqNflxGenreDeepDive');
+            var matrixEl   = document.getElementById('jiqNflxGenreMatrix');
+
+            function findGenre(id) {
+                for (var i = 0; i < genres.length; i++) {
+                    if (genres[i].id === id) return genres[i];
+                }
+                return genres[0];
+            }
+
+            function paintGenreGrid() {
+                if (!gridEl) return;
+                gridEl.innerHTML = ''
+                    + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:0.5rem;">'
+                    +   genres.map(function(g) {
+                            var active = (g.id === activeGenreId);
+                            var top    = (g.top_categories && g.top_categories[0]) || {};
+                            return '<div data-gid="' + _jiqEsc(g.id) + '" role="button" tabindex="0" '
+                                 +   'onmouseover="this.style.background=\'rgba(251,113,133,0.12)\';" '
+                                 +   'onmouseout="this.style.background=\'' + (active ? 'rgba(251,113,133,0.12)' : 'rgba(255,255,255,0.03)') + '\';" '
+                                 +   'style="cursor:pointer; padding:0.6rem 0.7rem; border-radius:6px; '
+                                 +          'background:' + (active ? 'rgba(251,113,133,0.12)' : 'rgba(255,255,255,0.03)') + '; '
+                                 +          'border:1px solid ' + (active ? '#fb7185' : 'rgba(255,255,255,0.08)') + ';">'
+                                 +   '<div style="display:flex; align-items:center; gap:0.35rem; margin-bottom:0.3rem;">'
+                                 +     '<span style="font-size:1.1rem;">' + (g.emoji || '🎬') + '</span>'
+                                 +     '<span style="font-size:0.85rem; font-weight:700;">' + _jiqEsc(g.name) + '</span>'
+                                 +   '</div>'
+                                 +   '<div style="font-size:0.66rem; color:var(--text-secondary); margin-bottom:0.25rem;">' + _jiqFmt(g.hh_count || 0) + ' HHs</div>'
+                                 +   '<div style="font-size:0.66rem; color:#fda4af; font-weight:700;">'
+                                 +     'Top: ' + _jiqEsc((top.name || '-').split(' (')[0]) + ' · +' + (top.cpm_uplift_pct || 0) + '% CPM'
+                                 +   '</div>'
+                                 + '</div>';
+                        }).join('')
+                    + '</div>';
+
+                Array.prototype.forEach.call(gridEl.querySelectorAll('[data-gid]'), function(tile) {
+                    var setActive = function onGenreSelect() {
+                        activeGenreId = tile.getAttribute('data-gid');
+                        paintGenreGrid();
+                        paintGenreDeepDive();
+                    };
+                    tile.addEventListener('click', setActive);
+                    tile.addEventListener('keydown', function onGenreKeydown(e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setActive();
+                        }
+                    });
+                });
+            }
+
+            function paintGenreDeepDive() {
+                if (!deepDiveEl) return;
+                var g = findGenre(activeGenreId);
+                if (!g) { deepDiveEl.innerHTML = ''; return; }
+
+                // 10-signal indexing chart - centered on 100 = parity
+                var sigRows = (g.signals || []).map(function(r) {
+                    var v = r.index || 100;
+                    var devPct = Math.max(-100, Math.min(100, ((v - 100) / 100) * 100));
+                    var leftPct, widthPct, color;
+                    if (devPct >= 0) {
+                        leftPct  = 50;
+                        widthPct = Math.min(50, devPct / 2);
+                        color    = '#fb7185';
+                    } else {
+                        widthPct = Math.min(50, (-devPct) / 2);
+                        leftPct  = 50 - widthPct;
+                        color    = '#94a3b8';
+                    }
+                    var stars = (v >= 150 ? ' ★★★' : (v >= 130 ? ' ★★' : (v >= 115 ? ' ★' : '')));
+                    return '<div style="display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,2fr) 60px; gap:0.5rem; align-items:center; padding:0.25rem 0;">'
+                         +   '<div style="font-size:0.72rem; font-weight:600;">' + _jiqEsc(r.signal) + '</div>'
+                         +   '<div style="position:relative; height:7px; background:rgba(255,255,255,0.05); border-radius:2px;">'
+                         +     '<div style="position:absolute; left:50%; top:-2px; height:11px; width:1px; background:rgba(255,255,255,0.3);"></div>'
+                         +     '<div style="position:absolute; left:' + leftPct.toFixed(2) + '%; width:' + widthPct.toFixed(2) + '%; height:100%; background:' + color + '; border-radius:2px;"></div>'
+                         +   '</div>'
+                         +   '<div style="text-align:right; font-family:monospace; font-size:0.72rem; font-weight:700; color:' + (v >= 115 ? '#fda4af' : 'var(--text-secondary)') + ';">' + v + stars + '</div>'
+                         + '</div>';
+                }).join('');
+
+                var catRows = (g.top_categories || []).map(function(c) {
+                    return '<div style="display:grid; grid-template-columns:minmax(0,1fr) 70px 70px; gap:0.45rem; align-items:center; padding:0.3rem 0; border-bottom:1px solid rgba(255,255,255,0.04);">'
+                         +   '<div style="font-size:0.74rem; font-weight:600;">' + _jiqEsc(c.name) + '</div>'
+                         +   '<div style="text-align:right; font-size:0.72rem; font-family:monospace;">idx ' + (c.affinity_index || 0) + '</div>'
+                         +   '<div style="text-align:right; font-size:0.74rem; font-weight:800; color:#fda4af;">+' + (c.cpm_uplift_pct || 0) + '%</div>'
+                         + '</div>';
+                }).join('');
+
+                var brandList = (g.top_brands || []).map(function(b) {
+                    return '<li style="margin-bottom:0.2rem;">' + _jiqEsc(b) + '</li>';
+                }).join('');
+
+                var packRows = (g.sponsorship_packs || []).map(function(pk) {
+                    return '<div style="padding:0.55rem 0.7rem; margin-bottom:0.4rem; border-radius:5px;'
+                         +              ' background:rgba(255,255,255,0.025); border-left:3px solid #fb7185;">'
+                         +   '<div style="display:flex; justify-content:space-between; gap:0.45rem; align-items:baseline;">'
+                         +     '<div style="font-size:0.62rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.06em;">' + _jiqEsc(pk.format) + '</div>'
+                         +     '<div style="font-size:0.74rem; font-weight:800; color:#fda4af;">+' + (pk.cpm_uplift_pct || 0) + '% CPM</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.78rem; font-weight:700; margin-top:0.2rem;">' + _jiqEsc(pk.pack) + '</div>'
+                         + '</div>';
+                }).join('');
+
+                deepDiveEl.innerHTML = ''
+                    + '<div style="padding:0.85rem 1rem; border-radius:7px; background:rgba(255,255,255,0.03); border:1px solid rgba(251,113,133,0.20);">'
+                    +   '<div style="display:flex; align-items:baseline; justify-content:space-between; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.5rem;">'
+                    +     '<div style="display:flex; align-items:baseline; gap:0.5rem;">'
+                    +       '<span style="font-size:1.4rem;">' + (g.emoji || '🎬') + '</span>'
+                    +       '<h4 style="margin:0; font-size:1rem;">' + _jiqEsc(g.name) + '</h4>'
+                    +     '</div>'
+                    +     '<div style="font-size:0.72rem; color:var(--text-secondary);">' + _jiqFmt(g.hh_count || 0) + ' Netflix HHs · <em>' + _jiqEsc(g.marquee_titles || '') + '</em></div>'
+                    +   '</div>'
+                    +   '<div style="display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:0.9rem;">'
+                    +     '<div>'
+                    +       '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.35rem;">'
+                    +         'Off-Netflix signal indexing (100 = genpop parity)'
+                    +       '</div>'
+                    +       sigRows
+                    +       '<div style="margin-top:0.7rem; padding:0.5rem 0.7rem; border-radius:5px;'
+                    +                    ' background:rgba(251,113,133,0.10); border-left:3px solid #fb7185;'
+                    +                    ' font-size:0.74rem; line-height:1.5;">'
+                    +         '🎯 <strong>' + _jiqEsc(g.proof || '') + '</strong>'
+                    +       '</div>'
+                    +     '</div>'
+                    +     '<div>'
+                    +       '<div style="margin-bottom:0.7rem;">'
+                    +         '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.3rem;">'
+                    +           'Top advertiser categories'
+                    +         '</div>'
+                    +         catRows
+                    +       '</div>'
+                    +       '<div style="margin-bottom:0.7rem;">'
+                    +         '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.3rem;">'
+                    +           'Top brand affinities'
+                    +         '</div>'
+                    +         '<ul style="font-size:0.74rem; line-height:1.45; padding-left:1.1rem; margin:0; color:var(--text-secondary);">' + brandList + '</ul>'
+                    +       '</div>'
+                    +       '<div>'
+                    +         '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.3rem;">'
+                    +           'Ready-to-pitch sponsorship + programmatic packs'
+                    +         '</div>'
+                    +         packRows
+                    +       '</div>'
+                    +     '</div>'
+                    +   '</div>'
+                    + '</div>';
+            }
+
+            // Cross-genre × ad-category heatmap matrix.
+            function paintGenreMatrix() {
+                if (!matrixEl) return;
+                var cats = data.ad_categories || [];
+
+                // Color scale - cool blue for under-index, neutral
+                // mid, warm rose for over-index.
+                function cellColor(v) {
+                    if (v >= 170) return 'rgba(244,63,94,0.55)';   // deep rose
+                    if (v >= 150) return 'rgba(251,113,133,0.45)';
+                    if (v >= 130) return 'rgba(253,164,175,0.40)';
+                    if (v >= 115) return 'rgba(254,205,211,0.35)';
+                    if (v >= 100) return 'rgba(255,255,255,0.06)';
+                    if (v >=  90) return 'rgba(148,163,184,0.12)';
+                    return 'rgba(100,116,139,0.18)';
+                }
+                function cellTextColor(v) {
+                    if (v >= 130) return '#0a0a0a';
+                    return 'var(--text-primary)';
+                }
+
+                var headRow = '<tr>'
+                    + '<th style="position:sticky; left:0; background:var(--bg-secondary, #0f1419); padding:0.45rem 0.6rem; font-size:0.7rem; text-align:left; min-width:170px; z-index:2;">Genre</th>'
+                    + cats.map(function(c) {
+                        return '<th style="padding:0.45rem 0.4rem; font-size:0.65rem; text-align:center; min-width:75px; color:var(--text-secondary); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">' + _jiqEsc(c) + '</th>';
+                    }).join('')
+                    + '</tr>';
+
+                var bodyRows = genres.map(function(g) {
+                    var rowActive = (g.id === activeGenreId);
+                    var nameCell = '<td style="position:sticky; left:0; background:' + (rowActive ? 'rgba(251,113,133,0.10)' : 'var(--bg-secondary, #0f1419)')
+                                 + '; padding:0.45rem 0.6rem; font-size:0.74rem; font-weight:' + (rowActive ? '800' : '600') + ';'
+                                 + ' border-left:3px solid ' + (rowActive ? '#fb7185' : 'transparent')
+                                 + '; cursor:pointer; z-index:1;" data-mid="' + _jiqEsc(g.id) + '">'
+                                 + (g.emoji || '') + ' ' + _jiqEsc(g.name) + '</td>';
+                    var cells = cats.map(function(c) {
+                        var v = (g.category_indices && g.category_indices[c]) || 100;
+                        return '<td style="padding:0.45rem 0.3rem; text-align:center; background:' + cellColor(v)
+                             + '; color:' + cellTextColor(v) + '; font-size:0.72rem; font-weight:' + (v >= 130 ? '800' : '600')
+                             + '; font-family:monospace;">' + v + '</td>';
+                    }).join('');
+                    return '<tr>' + nameCell + cells + '</tr>';
+                }).join('');
+
+                matrixEl.innerHTML = ''
+                    + '<div style="background:rgba(255,255,255,0.02); border-radius:6px; padding:0.4rem;">'
+                    +   '<table style="width:100%; border-collapse:separate; border-spacing:1px; min-width:760px;">'
+                    +     '<thead>' + headRow + '</thead>'
+                    +     '<tbody>' + bodyRows + '</tbody>'
+                    +   '</table>'
+                    +   '<div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; padding:0.55rem 0.6rem 0.2rem; font-size:0.66rem; color:var(--text-secondary);">'
+                    +     '<strong style="color:var(--text-primary);">Scale</strong>'
+                    +     '<span style="display:inline-flex; align-items:center; gap:0.25rem;"><span style="display:inline-block; width:14px; height:14px; background:rgba(100,116,139,0.18); border-radius:2px;"></span>&lt;90</span>'
+                    +     '<span style="display:inline-flex; align-items:center; gap:0.25rem;"><span style="display:inline-block; width:14px; height:14px; background:rgba(255,255,255,0.06); border-radius:2px;"></span>parity</span>'
+                    +     '<span style="display:inline-flex; align-items:center; gap:0.25rem;"><span style="display:inline-block; width:14px; height:14px; background:rgba(254,205,211,0.35); border-radius:2px;"></span>over-index</span>'
+                    +     '<span style="display:inline-flex; align-items:center; gap:0.25rem;"><span style="display:inline-block; width:14px; height:14px; background:rgba(251,113,133,0.45); border-radius:2px;"></span>strong fit</span>'
+                    +     '<span style="display:inline-flex; align-items:center; gap:0.25rem;"><span style="display:inline-block; width:14px; height:14px; background:rgba(244,63,94,0.55); border-radius:2px;"></span>anchor pack</span>'
+                    +   '</div>'
+                    + '</div>';
+
+                Array.prototype.forEach.call(matrixEl.querySelectorAll('[data-mid]'), function(td) {
+                    td.addEventListener('click', function onMatrixRowSelect() {
+                        activeGenreId = td.getAttribute('data-mid');
+                        paintGenreGrid();
+                        paintGenreDeepDive();
+                        paintGenreMatrix();
+                    });
+                });
+            }
+
+            var pitchEl = document.getElementById('jiqNflxGenrePitch');
+            if (pitchEl) {
+                pitchEl.innerHTML = '<strong>📣 The pitch:</strong> ' + _jiqEsc(data.pitch || '');
+            }
+
+            paintGenreGrid();
+            paintGenreDeepDive();
+            paintGenreMatrix();
         }
 
         // ══════════════════════════════════════════════════════════════
