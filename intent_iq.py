@@ -599,19 +599,19 @@ def get_cohorts(title_slug: Optional[str] = None) -> dict:
 
     if not cohorts:
         cohorts = [
-            {"cohort_slug": "weekly",     "display_name": "Weekly Moviegoers",
+            {"cohort_slug": "weekly",     "display_name": "Very Frequent Moviegoers",
              "frequency_band": "At least once a week",  "min_events_12mo": 50,
              "max_events_12mo": 0,  "panel_count": 0, "gen_pop_share": 0.0,
              "last_refreshed": ""},
-            {"cohort_slug": "monthly",    "display_name": "Monthly Moviegoers",
+            {"cohort_slug": "monthly",    "display_name": "Frequent Moviegoers",
              "frequency_band": "Once or twice a month", "min_events_12mo": 12,
              "max_events_12mo": 49, "panel_count": 0, "gen_pop_share": 0.0,
              "last_refreshed": ""},
-            {"cohort_slug": "bimonthly",  "display_name": "Bimonthly Moviegoers",
+            {"cohort_slug": "bimonthly",  "display_name": "Occasional Moviegoers",
              "frequency_band": "Every other month or so", "min_events_12mo": 5,
              "max_events_12mo": 11, "panel_count": 0, "gen_pop_share": 0.0,
              "last_refreshed": ""},
-            {"cohort_slug": "occasional", "display_name": "Occasional Moviegoers",
+            {"cohort_slug": "occasional", "display_name": "Infrequent Moviegoers",
              "frequency_band": "Few times a year or less", "min_events_12mo": 1,
              "max_events_12mo": 4,  "panel_count": 0, "gen_pop_share": 0.0,
              "last_refreshed": ""},
