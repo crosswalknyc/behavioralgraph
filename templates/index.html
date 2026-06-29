@@ -101718,9 +101718,9 @@
                 '#ef4444', // 0%  — bright red
                 '#f97316', // 1%  — vivid orange
                 '#fb923c', // 2%  — light orange
-                '#fde047', // 3%  — yellow
+                '#eab308', // 3%  — golden yellow
                 '#facc15', // 4%  — yellow
-                '#eab308', // 5%  — golden yellow
+                '#fde047', // 5%  — light yellow
                 '#e2c714', // 6%  — warm yellow
                 '#d4d420', // 7%  — yellow-chartreuse
                 '#84cc16', // 8%  — yellow-green
@@ -101832,10 +101832,10 @@
                 
                 return `
                 <div class="state-box has-tooltip" style="background: ${bgColor};" data-tooltip="${citiesText.replace(/"/g, '&quot;')}">
-                    <div class="state-name" style="color: white;">${state}</div>
-                    <div class="state-pct" style="color: white; font-weight: 600;">
+                    <div class="state-name" style="color: #000;">${state}</div>
+                    <div class="state-pct" style="color: #000; font-weight: 600;">
                         ${profileDisplay}
-                        <span style="color: rgba(255,255,255,0.7); font-weight: 400; margin-left: 0.5rem;">(${genPopDisplay})</span>
+                        <span style="color: rgba(0,0,0,0.55); font-weight: 400; margin-left: 0.5rem;">(${genPopDisplay})</span>
                     </div>
                 </div>
             `;
