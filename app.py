@@ -3287,7 +3287,12 @@ def _audit_profile_selector_coverage(jobs_list):
       - Gen Pop duplicates (only the canonical entry is shown)
     """
     missing = []
-    seen_gen_pop = False
+    # Track years seen via the clean Gen_Pop_YYYY.csv form so that
+    # legacy dated duplicates (or extra clean entries for the same year)
+    # are flagged but the per-year files themselves stay surfaced.
+    gen_pop_clean_years = set()
+    gen_pop_legacy_logged = False
+    clean_year_re = re.compile(r'^gen_pop_(\d{4})\.csv$')
     for j in (jobs_list or []):
         if not isinstance(j, dict):
             continue
@@ -3316,13 +3321,25 @@ def _audit_profile_selector_coverage(jobs_list):
             })
             continue
         if 'gen_pop' in sk.lower():
-            if seen_gen_pop:
+            m_clean = clean_year_re.match(sk.lower())
+            if m_clean:
+                year = m_clean.group(1)
+                if year in gen_pop_clean_years:
+                    missing.append({
+                        's3_key': sk, 'display': display, 'category': cat,
+                        'reason': f'Duplicate Gen Pop entry for year {year} (selector keeps one Gen_Pop_{year}.csv)'
+                    })
+                else:
+                    gen_pop_clean_years.add(year)
+                continue
+            # Legacy dated form — collapsed to canonical by list_jobs
+            if gen_pop_legacy_logged or '2026' in gen_pop_clean_years:
                 missing.append({
                     's3_key': sk, 'display': display, 'category': cat,
-                    'reason': 'Duplicate Gen Pop entry (selector keeps the canonical Gen_Pop_2026.csv)'
+                    'reason': 'Duplicate legacy Gen Pop entry (selector keeps the clean Gen_Pop_YYYY.csv files)'
                 })
-                continue
-            seen_gen_pop = True
+            else:
+                gen_pop_legacy_logged = True
     return missing
 
 
@@ -11280,17 +11297,26 @@ def get_csv_data(s3_key):
         resp.headers['Expires'] = '0'
         return resp
 
-    # Gen Pop: always fetch the canonical S3 file (GEN_POP_CANONICAL_KEY) so dashboard matches pipeline / S3
+    # Gen Pop year-specific files (Gen_Pop_2023.csv / Gen_Pop_2024.csv /
+    # Gen_Pop_2026.csv) are served as-is so the Data Cuts popover can
+    # actually compare years. Legacy dated forms
+    # (Gen_Pop_MM_DD_YYYY_MM_DD.csv, Gen_Pop_2026_…_anchored.csv, etc.)
+    # still collapse to the canonical Gen_Pop_2026.csv so the dashboard
+    # matches the pipeline / S3 baseline.
     effective_key = s3_key
     if s3_key and 'gen_pop' in s3_key.lower():
-        try:
-            csv_content, df, brand_name, date_range, data = _fetch_and_return(GEN_POP_CANONICAL_KEY)
-            print(f"📂 Served canonical Gen Pop file: {GEN_POP_CANONICAL_KEY}")
-            return _no_cache(jsonify(_csv_data_json_response(
-                data, brand_name, date_range, GEN_POP_CANONICAL_KEY
-            )))
-        except Exception:
-            pass  # fall back to requested key
+        is_clean_year_form = bool(
+            re.match(r'^Gen_Pop_\d{4}\.csv$', s3_key, re.IGNORECASE)
+        )
+        if not is_clean_year_form:
+            try:
+                csv_content, df, brand_name, date_range, data = _fetch_and_return(GEN_POP_CANONICAL_KEY)
+                print(f"📂 Served canonical Gen Pop file: {GEN_POP_CANONICAL_KEY}")
+                return _no_cache(jsonify(_csv_data_json_response(
+                    data, brand_name, date_range, GEN_POP_CANONICAL_KEY
+                )))
+            except Exception:
+                pass  # fall back to requested key
     try:
         print(f"📂 Fetching from S3: {S3_BUCKET}/{effective_key}")
         csv_content, df, brand_name, date_range, data = _fetch_and_return(effective_key)
@@ -21601,25 +21627,58 @@ def list_jobs():
         # Filter out OTHER and UNCATEGORIZED categories - these should never appear in profile selector
         job_list = [e for e in job_list if (e.get('category') or '').upper() not in ('OTHER', 'UNCATEGORIZED', '')]
         
-        # Gen Pop: always show the canonical S3 key + clean display name so
-        # profile selector only ever loads the canonical file and shows "Gen Pop 2026"
-        # (not the date-stamped filename of legacy entries).
-        seen_gen_pop = False
+        # Gen Pop: surface ONE entry per clean per-year file
+        # (Gen_Pop_2023.csv, Gen_Pop_2024.csv, Gen_Pop_2026.csv, …) so
+        # the dashboard Data Cuts popover can compare years against one
+        # another. Legacy dated filenames (e.g. Gen_Pop_03_04_2026_04_29.csv)
+        # collapse into a single canonical Gen_Pop_2026.csv entry so the
+        # selector doesn't show duplicate "2026" rows. Display names are
+        # normalized to "Gen Pop YYYY" so PROFILE_SUFFIX_REGEX picks
+        # the year suffix and the frontend's getProfileGroupKey rolls
+        # every Gen Pop entry under one "gen pop" canonical group.
+        gen_pop_emitted_years = set()
+        gen_pop_legacy_emitted = False
+        clean_year_re = re.compile(r'^gen_pop_(\d{4})\.csv$')
+        legacy_year_re = re.compile(r'gen_pop_\d{2}_\d{2}_(\d{4})_')
         new_job_list = []
         for e in job_list:
             sk = (e.get('s3_key') or '').lower()
-            if 'gen_pop' in sk:
-                if seen_gen_pop:
-                    continue  # keep only one Gen Pop entry
-                seen_gen_pop = True
+            if 'gen_pop' not in sk:
+                new_job_list.append(e)
+                continue
+            m_clean = clean_year_re.match(sk)
+            if m_clean:
+                year = m_clean.group(1)
+                if year in gen_pop_emitted_years:
+                    continue  # duplicate clean year
+                gen_pop_emitted_years.add(year)
+                clean_key = f'Gen_Pop_{year}.csv'
                 e = dict(e)
-                e['s3_key'] = GEN_POP_CANONICAL_KEY
-                e['job_id'] = GEN_POP_CANONICAL_KEY
-                # Force the clean name regardless of what's in the cache.
-                e['project_name'] = 'Gen Pop 2026'
-                e['display_name'] = 'Gen Pop 2026'
-                e['name'] = 'Gen Pop 2026'
-                e['title'] = 'Gen Pop 2026'
+                e['s3_key'] = clean_key
+                e['job_id'] = clean_key
+                e['project_name'] = f'Gen Pop {year}'
+                e['display_name'] = f'Gen Pop {year}'
+                e['name'] = f'Gen Pop {year}'
+                e['title'] = f'Gen Pop {year}'
+                new_job_list.append(e)
+                continue
+            # Legacy dated form (Gen_Pop_MM_DD_YYYY_*). Collapse to one
+            # canonical entry. If a clean Gen_Pop_2026.csv is also
+            # present in this response it has precedence — skip this
+            # legacy duplicate.
+            if gen_pop_legacy_emitted or '2026' in gen_pop_emitted_years:
+                continue
+            m_legacy = legacy_year_re.search(sk)
+            legacy_year = m_legacy.group(1) if m_legacy else '2026'
+            gen_pop_legacy_emitted = True
+            gen_pop_emitted_years.add(legacy_year)
+            e = dict(e)
+            e['s3_key'] = GEN_POP_CANONICAL_KEY
+            e['job_id'] = GEN_POP_CANONICAL_KEY
+            e['project_name'] = f'Gen Pop {legacy_year}'
+            e['display_name'] = f'Gen Pop {legacy_year}'
+            e['name'] = f'Gen Pop {legacy_year}'
+            e['title'] = f'Gen Pop {legacy_year}'
             new_job_list.append(e)
         job_list = new_job_list
         
