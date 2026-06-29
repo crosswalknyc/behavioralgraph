@@ -36095,6 +36095,22 @@
                   + '<div class="blue-iq-card-body" id="blueIQTrendingBody"></div>'
                   + '</div>';
 
+            // CARD T2: "Overall trending searches" - same Google Trends
+            // source as Card T, but UNFILTERED. Shows the top 10 things
+            // this geography is searching for in the past 7 days,
+            // regardless of political relevance. DNC marketers asked for
+            // this back so the broader cultural context (viral news,
+            // sports moments, weather events) sits alongside the
+            // political view and can inform creative timing / placement.
+            html += '<div class="blue-iq-card blue-iq-card-trending-overall" style="grid-column: span 12;">'
+                  + '<h3 class="blue-iq-card-title" style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">'
+                  +   '<span>Overall trending searches \u2014 <span id="blueIQTrendingOverallGeoLabel">United States</span></span>'
+                  +   '<span class="blue-iq-badge" style="margin-left:0.4rem;">Top 10</span>'
+                  + '</h3>'
+                  + '<div class="blue-iq-card-subtitle" style="margin-bottom:0.6rem;">everything trending in this geography over the <em>past 7 days</em> \u2014 not just political. Useful for broader cultural context next to the political view above.</div>'
+                  + '<div class="blue-iq-card-body" id="blueIQTrendingOverallBody"></div>'
+                  + '</div>';
+
             // CARD G: Issue × Geo heatmap - US state-hex choropleth showing
             // where each issue is hot. Issue selector dropdown lets the user
             // pivot the map by issue. Click a state to drill into that slice.
@@ -36240,6 +36256,7 @@
             _bqRenderPartyFiltered('top_politicians', 'All');
             _bqRenderPartyFiltered('top_candidates', 'All');
             _bqRenderTrendingLocal(cards.trending_local || [], cards.trending_meta || {});
+            _bqRenderTrendingOverall(cards.trending_overall || [], cards.trending_overall_meta || {});
             _bqRenderIssueGeo(cards.issue_geo || [], cards.issue_buckets || []);
             _bqRenderDayInLife(cards.issue_buckets || []);
             _bqRenderCreativePlaybook(cards.issue_buckets || [],
@@ -36760,6 +36777,77 @@
                 + (rows.length > 6
                     ? '<div class="bq-trending-scroll-hint">Showing top ' + rows.length + ' \u00b7 scroll for more</div>'
                     : '');
+        }
+
+        // Sibling of _bqRenderTrendingLocal: renders the UNFILTERED top 10
+        // Google Trends rows for the geo. Same data shape (term, score,
+        // related, days_trending, first_seen, last_seen) but no political
+        // filter, so we drop the whyChip and just show rank / term /
+        // traffic / persistence chip / related. Reuses the existing
+        // bq-trending-* CSS so the look matches the political card.
+        function _bqRenderTrendingOverall(rows, meta) {
+            var labelEl = document.getElementById('blueIQTrendingOverallGeoLabel');
+            var body    = document.getElementById('blueIQTrendingOverallBody');
+            if (!body) return;
+            if (labelEl) labelEl.textContent = (meta && meta.geo_label) || 'United States';
+
+            if (!rows || !rows.length) {
+                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.7rem 0;">'
+                    + 'Google Trends returned no data for this geo across the past 7 days. Snapshots accumulate as the dashboard is used \u2014 try again later, or pick a different geography.'
+                    + '</div>';
+                return;
+            }
+
+            var maxScore = Math.max.apply(null, rows.map(function(r) { return +r.score || 0; })) || 1;
+            function daysChip(r) {
+                var d = +(r && r.days_trending) || 0;
+                if (d <= 0) return '';
+                var tone, label;
+                if (d >= 5)      { tone = ['rgba(96,165,250,0.22)', '#bfdbfe']; label = d + 'd \u2022 persistent'; }
+                else if (d >= 3) { tone = ['rgba(96,165,250,0.16)', '#93c5fd']; label = d + 'd this week'; }
+                else if (d >= 2) { tone = ['rgba(100,116,139,0.18)', '#cbd5e1']; label = d + 'd this week'; }
+                else             { tone = ['rgba(100,116,139,0.14)', '#94a3b8']; label = '1d this week'; }
+                var title = 'Trended ' + d + ' of the past 7 days'
+                          + (r.first_seen ? ' \u2022 first seen ' + r.first_seen : '')
+                          + (r.last_seen  ? ' \u2022 last seen '  + r.last_seen  : '');
+                return '<span class="bq-why-chip" title="' + _bqEscape(title) + '"'
+                     + ' style="background:' + tone[0] + '; color:' + tone[1] + ';">'
+                     + _bqEscape(label) + '</span>';
+            }
+            function pctOfMax(s) { return Math.round((+s || 0) / maxScore * 100); }
+            function fmtTraffic(s) {
+                s = +s || 0;
+                if (s >= 1e6) return (s / 1e6).toFixed(1).replace(/\.0$/, '') + 'M+';
+                if (s >= 1e3) return Math.round(s / 1e3) + 'K+';
+                return String(s);
+            }
+
+            body.innerHTML = '<div class="bq-trending-scroll"><div class="bq-trending-grid">'
+                + rows.slice(0, 10).map(function(r, idx) {
+                    var rel = (r.related || []).map(_bqStripDates).filter(Boolean).slice(0, 5);
+                    var relHtml = rel.length
+                        ? '<div class="bq-trending-related">'
+                            + '<span class="bq-trending-related-label">Related searches:</span> '
+                            + rel.map(function(q) {
+                                return '<span class="bq-trending-related-chip">' + _bqEscape(q) + '</span>';
+                              }).join('')
+                          + '</div>'
+                        : '';
+                    var cleanTerm = _bqStripDates(r.term);
+                    return '<div class="bq-trending-card" data-term="' + _bqEscape(cleanTerm) + '">'
+                         +   '<div class="bq-trending-head">'
+                         +     '<div class="bq-trending-rank">#' + (idx + 1) + '</div>'
+                         +     '<div class="bq-trending-term">' + _bqEscape(cleanTerm) + '</div>'
+                         +     '<div class="bq-trending-traffic" title="Peak approx. search volume from Google Trends in the past 7 days">' + fmtTraffic(r.score) + '</div>'
+                         +   '</div>'
+                         +   '<div class="bq-trending-meta">'
+                         +     daysChip(r)
+                         +     '<div class="bq-trending-bar-wrap"><div class="bq-trending-bar" style="width:' + pctOfMax(r.score) + '%;"></div></div>'
+                         +   '</div>'
+                         +   relHtml
+                         + '</div>';
+                  }).join('')
+                + '</div></div>';
         }
 
         function _renderBlueIQIssueBuckets(buckets) {
