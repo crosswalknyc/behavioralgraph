@@ -100931,17 +100931,17 @@
             // 10%+ = brightest green, stepping through yellow to red at 0%.
             // Hand-picked palette avoids muddy brown in the mid-range.
             var colors = [
-                '#c0392b', // 0%  — red
-                '#d35400', // 1%  — burnt orange
-                '#e67e22', // 2%  — orange
-                '#f39c12', // 3%  — amber
-                '#f1c40f', // 4%  — golden yellow
-                '#d4ac0d', // 5%  — dark gold
-                '#b7950b', // 6%  — olive gold
-                '#7dcea0', // 7%  — soft green
-                '#52be80', // 8%  — medium green
-                '#27ae60', // 9%  — green
-                '#1e8449', // 10%+ — deep green
+                '#ef4444', // 0%  — bright red
+                '#f97316', // 1%  — vivid orange
+                '#fb923c', // 2%  — light orange
+                '#fbbf24', // 3%  — amber
+                '#facc15', // 4%  — bright yellow
+                '#eab308', // 5%  — yellow
+                '#a3e635', // 6%  — lime
+                '#4ade80', // 7%  — light green
+                '#22c55e', // 8%  — green
+                '#16a34a', // 9%  — rich green
+                '#15803d', // 10%+ — deep green
             ];
             var step = Math.max(0, Math.min(10, Math.floor(value)));
             return colors[step];
