@@ -100928,10 +100928,23 @@
         
         function getHeatColor(value, min, max) {
             // Discrete color bands by whole percentage point.
-            // 10%+ = brightest green, stepping through to red at 0%.
+            // 10%+ = brightest green, stepping through yellow to red at 0%.
+            // Hand-picked palette avoids muddy brown in the mid-range.
+            var colors = [
+                '#c0392b', // 0%  — red
+                '#d35400', // 1%  — burnt orange
+                '#e67e22', // 2%  — orange
+                '#f39c12', // 3%  — amber
+                '#f1c40f', // 4%  — golden yellow
+                '#d4ac0d', // 5%  — dark gold
+                '#b7950b', // 6%  — olive gold
+                '#7dcea0', // 7%  — soft green
+                '#52be80', // 8%  — medium green
+                '#27ae60', // 9%  — green
+                '#1e8449', // 10%+ — deep green
+            ];
             var step = Math.max(0, Math.min(10, Math.floor(value)));
-            var hue = step * 14; // 0 (red) → 140 (green)
-            return 'hsl(' + hue + ', 72%, 36%)';
+            return colors[step];
         }
         
         function renderHeatmap(locations) {
