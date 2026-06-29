@@ -55961,6 +55961,24 @@
         // would emit so a production payload can drop in cleanly.
         // ──────────────────────────────────────────────────────────────
         var _JIQ_NETFLIX_DATA = {
+            // ── PANEL BASIS ─────────────────────────────────────────────
+            // SINGLE source-of-truth from which every household / cohort
+            // number in this deck ladders. `sample_panelists` is the
+            // observed BehavioralGraph consumer panel that matched the
+            // Netflix profile filter; `projected_us_hh` is that panel
+            // scaled to the U.S. Netflix subscriber base via the same
+            // 32.99x projection factor (329.9M U.S. adults ÷ 10M panel
+            // slot) the rest of the dashboard uses. Every percentage in
+            // every pull below multiplies into `projected_us_hh`, and
+            // every absolute cohort size is the panel n × 32.99.
+            panel_basis: {
+                sample_panelists:  2406790,
+                projected_us_hh:   79400000,
+                projection_factor: 32.99,
+                refresh_window:    '90d rolling, refreshed May 2026',
+                methodology_note:  'Every percentage in this deck (in-market share, churn share, AQI tier share, stacking share, etc.) ladders to the 79.4M projected U.S. Netflix HH base. Absolute HH and cohort counts are projected from the n=2,406,790 panelist HH sample using the standard 32.99x projection factor.'
+            },
+
             // ── PULL 1 · PRE-SUBSCRIPTION JOURNEY ─────────────────
             nflx_pre_signup: {
                 enabled: true,
@@ -56670,9 +56688,9 @@
                     'Statistical significance via paired-difference test with bootstrapped CIs across 1,000 resamples of the matched pairs'
                 ],
                 pipeline: [
-                    { stage: 'Total U.S. Netflix HHs',         value: 80100000, label: 'addressable HH base' },
-                    { stage: 'Ad-tier eligible HHs',            value: 32700000, label: 'ad-supported plan, opted-in measurement' },
-                    { stage: 'Reached by campaign',             value: 14200000, label: '≥1 in-show ad impression on the flight' },
+                    { stage: 'Total U.S. Netflix HHs',         value: 79400000, label: 'addressable HH base (projected from n=2,406,790 panelist HHs)' },
+                    { stage: 'Ad-tier eligible HHs',            value: 32700000, label: 'ad-supported plan, opted-in measurement (41.2% of base)' },
+                    { stage: 'Reached by campaign',             value: 14200000, label: '≥1 in-show ad impression on the flight (17.9% of base)' },
                     { stage: 'Exposed cohort (analysis-ready)', value: 14200000, label: 'final exposed set after invalid-traffic exclusion' },
                     { stage: 'Matched control cohort',          value: 14200000, label: '1:1 nearest-neighbor match on 8 variables' }
                 ],
@@ -56813,11 +56831,11 @@
                     { signal: 'Loyalty / churn patterns',                       weight_pct:  6, source_hint: 'cancellation funnel exposure + repeat-purchase persistence' }
                 ],
                 tiers: [
-                    { name: 'Diamond',  range: '90-100', share_pct:  4.8, hh_count:  3840000, cpm_band: '+50 to +75%',  color: '#a78bfa' },
-                    { name: 'Platinum', range: '80-89',  share_pct: 12.4, hh_count:  9920000, cpm_band: '+35 to +50%',  color: '#fbbf24' },
-                    { name: 'Gold',     range: '70-79',  share_pct: 29.1, hh_count: 23300000, cpm_band: '+20 to +35%',  color: '#f59e0b' },
-                    { name: 'Silver',   range: '60-69',  share_pct: 30.6, hh_count: 24500000, cpm_band: 'baseline',     color: '#94a3b8' },
-                    { name: 'Bronze',   range: '<60',    share_pct: 23.1, hh_count: 18500000, cpm_band: '-10 to -20%',  color: '#64748b' }
+                    { name: 'Diamond',  range: '90-100', share_pct:  4.8, hh_count:  3811200, cpm_band: '+50 to +75%',  color: '#a78bfa' },
+                    { name: 'Platinum', range: '80-89',  share_pct: 12.4, hh_count:  9845600, cpm_band: '+35 to +50%',  color: '#fbbf24' },
+                    { name: 'Gold',     range: '70-79',  share_pct: 29.1, hh_count: 23105400, cpm_band: '+20 to +35%',  color: '#f59e0b' },
+                    { name: 'Silver',   range: '60-69',  share_pct: 30.6, hh_count: 24296400, cpm_band: 'baseline',     color: '#94a3b8' },
+                    { name: 'Bronze',   range: '<60',    share_pct: 23.1, hh_count: 18341400, cpm_band: '-10 to -20%',  color: '#64748b' }
                 ],
                 segments: [
                     {
@@ -57011,7 +57029,7 @@
                         ]
                     }
                 ],
-                pitch: 'Netflix today sells reach. With the AQI, Netflix sells a rate card. 10 commercially-priceable audience packs across 70.3M Diamond + Platinum + Gold HHs, each with a defensible composite score, a brand-anchored proof signal, and a CPM band that maps to demonstrated audience quality. Higher quality + better packaging = higher CPMs. This is how Netflix turns "we have great inventory" into "we have a priced rate card for every advertiser in every category."'
+                pitch: 'Netflix today sells reach. With the AQI, Netflix sells a rate card. 10 commercially-priceable audience packs whose HH counts sum to 70.3M across the 79.4M U.S. Netflix base (overlap allowed - a single HH can sit in multiple packs), each with a defensible composite score, a brand-anchored proof signal, and a CPM band that maps to demonstrated audience quality. Higher quality + better packaging = higher CPMs. This is how Netflix turns "we have great inventory" into "we have a priced rate card for every advertiser in every category."'
             },
 
             // ── PULL 10 · COMPETITIVE STREAMING MIGRATION MAP ──
@@ -57028,7 +57046,7 @@
                     'Title-triggered reactivation = previously-lapsed Netflix HH whose first reactivation session was within 7d of a major title premiere'
                 ],
                 sankey: {
-                    netflix: { label: 'Netflix', hh_count: 80100000, color: '#e50914' },
+                    netflix: { label: 'Netflix', hh_count: 79400000, color: '#e50914' },
                     competitors: [
                         { id: 'hulu',    label: 'Hulu',           color: '#1ce783', inbound_hh: 7100000,  outbound_hh: 8400000  },
                         { id: 'max',     label: 'Max',            color: '#a78bfa', inbound_hh: 3800000,  outbound_hh: 5700000  },
@@ -57049,11 +57067,11 @@
                         title: 'How many active paid SVODs Netflix HHs subscribe to in a rolling 90d window',
                         view: 'bar',
                         rows: [
-                            { label: '1 SVOD (Netflix-only)',    pct: 11.4, hh_count:  9150000, note: 'Netflix exclusives - the cohort most-at-risk for cycling out if engagement drops.' },
-                            { label: '2 SVODs',                  pct: 27.8, hh_count: 22300000, note: 'Most common stack. Usually Netflix + (Hulu or Prime). Highest cross-CTV ad reach.' },
-                            { label: '3 SVODs',                  pct: 31.2, hh_count: 25000000, note: 'The "core" stack: Netflix + 2 of {Hulu, Max, Prime, Disney+}.' },
-                            { label: '4 SVODs',                  pct: 18.6, hh_count: 14900000, note: 'Premium stackers - over-index on the AQI Diamond + Platinum tiers.' },
-                            { label: '5+ SVODs',                 pct: 11.0, hh_count:  8800000, note: 'Super-stackers - 71% logged into >=2 competing SVODs in last 7d. Streaming Superfans cohort.' }
+                            { label: '1 SVOD (Netflix-only)',    pct: 11.4, hh_count:  9051600, note: 'Netflix exclusives - the cohort most-at-risk for cycling out if engagement drops.' },
+                            { label: '2 SVODs',                  pct: 27.8, hh_count: 22073200, note: 'Most common stack. Usually Netflix + (Hulu or Prime). Highest cross-CTV ad reach.' },
+                            { label: '3 SVODs',                  pct: 31.2, hh_count: 24772800, note: 'The "core" stack: Netflix + 2 of {Hulu, Max, Prime, Disney+}.' },
+                            { label: '4 SVODs',                  pct: 18.6, hh_count: 14768400, note: 'Premium stackers - over-index on the AQI Diamond + Platinum tiers.' },
+                            { label: '5+ SVODs',                 pct: 11.0, hh_count:  8734000, note: 'Super-stackers - 71% logged into >=2 competing SVODs in last 7d. Streaming Superfans cohort.' }
                         ],
                         callout: '88.6% of U.S. Netflix HHs are multi-platform streamers. Selling Netflix as part of a cross-CTV plan is more accurate to user behavior than selling it as a walled garden.'
                     },
@@ -57063,11 +57081,11 @@
                         title: 'Frequency of cancel -> resubscribe cycles on Netflix, last 12 months',
                         view: 'bar',
                         rows: [
-                            { label: '0 cycles (continuous sub)',         pct: 64.3, hh_count: 51500000, note: 'Steady-state subs - the loyalty-discount + bundle cohort.' },
-                            { label: '1 cycle (cancel once, came back)',  pct: 17.4, hh_count: 13900000, note: 'Title-triggered reactivators - see "Title-triggered reactivations" lens.' },
-                            { label: '2 cycles',                          pct:  9.1, hh_count:  7300000, note: 'On / off / on / off - cancel after binge, return for next big drop.' },
-                            { label: '3 cycles',                          pct:  4.8, hh_count:  3800000, note: 'High-churn - the ad-tier conversion target.' },
-                            { label: '4+ cycles',                         pct:  4.4, hh_count:  3500000, note: 'Promo-hopper / serial canceler - usually shopping for the lowest active price.' }
+                            { label: '0 cycles (continuous sub)',         pct: 64.3, hh_count: 51054200, note: 'Steady-state subs - the loyalty-discount + bundle cohort.' },
+                            { label: '1 cycle (cancel once, came back)',  pct: 17.4, hh_count: 13815600, note: 'Title-triggered reactivators - see "Title-triggered reactivations" lens.' },
+                            { label: '2 cycles',                          pct:  9.1, hh_count:  7225400, note: 'On / off / on / off - cancel after binge, return for next big drop.' },
+                            { label: '3 cycles',                          pct:  4.8, hh_count:  3811200, note: 'High-churn - the ad-tier conversion target.' },
+                            { label: '4+ cycles',                         pct:  4.4, hh_count:  3493600, note: 'Promo-hopper / serial canceler - usually shopping for the lowest active price.' }
                         ],
                         callout: '35.7% of U.S. Netflix HHs cycled in or out at least once in the last 12 months. The cycling cohort is twice as large as Netflix\'s lifetime-cancel base.'
                     },
@@ -57441,6 +57459,71 @@
         // ──────────────────────────────────────────────────────────────
         // SHARED RENDERER HELPERS for the Netflix block
         // ──────────────────────────────────────────────────────────────
+        function _jiqNflxAbbrevHH(n) {
+            // Short household abbreviation - 79.4M, 612K, 2.41M, etc.
+            n = Number(n) || 0;
+            if (n >= 1000000) {
+                var m = n / 1000000;
+                return (m >= 100 ? m.toFixed(0) : m.toFixed(2).replace(/\.?0+$/, '')) + 'M';
+            }
+            if (n >= 1000) {
+                var k = n / 1000;
+                return (k >= 100 ? k.toFixed(0) : k.toFixed(1).replace(/\.0$/, '')) + 'K';
+            }
+            return String(n);
+        }
+        function _jiqNflxPanelBasis() {
+            return (_JIQ_NETFLIX_DATA && _JIQ_NETFLIX_DATA.panel_basis) || null;
+        }
+        function _jiqNflxPanelChip() {
+            // Compact ribbon-style chip surfacing the SHARED panel basis
+            // so reviewers can ladder every percentage in the deck back
+            // to the same n / projected-U.S. denominator.
+            var pb = _jiqNflxPanelBasis();
+            if (!pb) return '';
+            return '<span title="' + _jiqEsc(pb.methodology_note || '') + '"'
+                 +       ' style="display:inline-flex; align-items:center; gap:0.4rem;'
+                 +              ' padding:0.16rem 0.55rem; border-radius:999px;'
+                 +              ' background:rgba(229,9,20,0.10);'
+                 +              ' border:1px solid rgba(229,9,20,0.32);'
+                 +              ' font-size:0.64rem; font-weight:700;'
+                 +              ' color:#fca5a5; white-space:nowrap;">'
+                 +   '<span style="opacity:0.7; letter-spacing:0.05em;">PANEL</span>'
+                 +   '<span style="color:var(--text-primary); font-weight:800;">'
+                 +     'n=' + _jiqFmt(pb.sample_panelists) + '</span>'
+                 +   '<span style="opacity:0.55;">\u2192</span>'
+                 +   '<span style="color:var(--text-primary); font-weight:800;">'
+                 +     _jiqNflxAbbrevHH(pb.projected_us_hh) + ' U.S. HHs</span>'
+                 + '</span>';
+        }
+        function _jiqNflxCohortMeta(label, cohortCount) {
+            // Build a meta-line HTML string that anchors a per-pull
+            // cohort to the panel basis. Produces:
+            //   "{label}: 612,400 (0.77% of 79.4M base · n=18,562 panelist HHs)  [PANEL CHIP]"
+            // so every card visibly ladders to the same denominator.
+            var pb = _jiqNflxPanelBasis();
+            var prefix = _jiqEsc(label || 'Cohort');
+            var ladder = '';
+            if (pb && cohortCount > 0 && pb.projected_us_hh > 0) {
+                var pctOfBase = (cohortCount / pb.projected_us_hh) * 100;
+                var pctTxt = pctOfBase >= 10 ? pctOfBase.toFixed(1)
+                           : pctOfBase >= 1  ? pctOfBase.toFixed(2)
+                                             : pctOfBase.toFixed(3);
+                var nPanel = Math.round(cohortCount / (pb.projection_factor || 32.99));
+                ladder = ' <span style="opacity:0.75;">('
+                       + pctTxt + '% of ' + _jiqNflxAbbrevHH(pb.projected_us_hh) + ' base'
+                       + ' · n=' + _jiqFmt(nPanel) + ' panelist HHs)</span>';
+            }
+            return '<span style="display:inline-flex; align-items:center; flex-wrap:wrap; gap:0.55rem;">'
+                 +   '<span>' + prefix + ': <strong>' + _jiqFmt(cohortCount || 0) + '</strong>' + ladder + '</span>'
+                 +   _jiqNflxPanelChip()
+                 + '</span>';
+        }
+        function _jiqNflxSetCohortMeta(metaElOrId, label, cohortCount) {
+            var el = (typeof metaElOrId === 'string') ? document.getElementById(metaElOrId) : metaElOrId;
+            if (!el) return;
+            el.innerHTML = _jiqNflxCohortMeta(label, cohortCount);
+        }
         function _jiqNflxWindowTabs(containerId, windows, activeKey, onChange) {
             var el = document.getElementById(containerId);
             if (!el) return;
@@ -57505,7 +57588,7 @@
             var pitchEl    = document.getElementById('jiqNflxSignupPitch');
             if (titleEl) titleEl.textContent = '🔍 ' + (data.title || '').replace(/^🔍\s*/, '');
             if (subEl)   subEl.textContent = data.subtitle || '';
-            if (metaEl)  metaEl.textContent = 'Study cohort: ' + _jiqFmt(data.study_cohort_size || 0) + ' net-new subscribers';
+            _jiqNflxSetCohortMeta(metaEl, 'Study cohort - net-new subscribers in window', data.study_cohort_size || 0);
             if (pitchEl) pitchEl.innerHTML = '<strong>Why this matters for ad sales: </strong>' + _jiqEsc(data.pitch || '');
 
             _jiqNflxSignupActiveWin = data.window_default || _jiqNflxSignupActiveWin;
@@ -57579,7 +57662,7 @@
             var pitchEl  = document.getElementById('jiqNflxChurnPitch');
             if (titleEl) titleEl.textContent = '🚪 ' + (data.title || '').replace(/^🚪\s*/, '');
             if (subEl)   subEl.textContent = data.subtitle || '';
-            if (metaEl)  metaEl.textContent = 'Study cohort: ' + _jiqFmt(data.study_cohort_size || 0) + ' churned accounts';
+            _jiqNflxSetCohortMeta(metaEl, 'Study cohort - churned accounts in window', data.study_cohort_size || 0);
             if (pitchEl) pitchEl.innerHTML = '<strong>Why this matters for ad sales: </strong>' + _jiqEsc(data.pitch || '');
 
             _jiqNflxChurnActiveWin = data.window_default || _jiqNflxChurnActiveWin;
@@ -57681,7 +57764,7 @@
             var pitchEl  = document.getElementById('jiqNflxTitlePitch');
             if (titleEl) titleEl.textContent = '🎬 ' + (data.title || '').replace(/^🎬\s*/, '');
             if (subEl)   subEl.textContent = data.subtitle || '';
-            if (metaEl)  metaEl.textContent = 'Combined cohort: ' + _jiqFmt(data.study_cohort_size || 0) + ' off-Netflix demand-forming users across all 5 titles';
+            _jiqNflxSetCohortMeta(metaEl, 'Combined cohort - off-Netflix demand-forming users across all 5 titles', data.study_cohort_size || 0);
             if (pitchEl) pitchEl.innerHTML = '<strong>Why this matters for ad sales: </strong>' + _jiqEsc(data.pitch || '');
 
             if (!_jiqNflxTitleActiveSlug && data.titles[0]) _jiqNflxTitleActiveSlug = data.titles[0].slug;
@@ -57785,7 +57868,7 @@
             var pitchEl = document.getElementById('jiqNflxCommercePitch');
             if (titleEl) titleEl.textContent = '🛒 ' + (data.title || '').replace(/^🛒\s*/, '');
             if (subEl)   subEl.textContent = data.subtitle || '';
-            if (metaEl)  metaEl.textContent = 'Observation cohort: ' + _jiqFmt(data.study_cohort_size || 0) + ' viewers with cross-tracked off-Netflix commercial behavior';
+            _jiqNflxSetCohortMeta(metaEl, 'Observation cohort - viewers with cross-tracked off-Netflix commercial behavior', data.study_cohort_size || 0);
             if (pitchEl) pitchEl.innerHTML = '<strong>Why this matters for ad sales: </strong>' + _jiqEsc(data.pitch || '');
 
             if (!_jiqNflxCommerceActiveSlug && data.genres[0]) _jiqNflxCommerceActiveSlug = data.genres[0].slug;
@@ -57879,16 +57962,20 @@
             var pitchEl = document.getElementById('jiqNflxIntentPitch');
             if (titleEl) titleEl.textContent = '💼 ' + (data.title || '').replace(/^💼\s*/, '');
             if (subEl)   subEl.textContent = data.subtitle || '';
-            if (metaEl)  metaEl.textContent = 'Base: ' + _jiqFmt(data.study_cohort_size || 0) + ' active U.S. Netflix households';
+            _jiqNflxSetCohortMeta(metaEl, 'Active base - U.S. Netflix households', data.study_cohort_size || 0);
 
             var topEl = document.getElementById('jiqNflxIntentTopline');
             if (topEl) {
                 var totalAddr = data.packs.reduce(function(s, p) { return s + (p.addressable_m || 0); }, 0);
                 var top3 = data.packs.slice().sort(function(a, b) { return (b.pct_in_market || 0) - (a.pct_in_market || 0); }).slice(0, 3);
+                var _pb = _JIQ_NETFLIX_DATA.panel_basis || {};
+                var _projHH = _pb.projected_us_hh || (data.study_cohort_size || 0);
+                var _addrPctOfBase = (_projHH > 0) ? (totalAddr * 1000000 / _projHH * 100) : 0;
                 topEl.innerHTML = ''
-                    + _jiqTile('Active households',  _jiqFmt(data.study_cohort_size || 0), 'U.S. Netflix base', '#5b6cff')
-                    + _jiqTile('Total addressable',  totalAddr.toFixed(1) + 'M', 'across 15 packs (overlap allowed)', '#5b6cff')
-                    + _jiqTile('Largest pack',       _jiqEsc((top3[0] || {}).label || '-'), ((top3[0] || {}).pct_in_market || 0).toFixed(1) + '% of base', '#22c55e')
+                    + _jiqTile('Panel sample',       'n=' + _jiqFmt(_pb.sample_panelists || 0), 'Netflix-active panelist HHs', '#fca5a5')
+                    + _jiqTile('Active households',  _jiqFmt(_projHH), 'U.S. Netflix base (' + (_pb.projection_factor || 32.99).toFixed(2) + 'x panel projection)', '#5b6cff')
+                    + _jiqTile('Total addressable',  totalAddr.toFixed(1) + 'M', _addrPctOfBase.toFixed(0) + '% of base (overlap allowed, 15 packs)', '#5b6cff')
+                    + _jiqTile('Largest pack',       _jiqEsc((top3[0] || {}).label || '-'), ((top3[0] || {}).pct_in_market || 0).toFixed(1) + '% of 79.4M base', '#22c55e')
                     + _jiqTile('Top high-CPM pack',  'Luxury fashion', '+28-42% CPM uplift', '#c026d3')
                     + _jiqTile('Pack count',         '15 packs', 'with brand-anchored intent proof', '#5b6cff');
             }
@@ -58007,7 +58094,7 @@
             var pitchEl = document.getElementById('jiqNflxVsAmznPitch');
             if (titleEl) titleEl.textContent = '🆚 ' + (data.title || '').replace(/^🆚\s*/, '');
             if (subEl)   subEl.textContent = data.subtitle || '';
-            if (metaEl)  metaEl.textContent = 'Base: ' + _jiqFmt(data.study_cohort_size || 0) + ' active U.S. Netflix households · Amazon-shopper cross-mapped';
+            _jiqNflxSetCohortMeta(metaEl, 'Active base - U.S. Netflix households (Amazon-shopper cross-mapped)', data.study_cohort_size || 0);
             if (pitchEl) pitchEl.innerHTML = '<strong>The wedge: </strong>' + _jiqEsc(data.pitch || '');
 
             _jiqNflxVsAmznActiveWin = data.window_default || _jiqNflxVsAmznActiveWin;
@@ -58185,6 +58272,9 @@
 
             var subEl = document.getElementById('jiqNflxPrePostSubtitle');
             if (subEl) subEl.textContent = data.subtitle || '';
+            _jiqNflxSetCohortMeta('jiqNflxPrePostMeta',
+                'Exposed cohort - HHs that saw the campaign creative',
+                (data.campaign && data.campaign.exposed_cohort) || 0);
 
             // Campaign header strip - 6-tile compact KPI band.
             var campEl = document.getElementById('jiqNflxPrePostCampaign');
@@ -58395,6 +58485,10 @@
 
             var subEl = document.getElementById('jiqNflxIncrementSubtitle');
             if (subEl) subEl.textContent = data.subtitle || '';
+            var _incTotal = ((data.pipeline || [])[0] || {}).value || ((_JIQ_NETFLIX_DATA.panel_basis || {}).projected_us_hh || 0);
+            _jiqNflxSetCohortMeta('jiqNflxIncrementMeta',
+                'Addressable base for matched-control design',
+                _incTotal);
 
             // Method strip: the question + the 5 bullets that define
             // the design. Two-column layout so it reads as a research
@@ -58688,6 +58782,9 @@
 
             var subEl = document.getElementById('jiqNflxAqiSubtitle');
             if (subEl) subEl.textContent = data.subtitle || '';
+            _jiqNflxSetCohortMeta('jiqNflxAqiMeta',
+                'Scored base - every U.S. Netflix HH gets an AQI score',
+                (_JIQ_NETFLIX_DATA.panel_basis || {}).projected_us_hh || 0);
 
             // Methodology strip - question + design bullets.
             var msEl = document.getElementById('jiqNflxAqiMethodStrip');
@@ -58945,6 +59042,9 @@
 
             var subEl = document.getElementById('jiqNflxMigrationSubtitle');
             if (subEl) subEl.textContent = data.subtitle || '';
+            _jiqNflxSetCohortMeta('jiqNflxMigrationMeta',
+                'Migration base - U.S. Netflix HHs tracked across the streaming marketplace',
+                ((data.sankey || {}).netflix || {}).hh_count || (_JIQ_NETFLIX_DATA.panel_basis || {}).projected_us_hh || 0);
 
             // Methodology strip - question + 5 design bullets.
             var msEl = document.getElementById('jiqNflxMigrationMethodStrip');
@@ -59272,6 +59372,10 @@
 
             var subEl = document.getElementById('jiqNflxGenreSubtitle');
             if (subEl) subEl.textContent = data.subtitle || '';
+            var _genreSum = (data.genres || []).reduce(function(s, g) { return s + (g.hh_count || 0); }, 0);
+            _jiqNflxSetCohortMeta('jiqNflxGenreMeta',
+                'Genre cohorts - sum across overlap-allowed genre packs',
+                _genreSum);
 
             var msEl = document.getElementById('jiqNflxGenreMethodStrip');
             if (msEl) {
