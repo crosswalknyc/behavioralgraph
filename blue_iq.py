@@ -377,13 +377,20 @@ def blue_iq_cache_key(filters: dict) -> str:
             outputs. v11 payloads may still carry the term in
             cached top_articles / trending_local / agent fields;
             bump forces regeneration so the scrubber takes effect.
+     v13 — 2026-06-29: editorial term-rewrite layer added
+            (_bq_rewrite_cards), running BEFORE the banned-term
+            scrubber. First rule: "Biden impeachment inquiry" ->
+            "impeachment inquiry" (drops the personal-name prefix
+            from headlines, sample queries, agent outputs, and
+            trending rows). v12 payloads carry the un-rewritten
+            label; bump forces regeneration so the relabel ships.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   12,
+        'version':   13,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -2507,12 +2514,21 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         'trending_meta':       trending_meta,
     }
 
-    # Banned-term scrub (user mandate 2026-06-12: government shutdown
-    # must not appear anywhere). Runs as the LAST step before the cards
-    # dict is sealed so it catches output from every upstream source —
-    # panel queries, GDELT titles, Google Trends, and all four agent
-    # modules (path / playbook / article / candidate discovery). See
-    # _bq_scrub_cards() for the per-surface strategy.
+    # Editorial term rewrites + banned-term scrub. Both run as the
+    # FINAL stage of compute_panel_view, after every panel / GDELT /
+    # Google Trends / agent payload has been assembled and BEFORE the
+    # cards dict is sealed to UI / S3 cache.
+    #
+    # Order matters:
+    #   1. _bq_rewrite_cards relabels phrases in-place (e.g. user
+    #      mandate 2026-06-29: "biden impeachment inquiry" ->
+    #      "impeachment inquiry"). Rewrites keep the surrounding
+    #      content but neutralize the labeling.
+    #   2. _bq_scrub_cards drops rows whose primary labels still
+    #      contain a banned term (user mandate 2026-06-12:
+    #      "government shutdown" anywhere). Runs AFTER rewrites so a
+    #      rewrite to a still-banned phrase is still caught.
+    cards = _bq_rewrite_cards(cards)
     cards = _bq_scrub_cards(cards)
 
     # Compare card (only when geo is set)
@@ -2755,6 +2771,149 @@ def _bq_scrub_dict_list(rows: list[dict], *, label_keys: tuple[str, ...],
                     r[sak] = _bq_scrub_str_list(r[sak])
         out.append(r)
     return out
+
+
+# ── Term-rewrite layer ───────────────────────────────────────────────────
+# Editorial relabels: rewrite specific phrases in place WITHOUT dropping
+# the surrounding content. Used when the underlying topic IS legitimately
+# in scope, but the labeling needs to be neutralized / depersonalized.
+# Runs BEFORE the banned-term scrubber inside compute_panel_view, so a
+# rewrite to a still-banned phrase would still get caught downstream.
+#
+# Each rule is (pattern, replacement). Patterns are case-insensitive and
+# applied via re.sub. To preserve original casing of surrounding text,
+# the replacement is treated literally — don't include backrefs unless
+# you intend them. Patterns are auto-wrapped with word boundaries so
+# "biden impeachment" doesn't accidentally rewrite mid-token.
+#
+# User mandates:
+#   2026-06-29: "biden impeachment inquiry change to just say
+#                impeachment inquiry."
+#
+# To extend, append a (pattern, replacement) tuple below. Use raw regex
+# fragments (no leading/trailing \b — the helper adds them).
+BLUE_IQ_REWRITES: list[tuple[str, str]] = [
+    # Strip the "biden" prefix from impeachment-inquiry mentions. Catches
+    # "Biden impeachment inquiry", "Biden's impeachment inquiry",
+    # "Biden-impeachment inquiry", etc.
+    (r"biden(?:['\u2019]s)?[\s\-]+impeachment\s+inquiry", "impeachment inquiry"),
+]
+_BLUE_IQ_REWRITE_RULES: list[tuple[re.Pattern, str]] = [
+    (re.compile(r'\b' + pat + r'\b', re.IGNORECASE), rep)
+    for pat, rep in BLUE_IQ_REWRITES
+]
+
+
+def _bq_rewrite_text(text: object) -> object:
+    """Apply all rewrites to a string. Non-strings pass through unchanged."""
+    if not text or not isinstance(text, str):
+        return text
+    out = text
+    for rx, rep in _BLUE_IQ_REWRITE_RULES:
+        out = rx.sub(rep, out)
+    return out
+
+
+def _bq_rewrite_str_list(items: list) -> list:
+    """Apply rewrites to every string in a list. None-safe."""
+    if not items:
+        return items
+    return [_bq_rewrite_text(it) for it in items]
+
+
+def _bq_rewrite_dict_list(rows: list[dict], *,
+                            text_keys: tuple[str, ...] = (),
+                            subarray_keys: tuple[str, ...] = ()) -> list[dict]:
+    """Apply rewrites to specific text fields + string-list subarrays of
+    each dict in `rows`. Returns a fresh list of dicts with the rewrites
+    applied (does not mutate inputs).
+    """
+    if not rows:
+        return rows
+    out: list[dict] = []
+    for r in rows:
+        if not isinstance(r, dict):
+            out.append(r)
+            continue
+        r2 = dict(r)
+        for tk in text_keys:
+            if tk in r2 and isinstance(r2[tk], str):
+                r2[tk] = _bq_rewrite_text(r2[tk])
+        for sak in subarray_keys:
+            if sak in r2 and isinstance(r2[sak], list):
+                r2[sak] = _bq_rewrite_str_list(r2[sak])
+        out.append(r2)
+    return out
+
+
+def _bq_rewrite_cards(cards: dict) -> dict:
+    """Walk every Blue IQ card surface and apply BLUE_IQ_REWRITES.
+
+    Runs BEFORE the banned-term scrubber. Touches the same surfaces the
+    scrubber touches but rewrites text in place instead of dropping
+    rows. Idempotent — running it twice is a no-op on already-rewritten
+    data (the replacement strings don't match the source patterns).
+    """
+    if not isinstance(cards, dict):
+        return cards
+
+    cards['issue_buckets'] = _bq_rewrite_dict_list(
+        cards.get('issue_buckets') or [],
+        text_keys=('bucket',),
+        subarray_keys=('sample_queries', 'top_terms'),
+    )
+    cards['top_articles'] = _bq_rewrite_dict_list(
+        cards.get('top_articles') or [],
+        text_keys=('title', 'description', 'summary'),
+        subarray_keys=('topics',),
+    )
+    cards['trending_local'] = _bq_rewrite_dict_list(
+        cards.get('trending_local') or [],
+        text_keys=('term', 'query'),
+    )
+
+    # Issue × Geo heatmap cells — rewrite sample queries in place.
+    igeo = cards.get('issue_geo') or {}
+    if isinstance(igeo, dict):
+        rows = igeo.get('rows') or []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            buckets = row.get('buckets') or []
+            for b in buckets:
+                if isinstance(b, dict) and isinstance(b.get('sample_queries'), list):
+                    b['sample_queries'] = _bq_rewrite_str_list(b['sample_queries'])
+        cards['issue_geo'] = igeo
+
+    cards['top_politicians'] = _bq_rewrite_dict_list(
+        cards.get('top_politicians') or [],
+        text_keys=('engagement_driver', 'rationale', 'headline'),
+        subarray_keys=('engagement_drivers',),
+    )
+    cards['top_candidates'] = _bq_rewrite_dict_list(
+        cards.get('top_candidates') or [],
+        text_keys=('rationale', 'headline', 'race'),
+    )
+    cards['issue_paths_agent'] = _bq_rewrite_dict_list(
+        cards.get('issue_paths_agent') or [],
+        text_keys=('bucket', 'next_action', 'follow_up_action', 'rationale'),
+    )
+    cards['playbook_agent'] = _bq_rewrite_dict_list(
+        cards.get('playbook_agent') or [],
+        text_keys=('bucket', 'where_to_buy', 'creative_direction', 'rationale'),
+    )
+    cards['issue_journey_cross'] = _bq_rewrite_dict_list(
+        cards.get('issue_journey_cross') or [],
+        text_keys=('bucket',),
+        subarray_keys=('top_terms',),
+    )
+
+    tu = cards.get('turnout_intent') or {}
+    if isinstance(tu, dict) and isinstance(tu.get('sample_queries'), list):
+        tu['sample_queries'] = _bq_rewrite_str_list(tu['sample_queries'])
+        cards['turnout_intent'] = tu
+
+    return cards
 
 
 def _bq_scrub_cards(cards: dict) -> dict:

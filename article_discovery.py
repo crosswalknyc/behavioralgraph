@@ -40,7 +40,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 S3_BUCKET   = os.environ.get('BLUE_IQ_CACHE_BUCKET', 'dashboard-inputs')
-S3_PREFIX   = 'blue_iq/articles/v2/'  # v2: banned-term system-prompt clause (2026-06-12)
+S3_PREFIX   = 'blue_iq/articles/v3/'  # v3: impeachment-inquiry relabel clause (2026-06-29)
 CACHE_TTL_S = 12 * 3600                # 12h — articles are time-sensitive
 AGENT_TIMEOUT_S = float(os.environ.get('ARTICLE_AGENT_TIMEOUT', '60'))
 AGENT_MODEL = os.environ.get('ARTICLE_AGENT_MODEL', 'gpt-4o')
@@ -178,6 +178,12 @@ _AGENT_SYSTEM = (
     "If a budget / appropriations story is genuinely the lead story for\n"
     "the geography, only include it if the title can be cited verbatim\n"
     "WITHOUT the banned phrase. Skip otherwise.\n"
+    "\n"
+    "TERM RELABELS — never prefix 'impeachment inquiry' with a personal\n"
+    "name in title / topic / summary. Write 'impeachment inquiry' (not\n"
+    "'Biden impeachment inquiry', not 'Trump impeachment inquiry'). If\n"
+    "the source's actual headline uses the prefixed form, rewrite to\n"
+    "the unprefixed label before returning.\n"
     "\n"
     "OUTPUT FORMAT: return ONLY a JSON object. No markdown fences, no\n"
     "commentary. First char `{`, last char `}`:\n"
