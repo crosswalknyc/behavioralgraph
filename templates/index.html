@@ -36227,23 +36227,15 @@
                   + '</div>'
                   + '</div>';
 
-            // CARD M: Marketing creative - Issue × Voter Journey Sankey flow.
-            // Reads like a left-to-right flow: each issue (left node) →
-            // curved colored ribbon → next-action destination (right node).
-            // Ribbon thickness ∝ panelists in that (issue, dest) cell. Click
-            // any flow / node to pin it; recommendation panel below updates.
-            var cross = cards.issue_journey_cross || [];
-            html += '<div class="blue-iq-card blue-iq-card-creative" style="grid-column: span 12;">'
-                  + '<h3 class="blue-iq-card-title">Issue \u2192 next action flow <span class="blue-iq-badge">where to place creative</span></h3>'
-                  + '<div class="blue-iq-card-body" id="blueIQCardCreativeBody">'
-                  +   '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;">'
-                  +     'For voters who searched a U.S.-policy topic AND hit a political-media site, what did they do next? '
-                  +     'Ribbon width \u221d panelists. <strong>Click any flow, issue node, or destination node</strong> to pin a slice - '
-                  +     'the recommendation panel below updates with the matching placement and creative direction.'
-                  +   '</div>'
-                  +   _renderBlueIQIssueJourneyCross(cross, cards.issue_paths_agent || [], cards.playbook_agent || [])
-                  + '</div>'
-                  + '</div>';
+            // CARD M (Issue → next action flow) intentionally removed
+            // 2026-06-29 per user request. The "Digital voter journey
+            // (after political touchpoint)" + "Top observed paths after
+            // an issue search" + "How voters arrived" cards above already
+            // cover the same issue-to-action narrative with stronger
+            // visualizations, so this Sankey-flow card was redundant.
+            // Backend still emits cards.issue_journey_cross / issue_paths_agent
+            // / playbook_agent for those upstream cards and any downstream
+            // API consumers.
 
             // CARD L (Audience demographics) intentionally removed per
             // user request 2026-06-09 - the age/gender/ethnicity/income
