@@ -36071,12 +36071,15 @@
                   + '<div class="blue-iq-card-body">' + artHtml + '</div>'
                   + '</div>';
 
-            // CARD T: "Trending in [Geo] right now" - live Google Trends,
-            // AI/keyword-filtered to political. Geographically scoped: filter
-            // to a state or DMA and this card surfaces local trending searches
-            // (e.g. mayoral races, ballot props, state legislature fights) that
-            // the cube panel sample wouldn't catch yet. Each term shows score
-            // + related queries; click for the full drill.
+            // CARD T: "Trending political searches" - rolling 7-day Google
+            // Trends, AI/keyword-filtered to political. Geographically
+            // scoped: filter to a state or DMA and this card surfaces local
+            // trending searches (e.g. mayoral races, ballot props, state
+            // legislature fights) that the cube panel sample wouldn't catch
+            // yet. Each term shows peak traffic score over the window,
+            // related news, and how many days in the past 7 it trended.
+            // Updated 2026-06-29: was "right now" (24h RSS); now aggregates
+            // the past 7 daily snapshots in S3 to give a 7-day window.
             html += '<div class="blue-iq-card blue-iq-card-trending" style="grid-column: span 12;">'
                   + '<h3 class="blue-iq-card-title" style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">'
                   +   '<span>Trending political searches \u2014 <span id="blueIQTrendingGeoLabel">United States</span></span>'
@@ -36088,7 +36091,7 @@
                   +     '</select>'
                   +   '</span>'
                   + '</h3>'
-                  + '<div class="blue-iq-card-subtitle" style="margin-bottom:0.6rem;">what people in this geography are actually searching <em>right now</em>. Updates per-filter. AI/keyword-filtered to political only.</div>'
+                  + '<div class="blue-iq-card-subtitle" style="margin-bottom:0.6rem;">what people in this geography have been searching most over the <em>past 7 days</em>. Scores are peak-day traffic in the window. Updates per-filter. AI/keyword-filtered to political only.</div>'
                   + '<div class="blue-iq-card-body" id="blueIQTrendingBody"></div>'
                   + '</div>';
 
@@ -36664,9 +36667,10 @@
             if (!rows || !rows.length) {
                 // Backend now falls back to raw Google Trends when the
                 // political filter empties the list, so reaching here
-                // means Google Trends itself returned nothing.
+                // means Google Trends itself returned nothing across
+                // the 7-day snapshot window.
                 body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.7rem 0;">'
-                    + 'Google Trends returned no data for this geo right now (the endpoint sometimes throttles or comes back empty). The cube refreshes hourly \u2014 try again in a few minutes, or pick a different geography.'
+                    + 'Google Trends returned no data for this geo across the past 7 days (the endpoint sometimes throttles or comes back empty, and snapshots accumulate as the dashboard is used). Try again later, or pick a different geography.'
                     + '</div>';
                 return;
             }
@@ -36678,7 +36682,7 @@
             var fallbackNote = '';
             if (meta && meta.used_fallback) {
                 fallbackNote = '<div style="color: var(--text-secondary); font-size: 0.72rem; padding: 0 0 0.5rem 0; opacity: 0.75;">'
-                             + 'No purely political topics trending here right now \u2014 showing top Google Trends for this geo.'
+                             + 'No purely political topics trended here in the past 7 days \u2014 showing top Google Trends for this geo.'
                              + '</div>';
             }
 
@@ -36696,6 +36700,26 @@
                 var cfg = WHY_COLOR[why];
                 if (!cfg) return '';
                 return '<span class="bq-why-chip" style="background:' + cfg[0] + '; color:' + cfg[1] + ';">' + cfg[2] + '</span>';
+            }
+            // 7-day persistence chip: "5d this week" / "1d this week" etc.
+            // Backed by the days_trending field added 2026-06-29 to the
+            // trends aggregator. The chip changes tone as a term trends
+            // more days in the window (lighter = more persistent).
+            // Tooltip carries first_seen / last_seen for full context.
+            function daysChip(r) {
+                var d = +(r && r.days_trending) || 0;
+                if (d <= 0) return '';
+                var tone, label;
+                if (d >= 5)      { tone = ['rgba(96,165,250,0.22)', '#bfdbfe']; label = d + 'd \u2022 persistent'; }
+                else if (d >= 3) { tone = ['rgba(96,165,250,0.16)', '#93c5fd']; label = d + 'd this week'; }
+                else if (d >= 2) { tone = ['rgba(100,116,139,0.18)', '#cbd5e1']; label = d + 'd this week'; }
+                else             { tone = ['rgba(100,116,139,0.14)', '#94a3b8']; label = '1d this week'; }
+                var title = 'Trended ' + d + ' of the past 7 days'
+                          + (r.first_seen ? ' \u2022 first seen ' + r.first_seen : '')
+                          + (r.last_seen  ? ' \u2022 last seen '  + r.last_seen  : '');
+                return '<span class="bq-why-chip" title="' + _bqEscape(title) + '"'
+                     + ' style="background:' + tone[0] + '; color:' + tone[1] + ';">'
+                     + _bqEscape(label) + '</span>';
             }
             function pctOfMax(s) { return Math.round((+s || 0) / maxScore * 100); }
             function fmtTraffic(s) {
@@ -36722,10 +36746,11 @@
                          +   '<div class="bq-trending-head">'
                          +     '<div class="bq-trending-rank">#' + (idx + 1) + '</div>'
                          +     '<div class="bq-trending-term">' + _bqEscape(cleanTerm) + '</div>'
-                         +     '<div class="bq-trending-traffic" title="Approx. search volume from Google Trends">' + fmtTraffic(r.score) + '</div>'
+                         +     '<div class="bq-trending-traffic" title="Peak approx. search volume from Google Trends in the past 7 days">' + fmtTraffic(r.score) + '</div>'
                          +   '</div>'
                          +   '<div class="bq-trending-meta">'
                          +     whyChip(r.why_political)
+                         +     daysChip(r)
                          +     '<div class="bq-trending-bar-wrap"><div class="bq-trending-bar" style="width:' + pctOfMax(r.score) + '%;"></div></div>'
                          +   '</div>'
                          +   relHtml

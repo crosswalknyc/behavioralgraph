@@ -384,13 +384,21 @@ def blue_iq_cache_key(filters: dict) -> str:
             from headlines, sample queries, agent outputs, and
             trending rows). v12 payloads carry the un-rewritten
             label; bump forces regeneration so the relabel ships.
+     v14 — 2026-06-29: trending_local now sources from a 7-day
+            snapshot window (was 24h RSS-only). Each row carries
+            new days_trending / first_seen / last_seen fields,
+            score is now peak-day traffic in the window, and the
+            card subtitle was rewritten from "right now" to
+            "past 7 days". v13 payloads don't carry the new
+            fields and would render the persistence chip empty,
+            so bump invalidates them.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   13,
+        'version':   14,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
