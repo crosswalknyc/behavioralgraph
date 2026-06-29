@@ -79696,6 +79696,15 @@
             SOCIAL_BRAND:  { social: 62, search: 12, owned: 18, retail:  3, media:  5 },
             TRAVEL_BRAND:  { social: 12, search: 20, owned: 28, retail: 30, media: 10 },
             CONTENT:       { social:  0, search:  0, owned:  0, retail:  0, media: 100 },
+            // 2026-06-29 (Jenna): every profile in the PLATFORMS master
+            // (Netflix, Hulu, YouTube, Facebook, Instagram, Google,
+            // Spotify, broadcast networks, etc.) is - by qualification -
+            // engaged with the platform's own owned-and-operated channel
+            // (logged-in session / app session / direct visit). Mirror
+            // the CONTENT 100%-MEDIA short-circuit but for OWNED: the
+            // composition is 100% Owned with the other four boxes
+            // rendered as "-".
+            PLATFORM:      { social:  0, search:  0, owned: 100, retail:  0, media:   0 },
             GENERIC:       { social: 18, search: 18, owned: 22, retail: 22, media: 20 }
         };
         // Archetypes for which there is no meaningful brand-owned .com /
@@ -79742,6 +79751,28 @@
             const prof  = String(profileCategory || '').trim().toUpperCase();
             const cat = brand || prof;
             if (!cat) return 'GENERIC';
+            // PLATFORMS master (Netflix / Hulu / YouTube / Facebook /
+            // Instagram / Google / Spotify / broadcast networks / FAST
+            // platforms / search engines / etc.) - takes priority over
+            // every per-brand-category mapping below. Per user 2026-06-29:
+            // "on anything in platform it should be 100% owned & operated."
+            // Qualification for any of these profiles is "the panelist
+            // engaged with the platform via the platform's own channel"
+            // (logged-in session / app session / direct visit), so by
+            // definition every engager is an Owned-channel engager. The
+            // CONTENT 100%-MEDIA short-circuit is the analogous case for
+            // movie / podcast / game / series profiles. Resolution via
+            // getMasterCategory so the override fires even when the
+            // brand-category column on the CSV uses a finer sub-bucket
+            // (e.g. SOCIAL MEDIA would normally route to SOCIAL_BRAND
+            // - but Facebook IS the platform, so 100% Owned wins).
+            if (typeof getMasterCategory === 'function') {
+                try {
+                    const brandMaster = brand ? String(getMasterCategory(brand, false) || '').toUpperCase() : '';
+                    const profMaster  = prof  ? String(getMasterCategory(prof, false)  || '').toUpperCase() : '';
+                    if (brandMaster === 'PLATFORMS' || profMaster === 'PLATFORMS') return 'PLATFORM';
+                } catch (_) {}
+            }
             // CONTENT bucket (profile selector "Content" master) - takes
             // priority over everything else because qualification = "they
             // had to watch / play this piece of content during the window",
@@ -79883,6 +79914,15 @@
             if (archetype === 'CONTENT') {
                 return { social: 0, search: 0, retail: 0, media: 100, owned: 0,
                          archetype, noOwned: true, dataActive: false };
+            }
+            // PLATFORM short-circuit (2026-06-29): any profile in the
+            // PLATFORMS master is - by qualification - a logged-in /
+            // app-session engager on the platform's owned-and-operated
+            // channel. Force 100% Owned and "-" on the other four boxes
+            // (rendered in _renderAudienceShareBoxes via share.ownedOnly).
+            if (archetype === 'PLATFORM') {
+                return { social: 0, search: 0, retail: 0, media: 0, owned: 100,
+                         archetype, noOwned: false, ownedOnly: true, dataActive: false };
             }
 
             // (a) Archetype base - clone so we can mutate.
@@ -80093,12 +80133,19 @@
             // content," so MEDIA = 100% and the other four channels are
             // not-applicable rather than literally zero. Render them as
             // "-" instead of "0%" to make that distinction visible.
-            const isContent = share.archetype === 'CONTENT';
-            apply('asbSocial', share.social, isContent);
-            apply('asbSearch', share.search, isContent);
+            //
+            // For PLATFORM profiles (Netflix / Hulu / Facebook / Google /
+            // etc.), Owned = 100% by definition (every engager hit the
+            // platform's own logged-in / app session). Mirror the CONTENT
+            // treatment but inverted: Owned shows the 100%, the OTHER
+            // four (Social / Search / Retail / Media) render as "-".
+            const isContent  = share.archetype === 'CONTENT';
+            const isPlatform = share.archetype === 'PLATFORM' || share.ownedOnly === true;
+            apply('asbSocial', share.social, isContent || isPlatform);
+            apply('asbSearch', share.search, isContent || isPlatform);
             apply('asbOwned',  share.owned,  share.noOwned);
-            apply('asbRetail', share.retail, isContent);
-            apply('asbMedia',  share.media,  false);
+            apply('asbRetail', share.retail, isContent || isPlatform);
+            apply('asbMedia',  share.media,  isPlatform);
             // Expose archetype on the container so dev tools (and the
             // hover tooltip below) can show which template drove the
             // numbers. Useful when debugging "why does Mark Rober look
