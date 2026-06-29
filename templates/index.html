@@ -54857,6 +54857,38 @@
                  +   '<div style="height:100%; width:' + w.toFixed(1) + '%; background:' + (color || 'var(--accent-cyan)') + ';"></div>'
                  + '</div>';
         }
+        function _jiqStepPills(label, accentColor) {
+            // Render an arrow-separated step chain ("A → B → C") as a
+            // row of pill chips. Early steps render as tinted outlined
+            // pills; the final step (the outcome / conversion verb)
+            // renders solid in the accent color so the destination
+            // reads as the visual punchline.
+            var color = accentColor || '#3b82f6';
+            var raw = (label == null) ? '' : String(label);
+            var parts = raw.split(/\s*[\u2192]\s*/).filter(function(s) { return s && s.length; });
+            if (parts.length === 0) return '';
+            var pillCss = function(isFinal) {
+                return 'display:inline-block; padding:0.22rem 0.6rem; border-radius:14px;'
+                     + ' font-size:0.74rem; font-weight:' + (isFinal ? '800' : '700') + '; line-height:1.25;'
+                     + ' background:' + (isFinal ? color : color + '22') + ';'
+                     + ' color:' + (isFinal ? '#ffffff' : color) + ';'
+                     + ' border:1px solid ' + (isFinal ? color : color + '55') + ';';
+            };
+            if (parts.length === 1) {
+                return '<span style="' + pillCss(true) + '">' + _jiqEsc(parts[0]) + '</span>';
+            }
+            return '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.3rem 0.35rem;">'
+                 + parts.map(function(step, i) {
+                     var isFinal = (i === parts.length - 1);
+                     var pill = '<span style="' + pillCss(isFinal) + '">' + _jiqEsc(step) + '</span>';
+                     if (isFinal) return pill;
+                     return pill
+                          + '<span aria-hidden="true" style="color:' + color + '99;'
+                          +                              ' font-size:0.95rem; font-weight:700;'
+                          +                              ' line-height:1; padding:0 0.05rem;">\u203A</span>';
+                 }).join('')
+                 + '</div>';
+        }
 
         // ──────────────────────────────────────────────────────────────
         // CARD 1 · 🔭 Off-Platform Discovery Halo
@@ -55422,14 +55454,14 @@
             if (trigEl) {
                 var triggers = p.trigger_sequences || [];
                 trigEl.innerHTML = triggers.map(function(r) {
-                    return '<div style="display:grid; grid-template-columns: 70px minmax(0, 1.4fr) minmax(0, 1.6fr); gap:0.85rem; align-items:start;'
+                    return '<div style="display:grid; grid-template-columns: 70px minmax(0, 1.4fr) minmax(0, 1.6fr); gap:0.85rem; align-items:center;'
                          +              ' padding:0.7rem 0.85rem; margin-bottom:0.45rem; border-radius:6px;'
                          +              ' background: rgba(255,255,255,0.025); border-left: 3px solid ' + ACC + ';">'
                          +   '<div style="text-align:center;">'
                          +     '<div style="font-size:1rem; font-weight:800; color: var(--text-primary); line-height:1;">' + (r.pct || 0).toFixed(1) + '%</div>'
                          +     '<div style="font-size:0.65rem; opacity:0.6; margin-top:0.25rem;">' + (r.avg_days || 0) + 'd avg</div>'
                          +   '</div>'
-                         +   '<div style="font-size:0.84rem; font-weight:600; color: var(--text-primary); line-height:1.4;">' + _jiqEsc(r.label) + '</div>'
+                         +   '<div>' + _jiqStepPills(r.label, ACC) + '</div>'
                          +   '<div style="font-size:0.74rem; color: var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(r.note) + '</div>'
                          + '</div>';
                 }).join('');
@@ -57504,14 +57536,14 @@
                 if (trigEl) {
                     var triggers = data.trigger_sequences || [];
                     trigEl.innerHTML = triggers.map(function(r) {
-                        return '<div style="display:grid; grid-template-columns: 80px minmax(0, 1.6fr) minmax(0, 1.4fr); gap:0.85rem; align-items:start;'
+                        return '<div style="display:grid; grid-template-columns: 80px minmax(0, 1.6fr) minmax(0, 1.4fr); gap:0.85rem; align-items:center;'
                              +              ' padding:0.7rem 0.85rem; margin-bottom:0.45rem; border-radius:6px;'
                              +              ' background: rgba(255,255,255,0.025); border-left: 3px solid #e50914;">'
                              +   '<div style="text-align:center;">'
                              +     '<div style="font-size:1.05rem; font-weight:800; color:var(--text-primary); line-height:1;">' + (r.pct || 0).toFixed(1) + '%</div>'
                              +     '<div style="font-size:0.62rem; opacity:0.65; margin-top:0.25rem;">' + (r.avg_days || 0).toFixed(1) + 'd avg</div>'
                              +   '</div>'
-                             +   '<div style="font-size:0.82rem; font-weight:600; color:var(--text-primary); line-height:1.45;">' + _jiqEsc(r.label) + '</div>'
+                             +   '<div>' + _jiqStepPills(r.label, '#e50914') + '</div>'
                              +   '<div style="font-size:0.74rem; color:var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(r.note || '') + '</div>'
                              + '</div>';
                     }).join('');
