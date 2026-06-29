@@ -102340,21 +102340,16 @@
                     +  '</circle>';
             });
 
-            // Draw labels for top bubbles — show DMA name + pct
+            // Draw labels — full DMA name + pct, font sized to fit the circle
             bubbles.forEach(b => {
                 const r = getRadius(b.pct);
-                if (r >= 12) {
-                    var parts = b.name.split(/[\s,\-\/]+/);
+                if (r >= 10) {
                     var label = b.name;
-                    if (parts[0] === 'San' || parts[0] === 'New' || parts[0] === 'Las' || parts[0] === 'El' || parts[0] === 'St' || parts[0] === 'Ft' || parts[0] === 'Fort' || parts[0] === 'Salt' || parts[0] === 'West' || parts[0] === 'Grand' || parts[0] === 'Little' || parts[0] === 'Cedar' || parts[0] === 'Santa' || parts[0] === 'Des' || parts[0] === 'Baton') {
-                        label = parts.slice(0, 2).join(' ');
-                    } else {
-                        label = parts[0];
-                    }
-                    if (r < 18 && label.length > 6) label = label.substring(0, 5);
-                    const fontSize = r >= 20 ? 10 : 8;
-                    svg += '<text x="' + b.x.toFixed(1) + '" y="' + (b.y - 1).toFixed(1) + '" fill="#fff" font-size="' + fontSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + label + '</text>';
-                    svg += '<text x="' + b.x.toFixed(1) + '" y="' + (b.y + fontSize).toFixed(1) + '" fill="rgba(255,255,255,0.8)" font-size="' + (fontSize - 1.5) + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
+                    var fontSize = Math.min(10, Math.max(5, (r * 1.6) / Math.max(1, label.length) * 2.2));
+                    fontSize = Math.round(fontSize * 10) / 10;
+                    var pctSize = Math.max(4, fontSize - 1.5);
+                    svg += '<text x="' + b.x.toFixed(1) + '" y="' + (b.y - pctSize * 0.4).toFixed(1) + '" fill="#fff" font-size="' + fontSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + label + '</text>';
+                    svg += '<text x="' + b.x.toFixed(1) + '" y="' + (b.y + fontSize * 0.8).toFixed(1) + '" fill="rgba(255,255,255,0.8)" font-size="' + pctSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
                 }
             });
 
