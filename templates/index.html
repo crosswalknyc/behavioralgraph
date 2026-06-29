@@ -31410,7 +31410,7 @@
                      interactive Subscriber Lifecycle card above. -->
 
                 <!-- ════════════════════════════════════════════════════════
-                     NETFLIX AD-SALES DEMAND-MAP BLOCK - five purpose-
+                     NETFLIX AD-SALES DEMAND-MAP BLOCK - six purpose-
                      built cards for the Netflix Ads / Insights team.
                      Each card answers a single "what would I want to
                      know that my first-party data physically cannot
@@ -31424,6 +31424,7 @@
                        jiqNflxTitleCard        (nflx_title_interest)
                        jiqNflxCommerceCard     (nflx_content_to_commerce)
                        jiqNflxIntentCard       (nflx_advertiser_intent_packs)
+                       jiqNflxVsAmznCard       (nflx_vs_amazon)
 
                      Shared section header (jiqNetflixPitchHeader) is
                      revealed by the first card that paints via
@@ -31437,7 +31438,7 @@
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem;">
                         <h3 style="margin: 0; font-size: 1.1rem;">🎬 Netflix Ad-Sales Demand Map &amp; Off-Platform Intel</h3>
                         <div style="font-size: 0.72rem; color: var(--text-secondary); font-style: italic;">
-                            5 clickstream-only views Netflix's first-party data physically cannot produce
+                            6 clickstream-only views Netflix's first-party data physically cannot produce
                         </div>
                     </div>
                     <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.45rem; line-height: 1.55;">
@@ -31679,6 +31680,77 @@
                     <div id="jiqNflxIntentPitch"
                          style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
                                 background: rgba(91,108,255,0.08); border-left: 3px solid #5b6cff; line-height: 1.55;"></div>
+                </div>
+
+                <!-- ─── NETFLIX CARD 6: 🆚 Netflix vs. Amazon Audience Proof ─── -->
+                <div class="card" id="jiqNflxVsAmznCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(229,9,20,0.06) 0%, rgba(255,153,0,0.05) 100%);
+                            border: 1px solid rgba(255,153,0,0.30);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNflxVsAmznTitle" style="margin: 0;">🆚 Netflix vs. Amazon - competing for the budget Amazon thinks it owns</h3>
+                        <div id="jiqNflxVsAmznMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNflxVsAmznSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+
+                    <!-- Look-back window pills - 30d / 60d / 90d -->
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.85rem;">
+                        <span style="font-size: 0.62rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em;">Behavioral lookback</span>
+                        <div id="jiqNflxVsAmznWindowTabs" style="display: flex; gap: 0.35rem;"></div>
+                    </div>
+
+                    <div id="jiqNflxVsAmznTopline"
+                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                                gap: 0.5rem; margin-bottom: 0.95rem;"></div>
+
+                    <!-- Battleground: categories where Netflix audiences over-index in purchase intent
+                         vs. Amazon's baseline audience. Each row shows the over-index,
+                         addressable $ size, and best-aligned Netflix titles. -->
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
+                        🥊 Category battleground - where Netflix audiences over-index purchase intent vs. Amazon's typical audience
+                    </h4>
+                    <div id="jiqNflxVsAmznBattle" style="margin-bottom: 0.95rem;"></div>
+
+                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                                gap: 1rem; align-items: start; margin-bottom: 0.95rem;">
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                🛒 Top DTC brand sites Netflix viewers visit DIRECTLY (bypassing Amazon)
+                            </h4>
+                            <div id="jiqNflxVsAmznDtc"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                🏬 Cross-retailer comparison shopping - non-Amazon retailers
+                            </h4>
+                            <div id="jiqNflxVsAmznRetailers"></div>
+                        </div>
+                    </div>
+
+                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
+                        🛤️ Off-Amazon purchase paths - the chains that physically bypass Amazon
+                    </h4>
+                    <div id="jiqNflxVsAmznPaths" style="margin-bottom: 0.95rem;"></div>
+
+                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                                gap: 1rem; align-items: start; margin-bottom: 0.95rem;">
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                🔎 "Amazon alternative" searches - the intent signal
+                            </h4>
+                            <div id="jiqNflxVsAmznAltSearches"></div>
+                        </div>
+                        <div>
+                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
+                                💡 The wedge - what Netflix can sell against Amazon
+                            </h4>
+                            <div id="jiqNflxVsAmznWedge"></div>
+                        </div>
+                    </div>
+
+                    <div id="jiqNflxVsAmznPitch"
+                         style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
+                                background: rgba(255,153,0,0.10); border-left: 3px solid #ff9900; line-height: 1.55;"></div>
                 </div>
 
             </div>
@@ -46683,13 +46755,15 @@
                         nflx_title_interest:         _JIQ_NETFLIX_DATA.nflx_title_interest,
                         nflx_content_to_commerce:    _JIQ_NETFLIX_DATA.nflx_content_to_commerce,
                         nflx_advertiser_intent_packs:_JIQ_NETFLIX_DATA.nflx_advertiser_intent_packs,
+                        nflx_vs_amazon:              _JIQ_NETFLIX_DATA.nflx_vs_amazon,
                         facts: [
-                            { label: 'Headline',  value: 'Netflix sees the signup, the watch, and the cancel. Crosswalk sees the demand formation, the churn destination, the pre-launch demand curve, the post-watch commerce lift, and the in-market advertiser-category signals.' },
+                            { label: 'Headline',  value: 'Netflix sees the signup, the watch, and the cancel. Crosswalk sees the demand formation, the churn destination, the pre-launch demand curve, the post-watch commerce lift, the in-market advertiser-category signals, and the off-Amazon intent path.' },
                             { label: 'Pre-sub',   value: '62.7% of new Netflix subs are simultaneously in-market for at least one premium advertiser category in the 30d window before signup.' },
                             { label: 'Churn',     value: '56.8% of cancellers subscribe to a competitor within 30d - Hulu, Max, and YouTube Premium lead. Netflix sees zero signal for any of it.' },
                             { label: 'Title',     value: 'The 30d pre-launch demand curve (trailer rewatches, Reddit comments, TikTok hashtag velocity) predicts opening-week viewership weeks before press-play.' },
                             { label: 'Commerce',  value: 'Prestige drama drives 2.41x luxury-fashion lift in the 14d post-binge. Travel doc drives 3.18x destination-search lift in the 7-30d window.' },
-                            { label: 'Ad sales',  value: '15 advertiser-ready packs spanning 79.4M U.S. Netflix households, each with a brand-anchored proof signal and a CPM-uplift range.' }
+                            { label: 'Ad sales',  value: '15 advertiser-ready packs spanning 79.4M U.S. Netflix households, each with a brand-anchored proof signal and a CPM-uplift range.' },
+                            { label: 'Amazon',    value: 'Beauty, travel, luxury fashion, jewelry, and premium spirits all over-index Netflix viewer purchase intent AND have under 30% Amazon category share - the budgets Netflix can credibly take from Amazon.' }
                         ]
                     }
                 };
@@ -48226,6 +48300,7 @@
             _jiqHideCard('jiqNflxTitleCard');
             _jiqHideCard('jiqNflxCommerceCard');
             _jiqHideCard('jiqNflxIntentCard');
+            _jiqHideCard('jiqNflxVsAmznCard');
 
             var _isNetflixStory = (_storyMode === 'netflix_ad_sales');
             if (_isNetflixStory) {
@@ -48243,6 +48318,9 @@
                 }
                 if (typeof renderJourneyIqNflxIntentPacks === 'function') {
                     renderJourneyIqNflxIntentPacks(_pickClickstreamBlock('nflx_advertiser_intent_packs'));
+                }
+                if (typeof renderJourneyIqNflxVsAmazon === 'function') {
+                    renderJourneyIqNflxVsAmazon(_pickClickstreamBlock('nflx_vs_amazon'));
                 }
             }
 
@@ -56081,6 +56159,105 @@
                       cpm_uplift: '+21-34% vs. broad CPM', proof_signal: 'Console-storefront + Steam / Epic / Twitch sessions, 14d' }
                 ],
                 pitch: 'The biggest unlock for Netflix ad sales isn\'t a new ad format - it\'s the ability to walk into a Cadillac, LVMH, Booking, or Verizon meeting with a behaviorally-anchored audience pack the buyer can validate against their own first-party signal. 15 packs, 79.4M households, every pack with a measurable off-Netflix proof signal. This is the CPM-uplift conversation.'
+            },
+
+            // ── PULL 6 · NETFLIX vs. AMAZON AUDIENCE PROOF ─────────
+            nflx_vs_amazon: {
+                enabled: true,
+                title: 'Netflix vs. Amazon - competing for the budget Amazon thinks it owns',
+                subtitle: 'Amazon owns the closed-loop transaction. Netflix doesn\'t, and pretending otherwise is a losing CPM pitch. But Crosswalk shows Netflix viewers comparison-shopping across Walmart / Target / Sephora / Best Buy / Booking / Expedia, visiting DTC brand sites directly, and searching "Amazon alternative" - the off-Amazon intent path where Netflix can legitimately compete for the same budget.',
+                study_cohort_size: 79400000,
+                window_default: '60d',
+                windows: {
+                    '30d': { pct_shop_amazon: 71.4, pct_research_offamzn: 58.2, pct_dtc_visits: 41.6, pct_amzn_alt_searcher: 8.4,  median_nonamzn_retailers: 2.3, dtc_purchase_pct: 18.6 },
+                    '60d': { pct_shop_amazon: 81.7, pct_research_offamzn: 68.4, pct_dtc_visits: 54.8, pct_amzn_alt_searcher: 12.1, median_nonamzn_retailers: 3.7, dtc_purchase_pct: 27.4 },
+                    '90d': { pct_shop_amazon: 86.3, pct_research_offamzn: 74.8, pct_dtc_visits: 62.4, pct_amzn_alt_searcher: 14.7, median_nonamzn_retailers: 4.9, dtc_purchase_pct: 34.1 }
+                },
+                battlegrounds: [
+                    { category: 'Premium beauty / skincare',     over_index: 2.84, addressable_b: 18.4, share_offamzn_pct: 71.3, best_titles: ['Bridgerton','Emily in Paris','Selling Sunset'],
+                      note: 'Sephora + Ulta + DTC brand sites (Charlotte Tilbury, Rare Beauty, Tatcha) capture ~71% of the post-view beauty spend. Amazon\'s share is the smallest of any high-CPM category.' },
+                    { category: 'Travel - hotels + bookings',   over_index: 2.41, addressable_b: 47.2, share_offamzn_pct: 96.2, best_titles: ['Somebody Feed Phil','The Diplomat','Ripley','Emily in Paris'],
+                      note: 'Booking.com, Expedia, Kayak, hotel-brand DTC dominate. Amazon barely competes - a category Netflix can sell at full premium against Booking and Expedia.' },
+                    { category: 'Luxury fashion + accessories',  over_index: 2.31, addressable_b: 22.6, share_offamzn_pct: 84.7, best_titles: ['The Crown','Ripley','Inventing Anna','Emily in Paris'],
+                      note: 'Net-a-Porter, Mr Porter, Saks, Farfetch, and DTC luxury brand sites - Amazon\'s luxury sub-store underperforms vs. dedicated luxury retailers.' },
+                    { category: 'Fine jewelry',                  over_index: 2.18, addressable_b:  9.8, share_offamzn_pct: 91.4, best_titles: ['Bridgerton','The Crown','Inventing Anna'],
+                      note: 'Tiffany.com / Cartier.com / Bulgari.com / Van Cleef direct. The jewelry shopper does not buy fine jewelry on Amazon - 91% off-Amazon share is the highest of any category.' },
+                    { category: 'Travel - airlines + experiences',over_index: 1.98, addressable_b: 31.4, share_offamzn_pct: 98.1, best_titles: ['Down to Earth','Somebody Feed Phil','Formula 1: DTS'],
+                      note: 'Delta, United, JetBlue, GetYourGuide, Viator - effectively 0% on Amazon. A category Netflix should sell to airlines directly.' },
+                    { category: 'Home decor + furnishings',      over_index: 1.74, addressable_b: 14.8, share_offamzn_pct: 67.3, best_titles: ['Bridgerton','Selling Sunset','The Crown'],
+                      note: 'West Elm, CB2, Anthropologie Home, Crate & Barrel - mid-share off-Amazon. Netflix can compete on "lifestyle-influenced" decor spend.' },
+                    { category: 'Premium spirits + wine',        over_index: 1.62, addressable_b:  8.4, share_offamzn_pct: 88.6, best_titles: ['Inventing Anna','The Crown','Ripley','Beef'],
+                      note: 'Reserve Bar, Drizly, ReserveSpirits, brand DTC + local retailer pickup. Amazon doesn\'t ship most premium spirits - clean off-Amazon battleground.' },
+                    { category: 'Apparel (mid-premium DTC)',     over_index: 1.58, addressable_b: 26.7, share_offamzn_pct: 61.2, best_titles: ['Nobody Wants This','Bridgerton','Selling Sunset'],
+                      note: 'Anthropologie, Reformation, Free People, Madewell, Aritzia - DTC channel is 61% of category spend, Amazon\'s apparel share is mostly basics not lifestyle.' },
+                    { category: 'Premium tech accessories',      over_index: 1.42, addressable_b: 12.1, share_offamzn_pct: 48.7, best_titles: ['Stranger Things','3 Body Problem','Black Mirror'],
+                      note: 'Apple.com direct, Beats / Sony / Bose DTC, B&H Photo, Best Buy. Amazon is competitive here but not dominant - 48% off-Amazon share leaves room.' },
+                    { category: 'Health + wellness DTC',         over_index: 1.94, addressable_b: 11.6, share_offamzn_pct: 74.1, best_titles: ['You Are What You Eat','Live to 100','Beef'],
+                      note: 'Whoop, Peloton, Calm, Headspace, Hims, Ritual - subscription-DTC is 74% off-Amazon. The wellness shopper buys direct.' },
+                    { category: 'Toys + collectibles',           over_index: 1.51, addressable_b:  7.2, share_offamzn_pct: 38.4, best_titles: ['Stranger Things','Nimona','Leo'],
+                      note: 'Target, Walmart, Etsy, Funko direct, BoxLunch / Hot Topic. Amazon dominates here but specialty retailers + Etsy capture ~38%.' },
+                    { category: 'Premium grocery + meal kits',   over_index: 1.34, addressable_b:  9.7, share_offamzn_pct: 82.6, best_titles: ['You Are What You Eat','Somebody Feed Phil'],
+                      note: 'HelloFresh, Blue Apron, Thrive Market, Sun Basket, Misfits Market. Amazon Fresh + Whole Foods are the laggards in this DTC-dominant space.' }
+                ],
+                dtc_brands: [
+                    { brand: 'Sephora',          pct: 38.7, sector: 'beauty',     note: 'The #1 off-Amazon beauty destination for Netflix viewers - heavy Charlotte Tilbury / Rare Beauty cross-traffic.' },
+                    { brand: 'Booking.com',      pct: 32.4, sector: 'travel',     note: 'The biggest Netflix-to-DTC travel destination, lifts 2.4x in 14d post-prestige-drama / travel-doc.' },
+                    { brand: 'Tiffany.com',      pct:  7.8, sector: 'jewelry',    note: 'Indexes 3.1x panel baseline among Bridgerton + The Crown viewers.' },
+                    { brand: 'Ulta',             pct: 27.4, sector: 'beauty',     note: 'Mass-premium beauty cross-shopper, paired with Sephora ~62% of the time.' },
+                    { brand: 'Anthropologie',    pct: 18.6, sector: 'apparel/home',note: 'Cross-traffic from Bridgerton / Nobody Wants This / female-drama viewers.' },
+                    { brand: 'Reformation',      pct: 11.4, sector: 'apparel',    note: 'Indexes 2.1x baseline among female-drama / romance viewers.' },
+                    { brand: 'Apple.com',        pct: 22.7, sector: 'electronics', note: 'Direct-Apple visits skew sci-fi / tech-show viewers.' },
+                    { brand: 'Peloton.com',      pct:  8.4, sector: 'wellness',   note: 'Strong over-index among wellness-doc viewers (You Are What You Eat / Live to 100).' },
+                    { brand: 'Net-a-Porter',     pct:  4.8, sector: 'luxury',     note: 'Pure luxury-fashion DTC - tiny absolute %, but 4.3x panel baseline among prestige-drama viewers.' },
+                    { brand: 'Charlotte Tilbury',pct: 14.7, sector: 'beauty DTC', note: 'DTC brand site visits - the Bridgerton effect is real and measurable.' }
+                ],
+                non_amazon_retailers: [
+                    { retailer: 'Target',     pct: 58.4, note: 'Mass-market Amazon alternative - paired with Amazon in ~67% of comparison sessions.' },
+                    { retailer: 'Walmart',    pct: 52.7, note: 'Comparison shopping spikes around big-ticket household + grocery purchases.' },
+                    { retailer: 'Best Buy',   pct: 31.6, note: 'Consumer electronics cross-shop. Best Buy wins on "want to touch the product" categories.' },
+                    { retailer: 'Costco',     pct: 28.4, note: 'Bulk + premium-grocery cross-shop. Higher-HHI Netflix-viewer over-index.' },
+                    { retailer: 'Expedia',    pct: 24.7, note: 'Travel comparison shopping - paired with Booking ~71% of the time.' },
+                    { retailer: 'Booking.com',pct: 36.1, note: 'The biggest single non-Amazon retailer for travel-doc viewers.' },
+                    { retailer: 'Macy\'s',    pct: 19.4, note: 'Apparel + home cross-shop. Skews older Netflix demos.' },
+                    { retailer: 'Sephora',    pct: 38.7, note: 'Beauty category - Amazon is not a serious competitor here.' },
+                    { retailer: 'Wayfair',    pct: 16.8, note: 'Home decor cross-shop, paired with West Elm / Anthropologie home.' },
+                    { retailer: 'Etsy',       pct: 22.6, note: 'Gifts + customizable - paired with Amazon ~58% but wins on "uniqueness" purchase intent.' }
+                ],
+                off_amazon_paths: [
+                    { pct: 22.4, label: 'Netflix viewing → Sephora.com browse → Sephora checkout',
+                      note: 'The cleanest "Netflix to direct purchase, zero Amazon" beauty chain. 22% of beauty-buying Netflix viewers complete this sequence in 14d post-watch with no Amazon touch.' },
+                    { pct: 18.7, label: 'Netflix viewing → destination Google search → Booking.com → reservation',
+                      note: 'Travel-doc viewers go direct to Booking. Amazon never enters the path. The clearest off-Amazon category in the dataset.' },
+                    { pct: 14.6, label: 'Netflix viewing → brand DTC site → checkout',
+                      note: 'Pure DTC purchase - cast-worn brand identification, IG shop, direct brand site. Amazon excluded entirely.' },
+                    { pct: 11.8, label: 'Netflix viewing → Target.com → in-store pickup',
+                      note: 'BOPIS path - the "I want it today" alternative to Amazon Prime same-day.' },
+                    { pct:  9.2, label: 'Netflix viewing → Best Buy → in-store touch & buy',
+                      note: 'Consumer electronics path where Amazon\'s lack of physical presence loses the customer.' },
+                    { pct:  7.4, label: 'Netflix viewing → Costco / Sam\'s Club bulk purchase',
+                      note: 'Premium grocery + bulk - Amazon Fresh / Whole Foods doesn\'t intercept this path.' }
+                ],
+                amazon_alt_searches: [
+                    { query: 'amazon alternative',                pct: 14.7, intent: 'category-broad' },
+                    { query: 'best place to buy <product>',       pct: 12.4, intent: 'comparison-shopping' },
+                    { query: 'where to buy <brand> not amazon',   pct:  8.6, intent: 'amazon-rejection' },
+                    { query: 'sephora vs amazon beauty',          pct:  6.3, intent: 'amazon-rejection' },
+                    { query: 'best dtc <category>',               pct:  9.8, intent: 'DTC-discovery' },
+                    { query: '<brand> official website',          pct: 17.2, intent: 'brand-direct' },
+                    { query: 'shop small alternatives to amazon', pct:  5.4, intent: 'values-driven' },
+                    { query: 'target vs amazon same day',         pct:  7.1, intent: 'speed-comparison' }
+                ],
+                wedge: [
+                    { title: 'High-intent category, low-Amazon share',
+                      detail: 'Beauty, travel, luxury fashion, jewelry, premium spirits - all over-index Netflix viewer purchase intent AND have <30% Amazon share of category spend. Sell these to Sephora, Booking, Tiffany, LVMH, Reserve Bar.' },
+                    { title: 'The DTC story Amazon physically cannot tell',
+                      detail: 'Amazon has no incentive (or ability) to drive customers to DTC brand sites. Netflix + Crosswalk can prove the lift from content to a direct-to-brand visit - a story that pays advertiser CPM premiums in apparel, beauty, and wellness.' },
+                    { title: 'Influence the intent path BEFORE checkout',
+                      detail: 'Amazon owns the transaction. But the 30-60d intent-formation window is up for grabs. Netflix delivers the seed (the show, the cast, the lifestyle), Crosswalk proves the off-Netflix research, and the brand wins the eventual purchase whether it lands on Amazon or off.' },
+                    { title: 'The comparison-shopping audience pack',
+                      detail: '12.1% of Netflix viewers are searching "best place to buy X" or "<brand> official website" in the 60d window. This is the most valuable upper-funnel audience in CPG, and Amazon can\'t prove they\'re reaching it.' }
+                ],
+                pitch: 'Amazon owns the transaction. Netflix + Crosswalk can identify and influence the intent path BEFORE purchase. That\'s the wedge - and it\'s sellable at a premium in every category where Amazon\'s share of off-platform spend is under 50%: beauty, travel, luxury fashion, jewelry, premium spirits, wellness DTC, apparel DTC. Those categories combined are a $200B+ addressable advertiser pool Amazon cannot fully serve from inside its own walled garden.'
             }
         };
 
@@ -56637,6 +56814,183 @@
             paintDrill();
 
             if (pitchEl) pitchEl.innerHTML = '<strong>Why this matters for ad sales: </strong>' + _jiqEsc(data.pitch || '');
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // CARD 6 · 🆚 Netflix vs. Amazon Audience Proof
+        // ──────────────────────────────────────────────────────────────
+        var _jiqNflxVsAmznActiveWin = '60d';
+        function renderJourneyIqNflxVsAmazon(p) {
+            var data = (p && p.enabled !== false && p.windows) ? p : _JIQ_NETFLIX_DATA.nflx_vs_amazon;
+            if (!data) { _jiqHideCard('jiqNflxVsAmznCard'); return; }
+            _jiqShowNflxCard('jiqNflxVsAmznCard');
+            var titleEl = document.getElementById('jiqNflxVsAmznTitle');
+            var subEl   = document.getElementById('jiqNflxVsAmznSubtitle');
+            var metaEl  = document.getElementById('jiqNflxVsAmznMeta');
+            var pitchEl = document.getElementById('jiqNflxVsAmznPitch');
+            if (titleEl) titleEl.textContent = '🆚 ' + (data.title || '').replace(/^🆚\s*/, '');
+            if (subEl)   subEl.textContent = data.subtitle || '';
+            if (metaEl)  metaEl.textContent = 'Base: ' + _jiqFmt(data.study_cohort_size || 0) + ' active U.S. Netflix households · Amazon-shopper cross-mapped';
+            if (pitchEl) pitchEl.innerHTML = '<strong>The wedge: </strong>' + _jiqEsc(data.pitch || '');
+
+            _jiqNflxVsAmznActiveWin = data.window_default || _jiqNflxVsAmznActiveWin;
+
+            // The window-tab helper (_jiqNflxWindowTabs) was authored
+            // with red Netflix accents. Reuse it but override the
+            // active-color via a thin wrapper so the Amazon-orange
+            // tone reads consistently across the card.
+            function paintWindowTabs() {
+                var el = document.getElementById('jiqNflxVsAmznWindowTabs');
+                if (!el) return;
+                el.innerHTML = Object.keys(data.windows).map(function(k) {
+                    var on = (k === _jiqNflxVsAmznActiveWin);
+                    return '<button type="button" data-window="' + k + '"'
+                         + ' style="padding:0.32rem 0.7rem; border-radius:5px; font-size:0.7rem; font-weight:700;'
+                         +        ' cursor:pointer; border:1px solid ' + (on ? '#ff9900' : 'rgba(255,255,255,0.14)') + ';'
+                         +        ' background:' + (on ? 'rgba(255,153,0,0.18)' : 'rgba(255,255,255,0.03)') + ';'
+                         +        ' color:' + (on ? '#fcd34d' : 'var(--text-secondary)') + ';">'
+                         + k + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(el.querySelectorAll('button'), function(btn) {
+                    btn.addEventListener('click', function() {
+                        _jiqNflxVsAmznActiveWin = btn.getAttribute('data-window');
+                        paintWindowTabs();
+                        paint();
+                    });
+                });
+            }
+
+            function paint() {
+                var w = data.windows[_jiqNflxVsAmznActiveWin] || {};
+                var topEl = document.getElementById('jiqNflxVsAmznTopline');
+                if (topEl) {
+                    topEl.innerHTML = ''
+                        + _jiqTile('Also shop Amazon',         (w.pct_shop_amazon || 0).toFixed(1) + '%','of Netflix viewers in window', '#ff9900')
+                        + _jiqTile('Research OFF-Amazon',      (w.pct_research_offamzn || 0).toFixed(1) + '%','same viewers, off-Amazon research', '#22c55e')
+                        + _jiqTile('Visit DTC brand sites',    (w.pct_dtc_visits || 0).toFixed(1) + '%','direct-to-brand traffic', '#22c55e')
+                        + _jiqTile('"Amazon alt" searchers',   (w.pct_amzn_alt_searcher || 0).toFixed(1) + '%','seeking non-Amazon options', '#f59e0b')
+                        + _jiqTile('Median non-Amazon retailers',(w.median_nonamzn_retailers || 0).toFixed(1),'visited per viewer', '#3b82f6')
+                        + _jiqTile('Closed DTC purchase',      (w.dtc_purchase_pct || 0).toFixed(1) + '%','bought direct, bypassed Amazon', '#22c55e');
+                }
+
+                var battleEl = document.getElementById('jiqNflxVsAmznBattle');
+                if (battleEl) {
+                    var bg = (data.battlegrounds || []).slice().sort(function(a, b) {
+                        return (b.over_index || 0) - (a.over_index || 0);
+                    });
+                    var maxOI = bg.reduce(function(m, r) { return Math.max(m, r.over_index || 0); }, 0);
+                    battleEl.innerHTML = bg.map(function(r) {
+                        // Green when off-Amazon share is high (the
+                        // "Netflix can win this" categories). Amber
+                        // when Amazon is competitive. Red when Amazon
+                        // dominates.
+                        var shareColor = (r.share_offamzn_pct >= 70 ? '#22c55e'
+                                       : (r.share_offamzn_pct >= 50 ? '#f59e0b' : '#ef4444'));
+                        return '<div style="padding:9px 0; border-bottom:1px solid var(--border-color);">'
+                             +   '<div style="display:grid; grid-template-columns: minmax(0, 1.7fr) 90px 90px 90px; gap:8px; align-items:baseline;">'
+                             +     '<div>'
+                             +       '<div style="font-size:12.8px; font-weight:700; color:var(--text-primary);">' + _jiqEsc(r.category) + '</div>'
+                             +       '<div style="display:flex; flex-wrap:wrap; gap:0.25rem; margin-top:5px;">'
+                             +         (r.best_titles || []).map(function(t) {
+                                    return '<span style="padding:0.18rem 0.45rem; border-radius:4px; font-size:0.65rem; font-weight:600;'
+                                         +              ' background:rgba(229,9,20,0.14); color:#fca5a5;">' + _jiqEsc(t) + '</span>';
+                                }).join('')
+                             +       '</div>'
+                             +     '</div>'
+                             +     '<div style="text-align:right;">'
+                             +       '<div style="font-size:13px; font-weight:800; color:#ff9900;">' + (r.over_index || 0).toFixed(2) + 'x</div>'
+                             +       '<div style="font-size:9.5px; opacity:0.6; margin-top:2px;">over-index</div>'
+                             +     '</div>'
+                             +     '<div style="text-align:right;">'
+                             +       '<div style="font-size:12.5px; font-weight:700; color:var(--text-primary);">$' + (r.addressable_b || 0).toFixed(1) + 'B</div>'
+                             +       '<div style="font-size:9.5px; opacity:0.6; margin-top:2px;">addressable</div>'
+                             +     '</div>'
+                             +     '<div style="text-align:right;">'
+                             +       '<div style="font-size:12.5px; font-weight:800; color:' + shareColor + ';">' + (r.share_offamzn_pct || 0).toFixed(1) + '%</div>'
+                             +       '<div style="font-size:9.5px; opacity:0.6; margin-top:2px;">off-Amazon</div>'
+                             +     '</div>'
+                             +   '</div>'
+                             +   '<div style="margin-top:6px;">' + _jiqMiniBar(r.over_index, '#ff9900', maxOI) + '</div>'
+                             +   '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:5px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
+                             + '</div>';
+                    }).join('');
+                }
+
+                var dtcEl = document.getElementById('jiqNflxVsAmznDtc');
+                if (dtcEl) {
+                    var dtc = (data.dtc_brands || []).slice().sort(function(a, b) { return (b.pct || 0) - (a.pct || 0); });
+                    var maxD = dtc.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                    dtcEl.innerHTML = dtc.map(function(r) {
+                        return '<div style="padding:7px 0; border-bottom:1px solid var(--border-color);">'
+                             +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                             +     '<div>'
+                             +       '<span style="font-size:12.5px; font-weight:600;">' + _jiqEsc(r.brand) + '</span>'
+                             +       '<span style="font-size:9.5px; font-weight:700; padding:1.5px 6px; border-radius:3px; margin-left:6px;'
+                             +                   ' background:rgba(34,197,94,0.18); color:#86efac;">' + _jiqEsc(r.sector || '') + '</span>'
+                             +     '</div>'
+                             +     '<div style="font-size:12px; font-weight:700;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                             +   '</div>'
+                             +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.pct, '#22c55e', maxD) + '</div>'
+                             + (r.note ? '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note) + '</div>' : '')
+                             + '</div>';
+                    }).join('');
+                }
+
+                var retEl = document.getElementById('jiqNflxVsAmznRetailers');
+                if (retEl) {
+                    var rs = (data.non_amazon_retailers || []).slice().sort(function(a, b) { return (b.pct || 0) - (a.pct || 0); });
+                    var maxR = rs.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                    retEl.innerHTML = rs.map(function(r) {
+                        return '<div style="padding:7px 0; border-bottom:1px solid var(--border-color);">'
+                             +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
+                             +     '<div style="font-size:12.5px; font-weight:600;">' + _jiqEsc(r.retailer) + '</div>'
+                             +     '<div style="font-size:12px; font-weight:700;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                             +   '</div>'
+                             +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.pct, '#3b82f6', maxR) + '</div>'
+                             + (r.note ? '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note) + '</div>' : '')
+                             + '</div>';
+                    }).join('');
+                }
+
+                var pathEl = document.getElementById('jiqNflxVsAmznPaths');
+                if (pathEl) {
+                    var paths = data.off_amazon_paths || [];
+                    pathEl.innerHTML = paths.map(function(r) {
+                        return '<div style="display:grid; grid-template-columns: 70px minmax(0, 1.6fr) minmax(0, 1.6fr); gap:0.85rem; align-items:start;'
+                             +              ' padding:0.7rem 0.85rem; margin-bottom:0.45rem; border-radius:6px;'
+                             +              ' background: rgba(255,255,255,0.025); border-left: 3px solid #22c55e;">'
+                             +   '<div style="text-align:center;">'
+                             +     '<div style="font-size:1.05rem; font-weight:800; color:#22c55e; line-height:1;">' + (r.pct || 0).toFixed(1) + '%</div>'
+                             +     '<div style="font-size:0.6rem; opacity:0.6; margin-top:0.25rem;">of buyers</div>'
+                             +   '</div>'
+                             +   '<div style="font-size:0.82rem; font-weight:600; color:var(--text-primary); line-height:1.45; font-family:monospace;">' + _jiqEsc(r.label) + '</div>'
+                             +   '<div style="font-size:0.74rem; color:var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(r.note || '') + '</div>'
+                             + '</div>';
+                    }).join('');
+                }
+
+                var altEl = document.getElementById('jiqNflxVsAmznAltSearches');
+                if (altEl) {
+                    var alts = data.amazon_alt_searches || [];
+                    var maxA = alts.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
+                    altEl.innerHTML = alts.map(function(r) { return _jiqNflxSearchRow(r.query, r.pct, r.intent, maxA, '#ff9900'); }).join('');
+                }
+
+                var wedgeEl = document.getElementById('jiqNflxVsAmznWedge');
+                if (wedgeEl) {
+                    var ws = data.wedge || [];
+                    wedgeEl.innerHTML = ws.map(function(r) {
+                        return '<div style="padding:0.55rem 0.7rem; margin-bottom:0.4rem; border-radius:5px;'
+                             +              ' background:rgba(255,255,255,0.025); border-left:3px solid #ff9900;">'
+                             +   '<div style="font-size:0.78rem; font-weight:700; color:#fcd34d; margin-bottom:0.25rem;">' + _jiqEsc(r.title) + '</div>'
+                             +   '<div style="font-size:0.72rem; color:var(--text-secondary); line-height:1.5;">' + _jiqEsc(r.detail) + '</div>'
+                             + '</div>';
+                    }).join('');
+                }
+            }
+
+            paintWindowTabs();
+            paint();
         }
 
         // ══════════════════════════════════════════════════════════════
