@@ -16754,7 +16754,7 @@
                             {# Display order 2026-06-18 (flat - categorization
                                groups removed per user request):
                                  Profile IQ, Subscriber IQ, Digital Journey IQ,
-                                 Ranker, Blue IQ, Fin IQ, LLMO IQ,
+                                 Culture Ranker, Content Ranker, Blue IQ, Fin IQ, LLMO IQ,
                                  SF Conversion, Intent IQ, ROAS IQ,
                                  Brand Partnership, Flywheel Conversion,
                                  Analysis IQ, Share of Time, Workspace,
@@ -16774,7 +16774,8 @@
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
                             <option value="journeyIQ" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
-                            <option value="rankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</option>
+                            <option value="cultureRankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Culture Ranker</option>
+                            <option value="contentRankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>🎬 Content Ranker</option>
                             <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
@@ -33783,6 +33784,8 @@
                 subscriberIQ: showSubscriberIQ,
                 sfConversion: showSFConversion,
                 llmoIQ: showLLMOIQ,
+                cultureRankerIQ: function() { if (typeof showCultureRankerIQ === 'function') showCultureRankerIQ(); },
+                contentRankerIQ: function() { if (typeof showContentRankerIQ === 'function') showContentRankerIQ(); },
                 rankerIQ: showRankerIQ,
                 ticketSalesIQ: showTicketSalesIQ,
                 ticketSalesTracker: showTicketSalesTracker,
@@ -33890,7 +33893,8 @@
                         ['profileIQ', !!d.has_profile_iq_access],
                         ['subscriberIQ', !!d.has_subscriber_iq_access],
                         ['llmoIQ', !!d.has_llmo_iq_access],
-                        ['rankerIQ', !!d.has_rankers_iq_access],
+                        ['cultureRankerIQ', !!d.has_rankers_iq_access],
+                        ['contentRankerIQ', !!d.has_rankers_iq_access],
                         ['ticketSalesIQ', !!d.has_ticket_sales_iq_access],
                         ['ticketSalesTracker', !!d.has_ticket_sales_tracker_access],
                         ['hedgeFundIQ', !!d.has_hedge_fund_iq_access],
@@ -40451,9 +40455,12 @@
 
         window.showRankerIQ = function() {
             const dd = document.getElementById('viewNavDropdown');
-            const opt = dd?.querySelector('option[value="rankerIQ"]');
-            if (opt?.disabled) return;
-            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('rankerIQ');
+            // Support being called directly or from Culture/Content wrappers
+            if (!window._rankerTabFilter) {
+                const opt = dd?.querySelector('option[value="cultureRankerIQ"]');
+                if (opt?.disabled) return;
+                if (typeof setViewNavDropdown === 'function') setViewNavDropdown('cultureRankerIQ');
+            }
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
@@ -40492,7 +40499,54 @@
             // /api/iq-rankers/leaderboard.
             if (typeof showRankerIQPlatform === 'function') showRankerIQPlatform('talent');
         }
-        
+
+        // Culture Ranker: Talent, Brands, Sport
+        window._rankerTabFilter = null;
+        window.showCultureRankerIQ = function() {
+            window._rankerTabFilter = 'culture';
+            var dd = document.getElementById('viewNavDropdown');
+            var opt = dd && dd.querySelector('option[value="cultureRankerIQ"]');
+            if (opt && opt.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('cultureRankerIQ');
+            showRankerIQ();
+            var title = document.querySelector('#rankerIQView > h2');
+            if (title) title.textContent = '📊 Culture Ranker';
+            _applyRankerTabFilter();
+            if (typeof showRankerIQPlatform === 'function') showRankerIQPlatform('talent');
+        };
+
+        // Content Ranker: Content, Platforms, Netflix, Trends, Other
+        window.showContentRankerIQ = function() {
+            window._rankerTabFilter = 'content';
+            var dd = document.getElementById('viewNavDropdown');
+            var opt = dd && dd.querySelector('option[value="contentRankerIQ"]');
+            if (opt && opt.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('contentRankerIQ');
+            showRankerIQ();
+            var title = document.querySelector('#rankerIQView > h2');
+            if (title) title.textContent = '🎬 Content Ranker';
+            _applyRankerTabFilter();
+            if (typeof showRankerIQPlatform === 'function') showRankerIQPlatform('content');
+        };
+
+        function _applyRankerTabFilter() {
+            var cultureSlugs = ['talent', 'brands', 'sport'];
+            var contentSlugs = ['content', 'platforms', 'netflixch', 'trends', 'other'];
+            var allBtns = document.querySelectorAll('.rankers-container .rankers-platform-tabs .tab-btn');
+            allBtns.forEach(function(btn) {
+                var onclick = btn.getAttribute('onclick') || '';
+                var match = onclick.match(/showRankerIQPlatform\('([^']+)'\)/);
+                var slug = match ? match[1] : '';
+                if (window._rankerTabFilter === 'culture') {
+                    btn.style.display = cultureSlugs.indexOf(slug) >= 0 ? '' : 'none';
+                } else if (window._rankerTabFilter === 'content') {
+                    btn.style.display = contentSlugs.indexOf(slug) >= 0 ? '' : 'none';
+                } else {
+                    btn.style.display = '';
+                }
+            });
+        }
+
         window.showTicketSalesIQ = function() {
             const dd = document.getElementById('viewNavDropdown');
             const opt = dd?.querySelector('option[value="ticketSalesIQ"]');
