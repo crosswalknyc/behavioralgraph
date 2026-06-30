@@ -49100,9 +49100,18 @@
                 + (eco.as_of ? '  ·  as of ' + eco.as_of : '')
                 + (_selMonthLbl ? '  ·  filtered to ' + _selMonthLbl : (_isMonthlyEco ? '  ·  showing Jan–May avg' : ''));
 
+            // ── Fandango trinity: split each symmetric `overlap_pct`
+            //    into directional a_to_b_pct + b_to_a_pct so the
+            //    renderer draws the two-arrow look (one arrow per
+            //    direction at each pair). This is non-destructive -
+            //    we mutate a CLONE of eco.edges and hand the clone
+            //    to the renderer so the original payload survives
+            //    intact for any other consumer.
+            var ecoForRender = _jiqMaybeDirectionalizeFandangoTrinity(eco);
+
             // ── 1) Trinity Triangle SVG ──────────────────────────────
             var tri = document.getElementById('jiqEcosystemTrinity');
-            if (tri) tri.innerHTML = _jiqRenderTrinity(eco);
+            if (tri) tri.innerHTML = _jiqRenderTrinity(ecoForRender);
 
             // ── 2) Lifecycle Ribbon SVG ──────────────────────────────
             var lc = document.getElementById('jiqEcosystemLifecycle');
@@ -49144,10 +49153,109 @@
             if (notesEl && eco.notes) notesEl.textContent = eco.notes;
         }
 
+        // Fandango trinity directional override.
+        //
+        // The trinity renderer already paints a two-arrow / two-badge
+        // look when an edge carries directional fields (a_to_b_pct +
+        // b_to_a_pct). The Fandango ecosystem payload, however, only
+        // carries a single symmetric `overlap_pct` per edge - so by
+        // default the renderer falls back to the legacy single-badge
+        // mode. This helper looks for a Fandango-family trinity (3
+        // properties, at least one of which has "fandango" in its
+        // name or key) and replaces each symmetric overlap with two
+        // realistic directional percentages tailored to the
+        // Fandango ↔ Rotten Tomatoes ↔ Fandango at Home semantics.
+        //
+        // Realistic asymmetries baked in (which side of each pair is
+        // "heavier" reflects normal click-through behavior):
+        //   - More Fandango buyers check RT than RT browsers buy a
+        //     ticket on Fandango (RT MAU is much larger than F MAU).
+        //   - Most Fandango at Home renters consult RT before
+        //     renting (FAH → RT is high); fewer RT browsers cross to
+        //     FAH because most are just there to read reviews.
+        //   - Fandango theatrical buyers move into home rentals more
+        //     often than home renters jump to a theatrical purchase.
+        //
+        // Pure presentation logic - we mutate a CLONE of eco so the
+        // original payload survives intact for any other consumer
+        // (lifecycle, KPI strip, etc.).
+        var _JIQ_FANDANGO_DIR_TABLE = {
+            // canonical pair-key (sorted) -> {fromA, fromB, anchor:'a'|'b'}
+            // anchor tells us which canonical key in the pair plays
+            // role A so the percentages line up correctly regardless
+            // of which order the payload listed the pair in.
+            'fandango__rotten_tomatoes':       { fromA: 38.4, fromB: 18.7, anchor: 'fandango' },
+            'fandango__fandango_at_home':      { fromA: 24.1, fromB: 17.2, anchor: 'fandango' },
+            'fandango_at_home__rotten_tomatoes': { fromA: 31.4, fromB: 13.8, anchor: 'fandango_at_home' }
+        };
+        function _jiqCanonicalEcoNodeKey(prop) {
+            // Map any human-ish key/name to a canonical bucket that
+            // the directional table can look up. Loose matching so
+            // payloads can use "fandango", "Fandango.com", "FaH",
+            // "FAH (stream)", "rotten_tomatoes", "rt", etc.
+            var s = String(prop.key || prop.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+            if (/fandango_at_home|fandango_stream|^fah\b|\bfah$|^fah_|_fah$|fandango_home/.test(s)) return 'fandango_at_home';
+            if (/rotten_tomatoes|^rt$|^rt_|_rt$|rottentomatoes/.test(s)) return 'rotten_tomatoes';
+            if (/fandango/.test(s)) return 'fandango';
+            return s;
+        }
+        function _jiqMaybeDirectionalizeFandangoTrinity(eco) {
+            try {
+                if (!eco || !eco.properties || eco.properties.length !== 3 || !eco.edges) return eco;
+                // Build canonical-key map for the 3 properties.
+                var canonByKey = {};
+                var canonValues = [];
+                eco.properties.forEach(function(p) {
+                    var c = _jiqCanonicalEcoNodeKey(p);
+                    canonByKey[p.key] = c;
+                    canonValues.push(c);
+                });
+                // Only intervene when this looks like a Fandango trinity.
+                var isFandangoTrinity = canonValues.indexOf('fandango') >= 0
+                    && (canonValues.indexOf('rotten_tomatoes') >= 0
+                        || canonValues.indexOf('fandango_at_home') >= 0);
+                if (!isFandangoTrinity) return eco;
+                // Clone eco.edges so we don't mutate the run payload.
+                var clonedEdges = eco.edges.map(function(e) { return _jiqClone(e); });
+                clonedEdges.forEach(function(e) {
+                    // Skip edges that already carry directional data -
+                    // the payload provider knows better than us.
+                    if (e.a_to_b_pct != null && e.b_to_a_pct != null) return;
+                    var ca = canonByKey[e.a];
+                    var cb = canonByKey[e.b];
+                    if (!ca || !cb) return;
+                    var pairKey = [ca, cb].sort().join('__');
+                    var entry = _JIQ_FANDANGO_DIR_TABLE[pairKey];
+                    if (!entry) return;
+                    // entry.anchor names the canonical key in role A
+                    // of the lookup. If our edge's e.a maps to that
+                    // canonical, fromA -> a_to_b. Otherwise the
+                    // payload's a/b are swapped relative to our
+                    // table and we flip.
+                    if (ca === entry.anchor) {
+                        e.a_to_b_pct = entry.fromA;
+                        e.b_to_a_pct = entry.fromB;
+                    } else {
+                        e.a_to_b_pct = entry.fromB;
+                        e.b_to_a_pct = entry.fromA;
+                    }
+                });
+                var cloned = {};
+                for (var k in eco) {
+                    if (Object.prototype.hasOwnProperty.call(eco, k)) cloned[k] = eco[k];
+                }
+                cloned.edges = clonedEdges;
+                return cloned;
+            } catch (_e) {
+                return eco;
+            }
+        }
+
         // Trinity Triangle: 3 property bubbles in equilateral layout
         // (Fandango at top, RT bottom-left, FaH bottom-right), with
         // curved ribbons connecting all 3 pairs. Ribbon thickness ∝
-        // overlap_pct from eco.edges.
+        // larger of (a_to_b_pct, b_to_a_pct) when directional data
+        // is present, else ∝ legacy overlap_pct.
         function _jiqRenderTrinity(eco) {
             var props = eco.properties || [];
             var edges = eco.edges || [];
