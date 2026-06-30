@@ -47764,9 +47764,6 @@
                               + '<td style="' + tdStyle + ' font-weight: 700;">' + _jiqEsc(bw.label || 'All months') + '</td>'
                               + '<td style="' + tdStyle + ' color: var(--text-secondary);">5-month aggregate</td>'
                               + '<td style="' + tdStyle + ' text-align: right; color: var(--text-secondary);">1.00×</td>'
-                              + '<td style="' + tdStyle + ' color: var(--text-secondary); font-style: italic; line-height: 1.45;">'
-                              +   'Pick a month pill to slice every card on the page to that calendar month - KPIs, funnel split, ecosystem MAUs, path-to-purchase volumes, and marketing reach all shift to the month\'s seasonality.'
-                              + '</td>'
                               + '</tr>';
                     mc.months.forEach(function(m) {
                         var on = (sel === m.key);
@@ -47782,7 +47779,6 @@
                                   +   ' <span style="font-size: 0.7rem; color: ' + deltaCol + '; font-weight: 600;">(' + deltaTxt + ')</span>'
                                   + '</td>'
                                   + '<td style="' + tdStyle + ' text-align: right; color: ' + deltaCol + '; font-weight: 700;">' + deltaTxt + '</td>'
-                                  + '<td style="' + tdStyle + ' color: var(--text-secondary); line-height: 1.45;">' + _jiqEsc(m.headline_note || '') + '</td>'
                                   + '</tr>';
                     });
                     tbl.innerHTML =
@@ -47798,7 +47794,6 @@
                       +       '<th style="' + thStyle + '">Month</th>'
                       +       '<th style="' + thStyle + '">Traffic index</th>'
                       +       '<th style="' + thStyle + ' text-align: right;">vs 5-mo avg</th>'
-                      +       '<th style="' + thStyle + '">Seasonality note</th>'
                       +     '</tr></thead>'
                       +     '<tbody>' + rowsHtml + '</tbody>'
                       +   '</table>'
