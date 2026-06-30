@@ -47159,17 +47159,6 @@
                     var archived = (data && data.archived_runs) || [];
 
                     var opts = ['<option value="">- pick a past run -</option>'];
-                    // Synthetic / always-available demo runs that hydrate
-                    // client-side without a backend round-trip. Picking
-                    // one of these short-circuits onJourneyIqRunPicked
-                    // (see _jiqMaybeHydrateDemoRun) and renders the
-                    // hand-authored payload baked into the front-end.
-                    opts.push('<optgroup label="🎬 Netflix">');
-                    opts.push('<option value="__demo_netflix_ad_sales__">🎬 Netflix Ad-Sales Demand Map &amp; Off-Platform Intel</option>');
-                    opts.push('</optgroup>');
-                    opts.push('<optgroup label="🎬 Theatrical Film">');
-                    opts.push('<option value="__demo_obsession_caa__">🎬 Obsession</option>');
-                    opts.push('</optgroup>');
 
                     // Run picker hide-list. Project / target names listed
                     // here are filtered out of the dropdown so stale demo
@@ -47183,15 +47172,87 @@
                         var name = ((r.project_name || r.target || '') + '').trim().toLowerCase();
                         return hiddenRuns.indexOf(name) !== -1;
                     }
-                    var visibleRuns    = runs.filter(function(r)     { return !_isHiddenRun(r); });
+                    var visibleRuns     = runs.filter(function(r)     { return !_isHiddenRun(r); });
                     var visibleArchived = archived.filter(function(r) { return !_isHiddenRun(r); });
 
+                    // ── Category buckets ─────────────────────────────
+                    // Each S3 run is placed into the first category
+                    // whose keyword list matches its project_name /
+                    // target (case-insensitive, underscores → spaces).
+                    // Demo cards baked into the front-end are added
+                    // alongside the matching S3 runs inside the same
+                    // optgroup so the whole picker reads as one
+                    // organized list. Anything that doesn't match a
+                    // known category falls into the trailing "Other"
+                    // group so unfamiliar runs are still findable.
+                    var CATEGORIES = [
+                        { id: 'platforms', label: '🏢 Platforms', keywords: ['fandango', 'paramount', 'moviesphere', 'lionsgate', 'netflix'] },
+                        { id: 'tv',        label: '📺 TV Shows',  keywords: ['pop culture jeopardy', 'pop_culture_jeopardy', 'landman', 'mark rober', 'mark_rober'] },
+                        { id: 'brands',    label: '🛍️ Brands',    keywords: ['abercrombie'] },
+                        { id: 'talent',    label: '🎭 Talent',    keywords: ['obsession'] }
+                    ];
+                    function _runMatchesCategory(r, cat) {
+                        var name = ((r.project_name || r.target || '') + '').toLowerCase().replace(/[_\-]+/g, ' ');
+                        for (var i = 0; i < cat.keywords.length; i++) {
+                            if (name.indexOf(cat.keywords[i].toLowerCase().replace(/[_\-]+/g, ' ')) !== -1) return true;
+                        }
+                        return false;
+                    }
+                    var placedKeys = {};
+                    var byCategory = {};
+                    CATEGORIES.forEach(function(cat) { byCategory[cat.id] = []; });
                     visibleRuns.forEach(function(r) {
+                        for (var i = 0; i < CATEGORIES.length; i++) {
+                            if (_runMatchesCategory(r, CATEGORIES[i])) {
+                                byCategory[CATEGORIES[i].id].push(r);
+                                placedKeys[r.key] = true;
+                                return;
+                            }
+                        }
+                    });
+                    var otherRuns = visibleRuns.filter(function(r) { return !placedKeys[r.key]; });
+
+                    // Synthetic / always-available demo runs that hydrate
+                    // client-side without a backend round-trip. Picking
+                    // one of these short-circuits onJourneyIqRunPicked
+                    // (see _jiqMaybeHydrateDemoRun) and renders the
+                    // hand-authored payload baked into the front-end.
+                    // Bucketed into the matching category so they sit
+                    // next to their thematic siblings.
+                    var DEMO_CARDS = {
+                        platforms: [
+                            { value: '__demo_netflix_ad_sales__', label: '🎬 Netflix Ad-Sales Demand Map &amp; Off-Platform Intel' }
+                        ],
+                        talent: [
+                            { value: '__demo_obsession_caa__',    label: '🎬 Obsession' }
+                        ]
+                    };
+
+                    function _runOption(r) {
                         var label = (r.project_name || r.target || 'Journey')
                                   + ' - ' + (r.start_date || '') + '→' + (r.end_date || '');
                         var safe = (r.key || '').replace(/"/g, '&quot;');
-                        opts.push('<option value="' + safe + '">' + label + '</option>');
+                        return '<option value="' + safe + '">' + label + '</option>';
+                    }
+
+                    CATEGORIES.forEach(function(cat) {
+                        var demos = DEMO_CARDS[cat.id] || [];
+                        var s3    = byCategory[cat.id] || [];
+                        if (!demos.length && !s3.length) return;
+                        opts.push('<optgroup label="' + cat.label + '">');
+                        demos.forEach(function(d) {
+                            opts.push('<option value="' + d.value + '">' + d.label + '</option>');
+                        });
+                        s3.forEach(function(r) { opts.push(_runOption(r)); });
+                        opts.push('</optgroup>');
                     });
+
+                    if (otherRuns.length) {
+                        opts.push('<optgroup label="📦 Other">');
+                        otherRuns.forEach(function(r) { opts.push(_runOption(r)); });
+                        opts.push('</optgroup>');
+                    }
+
                     if (visibleArchived.length) {
                         opts.push('<optgroup label="🗄️ Archived (admin only)">');
                         visibleArchived.forEach(function(r) {
