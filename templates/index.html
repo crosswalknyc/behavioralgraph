@@ -102305,14 +102305,14 @@
 
             // Radius scaling — sqrt for area-proportional, clamped
             const maxPct = bubbles.length ? bubbles[0].pct : 1;
-            const minR = 6, maxR = 32;
+            const minR = 10, maxR = 50;
             function getRadius(pct) {
                 return minR + (maxR - minR) * Math.sqrt(pct / maxPct);
             }
 
             // Build SVG (Wikimedia Albers viewBox 959×593)
             const W = 959, H = 593;
-            let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;max-height:520px;">';
+            let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">';
 
             // Fix SVG paths: after uppercase M x,y, implicit coords must be relative lineto
             function _fixPath(d) {
@@ -102334,15 +102334,15 @@
                 const opacity = 0.25 + 0.45 * (b.pct / maxPct);
                 svg += '<circle cx="' + b.x.toFixed(1) + '" cy="' + b.y.toFixed(1) + '" r="' + r.toFixed(1) + '" '
                     +  'fill="hsla(' + accentH + ',80%,55%,' + opacity.toFixed(2) + ')" '
-                    +  'stroke="hsl(' + accentH + ',80%,65%)" stroke-width="1.2" '
+                    +  'stroke="hsl(' + accentH + ',80%,65%)" stroke-width="1.8" '
                     +  'style="cursor:default;">'
                     +  '<title>' + (b.name + (b.state ? ', ' + b.state : '')) + ': ' + b.pct.toFixed(2) + '%</title>'
                     +  '</circle>';
             });
 
             // Draw labels — full DMA name + pct, uniform font size
-            var labelSize = 7;
-            var pctLabelSize = 5.5;
+            var labelSize = 11;
+            var pctLabelSize = 8.5;
             bubbles.forEach(b => {
                 const r = getRadius(b.pct);
                 if (r >= 10) {
