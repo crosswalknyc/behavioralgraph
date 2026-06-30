@@ -5424,7 +5424,8 @@
         
         .interest-item {
             display: grid;
-            grid-template-columns: 40px minmax(120px, 1fr) repeat(3, minmax(80px, auto));
+            grid-template-columns: 40px minmax(150px, 1fr) 105px 105px 90px;
+            gap: 0 0.75rem;
             padding: 0.5rem 0;
             border-bottom: 1px solid var(--border-color);
             font-size: 0.75rem;
@@ -5439,7 +5440,8 @@
         
         .interest-header-row {
             display: grid;
-            grid-template-columns: 40px minmax(120px, 1fr) repeat(3, minmax(80px, auto));
+            grid-template-columns: 40px minmax(150px, 1fr) 105px 105px 90px;
+            gap: 0 0.75rem;
             padding: 0.4rem 0;
             border-bottom: 2px solid var(--border-color);
             font-size: 0.7rem;
@@ -82834,7 +82836,7 @@
             ));
             headers.forEach(h => {
                 if (h._cmpOrigLabel == null) h._cmpOrigLabel = h.textContent;
-                h.textContent = h._cmpOrigLabel + headerSuffix;
+                h.innerHTML = h._cmpOrigLabel + '<br><span style="font-size:0.6rem;opacity:0.8;">' + headerSuffix.replace(/</g,'&lt;') + '</span>';
             });
 
             try {
@@ -84495,11 +84497,11 @@
         // many-cohort selections from blowing out the row width.
         function _cmpCohortColWidth(label) {
             const lbl = String(label || '').trim();
-            if (!lbl) return '80px';
+            if (!lbl) return '105px';
             let maxWord = 0;
             lbl.split(/\s+/).forEach(w => { if (w.length > maxWord) maxWord = w.length; });
-            if (maxWord <= 8) return '80px';
-            const w = Math.min(120, maxWord * 8 + 16);
+            if (maxWord <= 8) return '105px';
+            const w = Math.min(160, maxWord * 10 + 20);
             return w + 'px';
         }
 
@@ -84947,9 +84949,9 @@
                     // right padding so values never visually merge
                     // with the next column (the 85.22%65.27% problem).
                     const cmpCols = series.map(s => _cmpCohortColWidth(s.label || '')).join(' ');
-                    const profileCol = hideCF ? '' : '70px ';
-                    const gpCol = hideGP ? '' : ' 70px';
-                    const intGridTpl = '30px minmax(120px,1fr) ' + profileCol + cmpCols + gpCol + ' 60px';
+                    const profileCol = hideCF ? '' : '105px ';
+                    const gpCol = hideGP ? '' : ' 105px';
+                    const intGridTpl = '40px minmax(150px,1fr) ' + profileCol + cmpCols + gpCol + ' 90px';
 
                     if (intHeader) {
                         intHeader.style.gridTemplateColumns = intGridTpl;
