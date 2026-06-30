@@ -82043,8 +82043,7 @@
             // like a search-heavy profile?" - answer: detected
             // archetype = INFLUENCER.
             container.setAttribute('data-archetype', share.archetype || '');
-            container.title = 'Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%). Detected archetype: '
-                + (share.archetype || 'GENERIC').replace(/_/g, ' ');
+            container.removeAttribute('title');
             container.style.display = 'flex';
             if (tucCard) tucCard.style.display = '';
         }
