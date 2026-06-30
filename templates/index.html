@@ -2472,7 +2472,7 @@
         #audienceShareBoxes {
             display: flex;
             flex-direction: row;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             gap: 0.5rem;
             align-items: center;
         }
@@ -20151,55 +20151,61 @@
                                 </div>
                             </div>
                             
-                            <!-- Total Universe Composition (Insights tab only) -->
-                            <div class="insight-card-v2" id="tucCard" style="display: none; max-width: 50%;">
-                                <div class="insight-card-header">
-                                    <h3>
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                        <span>🌎 Total Universe Composition</span>
-                                    </h3>
-                                </div>
-                                <div id="audienceShareBoxes" style="display: none; gap: 0.5rem; flex-wrap: wrap;" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
-                                    <div class="asb-box" data-channel="social" title="Engaged with the subject on a social platform (YouTube, IG, TikTok, FB, Twitter)."><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">-</span></div>
-                                    <div class="asb-box" data-channel="search" title="Discovered or looked up the subject via Google / AI search."><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">-</span></div>
-                                    <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent and influencer profiles (no brand-owned channel)."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">-</span></div>
-                                    <div class="asb-box" data-channel="retail" title="Retail / eCommerce engagement share"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">-</span></div>
-                                    <div class="asb-box" data-channel="media"  title="Engaged with the subject's content via traditional / third-party media (TV, streaming, films, music, news, podcasts)."><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">-</span></div>
-                                </div>
-                            </div>
+                            <!-- Two-column layout: left (TUC + Audience Snapshot) / right (Behavioral Profile) -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start;">
+                                <!-- Left column -->
+                                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                                    <!-- Total Universe Composition (Insights tab only) -->
+                                    <div class="insight-card-v2" id="tucCard" style="display: none; padding: 0.75rem 1.25rem;">
+                                        <div class="insight-card-header" style="margin-bottom: 0.6rem;">
+                                            <h3 style="margin: 0;">
+                                                <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                                <span>🌎 Total Universe Composition</span>
+                                            </h3>
+                                        </div>
+                                        <div id="audienceShareBoxes" style="display: none; flex-wrap: nowrap; gap: 0.5rem;" title="Share of audience digital engagement across Social, Search, Owned, Retail, and Media touchpoints (sums to 100%)">
+                                            <div class="asb-box" data-channel="social" title="Engaged with the subject on a social platform (YouTube, IG, TikTok, FB, Twitter)."><span class="asb-label">Social</span><span class="asb-pct" id="asbSocial">-</span></div>
+                                            <div class="asb-box" data-channel="search" title="Discovered or looked up the subject via Google / AI search."><span class="asb-label">Search</span><span class="asb-pct" id="asbSearch">-</span></div>
+                                            <div class="asb-box" data-channel="owned"  title="Brand-owned (.com / app) engagement share. N/A for talent and influencer profiles (no brand-owned channel)."><span class="asb-label">Owned</span><span class="asb-pct" id="asbOwned">-</span></div>
+                                            <div class="asb-box" data-channel="retail" title="Retail / eCommerce engagement share"><span class="asb-label">Retail</span><span class="asb-pct" id="asbRetail">-</span></div>
+                                            <div class="asb-box" data-channel="media"  title="Engaged with the subject's content via traditional / third-party media (TV, streaming, films, music, news, podcasts)."><span class="asb-label">Media</span><span class="asb-pct" id="asbMedia">-</span></div>
+                                        </div>
+                                    </div>
 
-                            <!-- Audience Snapshot -->
-                            <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Audience Snapshot">
-                                <div class="insight-card-header">
-                                    <h3 class="has-tooltip" data-tooltip="Audience Snapshot: Quick demographic overview showing the dominant characteristic in each category. The percentage shows what portion of your audience falls into each segment.">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                        <span>👤 Audience Snapshot</span>
-                                    </h3>
-                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                        <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('audience-snapshot')" data-tooltip="Add to Deck">➕</button>
+                                    <!-- Audience Snapshot -->
+                                    <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Audience Snapshot">
+                                        <div class="insight-card-header">
+                                            <h3 class="has-tooltip" data-tooltip="Audience Snapshot: Quick demographic overview showing the dominant characteristic in each category. The percentage shows what portion of your audience falls into each segment.">
+                                                <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                                <span>👤 Audience Snapshot</span>
+                                            </h3>
+                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('audience-snapshot')" data-tooltip="Add to Deck">➕</button>
+                                            </div>
+                                        </div>
+                                        <div id="audienceSnapshot" class="audience-snapshot">
+                                            <div class="snapshot-loading">Loading audience profile...</div>
+                                        </div>
+                                        <!-- Audience vs Gen Pop Takeaways -->
+                                        <div id="audienceTakeaways" class="audience-takeaways" style="display: none;">
+                                        </div>
                                     </div>
                                 </div>
-                                <div id="audienceSnapshot" class="audience-snapshot">
-                                    <div class="snapshot-loading">Loading audience profile...</div>
-                                </div>
-                                <!-- Audience vs Gen Pop Takeaways -->
-                                <div id="audienceTakeaways" class="audience-takeaways" style="display: none;">
-                                </div>
-                            </div>
-                            
-                            <!-- Behavioral Profile Card -->
-                            <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Behavioral Profile">
-                                <div class="insight-card-header">
-                                    <h3 class="has-tooltip" data-tooltip="Behavioral Profile: AI-generated analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data.">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                        <span>🧠 Behavioral Profile</span>
-                                    </h3>
-                                    <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('behavioral-profile')" data-tooltip="Add to Deck">➕</button>
-                                </div>
-                                <div id="behavioralProfileCard" style="padding: 0.5rem 0;">
-                                    <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">
-                                        <span class="loading-spinner" style="width: 14px; height: 14px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></span>
-                                        Analyzing behavioral patterns...
+
+                                <!-- Right column: Behavioral Profile -->
+                                <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Behavioral Profile">
+                                    <div class="insight-card-header">
+                                        <h3 class="has-tooltip" data-tooltip="Behavioral Profile: AI-generated analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data.">
+                                            <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                            <span>🧠 Behavioral Profile</span>
+                                        </h3>
+                                        <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('behavioral-profile')" data-tooltip="Add to Deck">➕</button>
+                                    </div>
+                                    <div id="behavioralProfileCard" style="padding: 0.5rem 0;">
+                                        <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">
+                                            <span class="loading-spinner" style="width: 14px; height: 14px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                                            Analyzing behavioral patterns...
+                                        </div>
                                     </div>
                                 </div>
                             </div>
