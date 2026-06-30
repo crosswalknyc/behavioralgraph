@@ -115,8 +115,55 @@ DASHBOARD_CAT     = "SERIES - APPLE TV+"
 # IP / star power) vs niche genre.
 # ──────────────────────────────────────────────────────────────────────
 
+# ──────────────────────────────────────────────────────────────────────
+# CONVERSION OVERRIDES (% of viewers who became new+reactivated subs in
+# the 30-day window) and REACTIVATION_PCT (fraction of those signups that
+# are returning dormant subs, i.e. 1 - new_share).
+#
+# These replace the pipeline's genre-keyed lookup-table defaults — the
+# defect family that produced identical D values across same-genre shows
+# in the previous pull run. Each per-title value is sourced from the
+# show-specific research documented in star_city_per_title_research.md:
+#   - Antenna Subscriber Views (Severance, Stick, etc.)
+#   - Kantar EoD (Slow Horses + Ted Lasso UK Q4'23)
+#   - Parrot Analytics demand multiples (Foundation, Silo, etc.)
+#   - Nielsen Top 10 entries (Your Friends & Neighbors, Pluribus)
+#   - Apple PR + corroborating third-party data (with Apple PR
+#     down-weighted where third-party signal contradicts — e.g.
+#     Presumed Innocent's Antenna Q2'24 share decline)
+#   - Renewal velocity + cancellation outcomes (Constellation, Sugar)
+#   - Era-adjusted new_share (free-trial-era 2019-2021: 0.80-0.95;
+#     mature-platform 2024-2026: 0.55-0.70 — reflecting deepening
+#     dormant-sub pool + Amazon Channels new/reactivation skew)
+# ──────────────────────────────────────────────────────────────────────
+
 CONFIGS: list[dict] = [
     # ──────────────────── 2026 NEW RELEASES ────────────────────
+    {
+        "project_name":   "Star_City_-_Season_1",
+        "title":          "Star City Season 1",
+        "platform":       "apple tv+",
+        "start":          "2026-05-29",
+        "genre":          ALT_HISTORY,
+        "cadence":        "Weekly",
+        "is_new":         True,
+        "reach_us":       1_600_000,  # FAM spinoff, #4 launch wk per FlixPatrol
+        "conv_pct":       3.5,        # critic-favorite spinoff with engagement skew
+        "new_share":      0.60,       # mature 2026 platform, more reactivation
+        "episode_dates":  _eps_premiere_drop("2026-05-29", premiere_count=2, total_count=8),
+        "context_note": (
+            "Star City Season 1 — Apple TV+ For All Mankind spinoff, "
+            "Soviet-era reframe of the alternate-history space race. "
+            "8 eps with 2-ep premiere on 5/29/26, weekly through 7/10/26. "
+            "Created by Nedivi/Wolpert/Moore. As of 6/29/26, 21-day window "
+            "is fully captured; 28-day window has ~3 days remaining. "
+            "97% RT critic, mixed audience reception. Strong franchise "
+            "halo from 5 seasons of FAM, but slower-burn pacing and "
+            "lack of marquee star limit broad-audience acquisition. "
+            "Trades #1 globally with FAM S5 finale; #4 on Apple TV+ "
+            "global chart in launch week (FlixPatrol)."
+        ),
+    },
     {
         "project_name":   "Cape_Fear_-_Season_1",
         "title":          "Cape Fear Season 1",
@@ -126,6 +173,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       2_000_000,  # mid-tier thriller, brand-recognition lift
+        "conv_pct":       4.0,        # #2-3 launch wk, divided audience, talent draw
+        "new_share":      0.55,       # mature platform, deep dormant pool
         "episode_dates":  _eps_weekly("2026-06-05", 8),
         "context_note": (
             "Cape Fear Season 1 — Apple TV+ original Series, dropped 6/5/26. "
@@ -147,6 +196,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       1_000_000,  # half-hour comedy, niche launch
+        "conv_pct":       3.0,        # darkly comedic thriller, cult star Maslany
+        "new_share":      0.65,       # newer concept skews slightly more new
         "episode_dates":  _eps_weekly("2026-05-20", 6),
         "context_note": (
             "Maximum Pleasure Guaranteed Season 1 — Apple TV+ original "
@@ -166,6 +217,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       1_800_000,  # mid-tier mystery in proven Apple format
+        "conv_pct":       3.5,        # Matthew Rhys + Hiro Murai prestige genre
+        "new_share":      0.60,       # mature platform engagement skew
         "episode_dates":  _eps_weekly("2026-04-29", 8),
         "context_note": (
             "Widow's Bay Season 1 — Apple TV+ original mystery thriller, "
@@ -185,6 +238,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       1_400_000,  # female-led dramedy, modest opener
+        "conv_pct":       3.5,        # stacked cast + A24 + Kelley, quirky premise
+        "new_share":      0.60,       # mature platform, cast-driven sampling
         "episode_dates":  _eps_weekly("2026-04-15", 10),
         "context_note": (
             "Margo's Got Money Troubles Season 1 — Apple TV+ original "
@@ -198,6 +253,29 @@ CONFIGS: list[dict] = [
 
     # ──────────────────── 2025 RELEASES ────────────────────
     {
+        "project_name":   "Pluribus_-_Season_1",
+        "title":          "Pluribus Season 1",
+        "platform":       "apple tv+",
+        "start":          "2025-11-07",
+        "genre":          SCIFI_THRILLER,
+        "cadence":        "Weekly",
+        "is_new":         True,
+        "reach_us":       3_900_000,  # Apple TV+ all-time biggest drama launch
+        "conv_pct":       11.0,       # Vince Gilligan halo; surpassed Severance S2 record
+        "new_share":      0.70,       # post-Amazon-Channels mature platform
+        "episode_dates":  _eps_premiere_drop("2025-11-07", premiere_count=2, total_count=9),
+        "context_note": (
+            "Pluribus Season 1 — Apple TV+ sci-fi thriller from Vince "
+            "Gilligan (Breaking Bad / Better Call Saul) starring Rhea "
+            "Seehorn. 9 eps with 2-ep premiere on 11/7/25, weekly "
+            "through 12/26/25. Set the Apple TV+ all-time record for "
+            "biggest global drama launch, surpassing Severance S2. "
+            "6.4M hours viewed in week 1 (Luminate). Eventually became "
+            "Apple TV+'s most-watched series in platform history, "
+            "surpassing both Severance and Ted Lasso."
+        ),
+    },
+    {
         "project_name":   "Your_Friends_and_Neighbors_-_Season_1",
         "title":          "Your Friends & Neighbors Season 1",
         "platform":       "apple tv+",
@@ -206,6 +284,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       3_500_000,  # Jon Hamm tentpole, strong launch
+        "conv_pct":       6.5,        # dethroned Severance S2; Nielsen Top 10 finale wk
+        "new_share":      0.65,       # Hamm draw pulls new + reactivates Mad Men adjacency
         "episode_dates":  _eps_premiere_drop("2025-04-11", premiere_count=2, total_count=9),
         "context_note": (
             "Your Friends & Neighbors Season 1 — Apple TV+ original drama "
@@ -220,6 +300,28 @@ CONFIGS: list[dict] = [
 
     # ──────────────────── 2024 RELEASES ────────────────────
     {
+        "project_name":   "Dark_Matter_-_Season_1",
+        "title":          "Dark Matter Season 1",
+        "platform":       "apple tv+",
+        "start":          "2024-05-08",
+        "genre":          SCIFI_THRILLER,
+        "cadence":        "Weekly",
+        "is_new":         True,
+        "reach_us":       3_000_000,  # #1 globally day 1, Reelgood week 2 cross-platform leader
+        "conv_pct":       6.0,        # strong launch, between Silo and Presumed Innocent tiers
+        "new_share":      0.65,       # accessible sci-fi pulls new + reactivates
+        "episode_dates":  _eps_premiere_drop("2024-05-08", premiere_count=2, total_count=9),
+        "context_note": (
+            "Dark Matter Season 1 — Apple TV+ sci-fi thriller adapted from "
+            "Blake Crouch's 2016 novel, Joel Edgerton + Jennifer Connelly. "
+            "9 eps with 2-ep premiere on 5/8/24, weekly through 6/26/24. "
+            "Became Apple TV+'s most-watched series worldwide within 24 "
+            "hours (FlixPatrol). Topped Reelgood's cross-platform streaming "
+            "chart for the week of May 9-15 (beat Fallout, Bodkin, Baby "
+            "Reindeer). Renewed for S2."
+        ),
+    },
+    {
         "project_name":   "Presumed_Innocent_-_Season_1",
         "title":          "Presumed Innocent Season 1",
         "platform":       "apple tv+",
@@ -228,6 +330,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       6_000_000,  # Apple's biggest series launch ever (per Apple PR July 2024)
+        "conv_pct":       3.5,        # high reach BUT Antenna Q2'24 platform share DECLINED
+        "new_share":      0.55,       # mature platform, engagement>>acquisition pattern
         "episode_dates":  _eps_premiere_drop("2024-06-12", premiere_count=2, total_count=8),
         "context_note": (
             "Presumed Innocent Season 1 — Apple TV+ limited series, "
@@ -248,6 +352,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       2_000_000,  # Colin Farrell mid-tier launch
+        "conv_pct":       3.5,        # mid-tier prestige, no chart records
+        "new_share":      0.60,       # mature platform, prestige engagement skew
         "episode_dates":  _eps_premiere_drop("2024-04-05", premiere_count=2, total_count=8),
         "context_note": (
             "Sugar Season 1 — Apple TV+ neo-noir detective drama, "
@@ -267,6 +373,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       1_600_000,  # mid-tier sci-fi, cancelled after S1
+        "conv_pct":       2.5,        # CANCELED — never made Nielsen Top 10
+        "new_share":      0.65,       # narrow sci-fi base, small absolute number
         "episode_dates":  _eps_premiere_drop("2024-02-21", premiere_count=3, total_count=8),
         "context_note": (
             "Constellation Season 1 — Apple TV+ sci-fi psychological "
@@ -288,6 +396,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       3_500_000,  # MonsterVerse IP lift, strong franchise opener
+        "conv_pct":       4.0,        # Reelgood #3 launch wk, but NO Nielsen Top 10 (franchise sampling)
+        "new_share":      0.65,       # IP brings new + reactivates kaiju fans
         "episode_dates":  _eps_premiere_drop("2023-11-17", premiere_count=2, total_count=10),
         "context_note": (
             "Monarch: Legacy of Monsters Season 1 — Apple TV+ MonsterVerse "
@@ -306,6 +416,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       3_000_000,  # Apple's biggest sci-fi launch in 2023
+        "conv_pct":       7.5,        # "#1 drama in Apple TV+ history" May'23, 5 wks Reelgood top 10
+        "new_share":      0.70,       # broader-appeal sci-fi pulls genuine new subs
         "episode_dates":  _eps_premiere_drop("2023-05-05", premiere_count=2, total_count=10),
         "context_note": (
             "Silo Season 1 — Apple TV+ dystopian sci-fi adapted from Hugh "
@@ -325,6 +437,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       1_700_000,  # modest comedy launch, grew via word-of-mouth
+        "conv_pct":       4.5,        # week-2 audience > week-1, JustWatch #3 / Reelgood #5
+        "new_share":      0.70,       # Harrison Ford + Ted Lasso pedigree pulls new
         "episode_dates":  _eps_premiere_drop("2023-01-27", premiere_count=2, total_count=10),
         "context_note": (
             "Shrinking Season 1 — Apple TV+ comedy-drama, 10 eps with "
@@ -346,6 +460,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       1_000_000,  # niche British-spy launch, grew over later seasons
+        "conv_pct":       2.0,        # sleeper; Kantar's "30% UK new subs" was at S3 not S1
+        "new_share":      0.75,       # 2022-era platform, free-trial tail
         "episode_dates":  _eps_premiere_drop("2022-04-01", premiere_count=2, total_count=6),
         "context_note": (
             "Slow Horses Season 1 — Apple TV+ spy thriller, 6 eps with "
@@ -365,6 +481,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       2_500_000,  # cultural breakthrough, ~3M+ once Emmy buzz hit
+        "conv_pct":       6.0,        # Reelgood #1 by week 3, $200M+ lifetime rev
+        "new_share":      0.80,       # 2022-era growing platform, free-trial still in effect
         "episode_dates":  _eps_premiere_drop("2022-02-18", premiere_count=2, total_count=9),
         "context_note": (
             "Severance Season 1 — Apple TV+ psychological workplace "
@@ -387,6 +505,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       1_500_000,  # ~25M Apple TV+ subs, mixed reception suppressed launch
+        "conv_pct":       3.0,        # mid-tier launch, mixed reception, sampling skew
+        "new_share":      0.75,       # 2021-era growing platform, free-trial still active
         "episode_dates":  _eps_premiere_drop("2021-10-22", premiere_count=3, total_count=10),
         "context_note": (
             "Invasion Season 1 — Apple TV+ alien-invasion sci-fi, 10 eps "
@@ -408,6 +528,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       3_000_000,  # Apple's 2021 sci-fi tentpole, ~25M subs
+        "conv_pct":       5.5,        # Parrot 35x avg demand, 2-week S2 renewal, niche Asimov appeal
+        "new_share":      0.80,       # 2021 free-trial era + small platform
         "episode_dates":  _eps_premiere_drop("2021-09-24", premiere_count=2, total_count=10),
         "context_note": (
             "Foundation Season 1 — Apple TV+ epic sci-fi adaptation of "
@@ -428,6 +550,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       350_000,  # Israeli-language niche, Apple TV+ ~13M subs in Sept 2020
+        "conv_pct":       2.0,        # niche international content, small US conversion
+        "new_share":      0.85,       # 2020-era tiny platform, virtually no install base
         "episode_dates":  _eps_premiere_drop("2020-09-25", premiere_count=3, total_count=8),
         "context_note": (
             "Tehran Season 1 — Apple TV+ Israeli spy thriller (in Persian / "
@@ -451,6 +575,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       900_000,  # modest launch in Aug 2020, exploded post-Emmys 2021
+        "conv_pct":       12.0,       # Apple-disclosed "25% new viewers" at 10 wk; free-trial era leverage
+        "new_share":      0.85,       # 2020-era tiny platform, vast majority truly new
         "episode_dates":  _eps_premiere_drop("2020-08-14", premiere_count=3, total_count=10),
         "context_note": (
             "Ted Lasso Season 1 — Apple TV+ sports comedy, 10 eps with "
@@ -473,6 +599,8 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       600_000,  # Apple TV+ LAUNCH DAY content, ~6M paid subs at debut
+        "conv_pct":       15.0,       # day-1 platform launch — most viewers were brand-new signups
+        "new_share":      0.95,       # virtually no install base existed to reactivate
         "episode_dates":  _eps_premiere_drop("2019-11-01", premiere_count=3, total_count=10),
         "context_note": (
             "For All Mankind Season 1 — Apple TV+ alternate-history space "
@@ -514,6 +642,10 @@ def build_config(spec: dict) -> dict:
     }
     if "reach_us" in spec:
         cfg["reach_us_override"] = spec["reach_us"]
+    if "conv_pct" in spec:
+        cfg["conversion_pct"] = float(spec["conv_pct"])
+    if "new_share" in spec:
+        cfg["reactivation_pct_override"] = max(0.0, min(1.0, 1.0 - float(spec["new_share"])))
     return cfg
 
 

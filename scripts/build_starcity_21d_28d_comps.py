@@ -145,9 +145,21 @@ def find_csv_for_show(keys: list[str], lookup_tokens: list[str],
         matches.append(k)
     if not matches:
         return None
-    # Prefer the most recently uploaded (lex sort of timestamped names
-    # is good enough since our naming convention embeds MM_DD_YYYY_HH_MM).
-    matches.sort(reverse=True)
+    # Prefer the most recently uploaded. The pull-script naming convention
+    # embeds `MM_DD_YYYY_HH_MM` immediately before `.csv`. A plain lex sort
+    # is unsafe because filenames may include separator chars (`-`, `_`)
+    # whose ASCII ordering does not match upload recency — e.g.
+    # `Star_City_-_Season_1_06_30_2026_16_09.csv` sorts BEFORE
+    # `Star_City_06_04_2026_14_09.csv` lexicographically even though it is
+    # ~26 days newer. Extract the embedded timestamp and sort by that.
+    ts_re = re.compile(r'(\d{2})_(\d{2})_(\d{4})_(\d{2})_(\d{2})\.csv$')
+    def _ts_key(k: str):
+        m = ts_re.search(k)
+        if not m:
+            return (0, 0, 0, 0, 0)
+        mm, dd, yyyy, hh, mi = m.groups()
+        return (int(yyyy), int(mm), int(dd), int(hh), int(mi))
+    matches.sort(key=_ts_key, reverse=True)
     return matches[0]
 
 
@@ -908,7 +920,11 @@ def _add_editorial_sheet(wb, rows: list[dict]) -> None:
          "(~6-13M paid subs), which is much smaller than today's ~80M. "
          "DO NOT directly compare absolute reach to 2024-2026 launches; "
          "use the conversion-efficiency (E%) metric for an era-neutral "
-         "comparison."),
+         "comparison. The very high E% for For All Mankind (15%) and Ted "
+         "Lasso (12%) reflects the platform-debut/free-trial dynamics — "
+         "almost every viewer in those windows was a brand-new Apple TV+ "
+         "trial signup attached to a device purchase, which the model "
+         "preserves as a directional estimate."),
         ("Star City's full season is not yet out",
          "Star City premiered 5/29/26 and runs through 7/10/26 (Ep 8). "
          "As of 6/29 only 5 of 8 episodes have aired (Ep 5 dropped 6/19). "
@@ -916,7 +932,7 @@ def _add_editorial_sheet(wb, rows: list[dict]) -> None:
          "viewing of an incomplete season — typical for an Apple TV+ "
          "weekly drop where reach continues to grow through and beyond "
          "the finale."),
-        ("Methodology",
+        ("Windowing methodology",
          "21-day metric: Day 0 (release) through Day 21 inclusive (22 calendar days). "
          "28-day metric: Day 0 through Day 28 inclusive (29 calendar days). "
          "Total Accounts Viewed is scaled from the show's modeled 30-43 day "
@@ -925,6 +941,24 @@ def _add_editorial_sheet(wb, rows: list[dict]) -> None:
          "Acquired and Reactivated signups are derived from the per-day "
          "signup-timing distribution in each show's CSV, applied to the "
          "show-level Attributed/Dormant split."),
+        ("Per-show conversion methodology (Resolves Issue #2: pipeline lookup-table defect, June 2026)",
+         "Subscriber conversion (col E) and the new/reactivated split (cols B, C, D) are "
+         "now set per-title using research-grounded analyst overrides, NOT a genre-keyed "
+         "lookup table. The previous run produced clustered identical D values across "
+         "same-genre shows because the synthetic pipeline's `conversion_pct` and "
+         "`reactivation_pct` were drawn from a small set of genre/cadence constants. That "
+         "is corrected here: each of the 21 titles has its own `conversion_pct` and "
+         "`new_share` informed by Antenna Subscriber Views citations (where published — "
+         "Severance, Pluribus, Stick, Slow Horses+Ted Lasso UK aggregate), Kantar EoD "
+         "data, Parrot Analytics demand multiples, Nielsen Top 10 entries, Apple PR "
+         "claims (down-weighted where third-party data contradicts — see Presumed "
+         "Innocent vs Antenna Q2'24), renewal velocity, cancellation signals "
+         "(Constellation), and era-effect adjustments (free-trial era 2019-2021 inflates "
+         "the new_share fraction; mature platform 2024-2026 deepens reactivation share). "
+         "Full per-title reasoning chain is documented in the 'Per-Show Methodology' "
+         "tab. All numbers remain modeled, not directly measured — Antenna's per-show "
+         "acquisition feed is the industry gold standard if the client wants ground-"
+         "truth measurement."),
     ]
     for label, body in notes:
         ws.cell(row=r, column=1, value=f"• {label}").font = bold
@@ -939,6 +973,101 @@ def _add_editorial_sheet(wb, rows: list[dict]) -> None:
         ws.column_dimensions[col].width = w
 
 
+# ─────────────────────────────────────────────────────────────────────
+# PER-SHOW CONVERSION REASONING ANCHORS
+# These document the research evidence that drove each title's
+# `conversion_pct` and `new_share` overrides in pull_apple_star_city_comps.py.
+# Exposed in the Per-Show Methodology sheet so the client can audit
+# the editorial reasoning chain for every comp.
+# ─────────────────────────────────────────────────────────────────────
+PER_SHOW_REASONING: dict[str, dict] = {
+    "Star City": {
+        "conv_pct": 3.5, "new_share": 0.60,
+        "anchor": "Critic-favorite FAM spinoff (94-97% RT critic). #4 on Apple TV+ global launch week per FlixPatrol — strong but not record-setting. Trades #1 with FAM S5 finale. Slower-burn pacing + lack of marquee star limits broad-audience acquisition; engagement-skewing mature-platform profile."
+    },
+    "Cape Fear": {
+        "conv_pct": 4.0, "new_share": 0.55,
+        "anchor": "#2-3 on Apple TV+ US chart launch week (FlixPatrol). 75-79% RT critic, 59-61% audience (divided). Spielberg/Scorsese EP + Bardem/Adams talent draw pulls in existing prestige-TV subs. Divided audience caps acquisition ceiling. Mature platform — deep dormant pool."
+    },
+    "Maximum Pleasure Guaranteed": {
+        "conv_pct": 3.0, "new_share": 0.65,
+        "anchor": "Half-hour darkly comedic thriller. Tatiana Maslany (Orphan Black cult) + Jake Johnson. No record claims; behind Cape Fear and YF&N on Apple TV+ chart through June. Half-hour format = smaller per-show engagement signal."
+    },
+    "Widow's Bay": {
+        "conv_pct": 3.5, "new_share": 0.60,
+        "anchor": "Matthew Rhys (The Americans cult) + Hiro Murai (Atlanta) directing. Genre-bending horror-comedy New England small-town setting. Apple gave it strong promo but not tentpole push. Mid-tier prestige with engaged-but-not-broad audience."
+    },
+    "Margo's Got Money Troubles": {
+        "conv_pct": 3.5, "new_share": 0.60,
+        "anchor": "Stacked cast (Fanning, Pfeiffer, Kidman, Offerman) + David E. Kelley + A24 producing. Based on Rufi Thorpe novel. Strong cast pulls sampling but the quirky single-mom-finds-fortune premise limits sub-stickiness — similar profile to Presumed Innocent (high reach, lower acquisition)."
+    },
+    "Pluribus": {
+        "conv_pct": 11.0, "new_share": 0.70,
+        "anchor": "Apple TV+'s all-time biggest drama launch — explicitly surpassed Severance S2's record (which Antenna estimated drove 34% of Jan 2025 Apple TV+ signups, ~850K-1M households). 6.4M hours week 1 (Luminate). Vince Gilligan + Rhea Seehorn Breaking Bad / Better Call Saul halo. Best-documented launch in the comp set."
+    },
+    "Your Friends & Neighbors": {
+        "conv_pct": 6.5, "new_share": 0.65,
+        "anchor": "Dethroned Severance S2 on Apple TV+ charts within 1 week of launch. Nielsen weekly Top 10 originals at finale week (May 2025): 392M minutes viewed. 200-day Apple TV+ #1 streak through S2 (per Collider June 2026). Jon Hamm 'best role since Mad Men' + 'next Breaking Bad' marketing positioning gave it both broad audience and real acquisition lift."
+    },
+    "Dark Matter": {
+        "conv_pct": 6.0, "new_share": 0.65,
+        "anchor": "#1 globally on Apple TV+ within 24 hours of launch (FlixPatrol). Topped Reelgood cross-platform chart week of May 9-15 (beat Fallout, Bodkin, Baby Reindeer). Joel Edgerton + Jennifer Connelly + Blake Crouch IP. Renewed for S2 (Aug 2024). Strong launch trajectory but no Antenna citation."
+    },
+    "Presumed Innocent": {
+        "conv_pct": 3.5, "new_share": 0.55,
+        "anchor": "Apple PR: '#1 most-viewed drama of all time on Apple TV+' (S2 renewal Jul 2024). BUT: Antenna Q2'24 Snapshot shows Apple TV+ share of Premium SVOD gross adds DECLINED slightly vs Q1'24 — directly contradicting a platform-level signup lift. Also did NOT break Nielsen Top 10 for premiere week. Classic engagement-hit / acquisition-miss profile on a mature platform."
+    },
+    "Sugar": {
+        "conv_pct": 3.5, "new_share": 0.60,
+        "anchor": "81% RT critic + 80% audience. Colin Farrell mid-tier prestige noir. No Apple record claims, no Nielsen Top 10. Same Apple TV+ era as Dark Matter & Presumed Innocent (~15-18M US subs) but smaller star-power package — landed in same prestige-engagement-skew tier as Presumed Innocent."
+    },
+    "Constellation": {
+        "conv_pct": 2.5, "new_share": 0.65,
+        "anchor": "CANCELED after S1 (announced May 2024). Never made Nielsen Top 10 (explicitly cited by HR + Gizmodo as reason for cancellation). 71-73% critics, 92% audience (loyal but narrow). Clear underperformer — Apple does not cancel hit shows. Bottom of prestige-sci-fi range."
+    },
+    "Monarch: Legacy of Monsters": {
+        "conv_pct": 4.0, "new_share": 0.65,
+        "anchor": "Reelgood #3 in streaming Top 10 in premiere week. MonsterVerse / Godzilla / Legendary franchise IP. Did NOT make Nielsen Top 10 in S1 (explicitly confirmed by S2 articles citing S2 as 'first time franchise charted'). Franchise sampling pattern — pulls casual viewers but lower per-viewer subscription conversion."
+    },
+    "Silo": {
+        "conv_pct": 7.5, "new_share": 0.70,
+        "anchor": "'No. 1 drama in Apple TV+ history' at the time per Apple press (May 2023). Renewed for S2 within 5-6 weeks. Parrot Analytics: 24.4× avg global demand week 5. 5 consecutive weeks in Reelgood Top 10; week 2 was #2 cross-platform. Rebecca Ferguson (MI franchise) + Hugh Howey *Wool* IP."
+    },
+    "Shrinking": {
+        "conv_pct": 4.5, "new_share": 0.70,
+        "anchor": "'Biggest hit on Apple TV+ since Severance and Black Bird' (Cult of Mac Feb 2023). Week 2 audience LARGER than week 1 — accelerating curve. JustWatch #3 + Reelgood #5 in early weeks. Jason Segel + Harrison Ford; Ted Lasso writer team. Comedy-drama traditionally converts slightly lower than thriller/sci-fi (engagement is atmospheric not urgent)."
+    },
+    "Slow Horses": {
+        "conv_pct": 2.0, "new_share": 0.75,
+        "anchor": "95% RT critic / 92% audience but NO S1-specific Antenna or Kantar citations. The famous Kantar Q4'23 stat ('Slow Horses + Ted Lasso drove 30% of new UK Apple TV+ subs') was at S3 launch, NOT S1. Classic sleeper hit — halo built across seasons. Forbes 2024: 'I am begging you to watch Slow Horses' (reach still low at S4). Niche genre, no breakout marketing."
+    },
+    "Severance": {
+        "conv_pct": 6.0, "new_share": 0.80,
+        "anchor": "97% RT critic. #1 on Reelgood across all streaming services by week 3 (Mar 9-10, 2022). $200M+ lifetime revenue (Parrot Analytics). TV Time 2022: Severance among top streaming-subscription drivers. The breakout heat built ACROSS episodes — peak was season finale, not launch window — so 30-day conversion is above mid-tier prestige but below tentpole-breakout (Antenna's S2 14% conversion is the upper bound)."
+    },
+    "Invasion": {
+        "conv_pct": 3.0, "new_share": 0.75,
+        "anchor": "Mid-tier sci-fi launch with mixed critical reception (IGN: 'too ambitious, slow,' 'mashup of prestige cliches'). NO record claims, no chart-topping placements for S1 launch window. Lack of breakout coverage in launch trade press is itself diagnostic. Simon Kinberg pedigree + Sam Neill cast didn't translate to acquisition lift."
+    },
+    "Foundation": {
+        "conv_pct": 5.5, "new_share": 0.80,
+        "anchor": "Renewed for S2 only 2 weeks after premiere. Parrot Analytics: 35.2× avg global demand, peak 38.7×; 44.4× momentum (top 1.53% of all shows). 72% RT critic (mixed; production hailed, dense narrative criticized). Asimov IP appeals to niche older fandom — limits broader subscription conversion. Above genre baseline but below Severance/Pluribus."
+    },
+    "Tehran": {
+        "conv_pct": 2.0, "new_share": 0.85,
+        "anchor": "88% RT, 87% audience — well-reviewed. Apple acquired international rights from Israeli Kan 11 (S1 had aired in Israel 6/22/20 before Apple TV+ launch). 'Popular with audiences in India, Japan, Singapore' — international skew limits US conversion specifically. Niche launch on very small late-2020 Apple TV+ platform."
+    },
+    "Ted Lasso": {
+        "conv_pct": 12.0, "new_share": 0.85,
+        "anchor": "Apple statement (late Oct 2020, ~10 weeks post-launch): 'drew 25% new viewers to Apple TV+' + 'viewership grown 600%.' Parrot Analytics: peak demand at ~50 days post-launch. TV Time 2022 survey: #1 most-cited driver of streaming subscriptions in prior 12 months. Era: 1-year free trial w/ device purchase — virtually every signup attributable was truly net-new. The 'most conversion-friendly' show in the comp set due to reach-to-signup leverage in early Apple TV+ era."
+    },
+    "For All Mankind": {
+        "conv_pct": 15.0, "new_share": 0.95,
+        "anchor": "DAY-1 PLATFORM LAUNCH ORIGINAL. Apple TV+ debuted 11/1/19 with FAM as one of 4 marquee originals. Top 3 most-talked Apple TV+ show on launch day (ListenFirst). Almost everyone who watched FAM S1 was either (a) a brand-new Apple TV+ trial signup (platform just launched) or (b) using free trial that came with recent device purchase. Reach denominator and new-signup numerator overlap heavily — virtually 100% of viewers were 'new' to the platform within 30 days."
+    },
+}
+
+
 def _add_methodology_sheet(wb, rows: list[dict]) -> None:
     """Per-show methodology and source attribution."""
     ws = wb.create_sheet("Per-Show Methodology")
@@ -946,29 +1075,44 @@ def _add_methodology_sheet(wb, rows: list[dict]) -> None:
     h1 = Font(bold=True, size=13)
     wrap = Alignment(wrap_text=True, vertical="top")
 
-    ws["A1"] = "Per-Show Source Detail"
+    ws["A1"] = "Per-Show Source Detail & Conversion Reasoning"
     ws["A1"].font = h1
-    ws.merge_cells("A1:F1")
+    ws.merge_cells("A1:H1")
+    ws["A2"] = ("Each title's `conversion_pct` and `new_share` are research-grounded "
+                "analyst overrides — NOT genre-keyed lookups. See the rightmost column "
+                "for the specific evidence anchor for each show.")
+    ws["A2"].alignment = wrap
+    ws.merge_cells("A2:H2")
 
     headers = ["#", "Show", "Release", "Modeled 30-Day Reach (US)",
-               "Total Signups (30d)", "Notes"]
+               "Total Signups (30d)", "Conv %", "New Share", "Reasoning anchor"]
     for i, h in enumerate(headers, start=1):
-        c = ws.cell(row=3, column=i, value=h)
+        c = ws.cell(row=4, column=i, value=h)
         c.font = bold
 
     for i, r in enumerate(rows):
-        rr = 4 + i
+        rr = 5 + i
         ws.cell(row=rr, column=1, value=i)
         ws.cell(row=rr, column=2, value=r["display"])
         ws.cell(row=rr, column=3, value=r["release_date"].strftime("%-m/%-d/%Y"))
+        reasoning = PER_SHOW_REASONING.get(r["display"], {})
         if r.get("missing"):
             ws.cell(row=rr, column=4, value="n/a")
             ws.cell(row=rr, column=5, value="n/a")
-            ws.cell(row=rr, column=6, value="No S3 CSV — pull pending or failed")
+            ws.cell(row=rr, column=6, value=reasoning.get("conv_pct", "n/a"))
+            ws.cell(row=rr, column=7, value=reasoning.get("new_share", "n/a"))
+            ws.cell(row=rr, column=8, value=(reasoning.get("anchor", "") +
+                                              " [No S3 CSV — pull pending or failed]")
+                    ).alignment = wrap
+            ws.row_dimensions[rr].height = 60
             continue
         p = r["parsed"]
         ws.cell(row=rr, column=4, value=p["total_watchers_gp"]).number_format = '#,##0'
         ws.cell(row=rr, column=5, value=p["total_signups_gp"]).number_format = '#,##0'
+        cell_conv = ws.cell(row=rr, column=6, value=reasoning.get("conv_pct"))
+        cell_conv.number_format = '0.0"%"'
+        cell_new = ws.cell(row=rr, column=7, value=reasoning.get("new_share"))
+        cell_new.number_format = '0.00'
         notes = []
         if r.get("pre_2021"):
             notes.append("Pre-2021 — reach calibrated to Apple TV+ launch-era sub base (~6-13M)")
@@ -976,9 +1120,13 @@ def _add_methodology_sheet(wb, rows: list[dict]) -> None:
             notes.append("28-day metric not yet available (released 6/5/26)")
         if r["display"] == "Star City":
             notes.append("Target show — Day 28 reflects 6 of 8 episodes aired")
-        ws.cell(row=rr, column=6, value=" • ".join(notes) if notes else "").alignment = wrap
+        anchor_text = reasoning.get("anchor", "")
+        if notes:
+            anchor_text = anchor_text + "  ⚑ " + " • ".join(notes)
+        ws.cell(row=rr, column=8, value=anchor_text).alignment = wrap
+        ws.row_dimensions[rr].height = 90 if notes else 75
 
-    for col, w in zip("ABCDEF", [4, 32, 14, 22, 22, 50]):
+    for col, w in zip("ABCDEFGH", [4, 32, 14, 18, 18, 9, 11, 70]):
         ws.column_dimensions[col].width = w
 
 

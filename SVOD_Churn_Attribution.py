@@ -5041,21 +5041,35 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
 
     # Use GPT-4o reasoning agent to determine reactivation rate based on demographics,
     # platform dynamics, content type, and audience age patterns.
+    # Caller may pass `reactivation_pct_override` (a float in [0,1]) to bypass
+    # GPT reasoning when an analyst has set the rate from external research.
+    # This is the new/reactivated counterpart to the existing conversion_pct
+    # override path — needed because the GPT reactivation reasoner uses
+    # platform-tier priors that can compress per-show variance to a small
+    # number of buckets (the same lookup-table defect family that
+    # conversion_pct overrides were introduced to solve).
     _plat_info = _get_platform_info(p.get('platform_name', ''))
-    _react_pct_final = _reason_reactivation_rate(
-        show_name=", ".join(p.get('show_search_terms', [])),
-        platform_name=p.get('platform_name', ''),
-        genre=p.get('genre', ''),
-        content_cadence=p.get('content_cadence', ''),
-        total_signups=new_signups,
-        total_watchers=total_watchers,
-        platform_info=_plat_info,
-        age_breakdown=_age_breakdown,
-        gender_breakdown=_gender_breakdown,
-        is_new_show=bool(p.get('is_new_show', False)),
-        pre_existing_viewers=int(p.get('pre_existing_viewers', 0) or 0),
-        episode_count=len(p.get('episode_dates', []) or []),
-    )
+    if p.get('reactivation_pct_override') is not None:
+        _react_pct_final = max(0.0, min(1.0, float(p['reactivation_pct_override'])))
+        print(
+            f"   🔒 Reactivation overridden by config: {_react_pct_final*100:.1f}% "
+            f"(skipping GPT reasoner — analyst-set from per-show research)"
+        )
+    else:
+        _react_pct_final = _reason_reactivation_rate(
+            show_name=", ".join(p.get('show_search_terms', [])),
+            platform_name=p.get('platform_name', ''),
+            genre=p.get('genre', ''),
+            content_cadence=p.get('content_cadence', ''),
+            total_signups=new_signups,
+            total_watchers=total_watchers,
+            platform_info=_plat_info,
+            age_breakdown=_age_breakdown,
+            gender_breakdown=_gender_breakdown,
+            is_new_show=bool(p.get('is_new_show', False)),
+            pre_existing_viewers=int(p.get('pre_existing_viewers', 0) or 0),
+            episode_count=len(p.get('episode_dates', []) or []),
+        )
     _reactivated_count = max(0, int(round(new_signups * _react_pct_final))) if new_signups > 0 else 0
     _new_only_signups = new_signups - _reactivated_count
     _new_only_conv = round((_new_only_signups * 100.0) / clean_sample, 2) if clean_sample > 0 else 0.0
