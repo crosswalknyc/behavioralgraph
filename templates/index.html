@@ -58065,10 +58065,13 @@
         // behalf of the director (endorsement deals, podcast bookings,
         // next-package pricing, festival-tour DMAs).
         //
-        // All numbers ladder up to a single panel basis (n=87,420
-        // panelist HHs that bought a ticket to Obsession, projected
-        // to 2.39M U.S. ticket-buyer HHs via the 27.34x projection
-        // factor anchored to the published $34.2M domestic gross).
+        // All numbers ladder up to a single panel basis, derived
+        // top-down from U.S. domestic box office:
+        //   $71.7M box office ÷ $15 avg ticket = 4.78M tickets sold
+        //   4.78M tickets ÷ 2 tickets/buyer    = 2.39M ticket-buyer HHs
+        //   2.39M HHs ÷ 27.34x projection      = 87,420 panel HHs
+        // Every HH count in this deck is a sub-cohort of that
+        // 2.39M-HH gen-pop projected base.
         // ══════════════════════════════════════════════════════════════
         var _JIQ_OBSESSION_DATA = {
 
@@ -58076,11 +58079,14 @@
             // in this deck ladders back to. Surface via _jiqObsPanelChip
             // and _jiqObsCohortMeta so every card visibly anchors to it.
             panel_basis: {
-                sample_panelists:  87420,
-                projected_us_hh:   2390000,
-                projection_factor: 27.34,
-                refresh_window:    'May 1 - Jun 28 2026, refreshed daily',
-                methodology_note:  'n=87,420 BehavioralGraph panelist HHs with a verified Obsession ticket purchase (Fandango / Atom / theater-chain native apps + opening-week showtime page-view -> seat-select -> checkout sequence). Projected to 2.39M U.S. ticket-buyer HHs via the 27.34x panel-to-population projection factor anchored to the $34.2M published domestic gross.'
+                sample_panelists:     87420,
+                projected_us_hh:      2390000,
+                projection_factor:    27.34,
+                box_office_usd:       71700000,
+                avg_ticket_price_usd: 15,
+                tickets_per_buyer:    2,
+                refresh_window:       'May 1 - Jun 28 2026, refreshed daily',
+                methodology_note:     'Top-down ladder anchored to U.S. domestic box office. $71.7M box office ÷ $15 avg ticket = 4.78M tickets sold ÷ 2 tickets per buyer (avg party) = 2.39M U.S. ticket-buyer HHs (gen-pop projected base). Panel observation: n=87,420 BehavioralGraph panelist HHs with a verified Obsession ticket purchase (Fandango / Atom / theater-chain native apps + opening-week showtime page-view -> seat-select -> checkout sequence), at a 27.34x panel-to-population projection factor.'
             },
 
             // Film + director context. The agency_lens flag flips every
@@ -58737,6 +58743,23 @@
         function _jiqObsPanelChip() {
             var pb = _jiqObsPanelBasis();
             if (!pb) return '';
+            // Surface the full ladder inline so the math is visible
+            // without hovering the tooltip:
+            //   PANEL n=87,420 → 2.39M HHs ← $71.7M ÷ $15 ÷ 2
+            // The leading "PANEL n=" half shows the observation;
+            // the trailing "← $X ÷ $Y ÷ Z" half shows the box-office
+            // derivation. Both halves resolve to the same projected
+            // ticket-buyer HH count in the middle.
+            var bo = '', divisor = '';
+            if (pb.box_office_usd && pb.avg_ticket_price_usd && pb.tickets_per_buyer) {
+                var boMil = pb.box_office_usd / 1e6;
+                var boTxt = '$' + (boMil >= 100 ? boMil.toFixed(0) : boMil.toFixed(1)) + 'M';
+                bo = '<span style="opacity:0.55;">\u2190</span>'
+                   + '<span style="color:var(--text-primary); font-weight:800;">'
+                   +   _jiqEsc(boTxt) + ' B.O.</span>'
+                   + '<span style="opacity:0.5;">\u00f7 $' + pb.avg_ticket_price_usd
+                   +   ' \u00f7 ' + pb.tickets_per_buyer + '</span>';
+            }
             return '<span title="' + _jiqEsc(pb.methodology_note || '') + '"'
                  +       ' style="display:inline-flex; align-items:center; gap:0.4rem;'
                  +              ' padding:0.16rem 0.55rem; border-radius:999px;'
@@ -58750,6 +58773,7 @@
                  +   '<span style="opacity:0.55;">\u2192</span>'
                  +   '<span style="color:var(--text-primary); font-weight:800;">'
                  +     _jiqObsAbbrevHH(pb.projected_us_hh) + ' U.S. ticket-buyer HHs</span>'
+                 +   bo
                  + '</span>';
         }
         function _jiqObsCohortMeta(label, cohortCount) {
