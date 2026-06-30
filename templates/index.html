@@ -58893,9 +58893,7 @@
                 + _jiqTile('Word of mouth',    Number(da.word_of_mouth_pct || 0).toFixed(1) + '%',   _jiqFmt(da.word_of_mouth_hh || 0) + ' HHs', '#86efac')
                 + '</div>';
 
-            var attribNote = da.note_for_caa ? '<div style="padding:0.7rem 0.9rem; margin-bottom:0.85rem; border-radius:6px;'
-                + ' background:rgba(168,85,247,0.10); border-left:3px solid #a855f7; font-size:0.82rem; line-height:1.55;">'
-                + '<strong style="color:#c4b5fd;">CAA lens:</strong> ' + _jiqEsc(da.note_for_caa) + '</div>' : '';
+            var attribNote = '';
 
             var maxSurfaceShare = (data.top_discovery_surfaces || []).reduce(function(m, s) { return Math.max(m, s.share_pct || 0); }, 0);
             var surfacesHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0;">📡 Top discovery surfaces (where audiences first encountered Obsession)</h4>'
