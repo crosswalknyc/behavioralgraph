@@ -104340,53 +104340,66 @@
                 });
             });
 
-            // Compute offset positions for displaced labels
-            var labelPositions = bubbles.map((b, i) => {
+            // Compute offset positions for displaced labels one at a time,
+            // factoring in previously placed labels to avoid stacking
+            var labelPositions = [];
+            bubbles.forEach((b, i) => {
                 var r = getRadius(b.pct);
-                if (!displaced[i]) return { x: b.x, y: b.y, displaced: false };
+                if (!displaced[i]) { labelPositions.push({ x: b.x, y: b.y, displaced: false }); return; }
                 var bestAngle = 0, bestScore = -Infinity;
-                for (var a = 0; a < Math.PI * 2; a += Math.PI / 12) {
+                var offset = r + 55;
+                for (var a = 0; a < Math.PI * 2; a += Math.PI / 16) {
+                    var testX = b.x + Math.cos(a) * offset;
+                    var testY = b.y + Math.sin(a) * offset;
                     var score = 0;
+                    // Push away from all bubble centers
                     bubbles.forEach((other, j) => {
                         if (j === i) return;
                         var rO = getRadius(other.pct);
                         var dx = b.x - other.x, dy = b.y - other.y;
                         var dist = Math.sqrt(dx * dx + dy * dy);
-                        if (dist < (r + rO) * 2) {
+                        if (dist < (r + rO) * 2.5) {
                             var awayAngle = Math.atan2(dy, dx);
                             score += Math.cos(a - awayAngle) * (1 / Math.max(dist, 1));
                         }
                     });
-                    var testX = b.x + Math.cos(a) * (r + 50);
-                    var testY = b.y + Math.sin(a) * (r + 50);
-                    if (testY > H - 20) score -= 5;
-                    if (testY < 20) score -= 5;
-                    if (testX > W - 60) score -= 5;
-                    if (testX < 60) score -= 5;
+                    // Push away from already-placed displaced labels
+                    labelPositions.forEach((prev, j) => {
+                        if (!prev.displaced) return;
+                        var dx = testX - prev.x, dy = testY - prev.y;
+                        var dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < 70) score -= (70 - dist) * 0.1;
+                    });
+                    // Boundary penalties
+                    if (testY > H - 30) score -= 5;
+                    if (testY < 30) score -= 5;
+                    if (testX > W - 70) score -= 5;
+                    if (testX < 70) score -= 5;
                     if (score > bestScore) { bestScore = score; bestAngle = a; }
                 }
-                var offset = r + 50;
-                return { x: b.x + Math.cos(bestAngle) * offset, y: b.y + Math.sin(bestAngle) * offset, displaced: true, angle: bestAngle };
+                labelPositions.push({ x: b.x + Math.cos(bestAngle) * offset, y: b.y + Math.sin(bestAngle) * offset, displaced: true, angle: bestAngle });
             });
 
-            // Second pass: separate displaced labels that ended up too close to each other
-            for (var pass = 0; pass < 4; pass++) {
+            // Separation pass: push apart any displaced labels still too close
+            var minSep = 65;
+            for (var pass = 0; pass < 8; pass++) {
                 labelPositions.forEach((lp, i) => {
                     if (!lp.displaced) return;
                     labelPositions.forEach((lp2, j) => {
-                        if (j <= i || !lp2.displaced) return;
+                        if (j <= i) return;
+                        var isOther = lp2.displaced;
                         var dx = lp.x - lp2.x, dy = lp.y - lp2.y;
                         var dist = Math.sqrt(dx * dx + dy * dy);
-                        var minSep = 40;
-                        if (dist < minSep && dist > 0) {
-                            var push = (minSep - dist) / 2;
+                        var sep = isOther ? minSep : minSep * 0.7;
+                        if (dist < sep && dist > 0) {
+                            var push = (sep - dist) / 2;
                             var nx = dx / dist, ny = dy / dist;
                             lp.x += nx * push; lp.y += ny * push;
-                            lp2.x -= nx * push; lp2.y -= ny * push;
+                            if (isOther) { lp2.x -= nx * push; lp2.y -= ny * push; }
                         }
                     });
-                    lp.x = Math.max(60, Math.min(W - 60, lp.x));
-                    lp.y = Math.max(20, Math.min(H - 20, lp.y));
+                    lp.x = Math.max(70, Math.min(W - 70, lp.x));
+                    lp.y = Math.max(25, Math.min(H - 25, lp.y));
                 });
             }
 
