@@ -104258,27 +104258,84 @@
                     +  '</circle>';
             });
 
-            // Draw labels — full DMA name (wrap if >2 words) + pct, uniform line spacing
+            // Detect overlapping bubbles — displace smaller-pct label with leader line
             var labelSize = 8.5;
             var pctLabelSize = 8.5;
             var lineGap = labelSize * 1.6;
-            bubbles.forEach(b => {
-                const r = getRadius(b.pct);
-                if (r >= 10) {
-                    var words = b.name.split(/\s+/);
-                    if (words.length > 2) {
-                        var mid = Math.ceil(words.length / 2);
-                        var line1 = words.slice(0, mid).join(' ');
-                        var line2 = words.slice(mid).join(' ');
-                        var topY = b.y - lineGap;
-                        svg += '<text x="' + b.x.toFixed(1) + '" y="' + topY.toFixed(1) + '" fill="#fff" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + line1 + '</text>';
-                        svg += '<text x="' + b.x.toFixed(1) + '" y="' + (topY + lineGap).toFixed(1) + '" fill="#fff" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + line2 + '</text>';
-                        svg += '<text x="' + b.x.toFixed(1) + '" y="' + (topY + lineGap * 2).toFixed(1) + '" fill="rgba(255,255,255,0.8)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
-                    } else {
-                        var topY = b.y - lineGap * 0.5;
-                        svg += '<text x="' + b.x.toFixed(1) + '" y="' + topY.toFixed(1) + '" fill="#fff" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + b.name + '</text>';
-                        svg += '<text x="' + b.x.toFixed(1) + '" y="' + (topY + lineGap).toFixed(1) + '" fill="rgba(255,255,255,0.8)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
+            var displaced = {};
+            bubbles.forEach((a, i) => {
+                var rA = getRadius(a.pct);
+                bubbles.forEach((b, j) => {
+                    if (j <= i) return;
+                    var rB = getRadius(b.pct);
+                    var dx = a.x - b.x, dy = a.y - b.y;
+                    var dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < (rA + rB) * 0.8) {
+                        var lesser = a.pct <= b.pct ? i : j;
+                        if (!displaced[lesser]) displaced[lesser] = true;
                     }
+                });
+            });
+
+            // Compute offset positions for displaced labels
+            var labelPositions = bubbles.map((b, i) => {
+                var r = getRadius(b.pct);
+                if (!displaced[i]) return { x: b.x, y: b.y, displaced: false };
+                var pushAngle = Math.PI / 2;
+                var bestAngle = 0, bestScore = -Infinity;
+                for (var a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+                    var score = 0;
+                    bubbles.forEach((other, j) => {
+                        if (j === i) return;
+                        var rO = getRadius(other.pct);
+                        var dx = b.x - other.x, dy = b.y - other.y;
+                        var dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < (r + rO) * 1.5) {
+                            var awayAngle = Math.atan2(dy, dx);
+                            score += Math.cos(a - awayAngle) * (1 / Math.max(dist, 1));
+                        }
+                    });
+                    if (b.y + Math.sin(a) * (r + 40) > H - 20) score -= 5;
+                    if (b.y + Math.sin(a) * (r + 40) < 20) score -= 5;
+                    if (b.x + Math.cos(a) * (r + 40) > W - 40) score -= 5;
+                    if (b.x + Math.cos(a) * (r + 40) < 40) score -= 5;
+                    if (score > bestScore) { bestScore = score; bestAngle = a; }
+                }
+                var offset = r + 35;
+                return { x: b.x + Math.cos(bestAngle) * offset, y: b.y + Math.sin(bestAngle) * offset, displaced: true };
+            });
+
+            // Draw leader lines for displaced labels
+            bubbles.forEach((b, i) => {
+                if (!labelPositions[i].displaced) return;
+                var r = getRadius(b.pct);
+                var lp = labelPositions[i];
+                var dx = lp.x - b.x, dy = lp.y - b.y;
+                var dist = Math.sqrt(dx * dx + dy * dy);
+                var edgeX = b.x + (dx / dist) * r;
+                var edgeY = b.y + (dy / dist) * r;
+                svg += '<line x1="' + edgeX.toFixed(1) + '" y1="' + edgeY.toFixed(1) + '" x2="' + lp.x.toFixed(1) + '" y2="' + lp.y.toFixed(1) + '" stroke="rgba(255,255,255,0.5)" stroke-width="1" />';
+                svg += '<circle cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="2" fill="rgba(255,255,255,0.6)" />';
+            });
+
+            // Draw labels at final positions
+            bubbles.forEach((b, i) => {
+                var r = getRadius(b.pct);
+                if (r < 10 && !labelPositions[i].displaced) return;
+                var lp = labelPositions[i];
+                var words = b.name.split(/\s+/);
+                if (words.length > 2) {
+                    var mid = Math.ceil(words.length / 2);
+                    var line1 = words.slice(0, mid).join(' ');
+                    var line2 = words.slice(mid).join(' ');
+                    var topY = lp.y - lineGap;
+                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + topY.toFixed(1) + '" fill="#fff" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + line1 + '</text>';
+                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap).toFixed(1) + '" fill="#fff" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + line2 + '</text>';
+                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap * 2).toFixed(1) + '" fill="rgba(255,255,255,0.8)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
+                } else {
+                    var topY = lp.y - lineGap * 0.5;
+                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + topY.toFixed(1) + '" fill="#fff" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + b.name + '</text>';
+                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap).toFixed(1) + '" fill="rgba(255,255,255,0.8)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
                 }
             });
 
