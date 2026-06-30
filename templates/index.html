@@ -31,6 +31,7 @@
             --index-over-bg: rgba(16, 185, 129, 0.2);
             --index-under-bg: rgba(239, 68, 68, 0.2);
             --data-tab-active: #5a9ad9;
+            --accent-primary: #6366f1;
             --deck-bg-cream: #F2EFE9;
             --deck-text-primary: #1a1a2e;
             --deck-text-muted: #7A8B99;
@@ -67,6 +68,7 @@
             --index-over-bg: rgba(10, 117, 82, 0.14);
             --index-under-bg: rgba(135, 32, 54, 0.12);
             --data-tab-active: #0d9488;
+            --accent-primary: #4f46e5;
         }
         body[data-theme="light"] *::-webkit-scrollbar-track { background: #e5e9f0; }
         body[data-theme="light"] *::-webkit-scrollbar-thumb { background: #cbd5e1; }
@@ -29988,6 +29990,7 @@
                          + traffic-index scaled counts on every card. -->
                     <div id="jiqMonthCutBar" style="display: none; margin-top: 0.55rem; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
                     <div id="jiqMonthCutNote" style="display: none; margin-top: 0.45rem; padding: 0.4rem 0.7rem; background: rgba(99, 102, 241, 0.08); border-left: 3px solid var(--accent-primary); border-radius: 6px; font-size: 0.72rem; color: var(--text-primary); line-height: 1.4; max-width: 760px; cursor: pointer;" title="Click to expand details"></div>
+                    <div id="jiqMonthCutTable" style="display: none; margin-top: 0.5rem; max-width: 980px; overflow-x: auto;"></div>
                 </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                     <select id="jiqRunPicker" onchange="onJourneyIqRunPicked(this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; min-width: 240px;">
@@ -47584,6 +47587,14 @@
             renderJourneyIqDashboard();
         };
 
+        // Toggle the all-months detail table that lives right under
+        // the month pill bar. State persists on window so re-renders
+        // (triggered by picking a month from the table) keep it open.
+        window._jiqToggleMonthCutTable = function() {
+            window._jiqMonthCutTableOpen = !window._jiqMonthCutTableOpen;
+            _jiqRenderMonthCutBar();
+        };
+
         // Rebuild _jiqCurrentRun from _jiqOriginalRun, optionally
         // applying the current page-month cut. Always overwrites
         // _jiqCurrentRun in place via reassignment of the module-scope
@@ -47630,12 +47641,14 @@
         function _jiqRenderMonthCutBar() {
             var bar  = document.getElementById('jiqMonthCutBar');
             var note = document.getElementById('jiqMonthCutNote');
+            var tbl  = document.getElementById('jiqMonthCutTable');
             if (!bar) return;
             var orig = window._jiqOriginalRun || window._jiqCurrentRun || {};
             var mc = orig.monthly_cuts || null;
             if (!mc || !mc.enabled || !(mc.months || []).length) {
                 bar.style.display  = 'none';
                 if (note) note.style.display = 'none';
+                if (tbl)  tbl.style.display  = 'none';
                 return;
             }
             bar.style.display = 'flex';
@@ -47659,7 +47672,86 @@
                 }
                 html += '<button type="button" title="' + _jiqEsc(m.headline_note || '') + '" style="' + pillStyle(on) + '" onclick="_jiqPickPageMonth(\'' + _jiqEsc(m.key) + '\')">' + _jiqEsc(m.label || m.key) + hint + '</button>';
             });
+            // Trailing "View all in a table" toggle - a flat link-style
+            // button at the end of the pill row so it reads as a
+            // secondary action rather than a sibling pill. Tracks
+            // window._jiqMonthCutTableOpen so the table state
+            // survives re-renders triggered by picking a month.
+            var tblOpen = !!window._jiqMonthCutTableOpen;
+            html += '<button type="button" onclick="_jiqToggleMonthCutTable()"'
+                  +  ' style="margin-left: 6px; padding: 5px 10px; border-radius: 6px;'
+                  +  ' background: transparent;'
+                  +  ' border: 1px dashed ' + (tblOpen ? 'var(--accent-primary)' : 'var(--border-color)') + ';'
+                  +  ' color: ' + (tblOpen ? 'var(--accent-primary)' : 'var(--text-secondary)') + ';'
+                  +  ' font-size: 0.7rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease;"'
+                  +  ' title="' + (tblOpen ? 'Hide the month detail table' : 'See every month in a side-by-side table') + '">'
+                  +    (tblOpen ? '✕ Hide table' : '▦ View all in a table')
+                  +  '</button>';
             bar.innerHTML = html;
+
+            // ── All-months detail table (collapsible) ─────────────
+            if (tbl) {
+                if (!tblOpen) {
+                    tbl.style.display = 'none';
+                    tbl.innerHTML = '';
+                } else {
+                    tbl.style.display = 'block';
+                    var bw = mc.baseline_window || {};
+                    var thStyle = 'padding: 7px 10px; font-size: 0.6rem; text-transform: uppercase;'
+                                + ' letter-spacing: 0.06em; color: var(--text-secondary);'
+                                + ' border-bottom: 1px solid var(--border-color);'
+                                + ' text-align: left; white-space: nowrap;';
+                    var tdStyle = 'padding: 8px 10px; font-size: 0.78rem;'
+                                + ' border-bottom: 1px solid var(--border-color);'
+                                + ' color: var(--text-primary); vertical-align: top;';
+                    var rowsHtml = '';
+                    var allActive = !sel;
+                    rowsHtml += '<tr onclick="_jiqPickPageMonth(\'\')"'
+                              + ' style="cursor: pointer;' + (allActive ? ' background: rgba(99, 102, 241, 0.08);' : '') + '">'
+                              + '<td style="' + tdStyle + ' font-weight: 700;">' + _jiqEsc(bw.label || 'All months') + '</td>'
+                              + '<td style="' + tdStyle + ' color: var(--text-secondary);">5-month aggregate</td>'
+                              + '<td style="' + tdStyle + ' text-align: right; color: var(--text-secondary);">1.00×</td>'
+                              + '<td style="' + tdStyle + ' color: var(--text-secondary); font-style: italic; line-height: 1.45;">'
+                              +   'Pick a month pill to slice every card on the page to that calendar month - KPIs, funnel split, ecosystem MAUs, path-to-purchase volumes, and marketing reach all shift to the month\'s seasonality.'
+                              + '</td>'
+                              + '</tr>';
+                    mc.months.forEach(function(m) {
+                        var on = (sel === m.key);
+                        var ti = (m.traffic_index != null) ? m.traffic_index : 1;
+                        var deltaPct = ((ti - 1) * 100).toFixed(0);
+                        var deltaTxt = (deltaPct >= 0 ? '+' : '') + deltaPct + '%';
+                        var deltaCol = ti >= 1 ? 'var(--index-over)' : 'var(--index-under)';
+                        rowsHtml += '<tr onclick="_jiqPickPageMonth(\'' + _jiqEsc(m.key) + '\')"'
+                                  + ' style="cursor: pointer;' + (on ? ' background: rgba(99, 102, 241, 0.08);' : '') + '">'
+                                  + '<td style="' + tdStyle + ' font-weight: 700;">' + _jiqEsc(m.long_label || m.label || m.key) + '</td>'
+                                  + '<td style="' + tdStyle + '">'
+                                  +   '<span style="font-weight: 700;">' + ti.toFixed(2) + '×</span>'
+                                  +   ' <span style="font-size: 0.7rem; color: ' + deltaCol + '; font-weight: 600;">(' + deltaTxt + ')</span>'
+                                  + '</td>'
+                                  + '<td style="' + tdStyle + ' text-align: right; color: ' + deltaCol + '; font-weight: 700;">' + deltaTxt + '</td>'
+                                  + '<td style="' + tdStyle + ' color: var(--text-secondary); line-height: 1.45;">' + _jiqEsc(m.headline_note || '') + '</td>'
+                                  + '</tr>';
+                    });
+                    tbl.innerHTML =
+                        '<div style="border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background: var(--bg-card);">'
+                      +   '<div style="padding: 0.55rem 0.85rem; border-bottom: 1px solid var(--border-color); font-size: 0.66rem;'
+                      +    ' text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-secondary); font-weight: 700;'
+                      +    ' display: flex; justify-content: space-between; align-items: center;">'
+                      +     '<span>Monthly cuts · click any row to apply it to every card on the page</span>'
+                      +     '<span style="color: var(--accent-primary); font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 0.7rem; cursor: pointer;" onclick="_jiqToggleMonthCutTable()" title="Hide table">✕ close</span>'
+                      +   '</div>'
+                      +   '<table style="width: 100%; border-collapse: collapse;">'
+                      +     '<thead><tr>'
+                      +       '<th style="' + thStyle + '">Month</th>'
+                      +       '<th style="' + thStyle + '">Traffic index</th>'
+                      +       '<th style="' + thStyle + ' text-align: right;">vs 5-mo avg</th>'
+                      +       '<th style="' + thStyle + '">Seasonality note</th>'
+                      +     '</tr></thead>'
+                      +     '<tbody>' + rowsHtml + '</tbody>'
+                      +   '</table>'
+                      + '</div>';
+                }
+            }
 
             // Headline note for the active month (or the baseline
             // blurb). Rendered collapsed-by-default - the header
