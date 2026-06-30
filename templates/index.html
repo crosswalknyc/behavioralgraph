@@ -29987,7 +29987,7 @@
                          pill re-renders the entire dashboard with that month's overrides
                          + traffic-index scaled counts on every card. -->
                     <div id="jiqMonthCutBar" style="display: none; margin-top: 0.55rem; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
-                    <div id="jiqMonthCutNote" style="display: none; margin-top: 0.45rem; padding: 0.4rem 0.7rem; background: rgba(99, 102, 241, 0.08); border-left: 3px solid var(--accent-primary); border-radius: 6px; font-size: 0.72rem; color: var(--text-primary); line-height: 1.4; max-width: 760px;"></div>
+                    <div id="jiqMonthCutNote" style="display: none; margin-top: 0.45rem; padding: 0.4rem 0.7rem; background: rgba(99, 102, 241, 0.08); border-left: 3px solid var(--accent-primary); border-radius: 6px; font-size: 0.72rem; color: var(--text-primary); line-height: 1.4; max-width: 760px; cursor: pointer;" title="Click to expand details"></div>
                 </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                     <select id="jiqRunPicker" onchange="onJourneyIqRunPicked(this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; min-width: 240px;">
@@ -47661,22 +47661,50 @@
             });
             bar.innerHTML = html;
 
-            // Headline note for the active month (or the baseline blurb)
+            // Headline note for the active month (or the baseline
+            // blurb). Rendered collapsed-by-default - the header
+            // row (label + chevron) is always visible; the body
+            // (the explanatory blurb) is hidden until the user
+            // clicks the row to expand. The expanded/collapsed
+            // state is held on window._jiqMonthCutNoteExpanded so
+            // re-renders triggered by picking a month pill don't
+            // snap a user-expanded note back closed.
             if (note) {
+                var headerHtml = '', bodyHtml = '';
                 if (sel) {
                     var ms = _jiqFindMonthSpec(orig, sel);
                     if (ms) {
-                        note.style.display = 'block';
-                        note.innerHTML = '<strong>' + _jiqEsc(ms.long_label) + ':</strong> '
-                                       + _jiqEsc(ms.headline_note || '')
-                                       + ' <span style="color: var(--text-secondary);">·  traffic ' + (ms.traffic_index || 1).toFixed(2) + '× the 5-month avg</span>';
-                    } else {
-                        note.style.display = 'none';
+                        headerHtml = '<strong>' + _jiqEsc(ms.long_label) + '</strong>'
+                                   + ' <span style="color: var(--text-secondary); font-weight: 500;">·  traffic ' + (ms.traffic_index || 1).toFixed(2) + '× the 5-month avg</span>';
+                        bodyHtml = _jiqEsc(ms.headline_note || '');
                     }
                 } else {
-                    note.style.display = 'block';
                     var bw = mc.baseline_window || {};
-                    note.innerHTML = '<strong>' + _jiqEsc(bw.label || 'All months') + ':</strong> showing the aggregate 5-month view. Pick a month pill to slice every card on the page to that calendar month - KPIs, funnel split, ecosystem MAUs, path-to-purchase volumes, and marketing reach all shift to the month\'s seasonality.';
+                    headerHtml = '<strong>' + _jiqEsc(bw.label || 'All months') + '</strong>'
+                               + ' <span style="color: var(--text-secondary); font-weight: 500;">·  5-month aggregate</span>';
+                    bodyHtml = 'Showing the aggregate 5-month view. Pick a month pill to slice every card on the page to that calendar month - KPIs, funnel split, ecosystem MAUs, path-to-purchase volumes, and marketing reach all shift to the month\'s seasonality.';
+                }
+                if (!headerHtml) {
+                    note.style.display = 'none';
+                } else {
+                    note.style.display = 'block';
+                    var expanded = !!window._jiqMonthCutNoteExpanded;
+                    var chevron = expanded ? '▾' : '▸';
+                    var bodyStyle = expanded
+                        ? 'margin-top: 0.4rem; color: var(--text-primary);'
+                        : 'display: none;';
+                    note.innerHTML =
+                        '<div style="display: flex; align-items: center; gap: 0.45rem; user-select: none;">'
+                      +   '<span style="color: var(--accent-primary); font-weight: 700; font-size: 0.72rem; width: 0.9rem; display: inline-block; text-align: center;">' + chevron + '</span>'
+                      +   '<span style="flex: 1;">' + headerHtml + '</span>'
+                      +   (bodyHtml ? '<span style="font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); opacity: 0.75;">' + (expanded ? 'hide' : 'details') + '</span>' : '')
+                      + '</div>'
+                      + (bodyHtml ? '<div style="' + bodyStyle + '">' + bodyHtml + '</div>' : '');
+                    note.setAttribute('title', expanded ? 'Click to collapse' : 'Click to expand details');
+                    note.onclick = function() {
+                        window._jiqMonthCutNoteExpanded = !window._jiqMonthCutNoteExpanded;
+                        _jiqRenderMonthCutBar();
+                    };
                 }
             }
         }
