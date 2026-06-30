@@ -32079,6 +32079,151 @@
                     <div id="jiqNflxAttribResult" style="display: none;"></div>
                 </div>
 
+                <!-- ════════════════════════════════════════════════════════
+                     OBSESSION (FILM) - CAA DIRECTOR-REP STORY MODE
+                     A digital-journey deck tailored for a talent agency
+                     repping a director. Same tab-bar UX as Netflix.
+                     Painted + wired by _jiqObsRenderTabBar() only when
+                     meta.story_mode === 'obsession_caa'.
+                ═══════════════════════════════════════════════════════ -->
+
+                <div id="jiqObsTabBar"
+                     style="display: none; margin-top: 1rem; padding: 0.55rem 0.65rem;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.10) 0%, rgba(15,23,42,0.55) 100%);
+                            border: 1px solid rgba(168,85,247,0.32); border-radius: 8px;
+                            position: sticky; top: 0; z-index: 30;
+                            backdrop-filter: blur(6px);"></div>
+
+                <!-- ─── OBSESSION 1: 🎯 Discovery Spine ─── -->
+                <div class="card" id="jiqObsDiscoveryCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.05) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqObsDiscoveryTitle" style="margin: 0;">🎯 How audiences found Obsession</h3>
+                        <div id="jiqObsDiscoveryMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqObsDiscoverySubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqObsDiscoveryBody"></div>
+                </div>
+
+                <!-- ─── OBSESSION 2: 🎬 Trailer Wake ─── -->
+                <div class="card" id="jiqObsTrailerCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.05) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqObsTrailerTitle" style="margin: 0;">🎬 The trailer-drop wake</h3>
+                        <div id="jiqObsTrailerMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqObsTrailerSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqObsTrailerBody"></div>
+                </div>
+
+                <!-- ─── OBSESSION 3: 🎙️ Press Tour ─── -->
+                <div class="card" id="jiqObsPodcastCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.05) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqObsPodcastTitle" style="margin: 0;">🎙️ The director's press tour, ranked by tickets it moved</h3>
+                        <div id="jiqObsPodcastMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqObsPodcastSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqObsPodcastBody"></div>
+                </div>
+
+                <!-- ─── OBSESSION 4: 🎟️ Ticket Funnel ─── -->
+                <div class="card" id="jiqObsFunnelCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.05) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqObsFunnelTitle" style="margin: 0;">🎟️ The ticket-buy funnel</h3>
+                        <div id="jiqObsFunnelMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqObsFunnelSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqObsFunnelBody"></div>
+                </div>
+
+                <!-- ─── OBSESSION 5: 🕰️ Pre-Show 14d ─── -->
+                <div class="card" id="jiqObsPreShowCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.05) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqObsPreShowTitle" style="margin: 0;">🕰️ The 14 days between ticket-buy and show date</h3>
+                        <div id="jiqObsPreShowMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqObsPreShowSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqObsPreShowBody"></div>
+                </div>
+
+                <!-- ─── OBSESSION 6: 📺 Streaming Wake ─── -->
+                <div class="card" id="jiqObsStreamingCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.05) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqObsStreamingTitle" style="margin: 0;">📺 Post-show streaming pull-through</h3>
+                        <div id="jiqObsStreamingMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqObsStreamingSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqObsStreamingBody"></div>
+                </div>
+
+                <!-- ─── OBSESSION 7: 🗣️ Social Footprint ─── -->
+                <div class="card" id="jiqObsSocialCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.05) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqObsSocialTitle" style="margin: 0;">🗣️ The social + Letterboxd footprint</h3>
+                        <div id="jiqObsSocialMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqObsSocialSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqObsSocialBody"></div>
+                </div>
+
+                <!-- ─── OBSESSION 8: 🛒 Off-Screen Commerce ─── -->
+                <div class="card" id="jiqObsCommerceCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.05) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqObsCommerceTitle" style="margin: 0;">🛒 Off-screen commerce wake</h3>
+                        <div id="jiqObsCommerceMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqObsCommerceSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqObsCommerceBody"></div>
+                </div>
+
+                <!-- ─── OBSESSION 9: 💼 Brand Affinity ─── -->
+                <div class="card" id="jiqObsBrandCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.05) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqObsBrandTitle" style="margin: 0;">💼 Audience brand affinity - the CAA endorsement-pitch deck</h3>
+                        <div id="jiqObsBrandMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqObsBrandSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqObsBrandBody"></div>
+                </div>
+
+                <!-- ─── OBSESSION 10: 🎭 Comp + Director Equity Index ─── -->
+                <div class="card" id="jiqObsCompCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(168,85,247,0.05) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(168,85,247,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqObsCompTitle" style="margin: 0;">🎭 Comp-audience overlap + Director Equity Index</h3>
+                        <div id="jiqObsCompMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqObsCompSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqObsCompBody"></div>
+                </div>
+
             </div>
         </div><!-- End journeyIQView -->
 
@@ -47021,6 +47166,9 @@
                     opts.push('<optgroup label="🎬 Netflix">');
                     opts.push('<option value="__demo_netflix_ad_sales__">🎬 Netflix Ad-Sales Demand Map &amp; Off-Platform Intel</option>');
                     opts.push('</optgroup>');
+                    opts.push('<optgroup label="🎭 CAA - Talent / Director">');
+                    opts.push('<option value="__demo_obsession_caa__">🎭 Obsession (CAA director-rep digital journey)</option>');
+                    opts.push('</optgroup>');
 
                     // Run picker hide-list. Project / target names listed
                     // here are filtered out of the dropdown so stale demo
@@ -47076,6 +47224,48 @@
         // for any of the always-available pitch-demo keys, or null when
         // the key is a normal backend run that should fetch as usual.
         function _jiqMaybeHydrateDemoRun(key) {
+            if (key === '__demo_obsession_caa__') {
+                return {
+                    success: true,
+                    data: {
+                        meta: {
+                            story_mode: 'obsession_caa',
+                            target_name: 'Obsession',
+                            target_display: 'Obsession (film)',
+                            project_name: 'Obsession - CAA Director Journey',
+                            customer_brand: 'CAA',
+                            agency_lens: true,
+                            start_date: '2026-03-15',
+                            end_date: '2026-06-30',
+                            target_type: 'film_release_agency_lens',
+                            category: 'theatrical_release'
+                        },
+                        obs_meta:                _JIQ_OBSESSION_DATA.obs_meta,
+                        obs_discovery_spine:     _JIQ_OBSESSION_DATA.obs_discovery_spine,
+                        obs_trailer_wake:        _JIQ_OBSESSION_DATA.obs_trailer_wake,
+                        obs_podcast_wake:        _JIQ_OBSESSION_DATA.obs_podcast_wake,
+                        obs_booking_funnel:      _JIQ_OBSESSION_DATA.obs_booking_funnel,
+                        obs_pre_show_window:     _JIQ_OBSESSION_DATA.obs_pre_show_window,
+                        obs_post_show_streaming: _JIQ_OBSESSION_DATA.obs_post_show_streaming,
+                        obs_social_letterboxd:   _JIQ_OBSESSION_DATA.obs_social_letterboxd,
+                        obs_offscreen_commerce:  _JIQ_OBSESSION_DATA.obs_offscreen_commerce,
+                        obs_brand_affinity:      _JIQ_OBSESSION_DATA.obs_brand_affinity,
+                        obs_comp_overlap:        _JIQ_OBSESSION_DATA.obs_comp_overlap,
+                        facts: [
+                            { label: 'Headline',   value: 'The studio sees the gross. CAA sees the audience. 54.1% of Obsession ticket buyers can be traced back to the director or her cast - that is the agency-owned 1.29M-HH audience floor CAA can price the next package against.' },
+                            { label: 'Discovery',  value: 'Three of the top five discovery surfaces (TikTok fancam edits, Letterboxd, the director\'s podcast tour) are off-platform and talent-led. CAA can quantify and own this funnel; the studio cannot.' },
+                            { label: 'Press tour', value: 'Smartless + NPR Pop Culture Happy Hour + Marc Maron WTF delivered 100,430 incremental tickets in the 7d post-air window. Letterboxd: Best in Show converted 41.8% of its small but cinephile-dense audience.' },
+                            { label: 'Funnel',     value: 'Director-attributable buyers converted in 1.2 days vs 6.4 for marketing-driven buyers. Letterboxd-redirect tickets converted at 27.4% - the highest single-channel rate in the deck.' },
+                            { label: 'Pre-show',   value: '78.4% rewatched the trailer 2-3x. 41.2% queued the director\'s prior film. 32.1% booked an OpenTable reservation near the theater. The 14d pre-show window is high-intent commerce the studio cannot see.' },
+                            { label: 'Streaming',  value: 'Max captured 7.34M incremental streams of The Quiet Year off this release. A24 Channel grew subs 38.7%. CAA should renegotiate the next library window 32-41% higher.' },
+                            { label: 'Social',     value: '4.21 average Letterboxd rating across 247.8K ratings is a top-decile prestige score. 31,840 user-generated TikTok edits means the audience IS the marketing.' },
+                            { label: 'Commerce',   value: 'Mica Levi back-catalog +87.4%. Source novel +320-482% across retailers. Criterion Channel subs +24.7%. The cultural footprint the studio captures zero of, the director captures most.' },
+                            { label: 'Brand',      value: '$14.6M of estimated value across five concrete deal opportunities. Letterboxd Pro affinity index 487 - smallest cohort, highest purity. Mubi, Aesop, Apple TV+ are the three near-term wins.' },
+                            { label: 'Comp',       value: 'Director Equity Index = 87. Closest peers: Celine Song (88), Lanthimos (94). Poor Things shares 47.4% of this audience. Price the next package against these films, not against the gross.' }
+                        ]
+                    }
+                };
+            }
             if (key === '__demo_netflix_ad_sales__') {
                 return {
                     success: true,
@@ -48659,8 +48849,19 @@
             _jiqHideCard('jiqNflxGenreCard');
             _jiqHideCard('jiqNflxSalesPitchCard');
             _jiqHideCard('jiqNflxAttributionCard');
+            _jiqHideCard('jiqObsDiscoveryCard');
+            _jiqHideCard('jiqObsTrailerCard');
+            _jiqHideCard('jiqObsPodcastCard');
+            _jiqHideCard('jiqObsFunnelCard');
+            _jiqHideCard('jiqObsPreShowCard');
+            _jiqHideCard('jiqObsStreamingCard');
+            _jiqHideCard('jiqObsSocialCard');
+            _jiqHideCard('jiqObsCommerceCard');
+            _jiqHideCard('jiqObsBrandCard');
+            _jiqHideCard('jiqObsCompCard');
 
-            var _isNetflixStory = (_storyMode === 'netflix_ad_sales');
+            var _isObsessionStory = (_storyMode === 'obsession_caa');
+            var _isNetflixStory   = (_storyMode === 'netflix_ad_sales');
             if (_isNetflixStory) {
                 if (typeof renderJourneyIqNflxPreSignup === 'function') {
                     renderJourneyIqNflxPreSignup(_pickClickstreamBlock('nflx_pre_signup'));
@@ -48704,6 +48905,27 @@
                 }
             } else {
                 if (typeof _jiqNflxHideTabBar === 'function') _jiqNflxHideTabBar();
+            }
+
+            // Obsession story-mode branch - paint the CAA director-rep
+            // deck, then activate the first tab so reviewers see only
+            // one pull at a time.
+            if (_isObsessionStory) {
+                if (typeof renderJourneyIqObsDiscovery === 'function') renderJourneyIqObsDiscovery(_pickClickstreamBlock('obs_discovery_spine'));
+                if (typeof renderJourneyIqObsTrailer === 'function')   renderJourneyIqObsTrailer(_pickClickstreamBlock('obs_trailer_wake'));
+                if (typeof renderJourneyIqObsPodcast === 'function')   renderJourneyIqObsPodcast(_pickClickstreamBlock('obs_podcast_wake'));
+                if (typeof renderJourneyIqObsFunnel === 'function')    renderJourneyIqObsFunnel(_pickClickstreamBlock('obs_booking_funnel'));
+                if (typeof renderJourneyIqObsPreShow === 'function')   renderJourneyIqObsPreShow(_pickClickstreamBlock('obs_pre_show_window'));
+                if (typeof renderJourneyIqObsStreaming === 'function') renderJourneyIqObsStreaming(_pickClickstreamBlock('obs_post_show_streaming'));
+                if (typeof renderJourneyIqObsSocial === 'function')    renderJourneyIqObsSocial(_pickClickstreamBlock('obs_social_letterboxd'));
+                if (typeof renderJourneyIqObsCommerce === 'function')  renderJourneyIqObsCommerce(_pickClickstreamBlock('obs_offscreen_commerce'));
+                if (typeof renderJourneyIqObsBrand === 'function')     renderJourneyIqObsBrand(_pickClickstreamBlock('obs_brand_affinity'));
+                if (typeof renderJourneyIqObsComp === 'function')      renderJourneyIqObsComp(_pickClickstreamBlock('obs_comp_overlap'));
+                if (typeof _jiqObsActivateTab === 'function') {
+                    _jiqObsActivateTab(_jiqObsActiveTab || 'discovery');
+                }
+            } else {
+                if (typeof _jiqObsHideTabBar === 'function') _jiqObsHideTabBar();
             }
 
             // Facts - facts can be plain strings or {label, value} dicts.
@@ -57581,6 +57803,522 @@
             }
         };
 
+        // ══════════════════════════════════════════════════════════════
+        // OBSESSION (FILM) - CAA DIRECTOR-REP STORY-MODE DATASET
+        //
+        // Hand-authored payload powering the Obsession demo run. The
+        // brief: build a digital-journey deck that CAA would want to
+        // see for a film they have a director attached to. So unlike
+        // the Netflix deck (which sells audience to advertisers), this
+        // deck sells DIRECTOR EQUITY: how audiences found the film,
+        // how they converted into ticket buyers, what they did before
+        // they showed up, where they went after, and what off-screen
+        // commerce + brand-affinity surfaces CAA can monetize on
+        // behalf of the director (endorsement deals, podcast bookings,
+        // next-package pricing, festival-tour DMAs).
+        //
+        // All numbers ladder up to a single panel basis (n=87,420
+        // panelist HHs that bought a ticket to Obsession, projected
+        // to 2.39M U.S. ticket-buyer HHs via the 27.34x projection
+        // factor anchored to the published $34.2M domestic gross).
+        // ══════════════════════════════════════════════════════════════
+        var _JIQ_OBSESSION_DATA = {
+
+            // Shared panel basis - the single denominator every number
+            // in this deck ladders back to. Surface via _jiqObsPanelChip
+            // and _jiqObsCohortMeta so every card visibly anchors to it.
+            panel_basis: {
+                sample_panelists:  87420,
+                projected_us_hh:   2390000,
+                projection_factor: 27.34,
+                refresh_window:    'May 1 - Jun 28 2026, refreshed daily',
+                methodology_note:  'n=87,420 BehavioralGraph panelist HHs with a verified Obsession ticket purchase (Fandango / Atom / theater-chain native apps + opening-week showtime page-view -> seat-select -> checkout sequence). Projected to 2.39M U.S. ticket-buyer HHs via the 27.34x panel-to-population projection factor anchored to the $34.2M published domestic gross.'
+            },
+
+            // Film + director context. The agency_lens flag flips every
+            // card into "what CAA cares about" framing.
+            obs_meta: {
+                film: 'Obsession',
+                director: 'Naya Okonkwo',
+                director_repped_by: 'CAA',
+                agency_lens: true,
+                release_date: '2026-05-01',
+                run_end_date: '2026-06-30',
+                domestic_gross_m: 34.2,
+                tickets_sold_m: 3.04,
+                unique_hh_m: 2.39,
+                runtime_min: 118,
+                genre: 'Psychological thriller / prestige drama',
+                cast_top: ['Florence Pugh', 'Daniel Kaluuya', 'Vicky Krieps'],
+                prior_director_works: [
+                    { title: 'The Quiet Year',   year: 2022, distributor: 'A24'    },
+                    { title: 'Bonefire',         year: 2020, distributor: 'Neon'   },
+                    { title: 'Vellichor',        year: 2018, distributor: 'Mubi'   }
+                ]
+            },
+
+            // ─── PULL 1: Discovery Spine ────────────────────────────────
+            // The end-to-end journey from first touch to loyalty. The
+            // stage chevrons surface drop-off / completion at every
+            // step. The director-attribution lens measures what % of
+            // the audience came in BECAUSE OF the director (searched
+            // name, queued back-catalog, followed director social) vs
+            // genre interest, cast, marketing, or organic discovery.
+            obs_discovery_spine: {
+                enabled: true,
+                title: 'How audiences found Obsession',
+                subtitle: 'First touch -> ticket-buy -> seat -> post-show. The director-attribution lens shows the audience CAA owns vs. the audience marketing rented.',
+                stages: [
+                    { id: 'discovery', label: 'Discovery',    pct_entering: 100.0, pct_completing: 41.2, dropoff_pp: 58.8, days_median: 0,  note: 'First exposure to Obsession (trailer view, social mention, critic review, festival clip).' },
+                    { id: 'research',  label: 'Research',    pct_entering: 41.2,  pct_completing: 24.8, dropoff_pp: 16.4, days_median: 3,  note: 'Watched trailer 2nd+ time, looked up reviews, checked showtimes, added to Letterboxd watchlist.' },
+                    { id: 'ticket',    label: 'Ticket-buy',  pct_entering: 24.8,  pct_completing: 17.7, dropoff_pp: 7.1,  days_median: 5,  note: 'Completed ticket purchase via Fandango / Atom / theater-chain native app.' },
+                    { id: 'showup',    label: 'Show-up',     pct_entering: 17.7,  pct_completing: 16.4, dropoff_pp: 1.3,  days_median: 9,  note: 'Attended scheduled showtime (small no-show share for refunds + reschedules).' },
+                    { id: 'loyalty',   label: 'Loyalty',     pct_entering: 16.4,  pct_completing: 11.9, dropoff_pp: 4.5,  days_median: 22, note: 'Post-show loyalty: queued director back-catalog, left Letterboxd 4+ star review, followed director on social, or recommended to >=1 friend.' }
+                ],
+                director_attribution: {
+                    director_driven_pct:   31.7,
+                    director_driven_hh:    757630,
+                    cast_driven_pct:       22.4,
+                    cast_driven_hh:        535360,
+                    marketing_driven_pct:  19.8,
+                    marketing_driven_hh:   473220,
+                    genre_organic_pct:     14.6,
+                    genre_organic_hh:      348940,
+                    word_of_mouth_pct:     11.5,
+                    word_of_mouth_hh:      274850,
+                    note_for_caa: 'CAA owns the 31.7% director-driven cohort outright. Combined with the 22.4% cast-driven cohort (CAA-adjacent in most cases), the agency-attributable audience is 54.1% of total ticket-buyers - 1.29M U.S. HHs. That is the price floor for the next package.'
+                },
+                top_discovery_surfaces: [
+                    { surface: 'TikTok organic (#obsessionmovie + fancam edits)', share_pct: 21.4, hh: 511460, on_platform: false, paid: false },
+                    { surface: 'YouTube trailer + reaction videos',                 share_pct: 17.8, hh: 425420, on_platform: false, paid: false },
+                    { surface: 'Letterboxd watchlist + reviews',                    share_pct: 12.6, hh: 301140, on_platform: false, paid: false },
+                    { surface: 'NYT / Vulture / Indiewire early reviews',           share_pct: 9.7,  hh: 231830, on_platform: false, paid: false },
+                    { surface: 'Director podcast circuit (Smartless, Marc Maron, NPR Pop Culture Happy Hour)', share_pct: 8.4, hh: 200760, on_platform: false, paid: false },
+                    { surface: 'Word of mouth (text / DM share)',                   share_pct: 7.9,  hh: 188810, on_platform: false, paid: false },
+                    { surface: 'Instagram Reels (paid + organic)',                  share_pct: 6.8,  hh: 162520, on_platform: false, paid: true  },
+                    { surface: 'Festival-circuit press (Sundance / Cannes Q&A clips)', share_pct: 4.7, hh: 112330, on_platform: false, paid: false },
+                    { surface: 'Reddit (r/movies / r/TrueFilm / r/Letterboxd)',     share_pct: 4.3,  hh: 102770, on_platform: false, paid: false },
+                    { surface: 'Theater chain native apps (AMC Stubs / Regal Crown Club)', share_pct: 3.6, hh: 86040, on_platform: true,  paid: false },
+                    { surface: 'Google Showtimes / search ads',                     share_pct: 2.8,  hh: 66920,  on_platform: false, paid: true  }
+                ],
+                takeaway_for_caa: '54.1% of Obsession ticket buyers can be directly attributed to the director or her cast. CAA should price the director\'s next package against a proven 1.29M-HH audience floor, not against the film\'s gross. Three of the top five discovery surfaces are off-platform talent-led (TikTok fancam edits, Letterboxd, podcast tour) - this is CAA-owned demand, not distributor-owned demand.'
+            },
+
+            // ─── PULL 2: Trailer-Drop Wake ──────────────────────────────
+            // Minute-by-minute spread of the trailer when it landed,
+            // the viral moments, search/save velocity, and which
+            // surfaces lit up first. CAA cares because trailer-wake
+            // intensity is the most reliable leading indicator of
+            // opening-weekend ticket-buy.
+            obs_trailer_wake: {
+                enabled: true,
+                title: 'The trailer-drop wake',
+                subtitle: 'Mar 17 2026, 9:00am ET. Six weeks of velocity decay from the first frame on YouTube to opening weekend.',
+                trailer_drop_at: '2026-03-17T09:00:00-04:00',
+                first_72h: {
+                    youtube_views_m:           14.6,
+                    youtube_likes_k:           487.3,
+                    instagram_reel_views_m:    22.4,
+                    tiktok_reupload_count:     31840,
+                    tiktok_total_views_m:      89.7,
+                    letterboxd_watchlist_adds: 184620,
+                    google_search_index:       418,
+                    imdb_page_lookups_k:       612.1,
+                    director_name_search_lift: 8.4,
+                    note: 'TikTok re-uploads outpaced the official YouTube cut 6.1:1 in raw views during the first 72 hours. The fancam-edit-driven amplification is the asset CAA can quantify on behalf of the director.'
+                },
+                viral_moments: [
+                    { moment: 'The needle-drop on Mitski - Nobody (0:48 of trailer)',     tiktok_uses_k: 47.2, sound_saves_k: 312.4, note: 'Used as the audio bed in 47.2K user-generated edits, mostly fancams of Florence Pugh.' },
+                    { moment: 'The Pugh monologue ("you don\'t know what you took")',     tiktok_uses_k: 18.6, sound_saves_k: 94.7,  note: 'Quoted in 18.6K standalone reaction videos. Top comment "I felt this in my bones" has 412K likes.' },
+                    { moment: 'The single-take dinner-party scene (1:32 mark)',           tiktok_uses_k: 11.4, sound_saves_k: 38.2,  note: 'Cinephile Twitter / Letterboxd shorthand for "this is a real movie". Drove the festival-prestige framing.' },
+                    { moment: 'Kaluuya\'s final-shot stare (last 6 seconds)',             tiktok_uses_k: 8.9,  sound_saves_k: 24.1,  note: 'Memed extensively. The "Kaluuya stare" emerged as a stand-alone reaction format.' }
+                ],
+                velocity_by_week: [
+                    { week_label: 'W-6 (drop)',  youtube_daily_views_k: 4870, search_index: 418, letterboxd_adds_daily: 38420 },
+                    { week_label: 'W-5',         youtube_daily_views_k: 1840, search_index: 187, letterboxd_adds_daily: 14820 },
+                    { week_label: 'W-4',         youtube_daily_views_k: 1120, search_index: 142, letterboxd_adds_daily: 9870  },
+                    { week_label: 'W-3',         youtube_daily_views_k:  920, search_index: 158, letterboxd_adds_daily: 8420  },
+                    { week_label: 'W-2',         youtube_daily_views_k: 1410, search_index: 224, letterboxd_adds_daily: 12640 },
+                    { week_label: 'W-1',         youtube_daily_views_k: 2680, search_index: 312, letterboxd_adds_daily: 21470 },
+                    { week_label: 'Opening',     youtube_daily_views_k: 3920, search_index: 478, letterboxd_adds_daily: 34810 }
+                ],
+                top_dmas_by_trailer_engagement: [
+                    { dma: 'New York',      engagement_index: 247, share_pct: 11.4 },
+                    { dma: 'Los Angeles',   engagement_index: 234, share_pct: 9.7  },
+                    { dma: 'San Francisco', engagement_index: 218, share_pct: 5.4  },
+                    { dma: 'Chicago',       engagement_index: 188, share_pct: 4.9  },
+                    { dma: 'Austin',        engagement_index: 247, share_pct: 3.2  },
+                    { dma: 'Portland OR',   engagement_index: 264, share_pct: 2.8  },
+                    { dma: 'Seattle',       engagement_index: 198, share_pct: 3.7  },
+                    { dma: 'Boston',        engagement_index: 184, share_pct: 3.4  },
+                    { dma: 'Asheville',     engagement_index: 312, share_pct: 0.8  },
+                    { dma: 'Madison WI',    engagement_index: 287, share_pct: 0.9  }
+                ],
+                takeaway_for_caa: 'The trailer\'s viral moments (the Mitski needle-drop, the Pugh monologue, the dinner-party long take) were earned-not-bought. CAA can quantify this as the director\'s ability to cut a sequence that survives the algorithm. The Asheville / Madison / Portland triangle is the prestige-arthouse anchor - send the director on press tour there for film #2.'
+            },
+
+            // ─── PULL 3: Talent-Podcast Wake ────────────────────────────
+            // The director\'s 8-week press tour, ranked by ticket-buy
+            // lift in the 7d post-air vs pre-air window. This is the
+            // most actionable CAA card: book talent on the shows that
+            // actually moved tickets last time.
+            obs_podcast_wake: {
+                enabled: true,
+                title: 'The director\'s press tour, ranked by tickets it moved',
+                subtitle: '8 weeks. 17 podcast and late-night appearances. The audience-attributable lift in the 7d post-air vs. matched pre-air window, per show.',
+                ranked: [
+                    { rank: 1,  show: 'Smartless',                  host: 'Bateman / Arnett / Hayes',    air_date: '2026-04-08', listener_cohort_m: 4.8, ticket_buy_lift_pct: 18.4, search_lift_pct: 24.1, back_catalog_streams_lift_pct: 31.2, incremental_tickets_proj: 47820, note: 'The conversion engine. Biggest podcast cohort + most concentrated 7d ticket-buy spike of the tour.' },
+                    { rank: 2,  show: 'NPR Pop Culture Happy Hour', host: 'Linda Holmes',                air_date: '2026-04-22', listener_cohort_m: 1.6, ticket_buy_lift_pct: 28.7, search_lift_pct: 19.4, back_catalog_streams_lift_pct: 24.8, incremental_tickets_proj: 28430, note: 'Highest LIFT rate of the tour. NPR listener overlap with Letterboxd power-users is the prestige-anchor audience.' },
+                    { rank: 3,  show: 'Marc Maron WTF',             host: 'Marc Maron',                  air_date: '2026-04-15', listener_cohort_m: 2.3, ticket_buy_lift_pct: 22.1, search_lift_pct: 17.8, back_catalog_streams_lift_pct: 28.4, incremental_tickets_proj: 24180, note: 'Maron\'s craft-deep interview style drove the highest back-catalog lift of the entire tour (28.4%).' },
+                    { rank: 4,  show: 'The Daily Show',             host: 'Jon Stewart',                 air_date: '2026-04-29', listener_cohort_m: 2.1, ticket_buy_lift_pct: 14.2, search_lift_pct: 21.4, back_catalog_streams_lift_pct: 12.1, incremental_tickets_proj: 19840, note: 'Late-night appearance week-of-release. Drove broad-funnel awareness, weaker back-catalog pull-through.' },
+                    { rank: 5,  show: 'Letterboxd: Best in Show',   host: 'Mia Lee Vicino / Gemma Gracewood', air_date: '2026-03-31', listener_cohort_m: 0.42, ticket_buy_lift_pct: 41.8, search_lift_pct: 12.4, back_catalog_streams_lift_pct: 38.7, incremental_tickets_proj: 14620, note: 'Smallest cohort, highest cohort-conversion of the tour. 41.8% of pre-existing Letterboxd listeners who heard the episode bought a ticket within 7 days.' },
+                    { rank: 6,  show: 'Conan O\'Brien Needs A Friend', host: 'Conan O\'Brien',            air_date: '2026-04-12', listener_cohort_m: 1.4, ticket_buy_lift_pct: 16.7, search_lift_pct: 14.8, back_catalog_streams_lift_pct: 18.2, incremental_tickets_proj: 13820, note: 'Strong narrative-storytelling cohort overlap. Good fit for the director\'s personality.' },
+                    { rank: 7,  show: 'Fresh Air',                  host: 'Terry Gross',                 air_date: '2026-05-06', listener_cohort_m: 0.94, ticket_buy_lift_pct: 24.6, search_lift_pct: 18.4, back_catalog_streams_lift_pct: 27.4, incremental_tickets_proj: 12640, note: 'The Terry Gross prestige stamp. Drove sustained 14d post-air ticket-buy not just the 7d window.' },
+                    { rank: 8,  show: 'The Big Picture',            host: 'Sean Fennessey / Amanda Dobbins', air_date: '2026-04-19', listener_cohort_m: 0.62, ticket_buy_lift_pct: 31.4, search_lift_pct: 12.8, back_catalog_streams_lift_pct: 21.7, incremental_tickets_proj: 11240, note: 'Ringer film-pod cohort is dense + decision-making. Drove disproportionate ticket-buy per listener.' },
+                    { rank: 9,  show: 'Las Culturistas',            host: 'Bowen Yang / Matt Rogers',    air_date: '2026-04-26', listener_cohort_m: 0.78, ticket_buy_lift_pct: 22.4, search_lift_pct: 28.1, back_catalog_streams_lift_pct: 14.8, incremental_tickets_proj: 9620,  note: 'Gen-Z + queer-cinephile cohort. Drove the highest director-name search lift outside Smartless.' },
+                    { rank: 10, show: 'You Must Remember This',     host: 'Karina Longworth',            air_date: '2026-03-24', listener_cohort_m: 0.31, ticket_buy_lift_pct: 38.2, search_lift_pct: 9.4,  back_catalog_streams_lift_pct: 42.1, incremental_tickets_proj: 7480,  note: 'Smallest cohort but the highest back-catalog lift of the tour. Cinema-history-listener intent is fully formed before the episode airs.' }
+                ],
+                untapped: [
+                    { show: 'WTF Hot Ones',         host: 'Sean Evans',          why_caa_should_book: 'Cast-anchored vehicle. Strong opener for the director\'s next film with Pugh attached.' },
+                    { show: 'Las Culturistas Friends Edition',                  host: 'Bowen Yang / Matt Rogers', why_caa_should_book: 'Higher reach for a queer-cinephile audience that already over-indexes on the director\'s work.' },
+                    { show: 'On Being',             host: 'Krista Tippett',      why_caa_should_book: 'Reach the prestige-quiet audience the director\'s work resonates with most. Cross-over to NYRB / Substack reader graph.' },
+                    { show: 'Maintenance Phase',    host: 'Aubrey Gordon / Michael Hobbes', why_caa_should_book: 'Adjacent audience graph (cultural criticism, body-image discourse) that has not yet been activated for the director.' }
+                ],
+                takeaway_for_caa: 'Smartless + NPR PCHH + WTF Maron = three shows that together delivered 100,430 incremental tickets in the 7d post-air window - 3.3% of the entire opening run. Book these three FIRST on every CAA package. Letterboxd: Best in Show converted 41.8% of its listenership in 7 days; small cohort, but the highest-intent audience on the tour - lead with this for the director\'s next prestige festival drop.'
+            },
+
+            // ─── PULL 4: Ticket-Buy Funnel ──────────────────────────────
+            // Discovery -> search -> showtime page -> seat-select ->
+            // checkout. By channel + by week. Drop-off at each step
+            // and time-to-convert distribution.
+            obs_booking_funnel: {
+                enabled: true,
+                title: 'The ticket-buy funnel',
+                subtitle: 'From trailer-view to seat-select. Channel mix, drop-off, time-to-convert.',
+                funnel_steps: [
+                    { step: 'Trailer / clip view',          count_hh: 14820000, share_of_aware_pct: 100.0, drop_pp: 0 },
+                    { step: 'Director / film name search',  count_hh: 7140000,  share_of_aware_pct: 48.2,  drop_pp: 51.8 },
+                    { step: 'Showtime page view',           count_hh: 3870000,  share_of_aware_pct: 26.1,  drop_pp: 22.1 },
+                    { step: 'Seat-select step',             count_hh: 2820000,  share_of_aware_pct: 19.0,  drop_pp: 7.1  },
+                    { step: 'Checkout completed',           count_hh: 2390000,  share_of_aware_pct: 16.1,  drop_pp: 2.9  }
+                ],
+                by_channel: [
+                    { channel: 'Fandango',                          share_of_buys_pct: 31.4, hh: 750460, conversion_rate_pct: 17.8, avg_seat_select_to_checkout_sec: 84,  note: 'The largest channel. Conversion is well-tuned. The mobile flow is the highest-converting on the funnel.' },
+                    { channel: 'AMC Stubs native app',              share_of_buys_pct: 18.7, hh: 446930, conversion_rate_pct: 24.6, avg_seat_select_to_checkout_sec: 62,  note: 'Highest conversion rate of any channel. Stubs A-List subscribers do not see a price page.' },
+                    { channel: 'Atom Tickets',                      share_of_buys_pct: 12.8, hh: 305920, conversion_rate_pct: 14.2, avg_seat_select_to_checkout_sec: 102, note: 'Strong cinephile cohort. Lower conversion but higher pre-show engagement (trailer rewatches inside app).' },
+                    { channel: 'Regal Crown Club native app',       share_of_buys_pct: 9.4,  hh: 224660, conversion_rate_pct: 21.4, avg_seat_select_to_checkout_sec: 71,  note: 'Regal Unlimited subscribers - similar friction-free flow to AMC A-List.' },
+                    { channel: 'Theater chain web (AMC.com / Regal.com)', share_of_buys_pct: 8.9, hh: 212710, conversion_rate_pct: 11.4, avg_seat_select_to_checkout_sec: 138, note: 'Desktop-skewed. Older skew. Higher drop-off on the seat-select to checkout step.' },
+                    { channel: 'Google Showtimes redirect',         share_of_buys_pct: 7.6,  hh: 181640, conversion_rate_pct: 9.8,  avg_seat_select_to_checkout_sec: 152, note: 'Pure intent. People who searched the film by name and clicked the Google Showtimes module.' },
+                    { channel: 'Letterboxd "Where to watch" redirect', share_of_buys_pct: 4.2, hh: 100380, conversion_rate_pct: 27.4, avg_seat_select_to_checkout_sec: 58,  note: 'The HIGHEST per-impression conversion of any channel. Letterboxd-redirected ticket buyers are fully-formed intent.' },
+                    { channel: 'Apple Wallet / mobile pass',        share_of_buys_pct: 3.1,  hh: 74090,  conversion_rate_pct: 19.7, avg_seat_select_to_checkout_sec: 91,  note: 'Premium-iOS skew. Higher avg ticket price.' },
+                    { channel: 'Independent / arthouse theater native', share_of_buys_pct: 3.8, hh: 90820, conversion_rate_pct: 22.1, avg_seat_select_to_checkout_sec: 76,  note: 'Alamo / Metrograph / Music Box / Egyptian native flows. Lower share but the highest repeat-attendance rate (3.4x).' }
+                ],
+                time_to_convert_days: {
+                    median: 4.8,
+                    p25: 1.8,
+                    p75: 11.4,
+                    p90: 21.2,
+                    by_segment: [
+                        { segment: 'Director-driven',     median_days: 1.2,  share_pct: 31.7 },
+                        { segment: 'Cast-driven',         median_days: 3.8,  share_pct: 22.4 },
+                        { segment: 'Marketing-driven',    median_days: 6.4,  share_pct: 19.8 },
+                        { segment: 'Word-of-mouth',       median_days: 14.7, share_pct: 11.5 },
+                        { segment: 'Genre/organic',       median_days: 8.9,  share_pct: 14.6 }
+                    ]
+                },
+                weekly_attendance_curve: [
+                    { week: 'W1 (opening)', tickets_m: 1.24, share_pct: 40.8 },
+                    { week: 'W2',           tickets_m: 0.87, share_pct: 28.6 },
+                    { week: 'W3',           tickets_m: 0.52, share_pct: 17.1 },
+                    { week: 'W4',           tickets_m: 0.28, share_pct: 9.2  },
+                    { week: 'W5+',          tickets_m: 0.13, share_pct: 4.3  }
+                ],
+                takeaway_for_caa: 'Director-driven buyers converted in 1.2 days vs 6.4 days for marketing-driven buyers. The agency-owned audience is faster, more decisive, and over-indexes on Letterboxd-redirect (27.4% conversion) + AMC A-List (24.6%). For film #2: tilt distribution windows toward Alamo / Metrograph independent flows where repeat-attendance is 3.4x.'
+            },
+
+            // ─── PULL 5: The 14 Days Before Show ────────────────────────
+            // What audiences did between ticket-buy and show date. The
+            // pre-show window is the most under-monetized part of the
+            // funnel - audiences are in a high-intent, high-spend
+            // state and predictable behaviors emerge.
+            obs_pre_show_window: {
+                enabled: true,
+                title: 'The 14 days between ticket-buy and show date',
+                subtitle: 'High-intent commercial behavior the studio cannot see in their box-office logs.',
+                cohort_label: 'Audiences who bought a ticket but had not yet attended',
+                cohort_hh: 2390000,
+                pre_show_behaviors: [
+                    { behavior: 'Watched the trailer 2-3 more times',                 share_of_cohort_pct: 78.4, hh: 1873760, lift_index_vs_genpop: 412, note: 'Re-watch median = 2.7x. Spikes in the 48h before showtime.' },
+                    { behavior: 'Queued the director\'s prior film on streaming',     share_of_cohort_pct: 41.2, hh: 984680,  lift_index_vs_genpop: 528, note: 'The Quiet Year (A24, on Max + A24 Channel) was the most-queued prior work.' },
+                    { behavior: 'Read NYT / Vulture / Letterboxd reviews',            share_of_cohort_pct: 38.7, hh: 924930,  lift_index_vs_genpop: 247, note: 'Critic-checking peaks 3-5 days pre-show. NYT is the single most-clicked outlet.' },
+                    { behavior: 'IMDB-looked up cast filmographies',                  share_of_cohort_pct: 34.6, hh: 826940,  lift_index_vs_genpop: 198, note: 'Florence Pugh\'s page received +71.4% traffic vs. the matched 30d pre-trailer-drop baseline.' },
+                    { behavior: 'Streamed the soundtrack on Spotify / Apple Music',   share_of_cohort_pct: 24.7, hh: 590330,  lift_index_vs_genpop: 384, note: 'The Mitski needle-drop drove a 218% lift in "Nobody" streams from this cohort alone.' },
+                    { behavior: 'Picked up the source novel / related reading',       share_of_cohort_pct: 14.8, hh: 353720,  lift_index_vs_genpop: 642, note: 'Amazon book sales of the source novel saw a 4.2x lift in the 14d window. Bookshop.org spike was 5.8x.' },
+                    { behavior: 'Made an OpenTable reservation near the theater',     share_of_cohort_pct: 32.1, hh: 767190,  lift_index_vs_genpop: 187, note: 'Dinner-and-a-movie. Median reservation 2hr before showtime. Average party size 2.3.' },
+                    { behavior: 'Looked up critics\' top-10 list inclusions',         share_of_cohort_pct: 12.4, hh: 296360,  lift_index_vs_genpop: 312, note: 'Searches for "best films of 2026" peaked at the W3 mark.' },
+                    { behavior: 'Followed the director on Instagram / TikTok',        share_of_cohort_pct: 18.6, hh: 444540,  lift_index_vs_genpop: 421, note: 'Net new follow rate on the director\'s Instagram = +42K in the 14d window. CAA-trackable on platform.' },
+                    { behavior: 'Bought premium-format upgrade (IMAX / Dolby / 70mm)', share_of_cohort_pct: 22.4, hh: 535360,  lift_index_vs_genpop: 218, note: 'Premium-format pickup rate is 2.18x genpop average for prestige drama. Cinephile signal.' }
+                ],
+                top_streamers_benefiting_from_back_catalog: [
+                    { streamer: 'Max',            director_prior_title: 'The Quiet Year (2022)',   queue_lift_pct: 87.4, est_incremental_minutes_streamed_m: 14.6, note: 'Max owns the director\'s biggest back-catalog title. Single biggest beneficiary of the press tour.' },
+                    { streamer: 'A24 Channel',    director_prior_title: 'The Quiet Year + Vellichor', queue_lift_pct: 142.1, est_incremental_minutes_streamed_m: 4.2, note: 'Highest lift % - small base but enormous director-cohort overlap.' },
+                    { streamer: 'Mubi',           director_prior_title: 'Vellichor (2018)',        queue_lift_pct: 96.4, est_incremental_minutes_streamed_m: 2.8, note: 'Subscription net-adds in the 14d window were +21.4% above their 90d baseline.' },
+                    { streamer: 'Criterion Channel', director_prior_title: 'Bonefire (2020)',      queue_lift_pct: 78.4, est_incremental_minutes_streamed_m: 1.4, note: 'Lower share but the highest-intent cohort - 24.7% who streamed Bonefire then bought a Criterion 4K disc.' }
+                ],
+                takeaway_for_caa: 'The 14d pre-show window is where the director\'s back-catalog economics live. Max captured 14.6M incremental streamed minutes of The Quiet Year off the back of this release - that is a window-payment renegotiation in CAA\'s pocket for the next library deal. Soundtrack + source-novel lift (218% / 4.2x) is direct off-screen commerce that the studio cannot bill against, and the director can.'
+            },
+
+            // ─── PULL 6: Post-Show Streaming Pull-Through ───────────────
+            // 30 days after they saw Obsession, what did they stream.
+            // The director\'s back-catalog + comparable directors +
+            // genre adjacencies. This is the CAA window-renegotiation
+            // card: which streamer monetized this audience most, and
+            // what the next library window should price at.
+            obs_post_show_streaming: {
+                enabled: true,
+                title: 'Post-show streaming pull-through',
+                subtitle: '30 days after seeing Obsession in theaters. The director\'s back-catalog, comparable directors, and the genre-adjacency catalog this audience pulled through.',
+                director_back_catalog_lift_by_streamer: [
+                    { streamer: 'Max',                 title: 'The Quiet Year',     base_streams_30d_m: 8.4,  post_show_lift_pct: 87.4,  incremental_streams_m: 7.34, note: 'The single biggest beneficiary of the entire release wake. CAA should price the next Max window 32-41% higher.' },
+                    { streamer: 'A24 Channel',         title: 'The Quiet Year + Vellichor', base_streams_30d_m: 0.42, post_show_lift_pct: 142.1, incremental_streams_m: 0.60, note: 'Subscription net-adds traceable to this release: +14,200 new A24 subs in the 30d window.' },
+                    { streamer: 'Mubi',                title: 'Vellichor',          base_streams_30d_m: 0.31, post_show_lift_pct: 96.4,  incremental_streams_m: 0.30, note: 'Mubi US sub growth +21.4% above their 90d trailing baseline in the 30d window.' },
+                    { streamer: 'Criterion Channel',   title: 'Bonefire',           base_streams_30d_m: 0.18, post_show_lift_pct: 78.4,  incremental_streams_m: 0.14, note: 'Highest disc-purchase pull-through - 24.7% of Bonefire streamers then bought the Criterion 4K.' }
+                ],
+                comparable_directors_queued: [
+                    { director: 'Yorgos Lanthimos',    titles: ['Poor Things', 'The Favourite', 'Kinds of Kindness'], post_show_lift_pct: 38.7, primary_platform: 'Hulu / Searchlight', overlap_audience_pct: 47.4 },
+                    { director: 'Lynne Ramsay',        titles: ['You Were Never Really Here', 'We Need to Talk About Kevin'], post_show_lift_pct: 47.2, primary_platform: 'Prime / Amazon', overlap_audience_pct: 41.8 },
+                    { director: 'Park Chan-wook',      titles: ['Decision to Leave', 'The Handmaiden', 'Oldboy'], post_show_lift_pct: 41.4, primary_platform: 'Mubi / Criterion Channel', overlap_audience_pct: 38.2 },
+                    { director: 'Jonathan Glazer',     titles: ['The Zone of Interest', 'Under the Skin'], post_show_lift_pct: 52.1, primary_platform: 'Max / A24 Channel', overlap_audience_pct: 44.7 },
+                    { director: 'Charlotte Wells',     titles: ['Aftersun'],                              post_show_lift_pct: 34.8, primary_platform: 'Mubi / A24 Channel', overlap_audience_pct: 28.4 },
+                    { director: 'Andrea Arnold',       titles: ['Bird', 'Cow', 'Fish Tank', 'American Honey'], post_show_lift_pct: 31.7, primary_platform: 'Mubi / Criterion Channel', overlap_audience_pct: 26.1 },
+                    { director: 'Ari Aster',           titles: ['Beau is Afraid', 'Hereditary', 'Midsommar'], post_show_lift_pct: 28.4, primary_platform: 'Max / A24 Channel', overlap_audience_pct: 31.7 },
+                    { director: 'Celine Sciamma',      titles: ['Portrait of a Lady on Fire', 'Petite Maman'], post_show_lift_pct: 36.2, primary_platform: 'Hulu / Criterion Channel', overlap_audience_pct: 24.8 }
+                ],
+                cast_filmography_pull_through: [
+                    { cast_member: 'Florence Pugh',    titles_with_lift: ['Midsommar', 'Lady Macbeth', 'A Good Person', 'The Wonder'], avg_lift_pct: 42.1, primary_platforms: ['Max', 'Prime', 'Netflix'] },
+                    { cast_member: 'Daniel Kaluuya',   titles_with_lift: ['Get Out', 'Nope', 'Judas and the Black Messiah', 'Sicario'], avg_lift_pct: 38.7, primary_platforms: ['Peacock', 'Max', 'Prime'] },
+                    { cast_member: 'Vicky Krieps',     titles_with_lift: ['Phantom Thread', 'Corsage', 'Hold Me Tight', 'Bergman Island'], avg_lift_pct: 47.4, primary_platforms: ['Hulu', 'Mubi', 'Criterion Channel'] }
+                ],
+                takeaway_for_caa: 'Max gets the biggest direct payout from this release - 7.34M incremental streams of The Quiet Year off Obsession\'s back. CAA can argue the next Max library window should price 32-41% above the prior round. The comparable-directors graph (Lanthimos, Ramsay, Park, Glazer) defines the audience that holds up for the next package: a 38-52% lift cohort across 4 streamers. This is the audience CAA actually owns - regardless of which studio finances film #2.'
+            },
+
+            // ─── PULL 7: Social + Letterboxd Spillover ──────────────────
+            // The cultural footprint - Letterboxd ratings + reviews,
+            // Reddit thread density, TikTok hashtag velocity, Twitter
+            // critic threads, Instagram premiere coverage. The signal
+            // CAA can use to price talent (the director, the cast)
+            // for press tours, brand deals, festival appearances.
+            obs_social_letterboxd: {
+                enabled: true,
+                title: 'The social + Letterboxd footprint',
+                subtitle: 'The cultural-conversation surface CAA can value when pricing the director\'s next package or her cast\'s endorsement deals.',
+                letterboxd: {
+                    ratings_count_k: 247.8,
+                    avg_rating: 4.21,
+                    rating_distribution: [
+                        { stars: 5,   share_pct: 41.4 },
+                        { stars: 4.5, share_pct: 18.7 },
+                        { stars: 4,   share_pct: 17.2 },
+                        { stars: 3.5, share_pct: 9.4  },
+                        { stars: 3,   share_pct: 6.8  },
+                        { stars: 2.5, share_pct: 3.1  },
+                        { stars: 2,   share_pct: 1.7  },
+                        { stars: 1.5, share_pct: 0.8  },
+                        { stars: 1,   share_pct: 0.9  }
+                    ],
+                    watchlist_adds_pre_release: 184620,
+                    watchlist_adds_post_release: 312480,
+                    top_lists_inclusions: [
+                        '"Best of 2026 (so far)"                   - 41 user lists (top 25 by followers)',
+                        '"Films directed by women"                 - 89 user lists',
+                        '"A24 / Neon prestige drama"               - 67 user lists',
+                        '"Performances I will think about forever" - 34 user lists'
+                    ],
+                    fancam_edit_count: 12840,
+                    review_pull_quotes: [
+                        '"Florence Pugh has never been better and that is a sentence I do not write lightly." - 89,400 likes',
+                        '"Okonkwo made a film about being looked at without ever once exploiting the gaze." - 67,200 likes',
+                        '"The dinner-party scene will be taught in film schools in 5 years." - 41,800 likes'
+                    ]
+                },
+                reddit: {
+                    threads_count: 1240,
+                    upvote_total_k: 487.2,
+                    comment_total_k: 89.4,
+                    top_subreddits: [
+                        { sub: 'r/movies',        thread_count: 412, sentiment_score: 0.84 },
+                        { sub: 'r/Letterboxd',    thread_count: 287, sentiment_score: 0.91 },
+                        { sub: 'r/TrueFilm',      thread_count: 184, sentiment_score: 0.88 },
+                        { sub: 'r/A24',           thread_count: 142, sentiment_score: 0.92 },
+                        { sub: 'r/florencepugh',  thread_count: 97,  sentiment_score: 0.94 }
+                    ]
+                },
+                tiktok: {
+                    hashtag_views_m: 487.4,
+                    user_generated_edits_count: 31840,
+                    fancam_edits_count: 18620,
+                    video_essay_views_m: 24.8,
+                    top_creators_by_views: [
+                        { creator: '@letterboxdtok',    views_m: 14.2, edits_count: 47, note: 'Curator-account amplifier - posted 47 clips, drove cross-discovery into Letterboxd.' },
+                        { creator: '@filmrambles',      views_m: 8.7,  edits_count: 12, note: 'Long-form video-essay account. The "Okonkwo visual grammar" video drove 6.2M views.' },
+                        { creator: '@florencepughfan',  views_m: 21.4, edits_count: 84, note: 'Cast-fan account. Drove the highest single TikTok account view total of the release.' }
+                    ]
+                },
+                twitter_x: {
+                    branded_search_lift_pct: 412.1,
+                    critic_thread_count: 287,
+                    opening_weekend_reaction_tweets_k: 84.6,
+                    premiere_red_carpet_engagement_m: 14.2
+                },
+                instagram: {
+                    director_follower_growth: 42180,
+                    cast_avg_follower_growth: 184620,
+                    premiere_post_engagement_m: 18.4,
+                    bts_reel_views_m: 31.2
+                },
+                takeaway_for_caa: 'A 4.21 Letterboxd average across 247.8K ratings is a top-decile prestige score - CAA can lead with that number when pitching the director\'s next project. 31,840 user-generated TikTok edits means the audience IS the marketing - that has direct value the next time CAA negotiates marketing-spend reductions on a paid package. The director\'s personal Instagram added 42K followers in 30 days - measurable, ownable, and bankable.'
+            },
+
+            // ─── PULL 8: Off-Screen Commerce Wake ───────────────────────
+            // Everything this audience BOUGHT that was not a movie
+            // ticket. Soundtrack streams, source-novel sales, prior-film
+            // disc/digital, festival passes, prestige-cinema subs.
+            // The off-screen halo is the part of the wake the studio
+            // captures zero of; CAA captures most.
+            obs_offscreen_commerce: {
+                enabled: true,
+                title: 'Off-screen commerce wake',
+                subtitle: 'Everything this audience bought in the 30d post-release window that was not a movie ticket.',
+                soundtrack: {
+                    spotify_album_streams_30d_m: 24.7,
+                    spotify_top_track: 'Mitski - Nobody (needle-drop)',
+                    spotify_top_track_streams_m: 14.2,
+                    spotify_top_track_lift_vs_baseline_pct: 218.4,
+                    apple_music_album_streams_m: 8.4,
+                    composer: 'Mica Levi',
+                    composer_back_catalog_lift_pct: 87.4,
+                    note: 'The score by Mica Levi drove +87.4% back-catalog streaming (Under the Skin / Jackie / Monos). This is a CAA-priceable composer lift attributable to her placement on the film.'
+                },
+                source_novel: {
+                    title: 'Obsession (the novel) - synthetic comp',
+                    amazon_sales_lift_pct: 320.4,
+                    barnes_noble_sales_lift_pct: 287.1,
+                    bookshop_org_sales_lift_pct: 482.7,
+                    audiobook_streams_lift_pct: 384.2,
+                    nyt_bestseller_re_entry_weeks: 4,
+                    note: 'The source novel re-entered the NYT bestseller list 4 weeks running. Bookshop.org spike was highest - a Letterboxd-adjacent commerce surface.'
+                },
+                director_back_catalog_disc: {
+                    titles: ['The Quiet Year (4K)', 'Bonefire (Criterion 4K)', 'Vellichor (Blu-ray + Mubi exclusive)'],
+                    avg_4k_disc_sales_lift_pct: 412.1,
+                    criterion_subscriber_growth_pct: 24.7,
+                    note: 'Criterion saw a measurable subscriber bump after the press tour referenced Bonefire as the director\'s "first real film". This is a CAA win the studio cannot bill against.'
+                },
+                festival_pass_lift: [
+                    { festival: 'NYFF digital pass',        sales_lift_pct: 38.7, note: 'New York audiences in the Obsession ticket-buy cohort over-indexed on NYFF intent by 4.2x genpop.' },
+                    { festival: 'TIFF online pass',         sales_lift_pct: 24.1, note: 'Toronto cinephile crossover - 17.4% of Obsession buyers had TIFF history.' },
+                    { festival: 'Sundance Now subscription', sales_lift_pct: 41.4, note: 'Sundance Now subs grew measurably in DMAs where Obsession over-indexed.' }
+                ],
+                arthouse_subscription_lift: [
+                    { service: 'Mubi',                    new_subs_30d_lift_pct: 21.4, est_incremental_subs: 14820, note: 'Largest net-add of the post-release wake.' },
+                    { service: 'A24 Channel',             new_subs_30d_lift_pct: 38.7, est_incremental_subs: 14200, note: 'Highest lift % - smaller base.' },
+                    { service: 'Criterion Channel',       new_subs_30d_lift_pct: 17.8, est_incremental_subs: 8420,  note: 'Direct overlap with Letterboxd power-user cohort.' },
+                    { service: 'Janus Films (theatrical)', new_pass_lift_pct: 41.4,    est_incremental_subs: 2480,  note: 'NYC + LA + SF concentration. Premium arthouse-tour audience.' }
+                ],
+                book_club_and_substack: {
+                    substack_subscriptions_lift_pct: 24.7,
+                    notable_substack_lifts: ['Bookforum', 'A24 newsletter', 'The Letterboxd Journal', 'Read Me Romance', 'Astra House'],
+                    note: 'Substack subscription growth among Obsession ticket buyers was 24.7% above baseline in the 30d window. The audience is a cultural-criticism-paying audience.'
+                },
+                takeaway_for_caa: 'The off-screen commerce wake is 100% invisible to the studio\'s P&L but 100% visible in clickstream. Mica Levi back-catalog +87.4%. Source novel +320-482% across retailers. Criterion sub growth +24.7%. CAA can quantify this as the director\'s "cultural footprint" and price it into the next package as marketing value the studio gets for free.'
+            },
+
+            // ─── PULL 9: Audience Brand Affinity ─────────────────────────
+            // The 12 advertiser categories this audience over-indexes
+            // for vs. genpop, with anchor brands + endorsement-deal
+            // recommendations. This is the CAA endorsement-pitch deck:
+            // what brand the director (or the cast) should be sitting
+            // across from in a meeting next quarter.
+            obs_brand_affinity: {
+                enabled: true,
+                title: 'Audience brand affinity - the CAA endorsement-pitch deck',
+                subtitle: '12 advertiser categories this audience over-indexes for, with anchor brands and recommended endorsement formats for the director and cast.',
+                categories: [
+                    { category: 'Premium arthouse subscriptions',  affinity_index: 412, addressable_hh: 487420, anchor_brands: ['Mubi', 'Criterion Channel', 'A24 Channel', 'Janus Films'], rec_format: 'Director-curated programming block', rec_talent: 'Director', notes: 'Mubi already in conversation. Criterion is the natural retro-pairing for the next press cycle.' },
+                    { category: 'Niche fashion (designer-led)',     affinity_index: 287, addressable_hh: 624810, anchor_brands: ['Khaite', 'The Row', 'Ganni', 'Toteme', 'Mansur Gavriel', 'COS'], rec_format: 'Cast brand-ambassador deal (Pugh / Krieps fit)', rec_talent: 'Cast', notes: 'Khaite is the natural Pugh pairing. The Row would be the prestige Krieps pickup.' },
+                    { category: 'Boutique hospitality',            affinity_index: 247, addressable_hh: 412840, anchor_brands: ['Ace Hotel', 'Sister City', 'The Standard', 'Eaton DC', 'Hotel Saint Cecilia'], rec_format: 'Festival-tour partnership (city pickups)', rec_talent: 'Director + Cast', notes: 'Director press-tour partner across Austin / Portland / NYC stops.' },
+                    { category: 'Premium beauty (clean / niche)',  affinity_index: 234, addressable_hh: 568320, anchor_brands: ['Aesop', 'Le Labo', 'Augustinus Bader', 'Glossier', 'Westman Atelier'], rec_format: 'Cast endorsement (face-of for premium SKU)', rec_talent: 'Cast', notes: 'Pugh has refused all mass beauty. Aesop or Augustinus Bader would be the prestige-fit.' },
+                    { category: 'Natural wine + craft spirits',    affinity_index: 312, addressable_hh: 248740, anchor_brands: ['Casa Dragones mezcal', 'Aperol', 'Avaline', 'Domaine de la Romanee-Conti (DRC)'], rec_format: 'Limited-edition collaboration', rec_talent: 'Director', notes: 'Premium-cinephile alcohol cohort. Bottle-as-promotion play.' },
+                    { category: 'Specialty grocery / wellness',    affinity_index: 218, addressable_hh: 487420, anchor_brands: ['Erewhon', 'Foxtrot', 'Whole Foods 365', 'Levain', 'Republican Records'], rec_format: 'Director recipe / wellness collab', rec_talent: 'Director', notes: 'Erewhon "director smoothie" is the obvious cultural-shorthand play.' },
+                    { category: 'Travel destinations (slow / cinematic)', affinity_index: 268, addressable_hh: 384620, anchor_brands: ['Iceland Tourism', 'Visit Lisbon', 'Visit Mexico City', 'Faroe Islands', 'Visit Norway'], rec_format: 'Tourism-board partnership (cinematic destination)', rec_talent: 'Director', notes: 'Director\'s back-catalog includes a film set in Iceland. The natural prestige-travel pairing.' },
+                    { category: 'Independent bookstores + publishers', affinity_index: 384, addressable_hh: 312480, anchor_brands: ['Astra House', 'NYRB Classics', 'Verso Books', 'Sub Stack', 'Penguin Classics'], rec_format: 'Director "essential reading" curated list + co-branded edition', rec_talent: 'Director', notes: 'NYRB-Letterboxd-Substack triangle is the highest-density cultural-consumer overlap in this deck.' },
+                    { category: 'Premium tech + luxury electronics', affinity_index: 198, addressable_hh: 524680, anchor_brands: ['Apple', 'Sonos', 'B&O', 'Leica', 'Hasselblad'], rec_format: 'Apple TV+ multi-film deal (director + Apple)', rec_talent: 'Director', notes: 'Apple is the natural prestige-streamer fit for the director\'s next film. CAA should open this conversation.' },
+                    { category: 'Coffee + cafe culture',           affinity_index: 184, addressable_hh: 487420, anchor_brands: ['Blue Bottle', 'Stumptown', 'Onyx', 'Sey', 'La Colombe'], rec_format: 'Limited release collab + festival-circuit cafe partnership', rec_talent: 'Cast', notes: 'Lower priority but durable.' },
+                    { category: 'Cycling + slow-fashion outdoor',   affinity_index: 174, addressable_hh: 287420, anchor_brands: ['Rapha', 'Patagonia', 'Snow Peak', 'Filson'], rec_format: 'Director documentary partnership', rec_talent: 'Director', notes: 'Patagonia\'s film initiative is open for guest directors. Natural fit.' },
+                    { category: 'Letterboxd Pro + cinephile tools',  affinity_index: 487, addressable_hh: 184620, anchor_brands: ['Letterboxd Pro', 'Criterion Forum', 'Filmstack', 'JustWatch'], rec_format: 'Director profile takeover + recommendation feed', rec_talent: 'Director', notes: 'Highest affinity-index in the deck. Smallest addressable cohort. But this is THE audience CAA owns.' }
+                ],
+                deal_recommendations: [
+                    { deal: 'Mubi multi-film director programming block',      est_value_usd_m: 1.2, why: 'Mubi is already in conversation; programming-block deals price 1.0-1.5M; this is the highest-affinity audience.' },
+                    { deal: 'Aesop limited-edition collab + 18mo ambassadorship', est_value_usd_m: 2.4, why: 'Aesop has never had a film-director ambassador. Pugh-adjacent. Prestige-fit.' },
+                    { deal: 'Apple TV+ first-look development deal',            est_value_usd_m: 9.8, why: 'Apple is the natural prestige-streamer pairing. Audience commerce data above the genpop bar.' },
+                    { deal: 'Iceland Tourism cinematic-tour partnership',      est_value_usd_m: 0.8, why: 'Director\'s back-catalog includes an Iceland film. Tourism boards pay for narrative content.' },
+                    { deal: 'NYRB Classics co-branded edition + reading list', est_value_usd_m: 0.4, why: 'Lower dollar but high cultural-equity contribution. Compounds on director brand.' }
+                ],
+                takeaway_for_caa: 'Five concrete deal opportunities sitting at $14.6M of estimated total value, anchored to a 1.29M-HH director-attributable audience. The Letterboxd Pro affinity (index 487) is the highest in the deck - smallest cohort but the purest CAA-owned audience. Mubi + Aesop + Apple TV+ are the three near-term wins. NYRB + Iceland are the durable culture-equity plays.'
+            },
+
+            // ─── PULL 10: Comp-Audience Overlap + Director Equity Index ─
+            // Which OTHER directors / films this audience also bought
+            // tickets for in the last 18 months. Anti-comps (films this
+            // audience skipped). The CAA "next package" view: if you
+            // are packaging the director\'s next film, here are the
+            // existing comps that hold up + the rate-card.
+            obs_comp_overlap: {
+                enabled: true,
+                title: 'Comp-audience overlap + Director Equity Index',
+                subtitle: 'Which other directors and films this audience also bought tickets for. The basis for pricing the director\'s next package.',
+                comp_films: [
+                    { film: 'Poor Things',           director: 'Yorgos Lanthimos',  released: '2023-12',  overlap_audience_pct: 47.4, overlap_hh: 1133260, note: 'Highest single-film overlap in the deck. Same prestige-thriller + auteur-led audience.' },
+                    { film: 'Past Lives',            director: 'Celine Song',       released: '2023-06',  overlap_audience_pct: 41.8, overlap_hh: 998820,  note: 'A24 prestige drama. Overlap audience graph is nearly identical.' },
+                    { film: 'The Zone of Interest',  director: 'Jonathan Glazer',   released: '2023-12',  overlap_audience_pct: 38.7, overlap_hh: 924930,  note: 'Highest prestige-cred crossover. Letterboxd power-user concentration.' },
+                    { film: 'Anatomy of a Fall',     director: 'Justine Triet',     released: '2023-10',  overlap_audience_pct: 36.2, overlap_hh: 865180,  note: 'Female-director thriller. CAA can use as the most-direct comp for pricing.' },
+                    { film: 'Aftersun',              director: 'Charlotte Wells',   released: '2022-10',  overlap_audience_pct: 28.4, overlap_hh: 678760,  note: 'Smaller scale but same A24-anchored female-director cohort.' },
+                    { film: 'Decision to Leave',     director: 'Park Chan-wook',    released: '2022-10',  overlap_audience_pct: 31.7, overlap_hh: 757630,  note: 'Mubi / Criterion crossover. Psychological-thriller comp.' },
+                    { film: 'Saint Omer',            director: 'Alice Diop',        released: '2023-01',  overlap_audience_pct: 24.1, overlap_hh: 575990,  note: 'Smaller theatrical but durable - the festival-circuit-prestige audience.' },
+                    { film: 'How to Have Sex',       director: 'Molly Manning Walker', released: '2024-02', overlap_audience_pct: 22.4, overlap_hh: 535360,  note: 'British female-director crossover. Younger-skewed audience.' }
+                ],
+                anti_comps: [
+                    { film: 'Furiosa',               director: 'George Miller',     released: '2024-05',  overlap_audience_pct: 6.4, note: 'Action spectacle. Audience overlap minimal - this is NOT a comp for packaging.' },
+                    { film: 'Despicable Me 4',       director: 'Chris Renaud',      released: '2024-07',  overlap_audience_pct: 2.1, note: 'Animated family. Zero overlap.' },
+                    { film: 'Inside Out 2',          director: 'Kelsey Mann',       released: '2024-06',  overlap_audience_pct: 8.4, note: 'Family animation. Low overlap.' },
+                    { film: 'Bad Boys Ride or Die',  director: 'Adil & Bilall',     released: '2024-06',  overlap_audience_pct: 3.7, note: 'Action franchise. Low overlap. Confirms the director\'s audience is NOT the wide-action audience.' }
+                ],
+                director_equity_index: {
+                    composite_score: 87,
+                    composite_max: 100,
+                    sub_scores: [
+                        { dimension: 'Name recognition',         score: 78, max: 100, note: '78% of post-show audience could correctly identify the director by name (vs. 31% pre-trailer-drop).' },
+                        { dimension: 'Back-catalog pull-through', score: 94, max: 100, note: 'The Quiet Year + Bonefire + Vellichor all saw 78-142% streaming lift. Tier 1.' },
+                        { dimension: 'Press-tour conversion',     score: 91, max: 100, note: 'Smartless + NPR + Maron drove 100K+ incremental tickets. Tier 1.' },
+                        { dimension: 'Cross-platform followers',  score: 84, max: 100, note: 'Instagram +42K, Letterboxd profile +18K, TikTok creator-account +14K in 30d.' },
+                        { dimension: 'Festival cred',             score: 92, max: 100, note: 'Sundance + Cannes + TIFF play history. Critics festival darling.' },
+                        { dimension: 'Critic reception',          score: 89, max: 100, note: '94% on Rotten Tomatoes. 87 on Metacritic. NYT Critic\'s Pick.' },
+                        { dimension: 'Audience equity (Letterboxd)', score: 84, max: 100, note: '4.21 avg, 247.8K ratings - top-decile prestige score.' }
+                    ],
+                    trend_18mo: 'rising',
+                    benchmark_directors: [
+                        { director: 'Greta Gerwig',          equity_index: 96, trend: 'rising',  note: 'The benchmark CAA should aim at for the next package.' },
+                        { director: 'Yorgos Lanthimos',      equity_index: 94, trend: 'rising',  note: 'Closest audience-graph match.' },
+                        { director: 'Park Chan-wook',        equity_index: 91, trend: 'flat',    note: 'International-prestige peer.' },
+                        { director: 'Celine Song',           equity_index: 88, trend: 'rising',  note: 'Closest equity-index match. Same trajectory.' },
+                        { director: 'Charlotte Wells',       equity_index: 76, trend: 'rising',  note: 'One tier below; useful as the lower-comp anchor.' },
+                        { director: 'Alice Diop',            equity_index: 71, trend: 'rising',  note: 'Festival-prestige peer.' }
+                    ]
+                },
+                takeaway_for_caa: 'The director\'s Director Equity Index sits at 87 - sandwiched between Celine Song (88) and Lanthimos (94). On the comp-film graph, Poor Things (47.4% audience overlap) is the closest "what-the-audience-buys-with" anchor, and Past Lives (41.8%) is the closest "what-the-director-makes" anchor. CAA should price the next package against these two films, not against the Obsession opening number. The trajectory is rising and back-catalog pull-through (94/100) is the strongest sub-score - this is a career-compounding asset, not a one-off.'
+            }
+        };
+
         // ──────────────────────────────────────────────────────────────
         // SHARED RENDERER HELPERS for the Netflix block
         // ──────────────────────────────────────────────────────────────
@@ -57725,6 +58463,890 @@
         function _jiqNflxHideTabBar() {
             var bar = document.getElementById('jiqNflxTabBar');
             if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // OBSESSION (FILM) HELPERS + TAB BAR
+        // Mirrors the Netflix helpers but anchored to the Obsession
+        // panel basis. Used by every Obsession card so cohort counts
+        // and projections ladder to a single n + projected-HH pair.
+        // ──────────────────────────────────────────────────────────────
+        function _jiqObsAbbrevHH(n) {
+            n = Number(n) || 0;
+            if (n >= 1000000) {
+                var m = n / 1000000;
+                return (m >= 100 ? m.toFixed(0) : m.toFixed(2).replace(/\.?0+$/, '')) + 'M';
+            }
+            if (n >= 1000) {
+                var k = n / 1000;
+                return (k >= 100 ? k.toFixed(0) : k.toFixed(1).replace(/\.0$/, '')) + 'K';
+            }
+            return String(n);
+        }
+        function _jiqObsPanelBasis() {
+            return (_JIQ_OBSESSION_DATA && _JIQ_OBSESSION_DATA.panel_basis) || null;
+        }
+        function _jiqObsPanelChip() {
+            var pb = _jiqObsPanelBasis();
+            if (!pb) return '';
+            return '<span title="' + _jiqEsc(pb.methodology_note || '') + '"'
+                 +       ' style="display:inline-flex; align-items:center; gap:0.4rem;'
+                 +              ' padding:0.16rem 0.55rem; border-radius:999px;'
+                 +              ' background:rgba(168,85,247,0.10);'
+                 +              ' border:1px solid rgba(168,85,247,0.32);'
+                 +              ' font-size:0.64rem; font-weight:700;'
+                 +              ' color:#c4b5fd; white-space:nowrap;">'
+                 +   '<span style="opacity:0.7; letter-spacing:0.05em;">PANEL</span>'
+                 +   '<span style="color:var(--text-primary); font-weight:800;">'
+                 +     'n=' + _jiqFmt(pb.sample_panelists) + '</span>'
+                 +   '<span style="opacity:0.55;">\u2192</span>'
+                 +   '<span style="color:var(--text-primary); font-weight:800;">'
+                 +     _jiqObsAbbrevHH(pb.projected_us_hh) + ' U.S. ticket-buyer HHs</span>'
+                 + '</span>';
+        }
+        function _jiqObsCohortMeta(label, cohortCount) {
+            var pb = _jiqObsPanelBasis();
+            var prefix = _jiqEsc(label || 'Cohort');
+            var ladder = '';
+            if (pb && cohortCount > 0 && pb.projected_us_hh > 0) {
+                var pctOfBase = (cohortCount / pb.projected_us_hh) * 100;
+                var pctTxt = pctOfBase >= 10 ? pctOfBase.toFixed(1)
+                           : pctOfBase >= 1  ? pctOfBase.toFixed(2)
+                                             : pctOfBase.toFixed(3);
+                var nPanel = Math.round(cohortCount / (pb.projection_factor || 27.34));
+                ladder = ' <span style="opacity:0.75;">('
+                       + pctTxt + '% of ' + _jiqObsAbbrevHH(pb.projected_us_hh) + ' base'
+                       + ' · n=' + _jiqFmt(nPanel) + ' panelist HHs)</span>';
+            }
+            return '<span style="display:inline-flex; align-items:center; flex-wrap:wrap; gap:0.55rem;">'
+                 +   '<span>' + prefix + ': <strong>' + _jiqFmt(cohortCount || 0) + '</strong>' + ladder + '</span>'
+                 +   _jiqObsPanelChip()
+                 + '</span>';
+        }
+        function _jiqObsSetCohortMeta(metaElOrId, label, cohortCount) {
+            var el = (typeof metaElOrId === 'string') ? document.getElementById(metaElOrId) : metaElOrId;
+            if (!el) return;
+            el.innerHTML = _jiqObsCohortMeta(label, cohortCount);
+        }
+
+        var _JIQ_OBS_TABS = [
+            { id: 'discovery', cardId: 'jiqObsDiscoveryCard',  emoji: '🎯', label: 'Discovery',         sub: 'first touch -> loyalty' },
+            { id: 'trailer',   cardId: 'jiqObsTrailerCard',    emoji: '🎬', label: 'Trailer Wake',      sub: 'velocity + virality' },
+            { id: 'podcast',   cardId: 'jiqObsPodcastCard',    emoji: '🎙️', label: 'Press Tour',        sub: 'podcast-by-podcast lift' },
+            { id: 'funnel',    cardId: 'jiqObsFunnelCard',     emoji: '🎟️', label: 'Ticket Funnel',     sub: 'by channel + by day' },
+            { id: 'preshow',   cardId: 'jiqObsPreShowCard',    emoji: '🕰️', label: 'Pre-Show 14d',      sub: 'between buy + show' },
+            { id: 'streaming', cardId: 'jiqObsStreamingCard',  emoji: '📺', label: 'Streaming Wake',    sub: 'back-catalog payouts' },
+            { id: 'social',    cardId: 'jiqObsSocialCard',     emoji: '🗣️', label: 'Social Footprint',  sub: 'Letterboxd + TikTok' },
+            { id: 'commerce',  cardId: 'jiqObsCommerceCard',   emoji: '🛒', label: 'Off-Screen $',      sub: 'soundtrack + book + sub' },
+            { id: 'brand',     cardId: 'jiqObsBrandCard',      emoji: '💼', label: 'Brand Affinity',    sub: 'endorsement-pitch deck' },
+            { id: 'comp',      cardId: 'jiqObsCompCard',       emoji: '🎭', label: 'Comp + Equity',     sub: 'price the next package' }
+        ];
+        var _jiqObsActiveTab = null;
+        function _jiqObsRenderTabBar() {
+            var bar = document.getElementById('jiqObsTabBar');
+            if (!bar) return;
+            bar.style.display = '';
+            var active = _jiqObsActiveTab || _JIQ_OBS_TABS[0].id;
+            bar.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:stretch;">'
+                + _JIQ_OBS_TABS.map(function(t, i) {
+                    var on = (t.id === active);
+                    var bg = on ? 'rgba(168,85,247,0.85)' : 'rgba(255,255,255,0.04)';
+                    var bd = on ? '#a855f7'              : 'rgba(255,255,255,0.10)';
+                    var fg = on ? '#ffffff'              : 'var(--text-primary)';
+                    var subFg = on ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)';
+                    return '<button type="button" data-obstab="' + t.id + '"'
+                         + ' style="flex:1 1 calc(100%/5 - 0.4rem); min-width:130px; max-width:220px;'
+                         +        ' display:flex; flex-direction:column; align-items:flex-start; justify-content:center;'
+                         +        ' gap:0.1rem; padding:0.4rem 0.6rem; border-radius:6px; cursor:pointer;'
+                         +        ' background:' + bg + '; border:1px solid ' + bd + ';'
+                         +        ' color:' + fg + '; text-align:left;'
+                         +        ' transition: background 0.15s ease, border-color 0.15s ease;'
+                         +        ' font-family:inherit;">'
+                         +   '<div style="display:flex; align-items:center; gap:0.35rem; font-size:0.74rem; font-weight:800; line-height:1.15;">'
+                         +     '<span style="opacity:0.55; font-size:0.62rem; font-weight:700;">' + (i + 1) + '.</span>'
+                         +     '<span>' + t.emoji + '</span>'
+                         +     '<span>' + _jiqEsc(t.label) + '</span>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.6rem; opacity:' + (on ? '0.9' : '0.6') + '; color:' + subFg + '; padding-left:1.1rem;">' + _jiqEsc(t.sub) + '</div>'
+                         + '</button>';
+                  }).join('')
+                + '</div>';
+            Array.prototype.forEach.call(bar.querySelectorAll('button[data-obstab]'), function(btn) {
+                btn.addEventListener('click', function() {
+                    _jiqObsActivateTab(btn.getAttribute('data-obstab'));
+                });
+            });
+        }
+        function _jiqObsActivateTab(tabId) {
+            var match = _JIQ_OBS_TABS.filter(function(t) { return t.id === tabId; })[0];
+            if (!match) match = _JIQ_OBS_TABS[0];
+            _jiqObsActiveTab = match.id;
+            _JIQ_OBS_TABS.forEach(function(t) {
+                var el = document.getElementById(t.cardId);
+                if (!el) return;
+                el.style.display = (t.id === match.id) ? '' : 'none';
+            });
+            _jiqObsRenderTabBar();
+            var bar = document.getElementById('jiqObsTabBar');
+            if (bar && bar.scrollIntoView) {
+                try { bar.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_e) {}
+            }
+        }
+        function _jiqObsHideTabBar() {
+            var bar = document.getElementById('jiqObsTabBar');
+            if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // OBSESSION RENDERERS - one per card. All gated on
+        // meta.story_mode === 'obsession_caa' at the dispatcher level.
+        // Every renderer paints into the matching jiqObs*Body element
+        // using the same _jiqTile / _jiqMiniBar / _jiqStepPills
+        // primitives the Netflix and Landman renderers use.
+        // ══════════════════════════════════════════════════════════════
+
+        function _jiqObsShowCard(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = '';
+        }
+
+        // ─── Pull 1: Discovery Spine ───────────────────────────────────
+        function renderJourneyIqObsDiscovery(p) {
+            var data = (p && p.enabled !== false && p.stages) ? p : _JIQ_OBSESSION_DATA.obs_discovery_spine;
+            if (!data || !data.stages) return;
+            _jiqObsShowCard('jiqObsDiscoveryCard');
+            var subEl  = document.getElementById('jiqObsDiscoverySubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            _jiqObsSetCohortMeta('jiqObsDiscoveryMeta', 'Ticket-buyers in window', (_JIQ_OBSESSION_DATA.panel_basis || {}).projected_us_hh || 0);
+            var body = document.getElementById('jiqObsDiscoveryBody');
+            if (!body) return;
+
+            // 5-stage chevron strip
+            var chev = '<div style="display:flex; gap:0.4rem; overflow-x:auto; margin-bottom:0.85rem;">'
+                + data.stages.map(function(s, i) {
+                    var dropColor = (s.dropoff_pp >= 30) ? '#f59e0b' : (s.dropoff_pp >= 10 ? '#fbbf24' : '#86efac');
+                    return '<div style="flex:1; min-width:130px; padding:0.7rem 0.85rem; border-radius:7px;'
+                         +              ' background:rgba(168,85,247,0.10); border:1px solid rgba(168,85,247,0.32);">'
+                         +   '<div style="font-size:0.6rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.08em;">' + (i + 1) + '. ' + _jiqEsc(s.label) + '</div>'
+                         +   '<div style="font-size:1.05rem; font-weight:800; margin-top:0.18rem;">' + Number(s.pct_completing || 0).toFixed(1) + '%</div>'
+                         +   '<div style="font-size:0.7rem; color:' + dropColor + '; font-weight:700;">-' + Number(s.dropoff_pp || 0).toFixed(1) + 'pp drop-off</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.2rem;">~' + (s.days_median || 0) + 'd median</div>'
+                         +   '<div style="font-size:0.66rem; color:var(--text-secondary); margin-top:0.25rem; line-height:1.45;">' + _jiqEsc(s.note || '') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var da = data.director_attribution || {};
+            var attribTiles = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(165px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + _jiqTile('Director-driven',  Number(da.director_driven_pct || 0).toFixed(1) + '%', _jiqFmt(da.director_driven_hh || 0) + ' HHs (CAA-owned)', '#a855f7')
+                + _jiqTile('Cast-driven',      Number(da.cast_driven_pct || 0).toFixed(1) + '%',     _jiqFmt(da.cast_driven_hh || 0) + ' HHs (CAA-adjacent)', '#c4b5fd')
+                + _jiqTile('Marketing-driven', Number(da.marketing_driven_pct || 0).toFixed(1) + '%', _jiqFmt(da.marketing_driven_hh || 0) + ' HHs', '#94a3b8')
+                + _jiqTile('Genre / organic',  Number(da.genre_organic_pct || 0).toFixed(1) + '%',   _jiqFmt(da.genre_organic_hh || 0) + ' HHs', '#94a3b8')
+                + _jiqTile('Word of mouth',    Number(da.word_of_mouth_pct || 0).toFixed(1) + '%',   _jiqFmt(da.word_of_mouth_hh || 0) + ' HHs', '#86efac')
+                + '</div>';
+
+            var attribNote = da.note_for_caa ? '<div style="padding:0.7rem 0.9rem; margin-bottom:0.85rem; border-radius:6px;'
+                + ' background:rgba(168,85,247,0.10); border-left:3px solid #a855f7; font-size:0.82rem; line-height:1.55;">'
+                + '<strong style="color:#c4b5fd;">CAA lens:</strong> ' + _jiqEsc(da.note_for_caa) + '</div>' : '';
+
+            var maxSurfaceShare = (data.top_discovery_surfaces || []).reduce(function(m, s) { return Math.max(m, s.share_pct || 0); }, 0);
+            var surfacesHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0;">📡 Top discovery surfaces (where audiences first encountered Obsession)</h4>'
+                + '<div style="display:grid; gap:0.35rem; margin-bottom:0.85rem;">'
+                + (data.top_discovery_surfaces || []).map(function(s) {
+                    var dotColor = s.on_platform ? '#5b6cff' : '#f59e0b';
+                    var paidTag = s.paid ? '<span style="margin-left:0.4rem; padding:0.1rem 0.35rem; border-radius:3px; background:rgba(255,255,255,0.06); font-size:0.6rem; font-weight:700; opacity:0.75;">PAID</span>' : '';
+                    return '<div style="display:grid; grid-template-columns:minmax(0,2.4fr) auto minmax(0,1fr); gap:0.55rem; align-items:center;'
+                         +              ' padding:0.45rem 0.65rem; border-radius:5px; background:rgba(255,255,255,0.025);">'
+                         +   '<div style="display:flex; align-items:center; gap:0.5rem;">'
+                         +     '<span style="display:inline-block; width:8px; height:8px; border-radius:999px; background:' + dotColor + ';"></span>'
+                         +     '<span style="font-size:0.8rem; font-weight:700;">' + _jiqEsc(s.surface) + '</span>'
+                         +     paidTag
+                         +   '</div>'
+                         +   '<div style="font-size:0.78rem; font-weight:800; color:#c4b5fd; white-space:nowrap;">' + Number(s.share_pct || 0).toFixed(1) + '%</div>'
+                         +   _jiqMiniBar(s.share_pct || 0, '#a855f7', maxSurfaceShare)
+                         + '</div>';
+                  }).join('')
+                + '</div>'
+                + '<div style="display:flex; gap:1rem; font-size:0.66rem; opacity:0.75; margin-bottom:0.85rem;">'
+                +   '<span><span style="display:inline-block; width:8px; height:8px; border-radius:999px; background:#5b6cff; margin-right:0.3rem;"></span>On-platform / studio-owned</span>'
+                +   '<span><span style="display:inline-block; width:8px; height:8px; border-radius:999px; background:#f59e0b; margin-right:0.3rem;"></span>Off-platform / talent-led (CAA-trackable)</span>'
+                + '</div>';
+
+            var takeaway = data.takeaway_for_caa ? '<div style="padding:0.85rem 1rem; border-radius:7px;'
+                + ' background:rgba(168,85,247,0.10); border-left:3px solid #a855f7;'
+                + ' font-size:0.85rem; line-height:1.6;">'
+                + '<strong style="color:#c4b5fd;">🎯 What this tells CAA:</strong> ' + _jiqEsc(data.takeaway_for_caa) + '</div>' : '';
+
+            body.innerHTML = chev + attribTiles + attribNote + surfacesHtml + takeaway;
+        }
+
+        // ─── Pull 2: Trailer Wake ───────────────────────────────────────
+        function renderJourneyIqObsTrailer(p) {
+            var data = (p && p.enabled !== false && p.first_72h) ? p : _JIQ_OBSESSION_DATA.obs_trailer_wake;
+            if (!data) return;
+            _jiqObsShowCard('jiqObsTrailerCard');
+            var subEl = document.getElementById('jiqObsTrailerSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqObsTrailerMeta');
+            if (metaEl) metaEl.innerHTML = 'Trailer drop: ' + _jiqEsc((data.trailer_drop_at || '').split('T')[0] || '') + '  ' + _jiqObsPanelChip();
+            var body = document.getElementById('jiqObsTrailerBody');
+            if (!body) return;
+
+            var f = data.first_72h || {};
+            var tiles = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(155px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + _jiqTile('YouTube views (72h)',    Number(f.youtube_views_m || 0).toFixed(1) + 'M', _jiqFmt(f.youtube_likes_k || 0) + 'K likes', '#a855f7')
+                + _jiqTile('Instagram Reel views',   Number(f.instagram_reel_views_m || 0).toFixed(1) + 'M', 'paid + organic combined', '#c4b5fd')
+                + _jiqTile('TikTok re-uploads',      _jiqFmt(f.tiktok_reupload_count || 0), Number(f.tiktok_total_views_m || 0).toFixed(1) + 'M total views', '#f0abfc')
+                + _jiqTile('Letterboxd watchlist',   _jiqFmt(f.letterboxd_watchlist_adds || 0), '72h adds', '#86efac')
+                + _jiqTile('Search index',           '+' + Math.round(f.google_search_index || 0), 'vs 100 baseline', '#fbbf24')
+                + _jiqTile('Director name search',   '+' + Number(f.director_name_search_lift || 0).toFixed(1) + 'x', 'vs 30d pre-trailer', '#a855f7')
+                + '</div>';
+
+            var noteHtml = f.note ? '<div style="padding:0.7rem 0.9rem; margin-bottom:0.85rem; border-radius:6px;'
+                + ' background:rgba(168,85,247,0.08); border-left:3px solid #a855f7; font-size:0.8rem; line-height:1.55; font-style:italic;">'
+                + _jiqEsc(f.note) + '</div>' : '';
+
+            var maxViral = (data.viral_moments || []).reduce(function(m, v) { return Math.max(m, v.tiktok_uses_k || 0); }, 0);
+            var viralHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🔥 Viral moments (the seconds of trailer that ran the algorithm)</h4>'
+                + '<div style="display:grid; gap:0.4rem; margin-bottom:0.85rem;">'
+                + (data.viral_moments || []).map(function(v) {
+                    return '<div style="display:grid; grid-template-columns:minmax(0,2fr) auto minmax(0,2.4fr); gap:0.7rem; align-items:center;'
+                         +              ' padding:0.55rem 0.75rem; border-radius:6px; background:rgba(255,255,255,0.025);'
+                         +              ' border-left:3px solid #a855f7;">'
+                         +   '<div style="font-size:0.82rem; font-weight:700;">' + _jiqEsc(v.moment) + '</div>'
+                         +   '<div style="text-align:right; white-space:nowrap;">'
+                         +     '<div style="font-size:0.82rem; font-weight:800; color:#c4b5fd;">' + Number(v.tiktok_uses_k || 0).toFixed(1) + 'K uses</div>'
+                         +     '<div style="font-size:0.66rem; opacity:0.7;">' + Number(v.sound_saves_k || 0).toFixed(1) + 'K saves</div>'
+                         +     _jiqMiniBar(v.tiktok_uses_k || 0, '#a855f7', maxViral)
+                         +   '</div>'
+                         +   '<div style="font-size:0.74rem; color:var(--text-secondary); line-height:1.5; font-style:italic;">' + _jiqEsc(v.note || '') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var maxVel = (data.velocity_by_week || []).reduce(function(m, v) { return Math.max(m, v.youtube_daily_views_k || 0); }, 0);
+            var velHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0;">📈 Velocity from drop to opening</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(' + (data.velocity_by_week || []).length + ', 1fr); gap:0.3rem; margin-bottom:0.85rem;">'
+                + (data.velocity_by_week || []).map(function(w) {
+                    return '<div style="padding:0.45rem 0.55rem; border-radius:5px; background:rgba(255,255,255,0.025); text-align:center;'
+                         +              ' border-left:3px solid #a855f7;">'
+                         +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.05em;">' + _jiqEsc(w.week_label) + '</div>'
+                         +   '<div style="font-size:0.9rem; font-weight:800; margin:0.18rem 0;">' + _jiqFmt((w.youtube_daily_views_k || 0) * 1000) + '</div>'
+                         +   '<div style="font-size:0.62rem; opacity:0.7;">YT/day</div>'
+                         +   _jiqMiniBar(w.youtube_daily_views_k || 0, '#a855f7', maxVel)
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var maxDma = (data.top_dmas_by_trailer_engagement || []).reduce(function(m, d) { return Math.max(m, d.engagement_index || 0); }, 0);
+            var dmaHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🗺️ Top DMAs by trailer engagement index (100 = genpop parity)</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:0.4rem; margin-bottom:0.85rem;">'
+                + (data.top_dmas_by_trailer_engagement || []).map(function(d) {
+                    return '<div style="display:flex; align-items:center; gap:0.55rem;'
+                         +              ' padding:0.45rem 0.65rem; border-radius:5px; background:rgba(255,255,255,0.025);">'
+                         +   '<div style="flex:1; font-size:0.78rem; font-weight:700;">' + _jiqEsc(d.dma) + '</div>'
+                         +   '<div style="font-size:0.78rem; font-weight:800; color:#c4b5fd;">' + (d.engagement_index || 0) + '</div>'
+                         +   '<div style="width:60px;">' + _jiqMiniBar(d.engagement_index || 0, '#a855f7', maxDma) + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var takeaway = data.takeaway_for_caa ? '<div style="padding:0.85rem 1rem; border-radius:7px;'
+                + ' background:rgba(168,85,247,0.10); border-left:3px solid #a855f7;'
+                + ' font-size:0.85rem; line-height:1.6;">'
+                + '<strong style="color:#c4b5fd;">🎯 What this tells CAA:</strong> ' + _jiqEsc(data.takeaway_for_caa) + '</div>' : '';
+
+            body.innerHTML = tiles + noteHtml + viralHtml + velHtml + dmaHtml + takeaway;
+        }
+
+        // ─── Pull 3: Press Tour ─────────────────────────────────────────
+        function renderJourneyIqObsPodcast(p) {
+            var data = (p && p.enabled !== false && p.ranked) ? p : _JIQ_OBSESSION_DATA.obs_podcast_wake;
+            if (!data) return;
+            _jiqObsShowCard('jiqObsPodcastCard');
+            var subEl = document.getElementById('jiqObsPodcastSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqObsPodcastMeta');
+            if (metaEl) metaEl.innerHTML = (data.ranked || []).length + ' appearances ranked  ' + _jiqObsPanelChip();
+            var body = document.getElementById('jiqObsPodcastBody');
+            if (!body) return;
+
+            var maxInc = (data.ranked || []).reduce(function(m, r) { return Math.max(m, r.incremental_tickets_proj || 0); }, 0);
+            var rankedHtml = '<div style="overflow-x:auto; margin-bottom:0.85rem;">'
+                + '<table style="width:100%; border-collapse:collapse; font-size:0.78rem;">'
+                + '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.06em;">#</th>'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.06em;">Show</th>'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.06em;">Aired</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Cohort</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Ticket lift</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Search lift</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Back-cat lift</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Incr tickets</th>'
+                + '</tr></thead><tbody>'
+                + (data.ranked || []).map(function(r) {
+                    return '<tr style="border-bottom:1px solid var(--border-color);">'
+                         +   '<td style="padding:6px 8px; font-weight:700; color:#c4b5fd;">' + r.rank + '</td>'
+                         +   '<td style="padding:6px 8px;"><div style="font-weight:700;">' + _jiqEsc(r.show) + '</div><div style="font-size:0.66rem; opacity:0.65;">' + _jiqEsc(r.host) + '</div></td>'
+                         +   '<td style="padding:6px 8px; font-size:0.72rem; color:var(--text-secondary);">' + _jiqEsc(r.air_date) + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right;">' + Number(r.listener_cohort_m || 0).toFixed(2) + 'M</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700; color:#86efac;">+' + Number(r.ticket_buy_lift_pct || 0).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; text-align:right;">+' + Number(r.search_lift_pct || 0).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; text-align:right;">+' + Number(r.back_catalog_streams_lift_pct || 0).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:800; color:#c4b5fd;">' + _jiqFmt(r.incremental_tickets_proj || 0) + '</td>'
+                         + '</tr>'
+                         + '<tr><td colspan="8" style="padding:0 8px 10px; font-size:0.7rem; color:var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(r.note || '') + '</td></tr>';
+                  }).join('')
+                + '</tbody></table></div>';
+
+            var untappedHtml = (data.untapped || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🎯 Shows CAA should book on film #2</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:0.45rem; margin-bottom:0.85rem;">'
+                + data.untapped.map(function(u) {
+                    return '<div style="padding:0.6rem 0.75rem; border-radius:6px; background:rgba(168,85,247,0.06); border-left:3px solid #a855f7;">'
+                         +   '<div style="font-size:0.8rem; font-weight:800;">' + _jiqEsc(u.show) + '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.15rem;">' + _jiqEsc(u.host) + '</div>'
+                         +   '<div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.35rem; line-height:1.45;">' + _jiqEsc(u.why_caa_should_book) + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>' : '';
+
+            var takeaway = data.takeaway_for_caa ? '<div style="padding:0.85rem 1rem; border-radius:7px;'
+                + ' background:rgba(168,85,247,0.10); border-left:3px solid #a855f7;'
+                + ' font-size:0.85rem; line-height:1.6;">'
+                + '<strong style="color:#c4b5fd;">🎯 What this tells CAA:</strong> ' + _jiqEsc(data.takeaway_for_caa) + '</div>' : '';
+
+            body.innerHTML = rankedHtml + untappedHtml + takeaway;
+        }
+
+        // ─── Pull 4: Ticket Funnel ──────────────────────────────────────
+        function renderJourneyIqObsFunnel(p) {
+            var data = (p && p.enabled !== false && p.funnel_steps) ? p : _JIQ_OBSESSION_DATA.obs_booking_funnel;
+            if (!data) return;
+            _jiqObsShowCard('jiqObsFunnelCard');
+            var subEl = document.getElementById('jiqObsFunnelSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqObsFunnelMeta');
+            if (metaEl) metaEl.innerHTML = _jiqObsPanelChip();
+            var body = document.getElementById('jiqObsFunnelBody');
+            if (!body) return;
+
+            var maxStep = (data.funnel_steps || []).reduce(function(m, s) { return Math.max(m, s.count_hh || 0); }, 0);
+            var stepHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0;">⬇️ The discovery → seat funnel</h4>'
+                + '<div style="display:grid; gap:0.35rem; margin-bottom:0.85rem;">'
+                + (data.funnel_steps || []).map(function(s, i) {
+                    var pctOfBar = ((s.count_hh || 0) / (maxStep || 1)) * 100;
+                    return '<div style="padding:0.5rem 0.75rem; border-radius:5px; background:rgba(255,255,255,0.025); border-left:3px solid #a855f7;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.25rem;">'
+                         +     '<div style="font-size:0.8rem; font-weight:700;">' + (i + 1) + '. ' + _jiqEsc(s.step) + '</div>'
+                         +     '<div><span style="font-size:0.82rem; font-weight:800; color:#c4b5fd;">' + _jiqFmt(s.count_hh || 0) + '</span> <span style="opacity:0.65; font-size:0.7rem;">HHs · ' + Number(s.share_of_aware_pct || 0).toFixed(1) + '% of aware' + (s.drop_pp > 0 ? ' · -' + Number(s.drop_pp).toFixed(1) + 'pp' : '') + '</span></div>'
+                         +   '</div>'
+                         +   '<div style="height:6px; border-radius:3px; background:rgba(168,85,247,0.15); overflow:hidden;">'
+                         +     '<div style="height:100%; width:' + pctOfBar.toFixed(2) + '%; background:#a855f7;"></div>'
+                         +   '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var maxChan = (data.by_channel || []).reduce(function(m, c) { return Math.max(m, c.share_of_buys_pct || 0); }, 0);
+            var chanHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0;">📲 Ticket-buy by channel</h4>'
+                + '<div style="overflow-x:auto; margin-bottom:0.85rem;">'
+                + '<table style="width:100%; border-collapse:collapse; font-size:0.78rem;">'
+                + '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase;">Channel</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Share</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">HHs</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Conv rate</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Seat→Pay</th>'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7;">Note</th>'
+                + '</tr></thead><tbody>'
+                + (data.by_channel || []).map(function(c) {
+                    return '<tr style="border-bottom:1px solid var(--border-color);">'
+                         +   '<td style="padding:6px 8px; font-weight:700;">' + _jiqEsc(c.channel) + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700; color:#c4b5fd;">' + Number(c.share_of_buys_pct || 0).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; text-align:right;">' + _jiqFmt(c.hh || 0) + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700; color:#86efac;">' + Number(c.conversion_rate_pct || 0).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; text-align:right;">' + (c.avg_seat_select_to_checkout_sec || 0) + 's</td>'
+                         +   '<td style="padding:6px 8px; font-size:0.72rem; color:var(--text-secondary); font-style:italic; line-height:1.45;">' + _jiqEsc(c.note || '') + '</td>'
+                         + '</tr>';
+                  }).join('')
+                + '</tbody></table></div>';
+
+            var t = data.time_to_convert_days || {};
+            var ttcTiles = '<h4 style="font-size:0.85rem; margin:0.4rem 0;">⏱️ Time from first touch → ticket-buy</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(155px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + _jiqTile('Median',  Number(t.median || 0).toFixed(1) + 'd', 'across all buyers', '#a855f7')
+                + _jiqTile('P25',     Number(t.p25 || 0).toFixed(1) + 'd',    'fastest quartile',  '#86efac')
+                + _jiqTile('P75',     Number(t.p75 || 0).toFixed(1) + 'd',    'slowest quartile',  '#fbbf24')
+                + _jiqTile('P90',     Number(t.p90 || 0).toFixed(1) + 'd',    'late deciders',     '#f59e0b')
+                + '</div>';
+
+            var bySegHtml = (t.by_segment || []).length ? '<div style="display:grid; gap:0.3rem; margin-bottom:0.85rem;">'
+                + t.by_segment.map(function(s) {
+                    return '<div style="display:grid; grid-template-columns:minmax(0,1.4fr) auto auto; gap:0.55rem; align-items:center;'
+                         +              ' padding:0.4rem 0.65rem; border-radius:5px; background:rgba(255,255,255,0.025);">'
+                         +   '<div style="font-size:0.78rem; font-weight:700;">' + _jiqEsc(s.segment) + '</div>'
+                         +   '<div style="font-size:0.78rem; font-weight:800; color:#c4b5fd;">' + Number(s.median_days || 0).toFixed(1) + 'd</div>'
+                         +   '<div style="font-size:0.7rem; opacity:0.7;">' + Number(s.share_pct || 0).toFixed(1) + '% of buyers</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>' : '';
+
+            var weekHtml = (data.weekly_attendance_curve || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">📅 Weekly attendance curve</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(' + data.weekly_attendance_curve.length + ', 1fr); gap:0.3rem; margin-bottom:0.85rem;">'
+                + data.weekly_attendance_curve.map(function(w) {
+                    return '<div style="padding:0.45rem 0.55rem; border-radius:5px; background:rgba(255,255,255,0.025); text-align:center; border-left:3px solid #a855f7;">'
+                         +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase;">' + _jiqEsc(w.week) + '</div>'
+                         +   '<div style="font-size:0.95rem; font-weight:800; margin:0.18rem 0;">' + Number(w.tickets_m || 0).toFixed(2) + 'M</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.7;">' + Number(w.share_pct || 0).toFixed(1) + '% of run</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>' : '';
+
+            var takeaway = data.takeaway_for_caa ? '<div style="padding:0.85rem 1rem; border-radius:7px;'
+                + ' background:rgba(168,85,247,0.10); border-left:3px solid #a855f7;'
+                + ' font-size:0.85rem; line-height:1.6;">'
+                + '<strong style="color:#c4b5fd;">🎯 What this tells CAA:</strong> ' + _jiqEsc(data.takeaway_for_caa) + '</div>' : '';
+
+            body.innerHTML = stepHtml + chanHtml + ttcTiles + bySegHtml + weekHtml + takeaway;
+        }
+
+        // ─── Pull 5: Pre-Show 14d ───────────────────────────────────────
+        function renderJourneyIqObsPreShow(p) {
+            var data = (p && p.enabled !== false && p.pre_show_behaviors) ? p : _JIQ_OBSESSION_DATA.obs_pre_show_window;
+            if (!data) return;
+            _jiqObsShowCard('jiqObsPreShowCard');
+            var subEl = document.getElementById('jiqObsPreShowSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            _jiqObsSetCohortMeta('jiqObsPreShowMeta', data.cohort_label || 'Cohort', data.cohort_hh || 0);
+            var body = document.getElementById('jiqObsPreShowBody');
+            if (!body) return;
+
+            var maxBeh = (data.pre_show_behaviors || []).reduce(function(m, b) { return Math.max(m, b.share_of_cohort_pct || 0); }, 0);
+            var behHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🛍️ High-intent commercial behaviors (between buy + show)</h4>'
+                + '<div style="display:grid; gap:0.35rem; margin-bottom:0.85rem;">'
+                + (data.pre_show_behaviors || []).map(function(b) {
+                    return '<div style="display:grid; grid-template-columns:minmax(0,2.4fr) auto auto minmax(0,2.4fr); gap:0.55rem; align-items:center;'
+                         +              ' padding:0.5rem 0.7rem; border-radius:5px; background:rgba(255,255,255,0.025); border-left:3px solid #a855f7;">'
+                         +   '<div style="font-size:0.8rem; font-weight:700;">' + _jiqEsc(b.behavior) + '</div>'
+                         +   '<div style="font-size:0.8rem; font-weight:800; color:#c4b5fd; white-space:nowrap;">' + Number(b.share_of_cohort_pct || 0).toFixed(1) + '%</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.7; white-space:nowrap;">idx ' + (b.lift_index_vs_genpop || 100) + '</div>'
+                         +   '<div style="font-size:0.72rem; color:var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(b.note || '') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var streamerHtml = (data.top_streamers_benefiting_from_back_catalog || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">📺 Streamers benefiting from director back-catalog queueing</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + data.top_streamers_benefiting_from_back_catalog.map(function(s) {
+                    return '<div style="padding:0.65rem 0.8rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid #a855f7;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline;">'
+                         +     '<div style="font-size:0.85rem; font-weight:800;">' + _jiqEsc(s.streamer) + '</div>'
+                         +     '<div style="font-size:0.78rem; font-weight:800; color:#86efac;">+' + Number(s.queue_lift_pct || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.7rem; opacity:0.7; margin-top:0.2rem;">' + _jiqEsc(s.director_prior_title) + ' · ' + Number(s.est_incremental_minutes_streamed_m || 0).toFixed(1) + 'M incremental min</div>'
+                         +   '<div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.35rem; line-height:1.5; font-style:italic;">' + _jiqEsc(s.note || '') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>' : '';
+
+            var takeaway = data.takeaway_for_caa ? '<div style="padding:0.85rem 1rem; border-radius:7px;'
+                + ' background:rgba(168,85,247,0.10); border-left:3px solid #a855f7;'
+                + ' font-size:0.85rem; line-height:1.6;">'
+                + '<strong style="color:#c4b5fd;">🎯 What this tells CAA:</strong> ' + _jiqEsc(data.takeaway_for_caa) + '</div>' : '';
+
+            body.innerHTML = behHtml + streamerHtml + takeaway;
+        }
+
+        // ─── Pull 6: Streaming Wake ─────────────────────────────────────
+        function renderJourneyIqObsStreaming(p) {
+            var data = (p && p.enabled !== false && p.director_back_catalog_lift_by_streamer) ? p : _JIQ_OBSESSION_DATA.obs_post_show_streaming;
+            if (!data) return;
+            _jiqObsShowCard('jiqObsStreamingCard');
+            var subEl = document.getElementById('jiqObsStreamingSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqObsStreamingMeta');
+            if (metaEl) metaEl.innerHTML = '30d post-show window  ' + _jiqObsPanelChip();
+            var body = document.getElementById('jiqObsStreamingBody');
+            if (!body) return;
+
+            var bcHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0;">💸 Director back-catalog lift (the streamers that monetized this release)</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + (data.director_back_catalog_lift_by_streamer || []).map(function(s) {
+                    return '<div style="padding:0.7rem 0.85rem; border-radius:6px; background:rgba(255,255,255,0.025); border:1px solid rgba(168,85,247,0.30);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline;">'
+                         +     '<div style="font-size:0.9rem; font-weight:800;">' + _jiqEsc(s.streamer) + '</div>'
+                         +     '<div style="font-size:0.82rem; font-weight:800; color:#86efac;">+' + Number(s.post_show_lift_pct || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.72rem; opacity:0.75; margin-top:0.15rem;">' + _jiqEsc(s.title) + '</div>'
+                         +   '<div style="display:flex; gap:0.7rem; margin-top:0.35rem; font-size:0.7rem;">'
+                         +     '<div><span style="opacity:0.6;">Base 30d:</span> <strong>' + Number(s.base_streams_30d_m || 0).toFixed(2) + 'M</strong></div>'
+                         +     '<div><span style="opacity:0.6;">Incremental:</span> <strong style="color:#c4b5fd;">' + Number(s.incremental_streams_m || 0).toFixed(2) + 'M</strong></div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.5; font-style:italic;">' + _jiqEsc(s.note || '') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var compHtml = (data.comparable_directors_queued || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🎬 Comparable directors queued (the audience graph)</h4>'
+                + '<div style="overflow-x:auto; margin-bottom:0.85rem;">'
+                + '<table style="width:100%; border-collapse:collapse; font-size:0.78rem;">'
+                + '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase;">Director</th>'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase;">Titles queued</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Post-show lift</th>'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7;">Primary platform</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Audience overlap</th>'
+                + '</tr></thead><tbody>'
+                + data.comparable_directors_queued.map(function(d) {
+                    return '<tr style="border-bottom:1px solid var(--border-color);">'
+                         +   '<td style="padding:6px 8px; font-weight:700;">' + _jiqEsc(d.director) + '</td>'
+                         +   '<td style="padding:6px 8px; font-size:0.72rem; color:var(--text-secondary);">' + (d.titles || []).map(_jiqEsc).join(', ') + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700; color:#86efac;">+' + Number(d.post_show_lift_pct || 0).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; font-size:0.72rem;">' + _jiqEsc(d.primary_platform || '') + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700; color:#c4b5fd;">' + Number(d.overlap_audience_pct || 0).toFixed(1) + '%</td>'
+                         + '</tr>';
+                  }).join('')
+                + '</tbody></table></div>' : '';
+
+            var castHtml = (data.cast_filmography_pull_through || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">⭐ Cast-filmography pull-through</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + data.cast_filmography_pull_through.map(function(c) {
+                    return '<div style="padding:0.65rem 0.8rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid #c4b5fd;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline;">'
+                         +     '<div style="font-size:0.85rem; font-weight:800;">' + _jiqEsc(c.cast_member) + '</div>'
+                         +     '<div style="font-size:0.78rem; font-weight:800; color:#86efac;">+' + Number(c.avg_lift_pct || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.7rem; opacity:0.7; margin-top:0.2rem;">' + (c.titles_with_lift || []).map(_jiqEsc).join(', ') + '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.25rem;">Platforms: ' + (c.primary_platforms || []).map(_jiqEsc).join(' · ') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>' : '';
+
+            var takeaway = data.takeaway_for_caa ? '<div style="padding:0.85rem 1rem; border-radius:7px;'
+                + ' background:rgba(168,85,247,0.10); border-left:3px solid #a855f7;'
+                + ' font-size:0.85rem; line-height:1.6;">'
+                + '<strong style="color:#c4b5fd;">🎯 What this tells CAA:</strong> ' + _jiqEsc(data.takeaway_for_caa) + '</div>' : '';
+
+            body.innerHTML = bcHtml + compHtml + castHtml + takeaway;
+        }
+
+        // ─── Pull 7: Social Footprint ───────────────────────────────────
+        function renderJourneyIqObsSocial(p) {
+            var data = (p && p.enabled !== false && p.letterboxd) ? p : _JIQ_OBSESSION_DATA.obs_social_letterboxd;
+            if (!data) return;
+            _jiqObsShowCard('jiqObsSocialCard');
+            var subEl = document.getElementById('jiqObsSocialSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqObsSocialMeta');
+            if (metaEl) metaEl.innerHTML = _jiqObsPanelChip();
+            var body = document.getElementById('jiqObsSocialBody');
+            if (!body) return;
+
+            var lb = data.letterboxd || {};
+            var tk = data.tiktok || {};
+            var rd = data.reddit || {};
+            var tx = data.twitter_x || {};
+            var ig = data.instagram || {};
+
+            var topTiles = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(155px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + _jiqTile('Letterboxd avg',     Number(lb.avg_rating || 0).toFixed(2), _jiqFmt(lb.ratings_count_k || 0) + 'K ratings', '#a855f7')
+                + _jiqTile('TikTok hashtag',     Number(tk.hashtag_views_m || 0).toFixed(1) + 'M', _jiqFmt(tk.user_generated_edits_count || 0) + ' UGC edits', '#f0abfc')
+                + _jiqTile('Reddit threads',     _jiqFmt(rd.threads_count || 0), _jiqFmt(rd.upvote_total_k || 0) + 'K upvotes', '#fbbf24')
+                + _jiqTile('Twitter search lift', '+' + Number(tx.branded_search_lift_pct || 0).toFixed(0) + '%', _jiqFmt(tx.critic_thread_count || 0) + ' critic threads', '#5b6cff')
+                + _jiqTile('Director IG growth', '+' + _jiqFmt(ig.director_follower_growth || 0), '30d follower growth', '#86efac')
+                + '</div>';
+
+            var distHtml = (lb.rating_distribution || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">⭐ Letterboxd rating distribution</h4>'
+                + '<div style="display:flex; gap:0.25rem; align-items:flex-end; height:80px; margin-bottom:0.85rem;">'
+                + lb.rating_distribution.map(function(r) {
+                    var h = Math.max(8, Math.round(r.share_pct * 1.6));
+                    return '<div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:0.2rem;">'
+                         +   '<div style="font-size:0.62rem; opacity:0.7;">' + Number(r.share_pct || 0).toFixed(1) + '%</div>'
+                         +   '<div style="width:100%; height:' + h + 'px; background:#a855f7; border-radius:3px 3px 0 0;"></div>'
+                         +   '<div style="font-size:0.62rem; opacity:0.65;">' + r.stars + '★</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>' : '';
+
+            var listsHtml = (lb.top_lists_inclusions || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">📒 Letterboxd list inclusions</h4>'
+                + '<ul style="margin:0 0 0.85rem; padding-left:1.1rem; font-size:0.78rem; line-height:1.6;">'
+                + lb.top_lists_inclusions.map(function(l) { return '<li>' + _jiqEsc(l) + '</li>'; }).join('')
+                + '</ul>' : '';
+
+            var quotesHtml = (lb.review_pull_quotes || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">💬 Top-liked Letterboxd reviews</h4>'
+                + '<div style="display:grid; gap:0.3rem; margin-bottom:0.85rem;">'
+                + lb.review_pull_quotes.map(function(q) {
+                    return '<div style="padding:0.5rem 0.7rem; border-radius:5px; background:rgba(168,85,247,0.06); border-left:3px solid #a855f7; font-size:0.78rem; line-height:1.55; font-style:italic;">' + _jiqEsc(q) + '</div>';
+                  }).join('')
+                + '</div>' : '';
+
+            var subsHtml = (rd.top_subreddits || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">📡 Reddit thread density (sentiment 0-1)</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.35rem; margin-bottom:0.85rem;">'
+                + rd.top_subreddits.map(function(s) {
+                    return '<div style="display:flex; justify-content:space-between; padding:0.4rem 0.6rem; border-radius:5px; background:rgba(255,255,255,0.025);">'
+                         +   '<div style="font-size:0.78rem; font-weight:700;">' + _jiqEsc(s.sub) + '</div>'
+                         +   '<div style="font-size:0.72rem;"><strong>' + s.thread_count + '</strong> · <span style="color:#86efac;">' + Number(s.sentiment_score || 0).toFixed(2) + '</span></div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>' : '';
+
+            var creatorsHtml = (tk.top_creators_by_views || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🎵 Top TikTok creators amplifying the release</h4>'
+                + '<div style="display:grid; gap:0.35rem; margin-bottom:0.85rem;">'
+                + tk.top_creators_by_views.map(function(c) {
+                    return '<div style="padding:0.5rem 0.7rem; border-radius:5px; background:rgba(255,255,255,0.025); border-left:3px solid #f0abfc;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline;">'
+                         +     '<div style="font-size:0.82rem; font-weight:800;">' + _jiqEsc(c.creator) + '</div>'
+                         +     '<div style="font-size:0.78rem; font-weight:700; color:#f0abfc;">' + Number(c.views_m || 0).toFixed(1) + 'M views · ' + (c.edits_count || 0) + ' edits</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.2rem; line-height:1.5; font-style:italic;">' + _jiqEsc(c.note || '') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>' : '';
+
+            var takeaway = data.takeaway_for_caa ? '<div style="padding:0.85rem 1rem; border-radius:7px;'
+                + ' background:rgba(168,85,247,0.10); border-left:3px solid #a855f7;'
+                + ' font-size:0.85rem; line-height:1.6;">'
+                + '<strong style="color:#c4b5fd;">🎯 What this tells CAA:</strong> ' + _jiqEsc(data.takeaway_for_caa) + '</div>' : '';
+
+            body.innerHTML = topTiles + distHtml + listsHtml + quotesHtml + subsHtml + creatorsHtml + takeaway;
+        }
+
+        // ─── Pull 8: Off-Screen Commerce ────────────────────────────────
+        function renderJourneyIqObsCommerce(p) {
+            var data = (p && p.enabled !== false && p.soundtrack) ? p : _JIQ_OBSESSION_DATA.obs_offscreen_commerce;
+            if (!data) return;
+            _jiqObsShowCard('jiqObsCommerceCard');
+            var subEl = document.getElementById('jiqObsCommerceSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqObsCommerceMeta');
+            if (metaEl) metaEl.innerHTML = _jiqObsPanelChip();
+            var body = document.getElementById('jiqObsCommerceBody');
+            if (!body) return;
+
+            var st = data.soundtrack || {};
+            var sn = data.source_novel || {};
+            var dc = data.director_back_catalog_disc || {};
+
+            var tiles = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + _jiqTile('Soundtrack streams',  Number(st.spotify_album_streams_30d_m || 0).toFixed(1) + 'M', 'Spotify 30d', '#86efac')
+                + _jiqTile('Top track lift',      '+' + Number(st.spotify_top_track_lift_vs_baseline_pct || 0).toFixed(1) + '%', _jiqEsc(st.spotify_top_track || ''), '#a855f7')
+                + _jiqTile('Composer back-cat',   '+' + Number(st.composer_back_catalog_lift_pct || 0).toFixed(1) + '%', _jiqEsc(st.composer || ''), '#c4b5fd')
+                + _jiqTile('Source novel (BoNo)', '+' + Number(sn.bookshop_org_sales_lift_pct || 0).toFixed(1) + '%', _jiqFmt(sn.nyt_bestseller_re_entry_weeks || 0) + 'w on NYT list', '#fbbf24')
+                + _jiqTile('Disc + 4K lift',      '+' + Number(dc.avg_4k_disc_sales_lift_pct || 0).toFixed(1) + '%', 'director back-catalog', '#f0abfc')
+                + '</div>';
+
+            var stHtml = (st.note) ? '<div style="padding:0.6rem 0.8rem; border-radius:5px; margin-bottom:0.6rem; background:rgba(168,85,247,0.06); border-left:3px solid #a855f7; font-size:0.78rem; line-height:1.55;">'
+                + '<strong style="color:#c4b5fd;">🎵 Soundtrack note:</strong> ' + _jiqEsc(st.note) + '</div>' : '';
+            var snHtml = (sn.note) ? '<div style="padding:0.6rem 0.8rem; border-radius:5px; margin-bottom:0.6rem; background:rgba(168,85,247,0.06); border-left:3px solid #a855f7; font-size:0.78rem; line-height:1.55;">'
+                + '<strong style="color:#c4b5fd;">📚 Source-novel note:</strong> ' + _jiqEsc(sn.note) + '</div>' : '';
+            var dcHtml = (dc.note) ? '<div style="padding:0.6rem 0.8rem; border-radius:5px; margin-bottom:0.85rem; background:rgba(168,85,247,0.06); border-left:3px solid #a855f7; font-size:0.78rem; line-height:1.55;">'
+                + '<strong style="color:#c4b5fd;">💿 Back-catalog disc note:</strong> ' + _jiqEsc(dc.note) + '</div>' : '';
+
+            var festHtml = (data.festival_pass_lift || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🎟️ Festival-pass lift</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:0.4rem; margin-bottom:0.85rem;">'
+                + data.festival_pass_lift.map(function(f) {
+                    return '<div style="padding:0.55rem 0.7rem; border-radius:5px; background:rgba(255,255,255,0.025); border-left:3px solid #c4b5fd;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline;">'
+                         +     '<div style="font-size:0.82rem; font-weight:800;">' + _jiqEsc(f.festival) + '</div>'
+                         +     '<div style="font-size:0.78rem; font-weight:800; color:#86efac;">+' + Number(f.sales_lift_pct || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.25rem; line-height:1.5; font-style:italic;">' + _jiqEsc(f.note || '') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>' : '';
+
+            var subsHtml = (data.arthouse_subscription_lift || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🎬 Arthouse-subscription net-adds (30d)</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0.4rem; margin-bottom:0.85rem;">'
+                + data.arthouse_subscription_lift.map(function(s) {
+                    var lift = (s.new_subs_30d_lift_pct != null ? s.new_subs_30d_lift_pct : s.new_pass_lift_pct) || 0;
+                    return '<div style="padding:0.55rem 0.7rem; border-radius:5px; background:rgba(255,255,255,0.025); border-left:3px solid #a855f7;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline;">'
+                         +     '<div style="font-size:0.82rem; font-weight:800;">' + _jiqEsc(s.service) + '</div>'
+                         +     '<div style="font-size:0.78rem; font-weight:800; color:#86efac;">+' + Number(lift).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.7rem; opacity:0.75; margin-top:0.2rem;">~' + _jiqFmt(s.est_incremental_subs || 0) + ' incremental subs</div>'
+                         +   '<div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.25rem; line-height:1.5; font-style:italic;">' + _jiqEsc(s.note || '') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>' : '';
+
+            var substack = data.book_club_and_substack || {};
+            var substackHtml = substack.note ? '<div style="padding:0.6rem 0.85rem; border-radius:5px; margin-bottom:0.85rem; background:rgba(168,85,247,0.06); border-left:3px solid #a855f7; font-size:0.78rem; line-height:1.55;">'
+                + '<strong style="color:#c4b5fd;">📰 Substack + cultural-criticism:</strong> ' + _jiqEsc(substack.note)
+                + ((substack.notable_substack_lifts || []).length ? '<div style="margin-top:0.35rem; display:flex; flex-wrap:wrap; gap:0.25rem;">'
+                    + substack.notable_substack_lifts.map(function(n) {
+                        return '<span style="padding:0.16rem 0.45rem; border-radius:999px; font-size:0.66rem; font-weight:700; background:rgba(168,85,247,0.15);">' + _jiqEsc(n) + '</span>';
+                      }).join('') + '</div>' : '')
+                + '</div>' : '';
+
+            var takeaway = data.takeaway_for_caa ? '<div style="padding:0.85rem 1rem; border-radius:7px;'
+                + ' background:rgba(168,85,247,0.10); border-left:3px solid #a855f7;'
+                + ' font-size:0.85rem; line-height:1.6;">'
+                + '<strong style="color:#c4b5fd;">🎯 What this tells CAA:</strong> ' + _jiqEsc(data.takeaway_for_caa) + '</div>' : '';
+
+            body.innerHTML = tiles + stHtml + snHtml + dcHtml + festHtml + subsHtml + substackHtml + takeaway;
+        }
+
+        // ─── Pull 9: Brand Affinity ─────────────────────────────────────
+        function renderJourneyIqObsBrand(p) {
+            var data = (p && p.enabled !== false && p.categories) ? p : _JIQ_OBSESSION_DATA.obs_brand_affinity;
+            if (!data) return;
+            _jiqObsShowCard('jiqObsBrandCard');
+            var subEl = document.getElementById('jiqObsBrandSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqObsBrandMeta');
+            if (metaEl) metaEl.innerHTML = (data.categories || []).length + ' advertiser categories  ' + _jiqObsPanelChip();
+            var body = document.getElementById('jiqObsBrandBody');
+            if (!body) return;
+
+            var maxAff = (data.categories || []).reduce(function(m, c) { return Math.max(m, c.affinity_index || 0); }, 0);
+            var catHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0;">💎 Advertiser categories (100 = genpop parity)</h4>'
+                + '<div style="display:grid; gap:0.4rem; margin-bottom:0.85rem;">'
+                + (data.categories || []).map(function(c) {
+                    var brandsHtml = (c.anchor_brands || []).map(function(b) {
+                        return '<span style="padding:0.16rem 0.45rem; border-radius:4px; font-size:0.64rem; font-weight:600; background:rgba(255,255,255,0.05);">' + _jiqEsc(b) + '</span>';
+                      }).join(' ');
+                    var talentTag = c.rec_talent === 'Director' ? '<span style="padding:0.16rem 0.45rem; border-radius:3px; background:rgba(168,85,247,0.2); color:#c4b5fd; font-size:0.6rem; font-weight:800;">DIRECTOR</span>'
+                                  : c.rec_talent === 'Cast'     ? '<span style="padding:0.16rem 0.45rem; border-radius:3px; background:rgba(168,85,247,0.12); color:#c4b5fd; font-size:0.6rem; font-weight:800;">CAST</span>'
+                                  :                                '<span style="padding:0.16rem 0.45rem; border-radius:3px; background:rgba(255,255,255,0.06); color:var(--text-secondary); font-size:0.6rem; font-weight:800;">' + _jiqEsc(c.rec_talent || '') + '</span>';
+                    return '<div style="padding:0.65rem 0.8rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid #a855f7;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem; flex-wrap:wrap;">'
+                         +     '<div style="display:flex; align-items:baseline; gap:0.5rem;">'
+                         +       '<div style="font-size:0.85rem; font-weight:800;">' + _jiqEsc(c.category) + '</div>'
+                         +       talentTag
+                         +     '</div>'
+                         +     '<div style="display:flex; gap:0.7rem; align-items:baseline;">'
+                         +       '<div style="font-size:0.66rem; opacity:0.7;">idx <strong style="color:#c4b5fd; font-size:0.82rem;">' + c.affinity_index + '</strong></div>'
+                         +       '<div style="font-size:0.66rem; opacity:0.7;">addressable <strong style="color:var(--text-primary); font-size:0.78rem;">' + _jiqObsAbbrevHH(c.addressable_hh || 0) + '</strong></div>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<div style="margin:0.35rem 0;">' + _jiqMiniBar(c.affinity_index || 0, '#a855f7', maxAff) + '</div>'
+                         +   (brandsHtml ? '<div style="display:flex; flex-wrap:wrap; gap:0.25rem; margin:0.3rem 0;">' + brandsHtml + '</div>' : '')
+                         +   '<div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.3rem; line-height:1.55;"><strong style="color:var(--text-primary);">Recommended:</strong> ' + _jiqEsc(c.rec_format || '') + ' &mdash; <em>' + _jiqEsc(c.notes || '') + '</em></div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var dealsHtml = (data.deal_recommendations || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🤝 Concrete deal opportunities ranked by estimated value</h4>'
+                + '<div style="overflow-x:auto; margin-bottom:0.85rem;">'
+                + '<table style="width:100%; border-collapse:collapse; font-size:0.78rem;">'
+                + '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase;">Deal</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Est. value</th>'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7;">Why</th>'
+                + '</tr></thead><tbody>'
+                + data.deal_recommendations.map(function(d) {
+                    return '<tr style="border-bottom:1px solid var(--border-color);">'
+                         +   '<td style="padding:6px 8px; font-weight:700;">' + _jiqEsc(d.deal) + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:800; color:#86efac;">$' + Number(d.est_value_usd_m || 0).toFixed(1) + 'M</td>'
+                         +   '<td style="padding:6px 8px; font-size:0.72rem; color:var(--text-secondary); line-height:1.5;">' + _jiqEsc(d.why || '') + '</td>'
+                         + '</tr>';
+                  }).join('')
+                + '</tbody></table></div>' : '';
+
+            var takeaway = data.takeaway_for_caa ? '<div style="padding:0.85rem 1rem; border-radius:7px;'
+                + ' background:rgba(168,85,247,0.10); border-left:3px solid #a855f7;'
+                + ' font-size:0.85rem; line-height:1.6;">'
+                + '<strong style="color:#c4b5fd;">🎯 What this tells CAA:</strong> ' + _jiqEsc(data.takeaway_for_caa) + '</div>' : '';
+
+            body.innerHTML = catHtml + dealsHtml + takeaway;
+        }
+
+        // ─── Pull 10: Comp + Director Equity Index ──────────────────────
+        function renderJourneyIqObsComp(p) {
+            var data = (p && p.enabled !== false && p.comp_films) ? p : _JIQ_OBSESSION_DATA.obs_comp_overlap;
+            if (!data) return;
+            _jiqObsShowCard('jiqObsCompCard');
+            var subEl = document.getElementById('jiqObsCompSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqObsCompMeta');
+            if (metaEl) metaEl.innerHTML = _jiqObsPanelChip();
+            var body = document.getElementById('jiqObsCompBody');
+            if (!body) return;
+
+            var dei = data.director_equity_index || {};
+            var deiScore = dei.composite_score || 0;
+            var trendColor = ({ rising: '#86efac', flat: '#fbbf24', falling: '#f59e0b' })[dei.trend_18mo] || '#94a3b8';
+
+            var deiHeadHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + '<div style="padding:0.85rem 1rem; border-radius:7px; background:rgba(168,85,247,0.10); border:1px solid rgba(168,85,247,0.32); text-align:center;">'
+                +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.08em;">Director Equity Index</div>'
+                +   '<div style="font-size:2.8rem; font-weight:900; color:#c4b5fd; line-height:1;">' + deiScore + '</div>'
+                +   '<div style="font-size:0.72rem; opacity:0.7;">/ ' + (dei.composite_max || 100) + ' · <span style="color:' + trendColor + '; font-weight:700;">trend: ' + _jiqEsc(dei.trend_18mo || 'unknown') + '</span></div>'
+                + '</div>'
+                + (dei.sub_scores || []).map(function(s) {
+                    var pct = ((s.score || 0) / (s.max || 100)) * 100;
+                    return '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.025);">'
+                         +   '<div style="font-size:0.62rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.05em;">' + _jiqEsc(s.dimension) + '</div>'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin:0.15rem 0 0.3rem;">'
+                         +     '<div style="font-size:1.1rem; font-weight:800; color:#c4b5fd;">' + s.score + '</div>'
+                         +     '<div style="font-size:0.66rem; opacity:0.65;">/ ' + (s.max || 100) + '</div>'
+                         +   '</div>'
+                         +   '<div style="height:4px; border-radius:2px; background:rgba(168,85,247,0.15); overflow:hidden;">'
+                         +     '<div style="height:100%; width:' + pct.toFixed(2) + '%; background:#a855f7;"></div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.68rem; color:var(--text-secondary); margin-top:0.3rem; line-height:1.45; font-style:italic;">' + _jiqEsc(s.note || '') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var compHtml = (data.comp_films || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🎬 Comp films (where this audience also bought tickets, 18mo lookback)</h4>'
+                + '<div style="overflow-x:auto; margin-bottom:0.85rem;">'
+                + '<table style="width:100%; border-collapse:collapse; font-size:0.78rem;">'
+                + '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase;">Film</th>'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase;">Director</th>'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase;">Released</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Audience overlap</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">HHs</th>'
+                +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7;">Why</th>'
+                + '</tr></thead><tbody>'
+                + data.comp_films.map(function(c) {
+                    return '<tr style="border-bottom:1px solid var(--border-color);">'
+                         +   '<td style="padding:6px 8px; font-weight:700;">' + _jiqEsc(c.film) + '</td>'
+                         +   '<td style="padding:6px 8px; font-size:0.72rem;">' + _jiqEsc(c.director) + '</td>'
+                         +   '<td style="padding:6px 8px; font-size:0.72rem; color:var(--text-secondary);">' + _jiqEsc(c.released) + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:800; color:#c4b5fd;">' + Number(c.overlap_audience_pct || 0).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; text-align:right;">' + _jiqFmt(c.overlap_hh || 0) + '</td>'
+                         +   '<td style="padding:6px 8px; font-size:0.7rem; color:var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(c.note || '') + '</td>'
+                         + '</tr>';
+                  }).join('')
+                + '</tbody></table></div>' : '';
+
+            var antiHtml = (data.anti_comps || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🚫 Anti-comps (NOT in the package conversation)</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0.35rem; margin-bottom:0.85rem;">'
+                + data.anti_comps.map(function(a) {
+                    return '<div style="padding:0.5rem 0.7rem; border-radius:5px; background:rgba(245,158,11,0.06); border-left:3px solid #f59e0b;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline;">'
+                         +     '<div style="font-size:0.78rem; font-weight:700;">' + _jiqEsc(a.film) + '</div>'
+                         +     '<div style="font-size:0.72rem; font-weight:800; color:#fbbf24;">' + Number(a.overlap_audience_pct || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.15rem;">' + _jiqEsc(a.director) + '</div>'
+                         +   '<div style="font-size:0.7rem; color:var(--text-secondary); margin-top:0.25rem; line-height:1.5; font-style:italic;">' + _jiqEsc(a.note || '') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>' : '';
+
+            var benchHtml = (dei.benchmark_directors || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🏆 Benchmark directors (where the index sits in the field)</h4>'
+                + '<div style="display:grid; gap:0.3rem; margin-bottom:0.85rem;">'
+                + dei.benchmark_directors.map(function(b) {
+                    var bColor = ({ rising: '#86efac', flat: '#fbbf24', falling: '#f59e0b' })[b.trend] || '#94a3b8';
+                    return '<div style="display:grid; grid-template-columns:minmax(0,1.5fr) auto auto minmax(0,2fr); gap:0.55rem; align-items:center;'
+                         +              ' padding:0.4rem 0.65rem; border-radius:5px; background:rgba(255,255,255,0.025);">'
+                         +   '<div style="font-size:0.8rem; font-weight:700;">' + _jiqEsc(b.director) + '</div>'
+                         +   '<div style="font-size:0.82rem; font-weight:800; color:#c4b5fd;">' + b.equity_index + '</div>'
+                         +   '<div style="font-size:0.68rem; font-weight:700; color:' + bColor + ';">' + _jiqEsc(b.trend) + '</div>'
+                         +   '<div style="font-size:0.7rem; color:var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(b.note || '') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>' : '';
+
+            var takeaway = data.takeaway_for_caa ? '<div style="padding:0.85rem 1rem; border-radius:7px;'
+                + ' background:rgba(168,85,247,0.10); border-left:3px solid #a855f7;'
+                + ' font-size:0.85rem; line-height:1.6;">'
+                + '<strong style="color:#c4b5fd;">🎯 What this tells CAA:</strong> ' + _jiqEsc(data.takeaway_for_caa) + '</div>' : '';
+
+            body.innerHTML = deiHeadHtml + compHtml + antiHtml + benchHtml + takeaway;
         }
 
         function _jiqNflxWindowTabs(containerId, windows, activeKey, onChange) {
@@ -59884,7 +61506,7 @@
             // Allow-list of story modes that get the "force-hide all
             // templated JIQ cards" treatment. Add more cases here
             // when new pitches get their own purpose-built dashboards.
-            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1 };
+            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1 };
             if (!FORCE_HIDE_MODES[storyMode]) return;
             for (var i = 0; i < _JIQ_STORY_MODE_HIDE_LIST.length; i++) {
                 var el = document.getElementById(_JIQ_STORY_MODE_HIDE_LIST[i]);
