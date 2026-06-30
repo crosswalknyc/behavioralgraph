@@ -104291,9 +104291,9 @@
                 return minR + (maxR - minR) * Math.sqrt(pct / maxPct);
             }
 
-            // Build SVG (Wikimedia Albers viewBox 959×593)
+            // Build SVG — padded viewBox for label overflow, capped height to fit on screen
             const W = 959, H = 593;
-            let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">';
+            let svg = '<svg viewBox="-40 -10 ' + (W + 60) + ' ' + (H + 20) + '" xmlns="http://www.w3.org/2000/svg" style="width:95%;height:auto;max-height:75vh;margin:0 auto;display:block;">';
 
             // Fix SVG paths: after uppercase M x,y, implicit coords must be relative lineto
             function _fixPath(d) {
@@ -104347,7 +104347,7 @@
                 var r = getRadius(b.pct);
                 if (!displaced[i]) { labelPositions.push({ x: b.x, y: b.y, displaced: false }); return; }
                 var bestAngle = 0, bestScore = -Infinity;
-                var offset = r + 55;
+                var offset = r + 28;
                 for (var a = 0; a < Math.PI * 2; a += Math.PI / 16) {
                     var testX = b.x + Math.cos(a) * offset;
                     var testY = b.y + Math.sin(a) * offset;
