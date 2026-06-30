@@ -32081,8 +32081,8 @@
                 </div>
 
                 <!-- ════════════════════════════════════════════════════════
-                     OBSESSION (FILM) - CAA DIRECTOR-REP STORY MODE
-                     A digital-journey deck tailored for a talent agency
+                     OBSESSION (FILM) - DIRECTOR-REP STORY MODE
+                     A digital-journey deck tailored for a talent rep
                      repping a director. Same tab-bar UX as Netflix.
                      Painted + wired by _jiqObsRenderTabBar() only when
                      meta.story_mode === 'obsession_caa'.
@@ -32205,7 +32205,7 @@
                             background: linear-gradient(135deg, rgba(168,85,247,0.05) 0%, rgba(15,23,42,0.05) 100%);
                             border: 1px solid rgba(168,85,247,0.22);">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqObsBrandTitle" style="margin: 0;">💼 Audience brand affinity - the CAA endorsement-pitch deck</h3>
+                        <h3 id="jiqObsBrandTitle" style="margin: 0;">💼 Audience brand affinity - endorsement-pitch deck</h3>
                         <div id="jiqObsBrandMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqObsBrandSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
@@ -47233,8 +47233,8 @@
                             story_mode: 'obsession_caa',
                             target_name: 'Obsession',
                             target_display: 'Obsession (film)',
-                            project_name: 'Obsession - CAA Director Journey',
-                            customer_brand: 'CAA',
+                            project_name: 'Obsession - Director Journey',
+                            customer_brand: 'Talent Rep',
                             agency_lens: true,
                             start_date: '2026-03-15',
                             end_date: '2026-06-30',
@@ -47253,12 +47253,12 @@
                         obs_brand_affinity:      _JIQ_OBSESSION_DATA.obs_brand_affinity,
                         obs_comp_overlap:        _JIQ_OBSESSION_DATA.obs_comp_overlap,
                         facts: [
-                            { label: 'Headline',   value: 'The studio sees the gross. CAA sees the audience. 54.1% of Obsession ticket buyers can be traced back to the director or her cast - that is the agency-owned 1.29M-HH audience floor CAA can price the next package against.' },
-                            { label: 'Discovery',  value: 'Three of the top five discovery surfaces (TikTok fancam edits, Letterboxd, the director\'s podcast tour) are off-platform and talent-led. CAA can quantify and own this funnel; the studio cannot.' },
+                            { label: 'Headline',   value: 'The studio sees the gross. The talent rep sees the audience. 54.1% of Obsession ticket buyers can be traced back to the director or her cast - the 1.29M-HH talent-attributable audience floor for pricing the next package.' },
+                            { label: 'Discovery',  value: 'Three of the top five discovery surfaces (TikTok fancam edits, Letterboxd, the director\'s podcast tour) are off-platform and talent-led. The talent rep can quantify and own this funnel; the studio cannot.' },
                             { label: 'Press tour', value: 'Smartless + NPR Pop Culture Happy Hour + Marc Maron WTF delivered 100,430 incremental tickets in the 7d post-air window. Letterboxd: Best in Show converted 41.8% of its small but cinephile-dense audience.' },
                             { label: 'Funnel',     value: 'Director-attributable buyers converted in 1.2 days vs 6.4 for marketing-driven buyers. Letterboxd-redirect tickets converted at 27.4% - the highest single-channel rate in the deck.' },
                             { label: 'Pre-show',   value: '78.4% rewatched the trailer 2-3x. 41.2% queued the director\'s prior film. 32.1% booked an OpenTable reservation near the theater. The 14d pre-show window is high-intent commerce the studio cannot see.' },
-                            { label: 'Streaming',  value: 'Max captured 7.34M incremental streams of The Quiet Year off this release. A24 Channel grew subs 38.7%. CAA should renegotiate the next library window 32-41% higher.' },
+                            { label: 'Streaming',  value: 'Max captured 7.34M incremental streams of The Quiet Year off this release. A24 Channel grew subs 38.7%. The next library window should renegotiate 32-41% higher.' },
                             { label: 'Social',     value: '4.21 average Letterboxd rating across 247.8K ratings is a top-decile prestige score. 31,840 user-generated TikTok edits means the audience IS the marketing.' },
                             { label: 'Commerce',   value: 'Mica Levi back-catalog +87.4%. Source novel +320-482% across retailers. Criterion Channel subs +24.7%. The cultural footprint the studio captures zero of, the director captures most.' },
                             { label: 'Brand',      value: '$14.6M of estimated value across five concrete deal opportunities. Letterboxd Pro affinity index 487 - smallest cohort, highest purity. Mubi, Aesop, Apple TV+ are the three near-term wins.' },
@@ -49025,7 +49025,7 @@
                 if (typeof _jiqNflxHideTabBar === 'function') _jiqNflxHideTabBar();
             }
 
-            // Obsession story-mode branch - paint the CAA director-rep
+            // Obsession story-mode branch - paint the director-rep
             // deck, then activate the first tab so reviewers see only
             // one pull at a time.
             if (_isObsessionStory) {
@@ -58052,16 +58052,16 @@
         };
 
         // ══════════════════════════════════════════════════════════════
-        // OBSESSION (FILM) - CAA DIRECTOR-REP STORY-MODE DATASET
+        // OBSESSION (FILM) - DIRECTOR-REP STORY-MODE DATASET
         //
         // Hand-authored payload powering the Obsession demo run. The
-        // brief: build a digital-journey deck that CAA would want to
-        // see for a film they have a director attached to. So unlike
+        // brief: build a digital-journey deck a talent rep would want
+        // to see for a film they have a director attached to. So unlike
         // the Netflix deck (which sells audience to advertisers), this
         // deck sells DIRECTOR EQUITY: how audiences found the film,
         // how they converted into ticket buyers, what they did before
         // they showed up, where they went after, and what off-screen
-        // commerce + brand-affinity surfaces CAA can monetize on
+        // commerce + brand-affinity surfaces the rep can monetize on
         // behalf of the director (endorsement deals, podcast bookings,
         // next-package pricing, festival-tour DMAs).
         //
@@ -58084,11 +58084,11 @@
             },
 
             // Film + director context. The agency_lens flag flips every
-            // card into "what CAA cares about" framing.
+            // card into "what the talent rep cares about" framing.
             obs_meta: {
                 film: 'Obsession',
                 director: 'Naya Okonkwo',
-                director_repped_by: 'CAA',
+                director_repped_by: 'Talent Rep',
                 agency_lens: true,
                 release_date: '2026-05-01',
                 run_end_date: '2026-06-30',
@@ -58115,7 +58115,7 @@
             obs_discovery_spine: {
                 enabled: true,
                 title: 'How audiences found Obsession',
-                subtitle: 'First touch -> ticket-buy -> seat -> post-show. The director-attribution lens shows the audience CAA owns vs. the audience marketing rented.',
+                subtitle: 'First touch -> ticket-buy -> seat -> post-show. The director-attribution lens shows the audience the talent owns vs. the audience marketing rented.',
                 stages: [
                     { id: 'discovery', label: 'Discovery',    pct_entering: 100.0, pct_completing: 41.2, dropoff_pp: 58.8, days_median: 0,  note: 'First exposure to Obsession (trailer view, social mention, critic review, festival clip).' },
                     { id: 'research',  label: 'Research',    pct_entering: 41.2,  pct_completing: 24.8, dropoff_pp: 16.4, days_median: 3,  note: 'Watched trailer 2nd+ time, looked up reviews, checked showtimes, added to Letterboxd watchlist.' },
@@ -58134,7 +58134,7 @@
                     genre_organic_hh:      348940,
                     word_of_mouth_pct:     11.5,
                     word_of_mouth_hh:      274850,
-                    note_for_caa: 'CAA owns the 31.7% director-driven cohort outright. Combined with the 22.4% cast-driven cohort (CAA-adjacent in most cases), the agency-attributable audience is 54.1% of total ticket-buyers - 1.29M U.S. HHs. That is the price floor for the next package.'
+                    note_for_caa: ''
                 },
                 top_discovery_surfaces: [
                     { surface: 'TikTok organic (#obsessionmovie + fancam edits)', share_pct: 21.4, hh: 511460, on_platform: false, paid: false },
@@ -58149,15 +58149,15 @@
                     { surface: 'Theater chain native apps (AMC Stubs / Regal Crown Club)', share_pct: 3.6, hh: 86040, on_platform: true,  paid: false },
                     { surface: 'Google Showtimes / search ads',                     share_pct: 2.8,  hh: 66920,  on_platform: false, paid: true  }
                 ],
-                takeaway_for_caa: '54.1% of Obsession ticket buyers can be directly attributed to the director or her cast. CAA should price the director\'s next package against a proven 1.29M-HH audience floor, not against the film\'s gross. Three of the top five discovery surfaces are off-platform talent-led (TikTok fancam edits, Letterboxd, podcast tour) - this is CAA-owned demand, not distributor-owned demand.'
+                takeaway_for_caa: ''
             },
 
             // ─── PULL 2: Trailer-Drop Wake ──────────────────────────────
             // Minute-by-minute spread of the trailer when it landed,
             // the viral moments, search/save velocity, and which
-            // surfaces lit up first. CAA cares because trailer-wake
-            // intensity is the most reliable leading indicator of
-            // opening-weekend ticket-buy.
+            // surfaces lit up first. Trailer-wake intensity is the
+            // most reliable leading indicator of opening-weekend
+            // ticket-buy.
             obs_trailer_wake: {
                 enabled: true,
                 title: 'The trailer-drop wake',
@@ -58173,7 +58173,7 @@
                     google_search_index:       418,
                     imdb_page_lookups_k:       612.1,
                     director_name_search_lift: 8.4,
-                    note: 'TikTok re-uploads outpaced the official YouTube cut 6.1:1 in raw views during the first 72 hours. The fancam-edit-driven amplification is the asset CAA can quantify on behalf of the director.'
+                    note: 'TikTok re-uploads outpaced the official YouTube cut 6.1:1 in raw views during the first 72 hours. The fancam-edit-driven amplification is a quantifiable asset attributable to the director.'
                 },
                 viral_moments: [
                     { moment: 'The needle-drop on Mitski - Nobody (0:48 of trailer)',     tiktok_uses_k: 47.2, sound_saves_k: 312.4, note: 'Used as the audio bed in 47.2K user-generated edits, mostly fancams of Florence Pugh.' },
@@ -58202,13 +58202,13 @@
                     { dma: 'Asheville',     engagement_index: 312, share_pct: 0.8  },
                     { dma: 'Madison WI',    engagement_index: 287, share_pct: 0.9  }
                 ],
-                takeaway_for_caa: 'The trailer\'s viral moments (the Mitski needle-drop, the Pugh monologue, the dinner-party long take) were earned-not-bought. CAA can quantify this as the director\'s ability to cut a sequence that survives the algorithm. The Asheville / Madison / Portland triangle is the prestige-arthouse anchor - send the director on press tour there for film #2.'
+                takeaway_for_caa: ''
             },
 
             // ─── PULL 3: Talent-Podcast Wake ────────────────────────────
             // The director\'s 8-week press tour, ranked by ticket-buy
             // lift in the 7d post-air vs pre-air window. This is the
-            // most actionable CAA card: book talent on the shows that
+            // most actionable card: book talent on the shows that
             // actually moved tickets last time.
             obs_podcast_wake: {
                 enabled: true,
@@ -58232,7 +58232,7 @@
                     { show: 'On Being',             host: 'Krista Tippett',      why_caa_should_book: 'Reach the prestige-quiet audience the director\'s work resonates with most. Cross-over to NYRB / Substack reader graph.' },
                     { show: 'Maintenance Phase',    host: 'Aubrey Gordon / Michael Hobbes', why_caa_should_book: 'Adjacent audience graph (cultural criticism, body-image discourse) that has not yet been activated for the director.' }
                 ],
-                takeaway_for_caa: 'Smartless + NPR PCHH + WTF Maron = three shows that together delivered 100,430 incremental tickets in the 7d post-air window - 3.3% of the entire opening run. Book these three FIRST on every CAA package. Letterboxd: Best in Show converted 41.8% of its listenership in 7 days; small cohort, but the highest-intent audience on the tour - lead with this for the director\'s next prestige festival drop.'
+                takeaway_for_caa: ''
             },
 
             // ─── PULL 4: Ticket-Buy Funnel ──────────────────────────────
@@ -58281,7 +58281,7 @@
                     { week: 'W4',           tickets_m: 0.28, share_pct: 9.2  },
                     { week: 'W5+',          tickets_m: 0.13, share_pct: 4.3  }
                 ],
-                takeaway_for_caa: 'Director-driven buyers converted in 1.2 days vs 6.4 days for marketing-driven buyers. The agency-owned audience is faster, more decisive, and over-indexes on Letterboxd-redirect (27.4% conversion) + AMC A-List (24.6%). For film #2: tilt distribution windows toward Alamo / Metrograph independent flows where repeat-attendance is 3.4x.'
+                takeaway_for_caa: ''
             },
 
             // ─── PULL 5: The 14 Days Before Show ────────────────────────
@@ -58304,7 +58304,7 @@
                     { behavior: 'Picked up the source novel / related reading',       share_of_cohort_pct: 14.8, hh: 353720,  lift_index_vs_genpop: 642, note: 'Amazon book sales of the source novel saw a 4.2x lift in the 14d window. Bookshop.org spike was 5.8x.' },
                     { behavior: 'Made an OpenTable reservation near the theater',     share_of_cohort_pct: 32.1, hh: 767190,  lift_index_vs_genpop: 187, note: 'Dinner-and-a-movie. Median reservation 2hr before showtime. Average party size 2.3.' },
                     { behavior: 'Looked up critics\' top-10 list inclusions',         share_of_cohort_pct: 12.4, hh: 296360,  lift_index_vs_genpop: 312, note: 'Searches for "best films of 2026" peaked at the W3 mark.' },
-                    { behavior: 'Followed the director on Instagram / TikTok',        share_of_cohort_pct: 18.6, hh: 444540,  lift_index_vs_genpop: 421, note: 'Net new follow rate on the director\'s Instagram = +42K in the 14d window. CAA-trackable on platform.' },
+                    { behavior: 'Followed the director on Instagram / TikTok',        share_of_cohort_pct: 18.6, hh: 444540,  lift_index_vs_genpop: 421, note: 'Net new follow rate on the director\'s Instagram = +42K in the 14d window.' },
                     { behavior: 'Bought premium-format upgrade (IMAX / Dolby / 70mm)', share_of_cohort_pct: 22.4, hh: 535360,  lift_index_vs_genpop: 218, note: 'Premium-format pickup rate is 2.18x genpop average for prestige drama. Cinephile signal.' }
                 ],
                 top_streamers_benefiting_from_back_catalog: [
@@ -58313,13 +58313,13 @@
                     { streamer: 'Mubi',           director_prior_title: 'Vellichor (2018)',        queue_lift_pct: 96.4, est_incremental_minutes_streamed_m: 2.8, note: 'Subscription net-adds in the 14d window were +21.4% above their 90d baseline.' },
                     { streamer: 'Criterion Channel', director_prior_title: 'Bonefire (2020)',      queue_lift_pct: 78.4, est_incremental_minutes_streamed_m: 1.4, note: 'Lower share but the highest-intent cohort - 24.7% who streamed Bonefire then bought a Criterion 4K disc.' }
                 ],
-                takeaway_for_caa: 'The 14d pre-show window is where the director\'s back-catalog economics live. Max captured 14.6M incremental streamed minutes of The Quiet Year off the back of this release - that is a window-payment renegotiation in CAA\'s pocket for the next library deal. Soundtrack + source-novel lift (218% / 4.2x) is direct off-screen commerce that the studio cannot bill against, and the director can.'
+                takeaway_for_caa: ''
             },
 
             // ─── PULL 6: Post-Show Streaming Pull-Through ───────────────
             // 30 days after they saw Obsession, what did they stream.
             // The director\'s back-catalog + comparable directors +
-            // genre adjacencies. This is the CAA window-renegotiation
+            // genre adjacencies. This is the window-renegotiation
             // card: which streamer monetized this audience most, and
             // what the next library window should price at.
             obs_post_show_streaming: {
@@ -58327,7 +58327,7 @@
                 title: 'Post-show streaming pull-through',
                 subtitle: '30 days after seeing Obsession in theaters. The director\'s back-catalog, comparable directors, and the genre-adjacency catalog this audience pulled through.',
                 director_back_catalog_lift_by_streamer: [
-                    { streamer: 'Max',                 title: 'The Quiet Year',     base_streams_30d_m: 8.4,  post_show_lift_pct: 87.4,  incremental_streams_m: 7.34, note: 'The single biggest beneficiary of the entire release wake. CAA should price the next Max window 32-41% higher.' },
+                    { streamer: 'Max',                 title: 'The Quiet Year',     base_streams_30d_m: 8.4,  post_show_lift_pct: 87.4,  incremental_streams_m: 7.34, note: 'The single biggest beneficiary of the entire release wake. Price the next Max window 32-41% higher.' },
                     { streamer: 'A24 Channel',         title: 'The Quiet Year + Vellichor', base_streams_30d_m: 0.42, post_show_lift_pct: 142.1, incremental_streams_m: 0.60, note: 'Subscription net-adds traceable to this release: +14,200 new A24 subs in the 30d window.' },
                     { streamer: 'Mubi',                title: 'Vellichor',          base_streams_30d_m: 0.31, post_show_lift_pct: 96.4,  incremental_streams_m: 0.30, note: 'Mubi US sub growth +21.4% above their 90d trailing baseline in the 30d window.' },
                     { streamer: 'Criterion Channel',   title: 'Bonefire',           base_streams_30d_m: 0.18, post_show_lift_pct: 78.4,  incremental_streams_m: 0.14, note: 'Highest disc-purchase pull-through - 24.7% of Bonefire streamers then bought the Criterion 4K.' }
@@ -58347,19 +58347,19 @@
                     { cast_member: 'Daniel Kaluuya',   titles_with_lift: ['Get Out', 'Nope', 'Judas and the Black Messiah', 'Sicario'], avg_lift_pct: 38.7, primary_platforms: ['Peacock', 'Max', 'Prime'] },
                     { cast_member: 'Vicky Krieps',     titles_with_lift: ['Phantom Thread', 'Corsage', 'Hold Me Tight', 'Bergman Island'], avg_lift_pct: 47.4, primary_platforms: ['Hulu', 'Mubi', 'Criterion Channel'] }
                 ],
-                takeaway_for_caa: 'Max gets the biggest direct payout from this release - 7.34M incremental streams of The Quiet Year off Obsession\'s back. CAA can argue the next Max library window should price 32-41% above the prior round. The comparable-directors graph (Lanthimos, Ramsay, Park, Glazer) defines the audience that holds up for the next package: a 38-52% lift cohort across 4 streamers. This is the audience CAA actually owns - regardless of which studio finances film #2.'
+                takeaway_for_caa: ''
             },
 
             // ─── PULL 7: Social + Letterboxd Spillover ──────────────────
             // The cultural footprint - Letterboxd ratings + reviews,
             // Reddit thread density, TikTok hashtag velocity, Twitter
             // critic threads, Instagram premiere coverage. The signal
-            // CAA can use to price talent (the director, the cast)
+            // the rep can use to price talent (the director, the cast)
             // for press tours, brand deals, festival appearances.
             obs_social_letterboxd: {
                 enabled: true,
                 title: 'The social + Letterboxd footprint',
-                subtitle: 'The cultural-conversation surface CAA can value when pricing the director\'s next package or her cast\'s endorsement deals.',
+                subtitle: 'The cultural-conversation surface to value when pricing the director\'s next package or her cast\'s endorsement deals.',
                 letterboxd: {
                     ratings_count_k: 247.8,
                     avg_rating: 4.21,
@@ -58424,7 +58424,7 @@
                     premiere_post_engagement_m: 18.4,
                     bts_reel_views_m: 31.2
                 },
-                takeaway_for_caa: 'A 4.21 Letterboxd average across 247.8K ratings is a top-decile prestige score - CAA can lead with that number when pitching the director\'s next project. 31,840 user-generated TikTok edits means the audience IS the marketing - that has direct value the next time CAA negotiates marketing-spend reductions on a paid package. The director\'s personal Instagram added 42K followers in 30 days - measurable, ownable, and bankable.'
+                takeaway_for_caa: ''
             },
 
             // ─── PULL 8: Off-Screen Commerce Wake ───────────────────────
@@ -58432,7 +58432,7 @@
             // ticket. Soundtrack streams, source-novel sales, prior-film
             // disc/digital, festival passes, prestige-cinema subs.
             // The off-screen halo is the part of the wake the studio
-            // captures zero of; CAA captures most.
+            // captures zero of; the talent rep captures most.
             obs_offscreen_commerce: {
                 enabled: true,
                 title: 'Off-screen commerce wake',
@@ -58445,7 +58445,7 @@
                     apple_music_album_streams_m: 8.4,
                     composer: 'Mica Levi',
                     composer_back_catalog_lift_pct: 87.4,
-                    note: 'The score by Mica Levi drove +87.4% back-catalog streaming (Under the Skin / Jackie / Monos). This is a CAA-priceable composer lift attributable to her placement on the film.'
+                    note: 'The score by Mica Levi drove +87.4% back-catalog streaming (Under the Skin / Jackie / Monos). This is a priceable composer lift attributable to her placement on the film.'
                 },
                 source_novel: {
                     title: 'Obsession (the novel) - synthetic comp',
@@ -58460,7 +58460,7 @@
                     titles: ['The Quiet Year (4K)', 'Bonefire (Criterion 4K)', 'Vellichor (Blu-ray + Mubi exclusive)'],
                     avg_4k_disc_sales_lift_pct: 412.1,
                     criterion_subscriber_growth_pct: 24.7,
-                    note: 'Criterion saw a measurable subscriber bump after the press tour referenced Bonefire as the director\'s "first real film". This is a CAA win the studio cannot bill against.'
+                    note: 'Criterion saw a measurable subscriber bump after the press tour referenced Bonefire as the director\'s "first real film". This is a talent-rep win the studio cannot bill against.'
                 },
                 festival_pass_lift: [
                     { festival: 'NYFF digital pass',        sales_lift_pct: 38.7, note: 'New York audiences in the Obsession ticket-buy cohort over-indexed on NYFF intent by 4.2x genpop.' },
@@ -58478,18 +58478,18 @@
                     notable_substack_lifts: ['Bookforum', 'A24 newsletter', 'The Letterboxd Journal', 'Read Me Romance', 'Astra House'],
                     note: 'Substack subscription growth among Obsession ticket buyers was 24.7% above baseline in the 30d window. The audience is a cultural-criticism-paying audience.'
                 },
-                takeaway_for_caa: 'The off-screen commerce wake is 100% invisible to the studio\'s P&L but 100% visible in clickstream. Mica Levi back-catalog +87.4%. Source novel +320-482% across retailers. Criterion sub growth +24.7%. CAA can quantify this as the director\'s "cultural footprint" and price it into the next package as marketing value the studio gets for free.'
+                takeaway_for_caa: ''
             },
 
             // ─── PULL 9: Audience Brand Affinity ─────────────────────────
             // The 12 advertiser categories this audience over-indexes
             // for vs. genpop, with anchor brands + endorsement-deal
-            // recommendations. This is the CAA endorsement-pitch deck:
+            // recommendations. This is the endorsement-pitch deck:
             // what brand the director (or the cast) should be sitting
             // across from in a meeting next quarter.
             obs_brand_affinity: {
                 enabled: true,
-                title: 'Audience brand affinity - the CAA endorsement-pitch deck',
+                title: 'Audience brand affinity - endorsement-pitch deck',
                 subtitle: '12 advertiser categories this audience over-indexes for, with anchor brands and recommended endorsement formats for the director and cast.',
                 categories: [
                     { category: 'Premium arthouse subscriptions',  affinity_index: 412, addressable_hh: 487420, anchor_brands: ['Mubi', 'Criterion Channel', 'A24 Channel', 'Janus Films'], rec_format: 'Director-curated programming block', rec_talent: 'Director', notes: 'Mubi already in conversation. Criterion is the natural retro-pairing for the next press cycle.' },
@@ -58500,10 +58500,10 @@
                     { category: 'Specialty grocery / wellness',    affinity_index: 218, addressable_hh: 487420, anchor_brands: ['Erewhon', 'Foxtrot', 'Whole Foods 365', 'Levain', 'Republican Records'], rec_format: 'Director recipe / wellness collab', rec_talent: 'Director', notes: 'Erewhon "director smoothie" is the obvious cultural-shorthand play.' },
                     { category: 'Travel destinations (slow / cinematic)', affinity_index: 268, addressable_hh: 384620, anchor_brands: ['Iceland Tourism', 'Visit Lisbon', 'Visit Mexico City', 'Faroe Islands', 'Visit Norway'], rec_format: 'Tourism-board partnership (cinematic destination)', rec_talent: 'Director', notes: 'Director\'s back-catalog includes a film set in Iceland. The natural prestige-travel pairing.' },
                     { category: 'Independent bookstores + publishers', affinity_index: 384, addressable_hh: 312480, anchor_brands: ['Astra House', 'NYRB Classics', 'Verso Books', 'Sub Stack', 'Penguin Classics'], rec_format: 'Director "essential reading" curated list + co-branded edition', rec_talent: 'Director', notes: 'NYRB-Letterboxd-Substack triangle is the highest-density cultural-consumer overlap in this deck.' },
-                    { category: 'Premium tech + luxury electronics', affinity_index: 198, addressable_hh: 524680, anchor_brands: ['Apple', 'Sonos', 'B&O', 'Leica', 'Hasselblad'], rec_format: 'Apple TV+ multi-film deal (director + Apple)', rec_talent: 'Director', notes: 'Apple is the natural prestige-streamer fit for the director\'s next film. CAA should open this conversation.' },
+                    { category: 'Premium tech + luxury electronics', affinity_index: 198, addressable_hh: 524680, anchor_brands: ['Apple', 'Sonos', 'B&O', 'Leica', 'Hasselblad'], rec_format: 'Apple TV+ multi-film deal (director + Apple)', rec_talent: 'Director', notes: 'Apple is the natural prestige-streamer fit for the director\'s next film. The talent rep should open this conversation.' },
                     { category: 'Coffee + cafe culture',           affinity_index: 184, addressable_hh: 487420, anchor_brands: ['Blue Bottle', 'Stumptown', 'Onyx', 'Sey', 'La Colombe'], rec_format: 'Limited release collab + festival-circuit cafe partnership', rec_talent: 'Cast', notes: 'Lower priority but durable.' },
                     { category: 'Cycling + slow-fashion outdoor',   affinity_index: 174, addressable_hh: 287420, anchor_brands: ['Rapha', 'Patagonia', 'Snow Peak', 'Filson'], rec_format: 'Director documentary partnership', rec_talent: 'Director', notes: 'Patagonia\'s film initiative is open for guest directors. Natural fit.' },
-                    { category: 'Letterboxd Pro + cinephile tools',  affinity_index: 487, addressable_hh: 184620, anchor_brands: ['Letterboxd Pro', 'Criterion Forum', 'Filmstack', 'JustWatch'], rec_format: 'Director profile takeover + recommendation feed', rec_talent: 'Director', notes: 'Highest affinity-index in the deck. Smallest addressable cohort. But this is THE audience CAA owns.' }
+                    { category: 'Letterboxd Pro + cinephile tools',  affinity_index: 487, addressable_hh: 184620, anchor_brands: ['Letterboxd Pro', 'Criterion Forum', 'Filmstack', 'JustWatch'], rec_format: 'Director profile takeover + recommendation feed', rec_talent: 'Director', notes: 'Highest affinity-index in the deck. Smallest addressable cohort. But this is THE audience the director owns.' }
                 ],
                 deal_recommendations: [
                     { deal: 'Mubi multi-film director programming block',      est_value_usd_m: 1.2, why: 'Mubi is already in conversation; programming-block deals price 1.0-1.5M; this is the highest-affinity audience.' },
@@ -58512,13 +58512,13 @@
                     { deal: 'Iceland Tourism cinematic-tour partnership',      est_value_usd_m: 0.8, why: 'Director\'s back-catalog includes an Iceland film. Tourism boards pay for narrative content.' },
                     { deal: 'NYRB Classics co-branded edition + reading list', est_value_usd_m: 0.4, why: 'Lower dollar but high cultural-equity contribution. Compounds on director brand.' }
                 ],
-                takeaway_for_caa: 'Five concrete deal opportunities sitting at $14.6M of estimated total value, anchored to a 1.29M-HH director-attributable audience. The Letterboxd Pro affinity (index 487) is the highest in the deck - smallest cohort but the purest CAA-owned audience. Mubi + Aesop + Apple TV+ are the three near-term wins. NYRB + Iceland are the durable culture-equity plays.'
+                takeaway_for_caa: ''
             },
 
             // ─── PULL 10: Comp-Audience Overlap + Director Equity Index ─
             // Which OTHER directors / films this audience also bought
             // tickets for in the last 18 months. Anti-comps (films this
-            // audience skipped). The CAA "next package" view: if you
+            // audience skipped). The "next package" view: if you
             // are packaging the director\'s next film, here are the
             // existing comps that hold up + the rate-card.
             obs_comp_overlap: {
@@ -58529,7 +58529,7 @@
                     { film: 'Poor Things',           director: 'Yorgos Lanthimos',  released: '2023-12',  overlap_audience_pct: 47.4, overlap_hh: 1133260, note: 'Highest single-film overlap in the deck. Same prestige-thriller + auteur-led audience.' },
                     { film: 'Past Lives',            director: 'Celine Song',       released: '2023-06',  overlap_audience_pct: 41.8, overlap_hh: 998820,  note: 'A24 prestige drama. Overlap audience graph is nearly identical.' },
                     { film: 'The Zone of Interest',  director: 'Jonathan Glazer',   released: '2023-12',  overlap_audience_pct: 38.7, overlap_hh: 924930,  note: 'Highest prestige-cred crossover. Letterboxd power-user concentration.' },
-                    { film: 'Anatomy of a Fall',     director: 'Justine Triet',     released: '2023-10',  overlap_audience_pct: 36.2, overlap_hh: 865180,  note: 'Female-director thriller. CAA can use as the most-direct comp for pricing.' },
+                    { film: 'Anatomy of a Fall',     director: 'Justine Triet',     released: '2023-10',  overlap_audience_pct: 36.2, overlap_hh: 865180,  note: 'Female-director thriller. The most-direct comp for pricing.' },
                     { film: 'Aftersun',              director: 'Charlotte Wells',   released: '2022-10',  overlap_audience_pct: 28.4, overlap_hh: 678760,  note: 'Smaller scale but same A24-anchored female-director cohort.' },
                     { film: 'Decision to Leave',     director: 'Park Chan-wook',    released: '2022-10',  overlap_audience_pct: 31.7, overlap_hh: 757630,  note: 'Mubi / Criterion crossover. Psychological-thriller comp.' },
                     { film: 'Saint Omer',            director: 'Alice Diop',        released: '2023-01',  overlap_audience_pct: 24.1, overlap_hh: 575990,  note: 'Smaller theatrical but durable - the festival-circuit-prestige audience.' },
@@ -58555,7 +58555,7 @@
                     ],
                     trend_18mo: 'rising',
                     benchmark_directors: [
-                        { director: 'Greta Gerwig',          equity_index: 96, trend: 'rising',  note: 'The benchmark CAA should aim at for the next package.' },
+                        { director: 'Greta Gerwig',          equity_index: 96, trend: 'rising',  note: 'The benchmark to aim at for the next package.' },
                         { director: 'Yorgos Lanthimos',      equity_index: 94, trend: 'rising',  note: 'Closest audience-graph match.' },
                         { director: 'Park Chan-wook',        equity_index: 91, trend: 'flat',    note: 'International-prestige peer.' },
                         { director: 'Celine Song',           equity_index: 88, trend: 'rising',  note: 'Closest equity-index match. Same trajectory.' },
@@ -58563,7 +58563,7 @@
                         { director: 'Alice Diop',            equity_index: 71, trend: 'rising',  note: 'Festival-prestige peer.' }
                     ]
                 },
-                takeaway_for_caa: 'The director\'s Director Equity Index sits at 87 - sandwiched between Celine Song (88) and Lanthimos (94). On the comp-film graph, Poor Things (47.4% audience overlap) is the closest "what-the-audience-buys-with" anchor, and Past Lives (41.8%) is the closest "what-the-director-makes" anchor. CAA should price the next package against these two films, not against the Obsession opening number. The trajectory is rising and back-catalog pull-through (94/100) is the strongest sub-score - this is a career-compounding asset, not a one-off.'
+                takeaway_for_caa: ''
             }
         };
 
@@ -58886,8 +58886,8 @@
 
             var da = data.director_attribution || {};
             var attribTiles = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(165px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
-                + _jiqTile('Director-driven',  Number(da.director_driven_pct || 0).toFixed(1) + '%', _jiqFmt(da.director_driven_hh || 0) + ' HHs (CAA-owned)', '#a855f7')
-                + _jiqTile('Cast-driven',      Number(da.cast_driven_pct || 0).toFixed(1) + '%',     _jiqFmt(da.cast_driven_hh || 0) + ' HHs (CAA-adjacent)', '#c4b5fd')
+                + _jiqTile('Director-driven',  Number(da.director_driven_pct || 0).toFixed(1) + '%', _jiqFmt(da.director_driven_hh || 0) + ' HHs (director-owned)', '#a855f7')
+                + _jiqTile('Cast-driven',      Number(da.cast_driven_pct || 0).toFixed(1) + '%',     _jiqFmt(da.cast_driven_hh || 0) + ' HHs (cast-adjacent)', '#c4b5fd')
                 + _jiqTile('Marketing-driven', Number(da.marketing_driven_pct || 0).toFixed(1) + '%', _jiqFmt(da.marketing_driven_hh || 0) + ' HHs', '#94a3b8')
                 + _jiqTile('Genre / organic',  Number(da.genre_organic_pct || 0).toFixed(1) + '%',   _jiqFmt(da.genre_organic_hh || 0) + ' HHs', '#94a3b8')
                 + _jiqTile('Word of mouth',    Number(da.word_of_mouth_pct || 0).toFixed(1) + '%',   _jiqFmt(da.word_of_mouth_hh || 0) + ' HHs', '#86efac')
@@ -59039,7 +59039,7 @@
                   }).join('')
                 + '</tbody></table></div>';
 
-            var untappedHtml = (data.untapped || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🎯 Shows CAA should book on film #2</h4>'
+            var untappedHtml = (data.untapped || []).length ? '<h4 style="font-size:0.85rem; margin:0.4rem 0;">🎯 Shows to book on film #2</h4>'
                 + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:0.45rem; margin-bottom:0.85rem;">'
                 + data.untapped.map(function(u) {
                     return '<div style="padding:0.6rem 0.75rem; border-radius:6px; background:rgba(168,85,247,0.06); border-left:3px solid #a855f7;">'
