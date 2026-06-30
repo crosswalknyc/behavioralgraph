@@ -638,6 +638,74 @@ def write_excel(rows: list[dict]) -> None:
     wb.save(out)
 
 
+def _build_bottom_line(
+    sc_w21: dict,
+    sc_w28: dict | None,
+    rank_reach: int,
+    rank_signups: int,
+    rank_conv: int,
+    total: int,
+) -> str:
+    """Produce a 2-3 sentence editorial takeaway from Star City's ranks/metrics."""
+    if not sc_w21 or not rank_reach:
+        return ("Star City data was not available in the comp set at run time. "
+                "Re-run after the S3 pull completes for a populated bottom-line.")
+
+    def tier(rank: int, total: int) -> str:
+        if rank <= max(1, total // 4):
+            return "top-quartile"
+        if rank <= max(1, total // 2):
+            return "above-median"
+        if rank <= max(1, 3 * total // 4):
+            return "below-median"
+        return "bottom-quartile"
+
+    reach_tier   = tier(rank_reach,   total)
+    conv_tier    = tier(rank_conv,    total)
+    signups_tier = tier(rank_signups, total)
+
+    reach_21 = sc_w21.get("A", 0)
+    conv_21  = sc_w21.get("E", 0.0) * 100
+    signs_21 = sc_w21.get("D", 0)
+
+    sentence_1 = (
+        f"Star City is tracking as a {reach_tier} launch on reach "
+        f"(#{rank_reach} of {total} Apple TV+ S1 originals, ~{reach_21/1_000_000:.1f}M "
+        f"Total Accounts Viewed at 21 days), "
+    )
+    if rank_conv <= max(1, total // 3):
+        sentence_1 += (
+            f"and is punching above its weight on subscriber conversion — #{rank_conv} of "
+            f"{total} on % Acquired/Reactivated ({conv_21:.2f}% of its viewing base "
+            f"converted into new or win-back Apple TV+ accounts)."
+        )
+    elif rank_conv <= max(1, total // 2):
+        sentence_1 += (
+            f"with a healthy conversion read — #{rank_conv} of {total} on "
+            f"% Acquired/Reactivated ({conv_21:.2f}%)."
+        )
+    else:
+        sentence_1 += (
+            f"with a {conv_tier} conversion read ({conv_21:.2f}% Acquired/"
+            f"Reactivated, ranking #{rank_conv} of {total})."
+        )
+
+    sentence_2 = (
+        f" Net new + reactivated subscribers in the 21-day window: "
+        f"~{signs_21:,} ({signups_tier} of the comp set, #{rank_signups}/{total})."
+    )
+
+    base = sentence_1 + sentence_2
+    if sc_w28:
+        base += (
+            f"  At 28 days, reach grew to ~{sc_w28.get('A',0)/1_000_000:.1f}M "
+            f"({sc_w28.get('D',0):,} cumulative new+reactivated, "
+            f"{sc_w28.get('E',0)*100:.2f}% conversion) — indicating "
+            f"{'continued tail engagement' if sc_w28.get('A',0) > reach_21 * 1.15 else 'a fast front-loaded curve'}."
+        )
+    return base
+
+
 def _add_editorial_sheet(wb, rows: list[dict]) -> None:
     """Editorial analysis sheet — narrative read of the data."""
     ws = wb.create_sheet("Editorial Analysis")
@@ -690,8 +758,17 @@ def _add_editorial_sheet(wb, rows: list[dict]) -> None:
     ws["A2"] = f"21-day & 28-day Subscriber-IQ benchmark vs 20 Apple TV+ Season 1 comps (data through {TODAY.strftime('%-m/%-d/%Y')})"
     ws.merge_cells("A2:D2")
 
+    # ── BOTTOM LINE TAKEAWAY (1-2 sentence narrative) ──
+    bottom_line = _build_bottom_line(sc_w21, sc_w28, sc_rank_reach, sc_rank_signups,
+                                     sc_rank_conv, total)
+    ws["A3"] = "Bottom Line"
+    ws["A3"].font = h2
+    ws.cell(row=4, column=1, value=bottom_line).alignment = wrap
+    ws.merge_cells("A4:D4")
+    ws.row_dimensions[4].height = 75
+
     # ── Section 1: Star City headline numbers ──
-    r = 4
+    r = 6
     ws.cell(row=r, column=1, value="1. Star City headline performance").font = h2
     r += 1
     ws.cell(row=r, column=1, value="Window").font = bold
