@@ -9980,6 +9980,7 @@ def get_netflix_clickhouse_ranker_data():
     except (TypeError, ValueError):
         limit = 500
     limit = max(1, min(limit, 2000))
+    collapse_param = (request.args.get('collapse') or 'episode').strip()
 
     yesterday = datetime.utcnow().date() - timedelta(days=1)
 
@@ -10023,6 +10024,20 @@ def get_netflix_clickhouse_ranker_data():
         base_params['genre_filter'] = genre_filter
     base_where = " AND ".join(base_where_parts)
 
+    if collapse_param == 'season':
+        cur_select   = "NAME_OF_SHOW, TYPE, SEASON, '' AS EPISODE, '' AS EPISODE_NAME, SUM(VIEW_COUNT) AS total_views, any(GENRE) AS GENRE, any(RUN_TIME) AS RUN_TIME"
+        cur_groupby  = "NAME_OF_SHOW, TYPE, SEASON"
+        pr_select    = "NAME_OF_SHOW, TYPE, SEASON, SUM(VIEW_COUNT) AS v"
+        pr_groupby   = "NAME_OF_SHOW, TYPE, SEASON"
+        make_cur_key = lambda r: (r[0], r[1], r[2])   # (show, type, season)
+        make_pr_key  = lambda r: (r[0], r[1], r[2])
+    else:
+        cur_select   = "NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME, SUM(VIEW_COUNT) AS total_views, any(GENRE) AS GENRE, any(RUN_TIME) AS RUN_TIME"
+        cur_groupby  = "NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME"
+        pr_select    = "NAME_OF_SHOW, SEASON, EPISODE, SUM(VIEW_COUNT) AS v"
+        pr_groupby   = "NAME_OF_SHOW, SEASON, EPISODE"
+        make_cur_key = lambda r: (r[0], r[2], r[3])   # (show, season, episode)
+        make_pr_key  = lambda r: (r[0], r[1], r[2])
     GEN_POP = 329_900_000 / 10_000_000  # ~32.99
 
     try:
@@ -10033,15 +10048,12 @@ def get_netflix_clickhouse_ranker_data():
         tp = dict(base_params, start_date=start_str, end_date=end_str)
         cur.execute(f"""
             SELECT
-                NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME,
-                SUM(VIEW_COUNT) AS total_views,
-                any(GENRE)      AS GENRE,
-                any(RUN_TIME)   AS RUN_TIME
+                {cur_select}
             FROM netflix.netflix_ranker_daily
             WHERE {base_where}
               AND toDate(DAY) >= {{start_date:Date}}
               AND toDate(DAY) <= {{end_date:Date}}
-            GROUP BY NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME
+            GROUP BY {cur_groupby}
             ORDER BY total_views DESC
             LIMIT {limit}
         """, tp)
@@ -10050,16 +10062,16 @@ def get_netflix_clickhouse_ranker_data():
         # prior period: rank + views
         pp = dict(base_params, prior_start=prior_start_str, prior_end=prior_end_str)
         cur.execute(f"""
-            SELECT NAME_OF_SHOW, SEASON, EPISODE, SUM(VIEW_COUNT) AS v
+            SELECT {pr_select}
             FROM netflix.netflix_ranker_daily
             WHERE {base_where}
               AND toDate(DAY) >= {{prior_start:Date}}
               AND toDate(DAY) <= {{prior_end:Date}}
-            GROUP BY NAME_OF_SHOW, SEASON, EPISODE
+            GROUP BY {pr_groupby}
             ORDER BY v DESC
             LIMIT 2000
         """, pp)
-        prior_map = {(r[0], r[1], r[2]): (i + 1, int(r[3]))
+        prior_map = {make_pr_key(r): (i + 1, int(r[3]))
                      for i, r in enumerate(cur.fetchall())}
 
         # available dates for picker
@@ -10080,7 +10092,7 @@ def get_netflix_clickhouse_ranker_data():
 
         out = []
         for i, r in enumerate(rows):
-            key       = (r[0], r[2], r[3])  # (show, season, episode)
+            key       = make_cur_key(r)
             pr        = prior_map.get(key)
             cur_rank  = i + 1
             cur_views = int(r[5])
@@ -10102,8 +10114,8 @@ def get_netflix_clickhouse_ranker_data():
                 'genre':         r[6],
                 'runtime':       r[7],
                 'avg_watch_time':  None,
-                'avg_daily_views': int(round(cur_views / num_days)),
-                'netflix_url':     url_map_lookup.get(r[0]) or 'https://www.netflix.com/search?q=' + urllib.parse.quote(str(r[0])),
+                'avg_daily_views': int(round(cur_views * GEN_POP / num_days)),
+                'netflix_url':     (url_map_lookup.get(r[0]) or 'https://www.netflix.com/search?q=' + urllib.parse.quote(str(r[0]))).split('#')[0],
             })
 
         return jsonify({
