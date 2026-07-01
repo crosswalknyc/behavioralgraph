@@ -1358,282 +1358,6 @@ def _get_company_pool(data, company_name):
     return data.get('companies', {}).get(company_name)
 
 
-# ---------------------------------------------------------------------------
-# CONSULTING HOURS + RECURRING GRANTS
-# ---------------------------------------------------------------------------
-# Consulting hours are tracked exactly like credits but denominated in
-# minutes (finer resolution, matches how admins enter time — "1h 45m").
-# Data lives alongside credits on the same subject (user or company):
-#
-#   subject = users[uname]  OR  companies[co_name]
-#   subject['consulting_hour_pool']         # int minutes; -1 = unlimited
-#   subject['consulting_hour_pool_used']    # int minutes drawn down
-#   subject['consulting_hour_entries']      # [ {id, logged_at, minutes,
-#                                                description, logged_by,
-#                                                subject_type, subject_name} ]
-#   subject['consulting_hour_grants']       # attribution log (admin grants)
-#   subject['recurring_grants']             # [ {id, kind='credits'|'hours',
-#                                                amount, months_remaining,
-#                                                next_due_at, created_at,
-#                                                created_by, reason} ]
-#
-# Recurring grants replace the manual "add credits every month" toil — an
-# admin schedules "500 credits/month for 6 months" and every subsequent
-# admin request tick auto-applies any due month. A None months_remaining
-# means "forever" (until the admin cancels).
-
-def _time_tracking_subject(data, subject_type, subject_name):
-    """Return the mutable dict for this subject (user or company), or None.
-
-    subject_type must be 'user' or 'company'; subject_name is the primary
-    key in the respective sub-dict. Callers should treat the returned
-    dict as live and mutate it in place, then save_users(data).
-    """
-    st = (subject_type or '').lower()
-    if st == 'user':
-        return (data.get('users') or {}).get(subject_name)
-    if st == 'company':
-        return (data.get('companies') or {}).get(subject_name)
-    return None
-
-
-def _consulting_hour_state(subject):
-    """Extract (pool_minutes, used_minutes, unlimited, remaining) tuple.
-
-    pool_minutes: total granted (int, -1 = unlimited, 0 if never granted)
-    used_minutes: minutes logged against this subject
-    unlimited: True when pool_minutes == -1
-    remaining: -1 when unlimited, else max(pool - used, 0)
-    """
-    if not subject:
-        return (0, 0, False, 0)
-    pool = subject.get('consulting_hour_pool')
-    used = subject.get('consulting_hour_pool_used') or 0
-    if pool is None:
-        pool = 0
-    unlimited = pool == -1
-    remaining = -1 if unlimited else max(pool - used, 0)
-    return (pool, used, unlimited, remaining)
-
-
-def _grant_consulting_hours(subject, minutes, *, reason, granted_by):
-    """Add `minutes` to a subject's consulting-hour pool, recording attribution.
-
-    Passing minutes=-1 marks the pool as unlimited (subject can log
-    forever). Attribution log entries are kept newest-first, capped at 500.
-    """
-    if minutes is None:
-        raise ValueError('minutes required')
-    minutes = int(minutes)
-    if minutes == 0:
-        raise ValueError('minutes cannot be zero')
-    if minutes < -1:
-        raise ValueError('minutes must be >= -1 (-1 = unlimited)')
-
-    cur = subject.get('consulting_hour_pool')
-    if cur is None:
-        cur = 0
-    if minutes == -1 or cur == -1:
-        subject['consulting_hour_pool'] = -1
-    else:
-        subject['consulting_hour_pool'] = cur + minutes
-    if 'consulting_hour_pool_used' not in subject:
-        subject['consulting_hour_pool_used'] = 0
-
-    log = subject.setdefault('consulting_hour_grants', [])
-    log.insert(0, {
-        'granted_at': datetime.now().isoformat(),
-        'minutes_added': minutes,       # -1 → unlimited
-        'reason': (reason or 'Consulting hours granted').strip(),
-        'granted_by': granted_by or 'admin',
-    })
-    subject['consulting_hour_grants'] = log[:500]
-
-
-def _log_consulting_hours(subject, *, subject_type, subject_name,
-                          minutes, description, logged_by):
-    """Draw down `minutes` from a subject's pool and record the entry.
-
-    Returns the entry dict written. Raises ValueError on invalid input
-    or insufficient pool. Ensures a stable entry id so undo can target it.
-    """
-    if minutes is None:
-        raise ValueError('minutes required')
-    minutes = int(minutes)
-    if minutes <= 0:
-        raise ValueError('minutes must be positive')
-    if not (description or '').strip():
-        raise ValueError('description required')
-
-    pool, used, unlimited, remaining = _consulting_hour_state(subject)
-    if not unlimited and pool == 0 and remaining == 0:
-        # Never granted — allow the log entry but leave pool at 0/used
-        # equal to what got logged. This keeps the running tally honest
-        # without blocking admins from logging time before they've set
-        # up a grant. UI should surface a "no pool set" hint when this
-        # happens.
-        pass
-    elif not unlimited and remaining < minutes:
-        raise ValueError(
-            f'Insufficient consulting-hour pool (remaining {remaining} min, need {minutes})'
-        )
-
-    entry_id = uuid.uuid4().hex[:12]
-    entry = {
-        'id': entry_id,
-        'logged_at': datetime.now().isoformat(),
-        'minutes': minutes,
-        'description': (description or '').strip(),
-        'logged_by': logged_by or 'admin',
-        'subject_type': subject_type,
-        'subject_name': subject_name,
-    }
-    entries = subject.setdefault('consulting_hour_entries', [])
-    entries.insert(0, entry)
-    subject['consulting_hour_entries'] = entries[:1000]
-
-    subject['consulting_hour_pool_used'] = used + minutes
-    return entry
-
-
-def _undo_consulting_hour_entry(subject, entry_id):
-    """Remove one entry by id and refund the minutes back to the pool.
-
-    Returns True if removed, False if id not found.
-    """
-    entries = subject.get('consulting_hour_entries') or []
-    for i, e in enumerate(entries):
-        if e.get('id') == entry_id:
-            minutes = int(e.get('minutes') or 0)
-            del entries[i]
-            subject['consulting_hour_entries'] = entries
-            used = int(subject.get('consulting_hour_pool_used') or 0)
-            subject['consulting_hour_pool_used'] = max(used - minutes, 0)
-            return True
-    return False
-
-
-def _add_recurring_grant(subject, *, kind, amount, months, reason, added_by):
-    """Schedule a recurring monthly grant on a subject.
-
-    kind: 'credits' or 'hours' (minutes for hours grants)
-    amount: int (>0). For hours grants this is minutes/month.
-    months: int months to run (None = forever until cancelled)
-    Applies the first month's grant immediately so the balance jumps
-    right away; the next tick fires ~30 days later.
-    """
-    kind = (kind or '').lower()
-    if kind not in ('credits', 'hours'):
-        raise ValueError("kind must be 'credits' or 'hours'")
-    amount = int(amount)
-    if amount <= 0:
-        raise ValueError('amount must be positive')
-    if months is not None:
-        months = int(months)
-        if months <= 0:
-            raise ValueError('months must be positive when set')
-
-    now = datetime.now()
-    grant = {
-        'id': uuid.uuid4().hex[:12],
-        'kind': kind,
-        'amount': amount,
-        'months_remaining': months,       # None = forever
-        'months_total': months,
-        'created_at': now.isoformat(),
-        'created_by': added_by or 'admin',
-        'reason': (reason or f'Recurring {kind} grant').strip(),
-        # We record last_applied_at so the tick can decide whether a
-        # new calendar month has elapsed. First application happens
-        # inline below, so we set it to `now` and decrement one month.
-        'last_applied_at': now.isoformat(),
-    }
-    grants = subject.setdefault('recurring_grants', [])
-    grants.append(grant)
-    return grant
-
-
-def _apply_recurring_grants(data):
-    """Tick every user/company: apply any recurring grants whose next
-    calendar-month due date has arrived. Idempotent, safe to call often.
-
-    Returns count of grants applied this tick.
-    """
-    now = datetime.now()
-    applied = 0
-
-    def _due(g):
-        last = g.get('last_applied_at')
-        if not last:
-            return True  # never applied — apply now
-        try:
-            last_dt = datetime.fromisoformat(last)
-        except Exception:
-            return True
-        # A month elapses when (a) at least 27 days have passed AND
-        # (b) it's a different calendar month, OR when 32+ days have
-        # passed (belt-and-suspenders for edge-of-month grants).
-        delta_days = (now - last_dt).days
-        if delta_days >= 32:
-            return True
-        if delta_days >= 27 and (now.year, now.month) != (last_dt.year, last_dt.month):
-            return True
-        return False
-
-    def _apply_one(subject, grant, subject_kind_hint):
-        nonlocal applied
-        if grant.get('months_remaining') is not None and grant['months_remaining'] <= 0:
-            return
-        try:
-            if grant['kind'] == 'credits':
-                cur = subject.get('credits') if subject_kind_hint == 'user' else subject.get('credit_pool')
-                if cur is None:
-                    cur = 0
-                if cur == -1:
-                    pass  # already unlimited — grant is a no-op but still ticks
-                else:
-                    new_val = cur + int(grant['amount'])
-                    if subject_kind_hint == 'user':
-                        subject['credits'] = new_val
-                    else:
-                        subject['credit_pool'] = new_val
-                # attribution
-                hist = subject.setdefault('credit_attribution_history', [])
-                hist.insert(0, {
-                    'added_at': now.isoformat(),
-                    'credits_added': int(grant['amount']),
-                    'reason': f"[Recurring] {grant.get('reason','')}".strip(),
-                    'added_by': grant.get('created_by') or 'system',
-                    'recurring_grant_id': grant.get('id'),
-                })
-                subject['credit_attribution_history'] = hist[:500]
-            elif grant['kind'] == 'hours':
-                _grant_consulting_hours(
-                    subject,
-                    int(grant['amount']),
-                    reason=f"[Recurring] {grant.get('reason','')}".strip(),
-                    granted_by=grant.get('created_by') or 'system',
-                )
-            grant['last_applied_at'] = now.isoformat()
-            if grant.get('months_remaining') is not None:
-                grant['months_remaining'] = int(grant['months_remaining']) - 1
-            applied += 1
-        except Exception as e:
-            print(f"⚠️ recurring grant apply failed for {grant.get('id')}: {e}")
-
-    for uname, u in (data.get('users') or {}).items():
-        for g in (u.get('recurring_grants') or []):
-            if _due(g):
-                _apply_one(u, g, 'user')
-
-    for cname, c in (data.get('companies') or {}).items():
-        for g in (c.get('recurring_grants') or []):
-            if _due(g):
-                _apply_one(c, g, 'company')
-
-    return applied
-
-
 def _numeric_credits_balance(user):
     """Personal `credits` field on user dict: None/missing → 0; -1 means unlimited."""
     if not user:
@@ -2849,18 +2573,8 @@ def admin_uncloak():
 @app.route('/api/admin/users', methods=['GET'])
 @requires_admin
 def get_all_users():
-    """Get all users (without password hashes).
-
-    We tick recurring monthly grants here because every admin page load hits
-    this endpoint — cheap, idempotent, and avoids needing a real scheduler
-    for a low-traffic feature.
-    """
+    """Get all users (without password hashes)."""
     data = load_users()
-    try:
-        if _apply_recurring_grants(data) > 0:
-            save_users(data)
-    except Exception as e:
-        print(f"⚠️ recurring grant tick failed: {e}")
     safe_users = {}
     for username, user in data['users'].items():
         safe_users[username] = {k: v for k, v in user.items() if k != 'password_hash'}
@@ -4863,335 +4577,6 @@ def api_update_company_user_credits(company_name):
             user['credits'] = int(req['credits'])
         save_users(data)
         return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-# ---------------------------------------------------------------------------
-# TIME TRACKING / CONSULTING HOURS — admin endpoints
-# ---------------------------------------------------------------------------
-# All three endpoints are keyed by (subject_type, subject_name) where
-# subject_type ∈ {'user', 'company'} and subject_name is either a username
-# or a company name. This lets one flow log time against a person or a
-# whole company without duplicating logic. Each endpoint also opportunistically
-# ticks recurring grants so balances stay fresh without needing a background
-# job.
-
-def _tt_subject_or_400(data, req):
-    """Extract & validate (subject_type, subject_name, subject_dict) from a JSON body."""
-    st = (req.get('subject_type') or '').lower().strip()
-    sn = (req.get('subject_name') or '').strip()
-    if st not in ('user', 'company'):
-        return None, None, None, (jsonify({'success': False,
-                                           'error': "subject_type must be 'user' or 'company'"}), 400)
-    if not sn:
-        return None, None, None, (jsonify({'success': False, 'error': 'subject_name required'}), 400)
-    subject = _time_tracking_subject(data, st, sn)
-    if not subject:
-        return None, None, None, (jsonify({'success': False,
-                                           'error': f"{st.title()} '{sn}' not found"}), 404)
-    return st, sn, subject, None
-
-
-@app.route('/api/admin/time-tracking/log', methods=['POST'])
-@requires_admin
-def api_time_tracking_log():
-    """Log a consulting-hour entry against a user or company.
-
-    Body: {subject_type: 'user'|'company', subject_name: str,
-           hours: int, minutes: int, description: str}
-    (Either hours or minutes may be omitted; combined into total minutes.)
-    """
-    try:
-        req = request.get_json() or {}
-        data = load_users()
-        _apply_recurring_grants(data)  # opportunistic tick
-        st, sn, subject, err = _tt_subject_or_400(data, req)
-        if err:
-            return err
-        hours = int(req.get('hours') or 0)
-        minutes = int(req.get('minutes') or 0)
-        total = hours * 60 + minutes
-        if total <= 0:
-            return jsonify({'success': False, 'error': 'hours+minutes must be > 0'}), 400
-        description = (req.get('description') or '').strip()
-        if not description:
-            return jsonify({'success': False, 'error': 'description required'}), 400
-        logged_by = (get_current_user() or {}).get('username') or 'admin'
-        entry = _log_consulting_hours(
-            subject,
-            subject_type=st, subject_name=sn,
-            minutes=total, description=description, logged_by=logged_by,
-        )
-        save_users(data)
-        pool, used, unlimited, remaining = _consulting_hour_state(subject)
-        return jsonify({
-            'success': True,
-            'entry': entry,
-            'pool_minutes': pool,
-            'used_minutes': used,
-            'remaining_minutes': remaining,
-            'unlimited': unlimited,
-        })
-    except ValueError as e:
-        return jsonify({'success': False, 'error': str(e)}), 400
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/admin/time-tracking/entries', methods=['GET'])
-@requires_admin
-def api_time_tracking_entries():
-    """Return entries + tally for a subject.
-
-    Query: ?subject_type=user|company&subject_name=X
-    When both params omitted, returns an aggregate roll-up of every user
-    and company with any consulting-hour activity so admins can see the
-    top-level list before drilling in.
-    """
-    try:
-        st = (request.args.get('subject_type') or '').lower().strip()
-        sn = (request.args.get('subject_name') or '').strip()
-        data = load_users()
-        _apply_recurring_grants(data)
-
-        if not st and not sn:
-            # Roll-up mode
-            rollup = []
-            for uname, u in (data.get('users') or {}).items():
-                entries = u.get('consulting_hour_entries') or []
-                pool, used, unlimited, remaining = _consulting_hour_state(u)
-                if entries or pool or used:
-                    rollup.append({
-                        'subject_type': 'user',
-                        'subject_name': uname,
-                        'display_name': (u.get('first_name', '') + ' ' + u.get('last_name', '')).strip() or uname,
-                        'company': u.get('company', ''),
-                        'entry_count': len(entries),
-                        'pool_minutes': pool,
-                        'used_minutes': used,
-                        'remaining_minutes': remaining,
-                        'unlimited': unlimited,
-                    })
-            for cname, c in (data.get('companies') or {}).items():
-                entries = c.get('consulting_hour_entries') or []
-                pool, used, unlimited, remaining = _consulting_hour_state(c)
-                if entries or pool or used:
-                    rollup.append({
-                        'subject_type': 'company',
-                        'subject_name': cname,
-                        'display_name': cname,
-                        'company': cname,
-                        'entry_count': len(entries),
-                        'pool_minutes': pool,
-                        'used_minutes': used,
-                        'remaining_minutes': remaining,
-                        'unlimited': unlimited,
-                    })
-            rollup.sort(key=lambda r: (-r['used_minutes'], r['display_name'].lower()))
-            return jsonify({'success': True, 'rollup': rollup})
-
-        # Detail mode
-        subject = _time_tracking_subject(data, st, sn)
-        if not subject:
-            return jsonify({'success': False, 'error': 'subject not found'}), 404
-        pool, used, unlimited, remaining = _consulting_hour_state(subject)
-        return jsonify({
-            'success': True,
-            'subject_type': st, 'subject_name': sn,
-            'entries': subject.get('consulting_hour_entries') or [],
-            'grants': subject.get('consulting_hour_grants') or [],
-            'pool_minutes': pool,
-            'used_minutes': used,
-            'remaining_minutes': remaining,
-            'unlimited': unlimited,
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/admin/time-tracking/grant', methods=['POST'])
-@requires_admin
-def api_time_tracking_grant():
-    """Grant consulting hours to a user or company.
-
-    Body: {subject_type, subject_name,
-           hours: int, minutes: int,        # one-time grant
-           unlimited: bool,                 # -1 pool sentinel
-           per_month: bool,                 # schedule as recurring
-           months: int | null,              # None = forever
-           reason: str}
-    """
-    try:
-        req = request.get_json() or {}
-        data = load_users()
-        _apply_recurring_grants(data)
-        st, sn, subject, err = _tt_subject_or_400(data, req)
-        if err:
-            return err
-
-        unlimited = bool(req.get('unlimited'))
-        per_month = bool(req.get('per_month'))
-        reason = (req.get('reason') or 'Consulting hours granted').strip()
-        added_by = (get_current_user() or {}).get('username') or 'admin'
-
-        if unlimited:
-            _grant_consulting_hours(subject, -1, reason=reason, granted_by=added_by)
-            save_users(data)
-            pool, used, u_, remaining = _consulting_hour_state(subject)
-            return jsonify({'success': True, 'unlimited': True,
-                            'pool_minutes': pool, 'used_minutes': used,
-                            'remaining_minutes': remaining})
-
-        hours = int(req.get('hours') or 0)
-        minutes = int(req.get('minutes') or 0)
-        total = hours * 60 + minutes
-        if total <= 0:
-            return jsonify({'success': False, 'error': 'hours+minutes must be > 0'}), 400
-
-        if per_month:
-            months = req.get('months')
-            months = int(months) if months not in (None, '', 0) else None
-            grant = _add_recurring_grant(
-                subject, kind='hours', amount=total,
-                months=months, reason=reason, added_by=added_by,
-            )
-            # Apply the first month immediately so the pool jumps now.
-            _grant_consulting_hours(subject, total, reason=f"[Recurring] {reason}",
-                                    granted_by=added_by)
-            if months is not None:
-                grant['months_remaining'] = months - 1
-            save_users(data)
-            pool, used, u_, remaining = _consulting_hour_state(subject)
-            return jsonify({'success': True, 'recurring': True, 'grant': grant,
-                            'pool_minutes': pool, 'used_minutes': used,
-                            'remaining_minutes': remaining})
-
-        _grant_consulting_hours(subject, total, reason=reason, granted_by=added_by)
-        save_users(data)
-        pool, used, u_, remaining = _consulting_hour_state(subject)
-        return jsonify({'success': True, 'pool_minutes': pool,
-                        'used_minutes': used, 'remaining_minutes': remaining})
-    except ValueError as e:
-        return jsonify({'success': False, 'error': str(e)}), 400
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/admin/time-tracking/entry', methods=['DELETE'])
-@requires_admin
-def api_time_tracking_delete_entry():
-    """Delete an entry and refund its minutes back to the pool.
-
-    Body: {subject_type, subject_name, entry_id}
-    """
-    try:
-        req = request.get_json() or {}
-        data = load_users()
-        st, sn, subject, err = _tt_subject_or_400(data, req)
-        if err:
-            return err
-        entry_id = (req.get('entry_id') or '').strip()
-        if not entry_id:
-            return jsonify({'success': False, 'error': 'entry_id required'}), 400
-        if not _undo_consulting_hour_entry(subject, entry_id):
-            return jsonify({'success': False, 'error': 'entry_id not found'}), 404
-        save_users(data)
-        pool, used, unlimited, remaining = _consulting_hour_state(subject)
-        return jsonify({'success': True, 'pool_minutes': pool,
-                        'used_minutes': used, 'remaining_minutes': remaining,
-                        'unlimited': unlimited})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/admin/recurring-grants', methods=['GET', 'POST', 'DELETE'])
-@requires_admin
-def api_recurring_grants():
-    """Manage recurring monthly grants (credits or consulting hours).
-
-    GET  → list every recurring grant across all users & companies.
-    POST body: {subject_type, subject_name, kind: 'credits'|'hours',
-                amount: int, months: int|null, reason: str,
-                apply_first_immediately: bool}
-    DELETE body: {subject_type, subject_name, grant_id}
-    """
-    try:
-        data = load_users()
-        if request.method == 'GET':
-            _apply_recurring_grants(data)
-            save_users(data)
-            grants = []
-            for uname, u in (data.get('users') or {}).items():
-                for g in (u.get('recurring_grants') or []):
-                    grants.append({**g, 'subject_type': 'user', 'subject_name': uname})
-            for cname, c in (data.get('companies') or {}).items():
-                for g in (c.get('recurring_grants') or []):
-                    grants.append({**g, 'subject_type': 'company', 'subject_name': cname})
-            grants.sort(key=lambda g: g.get('created_at', ''), reverse=True)
-            return jsonify({'success': True, 'grants': grants})
-
-        req = request.get_json() or {}
-        st, sn, subject, err = _tt_subject_or_400(data, req)
-        if err:
-            return err
-
-        if request.method == 'DELETE':
-            grant_id = (req.get('grant_id') or '').strip()
-            if not grant_id:
-                return jsonify({'success': False, 'error': 'grant_id required'}), 400
-            grants = subject.get('recurring_grants') or []
-            new_grants = [g for g in grants if g.get('id') != grant_id]
-            if len(new_grants) == len(grants):
-                return jsonify({'success': False, 'error': 'grant_id not found'}), 404
-            subject['recurring_grants'] = new_grants
-            save_users(data)
-            return jsonify({'success': True})
-
-        # POST — create
-        kind = (req.get('kind') or '').lower()
-        if kind == 'hours':
-            hours = int(req.get('hours') or 0)
-            minutes = int(req.get('minutes') or 0)
-            amount = hours * 60 + minutes
-        else:
-            amount = int(req.get('amount') or 0)
-        months = req.get('months')
-        months = int(months) if months not in (None, '', 0) else None
-        reason = (req.get('reason') or '').strip() or f"Recurring {kind} grant"
-        added_by = (get_current_user() or {}).get('username') or 'admin'
-        apply_now = bool(req.get('apply_first_immediately', True))
-
-        grant = _add_recurring_grant(subject, kind=kind, amount=amount,
-                                     months=months, reason=reason, added_by=added_by)
-        if apply_now:
-            if kind == 'credits':
-                if st == 'user':
-                    cur = subject.get('credits') or 0
-                    if cur != -1:
-                        subject['credits'] = cur + amount
-                else:
-                    cur = subject.get('credit_pool') or 0
-                    if cur != -1:
-                        subject['credit_pool'] = cur + amount
-                hist = subject.setdefault('credit_attribution_history', [])
-                hist.insert(0, {
-                    'added_at': datetime.now().isoformat(),
-                    'credits_added': amount,
-                    'reason': f'[Recurring] {reason}',
-                    'added_by': added_by,
-                    'recurring_grant_id': grant['id'],
-                })
-                subject['credit_attribution_history'] = hist[:500]
-            else:
-                _grant_consulting_hours(subject, amount, reason=f'[Recurring] {reason}',
-                                        granted_by=added_by)
-            if months is not None:
-                grant['months_remaining'] = months - 1
-        save_users(data)
-        return jsonify({'success': True, 'grant': grant})
-    except ValueError as e:
-        return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -9954,25 +9339,22 @@ def netflix_ranker_backfill():
 @requires_auth
 def get_netflix_clickhouse_ranker_data():
     """
-    Netflix ranker — single day or date range.
+    Daily "most watched on Netflix" ranking from netflix_ranker_daily
+    (pre-aggregated by the netflix-ranker-daily-cron service).
 
-    Params:
-        start_date=YYYY-MM-DD  period start (default: yesterday)
-        end_date=YYYY-MM-DD    period end   (default: same as start_date)
-        date=YYYY-MM-DD        shorthand — sets both start and end to one day
-        type=Movie|Show
-        genre=...
-        limit=N                (default 500, max 2000)
+    Accepts:
+        date=YYYY-MM-DD   day to rank (default: yesterday UTC)
+        type=Movie|Show   server-side type filter
+        genre=...         server-side genre tag filter
+        limit=N           max rows (default 500, max 2000)
 
-    Rows are ranked by total views over [start_date, end_date].
-    Prior period = same-length window ending the day before start_date.
-    delta_rank  = prior_rank  - current_rank  (positive = climbed)
-    delta_views = current_total_views - prior_total_views
+    Returns per row: rank, delta_rank (vs prior day; null = new entry),
+    date, show, type, season, episode, episode_name, views (raw panel),
+    gen_pop_views (projected: raw x 329.9M / 10M ~= x32.99), genre,
+    runtime, avg_watch_time (always null pending TIME_ON_PAGE cleanup).
     Also returns available_dates (last 90 days with data) for the picker.
     """
-    date_param   = (request.args.get('date')       or '').strip()
-    start_param  = (request.args.get('start_date') or date_param).strip()
-    end_param    = (request.args.get('end_date')   or date_param).strip()
+    date_param   = (request.args.get('date')  or '').strip()
     type_filter  = (request.args.get('type')  or '').strip()
     genre_filter = (request.args.get('genre') or '').strip()
     try:
@@ -9980,37 +9362,18 @@ def get_netflix_clickhouse_ranker_data():
     except (TypeError, ValueError):
         limit = 500
     limit = max(1, min(limit, 2000))
-    collapse_param = (request.args.get('collapse') or 'episode').strip()
 
-    yesterday = datetime.utcnow().date() - timedelta(days=1)
-
-    if start_param:
+    if date_param:
         try:
-            start_date = datetime.strptime(start_param, '%Y-%m-%d').date()
+            target_date = datetime.strptime(date_param, '%Y-%m-%d').date()
         except ValueError:
-            return jsonify({'error': 'Invalid start_date, expected YYYY-MM-DD'}), 400
+            return jsonify({'error': 'Invalid date, expected YYYY-MM-DD'}), 400
     else:
-        start_date = yesterday
+        target_date = datetime.utcnow().date() - timedelta(days=1)
 
-    if end_param:
-        try:
-            end_date = datetime.strptime(end_param, '%Y-%m-%d').date()
-        except ValueError:
-            return jsonify({'error': 'Invalid end_date, expected YYYY-MM-DD'}), 400
-    else:
-        end_date = start_date
-
-    if end_date < start_date:
-        return jsonify({'error': 'end_date must be >= start_date'}), 400
-
-    num_days    = (end_date - start_date).days + 1
-    prior_end   = start_date - timedelta(days=1)
-    prior_start = prior_end  - timedelta(days=num_days - 1)
-
-    start_str       = start_date.strftime('%Y-%m-%d')
-    end_str         = end_date.strftime('%Y-%m-%d')
-    prior_start_str = prior_start.strftime('%Y-%m-%d')
-    prior_end_str   = prior_end.strftime('%Y-%m-%d')
+    prior_date = target_date - timedelta(days=1)
+    target_str = target_date.strftime('%Y-%m-%d')
+    prior_str  = prior_date.strftime('%Y-%m-%d')
 
     base_where_parts = ["NAME_OF_SHOW IS NOT NULL", "TRIM(NAME_OF_SHOW) != ''"]
     base_params = {}
@@ -10024,55 +9387,39 @@ def get_netflix_clickhouse_ranker_data():
         base_params['genre_filter'] = genre_filter
     base_where = " AND ".join(base_where_parts)
 
-    if collapse_param == 'season':
-        cur_select   = "NAME_OF_SHOW, TYPE, SEASON, '' AS EPISODE, '' AS EPISODE_NAME, SUM(VIEW_COUNT) AS total_views, any(GENRE) AS GENRE, any(RUN_TIME) AS RUN_TIME"
-        cur_groupby  = "NAME_OF_SHOW, TYPE, SEASON"
-        pr_select    = "NAME_OF_SHOW, TYPE, SEASON, SUM(VIEW_COUNT) AS v"
-        pr_groupby   = "NAME_OF_SHOW, TYPE, SEASON"
-        make_cur_key = lambda r: (r[0], r[1], r[2])   # (show, type, season)
-        make_pr_key  = lambda r: (r[0], r[1], r[2])
-    else:
-        cur_select   = "NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME, SUM(VIEW_COUNT) AS total_views, any(GENRE) AS GENRE, any(RUN_TIME) AS RUN_TIME"
-        cur_groupby  = "NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME"
-        pr_select    = "NAME_OF_SHOW, SEASON, EPISODE, SUM(VIEW_COUNT) AS v"
-        pr_groupby   = "NAME_OF_SHOW, SEASON, EPISODE"
-        make_cur_key = lambda r: (r[0], r[2], r[3])   # (show, season, episode)
-        make_pr_key  = lambda r: (r[0], r[1], r[2])
     GEN_POP = 329_900_000 / 10_000_000  # ~32.99
 
     try:
         conn = _ch_connect()
         cur = conn.cursor()
 
-        # current period
-        tp = dict(base_params, start_date=start_str, end_date=end_str)
+        # target day
+        tp = dict(base_params, target_date=target_str)
         cur.execute(f"""
             SELECT
-                {cur_select}
+                NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME,
+                SUM(VIEW_COUNT) AS total_views,
+                any(GENRE)      AS GENRE,
+                any(RUN_TIME)   AS RUN_TIME
             FROM netflix.netflix_ranker_daily
-            WHERE {base_where}
-              AND toDate(DAY) >= {{start_date:Date}}
-              AND toDate(DAY) <= {{end_date:Date}}
-            GROUP BY {cur_groupby}
+            WHERE {base_where} AND toDate(DAY) = {{target_date:Date}}
+            GROUP BY NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME
             ORDER BY total_views DESC
             LIMIT {limit}
         """, tp)
         rows = cur.fetchall()
 
-        # prior period: rank + views
-        pp = dict(base_params, prior_start=prior_start_str, prior_end=prior_end_str)
+        # prior day rank map
+        pp = dict(base_params, prior_date=prior_str)
         cur.execute(f"""
-            SELECT {pr_select}
+            SELECT NAME_OF_SHOW, SEASON, EPISODE
             FROM netflix.netflix_ranker_daily
-            WHERE {base_where}
-              AND toDate(DAY) >= {{prior_start:Date}}
-              AND toDate(DAY) <= {{prior_end:Date}}
-            GROUP BY {pr_groupby}
-            ORDER BY v DESC
+            WHERE {base_where} AND toDate(DAY) = {{prior_date:Date}}
+            GROUP BY NAME_OF_SHOW, SEASON, EPISODE
+            ORDER BY SUM(VIEW_COUNT) DESC
             LIMIT 2000
         """, pp)
-        prior_map = {make_pr_key(r): (i + 1, int(r[3]))
-                     for i, r in enumerate(cur.fetchall())}
+        prior_rank_map = {(r[0], r[1], r[2]): i + 1 for i, r in enumerate(cur.fetchall())}
 
         # available dates for picker
         cur.execute("""
@@ -10082,50 +9429,31 @@ def get_netflix_clickhouse_ranker_data():
         """)
         available_dates = [str(dr[0]) for dr in cur.fetchall()]
 
-        # real Netflix URLs — look up direct title URL, fall back to search
-        cur.execute("""
-            SELECT NAME_OF_SHOW, any(URL) AS url
-            FROM netflix.netflix_url_map
-            GROUP BY NAME_OF_SHOW
-        """)
-        url_map_lookup = {row[0]: row[1] for row in cur.fetchall()}
-
         out = []
         for i, r in enumerate(rows):
-            key       = make_cur_key(r)
-            pr        = prior_map.get(key)
-            cur_rank  = i + 1
-            cur_views = int(r[5])
-            delta_rank  = None if pr is None else int(pr[0]) - cur_rank
-            delta_views = None if pr is None else cur_views - int(pr[1])
+            key   = (r[0], r[1], r[2])
+            pr    = prior_rank_map.get(key)
+            delta = None if pr is None else int(pr) - (i + 1)
             out.append({
-                'rank':          cur_rank,
-                'delta_rank':    delta_rank,
-                'delta_views':   delta_views,
-                'start_date':    start_str,
-                'end_date':      end_str,
+                'rank':          i + 1,
+                'delta_rank':    delta,
+                'date':          target_str,
                 'show':          r[0],
                 'type':          r[1],
                 'season':        r[2],
                 'episode':       r[3],
                 'episode_name':  r[4],
-                'views':         cur_views,
-                'gen_pop_views': int(round(cur_views * GEN_POP)),
+                'views':         int(r[5]),
+                'gen_pop_views': int(round(r[5] * GEN_POP)),
                 'genre':         r[6],
                 'runtime':       r[7],
-                'avg_watch_time':  None,
-                'avg_daily_views': int(round(cur_views * GEN_POP / num_days)),
-                'netflix_url':     (url_map_lookup.get(r[0]) or 'https://www.netflix.com/search?q=' + urllib.parse.quote(str(r[0]))).split('#')[0],
+                'avg_watch_time': None,
             })
 
         return jsonify({
-            'success':         True,
-            'rows':            out,
-            'start_date':      start_str,
-            'end_date':        end_str,
-            'num_days':        num_days,
-            'prior_start':     prior_start_str,
-            'prior_end':       prior_end_str,
+            'success': True,
+            'rows': out,
+            'date': target_str,
             'available_dates': available_dates,
         })
     except Exception as e:
@@ -10163,95 +9491,56 @@ def get_netflix_clickhouse_genres():
 @requires_auth
 def get_netflix_clickhouse_title_history():
     """
-    Previous-N-period rank history for a single show/episode.
+    Previous-N-days rank history for a single show/episode.
     Feeds the hover tooltip (Jessie spec point #4).
-    Supports both single-day and date-range modes — always returns
-    same-length periods so comparisons stay apples-to-apples.
 
     Params:
-        show=...           required
-        season=...         optional
-        episode=...        optional
-        start_date=...     current period start (default: yesterday)
-        end_date=...       current period end   (default: start_date)
-        periods=N          how many prior periods (default 5, max 10)
+        show=...    required
+        season=...  optional
+        episode=... optional
+        days=N      how many days (default 5, max 30)
     """
-    show       = (request.args.get('show')       or '').strip()
-    season     = (request.args.get('season')     or '').strip()
-    episode    = (request.args.get('episode')    or '').strip()
-    start_param = (request.args.get('start_date') or '').strip()
-    end_param   = (request.args.get('end_date')   or '').strip()
+    show    = (request.args.get('show')    or '').strip()
+    season  = (request.args.get('season')  or '').strip()
+    episode = (request.args.get('episode') or '').strip()
     try:
-        periods = int(request.args.get('periods', 5))
+        days = int(request.args.get('days', 5))
     except (TypeError, ValueError):
-        periods = 5
-    periods = max(1, min(periods, 10))
+        days = 5
+    days = max(1, min(days, 30))
 
     if not show:
         return jsonify({'error': 'show is required'}), 400
 
-    yesterday = datetime.utcnow().date() - timedelta(days=1)
-
-    if start_param:
-        try:
-            start_date = datetime.strptime(start_param, '%Y-%m-%d').date()
-        except ValueError:
-            return jsonify({'error': 'Invalid start_date'}), 400
-    else:
-        start_date = yesterday
-
-    if end_param:
-        try:
-            end_date = datetime.strptime(end_param, '%Y-%m-%d').date()
-        except ValueError:
-            return jsonify({'error': 'Invalid end_date'}), 400
-    else:
-        end_date = start_date
-
-    num_days = (end_date - start_date).days + 1
-
     try:
         conn = _ch_connect()
         cur = conn.cursor()
+        cur.execute(
+            "SELECT DISTINCT toDate(DAY) AS d FROM netflix.netflix_ranker_daily "
+            "ORDER BY d DESC LIMIT {days:UInt8}",
+            {'days': days}
+        )
+        recent_dates = [str(dr[0]) for dr in cur.fetchall()]
+        if not recent_dates:
+            return jsonify({'success': True, 'history': []})
 
         history = []
-        for p in range(1, periods + 1):
-            p_end   = start_date - timedelta(days=(p - 1) * num_days + 1)
-            p_start = p_end - timedelta(days=num_days - 1)
-            p_start_str = p_start.strftime('%Y-%m-%d')
-            p_end_str   = p_end.strftime('%Y-%m-%d')
-
+        for d_str in recent_dates:
             cur.execute("""
                 SELECT NAME_OF_SHOW, SEASON, EPISODE, SUM(VIEW_COUNT) AS v
                 FROM netflix.netflix_ranker_daily
-                WHERE toDate(DAY) >= {p_start:Date}
-                  AND toDate(DAY) <= {p_end:Date}
+                WHERE toDate(DAY) = {d:Date}
                   AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
                 GROUP BY NAME_OF_SHOW, SEASON, EPISODE
                 ORDER BY v DESC
                 LIMIT 2000
-            """, {'p_start': p_start_str, 'p_end': p_end_str})
-
-            found = False
+            """, {'d': d_str})
             for rank_num, r in enumerate(cur.fetchall(), start=1):
                 if (r[0] == show
                         and (not season  or r[1] == season)
                         and (not episode or str(r[2]) == str(episode))):
-                    history.append({
-                        'start_date': p_start_str,
-                        'end_date':   p_end_str,
-                        'rank':       rank_num,
-                        'views':      int(r[3]),
-                    })
-                    found = True
+                    history.append({'date': d_str, 'rank': rank_num, 'views': int(r[3])})
                     break
-            if not found:
-                history.append({
-                    'start_date': p_start_str,
-                    'end_date':   p_end_str,
-                    'rank':       None,
-                    'views':      None,
-                })
 
         return jsonify({'success': True, 'history': history})
     except Exception as e:
@@ -10261,33 +9550,35 @@ def get_netflix_clickhouse_title_history():
 
 @app.route('/api/cron/netflix-ranker-daily', methods=['GET', 'POST'])
 def cron_netflix_ranker_daily():
-    """Daily cron entry point. Appends one day's aggregation from
-    netflix.netflix into netflix.netflix_ranker_daily (yesterday's data,
-    by default). Auth via X-Cron-Secret header or ?secret=.
+    """Daily cron entry point. Ingests new clickstream data then aggregates
+    into netflix.netflix_ranker_daily (yesterday's data, by default).
+    Auth via X-Cron-Secret header or ?secret=.
 
-    This is a standalone pipeline feeding the Date/Date Range and
-    previous-ranks-trend features on the Netflix ClickHouse ranker tab.
-    It is separate from netflix_ranker (the legacy all-time flat table
-    with no date dimension, read by /api/rankers/netflix-clickhouse/data
-    above) and from the legacy Snowflake/S3-cached Netflix ranker
-    (/api/rankers/netflix/data) - this route only ever writes to
-    netflix_ranker_daily and never touches either of those tables.
+    Pipeline (all steps incremental — only new rows processed each run):
+      Phase 0a: append new rows from clickstream.clickstream_final
+                into netflix.netflix_clickstream
+      Phase 0b: enrich + append new clickstream rows into netflix.netflix_all
+                (joins with netflix_url_map for show metadata and
+                 userdata.user_data_sanitized for DMA)
+      Phase 0c: filter netflix_all (AVAILABLE='TRUE') into netflix.netflix
+      Phase 1:  aggregate netflix.netflix into netflix_ranker_daily
+                (one row per show/season/episode/day)
 
-    Idempotent by skip, not by delete: if a day already has rows in
-    netflix_ranker_daily, that day is skipped rather than re-inserted, so
-    an accidental double-fire of the cron can't double-count views. To
-    force a redo of a day that already has data, clear that day's rows
-    in ClickHouse manually first, then call this with ?date=YYYY-MM-DD.
+    Idempotent: phase 0 uses max(VISIT_TS) cursors so re-running is safe.
+    Phase 1 skips any date that already has rows in netflix_ranker_daily.
 
     Optional query params:
-        date=YYYY-MM-DD   run for one specific date instead of yesterday
-        days=N            backfill the last N days ending yesterday (1-90)
+        date=YYYY-MM-DD   run phase 1 for one specific date (skips phase 0)
+        days=N            backfill the last N days in phase 1 (1-90)
+        skip_ingest=1     skip phase 0 entirely (useful when backfilling
+                          dates that were already ingested)
     """
     secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
     if not secret or secret != os.environ.get('CRON_SECRET', ''):
         return jsonify({'error': 'Unauthorized'}), 403
 
     date_param = (request.args.get('date') or '').strip()
+    skip_ingest = request.args.get('skip_ingest', '0').strip() == '1'
     try:
         days_back = int(request.args.get('days', 1))
     except (TypeError, ValueError):
@@ -10303,10 +9594,88 @@ def cron_netflix_ranker_daily():
         yesterday = datetime.utcnow().date() - timedelta(days=1)
         target_dates = [yesterday - timedelta(days=i) for i in range(days_back)]
 
+    ingest = {}
     results = {}
     try:
         conn = _ch_connect()
         cur = conn.cursor()
+
+        # ── Phase 0: ingest (incremental, skippable) ─────────────────────────
+        if not skip_ingest:
+            # 0a: append new raw clickstream rows
+            print('[Netflix Ranker Cron] Phase 0a: appending clickstream...')
+            cur.execute("""
+                INSERT INTO netflix.netflix_clickstream
+                    (UID, URL, VISIT_TS, TIME_COMPUTED, BROWSER, PLATFORM)
+                SELECT UID, URL, VISIT_TS, false AS TIME_COMPUTED, BROWSER, PLATFORM
+                FROM clickstream.clickstream_final
+                WHERE URL LIKE '%netflix.com/watch/%'
+                  AND VISIT_TS > (SELECT max(VISIT_TS) FROM netflix.netflix_clickstream)
+            """)
+            ingest['clickstream'] = 'ok'
+
+            # 0b: enrich new rows into netflix_all (window fn only over new rows)
+            print('[Netflix Ranker Cron] Phase 0b: enriching into netflix_all...')
+            cur.execute("""
+                INSERT INTO netflix.netflix_all
+                SELECT
+                    cs.UID,
+                    cs.VISIT_TS,
+                    cs.URL,
+                    CASE
+                        WHEN next_ts IS NULL
+                          OR dateDiff('minute', cs.VISIT_TS, next_ts) > 210
+                        THEN NULL
+                        ELSE toString(dateDiff('second', cs.VISIT_TS, next_ts))
+                    END AS TIME_ON_PAGE,
+                    ud.DMA,
+                    m.NAME_OF_SHOW,
+                    m.SEASON,
+                    m.EPISODE,
+                    m.EPISODE_NAME,
+                    m.RUN_TIME,
+                    m.GENRE,
+                    m.CAST,
+                    m.AGE_RATING,
+                    m.YEAR_RELEASED,
+                    m.TYPE,
+                    m.AVAILABLE
+                FROM (
+                    SELECT
+                        UID, VISIT_TS, URL, BROWSER, PLATFORM,
+                        leadInFrame(VISIT_TS) OVER (
+                            PARTITION BY UID
+                            ORDER BY VISIT_TS
+                            ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING
+                        ) AS next_ts
+                    FROM netflix.netflix_clickstream
+                    WHERE VISIT_TS > (SELECT max(VISIT_TS) FROM netflix.netflix_all)
+                ) cs
+                JOIN netflix.netflix_url_map m
+                    ON concat('https://www.netflix.com/title/',
+                              splitByChar('?', splitByString('/watch/', cs.URL)[2])[1]) = m.URL
+                LEFT JOIN (
+                    SELECT UID, DMA FROM (
+                        SELECT UID, max(DMA) AS DMA
+                        FROM userdata.user_data_sanitized
+                        GROUP BY UID
+                    ) WHERE DMA != ''
+                ) ud ON cs.UID = ud.UID
+            """)
+            ingest['netflix_all'] = 'ok'
+
+            # 0c: filter AVAILABLE='TRUE' rows into netflix
+            print('[Netflix Ranker Cron] Phase 0c: filtering into netflix...')
+            cur.execute("""
+                INSERT INTO netflix.netflix
+                SELECT * FROM netflix.netflix_all
+                WHERE AVAILABLE = 'TRUE'
+                  AND VISIT_TS > (SELECT max(VISIT_TS) FROM netflix.netflix)
+            """)
+            ingest['netflix'] = 'ok'
+            print('[Netflix Ranker Cron] Phase 0 complete.')
+
+        # ── Phase 1: aggregate into netflix_ranker_daily ──────────────────────
         for d in target_dates:
             d_str = d.strftime('%Y-%m-%d')
             cur.execute(
@@ -10331,9 +9700,10 @@ def cron_netflix_ranker_daily():
                 GROUP BY DAY, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, TYPE, GENRE, RUN_TIME
             """, {'d': d_str})
             results[d_str] = 'inserted'
-        return jsonify({'success': True, 'days': results})
+
+        return jsonify({'success': True, 'ingest': ingest, 'days': results})
     except Exception as e:
-        print(f"[Netflix Ranker Daily Cron] Error: {e}")
+        print(f'[Netflix Ranker Cron] Error: {e}')
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/rankers/netflix/show-details', methods=['GET'])
