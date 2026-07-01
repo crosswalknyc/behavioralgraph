@@ -83549,7 +83549,11 @@
             container.setAttribute('data-archetype', share.archetype || '');
             container.removeAttribute('title');
             container.style.display = 'flex';
-            if (tucCard) tucCard.style.display = '';
+            if (tucCard) {
+                const cat = _currentProfileCategory();
+                const tucAllowed = ['TALENT','BRAND','SPORT','TRENDS'].includes(cat);
+                tucCard.style.display = tucAllowed ? '' : 'none';
+            }
         }
 
         async function _fetchCategoryNorm() {
