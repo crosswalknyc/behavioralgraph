@@ -47289,17 +47289,31 @@
                     // next to their thematic siblings.
                     var DEMO_CARDS = {
                         platforms: [
-                            { value: '__demo_netflix_ad_sales__', label: '🎬 Netflix Ad-Sales Demand Map &amp; Off-Platform Intel' }
+                            { value: '__demo_netflix_ad_sales__', label: 'Netflix' }
                         ],
                         talent: [
-                            { value: '__demo_obsession_caa__',    label: '🎬 Obsession' }
+                            { value: '__demo_obsession_caa__',    label: 'Obsession' }
                         ]
                     };
 
+                    // Cleans up an S3 run's project_name/target for display
+                    // in the dropdown: replaces underscores/hyphens with
+                    // spaces, and title-cases the string ONLY when it is
+                    // fully uppercase (like "PARAMOUNT_PLUS_SUBSCRIBER_LIFECYCLE").
+                    // Mixed-case names (e.g. "MovieSphere Plus") pass through
+                    // untouched so intentional brand casing is preserved.
+                    function _prettifyRunName(raw) {
+                        var s = String(raw || '').replace(/[_\-]+/g, ' ').trim();
+                        var letters = s.replace(/[^A-Za-z]/g, '');
+                        if (letters && letters === letters.toUpperCase()) {
+                            s = s.toLowerCase().replace(/\b([a-z])/g, function(_, c) { return c.toUpperCase(); });
+                        }
+                        return s;
+                    }
+
                     function _runOption(r) {
-                        var label = (r.project_name || r.target || 'Journey')
-                                  + ' - ' + (r.start_date || '') + '→' + (r.end_date || '');
-                        var safe = (r.key || '').replace(/"/g, '&quot;');
+                        var label = _prettifyRunName(r.project_name || r.target || 'Journey');
+                        var safe  = (r.key || '').replace(/"/g, '&quot;');
                         return '<option value="' + safe + '">' + label + '</option>';
                     }
 
@@ -47324,9 +47338,8 @@
                     if (visibleArchived.length) {
                         opts.push('<optgroup label="🗄️ Archived (admin only)">');
                         visibleArchived.forEach(function(r) {
-                            var label = '[ARCHIVED] ' + (r.project_name || r.target || 'Journey')
-                                      + ' - ' + (r.start_date || '') + '→' + (r.end_date || '');
-                            var safe = (r.key || '').replace(/"/g, '&quot;');
+                            var label = _prettifyRunName(r.project_name || r.target || 'Journey');
+                            var safe  = (r.key || '').replace(/"/g, '&quot;');
                             opts.push('<option value="' + safe + '">' + label + '</option>');
                         });
                         opts.push('</optgroup>');
@@ -47362,7 +47375,7 @@
                             story_mode: 'obsession_caa',
                             target_name: 'Obsession',
                             target_display: 'Obsession (film)',
-                            project_name: 'Obsession - Director Journey',
+                            project_name: 'Obsession',
                             customer_brand: 'Talent Rep',
                             agency_lens: true,
                             start_date: '2026-03-15',
