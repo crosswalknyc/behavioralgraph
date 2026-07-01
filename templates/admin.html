@@ -3206,11 +3206,31 @@
 
                     <!-- Impact IQ Access -->
                     <div class="dashboard-access-item">
-                        <div class="dashboard-access-header">
-                            <label class="checkbox-group">
+                        <div class="dashboard-access-header" onclick="toggleImpactIQJourneysSection(event)">
+                            <label class="checkbox-group" onclick="event.stopPropagation();">
                                 <input type="checkbox" id="hasImpactIQAccess">
                                 <span style="font-weight: 600;">🌊 IMPACT IQ</span>
                             </label>
+                            <span id="impactIQJourneysIcon" style="margin-left:auto; opacity:0.6; font-size:0.85rem;">▼</span>
+                        </div>
+                        <div id="impactIQJourneysSection" style="display:none; padding: 0.5rem 0 0.25rem 1.6rem; font-size: 0.85rem;">
+                            <div style="color: var(--text-secondary); margin-bottom: 0.35rem; font-size: 0.78rem;">
+                                Which journeys should this user see in the Impact IQ dropdown? Leave "All journeys" checked to grant everything (default).
+                            </div>
+                            <label class="checkbox-group" style="margin-bottom: 0.25rem;">
+                                <input type="checkbox" id="impactIQJourneyAll" onchange="onImpactIQJourneyAllToggle()">
+                                <span>All journeys (wildcard)</span>
+                            </label>
+                            <div id="impactIQJourneyList" style="padding-left: 1.4rem;">
+                                <label class="checkbox-group" style="margin-bottom: 0.2rem;">
+                                    <input type="checkbox" class="impact-iq-journey-cb" data-slug="coachella-bieber-2026">
+                                    <span>🎪 Coachella 2026 → Justin Bieber</span>
+                                </label>
+                                <label class="checkbox-group" style="margin-bottom: 0.2rem;">
+                                    <input type="checkbox" class="impact-iq-journey-cb" data-slug="latin-loyalty-2026">
+                                    <span>🔥 Latin fan loyalty vs Pop / R&B / Rap</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
 
@@ -8456,6 +8476,7 @@
             if (biqAccessReset) biqAccessReset.checked = false;
             var iiqAccessReset = document.getElementById('hasImpactIQAccess');
             if (iiqAccessReset) iiqAccessReset.checked = false;
+            setImpactIQJourneys(['*']);
             document.getElementById('hasTalentFitAccess').checked = false;
             document.getElementById('hasShareOfTimeAccess').checked = true;
             document.getElementById('hasShareOfTimeRunAccess').checked = true;
@@ -8596,6 +8617,7 @@
             if (biqAccess) biqAccess.checked = user.has_blue_iq_access === true; // Default false
             var iiqAccess = document.getElementById('hasImpactIQAccess');
             if (iiqAccess) iiqAccess.checked = user.has_impact_iq_access !== false; // Default true (opt-out)
+            setImpactIQJourneys(user.impact_iq_journeys);
             document.getElementById('hasTalentFitAccess').checked = user.has_talent_fit_access === true; // Default false
             document.getElementById('hasShareOfTimeAccess').checked = user.has_share_of_time_access !== false;
             document.getElementById('hasShareOfTimeRunAccess').checked = user.has_share_of_time_run_access !== false;
@@ -10065,6 +10087,66 @@
         function deselectAllRankerOptions() {
             document.querySelectorAll('.ranker-option-checkbox').forEach(cb => cb.checked = false);
         }
+
+        // Impact IQ per-user journey allow-list helpers.
+        function toggleImpactIQJourneysSection(evt) {
+            if (evt) evt.stopPropagation();
+            var s = document.getElementById('impactIQJourneysSection');
+            var icon = document.getElementById('impactIQJourneysIcon');
+            if (!s) return;
+            var open = s.style.display !== 'none';
+            s.style.display = open ? 'none' : 'block';
+            if (icon) icon.textContent = open ? '▼' : '▲';
+        }
+        function onImpactIQJourneyAllToggle() {
+            var all = document.getElementById('impactIQJourneyAll');
+            var list = document.getElementById('impactIQJourneyList');
+            if (!all || !list) return;
+            // When "All journeys" is checked, uncheck individuals and grey them out.
+            var boxes = list.querySelectorAll('.impact-iq-journey-cb');
+            if (all.checked) {
+                boxes.forEach(function(cb) { cb.checked = false; cb.disabled = true; });
+                list.style.opacity = '0.4';
+            } else {
+                boxes.forEach(function(cb) { cb.disabled = false; });
+                list.style.opacity = '1';
+            }
+        }
+        function setImpactIQJourneys(journeys) {
+            // Called during user-edit load. journeys is either ['*'] (all),
+            // an explicit array of slugs, or undefined (treat as all).
+            var all = document.getElementById('impactIQJourneyAll');
+            var list = document.getElementById('impactIQJourneyList');
+            if (!all || !list) return;
+            var boxes = list.querySelectorAll('.impact-iq-journey-cb');
+            var isWildcard = !Array.isArray(journeys) || journeys.length === 0 || journeys.indexOf('*') !== -1;
+            if (isWildcard) {
+                all.checked = true;
+                boxes.forEach(function(cb) { cb.checked = false; });
+            } else {
+                all.checked = false;
+                boxes.forEach(function(cb) {
+                    cb.checked = journeys.indexOf(cb.getAttribute('data-slug')) !== -1;
+                });
+            }
+            onImpactIQJourneyAllToggle();
+        }
+        function getImpactIQJourneys() {
+            // Returns the value to send in the save payload:
+            //   ['*']            = all journeys
+            //   [slug1, slug2]   = explicit subset
+            //   ['*']            = fallback if nothing is checked (avoids
+            //                       accidentally locking the user out)
+            var all = document.getElementById('impactIQJourneyAll');
+            if (all && all.checked) return ['*'];
+            var list = document.getElementById('impactIQJourneyList');
+            if (!list) return ['*'];
+            var slugs = [];
+            list.querySelectorAll('.impact-iq-journey-cb').forEach(function(cb) {
+                if (cb.checked) slugs.push(cb.getAttribute('data-slug'));
+            });
+            return slugs.length ? slugs : ['*'];
+        }
         
         // Set Rankers IQ Access (for editing users)
         function setRankersIQAccess(user) {
@@ -10721,6 +10803,7 @@
                 has_llmo_iq_access: document.getElementById('hasLLMOIQAccess').checked,
                 has_blue_iq_access: !!(document.getElementById('hasBlueIQAccess') && document.getElementById('hasBlueIQAccess').checked),
                 has_impact_iq_access: !!(document.getElementById('hasImpactIQAccess') && document.getElementById('hasImpactIQAccess').checked),
+                impact_iq_journeys: getImpactIQJourneys(),
                 has_talent_fit_access: document.getElementById('hasTalentFitAccess').checked,
                 has_share_of_time_access: document.getElementById('hasShareOfTimeAccess').checked,
                 has_share_of_time_run_access: document.getElementById('hasShareOfTimeRunAccess').checked && document.getElementById('hasShareOfTimeAccess').checked,

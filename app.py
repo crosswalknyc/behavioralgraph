@@ -4138,6 +4138,7 @@ def create_user():
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
             'has_blue_iq_access': req_data.get('has_blue_iq_access', cd.get('has_blue_iq_access', False) if cd else False),
             'has_impact_iq_access': req_data.get('has_impact_iq_access', cd.get('has_impact_iq_access', True) if cd else True),
+            'impact_iq_journeys': req_data.get('impact_iq_journeys', cd.get('impact_iq_journeys', ['*']) if cd else ['*']) or ['*'],
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
@@ -4293,6 +4294,16 @@ def update_user(username):
             user['has_blue_iq_access'] = bool(req_data['has_blue_iq_access'])
         if 'has_impact_iq_access' in req_data:
             user['has_impact_iq_access'] = bool(req_data['has_impact_iq_access'])
+        if 'impact_iq_journeys' in req_data:
+            # Per-user Impact IQ journey allow-list. Empty or missing = all
+            # journeys (['*']). Explicit list of slugs restricts which
+            # entries in the Journey dropdown the user sees.
+            val = req_data['impact_iq_journeys']
+            if isinstance(val, list):
+                cleaned = [str(x).strip() for x in val if str(x).strip()]
+                user['impact_iq_journeys'] = cleaned or ['*']
+            elif val is None:
+                user['impact_iq_journeys'] = ['*']
         if user.get('has_share_of_time_access') is False:
             user['has_share_of_time_run_access'] = False
         if 'auto_access_new' in req_data:
@@ -4696,6 +4707,7 @@ def restore_defaults_all_users():
             user['has_share_of_time_run_access'] = True
             user['has_blue_iq_access'] = False
             user['has_impact_iq_access'] = True
+            user['impact_iq_journeys'] = ['*']
             count += 1
         save_users(data)
         return jsonify({'success': True, 'message': f'Restored defaults for {count} user(s)', 'count': count})
@@ -5422,6 +5434,7 @@ def api_set_company_defaults(company_name):
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
             'has_blue_iq_access': req.get('has_blue_iq_access', False),
             'has_impact_iq_access': req.get('has_impact_iq_access', True),
+            'impact_iq_journeys': req.get('impact_iq_journeys', ['*']) or ['*'],
             'credits': req.get('credits', 5),
             'auto_access_new': req.get('auto_access_new', {}),
         }
@@ -5486,6 +5499,7 @@ def api_reset_company_users(company_name):
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
                 user['has_blue_iq_access'] = cd.get('has_blue_iq_access', False)
                 user['has_impact_iq_access'] = cd.get('has_impact_iq_access', True)
+                user['impact_iq_journeys'] = list(cd.get('impact_iq_journeys', ['*']) or ['*'])
                 user['credits'] = cd.get('credits', 5)
                 user['auto_access_new'] = dict(cd.get('auto_access_new', {}))
             else:
@@ -5513,6 +5527,7 @@ def api_reset_company_users(company_name):
                 user['has_share_of_time_run_access'] = True
                 user['has_blue_iq_access'] = False
                 user['has_impact_iq_access'] = True
+                user['impact_iq_journeys'] = ['*']
                 user['credits'] = 5
                 user['auto_access_new'] = {}
             if user.get('has_share_of_time_access') is False:
@@ -7568,6 +7583,7 @@ def compute_product_access_flags(user, role):
             'has_blue_iq_access': True,
             'has_intent_iq_access': True,
             'has_impact_iq_access': True,
+            'impact_iq_journeys': ['*'],
             'has_helm_iq_access': True,
         }
     u = user or {}
@@ -7603,6 +7619,7 @@ def compute_product_access_flags(user, role):
         'has_blue_iq_access': bool(u.get('has_blue_iq_access', False)),
         'has_intent_iq_access': bool(u.get('has_intent_iq_access', True)),
         'has_impact_iq_access': bool(u.get('has_impact_iq_access', True)),
+        'impact_iq_journeys': list(u.get('impact_iq_journeys', ['*']) or ['*']),
         'has_helm_iq_access': role == 'super_admin',
     }
 
@@ -7700,6 +7717,7 @@ def index():
     has_blue_iq = _acc.get('has_blue_iq_access', False)
     has_intent_iq = _acc.get('has_intent_iq_access', True)
     has_impact_iq = _acc.get('has_impact_iq_access', True)
+    impact_iq_journeys = _acc.get('impact_iq_journeys', ['*']) or ['*']
     has_helm_iq = _acc.get('has_helm_iq_access', False)
 
     # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page
@@ -7760,6 +7778,7 @@ def index():
                            has_blue_iq_access=has_blue_iq,
                            has_intent_iq_access=has_intent_iq,
                            has_impact_iq_access=has_impact_iq,
+                           impact_iq_journeys=impact_iq_journeys,
                            has_helm_iq_access=has_helm_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,

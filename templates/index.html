@@ -33282,16 +33282,52 @@
                 return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
             }
 
+            // Per-user allow-list of Impact IQ journey slugs. Seeded from the
+            // Jinja render (impact_iq_journeys) and later refreshed by
+            // /api/me/product-access. ['*'] = all journeys visible.
+            window.__impactIQ = window.__impactIQ || { current: 'coachella-bieber-2026' };
+            if (!Array.isArray(window.__impactIQ.allowed_journeys)) {
+                try {
+                    var _seedJourneys = {{ impact_iq_journeys | default(['*']) | tojson | safe }};
+                    window.__impactIQ.allowed_journeys = (Array.isArray(_seedJourneys) && _seedJourneys.length) ? _seedJourneys : ['*'];
+                } catch (_e) {
+                    window.__impactIQ.allowed_journeys = ['*'];
+                }
+            }
+            function _iiq2JourneyAllowed(slug) {
+                var a = window.__impactIQ.allowed_journeys || ['*'];
+                if (!a.length || a.indexOf('*') !== -1) return true;
+                return a.indexOf(slug) !== -1;
+            }
             function _iiq2InitSelector() {
                 var sel = document.getElementById('impactJourneySelect');
                 if (!sel) return;
-                if (sel.options.length > 0) return;
-                Object.keys(IMPACT_IQ_JOURNEYS).forEach(function(slug) {
+                // Rebuild whenever allow-list may have changed (idempotent).
+                while (sel.options.length > 0) sel.remove(0);
+                var allowedSlugs = Object.keys(IMPACT_IQ_JOURNEYS).filter(_iiq2JourneyAllowed);
+                if (allowedSlugs.length === 0) {
+                    // No journeys allowed for this user - insert a placeholder
+                    // so the render pipeline doesn't crash. showImpactIQ
+                    // should ideally have already been gated by the outer
+                    // has_impact_iq_access flag; this is a defensive belt.
+                    sel.appendChild(new Option('No journeys assigned', ''));
+                    return;
+                }
+                allowedSlugs.forEach(function(slug) {
                     var j = IMPACT_IQ_JOURNEYS[slug];
                     var opt = new Option(j.display, slug);
                     sel.appendChild(opt);
                 });
+                // If the currently-selected journey isn't in the allow-list,
+                // snap to the first allowed one so the tab still renders.
+                if (allowedSlugs.indexOf(window.__impactIQ.current) === -1) {
+                    window.__impactIQ.current = allowedSlugs[0];
+                }
                 sel.value = window.__impactIQ.current;
+                // Hide the whole Journey control if there's only one allowed
+                // journey - no reason to render a single-item dropdown.
+                var wrap = sel.closest('.iiq2-select-wrap') || sel.parentElement;
+                if (wrap) wrap.style.display = (allowedSlugs.length <= 1) ? 'none' : '';
             }
 
             function _iiq2HideAllOtherViews() {
@@ -35364,6 +35400,21 @@
                     if (typeof sotApplyRunAccessVisibility === 'function') sotApplyRunAccessVisibility();
                     // Store Fin IQ data cutoff date for filtering
                     window.hedgeFundIQDataCutoff = d.hedge_fund_iq_data_cutoff || null;
+                    // Per-user Impact IQ journey allow-list. ['*'] = all
+                    // journeys visible. Otherwise only slugs in the list
+                    // appear in the Journey dropdown.
+                    window.__impactIQ = window.__impactIQ || { current: 'coachella-bieber-2026' };
+                    window.__impactIQ.allowed_journeys = Array.isArray(d.impact_iq_journeys) && d.impact_iq_journeys.length
+                        ? d.impact_iq_journeys
+                        : ['*'];
+                    // If the Impact IQ view is currently open, rebuild its
+                    // Journey dropdown so the allow-list change takes effect
+                    // without a full page reload.
+                    var iiqView = document.getElementById('impactIQView');
+                    if (iiqView && iiqView.style.display !== 'none' && typeof _iiq2InitSelector === 'function') {
+                        _iiq2InitSelector();
+                        if (typeof renderImpactIQ === 'function') renderImpactIQ();
+                    }
                 }
                 // Track which nested groups the user has expanded so a
                 // rebuild (e.g. from /api/me/product-access re-sync on
