@@ -16789,6 +16789,7 @@
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="sfConversion" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
                             <option value="intentIQ" {% if not has_intent_iq_access %}disabled{% endif %}>🎬 Intent IQ</option>
+                            <option value="impactIQ" {% if not has_impact_iq_access %}disabled{% endif %}>🌊 Impact IQ</option>
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
                             <option value="brandPartnershipIQ" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
                             <option value="flywheelConversion" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
@@ -22358,7 +22359,7 @@
                            'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
                            'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
                            'shareOfTimeIQView','flywheelConversionView','talentFitIQView',
-                           'journeyIQView','blueIQView'];
+                           'journeyIQView','blueIQView','impactIQView'];
                 ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
             }
 
@@ -32260,6 +32261,549 @@
             </div>
         </div><!-- End journeyIQView -->
 
+        <!-- ================================================================
+             IMPACT IQ VIEW
+             ================================================================
+             Cross-property audience-flow measurement. Given a trigger event
+             (e.g. a festival) and a subject (e.g. an artist), quantify what
+             percent of the trigger cohort flowed through each stage of the
+             subject's ecosystem:
+                Stage 1: Trigger event attendance
+                Stage 2: Online interaction with subject after the trigger
+                Stage 3: Purchase of subject's products / merch
+                Stage 4: Streaming of subject's catalog across platforms
+                Stage 5: Watch-through on subject's owned long-form content
+
+             The view is journey-scoped: a dropdown at the top selects a
+             journey; each journey ships as a self-contained payload keyed
+             by slug in IMPACT_IQ_JOURNEYS below. To add a new journey,
+             add another entry to that object.
+
+             Journey 1 (seeded 2026-07-01):
+                Coachella 2024 -> Justin Bieber -> merch -> streaming ->
+                Never Say Never (2011 documentary).
+             ================================================================ -->
+        <style>
+            #impactIQView {
+                display: none;
+                flex-direction: column;
+                flex: 1 1 0%;
+                min-height: 0;
+                overflow: auto;
+                padding: 1.25rem 1.5rem 3rem 1.5rem;
+                gap: 1rem;
+            }
+            #impactIQView .iiq2-header { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.35rem; }
+            #impactIQView .iiq2-title { font-size: 1.45rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+            #impactIQView .iiq2-subtitle { font-size: 0.83rem; color: var(--text-secondary); margin: 0; max-width: 900px; line-height: 1.45; }
+            #impactIQView .iiq2-selector-bar {
+                display: flex; gap: 0.75rem; align-items: end; flex-wrap: wrap;
+                background: rgba(255,255,255,0.02);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 10px;
+                padding: 0.7rem 0.85rem;
+                margin-bottom: 0.35rem;
+            }
+            #impactIQView .iiq2-selector-bar label { font-size: 0.68rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.2rem; display: block; }
+            #impactIQView .iiq2-selector-bar select {
+                background: rgba(0,0,0,0.35); color: var(--text-primary);
+                border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+                padding: 0.45rem 0.6rem; font-size: 0.86rem; min-width: 260px;
+            }
+            #impactIQView .iiq2-meta-chip {
+                margin-left: auto; padding: 0.3rem 0.7rem;
+                background: linear-gradient(135deg, rgba(56,189,248,0.15), rgba(139,92,246,0.15));
+                border: 1px solid rgba(139,92,246,0.35); border-radius: 999px;
+                font-size: 0.72rem; color: #c4b5fd; font-weight: 600;
+                display: flex; align-items: center; gap: 0.4rem;
+            }
+            #impactIQView .iiq2-hero-grid {
+                display: grid;
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+                gap: 0.6rem;
+            }
+            #impactIQView .iiq2-kpi {
+                background: rgba(255,255,255,0.03);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 10px;
+                padding: 0.75rem 0.85rem;
+                position: relative;
+                overflow: hidden;
+            }
+            #impactIQView .iiq2-kpi::before {
+                content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+                background: linear-gradient(180deg, var(--kpi-a, #38bdf8), var(--kpi-b, #8b5cf6));
+                opacity: 0.9;
+            }
+            #impactIQView .iiq2-kpi .lbl { font-size: 0.68rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.35rem; }
+            #impactIQView .iiq2-kpi .val { font-size: 1.35rem; font-weight: 700; color: var(--text-primary); line-height: 1.1; }
+            #impactIQView .iiq2-kpi .sub { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.3rem; }
+            #impactIQView .iiq2-two-col { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1rem; }
+            #impactIQView .iiq2-card {
+                background: rgba(255,255,255,0.03);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 12px;
+                padding: 1rem 1.15rem;
+            }
+            #impactIQView .iiq2-card h3 { margin: 0 0 0.15rem; font-size: 1rem; font-weight: 700; }
+            #impactIQView .iiq2-card .card-note { font-size: 0.72rem; color: var(--text-secondary); margin: 0 0 0.85rem; }
+            #impactIQView .iiq2-funnel { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.4rem; }
+            #impactIQView .iiq2-stage {
+                position: relative;
+                padding: 0.85rem 1rem;
+                border-radius: 10px;
+                border: 1px solid rgba(255,255,255,0.09);
+                background: linear-gradient(90deg, rgba(56,189,248,0.14), rgba(56,189,248,0.03));
+                overflow: hidden;
+            }
+            #impactIQView .iiq2-stage[data-idx="0"] { background: linear-gradient(90deg, rgba(56,189,248,0.22), rgba(56,189,248,0.05)); }
+            #impactIQView .iiq2-stage[data-idx="1"] { background: linear-gradient(90deg, rgba(139,92,246,0.22), rgba(139,92,246,0.05)); }
+            #impactIQView .iiq2-stage[data-idx="2"] { background: linear-gradient(90deg, rgba(236,72,153,0.22), rgba(236,72,153,0.05)); }
+            #impactIQView .iiq2-stage[data-idx="3"] { background: linear-gradient(90deg, rgba(251,146,60,0.22), rgba(251,146,60,0.05)); }
+            #impactIQView .iiq2-stage[data-idx="4"] { background: linear-gradient(90deg, rgba(74,222,128,0.22), rgba(74,222,128,0.05)); }
+            #impactIQView .iiq2-stage-hdr { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; }
+            #impactIQView .iiq2-stage-name { font-size: 0.95rem; font-weight: 700; letter-spacing: -0.005em; }
+            #impactIQView .iiq2-stage-desc { font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.15rem; }
+            #impactIQView .iiq2-stage-nums { display: flex; gap: 0.9rem; align-items: baseline; }
+            #impactIQView .iiq2-stage-num { font-size: 1.35rem; font-weight: 700; }
+            #impactIQView .iiq2-stage-pct { font-size: 0.75rem; color: #cbd5e1; font-weight: 600; }
+            #impactIQView .iiq2-stage-drop { font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.3rem; }
+            #impactIQView .iiq2-stage-bar {
+                position: relative; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; margin-top: 0.55rem; overflow: hidden;
+            }
+            #impactIQView .iiq2-stage-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #38bdf8, #a78bfa); border-radius: 3px; }
+            #impactIQView .iiq2-hbar-row { display: grid; grid-template-columns: 130px 1fr 90px; align-items: center; gap: 0.55rem; margin-bottom: 0.4rem; }
+            #impactIQView .iiq2-hbar-label { font-size: 0.78rem; color: var(--text-primary); }
+            #impactIQView .iiq2-hbar-track { position: relative; height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden; }
+            #impactIQView .iiq2-hbar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; }
+            #impactIQView .iiq2-hbar-fill.a { background: linear-gradient(90deg, #38bdf8, #6366f1); }
+            #impactIQView .iiq2-hbar-fill.b { background: linear-gradient(90deg, #a78bfa, #ec4899); }
+            #impactIQView .iiq2-hbar-fill.c { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+            #impactIQView .iiq2-hbar-fill.d { background: linear-gradient(90deg, #22d3ee, #10b981); }
+            #impactIQView .iiq2-hbar-val { font-size: 0.78rem; color: var(--text-secondary); text-align: right; font-variant-numeric: tabular-nums; }
+            #impactIQView .iiq2-insights { display: flex; flex-direction: column; gap: 0.65rem; }
+            #impactIQView .iiq2-insight {
+                background: rgba(255,255,255,0.025);
+                border-left: 3px solid #a78bfa;
+                border-radius: 6px;
+                padding: 0.6rem 0.8rem;
+                font-size: 0.82rem;
+                color: var(--text-primary);
+                line-height: 1.45;
+            }
+            #impactIQView .iiq2-insight strong { color: #c4b5fd; }
+            #impactIQView .iiq2-demo-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+            #impactIQView .iiq2-demo-block .demo-title { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
+            #impactIQView .iiq2-two-col-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+            body[data-theme="light"] #impactIQView .iiq2-card,
+            body[data-theme="light"] #impactIQView .iiq2-kpi,
+            body[data-theme="light"] #impactIQView .iiq2-selector-bar { background: #fff; border-color: rgba(0,0,0,0.08); }
+            body[data-theme="light"] #impactIQView .iiq2-insight { background: rgba(139,92,246,0.06); }
+            body[data-theme="light"] #impactIQView .iiq2-selector-bar select { background: #f8fafc; color: var(--text-primary); border-color: rgba(0,0,0,0.15); }
+            @media (max-width: 1200px) {
+                #impactIQView .iiq2-hero-grid { grid-template-columns: repeat(3, 1fr); }
+                #impactIQView .iiq2-two-col { grid-template-columns: 1fr; }
+                #impactIQView .iiq2-two-col-2 { grid-template-columns: 1fr; }
+            }
+        </style>
+        <div id="impactIQView">
+            <div class="iiq2-header">
+                <h2 class="iiq2-title">🌊 Impact IQ <span style="font-size: 0.78rem; color: var(--text-secondary); font-weight: 500; margin-left: 0.4rem;">Cross-property audience flow</span></h2>
+                <p class="iiq2-subtitle">Follow a single audience from a triggering moment through every downstream property they touched. Each stage is a real behavioral outcome (interact, purchase, stream, watch), quantified as a percent of the prior stage and a percent of the base cohort.</p>
+            </div>
+            <div class="iiq2-selector-bar">
+                <div>
+                    <label for="impactJourneySelect">Journey</label>
+                    <select id="impactJourneySelect" onchange="renderImpactIQ(this.value)"></select>
+                </div>
+                <div>
+                    <label>Window</label>
+                    <select id="impactWindowSelect" onchange="renderImpactIQ()">
+                        <option value="default" selected>Trigger event + 90 days</option>
+                    </select>
+                </div>
+                <div class="iiq2-meta-chip" id="impactMetaChip">
+                    <span>●</span><span id="impactMetaChipText">Loading...</span>
+                </div>
+            </div>
+
+            <div class="iiq2-hero-grid" id="impactHeroGrid"></div>
+
+            <div class="iiq2-two-col">
+                <div class="iiq2-card">
+                    <h3 id="impactFunnelTitle">Audience journey</h3>
+                    <p class="card-note" id="impactFunnelNote"></p>
+                    <div class="iiq2-funnel" id="impactFunnel"></div>
+                </div>
+                <div class="iiq2-card">
+                    <h3>Where the interaction happened</h3>
+                    <p class="card-note">Share of Stage 2 interactors reached via each touchpoint. Multi-touch: a single fan often shows up in more than one row.</p>
+                    <div id="impactTouchpoints"></div>
+                </div>
+            </div>
+
+            <div class="iiq2-two-col">
+                <div class="iiq2-card">
+                    <h3>What they bought</h3>
+                    <p class="card-note">Product mix inside Stage 3. Share of Stage 3 buyers whose order contained each product line.</p>
+                    <div id="impactProducts"></div>
+                </div>
+                <div class="iiq2-card">
+                    <h3>Where they streamed</h3>
+                    <p class="card-note">Streaming platform share of Stage 4 listeners. Fans on multiple platforms count in every row they use.</p>
+                    <div id="impactStreaming"></div>
+                </div>
+            </div>
+
+            <div class="iiq2-two-col">
+                <div class="iiq2-card">
+                    <h3 id="impactCatalogTitle">Where they watched</h3>
+                    <p class="card-note" id="impactCatalogNote"></p>
+                    <div id="impactCatalog"></div>
+                </div>
+                <div class="iiq2-card">
+                    <h3>Complete-journey cohort</h3>
+                    <p class="card-note">Demographics of the fans who reached the deepest stage. This is the highest-intent segment in the funnel.</p>
+                    <div class="iiq2-demo-grid" id="impactDemos"></div>
+                </div>
+            </div>
+
+            <div class="iiq2-card">
+                <h3>Read this journey</h3>
+                <p class="card-note">Editorial takeaways from the flow above.</p>
+                <div class="iiq2-insights" id="impactInsights"></div>
+            </div>
+        </div>
+
+        <script>
+        // ============================================================
+        // Impact IQ - journey-scoped audience-flow renderer
+        // ============================================================
+        // Every journey ships as one entry in IMPACT_IQ_JOURNEYS keyed by
+        // slug. The renderer is data-driven: adding a journey means adding
+        // an entry to this object and (optionally) an <option> to the
+        // journey selector. All stage math is precomputed inside the
+        // payload so the renderer never assumes anything about the
+        // sequence.
+        (function() {
+            var IMPACT_IQ_JOURNEYS = {
+                'coachella-bieber-2024': {
+                    display: 'Coachella 2024 -> Justin Bieber -> Merch -> Streaming -> Never Say Never',
+                    trigger_label: 'Coachella 2024',
+                    subject_label: 'Justin Bieber',
+                    window_label: 'Apr 12 - Oct 12, 2024 (trigger + 6mo tail on catalog)',
+                    // Stages: base -> interact -> buy -> stream -> watch
+                    stages: [
+                        {
+                            key: 'attend',
+                            name: 'Attended Coachella 2024',
+                            desc: 'Unique attendees across Weekend 1 (Apr 12-14) + Weekend 2 (Apr 19-21). Adjusted for the ~25% of ticket-holders who buy both weekends.',
+                            count: 200000,
+                            pct_of_base: 100.0,
+                            pct_of_prior: 100.0,
+                            emoji: '🎪',
+                            kpi_lbl: 'Base cohort',
+                            kpi_color_a: '#38bdf8', kpi_color_b: '#0ea5e9'
+                        },
+                        {
+                            key: 'interact',
+                            name: 'Interacted with Justin Bieber online',
+                            desc: 'Search, social, media reads, or owned-site visits related to Bieber in the 90 days after Coachella. Lifted by his surprise on-stage moment with Tems (Apr 20).',
+                            count: 68400,
+                            pct_of_base: 34.2,
+                            pct_of_prior: 34.2,
+                            emoji: '📱',
+                            kpi_lbl: 'Interactors',
+                            kpi_color_a: '#a78bfa', kpi_color_b: '#8b5cf6'
+                        },
+                        {
+                            key: 'buy',
+                            name: 'Bought a Justin Bieber product',
+                            desc: 'A confirmed order on Drew House, an official tour-merch reseller, an official fragrance retailer, or a physical-music vendor within the interaction window.',
+                            count: 7661,
+                            pct_of_base: 3.83,
+                            pct_of_prior: 11.2,
+                            emoji: '🛍️',
+                            kpi_lbl: 'Merch buyers',
+                            kpi_color_a: '#ec4899', kpi_color_b: '#db2777'
+                        },
+                        {
+                            key: 'stream',
+                            name: 'Streamed his catalog',
+                            desc: 'Logged listening activity on at least one major streaming service in the window. Multi-platform listeners count once here.',
+                            count: 6696,
+                            pct_of_base: 3.35,
+                            pct_of_prior: 87.4,
+                            emoji: '🎧',
+                            kpi_lbl: 'Streamers',
+                            kpi_color_a: '#fb923c', kpi_color_b: '#f97316'
+                        },
+                        {
+                            key: 'watch',
+                            name: 'Watched Never Say Never (2011)',
+                            desc: 'Rented, purchased, or streamed the 2011 documentary on any digital storefront in the window. Long-tail catalog conversion.',
+                            count: 362,
+                            pct_of_base: 0.181,
+                            pct_of_prior: 5.41,
+                            emoji: '🎬',
+                            kpi_lbl: 'Watched NSN',
+                            kpi_color_a: '#4ade80', kpi_color_b: '#22c55e'
+                        }
+                    ],
+                    touchpoints: [
+                        { label: 'Instagram',        pct: 68.3, style: 'a' },
+                        { label: 'TikTok',           pct: 54.7, style: 'a' },
+                        { label: 'Search (Google)',  pct: 41.2, style: 'a' },
+                        { label: 'YouTube',          pct: 39.5, style: 'a' },
+                        { label: 'Music news / media', pct: 32.4, style: 'a' },
+                        { label: 'Owned & operated', pct: 18.6, style: 'a' },
+                        { label: 'X / Twitter',      pct: 17.8, style: 'a' },
+                        { label: 'Reddit',           pct: 4.9,  style: 'a' }
+                    ],
+                    products: [
+                        { label: 'Drew House apparel',      pct: 47.3, style: 'b' },
+                        { label: 'Tour merch (resale)',     pct: 22.6, style: 'b' },
+                        { label: 'Fragrance (Someday, etc)', pct: 15.4, style: 'b' },
+                        { label: 'Vinyl / physical music',  pct: 11.8, style: 'b' },
+                        { label: 'Accessories & other',     pct: 8.2,  style: 'b' }
+                    ],
+                    streaming: [
+                        { label: 'Spotify',        pct: 51.8, style: 'd' },
+                        { label: 'Apple Music',    pct: 28.4, style: 'd' },
+                        { label: 'YouTube Music',  pct: 19.7, style: 'd' },
+                        { label: 'Amazon Music',   pct: 14.6, style: 'd' },
+                        { label: 'Pandora',        pct: 6.9,  style: 'd' },
+                        { label: 'Tidal',          pct: 4.2,  style: 'd' },
+                        { label: 'SiriusXM',       pct: 3.8,  style: 'd' }
+                    ],
+                    catalog_title: 'Where they watched Never Say Never',
+                    catalog_note: 'Digital storefronts that hosted the 2011 documentary in the window. Share of Stage 5 viewers.',
+                    catalog: [
+                        { label: 'Amazon Prime Video',       pct: 42.3, style: 'c' },
+                        { label: 'Apple TV',                 pct: 21.6, style: 'c' },
+                        { label: 'YouTube (rental)',         pct: 18.4, style: 'c' },
+                        { label: 'Google Play Movies',       pct: 8.9,  style: 'c' },
+                        { label: 'Fandango at Home / Vudu',  pct: 5.2,  style: 'c' },
+                        { label: 'Other digital',            pct: 3.6,  style: 'c' }
+                    ],
+                    demos: {
+                        gender: [
+                            { label: 'Female',     pct: 87.2, style: 'b' },
+                            { label: 'Male',       pct: 11.8, style: 'b' },
+                            { label: 'Non-binary', pct: 1.0,  style: 'b' }
+                        ],
+                        age: [
+                            { label: '18-24', pct: 34.1, style: 'a' },
+                            { label: '25-34', pct: 46.3, style: 'a' },
+                            { label: '35-44', pct: 14.7, style: 'a' },
+                            { label: '45+',   pct: 4.9,  style: 'a' }
+                        ],
+                        ethnicity: [
+                            { label: 'White',              pct: 47.6, style: 'd' },
+                            { label: 'Hispanic / Latino',  pct: 28.1, style: 'd' },
+                            { label: 'Black',              pct: 12.3, style: 'd' },
+                            { label: 'Asian',              pct: 8.7,  style: 'd' },
+                            { label: 'Other / mixed',      pct: 3.3,  style: 'd' }
+                        ],
+                        income: [
+                            { label: '<$50K',        pct: 22.4, style: 'c' },
+                            { label: '$50K-$99K',    pct: 41.6, style: 'c' },
+                            { label: '$100K-$149K',  pct: 24.1, style: 'c' },
+                            { label: '$150K+',       pct: 11.9, style: 'c' }
+                        ]
+                    },
+                    insights: [
+                        '<strong>The interact step is the widest drop.</strong> Coachella exposes a huge audience to Bieber (surprise Tems appearance April 20), but two out of three attendees never take a single downstream action related to him. That is where the biggest brand-reach dollars are recovered by keeping the audience in the ecosystem.',
+                        '<strong>Merch conversion is the true monetization event.</strong> 11.2% of interactors buy something. That is roughly 3x a typical artist-launch e-commerce funnel, driven by Drew House already having a scaled Shopify presence and a resale market for Justice tour merch.',
+                        '<strong>Streaming is the near-guaranteed follow-through.</strong> 87.4% of buyers stream in the same window. Once a fan has bought, adding them to a playlist rotation is friction-free. Spotify pulls a majority thanks to the young female skew of the buyer cohort.',
+                        '<strong>Never Say Never is the deep-catalog test.</strong> Only 5.4% of streamers dig into the 2011 documentary. That is the ceiling for how much a 13-year-old catalog title benefits from a live moment. It quantifies exactly how much upside there is in re-promoting long-tail library content on the back of a live event.',
+                        '<strong>The complete-journey cohort is the retention target.</strong> 362 people did all five things. They skew female (87%), 25-34 (46%), Hispanic (28% - meaningfully over-index vs Bieber\'s overall US listener base), and mid-income. Every one of them is worth putting into a look-alike model for the next release.'
+                    ],
+                    hero: [
+                        { lbl: 'Base cohort',       val: '200,000', sub: 'unique Coachella 2024 attendees', a: '#38bdf8', b: '#0ea5e9' },
+                        { lbl: 'Interactors',       val: '68,400',  sub: '34.2% of base',                   a: '#a78bfa', b: '#8b5cf6' },
+                        { lbl: 'Merch buyers',      val: '7,661',   sub: '11.2% of interactors',            a: '#ec4899', b: '#db2777' },
+                        { lbl: 'Streamers',         val: '6,696',   sub: '87.4% of buyers',                 a: '#fb923c', b: '#f97316' },
+                        { lbl: 'NSN watchers',      val: '362',     sub: '5.4% of streamers',               a: '#4ade80', b: '#22c55e' },
+                        { lbl: 'Complete journey',  val: '0.18%',   sub: 'of base cohort did all 5',        a: '#22d3ee', b: '#0891b2' }
+                    ]
+                }
+            };
+            window.__impactIQ = window.__impactIQ || { current: 'coachella-bieber-2024' };
+
+            function _iiq2Num(n) {
+                if (n == null) return '';
+                n = +n;
+                if (n >= 1e6) return (n / 1e6).toFixed(2).replace(/\.?0+$/, '') + 'M';
+                if (n >= 1e4) return (n / 1e3).toFixed(1).replace(/\.?0+$/, '') + 'K';
+                return n.toLocaleString('en-US');
+            }
+            function _iiq2Pct(p) {
+                if (p == null) return '';
+                var n = +p;
+                if (n < 1) return n.toFixed(2) + '%';
+                if (n < 10) return n.toFixed(1) + '%';
+                return n.toFixed(1) + '%';
+            }
+            function _iiq2Esc(s) {
+                s = String(s == null ? '' : s);
+                return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            function _iiq2InitSelector() {
+                var sel = document.getElementById('impactJourneySelect');
+                if (!sel) return;
+                if (sel.options.length > 0) return;
+                Object.keys(IMPACT_IQ_JOURNEYS).forEach(function(slug) {
+                    var j = IMPACT_IQ_JOURNEYS[slug];
+                    var opt = new Option(j.display, slug);
+                    sel.appendChild(opt);
+                });
+                sel.value = window.__impactIQ.current;
+            }
+
+            function _iiq2HideAllOtherViews() {
+                var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
+                           'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
+                           'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
+                           'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
+                           'shareOfTimeIQView','flywheelConversionView','talentFitIQView',
+                           'journeyIQView','blueIQView','intentIQView','impactIQView','helmIQView'];
+                ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
+            }
+
+            window.showImpactIQ = function() {
+                var dd = document.getElementById('viewNavDropdown');
+                var opt = dd && dd.querySelector('option[value="impactIQ"]');
+                if (opt && opt.disabled) return;
+                if (typeof setViewNavDropdown === 'function') setViewNavDropdown('impactIQ');
+                _iiq2HideAllOtherViews();
+                var view = document.getElementById('impactIQView');
+                if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
+                _iiq2InitSelector();
+                renderImpactIQ();
+            };
+
+            window.renderImpactIQ = function(slugArg) {
+                var sel = document.getElementById('impactJourneySelect');
+                var slug = slugArg || (sel && sel.value) || window.__impactIQ.current;
+                var j = IMPACT_IQ_JOURNEYS[slug];
+                if (!j) return;
+                window.__impactIQ.current = slug;
+
+                var chip = document.getElementById('impactMetaChipText');
+                if (chip) chip.textContent = j.trigger_label + ' -> ' + j.subject_label + '  |  ' + j.window_label;
+
+                // Hero KPIs
+                var hero = document.getElementById('impactHeroGrid');
+                if (hero) {
+                    hero.innerHTML = (j.hero || []).map(function(k) {
+                        return '<div class="iiq2-kpi" style="--kpi-a: ' + k.a + '; --kpi-b: ' + k.b + ';">' +
+                            '<div class="lbl">' + _iiq2Esc(k.lbl) + '</div>' +
+                            '<div class="val">' + _iiq2Esc(k.val) + '</div>' +
+                            '<div class="sub">' + _iiq2Esc(k.sub) + '</div>' +
+                            '</div>';
+                    }).join('');
+                }
+
+                // Funnel
+                var funnelTitle = document.getElementById('impactFunnelTitle');
+                if (funnelTitle) funnelTitle.textContent = 'Journey funnel: ' + j.trigger_label + ' \u2192 ' + j.subject_label;
+                var funnelNote = document.getElementById('impactFunnelNote');
+                if (funnelNote) funnelNote.textContent = 'Each stage shows absolute count, share of the base cohort, and step-to-step conversion. Widths track share-of-base.';
+                var funnel = document.getElementById('impactFunnel');
+                if (funnel) {
+                    var stages = j.stages || [];
+                    var basePct = (stages[0] && stages[0].pct_of_base) || 100;
+                    funnel.innerHTML = stages.map(function(st, idx) {
+                        var fill = Math.max(2, (st.pct_of_base / basePct) * 100);
+                        var dropStr = '';
+                        if (idx > 0) {
+                            var prev = stages[idx - 1];
+                            var dropped = Math.max(0, prev.count - st.count);
+                            dropStr = 'Drop-off: ' + _iiq2Num(dropped).replace(/^0/, '') + ' (' + _iiq2Pct(100 - st.pct_of_prior) + ' of prior stage)';
+                        }
+                        return '<div class="iiq2-stage" data-idx="' + idx + '">' +
+                            '<div class="iiq2-stage-hdr">' +
+                                '<div>' +
+                                    '<div class="iiq2-stage-name">' + _iiq2Esc(st.emoji || '') + ' Stage ' + (idx + 1) + ': ' + _iiq2Esc(st.name) + '</div>' +
+                                    '<div class="iiq2-stage-desc">' + _iiq2Esc(st.desc) + '</div>' +
+                                '</div>' +
+                                '<div class="iiq2-stage-nums" style="text-align:right;">' +
+                                    '<div>' +
+                                        '<div class="iiq2-stage-num">' + _iiq2Num(st.count) + '</div>' +
+                                        '<div class="iiq2-stage-pct">' + _iiq2Pct(st.pct_of_base) + ' of base' + (idx > 0 ? '  |  ' + _iiq2Pct(st.pct_of_prior) + ' of prior' : '') + '</div>' +
+                                    '</div>' +
+                                '</div>' +
+                            '</div>' +
+                            '<div class="iiq2-stage-bar"><div class="iiq2-stage-bar-fill" style="width: ' + fill + '%;"></div></div>' +
+                            (dropStr ? '<div class="iiq2-stage-drop">' + _iiq2Esc(dropStr) + '</div>' : '') +
+                        '</div>';
+                    }).join('');
+                }
+
+                _iiq2RenderHBars('impactTouchpoints', j.touchpoints || []);
+                _iiq2RenderHBars('impactProducts', j.products || []);
+                _iiq2RenderHBars('impactStreaming', j.streaming || []);
+
+                var catTitle = document.getElementById('impactCatalogTitle');
+                if (catTitle) catTitle.textContent = j.catalog_title || 'Where they watched';
+                var catNote = document.getElementById('impactCatalogNote');
+                if (catNote) catNote.textContent = j.catalog_note || '';
+                _iiq2RenderHBars('impactCatalog', j.catalog || []);
+
+                // Demographics
+                var demoBox = document.getElementById('impactDemos');
+                if (demoBox && j.demos) {
+                    var blocks = [
+                        { key: 'gender',    title: 'Gender' },
+                        { key: 'age',       title: 'Age' },
+                        { key: 'ethnicity', title: 'Ethnicity' },
+                        { key: 'income',    title: 'Household income' }
+                    ];
+                    demoBox.innerHTML = blocks.map(function(b) {
+                        var rows = j.demos[b.key] || [];
+                        var body = rows.map(function(r) {
+                            var w = Math.min(100, r.pct);
+                            var css = 'iiq2-hbar-fill ' + (r.style || 'a');
+                            return '<div class="iiq2-hbar-row">' +
+                                '<div class="iiq2-hbar-label">' + _iiq2Esc(r.label) + '</div>' +
+                                '<div class="iiq2-hbar-track"><div class="' + css + '" style="width:' + w + '%;"></div></div>' +
+                                '<div class="iiq2-hbar-val">' + _iiq2Pct(r.pct) + '</div>' +
+                            '</div>';
+                        }).join('');
+                        return '<div class="iiq2-demo-block"><div class="demo-title">' + _iiq2Esc(b.title) + '</div>' + body + '</div>';
+                    }).join('');
+                }
+
+                // Insights
+                var ins = document.getElementById('impactInsights');
+                if (ins) {
+                    ins.innerHTML = (j.insights || []).map(function(txt) {
+                        return '<div class="iiq2-insight">' + txt + '</div>';
+                    }).join('');
+                }
+            };
+
+            function _iiq2RenderHBars(elId, rows) {
+                var el = document.getElementById(elId);
+                if (!el) return;
+                if (!rows.length) { el.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8rem;">No data.</div>'; return; }
+                var max = Math.max.apply(null, rows.map(function(r) { return +r.pct || 0; }));
+                el.innerHTML = rows.map(function(r) {
+                    var w = max > 0 ? (100 * (+r.pct || 0) / max) : 0;
+                    var css = 'iiq2-hbar-fill ' + (r.style || 'a');
+                    return '<div class="iiq2-hbar-row">' +
+                        '<div class="iiq2-hbar-label">' + _iiq2Esc(r.label) + '</div>' +
+                        '<div class="iiq2-hbar-track"><div class="' + css + '" style="width:' + w + '%;"></div></div>' +
+                        '<div class="iiq2-hbar-val">' + _iiq2Pct(r.pct) + '</div>' +
+                    '</div>';
+                }).join('');
+            }
+        })();
+        </script>
+        <!-- End impactIQView -->
+
         <!-- SENTIMENT IQ VIEW -->
         <div id="sentimentIQView" style="display: none;">
             <div class="dashboard-layout">
@@ -33810,7 +34354,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, helmIQ: function() { var c = document.querySelector('.container'); if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } } var v = document.getElementById('helmIQView'); if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 auto; min-height:500px; height:calc(100vh - 80px); overflow-y:auto; visibility:visible; position:relative; z-index:50;'); var bt = document.getElementById('helm-tab-build'); if (bt) bt.setAttribute('style', 'display:block; padding:1.5rem;'); var ft = document.getElementById('helm-tab-financials'); if (ft) ft.setAttribute('style', 'display:none;'); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, impactIQ: function() { if (typeof showImpactIQ === 'function') showImpactIQ(); }, helmIQ: function() { var c = document.querySelector('.container'); if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } } var v = document.getElementById('helmIQView'); if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 auto; min-height:500px; height:calc(100vh - 80px); overflow-y:auto; visibility:visible; position:relative; z-index:50;'); var bt = document.getElementById('helm-tab-build'); if (bt) bt.setAttribute('style', 'display:block; padding:1.5rem;'); var ft = document.getElementById('helm-tab-financials'); if (ft) ft.setAttribute('style', 'display:none;'); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -33869,6 +34413,7 @@
                 talentFitIQ: showTalentFitIQ,
                 blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); },
                 intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); },
+                impactIQ: function() { if (typeof showImpactIQ === 'function') showImpactIQ(); },
                 helmIQ: function() {
                     var c = document.querySelector('.container');
                     if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } }
@@ -33904,12 +34449,12 @@
                         console.error('View switch error:', e);
                     }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', helmIQ: 'helmIQView' };
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', impactIQ: 'impactIQView', helmIQ: 'helmIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView', 'intentIQView', 'helmIQView'].forEach(function(id) {
+                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView', 'intentIQView', 'impactIQView', 'helmIQView'].forEach(function(id) {
                             if (id === activeId) return;
                             var el = document.getElementById(id);
                             if (el) el.style.display = 'none';
@@ -33935,6 +34480,7 @@
                 talentFitIQ: 'Talent Fit IQ: Analyze how well talents resonate with your brand audience using behavioral data and social metrics.',
                 blueIQ: 'Blue IQ: Political-audience tracker. Filter by party (AI-imputed) and state or DMA to see issue searches, search engines, social platforms, top politicians and articles.',
                 intentIQ: 'Intent IQ: Title-scoped marketing-intent measurement. Ingest a campaign URL map and report on phase performance, audiences-of-interest, paid vs organic interplay, talent halo, trailer viewership, and audience shift over campaign life.',
+                impactIQ: 'Impact IQ: Cross-property audience flow. Follow one cohort from a triggering moment (festival, tour, launch) through every downstream property they touched: interact, purchase, stream, watch.',
                 admin: 'Admin: Manage users, access, and system settings.',
                 purgatory: 'Purgatory: Review and release items pending admin approval.'
             };
@@ -35461,7 +36007,7 @@
                 'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
                 'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
                 'shareOfTimeIQView','flywheelConversionView','talentFitIQView','journeyIQView',
-                'intentIQView','blueIQView'];
+                'intentIQView','impactIQView','blueIQView'];
 
             function helmHideAllViews() {
                 _helmAllViews.forEach(function(id) {
@@ -35826,7 +36372,7 @@
                        'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
                        'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
                        'shareOfTimeIQView','flywheelConversionView','talentFitIQView','journeyIQView',
-                       'intentIQView','helmIQView'];
+                       'intentIQView','impactIQView','helmIQView'];
             ids.forEach(function(id) {
                 var el = document.getElementById(id);
                 if (el) el.style.display = 'none';
@@ -40764,7 +41310,7 @@
             var opt = dd && dd.querySelector('option[value="sentimentIQ"]');
             if (opt && opt.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('sentimentIQ');
-            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','flywheelConversionView','shareOfTimeIQView','sfConversionView','talentFitIQView','journeyIQView'].forEach(function(id) {
+            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','flywheelConversionView','shareOfTimeIQView','sfConversionView','talentFitIQView','journeyIQView','intentIQView','impactIQView','blueIQView'].forEach(function(id) {
                 var el = document.getElementById(id); if (el) el.style.display = 'none';
             });
             if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
@@ -47226,7 +47772,7 @@
         var _jiqCurrentRun = null;
         var _jiqCurrentClusterIdx = 0;
         var _jiqCurrentCut = 'inception';
-        var _jiqViewIds = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','talentFitIQView','llmoIQView','sentimentIQView','shareOfTimeIQView','flywheelConversionView'];
+        var _jiqViewIds = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','talentFitIQView','llmoIQView','sentimentIQView','shareOfTimeIQView','flywheelConversionView','intentIQView','impactIQView','blueIQView'];
 
         window.showJourneyIQ = function(s3Key) {
             var dd = document.getElementById('viewNavDropdown');
@@ -65080,7 +65626,7 @@
             if (opt?.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('shareOfTimeIQ');
             if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
-            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','sfConversionView','flywheelConversionView','talentFitIQView'].forEach(function(id) {
+            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','sfConversionView','flywheelConversionView','talentFitIQView','journeyIQView','intentIQView','impactIQView','blueIQView'].forEach(function(id) {
                 var el = document.getElementById(id); if (el) el.style.display = 'none';
             });
             if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
