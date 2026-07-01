@@ -162,8 +162,44 @@ def redirect_if_must_reset_password():
 # ============================================================================
 
 S3_BUCKET = 'dashboard-inputs'
-# Canonical Gen Pop 2026 file - profile selector and get-csv-data always use this key so dashboard matches S3 link
+# Fallback canonical Gen Pop key. The REAL canonical is computed dynamically
+# by _resolve_canonical_gen_pop_key() at call time - it always returns the
+# most recent Gen_Pop_YYYY.csv present in the S3 bucket. This constant is
+# used only when the s3_cache hasn't been populated yet (early boot).
+# Per user 2026-07-01: "the canonical should always be the most recent
+# gen pop year" - never hardcode a year here.
 GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026.csv'
+
+
+def _resolve_canonical_gen_pop_key():
+    """Return the most-recent-year Gen_Pop_YYYY.csv currently in S3.
+
+    Scans the loaded s3_cache jobs list for keys matching Gen_Pop_YYYY.csv
+    and picks the maximum year. Falls back to GEN_POP_CANONICAL_KEY when
+    the cache isn't populated yet (early boot, first request, etc.).
+
+    The canonical rotates automatically as new years ship: dropping a
+    Gen_Pop_2027.csv into the bucket promotes it to canonical on the next
+    cache refresh, no code change needed.
+    """
+    try:
+        jobs = (s3_cache or {}).get('jobs') or []
+    except Exception:
+        jobs = []
+    best_year = 0
+    best_key = None
+    for job in jobs:
+        key = (job.get('s3_key') or job.get('key') or '').strip()
+        if not key:
+            continue
+        m = re.match(r'^Gen_Pop_(\d{4})\.csv$', key, re.IGNORECASE)
+        if not m:
+            continue
+        year = int(m.group(1))
+        if year > best_year:
+            best_year = year
+            best_key = key
+    return best_key or GEN_POP_CANONICAL_KEY
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 S3_PURGATORY_PREFIX = 'purgatory/'  # Files go here first; admin releases to main bucket
 JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persistence (Render)
@@ -12573,8 +12609,8 @@ def _preferred_gen_pop_key(s3_key):
     if match:
         mm1, dd1, year, mm2, dd2 = match.groups()
         return f"Gen_Pop_{year}_{mm1}_{dd1}_{year}_{mm2}_{dd2}.csv"
-    if '2026' in key_lower or 'gen_pop' in key_lower:
-        return GEN_POP_CANONICAL_KEY
+    if 'gen_pop' in key_lower:
+        return _resolve_canonical_gen_pop_key()
     return None
 
 
@@ -12636,22 +12672,23 @@ def get_csv_data(s3_key):
         return resp
 
     # Gen Pop year-specific files (Gen_Pop_2023.csv / Gen_Pop_2024.csv /
-    # Gen_Pop_2026.csv) are served as-is so the Data Cuts popover can
-    # actually compare years. Legacy dated forms
+    # Gen_Pop_2026.csv / whatever's newest) are served as-is so the Data
+    # Cuts popover can actually compare years. Legacy dated forms
     # (Gen_Pop_MM_DD_YYYY_MM_DD.csv, Gen_Pop_2026_…_anchored.csv, etc.)
-    # still collapse to the canonical Gen_Pop_2026.csv so the dashboard
-    # matches the pipeline / S3 baseline.
+    # collapse to the CURRENT canonical (most-recent-year Gen_Pop_YYYY.csv
+    # in S3) so the dashboard matches the pipeline / S3 baseline.
     effective_key = s3_key
     if s3_key and 'gen_pop' in s3_key.lower():
         is_clean_year_form = bool(
             re.match(r'^Gen_Pop_\d{4}\.csv$', s3_key, re.IGNORECASE)
         )
         if not is_clean_year_form:
+            canonical_key = _resolve_canonical_gen_pop_key()
             try:
-                csv_content, df, brand_name, date_range, data = _fetch_and_return(GEN_POP_CANONICAL_KEY)
-                print(f"📂 Served canonical Gen Pop file: {GEN_POP_CANONICAL_KEY}")
+                csv_content, df, brand_name, date_range, data = _fetch_and_return(canonical_key)
+                print(f"📂 Served canonical Gen Pop file: {canonical_key}")
                 return _no_cache(jsonify(_csv_data_json_response(
-                    data, brand_name, date_range, GEN_POP_CANONICAL_KEY
+                    data, brand_name, date_range, canonical_key
                 )))
             except Exception:
                 pass  # fall back to requested key
@@ -22969,9 +23006,10 @@ def list_jobs():
         # (Gen_Pop_2023.csv, Gen_Pop_2024.csv, Gen_Pop_2026.csv, …) so
         # the dashboard Data Cuts popover can compare years against one
         # another. Legacy dated filenames (e.g. Gen_Pop_03_04_2026_04_29.csv)
-        # collapse into a single canonical Gen_Pop_2026.csv entry so the
-        # selector doesn't show duplicate "2026" rows. Display names are
-        # normalized to "Gen Pop YYYY" so PROFILE_SUFFIX_REGEX picks
+        # collapse into a single canonical entry - the CURRENT canonical
+        # (most-recent-year clean file), determined dynamically so a
+        # Gen_Pop_2027.csv upload promotes automatically. Display names
+        # are normalized to "Gen Pop YYYY" so PROFILE_SUFFIX_REGEX picks
         # the year suffix and the frontend's getProfileGroupKey rolls
         # every Gen Pop entry under one "gen pop" canonical group.
         gen_pop_emitted_years = set()
@@ -22979,6 +23017,16 @@ def list_jobs():
         clean_year_re = re.compile(r'^gen_pop_(\d{4})\.csv$')
         legacy_year_re = re.compile(r'gen_pop_\d{2}_\d{2}_(\d{4})_')
         new_job_list = []
+        # Dynamic canonical resolved from THIS response's clean-form entries,
+        # falling back to the s3_cache-derived canonical for legacy paths.
+        this_response_max_year = 0
+        for e in job_list:
+            sk = (e.get('s3_key') or '').lower()
+            m_clean = clean_year_re.match(sk)
+            if m_clean:
+                y = int(m_clean.group(1))
+                if y > this_response_max_year:
+                    this_response_max_year = y
         for e in job_list:
             sk = (e.get('s3_key') or '').lower()
             if 'gen_pop' not in sk:
@@ -23001,18 +23049,23 @@ def list_jobs():
                 new_job_list.append(e)
                 continue
             # Legacy dated form (Gen_Pop_MM_DD_YYYY_*). Collapse to one
-            # canonical entry. If a clean Gen_Pop_2026.csv is also
-            # present in this response it has precedence — skip this
-            # legacy duplicate.
-            if gen_pop_legacy_emitted or '2026' in gen_pop_emitted_years:
+            # canonical entry. If a clean canonical for this year is
+            # already emitted in this response, skip the legacy duplicate.
+            legacy_target_key = (f'Gen_Pop_{this_response_max_year}.csv'
+                                 if this_response_max_year > 0
+                                 else _resolve_canonical_gen_pop_key())
+            legacy_target_year = (str(this_response_max_year)
+                                  if this_response_max_year > 0
+                                  else '')
+            if gen_pop_legacy_emitted or (legacy_target_year and legacy_target_year in gen_pop_emitted_years):
                 continue
             m_legacy = legacy_year_re.search(sk)
-            legacy_year = m_legacy.group(1) if m_legacy else '2026'
+            legacy_year = m_legacy.group(1) if m_legacy else (legacy_target_year or '2026')
             gen_pop_legacy_emitted = True
             gen_pop_emitted_years.add(legacy_year)
             e = dict(e)
-            e['s3_key'] = GEN_POP_CANONICAL_KEY
-            e['job_id'] = GEN_POP_CANONICAL_KEY
+            e['s3_key'] = legacy_target_key
+            e['job_id'] = legacy_target_key
             e['project_name'] = f'Gen Pop {legacy_year}'
             e['display_name'] = f'Gen Pop {legacy_year}'
             e['name'] = f'Gen Pop {legacy_year}'

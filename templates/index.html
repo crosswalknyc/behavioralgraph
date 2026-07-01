@@ -33671,44 +33671,30 @@
             }
         }
 
-        // The canonical Gen Pop file — MUST match backend GEN_POP_CANONICAL_KEY
-        // in app.py (line ~166). Every index calculation, every "Gen Pop"
-        // column, every default comparison denominator resolves to this
-        // file unless the user explicitly selects a different Gen_Pop_YYYY.csv
-        // from the Data Cuts popover. The 2026 in the filename is the
-        // generation year — the analysis period is 2025-01-01 → 2025-12-31.
-        const GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026.csv';
-
-        // Resolve Gen Pop filename.
+        // The CURRENT canonical Gen Pop key — always the most recent year
+        // present in the S3 bucket. Set by loadGenPopBaseline() after
+        // resolveGenPopFileName() picks the max-year file. Every index
+        // calculation, every "Gen Pop" column, every default comparison
+        // denominator defers to whatever this points to.
         //
-        // Priority (2026-07-01, per user "all indexing should default to
-        // the 2026 file"):
-        //   1. If the canonical Gen_Pop_2026.csv is present in the jobs
-        //      list, ALWAYS use it. Do NOT fall through to max-year picking
-        //      — a stale cache, a wrongly-emitted duplicate, or a legacy
-        //      dated form ("Gen_Pop_03_04_2026_04_29.csv" which regex-matches
-        //      2026) could silently steal the default and start indexing
-        //      against the wrong year.
-        //   2. Otherwise (canonical missing), fall back to the historical
-        //      max-year picker so we don't break dev environments that
-        //      haven't been seeded with the canonical yet.
-        function resolveGenPopFileName(jobs) {
-            const list = jobs || [];
-            // Priority 1: exact canonical match on s3_key (case-insensitive).
-            const canon = GEN_POP_CANONICAL_KEY.toLowerCase();
-            const canonicalHit = list.find(j => {
-                const key = (j.s3_key || j.job_id || '').toLowerCase();
-                return key === canon;
-            });
-            if (canonicalHit) {
-                try {
-                    console.info('[genpop] resolved to canonical: ' + GEN_POP_CANONICAL_KEY);
-                } catch (_) {}
-                return canonicalHit.s3_key || canonicalHit.job_id || GEN_POP_CANONICAL_KEY;
-            }
+        // Per user 2026-07-01: "the canonical should always be the most
+        // recent gen pop year". We don't hardcode a year — when Gen_Pop_2027.csv
+        // ships, that automatically becomes the canonical the next time
+        // the dashboard loads. Downstream code (self-mirror logic in
+        // renderLocationTable, etc.) reads GEN_POP_CANONICAL_KEY at call
+        // time so it always tracks the current resolution.
+        //
+        // Fallback initializer only used if loadGenPopBaseline() hasn't
+        // run yet (early boot). The safe default matches app.py.
+        let GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026.csv';
 
-            // Priority 2: max-year fallback (legacy path).
-            const genPopJobs = list.filter(j => {
+        // Resolve Gen Pop filename: pick the file with the most recent year
+        // (e.g. Gen_Pop_2026.csv over Gen_Pop_2024.csv over Gen_Pop_2023.csv).
+        // Prefers the explicit "Gen_Pop_YYYY" prefix pattern over ad-hoc year
+        // matches elsewhere in the key so legacy dated forms lose to clean
+        // year forms when both are in the list.
+        function resolveGenPopFileName(jobs) {
+            const genPopJobs = (jobs || []).filter(j => {
                 const key = (j.s3_key || j.job_id || '').toLowerCase();
                 const name = (j.project_name || j.display_name || '').toLowerCase();
                 return key.includes('gen_pop') || key.includes('gen pop') || name.includes('gen pop') || name.includes('gen_pop');
@@ -33741,9 +33727,8 @@
             }
             const resolvedKey = best.s3_key || best.job_id || null;
             try {
-                console.warn('[genpop] canonical ' + GEN_POP_CANONICAL_KEY
-                    + ' not in jobs list — fell back to max-year: ' + resolvedKey
-                    + ' (year ' + bestYear + ')');
+                console.info('[genpop] canonical resolved to most-recent year: '
+                    + resolvedKey + ' (year ' + bestYear + ')');
             } catch (_) {}
             return resolvedKey;
         }
@@ -33767,7 +33752,12 @@
                     console.warn('⚠️ No Gen Pop file found (no job with "gen pop" in name)');
                     return;
                 }
-                console.log('📊 Loading Gen Pop from: ' + genPopKey);
+                // Track the resolved most-recent-year Gen Pop as THE canonical
+                // for all downstream code (self-mirror checks, compare-mode
+                // default denominator, etc.). Re-runs of loadGenPopBaseline
+                // (e.g. after a new Gen Pop upload) automatically re-point.
+                GEN_POP_CANONICAL_KEY = genPopKey;
+                console.log('📊 Loading Gen Pop from: ' + genPopKey + ' (now canonical)');
                 const response = await fetch(`/api/get-csv-data/${encodeURIComponent(genPopKey)}`, { credentials: 'same-origin' });
                 if (response.ok) {
                     const data = await response.json();
