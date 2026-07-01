@@ -1358,6 +1358,283 @@ def _get_company_pool(data, company_name):
     return data.get('companies', {}).get(company_name)
 
 
+# ---------------------------------------------------------------------------
+# CONSULTING HOURS + RECURRING GRANTS
+# ---------------------------------------------------------------------------
+# Consulting hours are tracked exactly like credits but denominated in
+# minutes (finer resolution, matches how admins enter time — "1h 45m").
+# Data lives alongside credits on the same subject (user or company):
+#
+#   subject = users[uname]  OR  companies[co_name]
+#   subject['consulting_hour_pool']         # int minutes; -1 = unlimited
+#   subject['consulting_hour_pool_used']    # int minutes drawn down
+#   subject['consulting_hour_entries']      # [ {id, logged_at, minutes,
+#                                                description, logged_by,
+#                                                subject_type, subject_name} ]
+#   subject['consulting_hour_grants']       # attribution log (admin grants)
+#   subject['recurring_grants']             # [ {id, kind='credits'|'hours',
+#                                                amount, months_remaining,
+#                                                next_due_at, created_at,
+#                                                created_by, reason} ]
+#
+# Recurring grants replace the manual "add credits every month" toil — an
+# admin schedules "500 credits/month for 6 months" and every subsequent
+# admin request tick auto-applies any due month. A None months_remaining
+# means "forever" (until the admin cancels).
+
+def _time_tracking_subject(data, subject_type, subject_name):
+    """Return the mutable dict for this subject (user or company), or None.
+
+    subject_type must be 'user' or 'company'; subject_name is the primary
+    key in the respective sub-dict. Callers should treat the returned
+    dict as live and mutate it in place, then save_users(data).
+    """
+    st = (subject_type or '').lower()
+    if st == 'user':
+        return (data.get('users') or {}).get(subject_name)
+    if st == 'company':
+        return (data.get('companies') or {}).get(subject_name)
+    return None
+
+
+def _consulting_hour_state(subject):
+    """Extract (pool_minutes, used_minutes, unlimited, remaining) tuple.
+
+    pool_minutes: total granted (int, -1 = unlimited, 0 if never granted)
+    used_minutes: minutes logged against this subject
+    unlimited: True when pool_minutes == -1
+    remaining: -1 when unlimited, else max(pool - used, 0)
+    """
+    if not subject:
+        return (0, 0, False, 0)
+    pool = subject.get('consulting_hour_pool')
+    used = subject.get('consulting_hour_pool_used') or 0
+    if pool is None:
+        pool = 0
+    unlimited = pool == -1
+    remaining = -1 if unlimited else max(pool - used, 0)
+    return (pool, used, unlimited, remaining)
+
+
+def _grant_consulting_hours(subject, minutes, *, reason, granted_by):
+    """Add `minutes` to a subject's consulting-hour pool, recording attribution.
+
+    Passing minutes=-1 marks the pool as unlimited (subject can log
+    forever). Attribution log entries are kept newest-first, capped at 500.
+    """
+    if minutes is None:
+        raise ValueError('minutes required')
+    minutes = int(minutes)
+    if minutes == 0:
+        raise ValueError('minutes cannot be zero')
+    if minutes < -1:
+        raise ValueError('minutes must be >= -1 (-1 = unlimited)')
+
+    cur = subject.get('consulting_hour_pool')
+    if cur is None:
+        cur = 0
+    if minutes == -1 or cur == -1:
+        subject['consulting_hour_pool'] = -1
+    else:
+        subject['consulting_hour_pool'] = cur + minutes
+    if 'consulting_hour_pool_used' not in subject:
+        subject['consulting_hour_pool_used'] = 0
+
+    log = subject.setdefault('consulting_hour_grants', [])
+    log.insert(0, {
+        'granted_at': datetime.now().isoformat(),
+        'minutes_added': minutes,       # -1 → unlimited
+        'reason': (reason or 'Consulting hours granted').strip(),
+        'granted_by': granted_by or 'admin',
+    })
+    subject['consulting_hour_grants'] = log[:500]
+
+
+def _log_consulting_hours(subject, *, subject_type, subject_name,
+                          minutes, description, logged_by):
+    """Draw down `minutes` from a subject's pool and record the entry.
+
+    Returns the entry dict written. Raises ValueError on invalid input
+    or insufficient pool. Ensures a stable entry id so undo can target it.
+    """
+    if minutes is None:
+        raise ValueError('minutes required')
+    minutes = int(minutes)
+    if minutes <= 0:
+        raise ValueError('minutes must be positive')
+    if not (description or '').strip():
+        raise ValueError('description required')
+
+    pool, used, unlimited, remaining = _consulting_hour_state(subject)
+    if not unlimited and pool == 0 and remaining == 0:
+        # Never granted — allow the log entry but leave pool at 0/used
+        # equal to what got logged. This keeps the running tally honest
+        # without blocking admins from logging time before they've set
+        # up a grant. UI should surface a "no pool set" hint when this
+        # happens.
+        pass
+    elif not unlimited and remaining < minutes:
+        raise ValueError(
+            f'Insufficient consulting-hour pool (remaining {remaining} min, need {minutes})'
+        )
+
+    entry_id = uuid.uuid4().hex[:12]
+    entry = {
+        'id': entry_id,
+        'logged_at': datetime.now().isoformat(),
+        'minutes': minutes,
+        'description': (description or '').strip(),
+        'logged_by': logged_by or 'admin',
+        'subject_type': subject_type,
+        'subject_name': subject_name,
+    }
+    entries = subject.setdefault('consulting_hour_entries', [])
+    entries.insert(0, entry)
+    subject['consulting_hour_entries'] = entries[:1000]
+
+    subject['consulting_hour_pool_used'] = used + minutes
+    return entry
+
+
+def _undo_consulting_hour_entry(subject, entry_id):
+    """Remove one entry by id and refund the minutes back to the pool.
+
+    Returns True if removed, False if id not found.
+    """
+    entries = subject.get('consulting_hour_entries') or []
+    for i, e in enumerate(entries):
+        if e.get('id') == entry_id:
+            minutes = int(e.get('minutes') or 0)
+            del entries[i]
+            subject['consulting_hour_entries'] = entries
+            used = int(subject.get('consulting_hour_pool_used') or 0)
+            subject['consulting_hour_pool_used'] = max(used - minutes, 0)
+            return True
+    return False
+
+
+def _add_recurring_grant(subject, *, kind, amount, months, reason, added_by):
+    """Schedule a recurring monthly grant on a subject.
+
+    kind: 'credits' or 'hours' (minutes for hours grants)
+    amount: int (>0). For hours grants this is minutes/month.
+    months: int months to run (None = forever until cancelled)
+    Applies the first month's grant immediately so the balance jumps
+    right away; the next tick fires ~30 days later.
+    """
+    kind = (kind or '').lower()
+    if kind not in ('credits', 'hours'):
+        raise ValueError("kind must be 'credits' or 'hours'")
+    amount = int(amount)
+    if amount <= 0:
+        raise ValueError('amount must be positive')
+    if months is not None:
+        months = int(months)
+        if months <= 0:
+            raise ValueError('months must be positive when set')
+
+    now = datetime.now()
+    grant = {
+        'id': uuid.uuid4().hex[:12],
+        'kind': kind,
+        'amount': amount,
+        'months_remaining': months,       # None = forever
+        'months_total': months,
+        'created_at': now.isoformat(),
+        'created_by': added_by or 'admin',
+        'reason': (reason or f'Recurring {kind} grant').strip(),
+        # We record last_applied_at so the tick can decide whether a
+        # new calendar month has elapsed. First application happens
+        # inline below, so we set it to `now` and decrement one month.
+        'last_applied_at': now.isoformat(),
+    }
+    grants = subject.setdefault('recurring_grants', [])
+    grants.append(grant)
+    return grant
+
+
+def _apply_recurring_grants(data):
+    """Tick every user/company: apply any recurring grants whose next
+    calendar-month due date has arrived. Idempotent, safe to call often.
+
+    Returns count of grants applied this tick.
+    """
+    now = datetime.now()
+    applied = 0
+
+    def _due(g):
+        last = g.get('last_applied_at')
+        if not last:
+            return True  # never applied — apply now
+        try:
+            last_dt = datetime.fromisoformat(last)
+        except Exception:
+            return True
+        # A month elapses when (a) at least 27 days have passed AND
+        # (b) it's a different calendar month, OR when 32+ days have
+        # passed (belt-and-suspenders for edge-of-month grants).
+        delta_days = (now - last_dt).days
+        if delta_days >= 32:
+            return True
+        if delta_days >= 27 and (now.year, now.month) != (last_dt.year, last_dt.month):
+            return True
+        return False
+
+    def _apply_one(subject, grant, subject_kind_hint):
+        nonlocal applied
+        if grant.get('months_remaining') is not None and grant['months_remaining'] <= 0:
+            return
+        try:
+            if grant['kind'] == 'credits':
+                cur = subject.get('credits') if subject_kind_hint == 'user' else subject.get('credit_pool')
+                if cur is None:
+                    cur = 0
+                if cur == -1:
+                    pass  # already unlimited — grant is a no-op but still ticks
+                else:
+                    new_val = cur + int(grant['amount'])
+                    if subject_kind_hint == 'user':
+                        subject['credits'] = new_val
+                    else:
+                        subject['credit_pool'] = new_val
+                # attribution
+                hist = subject.setdefault('credit_attribution_history', [])
+                hist.insert(0, {
+                    'added_at': now.isoformat(),
+                    'credits_added': int(grant['amount']),
+                    'reason': f"[Recurring] {grant.get('reason','')}".strip(),
+                    'added_by': grant.get('created_by') or 'system',
+                    'recurring_grant_id': grant.get('id'),
+                })
+                subject['credit_attribution_history'] = hist[:500]
+            elif grant['kind'] == 'hours':
+                _grant_consulting_hours(
+                    subject,
+                    int(grant['amount']),
+                    reason=f"[Recurring] {grant.get('reason','')}".strip(),
+                    granted_by=grant.get('created_by') or 'system',
+                )
+            grant['last_applied_at'] = now.isoformat()
+            if grant.get('months_remaining') is not None:
+                grant['months_remaining'] = int(grant['months_remaining']) - 1
+            applied += 1
+        except Exception as e:
+            print(f"⚠️ recurring grant apply failed for {grant.get('id')}: {e}")
+
+    for uname, u in (data.get('users') or {}).items():
+        for g in (u.get('recurring_grants') or []):
+            if _due(g):
+                _apply_one(u, g, 'user')
+
+    for cname, c in (data.get('companies') or {}).items():
+        for g in (c.get('recurring_grants') or []):
+            if _due(g):
+                _apply_one(c, g, 'company')
+
+    return applied
+
+
+
 def _numeric_credits_balance(user):
     """Personal `credits` field on user dict: None/missing → 0; -1 means unlimited."""
     if not user:
@@ -2573,8 +2850,18 @@ def admin_uncloak():
 @app.route('/api/admin/users', methods=['GET'])
 @requires_admin
 def get_all_users():
-    """Get all users (without password hashes)."""
+    """Get all users (without password hashes).
+
+    We tick recurring monthly grants here because every admin page load hits
+    this endpoint — cheap, idempotent, and avoids needing a real scheduler
+    for a low-traffic feature.
+    """
     data = load_users()
+    try:
+        if _apply_recurring_grants(data) > 0:
+            save_users(data)
+    except Exception as e:
+        print(f"⚠️ recurring grant tick failed: {e}")
     safe_users = {}
     for username, user in data['users'].items():
         safe_users[username] = {k: v for k, v in user.items() if k != 'password_hash'}
@@ -4577,6 +4864,335 @@ def api_update_company_user_credits(company_name):
             user['credits'] = int(req['credits'])
         save_users(data)
         return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# TIME TRACKING / CONSULTING HOURS — admin endpoints
+# ---------------------------------------------------------------------------
+# All three endpoints are keyed by (subject_type, subject_name) where
+# subject_type ∈ {'user', 'company'} and subject_name is either a username
+# or a company name. This lets one flow log time against a person or a
+# whole company without duplicating logic. Each endpoint also opportunistically
+# ticks recurring grants so balances stay fresh without needing a background
+# job.
+
+def _tt_subject_or_400(data, req):
+    """Extract & validate (subject_type, subject_name, subject_dict) from a JSON body."""
+    st = (req.get('subject_type') or '').lower().strip()
+    sn = (req.get('subject_name') or '').strip()
+    if st not in ('user', 'company'):
+        return None, None, None, (jsonify({'success': False,
+                                           'error': "subject_type must be 'user' or 'company'"}), 400)
+    if not sn:
+        return None, None, None, (jsonify({'success': False, 'error': 'subject_name required'}), 400)
+    subject = _time_tracking_subject(data, st, sn)
+    if not subject:
+        return None, None, None, (jsonify({'success': False,
+                                           'error': f"{st.title()} '{sn}' not found"}), 404)
+    return st, sn, subject, None
+
+
+@app.route('/api/admin/time-tracking/log', methods=['POST'])
+@requires_admin
+def api_time_tracking_log():
+    """Log a consulting-hour entry against a user or company.
+
+    Body: {subject_type: 'user'|'company', subject_name: str,
+           hours: int, minutes: int, description: str}
+    (Either hours or minutes may be omitted; combined into total minutes.)
+    """
+    try:
+        req = request.get_json() or {}
+        data = load_users()
+        _apply_recurring_grants(data)  # opportunistic tick
+        st, sn, subject, err = _tt_subject_or_400(data, req)
+        if err:
+            return err
+        hours = int(req.get('hours') or 0)
+        minutes = int(req.get('minutes') or 0)
+        total = hours * 60 + minutes
+        if total <= 0:
+            return jsonify({'success': False, 'error': 'hours+minutes must be > 0'}), 400
+        description = (req.get('description') or '').strip()
+        if not description:
+            return jsonify({'success': False, 'error': 'description required'}), 400
+        logged_by = (get_current_user() or {}).get('username') or 'admin'
+        entry = _log_consulting_hours(
+            subject,
+            subject_type=st, subject_name=sn,
+            minutes=total, description=description, logged_by=logged_by,
+        )
+        save_users(data)
+        pool, used, unlimited, remaining = _consulting_hour_state(subject)
+        return jsonify({
+            'success': True,
+            'entry': entry,
+            'pool_minutes': pool,
+            'used_minutes': used,
+            'remaining_minutes': remaining,
+            'unlimited': unlimited,
+        })
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/time-tracking/entries', methods=['GET'])
+@requires_admin
+def api_time_tracking_entries():
+    """Return entries + tally for a subject.
+
+    Query: ?subject_type=user|company&subject_name=X
+    When both params omitted, returns an aggregate roll-up of every user
+    and company with any consulting-hour activity so admins can see the
+    top-level list before drilling in.
+    """
+    try:
+        st = (request.args.get('subject_type') or '').lower().strip()
+        sn = (request.args.get('subject_name') or '').strip()
+        data = load_users()
+        _apply_recurring_grants(data)
+
+        if not st and not sn:
+            # Roll-up mode
+            rollup = []
+            for uname, u in (data.get('users') or {}).items():
+                entries = u.get('consulting_hour_entries') or []
+                pool, used, unlimited, remaining = _consulting_hour_state(u)
+                if entries or pool or used:
+                    rollup.append({
+                        'subject_type': 'user',
+                        'subject_name': uname,
+                        'display_name': (u.get('first_name', '') + ' ' + u.get('last_name', '')).strip() or uname,
+                        'company': u.get('company', ''),
+                        'entry_count': len(entries),
+                        'pool_minutes': pool,
+                        'used_minutes': used,
+                        'remaining_minutes': remaining,
+                        'unlimited': unlimited,
+                    })
+            for cname, c in (data.get('companies') or {}).items():
+                entries = c.get('consulting_hour_entries') or []
+                pool, used, unlimited, remaining = _consulting_hour_state(c)
+                if entries or pool or used:
+                    rollup.append({
+                        'subject_type': 'company',
+                        'subject_name': cname,
+                        'display_name': cname,
+                        'company': cname,
+                        'entry_count': len(entries),
+                        'pool_minutes': pool,
+                        'used_minutes': used,
+                        'remaining_minutes': remaining,
+                        'unlimited': unlimited,
+                    })
+            rollup.sort(key=lambda r: (-r['used_minutes'], r['display_name'].lower()))
+            return jsonify({'success': True, 'rollup': rollup})
+
+        # Detail mode
+        subject = _time_tracking_subject(data, st, sn)
+        if not subject:
+            return jsonify({'success': False, 'error': 'subject not found'}), 404
+        pool, used, unlimited, remaining = _consulting_hour_state(subject)
+        return jsonify({
+            'success': True,
+            'subject_type': st, 'subject_name': sn,
+            'entries': subject.get('consulting_hour_entries') or [],
+            'grants': subject.get('consulting_hour_grants') or [],
+            'pool_minutes': pool,
+            'used_minutes': used,
+            'remaining_minutes': remaining,
+            'unlimited': unlimited,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/time-tracking/grant', methods=['POST'])
+@requires_admin
+def api_time_tracking_grant():
+    """Grant consulting hours to a user or company.
+
+    Body: {subject_type, subject_name,
+           hours: int, minutes: int,        # one-time grant
+           unlimited: bool,                 # -1 pool sentinel
+           per_month: bool,                 # schedule as recurring
+           months: int | null,              # None = forever
+           reason: str}
+    """
+    try:
+        req = request.get_json() or {}
+        data = load_users()
+        _apply_recurring_grants(data)
+        st, sn, subject, err = _tt_subject_or_400(data, req)
+        if err:
+            return err
+
+        unlimited = bool(req.get('unlimited'))
+        per_month = bool(req.get('per_month'))
+        reason = (req.get('reason') or 'Consulting hours granted').strip()
+        added_by = (get_current_user() or {}).get('username') or 'admin'
+
+        if unlimited:
+            _grant_consulting_hours(subject, -1, reason=reason, granted_by=added_by)
+            save_users(data)
+            pool, used, u_, remaining = _consulting_hour_state(subject)
+            return jsonify({'success': True, 'unlimited': True,
+                            'pool_minutes': pool, 'used_minutes': used,
+                            'remaining_minutes': remaining})
+
+        hours = int(req.get('hours') or 0)
+        minutes = int(req.get('minutes') or 0)
+        total = hours * 60 + minutes
+        if total <= 0:
+            return jsonify({'success': False, 'error': 'hours+minutes must be > 0'}), 400
+
+        if per_month:
+            months = req.get('months')
+            months = int(months) if months not in (None, '', 0) else None
+            grant = _add_recurring_grant(
+                subject, kind='hours', amount=total,
+                months=months, reason=reason, added_by=added_by,
+            )
+            # Apply the first month immediately so the pool jumps now.
+            _grant_consulting_hours(subject, total, reason=f"[Recurring] {reason}",
+                                    granted_by=added_by)
+            if months is not None:
+                grant['months_remaining'] = months - 1
+            save_users(data)
+            pool, used, u_, remaining = _consulting_hour_state(subject)
+            return jsonify({'success': True, 'recurring': True, 'grant': grant,
+                            'pool_minutes': pool, 'used_minutes': used,
+                            'remaining_minutes': remaining})
+
+        _grant_consulting_hours(subject, total, reason=reason, granted_by=added_by)
+        save_users(data)
+        pool, used, u_, remaining = _consulting_hour_state(subject)
+        return jsonify({'success': True, 'pool_minutes': pool,
+                        'used_minutes': used, 'remaining_minutes': remaining})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/time-tracking/entry', methods=['DELETE'])
+@requires_admin
+def api_time_tracking_delete_entry():
+    """Delete an entry and refund its minutes back to the pool.
+
+    Body: {subject_type, subject_name, entry_id}
+    """
+    try:
+        req = request.get_json() or {}
+        data = load_users()
+        st, sn, subject, err = _tt_subject_or_400(data, req)
+        if err:
+            return err
+        entry_id = (req.get('entry_id') or '').strip()
+        if not entry_id:
+            return jsonify({'success': False, 'error': 'entry_id required'}), 400
+        if not _undo_consulting_hour_entry(subject, entry_id):
+            return jsonify({'success': False, 'error': 'entry_id not found'}), 404
+        save_users(data)
+        pool, used, unlimited, remaining = _consulting_hour_state(subject)
+        return jsonify({'success': True, 'pool_minutes': pool,
+                        'used_minutes': used, 'remaining_minutes': remaining,
+                        'unlimited': unlimited})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/recurring-grants', methods=['GET', 'POST', 'DELETE'])
+@requires_admin
+def api_recurring_grants():
+    """Manage recurring monthly grants (credits or consulting hours).
+
+    GET  → list every recurring grant across all users & companies.
+    POST body: {subject_type, subject_name, kind: 'credits'|'hours',
+                amount: int, months: int|null, reason: str,
+                apply_first_immediately: bool}
+    DELETE body: {subject_type, subject_name, grant_id}
+    """
+    try:
+        data = load_users()
+        if request.method == 'GET':
+            _apply_recurring_grants(data)
+            save_users(data)
+            grants = []
+            for uname, u in (data.get('users') or {}).items():
+                for g in (u.get('recurring_grants') or []):
+                    grants.append({**g, 'subject_type': 'user', 'subject_name': uname})
+            for cname, c in (data.get('companies') or {}).items():
+                for g in (c.get('recurring_grants') or []):
+                    grants.append({**g, 'subject_type': 'company', 'subject_name': cname})
+            grants.sort(key=lambda g: g.get('created_at', ''), reverse=True)
+            return jsonify({'success': True, 'grants': grants})
+
+        req = request.get_json() or {}
+        st, sn, subject, err = _tt_subject_or_400(data, req)
+        if err:
+            return err
+
+        if request.method == 'DELETE':
+            grant_id = (req.get('grant_id') or '').strip()
+            if not grant_id:
+                return jsonify({'success': False, 'error': 'grant_id required'}), 400
+            grants = subject.get('recurring_grants') or []
+            new_grants = [g for g in grants if g.get('id') != grant_id]
+            if len(new_grants) == len(grants):
+                return jsonify({'success': False, 'error': 'grant_id not found'}), 404
+            subject['recurring_grants'] = new_grants
+            save_users(data)
+            return jsonify({'success': True})
+
+        # POST — create
+        kind = (req.get('kind') or '').lower()
+        if kind == 'hours':
+            hours = int(req.get('hours') or 0)
+            minutes = int(req.get('minutes') or 0)
+            amount = hours * 60 + minutes
+        else:
+            amount = int(req.get('amount') or 0)
+        months = req.get('months')
+        months = int(months) if months not in (None, '', 0) else None
+        reason = (req.get('reason') or '').strip() or f"Recurring {kind} grant"
+        added_by = (get_current_user() or {}).get('username') or 'admin'
+        apply_now = bool(req.get('apply_first_immediately', True))
+
+        grant = _add_recurring_grant(subject, kind=kind, amount=amount,
+                                     months=months, reason=reason, added_by=added_by)
+        if apply_now:
+            if kind == 'credits':
+                if st == 'user':
+                    cur = subject.get('credits') or 0
+                    if cur != -1:
+                        subject['credits'] = cur + amount
+                else:
+                    cur = subject.get('credit_pool') or 0
+                    if cur != -1:
+                        subject['credit_pool'] = cur + amount
+                hist = subject.setdefault('credit_attribution_history', [])
+                hist.insert(0, {
+                    'added_at': datetime.now().isoformat(),
+                    'credits_added': amount,
+                    'reason': f'[Recurring] {reason}',
+                    'added_by': added_by,
+                    'recurring_grant_id': grant['id'],
+                })
+                subject['credit_attribution_history'] = hist[:500]
+            else:
+                _grant_consulting_hours(subject, amount, reason=f'[Recurring] {reason}',
+                                        granted_by=added_by)
+            if months is not None:
+                grant['months_remaining'] = months - 1
+        save_users(data)
+        return jsonify({'success': True, 'grant': grant})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
