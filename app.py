@@ -10070,6 +10070,14 @@ def get_netflix_clickhouse_ranker_data():
         """)
         available_dates = [str(dr[0]) for dr in cur.fetchall()]
 
+        # real Netflix URLs — look up direct title URL, fall back to search
+        cur.execute("""
+            SELECT NAME_OF_SHOW, any(URL) AS url
+            FROM netflix.netflix_url_map
+            GROUP BY NAME_OF_SHOW
+        """)
+        url_map_lookup = {row[0]: row[1] for row in cur.fetchall()}
+
         out = []
         for i, r in enumerate(rows):
             key       = (r[0], r[2], r[3])  # (show, season, episode)
@@ -10095,7 +10103,7 @@ def get_netflix_clickhouse_ranker_data():
                 'runtime':       r[7],
                 'avg_watch_time':  None,
                 'avg_daily_views': int(round(cur_views / num_days)),
-                'netflix_url':     'https://www.netflix.com/search?q=' + urllib.parse.quote(str(r[0])),
+                'netflix_url':     url_map_lookup.get(r[0]) or 'https://www.netflix.com/search?q=' + urllib.parse.quote(str(r[0])),
             })
 
         return jsonify({
