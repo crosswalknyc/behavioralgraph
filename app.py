@@ -4172,7 +4172,7 @@ def create_user():
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
             'has_blue_iq_access': req_data.get('has_blue_iq_access', cd.get('has_blue_iq_access', False) if cd else False),
-            'has_impact_iq_access': req_data.get('has_impact_iq_access', cd.get('has_impact_iq_access', False) if cd else False),
+            'has_impact_iq_access': req_data.get('has_impact_iq_access', cd.get('has_impact_iq_access', True) if cd else True),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
@@ -4730,7 +4730,7 @@ def restore_defaults_all_users():
             user['has_share_of_time_access'] = True
             user['has_share_of_time_run_access'] = True
             user['has_blue_iq_access'] = False
-            user['has_impact_iq_access'] = False
+            user['has_impact_iq_access'] = True
             count += 1
         save_users(data)
         return jsonify({'success': True, 'message': f'Restored defaults for {count} user(s)', 'count': count})
@@ -5520,7 +5520,7 @@ def api_reset_company_users(company_name):
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
                 user['has_blue_iq_access'] = cd.get('has_blue_iq_access', False)
-                user['has_impact_iq_access'] = cd.get('has_impact_iq_access', False)
+                user['has_impact_iq_access'] = cd.get('has_impact_iq_access', True)
                 user['credits'] = cd.get('credits', 5)
                 user['auto_access_new'] = dict(cd.get('auto_access_new', {}))
             else:
@@ -5547,7 +5547,7 @@ def api_reset_company_users(company_name):
                 user['has_share_of_time_access'] = True
                 user['has_share_of_time_run_access'] = True
                 user['has_blue_iq_access'] = False
-                user['has_impact_iq_access'] = False
+                user['has_impact_iq_access'] = True
                 user['credits'] = 5
                 user['auto_access_new'] = {}
             if user.get('has_share_of_time_access') is False:
@@ -7637,7 +7637,7 @@ def compute_product_access_flags(user, role):
         'has_share_of_time_run_access': has_sot_run,
         'has_blue_iq_access': bool(u.get('has_blue_iq_access', False)),
         'has_intent_iq_access': bool(u.get('has_intent_iq_access', True)),
-        'has_impact_iq_access': bool(u.get('has_impact_iq_access', False)),
+        'has_impact_iq_access': bool(u.get('has_impact_iq_access', True)),
         'has_helm_iq_access': role == 'super_admin',
     }
 
@@ -7734,7 +7734,7 @@ def index():
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
     has_blue_iq = _acc.get('has_blue_iq_access', False)
     has_intent_iq = _acc.get('has_intent_iq_access', True)
-    has_impact_iq = _acc.get('has_impact_iq_access', False)
+    has_impact_iq = _acc.get('has_impact_iq_access', True)
     has_helm_iq = _acc.get('has_helm_iq_access', False)
 
     # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page

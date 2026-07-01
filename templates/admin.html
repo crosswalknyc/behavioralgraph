@@ -4675,7 +4675,7 @@
                     var cdBiq = document.getElementById('cdBlueIQ');
                     if (cdBiq) cdBiq.checked = !!d.has_blue_iq_access;
                     var cdIiq = document.getElementById('cdImpactIQNew');
-                    if (cdIiq) cdIiq.checked = !!d.has_impact_iq_access;
+                    if (cdIiq) cdIiq.checked = d.has_impact_iq_access !== false; // Default true (opt-out)
                     syncCompanyDefaultsShareOfTime();
                     document.getElementById('cdDefaultCredits').value = d.credits ?? 5;
                     // Access to New Releases
@@ -8595,7 +8595,7 @@
             var biqAccess = document.getElementById('hasBlueIQAccess');
             if (biqAccess) biqAccess.checked = user.has_blue_iq_access === true; // Default false
             var iiqAccess = document.getElementById('hasImpactIQAccess');
-            if (iiqAccess) iiqAccess.checked = user.has_impact_iq_access === true; // Default false
+            if (iiqAccess) iiqAccess.checked = user.has_impact_iq_access !== false; // Default true (opt-out)
             document.getElementById('hasTalentFitAccess').checked = user.has_talent_fit_access === true; // Default false
             document.getElementById('hasShareOfTimeAccess').checked = user.has_share_of_time_access !== false;
             document.getElementById('hasShareOfTimeRunAccess').checked = user.has_share_of_time_run_access !== false;
