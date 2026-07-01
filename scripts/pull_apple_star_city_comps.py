@@ -172,8 +172,8 @@ CONFIGS: list[dict] = [
         "genre":          CRIME_THRILLER,
         "cadence":        "Weekly",
         "is_new":         True,
-        "reach_us":       2_000_000,  # mid-tier thriller, brand-recognition lift
-        "conv_pct":       4.0,        # #2-3 launch wk, divided audience, talent draw
+        "reach_us":       2_200_000,  # top-2/3 Apple TV+ chart position launch wk (FlixPatrol) — up-tiered
+        "conv_pct":       4.2,        # tentpole marketing + Spielberg/Scorsese EP + Bardem/Adams draw
         "new_share":      0.55,       # mature platform, deep dormant pool
         "episode_dates":  _eps_weekly("2026-06-05", 8),
         "context_note": (
@@ -195,8 +195,8 @@ CONFIGS: list[dict] = [
         "genre":          COMEDY,
         "cadence":        "Weekly",
         "is_new":         True,
-        "reach_us":       1_000_000,  # half-hour comedy, niche launch
-        "conv_pct":       3.0,        # darkly comedic thriller, cult star Maslany
+        "reach_us":       1_100_000,  # half-hour launch on mature 2026 platform (~2.4% penetration)
+        "conv_pct":       3.1,        # dark-comedy thriller, mature-platform stickiness slightly above Invasion tier
         "new_share":      0.65,       # newer concept skews slightly more new
         "episode_dates":  _eps_weekly("2026-05-20", 6),
         "context_note": (
@@ -216,8 +216,8 @@ CONFIGS: list[dict] = [
         "genre":          MYSTERY_THRILL,
         "cadence":        "Weekly",
         "is_new":         True,
-        "reach_us":       1_800_000,  # mid-tier mystery in proven Apple format
-        "conv_pct":       3.5,        # Matthew Rhys + Hiro Murai prestige genre
+        "reach_us":       1_900_000,  # Matthew Rhys prestige-halo (The Americans) pulls above mid-tier
+        "conv_pct":       3.6,        # Hiro Murai directing (Atlanta) + horror-comedy novelty above Star City tier
         "new_share":      0.60,       # mature platform engagement skew
         "episode_dates":  _eps_weekly("2026-04-29", 8),
         "context_note": (
@@ -238,7 +238,7 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       1_400_000,  # female-led dramedy, modest opener
-        "conv_pct":       3.5,        # stacked cast + A24 + Kelley, quirky premise
+        "conv_pct":       3.7,        # top of mid-tier — stacked ensemble (Fanning/Pfeiffer/Kidman/Offerman + A24 + Kelley) pulls strongest sampling
         "new_share":      0.60,       # mature platform, cast-driven sampling
         "episode_dates":  _eps_weekly("2026-04-15", 10),
         "context_note": (
@@ -283,7 +283,7 @@ CONFIGS: list[dict] = [
         "genre":          DRAMA,
         "cadence":        "Weekly",
         "is_new":         True,
-        "reach_us":       3_500_000,  # Jon Hamm tentpole, strong launch
+        "reach_us":       3_700_000,  # 200-day #1 streak + Nielsen 392M mins finale wk — up-tiered
         "conv_pct":       6.5,        # dethroned Severance S2; Nielsen Top 10 finale wk
         "new_share":      0.65,       # Hamm draw pulls new + reactivates Mad Men adjacency
         "episode_dates":  _eps_premiere_drop("2025-04-11", premiere_count=2, total_count=9),
@@ -308,7 +308,7 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       3_000_000,  # #1 globally day 1, Reelgood week 2 cross-platform leader
-        "conv_pct":       6.0,        # strong launch, between Silo and Presumed Innocent tiers
+        "conv_pct":       6.2,        # #1 globally within 24hrs was truly instant conversion signal (above Severance S1 slower-build)
         "new_share":      0.65,       # accessible sci-fi pulls new + reactivates
         "episode_dates":  _eps_premiere_drop("2024-05-08", premiere_count=2, total_count=9),
         "context_note": (
@@ -330,7 +330,7 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       6_000_000,  # Apple's biggest series launch ever (per Apple PR July 2024)
-        "conv_pct":       3.5,        # high reach BUT Antenna Q2'24 platform share DECLINED
+        "conv_pct":       3.0,        # Antenna Q2'24 shows Apple TV+ share of gross adds DECLINED during launch — top reach, bottom of prestige-tier conversion
         "new_share":      0.55,       # mature platform, engagement>>acquisition pattern
         "episode_dates":  _eps_premiere_drop("2024-06-12", premiere_count=2, total_count=8),
         "context_note": (
@@ -351,8 +351,8 @@ CONFIGS: list[dict] = [
         "genre":          DETECTIVE_NOIR,
         "cadence":        "Weekly",
         "is_new":         True,
-        "reach_us":       2_000_000,  # Colin Farrell mid-tier launch
-        "conv_pct":       3.5,        # mid-tier prestige, no chart records
+        "reach_us":       1_800_000,  # Colin Farrell mid-tier launch, no chart/Nielsen (down-tiered from 2M)
+        "conv_pct":       3.3,        # 81% RT only, no Nielsen Top 10, no chart — below Star City tier
         "new_share":      0.60,       # mature platform, prestige engagement skew
         "episode_dates":  _eps_premiere_drop("2024-04-05", premiere_count=2, total_count=8),
         "context_note": (
@@ -372,8 +372,8 @@ CONFIGS: list[dict] = [
         "genre":          SCIFI_THRILLER,
         "cadence":        "Weekly",
         "is_new":         True,
-        "reach_us":       1_600_000,  # mid-tier sci-fi, cancelled after S1
-        "conv_pct":       2.5,        # CANCELED — never made Nielsen Top 10
+        "reach_us":       1_350_000,  # canceled after S1, never made Nielsen Top 10 — smallest of 2024 comp cohort
+        "conv_pct":       2.5,        # CANCELED — never made Nielsen Top 10 (Apple does not cancel hit shows)
         "new_share":      0.65,       # narrow sci-fi base, small absolute number
         "episode_dates":  _eps_premiere_drop("2024-02-21", premiere_count=3, total_count=8),
         "context_note": (
@@ -395,8 +395,8 @@ CONFIGS: list[dict] = [
         "genre":          MONSTER_ACTION,
         "cadence":        "Weekly",
         "is_new":         True,
-        "reach_us":       3_500_000,  # MonsterVerse IP lift, strong franchise opener
-        "conv_pct":       4.0,        # Reelgood #3 launch wk, but NO Nielsen Top 10 (franchise sampling)
+        "reach_us":       3_200_000,  # MonsterVerse IP lift; but NO Nielsen Top 10 in S1 (S2 was franchise-first per S2 press) — down-tiered from 3.5M
+        "conv_pct":       3.9,        # Reelgood #3 launch wk, franchise sampling behavior (viewers already-subs on Godzilla halo)
         "new_share":      0.65,       # IP brings new + reactivates kaiju fans
         "episode_dates":  _eps_premiere_drop("2023-11-17", premiere_count=2, total_count=10),
         "context_note": (
@@ -415,8 +415,8 @@ CONFIGS: list[dict] = [
         "genre":          SCIFI_DRAMA,
         "cadence":        "Weekly",
         "is_new":         True,
-        "reach_us":       3_000_000,  # Apple's biggest sci-fi launch in 2023
-        "conv_pct":       7.5,        # "#1 drama in Apple TV+ history" May'23, 5 wks Reelgood top 10
+        "reach_us":       3_300_000,  # Apple "#1 drama in history" May'23 on ~25M-sub platform — up-tiered from 3.0M
+        "conv_pct":       7.5,        # "#1 drama in Apple TV+ history" May'23, 5 wks Reelgood top 10, 2-wk S2 renewal
         "new_share":      0.70,       # broader-appeal sci-fi pulls genuine new subs
         "episode_dates":  _eps_premiere_drop("2023-05-05", premiere_count=2, total_count=10),
         "context_note": (
@@ -459,8 +459,8 @@ CONFIGS: list[dict] = [
         "genre":          SPY_THRILLER,
         "cadence":        "Weekly",
         "is_new":         True,
-        "reach_us":       1_000_000,  # niche British-spy launch, grew over later seasons
-        "conv_pct":       2.0,        # sleeper; Kantar's "30% UK new subs" was at S3 not S1
+        "reach_us":       950_000,  # sleeper hit, very quiet S1 in 2022; halo built over later seasons
+        "conv_pct":       2.1,        # 95% RT gave modest legit lift above pure niche tier; Kantar's UK stat was at S3 not S1
         "new_share":      0.75,       # 2022-era platform, free-trial tail
         "episode_dates":  _eps_premiere_drop("2022-04-01", premiere_count=2, total_count=6),
         "context_note": (
@@ -481,7 +481,7 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       2_500_000,  # cultural breakthrough, ~3M+ once Emmy buzz hit
-        "conv_pct":       6.0,        # Reelgood #1 by week 3, $200M+ lifetime rev
+        "conv_pct":       5.8,        # Reelgood #1 by week 3 — but peak was slow-build to finale; Antenna's 14% was S2 not S1
         "new_share":      0.80,       # 2022-era growing platform, free-trial still in effect
         "episode_dates":  _eps_premiere_drop("2022-02-18", premiere_count=2, total_count=9),
         "context_note": (
@@ -505,7 +505,7 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       1_500_000,  # ~25M Apple TV+ subs, mixed reception suppressed launch
-        "conv_pct":       3.0,        # mid-tier launch, mixed reception, sampling skew
+        "conv_pct":       2.8,        # IGN "too ambitious, slow" reviews; no chart-topping placements — below Max Pleasure tier
         "new_share":      0.75,       # 2021-era growing platform, free-trial still active
         "episode_dates":  _eps_premiere_drop("2021-10-22", premiere_count=3, total_count=10),
         "context_note": (
@@ -527,8 +527,8 @@ CONFIGS: list[dict] = [
         "genre":          SCIFI_DRAMA,
         "cadence":        "Weekly",
         "is_new":         True,
-        "reach_us":       3_000_000,  # Apple's 2021 sci-fi tentpole, ~25M subs
-        "conv_pct":       5.5,        # Parrot 35x avg demand, 2-week S2 renewal, niche Asimov appeal
+        "reach_us":       2_400_000,  # 2021 platform smaller (~15M subs) + mixed reviews ("too dense/slow") — down-tiered from 3.0M
+        "conv_pct":       5.5,        # Parrot 35x avg demand, 2-wk S2 renewal, but niche Asimov appeal caps broader conversion
         "new_share":      0.80,       # 2021 free-trial era + small platform
         "episode_dates":  _eps_premiere_drop("2021-09-24", premiere_count=2, total_count=10),
         "context_note": (
@@ -550,7 +550,7 @@ CONFIGS: list[dict] = [
         "cadence":        "Weekly",
         "is_new":         True,
         "reach_us":       350_000,  # Israeli-language niche, Apple TV+ ~13M subs in Sept 2020
-        "conv_pct":       2.0,        # niche international content, small US conversion
+        "conv_pct":       1.9,        # international-skew (India/Japan/Singapore per press) limits US-specific conversion vs Slow Horses
         "new_share":      0.85,       # 2020-era tiny platform, virtually no install base
         "episode_dates":  _eps_premiere_drop("2020-09-25", premiere_count=3, total_count=8),
         "context_note": (
