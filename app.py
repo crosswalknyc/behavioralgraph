@@ -9516,9 +9516,8 @@ def get_netflix_clickhouse_title_history():
         conn = _ch_connect()
         cur = conn.cursor()
         cur.execute(
-            "SELECT DISTINCT toDate(DAY) AS d FROM netflix.netflix_ranker_daily "
-            "ORDER BY d DESC LIMIT {days:UInt8}",
-            {'days': days}
+            f"SELECT DISTINCT toDate(DAY) AS d FROM netflix.netflix_ranker_daily "
+            f"ORDER BY d DESC LIMIT {days}"
         )
         recent_dates = [str(dr[0]) for dr in cur.fetchall()]
         if not recent_dates:
@@ -9526,15 +9525,15 @@ def get_netflix_clickhouse_title_history():
 
         history = []
         for d_str in recent_dates:
-            cur.execute("""
+            cur.execute(f"""
                 SELECT NAME_OF_SHOW, SEASON, EPISODE, SUM(VIEW_COUNT) AS v
                 FROM netflix.netflix_ranker_daily
-                WHERE toDate(DAY) = {d:Date}
+                WHERE toDate(DAY) = '{d_str}'
                   AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
                 GROUP BY NAME_OF_SHOW, SEASON, EPISODE
                 ORDER BY v DESC
                 LIMIT 2000
-            """, {'d': d_str})
+            """)
             for rank_num, r in enumerate(cur.fetchall(), start=1):
                 if (r[0] == show
                         and (not season  or r[1] == season)
@@ -9679,14 +9678,13 @@ def cron_netflix_ranker_daily():
         for d in target_dates:
             d_str = d.strftime('%Y-%m-%d')
             cur.execute(
-                "SELECT count() FROM netflix.netflix_ranker_daily WHERE DAY = {d:Date}",
-                {'d': d_str}
+                f"SELECT count() FROM netflix.netflix_ranker_daily WHERE DAY = '{d_str}'"
             )
             existing = cur.fetchone()[0]
             if existing:
                 results[d_str] = f'skipped (already has {existing} rows)'
                 continue
-            cur.execute("""
+            cur.execute(f"""
                 INSERT INTO netflix.netflix_ranker_daily
                 SELECT
                     toDate(VISIT_TS) AS DAY,
@@ -9696,9 +9694,9 @@ def cron_netflix_ranker_daily():
                     EPISODE_NAME, TYPE, GENRE, RUN_TIME,
                     count() AS VIEW_COUNT
                 FROM netflix.netflix
-                WHERE AVAILABLE = 'TRUE' AND toDate(VISIT_TS) = {d:Date}
+                WHERE AVAILABLE = 'TRUE' AND toDate(VISIT_TS) = '{d_str}'
                 GROUP BY DAY, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, TYPE, GENRE, RUN_TIME
-            """, {'d': d_str})
+            """)
             results[d_str] = 'inserted'
 
         return jsonify({'success': True, 'ingest': ingest, 'days': results})
