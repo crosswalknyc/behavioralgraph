@@ -13771,6 +13771,16 @@
         [data-jiq-landman-section][data-tab-hidden="true"] {
             display: none !important;
         }
+        /* Generic per-journey tab system (Fandango, Moviesphere+,
+           Lionsgate+, Paramount+ Lifecycle, Pop Culture Jeopardy,
+           Mark Rober, Abercrombie, Banking Research). Cards NOT
+           in the currently-active tab get data-jiq-tab-off="1"
+           applied by _jiqGenericActivateTab. The !important beats
+           the renderer's inline display so tabs work even after
+           cards have painted content. */
+        [data-jiq-tab-off="1"] {
+            display: none !important;
+        }
         .jiq-tab-btn {
             appearance: none;
             background: transparent;
@@ -30064,6 +30074,16 @@
                      payload has kpis.intent_gap_tickets_mid. Built by
                      the same JS path that builds jiqKpiStrip. -->
                 <div id="jiqIntentGapBreakdown" style="display:none; margin: 0 0 1.1rem;"></div>
+
+                <!-- Generic per-journey tab bar. Sticky under the KPI
+                     strip. Auto-shown for journeys registered in
+                     _JIQ_GENERIC_JOURNEY_TABS (Fandango, Moviesphere+,
+                     Lionsgate+, Paramount+ Lifecycle, Pop Culture
+                     Jeopardy, Mark Rober, Abercrombie, Banking
+                     Research); auto-hidden for everything else
+                     (Landman, Netflix, Obsession use their own tab
+                     bars; unrecognized runs render as long scroll). -->
+                <div id="jiqGenericTabBar" style="display: none; position: sticky; top: 0; z-index: 20; background: var(--bg-primary); padding: 0.55rem 0; margin: 0 0 1rem; border-bottom: 1px solid var(--border-color);"></div>
 
                 <!-- ════════════════════════════════════════════════════════
                      VIEWERSHIP TRENDS card - shown only when the run
@@ -49180,6 +49200,26 @@
                 if (typeof _jiqObsHideTabBar === 'function') _jiqObsHideTabBar();
             }
 
+            // Generic per-journey tab bar. Fires for the "long-scroll"
+            // journeys (Fandango, Moviesphere+, Lionsgate+, Paramount+
+            // Lifecycle, Pop Culture Jeopardy, Mark Rober, Abercrombie,
+            // Banking Research). Splits their card set into focused
+            // tabs (one card per tab) so users can drill into a single
+            // insight at a time instead of scrolling through everything.
+            // Hidden for Landman/Netflix/Obsession (which have their
+            // own tab systems) and for any unrecognized run.
+            (function _jiqApplyGenericJourneyTabs() {
+                if (typeof _jiqDetectJourneyForTabs !== 'function') return;
+                var journeyId = _jiqDetectJourneyForTabs(meta);
+                if (!journeyId) {
+                    if (typeof _jiqGenericHideTabBar === 'function') _jiqGenericHideTabBar();
+                    return;
+                }
+                if (typeof _jiqGenericActivateTab === 'function') {
+                    _jiqGenericActivateTab(journeyId, _JIQ_GENERIC_ACTIVE_TAB[journeyId]);
+                }
+            })();
+
             // Facts - facts can be plain strings or {label, value} dicts.
             // Coerce + filter so we never render '[object Object]' or empty
             // boilerplate (e.g. a lone {label:'Target', value:'Research-anchored ...'}).
@@ -59008,6 +59048,201 @@
         function _jiqObsHideTabBar() {
             var bar = document.getElementById('jiqObsTabBar');
             if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // GENERIC PER-JOURNEY TAB SYSTEM
+        // Netflix / Obsession give every card its own tab and hide the
+        // rest; this generic primitive does the same for the other
+        // journeys (Fandango, Moviesphere+, Lionsgate+, Paramount+
+        // Subscriber Lifecycle, Pop Culture Jeopardy, Mark Rober,
+        // Abercrombie, Banking Research) so each journey reads as a
+        // series of focused tabs instead of a long scroll.
+        //
+        // Wiring model:
+        //   1. Every card in a journey's registry is toggled on/off via
+        //      the data-jiq-tab-off="1" attribute (see CSS at ~13773).
+        //   2. Card renderers keep whatever inline display they set;
+        //      the attribute + !important CSS rule overrides it when
+        //      the tab is inactive.
+        //   3. Only cards listed in the registry are toggled. Anything
+        //      else (KPI strip, cluster picker, footer) stays visible.
+        //   4. Netflix / Obsession / Landman have their own bespoke tab
+        //      systems and are excluded via _jiqDetectJourneyForTabs.
+        // ══════════════════════════════════════════════════════════════
+        var _JIQ_GENERIC_JOURNEY_TABS = {
+            fandango: [
+                { id: 'ecosystem', cardIds: ['jiqEcosystemCard'], emoji: '🌟', label: 'Ecosystem',        sub: 'flywheel + MAU trinity' },
+                { id: 'funnel',    cardIds: ['jiqSiteFunnelCard','jiqSiteFunnelDetailsTop','jiqSiteFunnelDetailsCompanion','jiqSiteFunnelDetails'], emoji: '🚪', label: 'Site Funnel',       sub: 'visitor flow + switchers' },
+                { id: 'paths',     cardIds: ['jiqPathCard'],     emoji: '🛒', label: 'Path to Purchase', sub: 'top pre-purchase sequences' }
+            ],
+            moviesphere: [
+                { id: 'audience',  cardIds: ['jiqAudienceHypCard'], emoji: '👥', label: 'Audience Cohorts',    sub: 'intent signal cohorts' },
+                { id: 'footprint', cardIds: ['jiqBubbleCard','jiqAnchorsCard'], emoji: '📡', label: 'Marketing Footprint', sub: 'reach + audience anchors' },
+                { id: 'paths',     cardIds: ['jiqPathCard'],     emoji: '🎬', label: 'Path to View',        sub: 'discovery sequences' }
+            ],
+            lionsgate: [
+                { id: 'audience',  cardIds: ['jiqAudienceHypCard'], emoji: '👥', label: 'Audience Cohorts',    sub: 'intent signal cohorts' },
+                { id: 'footprint', cardIds: ['jiqBubbleCard','jiqAnchorsCard'], emoji: '📡', label: 'Marketing Footprint', sub: 'reach + audience anchors' },
+                { id: 'paths',     cardIds: ['jiqPathCard'],     emoji: '🎬', label: 'Path to View',        sub: 'discovery sequences' }
+            ],
+            paramount_lifecycle: [
+                { id: 'stages',    cardIds: ['jiqSubLifecycleCard'],    emoji: '🔄', label: 'Lifecycle Stages',  sub: 'cohort funnel by stage' },
+                { id: 'presignup', cardIds: ['jiqLifeSignupCard'],      emoji: '🔍', label: 'Pre-Signup Intel',  sub: '30d before sub' },
+                { id: 'churn',     cardIds: ['jiqLifeChurnWakeCard'],   emoji: '🌊', label: 'Churn Wake',        sub: '60d after churn' },
+                { id: 'nonconv',   cardIds: ['jiqLifeNonConvCard'],     emoji: '↩️', label: 'Non-Converter',     sub: 'where they went' },
+                { id: 'fast',      cardIds: ['jiqLifeFastRadarCard'],   emoji: '⚡', label: 'FAST Radar',        sub: 'AVOD signals' }
+            ],
+            pop_culture_jeopardy: [
+                { id: 'audience',  cardIds: ['jiqAudienceHypCard'], emoji: '👥', label: 'Audience Cohorts', sub: 'viewer intent signals' },
+                { id: 'paths',     cardIds: ['jiqPathCard'],       emoji: '🛤️', label: 'Path to View',      sub: 'how they arrived' }
+            ],
+            mark_rober: [
+                { id: 'paths',     cardIds: ['jiqPathCard'],       emoji: '🛤️', label: 'Discovery Paths',    sub: 'how they found him' },
+                { id: 'footprint', cardIds: ['jiqBubbleCard'],     emoji: '📡', label: 'Marketing Footprint', sub: 'reach + commerce' }
+            ],
+            abercrombie: [
+                { id: 'funnel',    cardIds: ['jiqSiteFunnelCard','jiqSiteFunnelDetailsTop','jiqSiteFunnelDetailsCompanion','jiqSiteFunnelDetails'], emoji: '🚪', label: 'Site Funnel',       sub: 'visitor outcomes' },
+                { id: 'paths',     cardIds: ['jiqPathCard'],       emoji: '🛒', label: 'Path to Purchase',  sub: 'top journeys' },
+                { id: 'footprint', cardIds: ['jiqBubbleCard'],     emoji: '📡', label: 'Marketing Footprint', sub: 'reach + anchors' }
+            ],
+            banking_research: [
+                { id: 'lifecycle', cardIds: ['jiqJourneyLifecycleCard'], emoji: '🛤️', label: 'Journey Lifecycle',  sub: 'stop-by-stop' },
+                { id: 'paths',     cardIds: ['jiqPathCard'],           emoji: '💳', label: 'Path to Open',       sub: 'top sequences' },
+                { id: 'footprint', cardIds: ['jiqBubbleCard'],         emoji: '📡', label: 'Marketing Footprint', sub: 'reach + anchors' }
+            ]
+        };
+        var _JIQ_GENERIC_ACTIVE_TAB = {};
+
+        // Maps the current run's meta to a journey key in the registry
+        // above, or returns null for runs that already have bespoke tab
+        // systems (Landman / Netflix / Obsession) or for unrecognized
+        // runs that should fall back to long-scroll rendering.
+        function _jiqDetectJourneyForTabs(meta) {
+            if (!meta) return null;
+            var mode = meta.story_mode || '';
+            if (mode === 'landman' || mode === 'netflix_ad_sales' || mode === 'obsession_caa') return null;
+            var name = ((meta.project_name || meta.target || meta.target_name || '') + '').toLowerCase().replace(/[_\-]+/g, ' ');
+            var tt   = (meta.target_type || '') + '';
+            var cat  = (meta.category || '') + '';
+            if (/fandango/.test(name)) return 'fandango';
+            if (/moviesphere/.test(name)) return 'moviesphere';
+            if (/lionsgate/.test(name)) return 'lionsgate';
+            if (/paramount.*subscriber.*lifecycle/.test(name) || tt === 'subscriber_lifecycle') return 'paramount_lifecycle';
+            if (/pop culture jeopardy/.test(name)) return 'pop_culture_jeopardy';
+            if (/mark rober/.test(name) || tt === 'creator_audience' || cat === 'creator_audience') return 'mark_rober';
+            if (/abercrombie/.test(name)) return 'abercrombie';
+            if (/banking/.test(name) || tt === 'banking_research' || cat === 'banking_research') return 'banking_research';
+            return null;
+        }
+
+        // Filters a journey's tab config down to tabs whose cards
+        // actually exist AND are currently visible (renderer decided
+        // the payload had data). Prevents empty / placeholder tabs.
+        function _jiqGenericVisibleTabs(journeyId) {
+            var tabs = _JIQ_GENERIC_JOURNEY_TABS[journeyId] || [];
+            return tabs.filter(function(t) {
+                return t.cardIds.some(function(cid) {
+                    var el = document.getElementById(cid);
+                    // "Visible" = element exists AND its inline display
+                    // is not 'none'. The renderer sets display to ''
+                    // (or 'grid' / 'block') when it has data to paint,
+                    // and leaves the initial 'display: none' otherwise.
+                    if (!el) return false;
+                    var d = (el.style && el.style.display) || '';
+                    return d !== 'none';
+                });
+            });
+        }
+
+        function _jiqGenericRenderTabBar(journeyId) {
+            var bar = document.getElementById('jiqGenericTabBar');
+            if (!bar) return;
+            var tabs = _jiqGenericVisibleTabs(journeyId);
+            if (!tabs.length) {
+                bar.style.display = 'none';
+                bar.innerHTML = '';
+                return;
+            }
+            bar.style.display = '';
+            var active = _JIQ_GENERIC_ACTIVE_TAB[journeyId];
+            // If the previously-active tab isn't in the current
+            // visible-tab list (e.g. cluster picker just changed and
+            // some card unhid/hid), fall back to the first visible tab.
+            if (!tabs.some(function(t) { return t.id === active; })) {
+                active = tabs[0].id;
+                _JIQ_GENERIC_ACTIVE_TAB[journeyId] = active;
+            }
+            bar.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:stretch;">'
+                + tabs.map(function(t, i) {
+                    var on = (t.id === active);
+                    var bg = on ? 'rgba(99,102,241,0.85)' : 'rgba(255,255,255,0.04)';
+                    var bd = on ? 'var(--accent-primary)'  : 'rgba(255,255,255,0.10)';
+                    var fg = on ? '#ffffff'                : 'var(--text-primary)';
+                    var subFg = on ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)';
+                    return '<button type="button" data-jiq-generic-tab="' + t.id + '"'
+                         + ' style="flex:1 1 calc(100%/' + tabs.length + ' - 0.4rem); min-width:120px; max-width:220px;'
+                         +        ' display:flex; flex-direction:column; align-items:flex-start; justify-content:center;'
+                         +        ' gap:0.1rem; padding:0.4rem 0.6rem; border-radius:6px; cursor:pointer;'
+                         +        ' background:' + bg + '; border:1px solid ' + bd + ';'
+                         +        ' color:' + fg + '; text-align:left;'
+                         +        ' transition: background 0.15s ease, border-color 0.15s ease;'
+                         +        ' font-family:inherit;">'
+                         +   '<div style="display:flex; align-items:center; gap:0.35rem; font-size:0.74rem; font-weight:800; line-height:1.15;">'
+                         +     '<span style="opacity:0.55; font-size:0.62rem; font-weight:700;">' + (i + 1) + '.</span>'
+                         +     '<span>' + t.emoji + '</span>'
+                         +     '<span>' + _jiqEsc(t.label) + '</span>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.6rem; opacity:' + (on ? '0.9' : '0.6') + '; color:' + subFg + '; padding-left:1.1rem;">' + _jiqEsc(t.sub || '') + '</div>'
+                         + '</button>';
+                }).join('')
+                + '</div>';
+            Array.prototype.forEach.call(bar.querySelectorAll('button[data-jiq-generic-tab]'), function(btn) {
+                btn.addEventListener('click', function() {
+                    _jiqGenericActivateTab(journeyId, btn.getAttribute('data-jiq-generic-tab'));
+                });
+            });
+        }
+
+        function _jiqGenericActivateTab(journeyId, tabId) {
+            var registry = _JIQ_GENERIC_JOURNEY_TABS[journeyId] || [];
+            var visible  = _jiqGenericVisibleTabs(journeyId);
+            var match    = visible.filter(function(t) { return t.id === tabId; })[0] || visible[0];
+            if (!match) return;
+            _JIQ_GENERIC_ACTIVE_TAB[journeyId] = match.id;
+            // Collect all card ids across every tab in the registry (not
+            // just visible), so we always clear a stale tab-off on cards
+            // that have since become visible.
+            var activeIds = {};
+            match.cardIds.forEach(function(id) { activeIds[id] = true; });
+            registry.forEach(function(t) {
+                t.cardIds.forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (!el) return;
+                    if (activeIds[id]) {
+                        el.removeAttribute('data-jiq-tab-off');
+                    } else {
+                        el.setAttribute('data-jiq-tab-off', '1');
+                    }
+                });
+            });
+            _jiqGenericRenderTabBar(journeyId);
+        }
+
+        function _jiqGenericHideTabBar() {
+            var bar = document.getElementById('jiqGenericTabBar');
+            if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+            // Also clear tab-off attributes so any leftover journey
+            // switch (e.g. Fandango → Landman) doesn't leave cards
+            // hidden on the next journey's render.
+            Object.keys(_JIQ_GENERIC_JOURNEY_TABS).forEach(function(jid) {
+                (_JIQ_GENERIC_JOURNEY_TABS[jid] || []).forEach(function(t) {
+                    t.cardIds.forEach(function(id) {
+                        var el = document.getElementById(id);
+                        if (el) el.removeAttribute('data-jiq-tab-off');
+                    });
+                });
+            });
         }
 
         // ══════════════════════════════════════════════════════════════

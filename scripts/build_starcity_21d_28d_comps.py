@@ -986,20 +986,20 @@ PER_SHOW_REASONING: dict[str, dict] = {
         "anchor": "Critic-favorite FAM spinoff (94-97% RT critic). #4 on Apple TV+ global launch week per FlixPatrol — strong but not record-setting. Trades #1 with FAM S5 finale. Slower-burn pacing + lack of marquee star limits broad-audience acquisition; engagement-skewing mature-platform profile."
     },
     "Cape Fear": {
-        "conv_pct": 4.0, "new_share": 0.55,
-        "anchor": "#2-3 on Apple TV+ US chart launch week (FlixPatrol). 75-79% RT critic, 59-61% audience (divided). Spielberg/Scorsese EP + Bardem/Adams talent draw pulls in existing prestige-TV subs. Divided audience caps acquisition ceiling. Mature platform — deep dormant pool."
+        "conv_pct": 4.2, "new_share": 0.55,
+        "anchor": "#2-3 on Apple TV+ US chart launch week (FlixPatrol). 75-79% RT critic, 59-61% audience (divided). Spielberg/Scorsese EP + Bardem/Adams talent draw pulls prestige-TV subs. Divided audience caps ceiling but tentpole marketing lifts above mid-tier. Above Monarch (3.9%) which had franchise IP but no Nielsen; below Shrinking (4.5%) which had comedy stickiness."
     },
     "Maximum Pleasure Guaranteed": {
-        "conv_pct": 3.0, "new_share": 0.65,
-        "anchor": "Half-hour darkly comedic thriller. Tatiana Maslany (Orphan Black cult) + Jake Johnson. No record claims; behind Cape Fear and YF&N on Apple TV+ chart through June. Half-hour format = smaller per-show engagement signal."
+        "conv_pct": 3.1, "new_share": 0.65,
+        "anchor": "Half-hour dark-comedy thriller. Tatiana Maslany (Orphan Black cult) + Jake Johnson. No record claims; behind Cape Fear and YF&N on Apple TV+ chart through June. Half-hour format = smaller per-show engagement signal. Above Invasion (2.8%, mixed reviews) and Sugar (3.3%, no chart) because mature-platform sticky-comedy signals mildly above them."
     },
     "Widow's Bay": {
-        "conv_pct": 3.5, "new_share": 0.60,
-        "anchor": "Matthew Rhys (The Americans cult) + Hiro Murai (Atlanta) directing. Genre-bending horror-comedy New England small-town setting. Apple gave it strong promo but not tentpole push. Mid-tier prestige with engaged-but-not-broad audience."
+        "conv_pct": 3.6, "new_share": 0.60,
+        "anchor": "Matthew Rhys (The Americans / Perry Mason prestige-halo) + Hiro Murai (Atlanta) directing. Horror-comedy is a more novel genre pulling both prestige and casual genre viewers. Apple gave strong promo. Placed just above Star City (3.5%) because the novel-genre appeal broadens sampling; below Margo's (3.7%) which has bigger cast draw."
     },
     "Margo's Got Money Troubles": {
-        "conv_pct": 3.5, "new_share": 0.60,
-        "anchor": "Stacked cast (Fanning, Pfeiffer, Kidman, Offerman) + David E. Kelley + A24 producing. Based on Rufi Thorpe novel. Strong cast pulls sampling but the quirky single-mom-finds-fortune premise limits sub-stickiness — similar profile to Presumed Innocent (high reach, lower acquisition)."
+        "conv_pct": 3.7, "new_share": 0.60,
+        "anchor": "Top of mid-tier prestige cluster. Stacked ensemble (Fanning + Pfeiffer + Kidman + Offerman) + David E. Kelley + A24 producing. Based on Rufi Thorpe novel. Strongest star-power package of the 2026 mid-tier group drives sampling above Widow's Bay and Star City despite quirky-premise stickiness limits."
     },
     "Pluribus": {
         "conv_pct": 11.0, "new_share": 0.70,
@@ -1007,55 +1007,55 @@ PER_SHOW_REASONING: dict[str, dict] = {
     },
     "Your Friends & Neighbors": {
         "conv_pct": 6.5, "new_share": 0.65,
-        "anchor": "Dethroned Severance S2 on Apple TV+ charts within 1 week of launch. Nielsen weekly Top 10 originals at finale week (May 2025): 392M minutes viewed. 200-day Apple TV+ #1 streak through S2 (per Collider June 2026). Jon Hamm 'best role since Mad Men' + 'next Breaking Bad' marketing positioning gave it both broad audience and real acquisition lift."
+        "anchor": "Dethroned Severance S2 on Apple TV+ charts within 1 week of launch. Nielsen weekly Top 10 originals at finale week (May 2025): 392M minutes viewed. 200-day Apple TV+ #1 streak through S2 (per Collider June 2026). Jon Hamm 'best role since Mad Men' + 'next Breaking Bad' marketing positioning drove both broad audience and real acquisition lift. Reach up-tiered to 3.7M reflecting Nielsen finale-week 392M minutes + 200-day #1 streak."
     },
     "Dark Matter": {
-        "conv_pct": 6.0, "new_share": 0.65,
-        "anchor": "#1 globally on Apple TV+ within 24 hours of launch (FlixPatrol). Topped Reelgood cross-platform chart week of May 9-15 (beat Fallout, Bodkin, Baby Reindeer). Joel Edgerton + Jennifer Connelly + Blake Crouch IP. Renewed for S2 (Aug 2024). Strong launch trajectory but no Antenna citation."
+        "conv_pct": 6.2, "new_share": 0.65,
+        "anchor": "#1 globally on Apple TV+ within 24 hours of launch (FlixPatrol). Topped Reelgood cross-platform chart week of May 9-15 (beat Fallout, Bodkin, Baby Reindeer). Joel Edgerton + Jennifer Connelly + Blake Crouch IP. Renewed for S2 (Aug 2024). Placed 6.2% (above Severance S1 5.8%) because the instant-#1-globally-24hrs signal is stronger than Severance's slow-build S1 trajectory."
     },
     "Presumed Innocent": {
-        "conv_pct": 3.5, "new_share": 0.55,
-        "anchor": "Apple PR: '#1 most-viewed drama of all time on Apple TV+' (S2 renewal Jul 2024). BUT: Antenna Q2'24 Snapshot shows Apple TV+ share of Premium SVOD gross adds DECLINED slightly vs Q1'24 — directly contradicting a platform-level signup lift. Also did NOT break Nielsen Top 10 for premiere week. Classic engagement-hit / acquisition-miss profile on a mature platform."
+        "conv_pct": 3.0, "new_share": 0.55,
+        "anchor": "Apple PR: '#1 most-viewed drama of all time on Apple TV+' (S2 renewal Jul 2024). BUT: Antenna Q2'24 Snapshot shows Apple TV+ share of Premium SVOD gross adds DECLINED slightly vs Q1'24 — directly contradicting a platform-level signup lift. Also did NOT break Nielsen Top 10 for premiere week. Classic reach-heavy engagement-hit / acquisition-miss profile. Placed at 3.0% — highest reach in the set (6M) paired with the LOWEST conversion of the prestige-drama tier — because that's the exact editorial story Antenna's data tells."
     },
     "Sugar": {
-        "conv_pct": 3.5, "new_share": 0.60,
-        "anchor": "81% RT critic + 80% audience. Colin Farrell mid-tier prestige noir. No Apple record claims, no Nielsen Top 10. Same Apple TV+ era as Dark Matter & Presumed Innocent (~15-18M US subs) but smaller star-power package — landed in same prestige-engagement-skew tier as Presumed Innocent."
+        "conv_pct": 3.3, "new_share": 0.60,
+        "anchor": "81% RT critic + 80% audience. Colin Farrell mid-tier prestige noir. No Apple record claims, no Nielsen Top 10, no chart position. Placed below Star City (3.5%) — same era but weaker signals; the model reflects that (a) 81% RT vs Star City's 94-97% is a meaningful engagement gap and (b) no chart placement is diagnostic of lower acquisition lift."
     },
     "Constellation": {
         "conv_pct": 2.5, "new_share": 0.65,
-        "anchor": "CANCELED after S1 (announced May 2024). Never made Nielsen Top 10 (explicitly cited by HR + Gizmodo as reason for cancellation). 71-73% critics, 92% audience (loyal but narrow). Clear underperformer — Apple does not cancel hit shows. Bottom of prestige-sci-fi range."
+        "anchor": "CANCELED after S1 (announced May 2024). Never made Nielsen Top 10 (explicitly cited by HR + Gizmodo as reason for cancellation). 71-73% critics, 92% audience (loyal but narrow). Reach down-tiered to 1.35M reflecting the cancellation signal + smallest-of-2024-comp-cohort placement."
     },
     "Monarch: Legacy of Monsters": {
-        "conv_pct": 4.0, "new_share": 0.65,
-        "anchor": "Reelgood #3 in streaming Top 10 in premiere week. MonsterVerse / Godzilla / Legendary franchise IP. Did NOT make Nielsen Top 10 in S1 (explicitly confirmed by S2 articles citing S2 as 'first time franchise charted'). Franchise sampling pattern — pulls casual viewers but lower per-viewer subscription conversion."
+        "conv_pct": 3.9, "new_share": 0.65,
+        "anchor": "Reelgood #3 in streaming Top 10 in premiere week. MonsterVerse / Godzilla / Legendary franchise IP. Did NOT make Nielsen Top 10 in S1 (explicitly confirmed by S2 articles citing S2 as 'first time franchise charted'). Reach down-tiered to 3.2M (from 3.5M) reflecting the absent-Nielsen signal. Conv placed just below Cape Fear (4.2%) because franchise sampling brings casual-viewer conversion above pure prestige-drama but below tentpole-marketed originals."
     },
     "Silo": {
         "conv_pct": 7.5, "new_share": 0.70,
-        "anchor": "'No. 1 drama in Apple TV+ history' at the time per Apple press (May 2023). Renewed for S2 within 5-6 weeks. Parrot Analytics: 24.4× avg global demand week 5. 5 consecutive weeks in Reelgood Top 10; week 2 was #2 cross-platform. Rebecca Ferguson (MI franchise) + Hugh Howey *Wool* IP."
+        "anchor": "'No. 1 drama in Apple TV+ history' at the time per Apple press (May 2023). Renewed for S2 within 5-6 weeks. Parrot Analytics: 24.4× avg global demand week 5. 5 consecutive weeks in Reelgood Top 10; week 2 was #2 cross-platform. Rebecca Ferguson (MI franchise) + Hugh Howey *Wool* IP. Reach up-tiered to 3.3M reflecting Apple's own 'biggest drama in history' claim on the ~25M-sub 2023 platform (vs Foundation's 2.4M on ~15M-sub 2021 platform)."
     },
     "Shrinking": {
         "conv_pct": 4.5, "new_share": 0.70,
         "anchor": "'Biggest hit on Apple TV+ since Severance and Black Bird' (Cult of Mac Feb 2023). Week 2 audience LARGER than week 1 — accelerating curve. JustWatch #3 + Reelgood #5 in early weeks. Jason Segel + Harrison Ford; Ted Lasso writer team. Comedy-drama traditionally converts slightly lower than thriller/sci-fi (engagement is atmospheric not urgent)."
     },
     "Slow Horses": {
-        "conv_pct": 2.0, "new_share": 0.75,
-        "anchor": "95% RT critic / 92% audience but NO S1-specific Antenna or Kantar citations. The famous Kantar Q4'23 stat ('Slow Horses + Ted Lasso drove 30% of new UK Apple TV+ subs') was at S3 launch, NOT S1. Classic sleeper hit — halo built across seasons. Forbes 2024: 'I am begging you to watch Slow Horses' (reach still low at S4). Niche genre, no breakout marketing."
+        "conv_pct": 2.1, "new_share": 0.75,
+        "anchor": "95% RT critic / 92% audience but NO S1-specific Antenna or Kantar citations. The famous Kantar Q4'23 stat ('Slow Horses + Ted Lasso drove 30% of new UK Apple TV+ subs') was at S3 launch, NOT S1. Classic sleeper hit — halo built across seasons. Reach down-tiered to 950K reflecting how quiet the S1 launch actually was (Forbes 2024: 'I am begging you to watch Slow Horses' at S4 was still an urging-people-to-notice framing). Placed at 2.1% (above Tehran 1.9%) because 95% RT + English-language put it slightly above pure international-skew niche."
     },
     "Severance": {
-        "conv_pct": 6.0, "new_share": 0.80,
-        "anchor": "97% RT critic. #1 on Reelgood across all streaming services by week 3 (Mar 9-10, 2022). $200M+ lifetime revenue (Parrot Analytics). TV Time 2022: Severance among top streaming-subscription drivers. The breakout heat built ACROSS episodes — peak was season finale, not launch window — so 30-day conversion is above mid-tier prestige but below tentpole-breakout (Antenna's S2 14% conversion is the upper bound)."
+        "conv_pct": 5.8, "new_share": 0.80,
+        "anchor": "97% RT critic. #1 on Reelgood across all streaming services by week 3 (Mar 9-10, 2022). $200M+ lifetime revenue (Parrot Analytics). TV Time 2022: Severance among top streaming-subscription drivers. Placed at 5.8% — below Dark Matter (6.2%, instant-#1-in-24hrs) and Foundation (5.5%) tier ceiling — because S1's breakout heat built ACROSS episodes to the finale, not in the launch window. Antenna's 14% S2 conversion figure is explicitly S2, not S1 launch."
     },
     "Invasion": {
-        "conv_pct": 3.0, "new_share": 0.75,
-        "anchor": "Mid-tier sci-fi launch with mixed critical reception (IGN: 'too ambitious, slow,' 'mashup of prestige cliches'). NO record claims, no chart-topping placements for S1 launch window. Lack of breakout coverage in launch trade press is itself diagnostic. Simon Kinberg pedigree + Sam Neill cast didn't translate to acquisition lift."
+        "conv_pct": 2.8, "new_share": 0.75,
+        "anchor": "Mid-tier sci-fi launch with mixed critical reception (IGN: 'too ambitious, slow,' 'mashup of prestige cliches'). NO record claims, no chart-topping placements for S1 launch window. Lack of breakout coverage in launch trade press is itself diagnostic. Simon Kinberg pedigree + Sam Neill cast didn't translate to acquisition lift. Placed below Max Pleasure (3.1%, mature-platform stickiness) because Invasion's mixed reviews suppress launch-window conversion."
     },
     "Foundation": {
         "conv_pct": 5.5, "new_share": 0.80,
-        "anchor": "Renewed for S2 only 2 weeks after premiere. Parrot Analytics: 35.2× avg global demand, peak 38.7×; 44.4× momentum (top 1.53% of all shows). 72% RT critic (mixed; production hailed, dense narrative criticized). Asimov IP appeals to niche older fandom — limits broader subscription conversion. Above genre baseline but below Severance/Pluribus."
+        "anchor": "Renewed for S2 only 2 weeks after premiere. Parrot Analytics: 35.2× avg global demand, peak 38.7×; 44.4× momentum (top 1.53% of all shows). 72% RT critic (mixed; production hailed, dense narrative criticized). Asimov IP appeals to niche older fandom — limits broader subscription conversion. Reach down-tiered to 2.4M (from 3M) reflecting the smaller 2021 Apple TV+ platform (~15M paid subs vs Silo's ~25M in 2023)."
     },
     "Tehran": {
-        "conv_pct": 2.0, "new_share": 0.85,
-        "anchor": "88% RT, 87% audience — well-reviewed. Apple acquired international rights from Israeli Kan 11 (S1 had aired in Israel 6/22/20 before Apple TV+ launch). 'Popular with audiences in India, Japan, Singapore' — international skew limits US conversion specifically. Niche launch on very small late-2020 Apple TV+ platform."
+        "conv_pct": 1.9, "new_share": 0.85,
+        "anchor": "88% RT, 87% audience — well-reviewed. Apple acquired international rights from Israeli Kan 11 (S1 had aired in Israel 6/22/20 before Apple TV+ launch). 'Popular with audiences in India, Japan, Singapore' — international skew limits US conversion specifically. Placed at 1.9% (below Slow Horses 2.1%) because international-content skew is a stronger US-conversion suppressor than pure niche-genre placement."
     },
     "Ted Lasso": {
         "conv_pct": 12.0, "new_share": 0.85,
