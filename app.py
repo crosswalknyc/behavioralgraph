@@ -10093,7 +10093,9 @@ def get_netflix_clickhouse_ranker_data():
                 'gen_pop_views': int(round(cur_views * GEN_POP)),
                 'genre':         r[6],
                 'runtime':       r[7],
-                'avg_watch_time': None,
+                'avg_watch_time':  None,
+                'avg_daily_views': int(round(cur_views / num_days)),
+                'netflix_url':     'https://www.netflix.com/search?q=' + urllib.parse.quote(str(r[0])),
             })
 
         return jsonify({
