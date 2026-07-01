@@ -83092,7 +83092,16 @@
             ));
             headers.forEach(h => {
                 if (h._cmpOrigLabel == null) h._cmpOrigLabel = h.textContent;
-                h.innerHTML = h._cmpOrigLabel + '<br><span style="font-size:0.6rem;opacity:0.8;">' + headerSuffix.replace(/</g,'&lt;') + '</span>';
+                // 2026-07-01: pin the "(XX vs YY)" suffix on its own row via
+                // both a hard <br> AND white-space:nowrap so the parenthesized
+                // phrase never fragments across multiple lines when the
+                // Index column is narrow (which it is in the demographics
+                // and locations tables). Trim the leading space we bake
+                // into headerSuffix so the (...) sits flush.
+                h.innerHTML = h._cmpOrigLabel
+                    + '<br><span style="font-size:0.6rem;opacity:0.8;white-space:nowrap;display:inline-block;">'
+                    + headerSuffix.replace(/</g,'&lt;').trim()
+                    + '</span>';
             });
 
             try {
