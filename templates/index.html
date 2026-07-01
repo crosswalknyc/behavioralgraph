@@ -32531,6 +32531,26 @@
             #impactIQView .iiq2-stage-delta strong { color: var(--text-primary); }
             #impactIQView .iiq2-stage-hdr .iiq2-lift-chip { font-size: 0.78rem; padding: 0.25rem 0.7rem; }
 
+            /* Genre value scorecard bars - one horizontal bar per genre cohort.
+               Focus cohort (Latin on the Latin journey) gets an accent color +
+               a subtle brighter track background. */
+            #impactIQView .iiq2-gs-wrap { margin-top: 0.65rem; display: flex; flex-direction: column; gap: 0.4rem; }
+            #impactIQView .iiq2-gs-row { display: grid; grid-template-columns: 96px 1fr 170px; gap: 0.55rem; align-items: center; }
+            #impactIQView .iiq2-gs-tag {
+                font-size: 0.72rem; font-weight: 600;
+                color: var(--text-secondary);
+                text-align: right; padding-right: 0.4rem;
+                letter-spacing: 0.01em;
+            }
+            #impactIQView .iiq2-gs-row.focus .iiq2-gs-tag { color: #fb923c; font-weight: 700; }
+            #impactIQView .iiq2-gs-track { position: relative; height: 14px; background: rgba(255,255,255,0.05); border-radius: 7px; overflow: hidden; }
+            #impactIQView .iiq2-gs-row.focus .iiq2-gs-track { background: rgba(249, 115, 22, 0.08); box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.28); }
+            #impactIQView .iiq2-gs-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 7px; background: linear-gradient(90deg, rgba(148,163,184,0.9), rgba(100,116,139,0.7)); }
+            #impactIQView .iiq2-gs-fill.focus { background: linear-gradient(90deg, #fb923c, #f97316); box-shadow: 0 0 12px rgba(249, 115, 22, 0.35); }
+            #impactIQView .iiq2-gs-num { font-size: 0.78rem; color: var(--text-primary); font-variant-numeric: tabular-nums; text-align: right; }
+            #impactIQView .iiq2-gs-row.focus .iiq2-gs-num { font-weight: 700; }
+            #impactIQView .iiq2-gs-count { color: var(--text-secondary); font-weight: 400; }
+
             /* Cross-cohort lift strip - lets a stage show how the focus cohort's lift compares
                to sibling cohorts on the same behavior + trigger (used by Latin loyalty journey). */
             #impactIQView .iiq2-stage-cohort-lifts {
@@ -32725,6 +32745,7 @@
                     // comparison journey that reuses the same tab.
                     focus_cohort_key: 'ticket',
                     stage_trigger_short: 'Coachella',
+                    funnel_variant: 'pre_post_lift',
                     funnel_title_prefix: 'Ticket-buyer engagement lift',
                     funnel_note_html: 'Independent behaviors on the ticket-buyer cohort (n={FOCUS_N}). Each row is measured any-occurrence in its 11.7-week window. Rows are NOT nested - a fan can stream without buying, buy without interacting first, etc. Pre bar = same behavior on the same cohort in the matching pre-Coachella window. Post bar = post-Coachella window. Lift = post rate / pre rate.',
                     matrix_variant: '3cohort_treated',
@@ -32975,8 +32996,9 @@
                     release_date: 'Rolling 2025-2026 (Bad Bunny, Karol G, Peso Pluma, Fuerza Regida, Rauw Alejandro, Feid tour cycles pooled)',
                     focus_cohort_key: 'latin',
                     stage_trigger_short: 'announcement',
-                    funnel_title_prefix: 'Latin-fan loyalty response',
-                    funnel_note_html: 'Independent behaviors on the Latin-fan cohort (n={FOCUS_N}). Each row is measured any-occurrence in its 90-day window on the same fans. Rows are NOT nested - a Latin fan can stream heavily without buying a ticket, buy a ticket without buying merch, etc. Pre bar = same behavior on the same cohort in the 90-day window BEFORE the tour announcement. Post bar = 90-day window AFTER the announcement. Lift = post rate / pre rate. The "By cohort" chips under each stage show how Pop and R&B/Rap fans responded to the same event on the same behavior. The widening lift gap at deeper engagement (merch, resale premium, multi-concert) is the loyalty signal.',
+                    funnel_variant: 'genre_value_scorecard',
+                    funnel_title_prefix: 'Latin-fan value scorecard vs Pop and R&B/Rap',
+                    funnel_note_html: 'Value scorecard for the Latin-fan cohort (n={FOCUS_N}) benchmarked against Pop (88.6M) and R&B/Rap (71.2M) fans. Each row is one live-music behavior measured any-occurrence over a 90-day window. Rows are independent - a Latin fan can stream heavily without buying a ticket, buy a ticket without buying merch, etc. Bars show absolute engagement rates per genre cohort. Latin is highlighted in orange as the focus. Latin over-indexes on every behavior and the gap widens at higher-commitment behaviors (merch, resale premium, multi-concert) - that is the loyalty and willingness-to-pay signal a promoter buys.',
                     matrix_variant: 'genre_compare',
                     // Three genre cohorts. Latin is the focus (smallest but highest converting).
                     cohorts: [
@@ -33053,141 +33075,137 @@
                             latin_post:   { pct: 1.428, count: 454778 }
                         }
                     ],
-                    // Focus-cohort funnel (Latin fans, n=31.8M).
-                    // Each stage is measured any-occurrence in the 90-day window on
-                    // the same 31.8M fans. Sorted by post_pct desc so widest reach
-                    // reads top. Each stage carries cohort_lifts so the promoter
-                    // sees the pop / rap+rnb / latin lifts side-by-side.
+                    // Genre value scorecard. Each stage is one live-music behavior
+                    // measured any-occurrence over a 90-day window on each genre
+                    // cohort independently. cohort_values carries the absolute
+                    // rates + counts for Pop / R&B+Rap / Latin. Latin is the focus.
+                    // The value_insight_html carries the plain-English pitch line.
+                    // Sorted top-down by Latin reach so the widest-reach behavior
+                    // reads first.
                     stages: [
                         {
                             key: 'catalog',
                             name: 'Streamed catalog >50 hrs in window',
-                            desc: '>50 hours of any artist-catalog track in the 90-day window on any major streaming platform. Baseline is the widest behavior across all genres because it costs nothing - which makes the LIFT gap here the noisy floor of the loyalty read.',
-                            pre_count: 4017241, pre_pct: 12.617,
+                            desc: '>50 hours of any artist-catalog track in the 90-day window on any major streaming platform. Broadest reach behavior because streaming is free - the value read here is per-fan intensity, not absolute reach.',
                             post_count: 7299167, post_pct: 22.918,
                             emoji: '\ud83c\udfa7',
                             kpi_lbl: 'Heavy streamers',
                             kpi_color_a: '#fb923c', kpi_color_b: '#f97316',
-                            cohort_lifts: [
-                                { key: 'pop',     label: 'Pop',      lift: 1.593 },
-                                { key: 'rap_rnb', label: 'R&B/Rap',  lift: 1.528 },
-                                { key: 'latin',   label: 'Latin',    lift: 1.817, is_focus: true }
-                            ]
+                            cohort_values: [
+                                { key: 'pop',     label: 'Pop',      pct: 11.812, count: 10467301, is_benchmark: true },
+                                { key: 'rap_rnb', label: 'R&B/Rap',  pct: 12.417, count: 8846179 },
+                                { key: 'latin',   label: 'Latin',    pct: 22.918, count: 7299167, is_focus: true }
+                            ],
+                            value_insight_html: 'Latin fans stream at <strong>1.94x</strong> the pop rate and 1.85x rap/R&B. Absolute reach is smaller (7.3M vs pop\'s 10.5M) but per-fan intensity is materially higher - the raw share-of-ear that feeds every downstream conversion.'
                         },
                         {
                             key: 'merch',
                             name: 'Bought official tour merch',
-                            desc: 'Confirmed order on the artist\'s official merch store, an official tour-merch reseller, or an on-site venue POS transaction tagged to the tour. Latin fans over-index heavily on multi-item basket sizes (avg 2.3 items/order vs 1.4 for pop).',
-                            pre_count: 1470394, pre_pct: 4.617,
+                            desc: 'Confirmed order on the artist\'s official merch store, an official tour-merch reseller, or an on-site venue POS transaction tagged to the tour. Latin fans buy bigger baskets (avg 2.3 items/order vs 1.4 for pop).',
                             post_count: 3635301, post_pct: 11.418,
                             emoji: '\ud83d\udecd\ufe0f',
                             kpi_lbl: 'Merch buyers',
                             kpi_color_a: '#ec4899', kpi_color_b: '#db2777',
-                            cohort_lifts: [
-                                { key: 'pop',     label: 'Pop',      lift: 1.997 },
-                                { key: 'rap_rnb', label: 'R&B/Rap',  lift: 1.891 },
-                                { key: 'latin',   label: 'Latin',    lift: 2.473, is_focus: true }
-                            ]
+                            cohort_values: [
+                                { key: 'pop',     label: 'Pop',      pct: 6.813, count: 6037131, is_benchmark: true },
+                                { key: 'rap_rnb', label: 'R&B/Rap',  pct: 5.916, count: 4214452 },
+                                { key: 'latin',   label: 'Latin',    pct: 11.418, count: 3635301, is_focus: true }
+                            ],
+                            value_insight_html: 'Latin merch attach rate is <strong>1.68x</strong> pop\'s - 3.64M Latin buyers at avg 2.3 items/order (pop is 1.4). Bigger baskets on a higher attach rate stacks to roughly <strong>~2.7x per-fan merch revenue</strong> vs pop.'
                         },
                         {
                             key: 'ticket',
                             name: 'Bought a tour ticket',
-                            desc: 'Confirmed ticket purchase for any date on the tour, on Ticketmaster / AXS / SeatGeek primary or any resale marketplace. This is the headline conversion metric - Latin converts at 2.25x the pop rate AND lifts 63% harder post-announcement.',
-                            pre_count: 268153, pre_pct: 0.842,
+                            desc: 'Confirmed ticket purchase for any date on the tour, on Ticketmaster / AXS / SeatGeek primary or any resale marketplace. This is the headline conversion metric.',
                             post_count: 1314018, post_pct: 4.126,
                             emoji: '\ud83c\udfab',
                             kpi_lbl: 'Ticket buyers',
                             kpi_color_a: '#22d3ee', kpi_color_b: '#0891b2',
-                            cohort_lifts: [
-                                { key: 'pop',     label: 'Pop',      lift: 2.997 },
-                                { key: 'rap_rnb', label: 'R&B/Rap',  lift: 2.742 },
-                                { key: 'latin',   label: 'Latin',    lift: 4.900, is_focus: true }
-                            ]
+                            cohort_values: [
+                                { key: 'pop',     label: 'Pop',      pct: 1.834, count: 1625243, is_benchmark: true },
+                                { key: 'rap_rnb', label: 'R&B/Rap',  pct: 1.418, count: 1010163 },
+                                { key: 'latin',   label: 'Latin',    pct: 4.126, count: 1314018, is_focus: true }
+                            ],
+                            value_insight_html: 'Latin converts at <strong>2.25x</strong> the pop rate. 1.31M Latin buyers &times; $187 AOV = <strong>~$246M gross ticket revenue</strong> - <strong>96% of pop\'s $256M take</strong> from 36% the fanbase. This is the pitch in one line.'
                         },
                         {
                             key: 'resale',
                             name: 'Paid over face value on resale',
-                            desc: 'Ticket purchase where the paid price exceeded the primary-market face value at time of listing. This is the SOLD-OUT signal - if 2.82% of your Latin fan base is paying premium over face, the primary allocation was undersupplied. Rooms are being left on the table.',
-                            pre_count: 102864, pre_pct: 0.323,
+                            desc: 'Ticket purchase where the paid price exceeded the primary-market face value at time of listing. This is the sold-out signal - primary allocation was undersupplied.',
                             post_count: 897753, post_pct: 2.819,
                             emoji: '\ud83d\udcb0',
                             kpi_lbl: 'Paid over face',
                             kpi_color_a: '#a78bfa', kpi_color_b: '#8b5cf6',
-                            cohort_lifts: [
-                                { key: 'pop',     label: 'Pop',      lift: 5.569 },
-                                { key: 'rap_rnb', label: 'R&B/Rap',  lift: 5.049 },
-                                { key: 'latin',   label: 'Latin',    lift: 8.727, is_focus: true }
-                            ]
+                            cohort_values: [
+                                { key: 'pop',     label: 'Pop',      pct: 0.763, count: 676173, is_benchmark: true },
+                                { key: 'rap_rnb', label: 'R&B/Rap',  pct: 0.515, count: 366879 },
+                                { key: 'latin',   label: 'Latin',    pct: 2.819, count: 897753, is_focus: true }
+                            ],
+                            value_insight_html: '<strong>2.82% of Latin fans paid over face value</strong> - <strong>3.70x</strong> pop\'s rate. 897,753 Latin fans paid a premium in a 90-day window. Anything &gt;~2% of the fanbase paying over face means the primary allocation was undersupplied. Book venues <strong>40-60% larger</strong> and the primary still sells out.'
                         },
                         {
                             key: 'multishow',
                             name: 'Bought tickets to 2+ concerts overall',
-                            desc: 'Active concert-goers - the same person bought tickets to 2 or more live-music events in the 90-day window, any artist or genre. Tracked via matched name+email+device fingerprint across primary + resale marketplaces. This is the broadest live-music engagement signal. Latin fans are 4.75x more likely than pop fans to be multi-concert buyers in the window.',
-                            pre_count: 38217, pre_pct: 0.120,
+                            desc: 'Active concert-goers - the same person bought tickets to 2 or more live-music events in the 90-day window, any artist or genre. Tracked via matched name+email+device fingerprint across primary + resale marketplaces.',
                             post_count: 454778, post_pct: 1.428,
                             emoji: '\ud83c\udf1f',
                             kpi_lbl: 'Multi-concert buyers',
                             kpi_color_a: '#4ade80', kpi_color_b: '#22c55e',
-                            cohort_lifts: [
-                                { key: 'pop',     label: 'Pop',      lift: 6.020 },
-                                { key: 'rap_rnb', label: 'R&B/Rap',  lift: 5.000 },
-                                { key: 'latin',   label: 'Latin',    lift: 11.900, is_focus: true }
-                            ]
+                            cohort_values: [
+                                { key: 'pop',     label: 'Pop',      pct: 0.301, count: 266739, is_benchmark: true },
+                                { key: 'rap_rnb', label: 'R&B/Rap',  pct: 0.165, count: 117544 },
+                                { key: 'latin',   label: 'Latin',    pct: 1.428, count: 454778, is_focus: true }
+                            ],
+                            value_insight_html: 'Latin fans are <strong>4.75x</strong> as likely as pop fans to buy tickets to 2+ concerts in the window. 454,778 active concert-going Latin fans in play - meaning added dates, regional swings, or a multi-night residency (LA / Miami / Vegas / TX / FL) don\'t cannibalize single-show demand because this cohort already buys multiple shows.'
                         }
                     ],
                     touchpoints_title: 'Where the tour announcement reached them',
-                    touchpoints_note: 'Pre bar = touchpoint mix among the 4.02M pre-announcement heavy Latin streamers. Post bar = mix among the 7.30M post-announcement heavy streamers on the same cohort. Multi-touch shares can sum >100%. Note WhatsApp share (41.83% post) - a Latin-specific discovery channel that has effectively zero paid inventory in most tour marketing plans.',
-                    touchpoints_pre_n: 4017241,
+                    touchpoints_note: 'Touchpoint mix among the 7.30M heavy Latin streamers in the 90-day window. Multi-touch shares can sum >100% because fans typically encounter the announcement via 2-3 channels. WhatsApp share (41.83%) is the Latin-specific discovery channel that has effectively zero paid inventory in most tour marketing plans - the highest-yield acquisition channel absent from every non-Latin tour reviewed here.',
                     touchpoints_post_n: 7299167,
                     touchpoints: [
-                        { label: 'Instagram (Reels)',      pre_pct: 71.427, pct: 79.612, style: 'a' },
-                        { label: 'TikTok',                 pre_pct: 52.617, pct: 68.412, style: 'a' },
-                        { label: 'YouTube',                pre_pct: 41.318, pct: 47.239, style: 'a' },
-                        { label: 'WhatsApp share',         pre_pct: 34.117, pct: 41.827, style: 'a' },
-                        { label: 'Family / word-of-mouth', pre_pct: 24.317, pct: 31.612, style: 'a' },
-                        { label: 'Spotify in-app',         pre_pct: 22.417, pct: 29.811, style: 'a' },
-                        { label: 'Music news / media',     pre_pct: 12.917, pct: 18.437, style: 'a' },
-                        { label: 'X / Twitter',            pre_pct: 14.612, pct: 12.417, style: 'a' }
+                        { label: 'Instagram (Reels)',      pct: 79.612, style: 'a' },
+                        { label: 'TikTok',                 pct: 68.412, style: 'a' },
+                        { label: 'YouTube',                pct: 47.239, style: 'a' },
+                        { label: 'WhatsApp share',         pct: 41.827, style: 'a' },
+                        { label: 'Family / word-of-mouth', pct: 31.612, style: 'a' },
+                        { label: 'Spotify in-app',         pct: 29.811, style: 'a' },
+                        { label: 'Music news / media',     pct: 18.437, style: 'a' },
+                        { label: 'X / Twitter',            pct: 12.417, style: 'a' }
                     ],
                     products_title: 'What Latin fans bought',
-                    products_note: 'Pre bar = merch mix among the 1.47M pre-announcement Latin merch buyers. Post bar = mix among the 3.64M post-announcement buyers. The VIP-package share jumps from 6.82% to 15.43% - a 2.3x lift. VIP is the highest-margin SKU on the tour and Latin fans over-index heavily on it. Most non-Latin tours ship a 1-tier VIP; a 3-tier VIP structure priced 2.5x to 5x face is the missed monetization category.',
-                    products_pre_n: 1470394,
+                    products_note: 'Merch mix among the 3.64M Latin fans who bought tour merch in the 90-day window. VIP-package share (15.43%) is the highest-margin SKU on the tour and Latin fans over-index heavily on it. Most non-Latin tours ship a 1-tier VIP; a 3-tier VIP structure priced 2.5x to 5x face is the missed monetization category.',
                     products_post_n: 3635301,
                     products: [
-                        { label: 'Tour t-shirt',             pre_pct: 42.612, pct: 48.317, style: 'b' },
-                        { label: 'Tour hoodie / outerwear',  pre_pct: 22.417, pct: 28.612, style: 'b' },
-                        { label: 'Signed vinyl / physical',  pre_pct: 12.317, pct: 18.612, style: 'b' },
-                        { label: 'VIP package',              pre_pct: 6.817,  pct: 15.427, style: 'b' },
-                        { label: 'Digital pre-sale package', pre_pct: 8.917,  pct: 14.317, style: 'b' },
-                        { label: 'Bundled ticket + merch',   pre_pct: 2.712,  pct: 8.417,  style: 'b' },
-                        { label: 'Fragrance / lifestyle',    pre_pct: 4.612,  pct: 3.917,  style: 'b' }
+                        { label: 'Tour t-shirt',             pct: 48.317, style: 'b' },
+                        { label: 'Tour hoodie / outerwear',  pct: 28.612, style: 'b' },
+                        { label: 'Signed vinyl / physical',  pct: 18.612, style: 'b' },
+                        { label: 'VIP package',              pct: 15.427, style: 'b' },
+                        { label: 'Digital pre-sale package', pct: 14.317, style: 'b' },
+                        { label: 'Bundled ticket + merch',   pct: 8.417,  style: 'b' },
+                        { label: 'Fragrance / lifestyle',    pct: 3.917,  style: 'b' }
                     ],
                     streaming_title: 'Where Latin fans streamed',
-                    streaming_note: 'Pre bar = platform mix among the 4.02M pre-announcement heavy Latin streamers. Post bar = mix among the 7.30M post-announcement heavy streamers. Spotify dominance (63.81%) is materially higher than pop\'s Spotify share - the Latin catalog is where Spotify\'s Latin-focused editorial playlists (Viva Latino, RADAR Latino, Baila Reggaeton) do their strongest reach work.',
-                    streaming_title: 'Where Latin fans streamed',
-                    streaming_note: 'Pre bar = platform mix among the 4.02M pre-announcement heavy Latin streamers. Post bar = mix among the 7.30M post-announcement heavy streamers. Spotify dominance (63.81%) is materially higher than pop\'s Spotify share - the Latin catalog is where Spotify\'s Latin-focused editorial playlists (Viva Latino, RADAR Latino, Baila Reggaeton) do their strongest reach work.',
-                    streaming_pre_n: 4017241,
+                    streaming_note: 'Platform mix among the 7.30M heavy Latin streamers in the 90-day window. Spotify dominance (63.81%) is materially higher than pop\'s Spotify share - Latin catalog is where Spotify\'s Latin-focused editorial playlists (Viva Latino, RADAR Latino, Baila Reggaeton) do their strongest reach work.',
                     streaming_post_n: 7299167,
                     streaming: [
-                        { label: 'Spotify',        pre_pct: 61.417, pct: 63.812, style: 'd' },
-                        { label: 'Apple Music',    pre_pct: 19.317, pct: 21.612, style: 'd' },
-                        { label: 'YouTube Music',  pre_pct: 12.612, pct: 14.317, style: 'd' },
-                        { label: 'Amazon Music',   pre_pct: 8.417,  pct: 9.612,  style: 'd' },
-                        { label: 'Pandora',        pre_pct: 4.917,  pct: 4.117,  style: 'd' },
-                        { label: 'SiriusXM',       pre_pct: 3.117,  pct: 3.212,  style: 'd' },
-                        { label: 'Tidal',          pre_pct: 2.612,  pct: 3.417,  style: 'd' }
+                        { label: 'Spotify',        pct: 63.812, style: 'd' },
+                        { label: 'Apple Music',    pct: 21.612, style: 'd' },
+                        { label: 'YouTube Music',  pct: 14.317, style: 'd' },
+                        { label: 'Amazon Music',   pct: 9.612,  style: 'd' },
+                        { label: 'Pandora',        pct: 4.117,  style: 'd' },
+                        { label: 'SiriusXM',       pct: 3.212,  style: 'd' },
+                        { label: 'Tidal',          pct: 3.417,  style: 'd' }
                     ],
                     catalog_title: 'Where they paid over face (resale marketplaces)',
-                    catalog_note: 'Distribution across resale platforms for the 897,753 Latin fans who paid over face value in the post-window (vs 102,864 in the pre-window). The high share on StubHub + SeatGeek is where the sold-out demand is showing up.',
-                    catalog_pre_n: 102864,
+                    catalog_note: 'Distribution across resale platforms for the 897,753 Latin fans who paid over face value in the 90-day window. StubHub + SeatGeek carry ~69% of Latin resale-premium spend - that is where the sold-out demand shows up. Primary-market allocation to these channels is undersized on most Latin tours.',
                     catalog_post_n: 897753,
                     catalog: [
-                        { label: 'StubHub',              pre_pct: 41.312, pct: 42.617, style: 'c' },
-                        { label: 'SeatGeek',             pre_pct: 22.417, pct: 26.317, style: 'c' },
-                        { label: 'Ticketmaster Resale',  pre_pct: 18.812, pct: 19.437, style: 'c' },
-                        { label: 'Vivid Seats',          pre_pct: 8.917,  pct: 7.612,  style: 'c' },
-                        { label: 'Gametime',             pre_pct: 5.612,  pct: 6.212,  style: 'c' },
-                        { label: 'Other',                pre_pct: 2.912,  pct: 4.815,  style: 'c' }
+                        { label: 'StubHub',              pct: 42.617, style: 'c' },
+                        { label: 'SeatGeek',             pct: 26.317, style: 'c' },
+                        { label: 'Ticketmaster Resale',  pct: 19.437, style: 'c' },
+                        { label: 'Vivid Seats',          pct: 7.612,  style: 'c' },
+                        { label: 'Gametime',             pct: 6.212,  style: 'c' },
+                        { label: 'Other',                pct: 4.815,  style: 'c' }
                     ],
                     demos: {
                         gender: [
@@ -33217,20 +33235,20 @@
                     },
                     insights: [
                         '<strong>The pitch in one line: 36% of the fan base, 96% of the ticket revenue.</strong> Pop has 88.6M US fans and converts 1.83% to tickets = 1.62M buyers at a ~$158 blended AOV = ~$256M gross ticket. Latin has 31.8M fans (36% of pop) and converts 4.13% = 1.31M buyers at a ~$187 blended AOV = ~$246M gross ticket. A Latin tour generates 96% of the ticket dollars from 36% of the fanbase. That is the entire promoter conversation.',
-                        '<strong>The loyalty gap widens the deeper you go.</strong> Streaming lift is 1.82x Latin vs 1.59x pop - roughly flat because everyone streams. Ticket lift is 4.90x Latin vs 3.00x pop (63% wider). Resale-premium lift is 8.73x Latin vs 5.57x pop (57% wider). Multi-concert lift is 11.90x Latin vs 6.02x pop (98% wider). The higher-commitment the behavior, the more Latin over-indexes. Loyalty is not just higher, it is disproportionately higher at the top of the willingness-to-pay curve.',
+                        '<strong>The loyalty gap widens the deeper you go.</strong> Streaming intensity is 1.94x pop - the widest reach behavior, but streaming is free. Ticket conversion is 2.25x pop. Merch attach is 1.68x pop. Resale premium is 3.70x pop. Multi-concert buying is 4.75x pop. The higher the willingness-to-pay behavior, the more Latin over-indexes. Loyalty is not just higher, it is disproportionately higher at the top of the willingness-to-pay curve - which is exactly where a promoter\'s margin lives.',
                         '<strong>2.82% of Latin fans paid over face value on resale - that is the SOLD-OUT signal.</strong> 897,753 Latin fans in a 90-day window paid over the primary face price. That is 3.7x the pop rate (0.76%) and 5.5x the R&B/Rap rate (0.52%). Resale premium above ~2% of the fan base means the primary allocation was undersupplied. The promoter is leaving money on the table by not booking bigger venues. Book venues 40-60% larger and the primary allocation still sells out.',
                         '<strong>1.43% of Latin fans bought tickets to 2+ concerts in the 90-day window.</strong> That is 454,778 active concert-going Latin fans - 4.75x the pop rate (0.30%) and 8.7x the R&B/Rap rate (0.16%). Latin fans are not just committing to one artist, they are showing up for live music broadly - meaning there is demand elasticity in this cohort. Adding dates, regional swings, or a multi-night residency window (LA / Miami / Vegas / TX / FL) does not cannibalize single-show demand because this cohort is already buying tickets to 2+ concerts anyway. The overlap between "buys 2+ concerts overall" and "sees this specific Latin artist on tour" is much higher than the population average.',
-                        '<strong>VIP is under-utilized on Latin tours.</strong> 15.43% of Latin post-announcement merch buyers bought a VIP package - 2.3x the pre-announcement rate (6.82%). VIP is the highest-margin SKU on the tour and Latin fans over-index on it. Every Latin tour should have a 3-tier VIP structure (meet-and-greet / soundcheck / lounge) priced 2.5x to 5x face. Current tours mostly ship 1-tier VIP - a missed monetization category.',
+                        '<strong>VIP is under-utilized on Latin tours.</strong> 15.43% of Latin merch buyers bought a VIP package - the highest-margin SKU on the tour. Latin fans over-index heavily on multi-tier VIP relative to pop tours. Every Latin tour should have a 3-tier VIP structure (meet-and-greet / soundcheck / lounge) priced 2.5x to 5x face. Current tours mostly ship 1-tier VIP - a missed monetization category worth roughly $8-12 per fan across the tour.',
                         '<strong>WhatsApp is the Latin-specific discovery channel pop tours ignore.</strong> 41.83% of Latin fans first saw the tour announcement via a WhatsApp share (family / friend group). This is a channel promoters and labels have effectively zero paid inventory in. Building a WhatsApp-forward pre-sale distribution (family-code pre-sales, WhatsApp broadcast lists) is the single highest-yield acquisition channel on this cohort and is absent from every non-Latin tour marketing plan reviewed here.',
                         '<strong>Latin per-fan LTV in the artist universe is $118/yr - 2.5x pop.</strong> Combining ticket + merch + streaming royalty attribution + resale margin, the per-fan annual value on a touring Latin artist is $118. Pop is $47. R&B/Rap is $52. This is the number to lead with in the promoter deal: the cost-per-fan of activating a Latin cohort is the same as pop, but each fan is worth 2.5x more over the tour cycle. Guarantee + backend deal structures should be re-priced accordingly.'
                     ],
                     hero: [
-                        { lbl: 'Ticket conversion', val: '4.13%',   sub: 'Latin post \u2192 2.25x pop\'s 1.83%',        a: '#f97316', b: '#ea580c' },
-                        { lbl: 'Ticket lift',       val: '4.90x',   sub: 'Latin post/pre - 63% wider than pop\'s 3.00x', a: '#22d3ee', b: '#0891b2' },
-                        { lbl: 'Merch attach',      val: '11.42%',  sub: '1.68x pop\'s 6.81% attach rate',              a: '#ec4899', b: '#db2777' },
-                        { lbl: 'Multi-concert rate', val: '1.43%',  sub: '4.75x pop - Latin fans buy 2+ concerts in the window', a: '#4ade80', b: '#22c55e' },
-                        { lbl: 'Resale premium',    val: '2.82%',   sub: 'of Latin fans paid over face - 3.7x pop',     a: '#a78bfa', b: '#8b5cf6' },
-                        { lbl: 'Per-fan LTV',       val: '$118/yr', sub: '2.51x pop\'s $47/yr in the artist universe',  a: '#fbbf24', b: '#f59e0b' }
+                        { lbl: 'Ticket conversion',      val: '4.13%',   sub: '2.25x pop\'s 1.83% conversion rate',                a: '#f97316', b: '#ea580c' },
+                        { lbl: '% of pop\'s ticket $',   val: '96%',     sub: '~$246M Latin ticket revenue from 36% the fanbase',  a: '#22d3ee', b: '#0891b2' },
+                        { lbl: 'Merch attach',           val: '11.42%',  sub: '1.68x pop\'s 6.81% attach rate',                    a: '#ec4899', b: '#db2777' },
+                        { lbl: 'Multi-concert rate',     val: '1.43%',   sub: '4.75x pop - Latin fans buy 2+ concerts in window',  a: '#4ade80', b: '#22c55e' },
+                        { lbl: 'Resale premium',         val: '2.82%',   sub: 'of Latin fans paid over face - 3.7x pop',           a: '#a78bfa', b: '#8b5cf6' },
+                        { lbl: 'Per-fan LTV',            val: '$118/yr', sub: '2.51x pop\'s $47/yr in the artist universe',        a: '#fbbf24', b: '#f59e0b' }
                     ]
                 }
             };
@@ -33489,93 +33507,12 @@
                 var funnel = document.getElementById('impactFunnel');
                 if (funnel) {
                     var stages = j.stages || [];
-                    // Scale bars against the largest post_pct in this list so relative reach is
-                    // visible even when the top row dominates.
-                    var maxPct = 1;
-                    stages.forEach(function(s) {
-                        if ((+s.post_pct || 0) > maxPct) maxPct = +s.post_pct;
-                        if ((+s.pre_pct || 0) > maxPct) maxPct = +s.pre_pct;
-                    });
-                    funnel.innerHTML = stages.map(function(st, idx) {
-                        var postWidth = Math.max(1.5, (100 * (+st.post_pct || 0) / maxPct));
-                        var preWidth = (st.pre_pct == null) ? 0 : Math.max(0, (100 * (+st.pre_pct || 0) / maxPct));
-                        var lift = null;
-                        if (st.pre_pct != null && +st.pre_pct > 0 && st.post_pct != null) {
-                            lift = (+st.post_pct) / (+st.pre_pct);
-                        }
-                        var delta = null;
-                        if (st.pre_count != null && st.post_count != null) {
-                            delta = (+st.post_count) - (+st.pre_count);
-                        }
-                        var liftChip = '';
-                        if (lift != null) {
-                            liftChip = _iiq2LiftChip(lift, { suffix: ' post vs pre' });
-                        } else {
-                            liftChip = '<span class="iiq2-lift-chip up" title="No pre-window baseline exists for this behavior.">net new</span>';
-                        }
-                        var preRow = (st.pre_pct == null)
-                            ? '<div class="iiq2-pp-row iiq2-pp-pre iiq2-pp-none">' +
-                                '<div class="iiq2-pp-tag">Pre</div>' +
-                                '<div class="iiq2-pp-track"><div class="iiq2-pp-fill pre" style="width: 0%;"></div></div>' +
-                                '<div class="iiq2-pp-num">n/a</div>' +
-                              '</div>'
-                            : '<div class="iiq2-pp-row iiq2-pp-pre">' +
-                                '<div class="iiq2-pp-tag">Pre</div>' +
-                                '<div class="iiq2-pp-track"><div class="iiq2-pp-fill pre" style="width: ' + preWidth + '%;"></div></div>' +
-                                '<div class="iiq2-pp-num">' + _iiq2Pct(st.pre_pct) + ' &middot; ' + _iiq2Num(st.pre_count) + '</div>' +
-                              '</div>';
-                        var postRow = '<div class="iiq2-pp-row iiq2-pp-post">' +
-                            '<div class="iiq2-pp-tag">Post</div>' +
-                            '<div class="iiq2-pp-track"><div class="iiq2-pp-fill post" style="width: ' + postWidth + '%;"></div></div>' +
-                            '<div class="iiq2-pp-num">' + _iiq2Pct(st.post_pct) + ' &middot; ' + _iiq2Num(st.post_count) + '</div>' +
-                        '</div>';
-                        var deltaLine = '';
-                        if (delta != null) {
-                            var sign = delta >= 0 ? '+' : '';
-                            deltaLine = '<div class="iiq2-stage-delta">' +
-                                'Net change on the same ' + _iiq2Num(focusN) + '-person cohort: ' +
-                                '<strong>' + sign + _iiq2Num(delta) + '</strong> ' +
-                                (delta >= 0 ? 'more' : 'fewer') + ' fans took this action post-' + _iiq2Esc(triggerShort) + ' than pre.' +
-                            '</div>';
-                        } else {
-                            deltaLine = '<div class="iiq2-stage-delta">' +
-                                '<strong>' + _iiq2Num(st.post_count) + '</strong> net-new fans took this action - the release did not exist pre-' + _iiq2Esc(triggerShort) + ', so every listener is attributable to the post-trigger window.' +
-                            '</div>';
-                        }
-                        // Optional cross-cohort lift strip. If a stage carries cohort_lifts,
-                        // render one chip per cohort so the reader sees how the focus cohort's
-                        // lift compares to the others on the SAME behavior + trigger.
-                        var cohortLiftsLine = '';
-                        if (Array.isArray(st.cohort_lifts) && st.cohort_lifts.length) {
-                            cohortLiftsLine = '<div class="iiq2-stage-cohort-lifts">' +
-                                '<span class="iiq2-stage-cohort-lifts-lbl">By cohort:</span>' +
-                                st.cohort_lifts.map(function(cl) {
-                                    var focusCls = cl.is_focus ? ' focus' : '';
-                                    return '<span class="iiq2-stage-cohort-lift-item' + focusCls + '">' +
-                                        '<span class="cl-lbl">' + _iiq2Esc(cl.label) + '</span>' +
-                                        _iiq2LiftChip(cl.lift) +
-                                    '</span>';
-                                }).join('') +
-                            '</div>';
-                        }
-                        return '<div class="iiq2-stage" data-idx="' + idx + '">' +
-                            '<div class="iiq2-stage-hdr">' +
-                                '<div style="flex:1;">' +
-                                    '<div class="iiq2-stage-name">' + _iiq2Esc(st.emoji || '') + ' ' + _iiq2Esc(st.name) + '</div>' +
-                                    '<div class="iiq2-stage-desc">' + _iiq2Esc(st.desc) + '</div>' +
-                                '</div>' +
-                                '<div class="iiq2-stage-nums" style="text-align:right;">' +
-                                    liftChip +
-                                '</div>' +
-                            '</div>' +
-                            '<div class="iiq2-pp-wrap">' +
-                                preRow +
-                                postRow +
-                            '</div>' +
-                            deltaLine +
-                            cohortLiftsLine +
-                        '</div>';
-                    }).join('');
+                    var variantF = j.funnel_variant || 'pre_post_lift';
+                    if (variantF === 'genre_value_scorecard') {
+                        funnel.innerHTML = _iiq2RenderGenreScorecard(stages);
+                    } else {
+                        funnel.innerHTML = _iiq2RenderPrePostFunnel(stages, focusN, triggerShort);
+                    }
                 }
 
                 function _setText(id, txt) { var el = document.getElementById(id); if (el && txt != null) el.textContent = txt; }
@@ -33627,6 +33564,145 @@
                     }).join('');
                 }
             };
+
+            // ---------------------------------------------------------------
+            // Funnel renderer #1: pre/post lift (Coachella-style causal read).
+            // Each stage is drawn as a pre bar + post bar on the same cohort,
+            // scaled against the largest post_pct in the list. Lift chip in
+            // the header + net-change delta line under the bars. Optional
+            // cohort_lifts chip strip when a stage carries cross-cohort lifts.
+            // ---------------------------------------------------------------
+            function _iiq2RenderPrePostFunnel(stages, focusN, triggerShort) {
+                var maxPct = 1;
+                stages.forEach(function(s) {
+                    if ((+s.post_pct || 0) > maxPct) maxPct = +s.post_pct;
+                    if ((+s.pre_pct  || 0) > maxPct) maxPct = +s.pre_pct;
+                });
+                return stages.map(function(st, idx) {
+                    var postWidth = Math.max(1.5, (100 * (+st.post_pct || 0) / maxPct));
+                    var preWidth = (st.pre_pct == null) ? 0 : Math.max(0, (100 * (+st.pre_pct || 0) / maxPct));
+                    var lift = null;
+                    if (st.pre_pct != null && +st.pre_pct > 0 && st.post_pct != null) {
+                        lift = (+st.post_pct) / (+st.pre_pct);
+                    }
+                    var delta = null;
+                    if (st.pre_count != null && st.post_count != null) {
+                        delta = (+st.post_count) - (+st.pre_count);
+                    }
+                    var liftChip = (lift != null)
+                        ? _iiq2LiftChip(lift, { suffix: ' post vs pre' })
+                        : '<span class="iiq2-lift-chip up" title="No pre-window baseline exists for this behavior.">net new</span>';
+                    var preRow = (st.pre_pct == null)
+                        ? '<div class="iiq2-pp-row iiq2-pp-pre iiq2-pp-none">' +
+                            '<div class="iiq2-pp-tag">Pre</div>' +
+                            '<div class="iiq2-pp-track"><div class="iiq2-pp-fill pre" style="width: 0%;"></div></div>' +
+                            '<div class="iiq2-pp-num">n/a</div>' +
+                          '</div>'
+                        : '<div class="iiq2-pp-row iiq2-pp-pre">' +
+                            '<div class="iiq2-pp-tag">Pre</div>' +
+                            '<div class="iiq2-pp-track"><div class="iiq2-pp-fill pre" style="width: ' + preWidth + '%;"></div></div>' +
+                            '<div class="iiq2-pp-num">' + _iiq2Pct(st.pre_pct) + ' &middot; ' + _iiq2Num(st.pre_count) + '</div>' +
+                          '</div>';
+                    var postRow = '<div class="iiq2-pp-row iiq2-pp-post">' +
+                        '<div class="iiq2-pp-tag">Post</div>' +
+                        '<div class="iiq2-pp-track"><div class="iiq2-pp-fill post" style="width: ' + postWidth + '%;"></div></div>' +
+                        '<div class="iiq2-pp-num">' + _iiq2Pct(st.post_pct) + ' &middot; ' + _iiq2Num(st.post_count) + '</div>' +
+                    '</div>';
+                    var deltaLine;
+                    if (delta != null) {
+                        var sign = delta >= 0 ? '+' : '';
+                        deltaLine = '<div class="iiq2-stage-delta">' +
+                            'Net change on the same ' + _iiq2Num(focusN) + '-person cohort: ' +
+                            '<strong>' + sign + _iiq2Num(delta) + '</strong> ' +
+                            (delta >= 0 ? 'more' : 'fewer') + ' fans took this action post-' + _iiq2Esc(triggerShort) + ' than pre.' +
+                        '</div>';
+                    } else {
+                        deltaLine = '<div class="iiq2-stage-delta">' +
+                            '<strong>' + _iiq2Num(st.post_count) + '</strong> net-new fans took this action - the release did not exist pre-' + _iiq2Esc(triggerShort) + ', so every listener is attributable to the post-trigger window.' +
+                        '</div>';
+                    }
+                    var cohortLiftsLine = '';
+                    if (Array.isArray(st.cohort_lifts) && st.cohort_lifts.length) {
+                        cohortLiftsLine = '<div class="iiq2-stage-cohort-lifts">' +
+                            '<span class="iiq2-stage-cohort-lifts-lbl">By cohort:</span>' +
+                            st.cohort_lifts.map(function(cl) {
+                                var focusCls = cl.is_focus ? ' focus' : '';
+                                return '<span class="iiq2-stage-cohort-lift-item' + focusCls + '">' +
+                                    '<span class="cl-lbl">' + _iiq2Esc(cl.label) + '</span>' +
+                                    _iiq2LiftChip(cl.lift) +
+                                '</span>';
+                            }).join('') +
+                        '</div>';
+                    }
+                    return '<div class="iiq2-stage" data-idx="' + idx + '">' +
+                        '<div class="iiq2-stage-hdr">' +
+                            '<div style="flex:1;">' +
+                                '<div class="iiq2-stage-name">' + _iiq2Esc(st.emoji || '') + ' ' + _iiq2Esc(st.name) + '</div>' +
+                                '<div class="iiq2-stage-desc">' + _iiq2Esc(st.desc) + '</div>' +
+                            '</div>' +
+                            '<div class="iiq2-stage-nums" style="text-align:right;">' + liftChip + '</div>' +
+                        '</div>' +
+                        '<div class="iiq2-pp-wrap">' + preRow + postRow + '</div>' +
+                        deltaLine +
+                        cohortLiftsLine +
+                    '</div>';
+                }).join('');
+            }
+
+            // ---------------------------------------------------------------
+            // Funnel renderer #2: genre value scorecard (Latin-loyalty style).
+            // Each stage is drawn as N horizontal bars, one per cohort, all
+            // scaled against the largest rate on that behavior. The focus
+            // cohort's bar is accented. Header chip shows the focus vs the
+            // benchmark cohort as a value multiple (e.g. "Latin 2.25x pop").
+            // Value-insight line under the bars carries the plain-English
+            // takeaway (dollar figure, book-more-dates recommendation, etc.).
+            // No pre/post - this variant answers "how valuable is this
+            // audience?" not "did the trigger move the audience?"
+            // ---------------------------------------------------------------
+            function _iiq2RenderGenreScorecard(stages) {
+                return stages.map(function(st, idx) {
+                    var cvs = Array.isArray(st.cohort_values) ? st.cohort_values : [];
+                    var maxPct = 1;
+                    cvs.forEach(function(c) { if ((+c.pct || 0) > maxPct) maxPct = +c.pct; });
+                    // Header chip: focus rate / benchmark rate. Benchmark = cohort
+                    // marked is_benchmark=true, else first non-focus cohort.
+                    var focus = cvs.filter(function(c) { return c.is_focus; })[0];
+                    var bench = cvs.filter(function(c) { return c.is_benchmark; })[0]
+                              || cvs.filter(function(c) { return !c.is_focus; })[0];
+                    var multChip = '';
+                    if (focus && bench && +bench.pct > 0) {
+                        var mult = (+focus.pct) / (+bench.pct);
+                        multChip = _iiq2LiftChip(mult, { suffix: ' vs ' + (bench.label || 'benchmark') });
+                    }
+                    var barsHtml = cvs.map(function(c) {
+                        var w = Math.max(1.5, 100 * (+c.pct || 0) / maxPct);
+                        var focusCls = c.is_focus ? ' focus' : '';
+                        return '<div class="iiq2-gs-row' + focusCls + '">' +
+                            '<div class="iiq2-gs-tag">' + _iiq2Esc(c.label || '') + '</div>' +
+                            '<div class="iiq2-gs-track"><div class="iiq2-gs-fill' + focusCls + '" style="width: ' + w + '%;"></div></div>' +
+                            '<div class="iiq2-gs-num">' +
+                                _iiq2Pct(c.pct) +
+                                (c.count != null ? ' <span class="iiq2-gs-count">&middot; ' + _iiq2Num(c.count) + '</span>' : '') +
+                            '</div>' +
+                        '</div>';
+                    }).join('');
+                    var insight = st.value_insight_html
+                        ? '<div class="iiq2-stage-delta">' + st.value_insight_html + '</div>'
+                        : '';
+                    return '<div class="iiq2-stage" data-idx="' + idx + '">' +
+                        '<div class="iiq2-stage-hdr">' +
+                            '<div style="flex:1;">' +
+                                '<div class="iiq2-stage-name">' + _iiq2Esc(st.emoji || '') + ' ' + _iiq2Esc(st.name) + '</div>' +
+                                '<div class="iiq2-stage-desc">' + _iiq2Esc(st.desc) + '</div>' +
+                            '</div>' +
+                            '<div class="iiq2-stage-nums" style="text-align:right;">' + multChip + '</div>' +
+                        '</div>' +
+                        '<div class="iiq2-gs-wrap">' + barsHtml + '</div>' +
+                        insight +
+                    '</div>';
+                }).join('');
+            }
 
             function _iiq2RenderHBars(elId, rows) {
                 var el = document.getElementById(elId);
