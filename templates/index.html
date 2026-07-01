@@ -13771,16 +13771,6 @@
         [data-jiq-landman-section][data-tab-hidden="true"] {
             display: none !important;
         }
-        /* Generic per-journey tab system (Fandango, Moviesphere+,
-           Lionsgate+, Paramount+ Lifecycle, Pop Culture Jeopardy,
-           Mark Rober, Abercrombie, Banking Research). Cards NOT
-           in the currently-active tab get data-jiq-tab-off="1"
-           applied by _jiqGenericActivateTab. The !important beats
-           the renderer's inline display so tabs work even after
-           cards have painted content. */
-        [data-jiq-tab-off="1"] {
-            display: none !important;
-        }
         .jiq-tab-btn {
             appearance: none;
             background: transparent;
@@ -28670,9 +28660,20 @@
                                 <button type="button" class="btn btn-sm rankeriq-netflixch-type-btn" data-type="Movie" onclick="setNetflixChTypeFilter('Movie')">Movies</button>
                                 <button type="button" class="btn btn-sm rankeriq-netflixch-type-btn" data-type="Show" onclick="setNetflixChTypeFilter('Show')">Shows</button>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 0.4rem;">
-                                <label for="rankerIQNetflixChDatePicker" style="font-size: 0.82rem; color: var(--text-secondary); white-space: nowrap;">Date:</label>
-                                <input type="date" id="rankerIQNetflixChDatePicker" style="padding: 0.35rem 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.82rem;" onchange="setNetflixChDate(this.value)">
+                            <div id="nfChDateRangeWrap" style="display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;">
+                                <span style="font-size:0.82rem;color:var(--text-secondary);white-space:nowrap;">Period:</span>
+                                <div style="display:flex;gap:0.25rem;flex-wrap:wrap;">
+                                    <button id="nfChPreset-yesterday" style="padding:0.28rem 0.6rem;font-size:0.78rem;border-radius:5px;border:1px solid var(--accent-color,#6366f1);background:var(--accent-color,#6366f1);color:#fff;cursor:pointer;font-weight:600;" onclick="setNetflixChPreset('yesterday')">Yesterday</button>
+                                    <button id="nfChPreset-7d" style="padding:0.28rem 0.6rem;font-size:0.78rem;border-radius:5px;border:1px solid var(--border-color);background:var(--bg-input);color:var(--text-primary);cursor:pointer;" onclick="setNetflixChPreset('7d')">Last 7d</button>
+                                    <button id="nfChPreset-30d" style="padding:0.28rem 0.6rem;font-size:0.78rem;border-radius:5px;border:1px solid var(--border-color);background:var(--bg-input);color:var(--text-primary);cursor:pointer;" onclick="setNetflixChPreset('30d')">Last 30d</button>
+                                    <button id="nfChPreset-90d" style="padding:0.28rem 0.6rem;font-size:0.78rem;border-radius:5px;border:1px solid var(--border-color);background:var(--bg-input);color:var(--text-primary);cursor:pointer;" onclick="setNetflixChPreset('90d')">Last 90d</button>
+                                    <button id="nfChPreset-custom" style="padding:0.28rem 0.6rem;font-size:0.78rem;border-radius:5px;border:1px solid var(--border-color);background:var(--bg-input);color:var(--text-primary);cursor:pointer;" onclick="setNetflixChPreset('custom')">Custom&#x2026;</button>
+                                </div>
+                                <div id="nfChCustomRange" style="display:none;align-items:center;gap:0.3rem;flex-wrap:wrap;">
+                                    <input type="date" id="nfChStartDate" style="padding:0.28rem 0.45rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.78rem;">
+                                    <span style="color:var(--text-secondary);font-size:0.82rem;">to</span>
+                                    <input type="date" id="nfChEndDate" style="padding:0.28rem 0.45rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.78rem;" onchange="applyNetflixChCustomRange()">
+                                </div>
                             </div>
                             <select id="rankerIQNetflixChGenreFilter" style="max-width: 260px; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);" onchange="loadNetflixChRanker(true)">
                                 <option value="">All Genres</option>
@@ -28686,8 +28687,9 @@
                                 <thead>
                                     <tr>
                                         <th>#</th>
-                                        <th title="Day-over-day rank change vs prior day">&#916;</th>
-                                        <th>Date</th>
+                                        <th title="Rank change vs prior period">&#916;</th>
+                                        <th title="View count change vs prior period" style="font-size:0.78rem;white-space:nowrap;">&#916; Views</th>
+                                        <th>Period</th>
                                         <th>Show</th>
                                         <th>Type</th>
                                         <th>Season</th>
@@ -30074,16 +30076,6 @@
                      payload has kpis.intent_gap_tickets_mid. Built by
                      the same JS path that builds jiqKpiStrip. -->
                 <div id="jiqIntentGapBreakdown" style="display:none; margin: 0 0 1.1rem;"></div>
-
-                <!-- Generic per-journey tab bar. Sticky under the KPI
-                     strip. Auto-shown for journeys registered in
-                     _JIQ_GENERIC_JOURNEY_TABS (Fandango, Moviesphere+,
-                     Lionsgate+, Paramount+ Lifecycle, Pop Culture
-                     Jeopardy, Mark Rober, Abercrombie, Banking
-                     Research); auto-hidden for everything else
-                     (Landman, Netflix, Obsession use their own tab
-                     bars; unrecognized runs render as long scroll). -->
-                <div id="jiqGenericTabBar" style="display: none; position: sticky; top: 0; z-index: 20; background: var(--bg-primary); padding: 0.55rem 0; margin: 0 0 1rem; border-bottom: 1px solid var(--border-color);"></div>
 
                 <!-- ════════════════════════════════════════════════════════
                      VIEWERSHIP TRENDS card - shown only when the run
@@ -47277,7 +47269,7 @@
                         { id: 'platforms', label: '🏢 Platforms', keywords: ['fandango', 'paramount', 'moviesphere', 'lionsgate', 'netflix'] },
                         { id: 'tv',        label: '📺 TV Shows',  keywords: ['pop culture jeopardy', 'pop_culture_jeopardy', 'landman', 'mark rober', 'mark_rober'] },
                         { id: 'brands',    label: '🛍️ Brands',    keywords: ['abercrombie'] },
-                        { id: 'movie',     label: '🎬 Movie',     keywords: ['obsession'] }
+                        { id: 'talent',    label: '🎭 Talent',    keywords: ['obsession'] }
                     ];
                     function _runMatchesCategory(r, cat) {
                         var name = ((r.project_name || r.target || '') + '').toLowerCase().replace(/[_\-]+/g, ' ');
@@ -47309,31 +47301,17 @@
                     // next to their thematic siblings.
                     var DEMO_CARDS = {
                         platforms: [
-                            { value: '__demo_netflix_ad_sales__', label: 'Netflix' }
+                            { value: '__demo_netflix_ad_sales__', label: '🎬 Netflix Ad-Sales Demand Map &amp; Off-Platform Intel' }
                         ],
-                        movie: [
-                            { value: '__demo_obsession_caa__',    label: 'Obsession' }
+                        talent: [
+                            { value: '__demo_obsession_caa__',    label: '🎬 Obsession' }
                         ]
                     };
 
-                    // Cleans up an S3 run's project_name/target for display
-                    // in the dropdown: replaces underscores/hyphens with
-                    // spaces, and title-cases the string ONLY when it is
-                    // fully uppercase (like "PARAMOUNT_PLUS_SUBSCRIBER_LIFECYCLE").
-                    // Mixed-case names (e.g. "MovieSphere Plus") pass through
-                    // untouched so intentional brand casing is preserved.
-                    function _prettifyRunName(raw) {
-                        var s = String(raw || '').replace(/[_\-]+/g, ' ').trim();
-                        var letters = s.replace(/[^A-Za-z]/g, '');
-                        if (letters && letters === letters.toUpperCase()) {
-                            s = s.toLowerCase().replace(/\b([a-z])/g, function(_, c) { return c.toUpperCase(); });
-                        }
-                        return s;
-                    }
-
                     function _runOption(r) {
-                        var label = _prettifyRunName(r.project_name || r.target || 'Journey');
-                        var safe  = (r.key || '').replace(/"/g, '&quot;');
+                        var label = (r.project_name || r.target || 'Journey')
+                                  + ' - ' + (r.start_date || '') + '→' + (r.end_date || '');
+                        var safe = (r.key || '').replace(/"/g, '&quot;');
                         return '<option value="' + safe + '">' + label + '</option>';
                     }
 
@@ -47358,8 +47336,9 @@
                     if (visibleArchived.length) {
                         opts.push('<optgroup label="🗄️ Archived (admin only)">');
                         visibleArchived.forEach(function(r) {
-                            var label = _prettifyRunName(r.project_name || r.target || 'Journey');
-                            var safe  = (r.key || '').replace(/"/g, '&quot;');
+                            var label = '[ARCHIVED] ' + (r.project_name || r.target || 'Journey')
+                                      + ' - ' + (r.start_date || '') + '→' + (r.end_date || '');
+                            var safe = (r.key || '').replace(/"/g, '&quot;');
                             opts.push('<option value="' + safe + '">' + label + '</option>');
                         });
                         opts.push('</optgroup>');
@@ -47395,7 +47374,7 @@
                             story_mode: 'obsession_caa',
                             target_name: 'Obsession',
                             target_display: 'Obsession (film)',
-                            project_name: 'Obsession',
+                            project_name: 'Obsession - Director Journey',
                             customer_brand: 'Talent Rep',
                             agency_lens: true,
                             start_date: '2026-03-15',
@@ -49199,26 +49178,6 @@
             } else {
                 if (typeof _jiqObsHideTabBar === 'function') _jiqObsHideTabBar();
             }
-
-            // Generic per-journey tab bar. Fires for the "long-scroll"
-            // journeys (Fandango, Moviesphere+, Lionsgate+, Paramount+
-            // Lifecycle, Pop Culture Jeopardy, Mark Rober, Abercrombie,
-            // Banking Research). Splits their card set into focused
-            // tabs (one card per tab) so users can drill into a single
-            // insight at a time instead of scrolling through everything.
-            // Hidden for Landman/Netflix/Obsession (which have their
-            // own tab systems) and for any unrecognized run.
-            (function _jiqApplyGenericJourneyTabs() {
-                if (typeof _jiqDetectJourneyForTabs !== 'function') return;
-                var journeyId = _jiqDetectJourneyForTabs(meta);
-                if (!journeyId) {
-                    if (typeof _jiqGenericHideTabBar === 'function') _jiqGenericHideTabBar();
-                    return;
-                }
-                if (typeof _jiqGenericActivateTab === 'function') {
-                    _jiqGenericActivateTab(journeyId, _JIQ_GENERIC_ACTIVE_TAB[journeyId]);
-                }
-            })();
 
             // Facts - facts can be plain strings or {label, value} dicts.
             // Coerce + filter so we never render '[object Object]' or empty
@@ -59048,201 +59007,6 @@
         function _jiqObsHideTabBar() {
             var bar = document.getElementById('jiqObsTabBar');
             if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
-        }
-
-        // ══════════════════════════════════════════════════════════════
-        // GENERIC PER-JOURNEY TAB SYSTEM
-        // Netflix / Obsession give every card its own tab and hide the
-        // rest; this generic primitive does the same for the other
-        // journeys (Fandango, Moviesphere+, Lionsgate+, Paramount+
-        // Subscriber Lifecycle, Pop Culture Jeopardy, Mark Rober,
-        // Abercrombie, Banking Research) so each journey reads as a
-        // series of focused tabs instead of a long scroll.
-        //
-        // Wiring model:
-        //   1. Every card in a journey's registry is toggled on/off via
-        //      the data-jiq-tab-off="1" attribute (see CSS at ~13773).
-        //   2. Card renderers keep whatever inline display they set;
-        //      the attribute + !important CSS rule overrides it when
-        //      the tab is inactive.
-        //   3. Only cards listed in the registry are toggled. Anything
-        //      else (KPI strip, cluster picker, footer) stays visible.
-        //   4. Netflix / Obsession / Landman have their own bespoke tab
-        //      systems and are excluded via _jiqDetectJourneyForTabs.
-        // ══════════════════════════════════════════════════════════════
-        var _JIQ_GENERIC_JOURNEY_TABS = {
-            fandango: [
-                { id: 'ecosystem', cardIds: ['jiqEcosystemCard'], emoji: '🌟', label: 'Ecosystem',        sub: 'flywheel + MAU trinity' },
-                { id: 'funnel',    cardIds: ['jiqSiteFunnelCard','jiqSiteFunnelDetailsTop','jiqSiteFunnelDetailsCompanion','jiqSiteFunnelDetails'], emoji: '🚪', label: 'Site Funnel',       sub: 'visitor flow + switchers' },
-                { id: 'paths',     cardIds: ['jiqPathCard'],     emoji: '🛒', label: 'Path to Purchase', sub: 'top pre-purchase sequences' }
-            ],
-            moviesphere: [
-                { id: 'audience',  cardIds: ['jiqAudienceHypCard'], emoji: '👥', label: 'Audience Cohorts',    sub: 'intent signal cohorts' },
-                { id: 'footprint', cardIds: ['jiqBubbleCard','jiqAnchorsCard'], emoji: '📡', label: 'Marketing Footprint', sub: 'reach + audience anchors' },
-                { id: 'paths',     cardIds: ['jiqPathCard'],     emoji: '🎬', label: 'Path to View',        sub: 'discovery sequences' }
-            ],
-            lionsgate: [
-                { id: 'audience',  cardIds: ['jiqAudienceHypCard'], emoji: '👥', label: 'Audience Cohorts',    sub: 'intent signal cohorts' },
-                { id: 'footprint', cardIds: ['jiqBubbleCard','jiqAnchorsCard'], emoji: '📡', label: 'Marketing Footprint', sub: 'reach + audience anchors' },
-                { id: 'paths',     cardIds: ['jiqPathCard'],     emoji: '🎬', label: 'Path to View',        sub: 'discovery sequences' }
-            ],
-            paramount_lifecycle: [
-                { id: 'stages',    cardIds: ['jiqSubLifecycleCard'],    emoji: '🔄', label: 'Lifecycle Stages',  sub: 'cohort funnel by stage' },
-                { id: 'presignup', cardIds: ['jiqLifeSignupCard'],      emoji: '🔍', label: 'Pre-Signup Intel',  sub: '30d before sub' },
-                { id: 'churn',     cardIds: ['jiqLifeChurnWakeCard'],   emoji: '🌊', label: 'Churn Wake',        sub: '60d after churn' },
-                { id: 'nonconv',   cardIds: ['jiqLifeNonConvCard'],     emoji: '↩️', label: 'Non-Converter',     sub: 'where they went' },
-                { id: 'fast',      cardIds: ['jiqLifeFastRadarCard'],   emoji: '⚡', label: 'FAST Radar',        sub: 'AVOD signals' }
-            ],
-            pop_culture_jeopardy: [
-                { id: 'audience',  cardIds: ['jiqAudienceHypCard'], emoji: '👥', label: 'Audience Cohorts', sub: 'viewer intent signals' },
-                { id: 'paths',     cardIds: ['jiqPathCard'],       emoji: '🛤️', label: 'Path to View',      sub: 'how they arrived' }
-            ],
-            mark_rober: [
-                { id: 'paths',     cardIds: ['jiqPathCard'],       emoji: '🛤️', label: 'Discovery Paths',    sub: 'how they found him' },
-                { id: 'footprint', cardIds: ['jiqBubbleCard'],     emoji: '📡', label: 'Marketing Footprint', sub: 'reach + commerce' }
-            ],
-            abercrombie: [
-                { id: 'funnel',    cardIds: ['jiqSiteFunnelCard','jiqSiteFunnelDetailsTop','jiqSiteFunnelDetailsCompanion','jiqSiteFunnelDetails'], emoji: '🚪', label: 'Site Funnel',       sub: 'visitor outcomes' },
-                { id: 'paths',     cardIds: ['jiqPathCard'],       emoji: '🛒', label: 'Path to Purchase',  sub: 'top journeys' },
-                { id: 'footprint', cardIds: ['jiqBubbleCard'],     emoji: '📡', label: 'Marketing Footprint', sub: 'reach + anchors' }
-            ],
-            banking_research: [
-                { id: 'lifecycle', cardIds: ['jiqJourneyLifecycleCard'], emoji: '🛤️', label: 'Journey Lifecycle',  sub: 'stop-by-stop' },
-                { id: 'paths',     cardIds: ['jiqPathCard'],           emoji: '💳', label: 'Path to Open',       sub: 'top sequences' },
-                { id: 'footprint', cardIds: ['jiqBubbleCard'],         emoji: '📡', label: 'Marketing Footprint', sub: 'reach + anchors' }
-            ]
-        };
-        var _JIQ_GENERIC_ACTIVE_TAB = {};
-
-        // Maps the current run's meta to a journey key in the registry
-        // above, or returns null for runs that already have bespoke tab
-        // systems (Landman / Netflix / Obsession) or for unrecognized
-        // runs that should fall back to long-scroll rendering.
-        function _jiqDetectJourneyForTabs(meta) {
-            if (!meta) return null;
-            var mode = meta.story_mode || '';
-            if (mode === 'landman' || mode === 'netflix_ad_sales' || mode === 'obsession_caa') return null;
-            var name = ((meta.project_name || meta.target || meta.target_name || '') + '').toLowerCase().replace(/[_\-]+/g, ' ');
-            var tt   = (meta.target_type || '') + '';
-            var cat  = (meta.category || '') + '';
-            if (/fandango/.test(name)) return 'fandango';
-            if (/moviesphere/.test(name)) return 'moviesphere';
-            if (/lionsgate/.test(name)) return 'lionsgate';
-            if (/paramount.*subscriber.*lifecycle/.test(name) || tt === 'subscriber_lifecycle') return 'paramount_lifecycle';
-            if (/pop culture jeopardy/.test(name)) return 'pop_culture_jeopardy';
-            if (/mark rober/.test(name) || tt === 'creator_audience' || cat === 'creator_audience') return 'mark_rober';
-            if (/abercrombie/.test(name)) return 'abercrombie';
-            if (/banking/.test(name) || tt === 'banking_research' || cat === 'banking_research') return 'banking_research';
-            return null;
-        }
-
-        // Filters a journey's tab config down to tabs whose cards
-        // actually exist AND are currently visible (renderer decided
-        // the payload had data). Prevents empty / placeholder tabs.
-        function _jiqGenericVisibleTabs(journeyId) {
-            var tabs = _JIQ_GENERIC_JOURNEY_TABS[journeyId] || [];
-            return tabs.filter(function(t) {
-                return t.cardIds.some(function(cid) {
-                    var el = document.getElementById(cid);
-                    // "Visible" = element exists AND its inline display
-                    // is not 'none'. The renderer sets display to ''
-                    // (or 'grid' / 'block') when it has data to paint,
-                    // and leaves the initial 'display: none' otherwise.
-                    if (!el) return false;
-                    var d = (el.style && el.style.display) || '';
-                    return d !== 'none';
-                });
-            });
-        }
-
-        function _jiqGenericRenderTabBar(journeyId) {
-            var bar = document.getElementById('jiqGenericTabBar');
-            if (!bar) return;
-            var tabs = _jiqGenericVisibleTabs(journeyId);
-            if (!tabs.length) {
-                bar.style.display = 'none';
-                bar.innerHTML = '';
-                return;
-            }
-            bar.style.display = '';
-            var active = _JIQ_GENERIC_ACTIVE_TAB[journeyId];
-            // If the previously-active tab isn't in the current
-            // visible-tab list (e.g. cluster picker just changed and
-            // some card unhid/hid), fall back to the first visible tab.
-            if (!tabs.some(function(t) { return t.id === active; })) {
-                active = tabs[0].id;
-                _JIQ_GENERIC_ACTIVE_TAB[journeyId] = active;
-            }
-            bar.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:stretch;">'
-                + tabs.map(function(t, i) {
-                    var on = (t.id === active);
-                    var bg = on ? 'rgba(99,102,241,0.85)' : 'rgba(255,255,255,0.04)';
-                    var bd = on ? 'var(--accent-primary)'  : 'rgba(255,255,255,0.10)';
-                    var fg = on ? '#ffffff'                : 'var(--text-primary)';
-                    var subFg = on ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)';
-                    return '<button type="button" data-jiq-generic-tab="' + t.id + '"'
-                         + ' style="flex:1 1 calc(100%/' + tabs.length + ' - 0.4rem); min-width:120px; max-width:220px;'
-                         +        ' display:flex; flex-direction:column; align-items:flex-start; justify-content:center;'
-                         +        ' gap:0.1rem; padding:0.4rem 0.6rem; border-radius:6px; cursor:pointer;'
-                         +        ' background:' + bg + '; border:1px solid ' + bd + ';'
-                         +        ' color:' + fg + '; text-align:left;'
-                         +        ' transition: background 0.15s ease, border-color 0.15s ease;'
-                         +        ' font-family:inherit;">'
-                         +   '<div style="display:flex; align-items:center; gap:0.35rem; font-size:0.74rem; font-weight:800; line-height:1.15;">'
-                         +     '<span style="opacity:0.55; font-size:0.62rem; font-weight:700;">' + (i + 1) + '.</span>'
-                         +     '<span>' + t.emoji + '</span>'
-                         +     '<span>' + _jiqEsc(t.label) + '</span>'
-                         +   '</div>'
-                         +   '<div style="font-size:0.6rem; opacity:' + (on ? '0.9' : '0.6') + '; color:' + subFg + '; padding-left:1.1rem;">' + _jiqEsc(t.sub || '') + '</div>'
-                         + '</button>';
-                }).join('')
-                + '</div>';
-            Array.prototype.forEach.call(bar.querySelectorAll('button[data-jiq-generic-tab]'), function(btn) {
-                btn.addEventListener('click', function() {
-                    _jiqGenericActivateTab(journeyId, btn.getAttribute('data-jiq-generic-tab'));
-                });
-            });
-        }
-
-        function _jiqGenericActivateTab(journeyId, tabId) {
-            var registry = _JIQ_GENERIC_JOURNEY_TABS[journeyId] || [];
-            var visible  = _jiqGenericVisibleTabs(journeyId);
-            var match    = visible.filter(function(t) { return t.id === tabId; })[0] || visible[0];
-            if (!match) return;
-            _JIQ_GENERIC_ACTIVE_TAB[journeyId] = match.id;
-            // Collect all card ids across every tab in the registry (not
-            // just visible), so we always clear a stale tab-off on cards
-            // that have since become visible.
-            var activeIds = {};
-            match.cardIds.forEach(function(id) { activeIds[id] = true; });
-            registry.forEach(function(t) {
-                t.cardIds.forEach(function(id) {
-                    var el = document.getElementById(id);
-                    if (!el) return;
-                    if (activeIds[id]) {
-                        el.removeAttribute('data-jiq-tab-off');
-                    } else {
-                        el.setAttribute('data-jiq-tab-off', '1');
-                    }
-                });
-            });
-            _jiqGenericRenderTabBar(journeyId);
-        }
-
-        function _jiqGenericHideTabBar() {
-            var bar = document.getElementById('jiqGenericTabBar');
-            if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
-            // Also clear tab-off attributes so any leftover journey
-            // switch (e.g. Fandango → Landman) doesn't leave cards
-            // hidden on the next journey's render.
-            Object.keys(_JIQ_GENERIC_JOURNEY_TABS).forEach(function(jid) {
-                (_JIQ_GENERIC_JOURNEY_TABS[jid] || []).forEach(function(t) {
-                    t.cardIds.forEach(function(id) {
-                        var el = document.getElementById(id);
-                        if (el) el.removeAttribute('data-jiq-tab-off');
-                    });
-                });
-            });
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -122124,9 +121888,55 @@
         let _netflixChGenresLoaded = false;
         let _netflixChRows = [];
         let _netflixChTypeFilter = 'BOTH';
-        let _netflixChDate = '';          // '' = let server default to yesterday
+        let _netflixChStartDate = '';   // '' = server defaults to yesterday
+        let _netflixChEndDate   = '';
+        let _netflixChPreset    = 'yesterday';
+        let _netflixChPeriodStr = '';
         let _netflixChChart = null;
         const _netflixChHistoryCache = {};
+
+        function _nfChClearCache() {
+            Object.keys(_netflixChHistoryCache).forEach(k => delete _netflixChHistoryCache[k]);
+        }
+
+        function setNetflixChPreset(preset) {
+            _netflixChPreset = preset;
+            ['yesterday','7d','30d','90d','custom'].forEach(p => {
+                const btn = document.getElementById('nfChPreset-' + p);
+                if (!btn) return;
+                const on = (p === preset);
+                btn.style.background   = on ? 'var(--accent-color,#6366f1)' : 'var(--bg-input)';
+                btn.style.color        = on ? '#fff' : 'var(--text-primary)';
+                btn.style.borderColor  = on ? 'var(--accent-color,#6366f1)' : 'var(--border-color)';
+                btn.style.fontWeight   = on ? '600' : '400';
+            });
+            const customDiv = document.getElementById('nfChCustomRange');
+            if (customDiv) customDiv.style.display = (preset === 'custom') ? 'flex' : 'none';
+            if (preset === 'custom') return;
+            _netflixChStartDate = '';
+            _netflixChEndDate   = '';
+            if (preset !== 'yesterday') {
+                const days = {'7d': 7, '30d': 30, '90d': 90}[preset] || 7;
+                const end   = new Date(); end.setDate(end.getDate() - 1);
+                const start = new Date(end); start.setDate(start.getDate() - (days - 1));
+                const fmt   = d => d.toISOString().slice(0, 10);
+                _netflixChStartDate = fmt(start);
+                _netflixChEndDate   = fmt(end);
+            }
+            _nfChClearCache();
+            loadNetflixChRanker(true);
+        }
+
+        function applyNetflixChCustomRange() {
+            const sEl = document.getElementById('nfChStartDate');
+            const eEl = document.getElementById('nfChEndDate');
+            if (!sEl || !eEl || !sEl.value || !eEl.value) return;
+            if (sEl.value > eEl.value) { alert('Start date must be on or before end date.'); return; }
+            _netflixChStartDate = sEl.value;
+            _netflixChEndDate   = eEl.value;
+            _nfChClearCache();
+            loadNetflixChRanker(true);
+        }
 
         async function loadNetflixChRanker(force) {
             if (!_netflixChGenresLoaded) {
@@ -122142,23 +121952,17 @@
                 const params = new URLSearchParams();
                 if (_netflixChTypeFilter !== 'BOTH') params.set('type', _netflixChTypeFilter);
                 if (genre) params.set('genre', genre);
-                if (_netflixChDate) params.set('date', _netflixChDate);
+                if (_netflixChStartDate) params.set('start_date', _netflixChStartDate);
+                if (_netflixChEndDate)   params.set('end_date',   _netflixChEndDate);
                 params.set('limit', '1000');
                 const r = await fetch('/api/rankers/netflix-clickhouse/data?' + params.toString(), { credentials: 'same-origin' });
                 const d = await r.json();
                 if (!d || !d.success) throw new Error((d && d.error) || 'Failed to load Netflix data');
                 _netflixChRows = d.rows || [];
                 _netflixChLoaded = true;
-                // Sync date picker: set value on first load, update min/max from available_dates
-                const datePicker = document.getElementById('rankerIQNetflixChDatePicker');
-                if (datePicker) {
-                    if (!_netflixChDate && d.date) { datePicker.value = d.date; _netflixChDate = d.date; }
-                    if (d.available_dates && d.available_dates.length) {
-                        const sorted = d.available_dates.slice().sort();
-                        datePicker.min = sorted[0];
-                        datePicker.max = sorted[sorted.length - 1];
-                    }
-                }
+                _netflixChPeriodStr = d.start_date && d.end_date
+                    ? (d.start_date === d.end_date ? d.start_date : d.start_date + '\u2013' + d.end_date)
+                    : (d.date || '');
                 renderNetflixChRanker();
             } catch (e) {
                 if (errorEl) {
@@ -122168,11 +121972,6 @@
             } finally {
                 if (loading) loading.style.display = 'none';
             }
-        }
-
-        function setNetflixChDate(dateStr) {
-            _netflixChDate = dateStr;
-            loadNetflixChRanker(true);
         }
 
         function setNetflixChTypeFilter(type) {
@@ -122206,7 +122005,7 @@
             if (!body) return;
 
             body.innerHTML = _netflixChRows.map((row, i) => {
-                // Delta indicator
+                // Delta rank
                 let deltaCell;
                 if (row.delta_rank == null) {
                     deltaCell = '<span style="color:#f59e0b;font-size:0.72rem;font-weight:600;">NEW</span>';
@@ -122217,15 +122016,29 @@
                 } else {
                     deltaCell = '<span style="color:var(--text-secondary);">&mdash;</span>';
                 }
+                // Delta views
+                let deltaViewsCell;
+                if (row.delta_views == null) {
+                    deltaViewsCell = '<span style="color:var(--text-secondary);">&mdash;</span>';
+                } else if (row.delta_views > 0) {
+                    deltaViewsCell = `<span style="color:#22c55e;font-size:0.76rem;font-weight:600;">+${row.delta_views.toLocaleString()}</span>`;
+                } else if (row.delta_views < 0) {
+                    deltaViewsCell = `<span style="color:#ef4444;font-size:0.76rem;font-weight:600;">${row.delta_views.toLocaleString()}</span>`;
+                } else {
+                    deltaViewsCell = '<span style="color:var(--text-secondary);">&mdash;</span>';
+                }
                 const viewsDisplay = (row.gen_pop_views || row.views || 0).toLocaleString();
-                const sk = encodeURIComponent(row.show || '');
-                const snk = encodeURIComponent(row.season != null ? String(row.season) : '');
+                const sk  = encodeURIComponent(row.show    || '');
+                const snk = encodeURIComponent(row.season  != null ? String(row.season)  : '');
                 const epk = encodeURIComponent(row.episode != null ? String(row.episode) : '');
+                const sdk = encodeURIComponent(_netflixChStartDate || '');
+                const edk = encodeURIComponent(_netflixChEndDate   || '');
                 return `<tr>
                     <td>${i + 1}</td>
                     <td>${deltaCell}</td>
-                    <td style="font-size:0.8rem;color:var(--text-secondary);white-space:nowrap;">${_iqEsc(row.date || '')}</td>
-                    <td data-nfshow="${sk}" data-nfseason="${snk}" data-nfepisode="${epk}"
+                    <td style="font-size:0.76rem;white-space:nowrap;">${deltaViewsCell}</td>
+                    <td style="font-size:0.78rem;color:var(--text-secondary);white-space:nowrap;">${_iqEsc(_netflixChPeriodStr || '')}</td>
+                    <td data-nfshow="${sk}" data-nfseason="${snk}" data-nfepisode="${epk}" data-nfstart="${sdk}" data-nfend="${edk}"
                         style="cursor:default;"
                         onmouseenter="showNetflixChTooltip(event,this)"
                         onmouseleave="hideNetflixChTooltip()">${_iqEsc(row.show || '')}${row.episode_name ? ' <span style="color:var(--text-secondary);">&mdash; ' + _iqEsc(row.episode_name) + '</span>' : ''}</td>
@@ -122243,9 +122056,11 @@
         }
 
         async function showNetflixChTooltip(event, el) {
-            const show    = decodeURIComponent(el.dataset.nfshow    || '');
-            const season  = decodeURIComponent(el.dataset.nfseason  || '');
-            const episode = decodeURIComponent(el.dataset.nfepisode || '');
+            const show      = decodeURIComponent(el.dataset.nfshow    || '');
+            const season    = decodeURIComponent(el.dataset.nfseason  || '');
+            const episode   = decodeURIComponent(el.dataset.nfepisode || '');
+            const startDate = decodeURIComponent(el.dataset.nfstart   || '');
+            const endDate   = decodeURIComponent(el.dataset.nfend     || '');
             if (!show) return;
             const tooltip = document.getElementById('nfChTooltip');
             if (!tooltip) return;
@@ -122254,15 +122069,17 @@
             tooltip.style.top  = (window.scrollY + rect.bottom + 4) + 'px';
             tooltip.innerHTML  = '<span style="color:var(--text-secondary);font-size:0.75rem;">Loading…</span>';
             tooltip.style.display = 'block';
-            const cacheKey = show + '|' + season + '|' + episode;
+            const cacheKey = show + '|' + season + '|' + episode + '|' + startDate + '|' + endDate;
             if (_netflixChHistoryCache[cacheKey] !== undefined) {
                 _renderNfChTooltip(tooltip, _netflixChHistoryCache[cacheKey]);
                 return;
             }
             try {
-                const p = new URLSearchParams({ show, days: 5 });
-                if (season)  p.set('season',  season);
-                if (episode) p.set('episode', episode);
+                const p = new URLSearchParams({ show, periods: 5 });
+                if (season)    p.set('season',     season);
+                if (episode)   p.set('episode',    episode);
+                if (startDate) p.set('start_date', startDate);
+                if (endDate)   p.set('end_date',   endDate);
                 const resp = await fetch('/api/rankers/netflix-clickhouse/history?' + p.toString(), { credentials: 'same-origin' });
                 const data = await resp.json();
                 if (!data || !data.success) throw new Error('failed');
@@ -122275,16 +122092,21 @@
 
         function _renderNfChTooltip(tooltip, history) {
             if (!history || !history.length) {
-                tooltip.innerHTML = '<span style="color:var(--text-secondary);font-size:0.75rem;">No history yet</span>';
+                tooltip.innerHTML = '<span style="color:var(--text-secondary);font-size:0.75rem;">No prior periods yet</span>';
                 return;
             }
             tooltip.innerHTML =
-                '<div style="font-size:0.7rem;font-weight:600;letter-spacing:.04em;color:var(--text-secondary);margin-bottom:0.4rem;text-transform:uppercase;">Previous ranks</div>' +
-                history.map(h =>
-                    `<div style="display:flex;justify-content:space-between;gap:1.2rem;font-size:0.78rem;padding:0.12rem 0;">` +
-                    `<span style="color:var(--text-secondary);">${_iqEsc(h.date)}</span>` +
-                    `<span style="font-weight:600;">#${h.rank}</span></div>`
-                ).join('');
+                '<div style="font-size:0.7rem;font-weight:600;letter-spacing:.04em;color:var(--text-secondary);margin-bottom:0.4rem;text-transform:uppercase;">Prior periods</div>' +
+                history.map(h => {
+                    const period   = (h.start_date && h.end_date)
+                        ? (h.start_date === h.end_date ? h.start_date : h.start_date + '\u2013' + h.end_date)
+                        : (h.date || '');
+                    const rankStr  = h.rank  != null ? '#' + h.rank  : '\u2014';
+                    const viewsStr = h.views != null ? Number(h.views).toLocaleString() + ' views' : '';
+                    return '<div style="display:flex;justify-content:space-between;gap:1.2rem;font-size:0.78rem;padding:0.12rem 0;">' +
+                        '<span style="color:var(--text-secondary);">' + _iqEsc(period) + '</span>' +
+                        '<span style="font-weight:600;">' + rankStr + (viewsStr ? ' \u00b7 ' + viewsStr : '') + '</span></div>';
+                }).join('');
         }
 
         function hideNetflixChTooltip() {
