@@ -28654,13 +28654,17 @@
                             <h3 style="margin: 0;">🎬 Most Watched on Netflix</h3>
                             <button class="btn btn-primary" onclick="loadNetflixChRanker(true)" id="rankerIQNetflixChRefreshBtn">🔄 Refresh</button>
                         </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
+                        <div style="display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
                             <div id="rankerIQNetflixChTypeToggle" role="group" aria-label="Filter by type" style="display: flex; gap: 0.4rem;">
                                 <button type="button" class="btn btn-sm rankeriq-netflixch-type-btn active" data-type="BOTH" onclick="setNetflixChTypeFilter('BOTH')">Both</button>
                                 <button type="button" class="btn btn-sm rankeriq-netflixch-type-btn" data-type="Movie" onclick="setNetflixChTypeFilter('Movie')">Movies</button>
                                 <button type="button" class="btn btn-sm rankeriq-netflixch-type-btn" data-type="Show" onclick="setNetflixChTypeFilter('Show')">Shows</button>
                             </div>
-                            <select id="rankerIQNetflixChGenreFilter" style="max-width: 260px; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);" onchange="renderNetflixChRanker()">
+                            <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                <label for="rankerIQNetflixChDatePicker" style="font-size: 0.82rem; color: var(--text-secondary); white-space: nowrap;">Date:</label>
+                                <input type="date" id="rankerIQNetflixChDatePicker" style="padding: 0.35rem 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.82rem;" onchange="setNetflixChDate(this.value)">
+                            </div>
+                            <select id="rankerIQNetflixChGenreFilter" style="max-width: 260px; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);" onchange="loadNetflixChRanker(true)">
                                 <option value="">All Genres</option>
                             </select>
                         </div>
@@ -28671,15 +28675,17 @@
                             <table class="rankers-table" style="width: 100%; border-collapse: collapse;">
                                 <thead>
                                     <tr>
-                                        <th>Rank</th>
+                                        <th>#</th>
+                                        <th title="Day-over-day rank change vs prior day">&#916;</th>
+                                        <th>Date</th>
                                         <th>Show</th>
                                         <th>Type</th>
                                         <th>Season</th>
                                         <th>Episode</th>
-                                        <th>Views</th>
+                                        <th title="Panel views projected to US gen pop (&#247;10M &#215; 329.9M)">Viewers</th>
                                         <th>Genre</th>
                                         <th>Runtime</th>
-                                        <th title="Placeholder - underlying watch-time data is being cleaned up">Avg Watch Time</th>
+                                        <th title="Placeholder - underlying watch-time data is being cleaned up">Avg Watch</th>
                                     </tr>
                                 </thead>
                                 <tbody id="rankerIQNetflixChBody"></tbody>
@@ -28688,6 +28694,8 @@
                         <div id="rankerIQNetflixChLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading Netflix data...</div>
                         <div id="rankerIQNetflixChError" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
                     </div>
+                    <div id="nfChTooltip" style="display:none; position:absolute; z-index:9999; background:var(--bg-card,#1e293b); border:1px solid var(--border-color,#334155); border-radius:8px; padding:0.65rem 0.85rem; box-shadow:0 4px 12px rgba(0,0,0,0.45); min-width:160px; max-width:240px; pointer-events:none;"></div>
+
 
                     {%- for m in IQ_RANKER_MASTERS %}
                     <!-- ===== {{ m.label|upper }} RANKER ===== -->
@@ -47281,7 +47289,7 @@
                     // next to their thematic siblings.
                     var DEMO_CARDS = {
                         platforms: [
-                            { value: '__demo_netflix_ad_sales__', label: '🎬 Netflix' }
+                            { value: '__demo_netflix_ad_sales__', label: '🎬 Netflix Ad-Sales Demand Map &amp; Off-Platform Intel' }
                         ],
                         talent: [
                             { value: '__demo_obsession_caa__',    label: '🎬 Obsession' }
@@ -47396,7 +47404,7 @@
                             story_mode: 'netflix_ad_sales',
                             target_name: 'Netflix',
                             target_display: 'Netflix',
-                            project_name: 'Netflix',
+                            project_name: 'Netflix Ad-Sales Demand Map',
                             customer_brand: 'Netflix',
                             svod_platform_name: 'Netflix',
                             start_date: '2026-04-01',
@@ -104423,7 +104431,7 @@
                 var lp = labelPositions[i];
                 var words = b.name.split(/\s+/);
                 if (words.length > 2) {
-                    var mid = words.length >= 5 ? 2 : 1;
+                    var mid = 1;
                     var line1 = words.slice(0, mid).join(' ');
                     var line2 = words.slice(mid).join(' ');
                     var topY = lp.y - lineGap;
@@ -121868,15 +121876,10 @@
         let _netflixChGenresLoaded = false;
         let _netflixChRows = [];
         let _netflixChTypeFilter = 'BOTH';
+        let _netflixChDate = '';          // '' = let server default to yesterday
         let _netflixChChart = null;
+        const _netflixChHistoryCache = {};
 
-        // Filtering (type/genre) now happens server-side against the full
-        // netflix.netflix_ranker table instead of re-filtering a fixed
-        // top-200-by-views client-side cache - that old approach is why
-        // niche combinations (e.g. Anime) used to show only a handful of
-        // rows even though the real table has thousands. Every filter
-        // change now triggers a fresh fetch with the new type/genre/limit
-        // params baked into the query string.
         async function loadNetflixChRanker(force) {
             if (!_netflixChGenresLoaded) {
                 loadNetflixChGenreOptions();
@@ -121891,12 +121894,23 @@
                 const params = new URLSearchParams();
                 if (_netflixChTypeFilter !== 'BOTH') params.set('type', _netflixChTypeFilter);
                 if (genre) params.set('genre', genre);
+                if (_netflixChDate) params.set('date', _netflixChDate);
                 params.set('limit', '1000');
                 const r = await fetch('/api/rankers/netflix-clickhouse/data?' + params.toString(), { credentials: 'same-origin' });
                 const d = await r.json();
                 if (!d || !d.success) throw new Error((d && d.error) || 'Failed to load Netflix data');
                 _netflixChRows = d.rows || [];
                 _netflixChLoaded = true;
+                // Sync date picker: set value on first load, update min/max from available_dates
+                const datePicker = document.getElementById('rankerIQNetflixChDatePicker');
+                if (datePicker) {
+                    if (!_netflixChDate && d.date) { datePicker.value = d.date; _netflixChDate = d.date; }
+                    if (d.available_dates && d.available_dates.length) {
+                        const sorted = d.available_dates.slice().sort();
+                        datePicker.min = sorted[0];
+                        datePicker.max = sorted[sorted.length - 1];
+                    }
+                }
                 renderNetflixChRanker();
             } catch (e) {
                 if (errorEl) {
@@ -121908,6 +121922,11 @@
             }
         }
 
+        function setNetflixChDate(dateStr) {
+            _netflixChDate = dateStr;
+            loadNetflixChRanker(true);
+        }
+
         function setNetflixChTypeFilter(type) {
             _netflixChTypeFilter = type;
             document.querySelectorAll('.rankeriq-netflixch-type-btn').forEach(b => {
@@ -121916,13 +121935,6 @@
             loadNetflixChRanker(true);
         }
 
-        // GENRE is a packed comma-separated string of tags per show
-        // (e.g. "Kids' TV, TV Cartoons, Imaginative"). The dropdown is
-        // built from a dedicated full-table DISTINCT query (not from the
-        // current page of ranked rows), fetched once, so it always lists
-        // every genre regardless of the active type/genre filter or row
-        // limit - previously it was built only from whatever rows were
-        // currently loaded, so rare genres could be missing entirely.
         async function loadNetflixChGenreOptions() {
             _netflixChGenresLoaded = true;
             const sel = document.getElementById('rankerIQNetflixChGenreFilter');
@@ -121937,7 +121949,7 @@
                     tags.map(t => `<option value="${_iqEsc(t)}">${_iqEsc(t)}</option>`).join('');
                 if (prevValue && tags.includes(prevValue)) sel.value = prevValue;
             } catch (e) {
-                // Non-fatal - dropdown just stays at "All Genres".
+                // Non-fatal - dropdown stays at "All Genres".
             }
         }
 
@@ -121945,22 +121957,91 @@
             const body = document.getElementById('rankerIQNetflixChBody');
             if (!body) return;
 
-            // Rows already come pre-filtered by type/genre from the server.
-            body.innerHTML = _netflixChRows.map((row, i) => `
-                <tr>
+            body.innerHTML = _netflixChRows.map((row, i) => {
+                // Delta indicator
+                let deltaCell;
+                if (row.delta_rank == null) {
+                    deltaCell = '<span style="color:#f59e0b;font-size:0.72rem;font-weight:600;">NEW</span>';
+                } else if (row.delta_rank > 0) {
+                    deltaCell = `<span style="color:#22c55e;font-weight:600;">&#9650;${row.delta_rank}</span>`;
+                } else if (row.delta_rank < 0) {
+                    deltaCell = `<span style="color:#ef4444;font-weight:600;">&#9660;${Math.abs(row.delta_rank)}</span>`;
+                } else {
+                    deltaCell = '<span style="color:var(--text-secondary);">&mdash;</span>';
+                }
+                const viewsDisplay = (row.gen_pop_views || row.views || 0).toLocaleString();
+                const sk = encodeURIComponent(row.show || '');
+                const snk = encodeURIComponent(row.season != null ? String(row.season) : '');
+                const epk = encodeURIComponent(row.episode != null ? String(row.episode) : '');
+                return `<tr>
                     <td>${i + 1}</td>
-                    <td>${_iqEsc(row.show || '')}${row.episode_name ? ' <span style="color: var(--text-secondary);">&mdash; ' + _iqEsc(row.episode_name) + '</span>' : ''}</td>
+                    <td>${deltaCell}</td>
+                    <td style="font-size:0.8rem;color:var(--text-secondary);white-space:nowrap;">${_iqEsc(row.date || '')}</td>
+                    <td data-nfshow="${sk}" data-nfseason="${snk}" data-nfepisode="${epk}"
+                        style="cursor:default;"
+                        onmouseenter="showNetflixChTooltip(event,this)"
+                        onmouseleave="hideNetflixChTooltip()">${_iqEsc(row.show || '')}${row.episode_name ? ' <span style="color:var(--text-secondary);">&mdash; ' + _iqEsc(row.episode_name) + '</span>' : ''}</td>
                     <td>${_iqEsc(row.type || '')}</td>
                     <td>${_iqEsc(row.season || '')}</td>
                     <td>${row.episode != null && row.episode !== '' ? _iqEsc(String(row.episode)) : ''}</td>
-                    <td>${(row.views || 0).toLocaleString()}</td>
+                    <td>${viewsDisplay}</td>
                     <td>${_iqEsc(row.genre || '')}</td>
                     <td>${_iqEsc(row.runtime || '')}</td>
-                    <td>${row.avg_watch_time != null ? _iqEsc(String(row.avg_watch_time)) : '<span style="color: var(--text-secondary);">&mdash;</span>'}</td>
-                </tr>
-            `).join('');
+                    <td>${row.avg_watch_time != null ? _iqEsc(String(row.avg_watch_time)) : '<span style="color:var(--text-secondary);">&mdash;</span>'}</td>
+                </tr>`;
+            }).join('');
 
             renderNetflixChChart(_netflixChRows);
+        }
+
+        async function showNetflixChTooltip(event, el) {
+            const show    = decodeURIComponent(el.dataset.nfshow    || '');
+            const season  = decodeURIComponent(el.dataset.nfseason  || '');
+            const episode = decodeURIComponent(el.dataset.nfepisode || '');
+            if (!show) return;
+            const tooltip = document.getElementById('nfChTooltip');
+            if (!tooltip) return;
+            const rect = el.getBoundingClientRect();
+            tooltip.style.left = (window.scrollX + rect.left) + 'px';
+            tooltip.style.top  = (window.scrollY + rect.bottom + 4) + 'px';
+            tooltip.innerHTML  = '<span style="color:var(--text-secondary);font-size:0.75rem;">Loading…</span>';
+            tooltip.style.display = 'block';
+            const cacheKey = show + '|' + season + '|' + episode;
+            if (_netflixChHistoryCache[cacheKey] !== undefined) {
+                _renderNfChTooltip(tooltip, _netflixChHistoryCache[cacheKey]);
+                return;
+            }
+            try {
+                const p = new URLSearchParams({ show, days: 5 });
+                if (season)  p.set('season',  season);
+                if (episode) p.set('episode', episode);
+                const resp = await fetch('/api/rankers/netflix-clickhouse/history?' + p.toString(), { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (!data || !data.success) throw new Error('failed');
+                _netflixChHistoryCache[cacheKey] = data.history || [];
+                _renderNfChTooltip(tooltip, _netflixChHistoryCache[cacheKey]);
+            } catch (_) {
+                tooltip.innerHTML = '<span style="color:var(--text-secondary);font-size:0.75rem;">History unavailable</span>';
+            }
+        }
+
+        function _renderNfChTooltip(tooltip, history) {
+            if (!history || !history.length) {
+                tooltip.innerHTML = '<span style="color:var(--text-secondary);font-size:0.75rem;">No history yet</span>';
+                return;
+            }
+            tooltip.innerHTML =
+                '<div style="font-size:0.7rem;font-weight:600;letter-spacing:.04em;color:var(--text-secondary);margin-bottom:0.4rem;text-transform:uppercase;">Previous ranks</div>' +
+                history.map(h =>
+                    `<div style="display:flex;justify-content:space-between;gap:1.2rem;font-size:0.78rem;padding:0.12rem 0;">` +
+                    `<span style="color:var(--text-secondary);">${_iqEsc(h.date)}</span>` +
+                    `<span style="font-weight:600;">#${h.rank}</span></div>`
+                ).join('');
+        }
+
+        function hideNetflixChTooltip() {
+            const tooltip = document.getElementById('nfChTooltip');
+            if (tooltip) tooltip.style.display = 'none';
         }
 
         // Builds a chart label that disambiguates episodes of the same show,
@@ -121977,13 +122058,14 @@
         function renderNetflixChChart(rows) {
             const canvas = document.getElementById('rankerIQNetflixChChart');
             if (!canvas || typeof Chart === 'undefined') return;
-            const top = rows.slice(0, 15);
+            const top    = rows.slice(0, 15);
             const labels = top.map(_netflixChChartLabel);
-            const data = top.map(r => r.views || 0);
+            const data   = top.map(r => r.gen_pop_views || r.views || 0);
+            const lbl    = _netflixChTypeFilter === 'BOTH' ? 'Projected Viewers (Movies + Shows)' : 'Projected Viewers (' + _netflixChTypeFilter + 's)';
             if (_netflixChChart) {
                 _netflixChChart.data.labels = labels;
-                _netflixChChart.data.datasets[0].data = data;
-                _netflixChChart.data.datasets[0].label = _netflixChTypeFilter === 'BOTH' ? 'Views (Movies + Shows)' : 'Views (' + _netflixChTypeFilter + 's)';
+                _netflixChChart.data.datasets[0].data  = data;
+                _netflixChChart.data.datasets[0].label = lbl;
                 _netflixChChart.update();
                 return;
             }
@@ -121991,16 +122073,12 @@
                 type: 'bar',
                 data: {
                     labels,
-                    datasets: [{
-                        label: _netflixChTypeFilter === 'BOTH' ? 'Views (Movies + Shows)' : 'Views (' + _netflixChTypeFilter + 's)',
-                        data,
-                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                    }],
+                    datasets: [{ label: lbl, data, backgroundColor: 'rgba(59, 130, 246, 0.7)' }],
                 },
                 options: {
                     indexAxis: 'y',
                     plugins: { legend: { display: false } },
-                    scales: { x: { beginAtZero: true } },
+                    scales:  { x: { beginAtZero: true } },
                 },
             });
         }
