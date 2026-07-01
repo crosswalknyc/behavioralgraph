@@ -9339,37 +9339,23 @@ def netflix_ranker_backfill():
 @requires_auth
 def get_netflix_clickhouse_ranker_data():
     """
-    Simple "most watched on Netflix" ranking sourced from ClickHouse
-    (netflix.netflix_ranker), independent of the legacy Snowflake-backed
-    Netflix ranker above. Returns Rank / Show / Type / Season / Episode /
-    Episode Name / Views / Genre / Runtime / Avg Watch Time (placeholder).
+    Daily "most watched on Netflix" ranking from netflix_ranker_daily
+    (pre-aggregated by the netflix-ranker-daily-cron service).
 
-    netflix_ranker has one row per show PER EPISODE for Shows (SEASON/
-    EPISODE/EPISODE_NAME columns; null for Movies). Earlier versions of
-    this endpoint selected only NAME_OF_SHOW, which made every episode of
-    a multi-episode show look like an identical duplicate row. Fixed by
-    selecting SEASON/EPISODE/EPISODE_NAME directly - each episode is kept
-    as its own ranked row (per explicit product decision: a per-episode
-    view, not a per-show rollup), and the frontend labels each row with
-    its season/episode so they're no longer indistinguishable.
+    Accepts:
+        date=YYYY-MM-DD   day to rank (default: yesterday UTC)
+        type=Movie|Show   server-side type filter
+        genre=...         server-side genre tag filter
+        limit=N           max rows (default 500, max 2000)
 
-    avg_watch_time is intentionally always null right now - the ClickHouse
-    TIME_ON_PAGE data backing it is known to be unreliable (see
-    netflix_clickstream investigation) and is being cleaned up separately.
-    The column exists in the payload so the frontend can render it as an
-    empty placeholder rather than omitting it.
-
-    type/genre/limit query params (added 2026-06): previously this always
-    pulled a single fixed top-200-by-views sample and the frontend
-    filtered that same 200 rows client-side for Movies/Shows/genre. Niche
-    combinations (e.g. Anime) could come back with only a handful of rows
-    even though the full table has thousands, because the filter was
-    starving on a tiny global sample rather than querying the real
-    population. Filtering now happens server-side against the full table,
-    and the row cap is raised well past 200 (default 500, max 2000) so
-    users can actually see more than 200 rows.
+    Returns per row: rank, delta_rank (vs prior day; null = new entry),
+    date, show, type, season, episode, episode_name, views (raw panel),
+    gen_pop_views (projected: raw x 329.9M / 10M ~= x32.99), genre,
+    runtime, avg_watch_time (always null pending TIME_ON_PAGE cleanup).
+    Also returns available_dates (last 90 days with data) for the picker.
     """
-    type_filter = (request.args.get('type') or '').strip()
+    date_param   = (request.args.get('date')  or '').strip()
+    type_filter  = (request.args.get('type')  or '').strip()
     genre_filter = (request.args.get('genre') or '').strip()
     try:
         limit = int(request.args.get('limit', 500))
@@ -9377,83 +9363,189 @@ def get_netflix_clickhouse_ranker_data():
         limit = 500
     limit = max(1, min(limit, 2000))
 
-    where_parts = ["NAME_OF_SHOW IS NOT NULL", "TRIM(NAME_OF_SHOW) != ''"]
-    params = {}
+    if date_param:
+        try:
+            target_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Invalid date, expected YYYY-MM-CD'}), 400
+    else:
+        target_date = datetime.utcnow().date() - timedelta(days=1)
 
+    prior_date = target_date - timedelta(days=1)
+    target_str = target_date.strftime('%Y-%m-%d')
+    prior_str  = prior_date.strftime('%Y-%m-%d')
+
+    base_where_parts = ["NAME_OF_SHOW IS NOT NULL", "TRIM(NAME_OF_SHOW) != ''"]
+    base_params = {}
     if type_filter in ('Movie', 'Show'):
-        where_parts.append("TYPE = {type_filter:String}")
-        params['type_filter'] = type_filter
-
+        base_where_parts.append("TYPE = {type_filter:String}")
+        base_params['type_filter'] = type_filter
     if genre_filter:
-        # GENRE is a packed comma-separated tag string (e.g. "Kids' TV,
-        # TV Cartoons"); match a trimmed exact tag, mirroring the
-        # frontend's old _netflixChRowHasGenre semantics.
-        where_parts.append("arrayExists(t -> trim(t) = {genre_filter:String}, splitByChar(',', coalesce(GENRE, '')))")
-        params['genre_filter'] = genre_filter
+        base_where_parts.append(
+            "arrayExists(t -> trim(t) = {genre_filter:String}, splitByChar(',', coalesce(GENRE, '')))"
+        )
+        base_params['genre_filter'] = genre_filter
+    base_where = " AND ".join(base_where_parts)
 
-    where_clause = " AND ".join(where_parts)
+    GEN_POP = 329_900_000 / 10_000_000  # ~32.99
 
     try:
         conn = _ch_connect()
         cur = conn.cursor()
+
+        # target day
+        tp = dict(base_params, target_date=target_str)
         cur.execute(f"""
-            SELECT NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME, VIEW_COUNT, GENRE, RUN_TIME
-            FROM netflix.netflix_ranker
-            WHERE {where_clause}
-            ORDER BY VIEW_COUNT DESC
+            SELECT
+                NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME,
+                SUM(VIEW_COUNT) AS total_views,
+                any(GENRE)      AS GENRE,
+                any(RUN_TIME)   AS RUN_TIME
+            FROM netflix.netflix_ranker_daily
+            WHERE {base_where} AND toDate(DAY) = {{target_date:Date}}
+            GROUP BY NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME
+            ORDER BY total_views DESC
             LIMIT {limit}
-        """, params)
+        """, tp)
         rows = cur.fetchall()
-        out = [
-            {
-                'rank': i + 1,
-                'show': r[0],
-                'type': r[1],
-                'season': r[2],
-                'episode': r[3],
-                'episode_name': r[4],
-                'views': r[5],
-                'genre': r[6],
-                'runtime': r[7],
+
+        # prior day rank map
+        pp = dict(base_params, prior_date=prior_str)
+        cur.execute(f"""
+            SELECT NAME_OF_SHOW, SEASON, EPISODE
+            FROM netflix.netflix_ranker_daily
+            WHERE {base_where} AND toDate(DAY) = {{prior_date:Date}}
+            GROUP BY NAME_OF_SHOW, SEASON, EPISODE
+            ORDER BY SUM(VIEW_COUNT) DESC
+            LIMIT 2000
+        """, pp)
+        prior_rank_map = {(r[0], r[1], r[2]): i + 1 for i, r in enumerate(cur.fetchall())}
+
+        # available dates for picker
+        cur.execute("""
+            SELECT DISTINCT toDate(DAY) AS d
+            FROM netflix.netflix_ranker_daily
+            ORDER BY d DESC LIMIT 90
+        """)
+        available_dates = [str(dr[0]) for dr in cur.fetchall()]
+
+        out = []
+        for i, r in enumerate(rows):
+            key   = (r[0], r[1], r[2])
+            pr    = prior_rank_map.get(key)
+            delta = None if pr is None else int(pr) - (i + 1)
+            out.append({
+                'rank':          i + 1,
+                'delta_rank':    delta,
+                'date':          target_str,
+                'show':          r[0],
+                'type':          r[1],
+                'season':        r[2],
+                'episode':       r[3],
+                'episode_name':  r[4],
+                'views':         int(r[5]),
+                'gen_pop_views': int(round(r[5] * GEN_POP)),
+                'genre':         r[6],
+                'runtime':       r[7],
                 'avg_watch_time': None,
-            }
-            for i, r in enumerate(rows)
-        ]
-        return jsonify({'success': True, 'rows': out})
+            })
+
+        return jsonify({
+            'success': True,
+            'rows': out,
+            'date': target_str,
+            'available_dates': available_dates,
+        })
     except Exception as e:
         print(f"[Netflix ClickHouse Ranker] Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
 
 
 @app.route('/api/rankers/netflix-clickhouse/genres', methods=['GET'])
 @requires_auth
 def get_netflix_clickhouse_genres():
     """
-    Full distinct list of genre tags across ALL rows in
-    netflix.netflix_ranker - not just whatever made it into the main
-    ranker endpoint's current LIMIT-ed/filtered page. The genre dropdown
-    needs this so it always lists every genre, regardless of the active
-    type filter or row limit (previously it was built from the loaded
-    page of rows, so rare genres could be missing from the dropdown
-    entirely if none of their rows made the top-200-by-views cut).
+    Full distinct genre tags from netflix_ranker_daily — populates the
+    genre dropdown with every genre in history, unaffected by active
+    date/type filters or row limits.
     """
     try:
         conn = _ch_connect()
         cur = conn.cursor()
         cur.execute("""
             SELECT DISTINCT trim(g) AS genre
-            FROM netflix.netflix_ranker
+            FROM netflix.netflix_ranker_daily
             ARRAY JOIN splitByChar(',', coalesce(GENRE, '')) AS g
             WHERE trim(g) != ''
             ORDER BY genre
         """)
-        rows = cur.fetchall()
-        genres = [r[0] for r in rows]
+        genres = [r[0] for r in cur.fetchall()]
         return jsonify({'success': True, 'genres': genres})
     except Exception as e:
         print(f"[Netflix ClickHouse Genres] Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+@app.route('/api/rankers/netflix-clickhouse/history', methods=['GET'])
+@requires_auth
+def get_netflix_clickhouse_title_history():
+    """
+    Previous-N-days rank history for a single show/episode.
+    Feeds the hover tooltip (Jessie spec point #4).
+
+    Params:
+        show=...    required
+        season=...  optional
+        episode=... optional
+        days=N      how many days (default 5, max 30)
+    """
+    show    = (request.args.get('show')    or '').strip()
+    season  = (request.args.get('season')  or '').strip()
+    episode = (request.args.get('episode') or '').strip()
+    try:
+        days = int(request.args.get('days', 5))
+    except (TypeError, ValueError):
+        days = 5
+    days = max(1, min(days, 30))
+
+    if not show:
+        return jsonify({'error': 'show is required'}), 400
+
+    try:
+        conn = _ch_connect()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT DISTINCT toDate(DAY) AS d FROM netflix.netflix_ranker_daily "
+            "ORDER BY d DESC LIMIT {days:UInt8}",
+            {'days': days}
+        )
+        recent_dates = [str(dr[0]) for dr in cur.fetchall()]
+        if not recent_dates:
+            return jsonify({'success': True, 'history': []})
+
+        history = []
+        for d_str in recent_dates:
+            cur.execute("""
+                SELECT NAME_OF_SHOW, SEASON, EPISODE, SUM(VIEW_COUNT) AS v
+                FROM netflix.netflix_ranker_daily
+                WHERE toDate(DAY) = {d:Date}
+                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                GROUP BY NAME_OF_SHOW, SEASON, EPISODE
+                ORDER BY v DESC
+                LIMIT 2000
+            """, {'d': d_str})
+            for rank_num, r in enumerate(cur.fetchall(), start=1):
+                if (r[0] == show
+                        and (not season  or r[1] == season)
+                        and (not episode or str(r[2]) == str(episode))):
+                    history.append({'date': d_str, 'rank': rank_num, 'views': int(r[3])})
+                    break
+
+        return jsonify({'success': True, 'history': history})
+    except Exception as e:
+        print(f"[Netflix ClickHouse History] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/cron/netflix-ranker-daily', methods=['GET', 'POST'])
