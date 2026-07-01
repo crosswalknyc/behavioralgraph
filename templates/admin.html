@@ -1900,6 +1900,10 @@
                                 <span>🎬 Intent IQ</span>
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="impactIQ" onchange="updateHiddenProduct('impactIQ', this.checked)">
+                                <span>🌊 Impact IQ</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="roasIQ" onchange="updateHiddenProduct('roasIQ', this.checked)">
                                 <span>💰 ROAS IQ</span>
                             </label>
@@ -2350,6 +2354,9 @@
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdBlueIQ"> Blue IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdImpactIQNew"> Impact IQ
                                     </label>
                                 </div>
                             </div>
@@ -3193,6 +3200,16 @@
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasBlueIQAccess">
                                 <span style="font-weight: 600;">🗳️ BLUE IQ</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Impact IQ Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasImpactIQAccess">
+                                <span style="font-weight: 600;">🌊 IMPACT IQ</span>
                             </label>
                         </div>
                     </div>
@@ -4657,6 +4674,8 @@
                     if (cdJiq) cdJiq.checked = !!d.has_journey_iq_access;
                     var cdBiq = document.getElementById('cdBlueIQ');
                     if (cdBiq) cdBiq.checked = !!d.has_blue_iq_access;
+                    var cdIiq = document.getElementById('cdImpactIQNew');
+                    if (cdIiq) cdIiq.checked = !!d.has_impact_iq_access;
                     syncCompanyDefaultsShareOfTime();
                     document.getElementById('cdDefaultCredits').value = d.credits ?? 5;
                     // Access to New Releases
@@ -4719,6 +4738,7 @@
                 has_brand_partnership_iq_access: !!(document.getElementById('cdBrandPartnership') && document.getElementById('cdBrandPartnership').checked),
                 has_journey_iq_access: !!(document.getElementById('cdJourneyIQ') && document.getElementById('cdJourneyIQ').checked),
                 has_blue_iq_access: !!(document.getElementById('cdBlueIQ') && document.getElementById('cdBlueIQ').checked),
+                has_impact_iq_access: !!(document.getElementById('cdImpactIQNew') && document.getElementById('cdImpactIQNew').checked),
                 credits: parseInt(document.getElementById('cdDefaultCredits').value) || 5,
                 auto_access_new: {
                     profile_iq: document.getElementById('cdAanProfileIQ').checked,
@@ -6662,6 +6682,7 @@
             profileIQ: false, subscriberIQ: false, journeyIQ: false,
             rankerIQ: false, blueIQ: false, hedgeFundIQ: false,
             llmoIQ: false, sfConversion: false, intentIQ: false,
+            impactIQ: false,
             roasIQ: false, brandPartnershipIQ: false, flywheelConversion: false,
             customAnalysis: false, shareOfTimeIQ: false, workspace: false,
             helmIQ: false
@@ -8433,6 +8454,8 @@
             document.getElementById('hasLLMOIQAccess').checked = false;
             var biqAccessReset = document.getElementById('hasBlueIQAccess');
             if (biqAccessReset) biqAccessReset.checked = false;
+            var iiqAccessReset = document.getElementById('hasImpactIQAccess');
+            if (iiqAccessReset) iiqAccessReset.checked = false;
             document.getElementById('hasTalentFitAccess').checked = false;
             document.getElementById('hasShareOfTimeAccess').checked = true;
             document.getElementById('hasShareOfTimeRunAccess').checked = true;
@@ -8571,6 +8594,8 @@
             document.getElementById('hasLLMOIQAccess').checked = user.has_llmo_iq_access === true; // Default false
             var biqAccess = document.getElementById('hasBlueIQAccess');
             if (biqAccess) biqAccess.checked = user.has_blue_iq_access === true; // Default false
+            var iiqAccess = document.getElementById('hasImpactIQAccess');
+            if (iiqAccess) iiqAccess.checked = user.has_impact_iq_access === true; // Default false
             document.getElementById('hasTalentFitAccess').checked = user.has_talent_fit_access === true; // Default false
             document.getElementById('hasShareOfTimeAccess').checked = user.has_share_of_time_access !== false;
             document.getElementById('hasShareOfTimeRunAccess').checked = user.has_share_of_time_run_access !== false;
@@ -10695,6 +10720,7 @@
                 analysis_iq_modules: getAnalysisIQModules() || [],
                 has_llmo_iq_access: document.getElementById('hasLLMOIQAccess').checked,
                 has_blue_iq_access: !!(document.getElementById('hasBlueIQAccess') && document.getElementById('hasBlueIQAccess').checked),
+                has_impact_iq_access: !!(document.getElementById('hasImpactIQAccess') && document.getElementById('hasImpactIQAccess').checked),
                 has_talent_fit_access: document.getElementById('hasTalentFitAccess').checked,
                 has_share_of_time_access: document.getElementById('hasShareOfTimeAccess').checked,
                 has_share_of_time_run_access: document.getElementById('hasShareOfTimeRunAccess').checked && document.getElementById('hasShareOfTimeAccess').checked,
