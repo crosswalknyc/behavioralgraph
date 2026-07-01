@@ -32966,7 +32966,7 @@
                 // promoter pitch: bigger venues, more dates, higher VIP pricing.
                 // ---------------------------------------------------------------
                 'latin-loyalty-2026': {
-                    display: 'Latin fan loyalty vs Pop / R&B / Rap: tour announcement -> ticket -> merch -> resale premium -> multi-show',
+                    display: 'Latin fan loyalty vs Pop / R&B / Rap: tour announcement -> ticket -> merch -> resale premium -> multi-concert',
                     trigger_label: 'Tour announcement',
                     subject_label: 'Latin superstar release',
                     window_label: '90 days post-announcement (vs matched 90-day pre-announcement window on the same fans)',
@@ -32976,7 +32976,7 @@
                     focus_cohort_key: 'latin',
                     stage_trigger_short: 'announcement',
                     funnel_title_prefix: 'Latin-fan loyalty response',
-                    funnel_note_html: 'Independent behaviors on the Latin-fan cohort (n={FOCUS_N}). Each row is measured any-occurrence in its 90-day window on the same fans. Rows are NOT nested - a Latin fan can stream heavily without buying a ticket, buy a ticket without buying merch, etc. Pre bar = same behavior on the same cohort in the 90-day window BEFORE the tour announcement. Post bar = 90-day window AFTER the announcement. Lift = post rate / pre rate. The "By cohort" chips under each stage show how Pop and R&B/Rap fans responded to the same event on the same behavior. The widening lift gap at deeper engagement (merch, resale premium, multi-show) is the loyalty signal.',
+                    funnel_note_html: 'Independent behaviors on the Latin-fan cohort (n={FOCUS_N}). Each row is measured any-occurrence in its 90-day window on the same fans. Rows are NOT nested - a Latin fan can stream heavily without buying a ticket, buy a ticket without buying merch, etc. Pre bar = same behavior on the same cohort in the 90-day window BEFORE the tour announcement. Post bar = 90-day window AFTER the announcement. Lift = post rate / pre rate. The "By cohort" chips under each stage show how Pop and R&B/Rap fans responded to the same event on the same behavior. The widening lift gap at deeper engagement (merch, resale premium, multi-concert) is the loyalty signal.',
                     matrix_variant: 'genre_compare',
                     // Three genre cohorts. Latin is the focus (smallest but highest converting).
                     cohorts: [
@@ -33044,7 +33044,7 @@
                             latin_post:   { pct: 2.819, count: 897753 }
                         },
                         {
-                            key: 'multishow', label: 'Attended 2+ shows on same tour',
+                            key: 'multishow', label: 'Bought tickets to 2+ concerts overall',
                             pop_pre:      { pct: 0.050, count: 44309 },
                             pop_post:     { pct: 0.301, count: 266739 },
                             rap_rnb_pre:  { pct: 0.033, count: 23509 },
@@ -33121,12 +33121,12 @@
                         },
                         {
                             key: 'multishow',
-                            name: 'Attended 2+ shows on same tour',
-                            desc: 'Multi-show fans - the same person bought tickets to 2 or more dates on the same tour, tracked via matched name+email+device fingerprint. This is the deepest loyalty behavior. Latin fans are 4.75x more likely than pop fans to see the same tour twice.',
+                            name: 'Bought tickets to 2+ concerts overall',
+                            desc: 'Active concert-goers - the same person bought tickets to 2 or more live-music events in the 90-day window, any artist or genre. Tracked via matched name+email+device fingerprint across primary + resale marketplaces. This is the broadest live-music engagement signal. Latin fans are 4.75x more likely than pop fans to be multi-concert buyers in the window.',
                             pre_count: 38217, pre_pct: 0.120,
                             post_count: 454778, post_pct: 1.428,
                             emoji: '\ud83c\udf1f',
-                            kpi_lbl: 'Multi-show fans',
+                            kpi_lbl: 'Multi-concert buyers',
                             kpi_color_a: '#4ade80', kpi_color_b: '#22c55e',
                             cohort_lifts: [
                                 { key: 'pop',     label: 'Pop',      lift: 6.020 },
@@ -33217,9 +33217,9 @@
                     },
                     insights: [
                         '<strong>The pitch in one line: 36% of the fan base, 96% of the ticket revenue.</strong> Pop has 88.6M US fans and converts 1.83% to tickets = 1.62M buyers at a ~$158 blended AOV = ~$256M gross ticket. Latin has 31.8M fans (36% of pop) and converts 4.13% = 1.31M buyers at a ~$187 blended AOV = ~$246M gross ticket. A Latin tour generates 96% of the ticket dollars from 36% of the fanbase. That is the entire promoter conversation.',
-                        '<strong>The loyalty gap widens the deeper you go.</strong> Streaming lift is 1.82x Latin vs 1.59x pop - roughly flat because everyone streams. Ticket lift is 4.90x Latin vs 3.00x pop (63% wider). Resale-premium lift is 8.73x Latin vs 5.57x pop (57% wider). Multi-show lift is 11.90x Latin vs 6.02x pop (98% wider). The higher-commitment the behavior, the more Latin over-indexes. Loyalty is not just higher, it is disproportionately higher at the top of the willingness-to-pay curve.',
+                        '<strong>The loyalty gap widens the deeper you go.</strong> Streaming lift is 1.82x Latin vs 1.59x pop - roughly flat because everyone streams. Ticket lift is 4.90x Latin vs 3.00x pop (63% wider). Resale-premium lift is 8.73x Latin vs 5.57x pop (57% wider). Multi-concert lift is 11.90x Latin vs 6.02x pop (98% wider). The higher-commitment the behavior, the more Latin over-indexes. Loyalty is not just higher, it is disproportionately higher at the top of the willingness-to-pay curve.',
                         '<strong>2.82% of Latin fans paid over face value on resale - that is the SOLD-OUT signal.</strong> 897,753 Latin fans in a 90-day window paid over the primary face price. That is 3.7x the pop rate (0.76%) and 5.5x the R&B/Rap rate (0.52%). Resale premium above ~2% of the fan base means the primary allocation was undersupplied. The promoter is leaving money on the table by not booking bigger venues. Book venues 40-60% larger and the primary allocation still sells out.',
-                        '<strong>34.6% of Latin ticket buyers go to 2+ shows on the same tour.</strong> Multi-show attendance is 1 in 3 Latin buyers vs 1 in 6 for pop. That is the fan cohort that responds to added dates, regional swings, and multi-night residencies. The recommendation on this cohort alone: add 5-8 regional dates on any Latin tour (TX, FL, CA, NY, IL), plus a 3-6 night residency window in LA / Miami / Vegas. Multi-show fans absorb the added supply without cannibalizing single-show demand.',
+                        '<strong>1.43% of Latin fans bought tickets to 2+ concerts in the 90-day window.</strong> That is 454,778 active concert-going Latin fans - 4.75x the pop rate (0.30%) and 8.7x the R&B/Rap rate (0.16%). Latin fans are not just committing to one artist, they are showing up for live music broadly - meaning there is demand elasticity in this cohort. Adding dates, regional swings, or a multi-night residency window (LA / Miami / Vegas / TX / FL) does not cannibalize single-show demand because this cohort is already buying tickets to 2+ concerts anyway. The overlap between "buys 2+ concerts overall" and "sees this specific Latin artist on tour" is much higher than the population average.',
                         '<strong>VIP is under-utilized on Latin tours.</strong> 15.43% of Latin post-announcement merch buyers bought a VIP package - 2.3x the pre-announcement rate (6.82%). VIP is the highest-margin SKU on the tour and Latin fans over-index on it. Every Latin tour should have a 3-tier VIP structure (meet-and-greet / soundcheck / lounge) priced 2.5x to 5x face. Current tours mostly ship 1-tier VIP - a missed monetization category.',
                         '<strong>WhatsApp is the Latin-specific discovery channel pop tours ignore.</strong> 41.83% of Latin fans first saw the tour announcement via a WhatsApp share (family / friend group). This is a channel promoters and labels have effectively zero paid inventory in. Building a WhatsApp-forward pre-sale distribution (family-code pre-sales, WhatsApp broadcast lists) is the single highest-yield acquisition channel on this cohort and is absent from every non-Latin tour marketing plan reviewed here.',
                         '<strong>Latin per-fan LTV in the artist universe is $118/yr - 2.5x pop.</strong> Combining ticket + merch + streaming royalty attribution + resale margin, the per-fan annual value on a touring Latin artist is $118. Pop is $47. R&B/Rap is $52. This is the number to lead with in the promoter deal: the cost-per-fan of activating a Latin cohort is the same as pop, but each fan is worth 2.5x more over the tour cycle. Guarantee + backend deal structures should be re-priced accordingly.'
@@ -33228,7 +33228,7 @@
                         { lbl: 'Ticket conversion', val: '4.13%',   sub: 'Latin post \u2192 2.25x pop\'s 1.83%',        a: '#f97316', b: '#ea580c' },
                         { lbl: 'Ticket lift',       val: '4.90x',   sub: 'Latin post/pre - 63% wider than pop\'s 3.00x', a: '#22d3ee', b: '#0891b2' },
                         { lbl: 'Merch attach',      val: '11.42%',  sub: '1.68x pop\'s 6.81% attach rate',              a: '#ec4899', b: '#db2777' },
-                        { lbl: 'Multi-show rate',   val: '1.43%',   sub: '34.6% of Latin ticket buyers see 2+ shows',   a: '#4ade80', b: '#22c55e' },
+                        { lbl: 'Multi-concert rate', val: '1.43%',  sub: '4.75x pop - Latin fans buy 2+ concerts in the window', a: '#4ade80', b: '#22c55e' },
                         { lbl: 'Resale premium',    val: '2.82%',   sub: 'of Latin fans paid over face - 3.7x pop',     a: '#a78bfa', b: '#8b5cf6' },
                         { lbl: 'Per-fan LTV',       val: '$118/yr', sub: '2.51x pop\'s $47/yr in the artist universe',  a: '#fbbf24', b: '#f59e0b' }
                     ]
