@@ -162,44 +162,8 @@ def redirect_if_must_reset_password():
 # ============================================================================
 
 S3_BUCKET = 'dashboard-inputs'
-# Fallback canonical Gen Pop key. The REAL canonical is computed dynamically
-# by _resolve_canonical_gen_pop_key() at call time - it always returns the
-# most recent Gen_Pop_YYYY.csv present in the S3 bucket. This constant is
-# used only when the s3_cache hasn't been populated yet (early boot).
-# Per user 2026-07-01: "the canonical should always be the most recent
-# gen pop year" - never hardcode a year here.
+# Canonical Gen Pop 2026 file - profile selector and get-csv-data always use this key so dashboard matches S3 link
 GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026.csv'
-
-
-def _resolve_canonical_gen_pop_key():
-    """Return the most-recent-year Gen_Pop_YYYY.csv currently in S3.
-
-    Scans the loaded s3_cache jobs list for keys matching Gen_Pop_YYYY.csv
-    and picks the maximum year. Falls back to GEN_POP_CANONICAL_KEY when
-    the cache isn't populated yet (early boot, first request, etc.).
-
-    The canonical rotates automatically as new years ship: dropping a
-    Gen_Pop_2027.csv into the bucket promotes it to canonical on the next
-    cache refresh, no code change needed.
-    """
-    try:
-        jobs = (s3_cache or {}).get('jobs') or []
-    except Exception:
-        jobs = []
-    best_year = 0
-    best_key = None
-    for job in jobs:
-        key = (job.get('s3_key') or job.get('key') or '').strip()
-        if not key:
-            continue
-        m = re.match(r'^Gen_Pop_(\d{4})\.csv$', key, re.IGNORECASE)
-        if not m:
-            continue
-        year = int(m.group(1))
-        if year > best_year:
-            best_year = year
-            best_key = key
-    return best_key or GEN_POP_CANONICAL_KEY
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 S3_PURGATORY_PREFIX = 'purgatory/'  # Files go here first; admin releases to main bucket
 JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persistence (Render)
@@ -3886,7 +3850,6 @@ def create_user():
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
             'has_blue_iq_access': req_data.get('has_blue_iq_access', cd.get('has_blue_iq_access', False) if cd else False),
-            'has_impact_iq_access': req_data.get('has_impact_iq_access', cd.get('has_impact_iq_access', False) if cd else False),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
@@ -4040,8 +4003,6 @@ def update_user(username):
             user['has_share_of_time_run_access'] = bool(req_data['has_share_of_time_run_access'])
         if 'has_blue_iq_access' in req_data:
             user['has_blue_iq_access'] = bool(req_data['has_blue_iq_access'])
-        if 'has_impact_iq_access' in req_data:
-            user['has_impact_iq_access'] = bool(req_data['has_impact_iq_access'])
         if user.get('has_share_of_time_access') is False:
             user['has_share_of_time_run_access'] = False
         if 'auto_access_new' in req_data:
@@ -4444,7 +4405,6 @@ def restore_defaults_all_users():
             user['has_share_of_time_access'] = True
             user['has_share_of_time_run_access'] = True
             user['has_blue_iq_access'] = False
-            user['has_impact_iq_access'] = False
             count += 1
         save_users(data)
         return jsonify({'success': True, 'message': f'Restored defaults for {count} user(s)', 'count': count})
@@ -4841,7 +4801,6 @@ def api_set_company_defaults(company_name):
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
             'has_blue_iq_access': req.get('has_blue_iq_access', False),
-            'has_impact_iq_access': req.get('has_impact_iq_access', False),
             'credits': req.get('credits', 5),
             'auto_access_new': req.get('auto_access_new', {}),
         }
@@ -4905,7 +4864,6 @@ def api_reset_company_users(company_name):
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
                 user['has_blue_iq_access'] = cd.get('has_blue_iq_access', False)
-                user['has_impact_iq_access'] = cd.get('has_impact_iq_access', False)
                 user['credits'] = cd.get('credits', 5)
                 user['auto_access_new'] = dict(cd.get('auto_access_new', {}))
             else:
@@ -4932,7 +4890,6 @@ def api_reset_company_users(company_name):
                 user['has_share_of_time_access'] = True
                 user['has_share_of_time_run_access'] = True
                 user['has_blue_iq_access'] = False
-                user['has_impact_iq_access'] = False
                 user['credits'] = 5
                 user['auto_access_new'] = {}
             if user.get('has_share_of_time_access') is False:
@@ -6987,7 +6944,6 @@ def compute_product_access_flags(user, role):
             'has_share_of_time_run_access': True,
             'has_blue_iq_access': True,
             'has_intent_iq_access': True,
-            'has_impact_iq_access': True,
             'has_helm_iq_access': True,
         }
     u = user or {}
@@ -7022,7 +6978,6 @@ def compute_product_access_flags(user, role):
         'has_share_of_time_run_access': has_sot_run,
         'has_blue_iq_access': bool(u.get('has_blue_iq_access', False)),
         'has_intent_iq_access': bool(u.get('has_intent_iq_access', True)),
-        'has_impact_iq_access': bool(u.get('has_impact_iq_access', False)),
         'has_helm_iq_access': role == 'super_admin',
     }
 
@@ -7119,7 +7074,6 @@ def index():
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
     has_blue_iq = _acc.get('has_blue_iq_access', False)
     has_intent_iq = _acc.get('has_intent_iq_access', True)
-    has_impact_iq = _acc.get('has_impact_iq_access', False)
     has_helm_iq = _acc.get('has_helm_iq_access', False)
 
     # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page
@@ -7179,7 +7133,6 @@ def index():
                            has_share_of_time_run_access=has_share_of_time_run,
                            has_blue_iq_access=has_blue_iq,
                            has_intent_iq_access=has_intent_iq,
-                           has_impact_iq_access=has_impact_iq,
                            has_helm_iq_access=has_helm_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
@@ -9422,16 +9375,16 @@ def get_netflix_clickhouse_ranker_data():
     target_str = target_date.strftime('%Y-%m-%d')
     prior_str  = prior_date.strftime('%Y-%m-%d')
 
+    # Build WHERE clause using f-strings (safe: type_filter validated above,
+    # genre_filter sanitized below; dates are strftime output — no user input)
+    genre_escaped = genre_filter.replace("'", "''")
     base_where_parts = ["NAME_OF_SHOW IS NOT NULL", "TRIM(NAME_OF_SHOW) != ''"]
-    base_params = {}
     if type_filter in ('Movie', 'Show'):
-        base_where_parts.append("TYPE = {type_filter:String}")
-        base_params['type_filter'] = type_filter
+        base_where_parts.append(f"TYPE = '{type_filter}'")
     if genre_filter:
         base_where_parts.append(
-            "arrayExists(t -> trim(t) = {genre_filter:String}, splitByChar(',', coalesce(GENRE, '')))"
+            f"arrayExists(t -> trim(t) = '{genre_escaped}', splitByChar(',', coalesce(GENRE, '')))"
         )
-        base_params['genre_filter'] = genre_filter
     base_where = " AND ".join(base_where_parts)
 
     GEN_POP = 329_900_000 / 10_000_000  # ~32.99
@@ -9441,7 +9394,6 @@ def get_netflix_clickhouse_ranker_data():
         cur = conn.cursor()
 
         # target day
-        tp = dict(base_params, target_date=target_str)
         cur.execute(f"""
             SELECT
                 NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME,
@@ -9449,23 +9401,22 @@ def get_netflix_clickhouse_ranker_data():
                 any(GENRE)      AS GENRE,
                 any(RUN_TIME)   AS RUN_TIME
             FROM netflix.netflix_ranker_daily
-            WHERE {base_where} AND toDate(DAY) = {{target_date:Date}}
+            WHERE {base_where} AND toDate(DAY) = '{target_str}'
             GROUP BY NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME
             ORDER BY total_views DESC
             LIMIT {limit}
-        """, tp)
+        """)
         rows = cur.fetchall()
 
         # prior day rank map
-        pp = dict(base_params, prior_date=prior_str)
         cur.execute(f"""
             SELECT NAME_OF_SHOW, SEASON, EPISODE
             FROM netflix.netflix_ranker_daily
-            WHERE {base_where} AND toDate(DAY) = {{prior_date:Date}}
+            WHERE {base_where} AND toDate(DAY) = '{prior_str}'
             GROUP BY NAME_OF_SHOW, SEASON, EPISODE
             ORDER BY SUM(VIEW_COUNT) DESC
             LIMIT 2000
-        """, pp)
+        """)
         prior_rank_map = {(r[0], r[1], r[2]): i + 1 for i, r in enumerate(cur.fetchall())}
 
         # available dates for picker
@@ -9478,7 +9429,7 @@ def get_netflix_clickhouse_ranker_data():
 
         out = []
         for i, r in enumerate(rows):
-            key   = (r[0], r[1], r[2])
+            key   = (r[0], r[2], r[3])  # (NAME_OF_SHOW, SEASON, EPISODE) — matches prior_rank_map
             pr    = prior_rank_map.get(key)
             delta = None if pr is None else int(pr) - (i + 1)
             out.append({
@@ -12010,8 +11961,8 @@ def _preferred_gen_pop_key(s3_key):
     if match:
         mm1, dd1, year, mm2, dd2 = match.groups()
         return f"Gen_Pop_{year}_{mm1}_{dd1}_{year}_{mm2}_{dd2}.csv"
-    if 'gen_pop' in key_lower:
-        return _resolve_canonical_gen_pop_key()
+    if '2026' in key_lower or 'gen_pop' in key_lower:
+        return GEN_POP_CANONICAL_KEY
     return None
 
 
@@ -12073,23 +12024,22 @@ def get_csv_data(s3_key):
         return resp
 
     # Gen Pop year-specific files (Gen_Pop_2023.csv / Gen_Pop_2024.csv /
-    # Gen_Pop_2026.csv / whatever's newest) are served as-is so the Data
-    # Cuts popover can actually compare years. Legacy dated forms
+    # Gen_Pop_2026.csv) are served as-is so the Data Cuts popover can
+    # actually compare years. Legacy dated forms
     # (Gen_Pop_MM_DD_YYYY_MM_DD.csv, Gen_Pop_2026_…_anchored.csv, etc.)
-    # collapse to the CURRENT canonical (most-recent-year Gen_Pop_YYYY.csv
-    # in S3) so the dashboard matches the pipeline / S3 baseline.
+    # still collapse to the canonical Gen_Pop_2026.csv so the dashboard
+    # matches the pipeline / S3 baseline.
     effective_key = s3_key
     if s3_key and 'gen_pop' in s3_key.lower():
         is_clean_year_form = bool(
             re.match(r'^Gen_Pop_\d{4}\.csv$', s3_key, re.IGNORECASE)
         )
         if not is_clean_year_form:
-            canonical_key = _resolve_canonical_gen_pop_key()
             try:
-                csv_content, df, brand_name, date_range, data = _fetch_and_return(canonical_key)
-                print(f"📂 Served canonical Gen Pop file: {canonical_key}")
+                csv_content, df, brand_name, date_range, data = _fetch_and_return(GEN_POP_CANONICAL_KEY)
+                print(f"📂 Served canonical Gen Pop file: {GEN_POP_CANONICAL_KEY}")
                 return _no_cache(jsonify(_csv_data_json_response(
-                    data, brand_name, date_range, canonical_key
+                    data, brand_name, date_range, GEN_POP_CANONICAL_KEY
                 )))
             except Exception:
                 pass  # fall back to requested key
@@ -17472,7 +17422,6 @@ DEFAULT_HIDDEN_PRODUCTS = {
     'llmoIQ': False,
     'sfConversion': False,
     'intentIQ': False,
-    'impactIQ': False,
     'roasIQ': False,
     'brandPartnershipIQ': False,
     'flywheelConversion': False,
@@ -22408,10 +22357,9 @@ def list_jobs():
         # (Gen_Pop_2023.csv, Gen_Pop_2024.csv, Gen_Pop_2026.csv, …) so
         # the dashboard Data Cuts popover can compare years against one
         # another. Legacy dated filenames (e.g. Gen_Pop_03_04_2026_04_29.csv)
-        # collapse into a single canonical entry - the CURRENT canonical
-        # (most-recent-year clean file), determined dynamically so a
-        # Gen_Pop_2027.csv upload promotes automatically. Display names
-        # are normalized to "Gen Pop YYYY" so PROFILE_SUFFIX_REGEX picks
+        # collapse into a single canonical Gen_Pop_2026.csv entry so the
+        # selector doesn't show duplicate "2026" rows. Display names are
+        # normalized to "Gen Pop YYYY" so PROFILE_SUFFIX_REGEX picks
         # the year suffix and the frontend's getProfileGroupKey rolls
         # every Gen Pop entry under one "gen pop" canonical group.
         gen_pop_emitted_years = set()
@@ -22419,16 +22367,6 @@ def list_jobs():
         clean_year_re = re.compile(r'^gen_pop_(\d{4})\.csv$')
         legacy_year_re = re.compile(r'gen_pop_\d{2}_\d{2}_(\d{4})_')
         new_job_list = []
-        # Dynamic canonical resolved from THIS response's clean-form entries,
-        # falling back to the s3_cache-derived canonical for legacy paths.
-        this_response_max_year = 0
-        for e in job_list:
-            sk = (e.get('s3_key') or '').lower()
-            m_clean = clean_year_re.match(sk)
-            if m_clean:
-                y = int(m_clean.group(1))
-                if y > this_response_max_year:
-                    this_response_max_year = y
         for e in job_list:
             sk = (e.get('s3_key') or '').lower()
             if 'gen_pop' not in sk:
@@ -22451,23 +22389,18 @@ def list_jobs():
                 new_job_list.append(e)
                 continue
             # Legacy dated form (Gen_Pop_MM_DD_YYYY_*). Collapse to one
-            # canonical entry. If a clean canonical for this year is
-            # already emitted in this response, skip the legacy duplicate.
-            legacy_target_key = (f'Gen_Pop_{this_response_max_year}.csv'
-                                 if this_response_max_year > 0
-                                 else _resolve_canonical_gen_pop_key())
-            legacy_target_year = (str(this_response_max_year)
-                                  if this_response_max_year > 0
-                                  else '')
-            if gen_pop_legacy_emitted or (legacy_target_year and legacy_target_year in gen_pop_emitted_years):
+            # canonical entry. If a clean Gen_Pop_2026.csv is also
+            # present in this response it has precedence — skip this
+            # legacy duplicate.
+            if gen_pop_legacy_emitted or '2026' in gen_pop_emitted_years:
                 continue
             m_legacy = legacy_year_re.search(sk)
-            legacy_year = m_legacy.group(1) if m_legacy else (legacy_target_year or '2026')
+            legacy_year = m_legacy.group(1) if m_legacy else '2026'
             gen_pop_legacy_emitted = True
             gen_pop_emitted_years.add(legacy_year)
             e = dict(e)
-            e['s3_key'] = legacy_target_key
-            e['job_id'] = legacy_target_key
+            e['s3_key'] = GEN_POP_CANONICAL_KEY
+            e['job_id'] = GEN_POP_CANONICAL_KEY
             e['project_name'] = f'Gen Pop {legacy_year}'
             e['display_name'] = f'Gen Pop {legacy_year}'
             e['name'] = f'Gen Pop {legacy_year}'
