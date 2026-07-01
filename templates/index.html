@@ -28660,6 +28660,10 @@
                                 <button type="button" class="btn btn-sm rankeriq-netflixch-type-btn" data-type="Movie" onclick="setNetflixChTypeFilter('Movie')">Movies</button>
                                 <button type="button" class="btn btn-sm rankeriq-netflixch-type-btn" data-type="Show" onclick="setNetflixChTypeFilter('Show')">Shows</button>
                             </div>
+                            <div id="nfChCollapseToggle" role="group" aria-label="Group by" style="display: flex; gap: 0.4rem;">
+                                <button type="button" id="nfChCollapse-episode" style="padding:0.28rem 0.6rem;font-size:0.78rem;border-radius:5px;border:1px solid var(--accent-color,#6366f1);background:var(--accent-color,#6366f1);color:#fff;cursor:pointer;font-weight:600;" onclick="setNetflixChCollapse('episode')">Episodes</button>
+                                <button type="button" id="nfChCollapse-season" style="padding:0.28rem 0.6rem;font-size:0.78rem;border-radius:5px;border:1px solid var(--border-color);background:var(--bg-input);color:var(--text-primary);cursor:pointer;" onclick="setNetflixChCollapse('season')">By Season</button>
+                            </div>
                             <div id="nfChDateRangeWrap" style="display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem;">
                                 <span style="font-size:0.82rem;color:var(--text-secondary);white-space:nowrap;">Period:</span>
                                 <div style="display:flex;gap:0.25rem;flex-wrap:wrap;">
@@ -28693,8 +28697,8 @@
                                         <th>Show</th>
                                         <th>Type</th>
                                         <th>Season</th>
-                                        <th>Episode</th>
-                                        <th title="Panel views projected to US gen pop (&#247;10M &#215; 329.9M)">Viewers</th>
+                                        <th id="nfChEpisodeTh">Episode</th>
+                                        <th title="Panel views projected to US gen pop (&#247;10M &#215; 329.9M)">Viewers (est.)</th>
                                         <th title="Average projected viewers per day over the period" style="white-space:nowrap;">Avg/Day</th>
                                         <th title="Open on Netflix" style="white-space:nowrap;">Link</th>
                                         <th>Genre</th>
@@ -121893,6 +121897,7 @@
         let _netflixChStartDate = '';   // '' = server defaults to yesterday
         let _netflixChEndDate   = '';
         let _netflixChPreset    = 'yesterday';
+        let _netflixChCollapse  = 'episode';
         let _netflixChPeriodStr = '';
         let _netflixChChart = null;
         const _netflixChHistoryCache = {};
@@ -121940,6 +121945,23 @@
             loadNetflixChRanker(true);
         }
 
+        function setNetflixChCollapse(mode) {
+            _netflixChCollapse = mode;
+            ['episode','season'].forEach(m => {
+                const btn = document.getElementById('nfChCollapse-' + m);
+                if (!btn) return;
+                const on = (m === mode);
+                btn.style.background  = on ? 'var(--accent-color,#6366f1)' : 'var(--bg-input)';
+                btn.style.color       = on ? '#fff' : 'var(--text-primary)';
+                btn.style.borderColor = on ? 'var(--accent-color,#6366f1)' : 'var(--border-color)';
+                btn.style.fontWeight  = on ? '600' : '400';
+            });
+            const epTh = document.getElementById('nfChEpisodeTh');
+            if (epTh) epTh.style.display = mode === 'season' ? 'none' : '';
+            _nfChClearCache();
+            loadNetflixChRanker(true);
+        }
+
         async function loadNetflixChRanker(force) {
             if (!_netflixChGenresLoaded) {
                 loadNetflixChGenreOptions();
@@ -121957,6 +121979,7 @@
                 if (_netflixChStartDate) params.set('start_date', _netflixChStartDate);
                 if (_netflixChEndDate)   params.set('end_date',   _netflixChEndDate);
                 params.set('limit', '1000');
+                params.set('collapse', _netflixChCollapse);
                 const r = await fetch('/api/rankers/netflix-clickhouse/data?' + params.toString(), { credentials: 'same-origin' });
                 const d = await r.json();
                 if (!d || !d.success) throw new Error((d && d.error) || 'Failed to load Netflix data');
@@ -122005,6 +122028,15 @@
         function renderNetflixChRanker() {
             const body = document.getElementById('rankerIQNetflixChBody');
             if (!body) return;
+
+            if (!_netflixChRows || _netflixChRows.length === 0) {
+                const noDataMsg = _netflixChPreset === 'yesterday'
+                    ? `<tr><td colspan="14" style="text-align:center;padding:2rem;color:var(--text-secondary);">No data yet for yesterday &mdash; try <a href="#" onclick="setNetflixChPreset('7d');return false;" style="color:var(--accent-color,#6366f1);text-decoration:underline;">Last 7d</a></td></tr>`
+                    : `<tr><td colspan="14" style="text-align:center;padding:2rem;color:var(--text-secondary);">No data for this period.</td></tr>`;
+                body.innerHTML = noDataMsg;
+                renderNetflixChChart([]);
+                return;
+            }
 
             body.innerHTML = _netflixChRows.map((row, i) => {
                 // Delta rank
