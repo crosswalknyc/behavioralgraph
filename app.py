@@ -9457,7 +9457,7 @@ def get_netflix_clickhouse_ranker_data():
 
         out = []
         for i, r in enumerate(rows):
-            key       = (r[0], r[1], r[2])
+            key       = (r[0], r[2], r[3])  # (show, season, episode)
             pr        = prior_map.get(key)
             cur_rank  = i + 1
             cur_views = int(r[5])
