@@ -33671,15 +33671,49 @@
             }
         }
 
-        // Resolve Gen Pop filename: use the file with "gen pop" (or gen_pop) + underscore + year; pick the one with the most recent year (e.g. Gen_Pop_2026_... over Gen_Pop_2025_...).
+        // The canonical Gen Pop file — MUST match backend GEN_POP_CANONICAL_KEY
+        // in app.py (line ~166). Every index calculation, every "Gen Pop"
+        // column, every default comparison denominator resolves to this
+        // file unless the user explicitly selects a different Gen_Pop_YYYY.csv
+        // from the Data Cuts popover. The 2026 in the filename is the
+        // generation year — the analysis period is 2025-01-01 → 2025-12-31.
+        const GEN_POP_CANONICAL_KEY = 'Gen_Pop_2026.csv';
+
+        // Resolve Gen Pop filename.
+        //
+        // Priority (2026-07-01, per user "all indexing should default to
+        // the 2026 file"):
+        //   1. If the canonical Gen_Pop_2026.csv is present in the jobs
+        //      list, ALWAYS use it. Do NOT fall through to max-year picking
+        //      — a stale cache, a wrongly-emitted duplicate, or a legacy
+        //      dated form ("Gen_Pop_03_04_2026_04_29.csv" which regex-matches
+        //      2026) could silently steal the default and start indexing
+        //      against the wrong year.
+        //   2. Otherwise (canonical missing), fall back to the historical
+        //      max-year picker so we don't break dev environments that
+        //      haven't been seeded with the canonical yet.
         function resolveGenPopFileName(jobs) {
-            const genPopJobs = (jobs || []).filter(j => {
+            const list = jobs || [];
+            // Priority 1: exact canonical match on s3_key (case-insensitive).
+            const canon = GEN_POP_CANONICAL_KEY.toLowerCase();
+            const canonicalHit = list.find(j => {
+                const key = (j.s3_key || j.job_id || '').toLowerCase();
+                return key === canon;
+            });
+            if (canonicalHit) {
+                try {
+                    console.info('[genpop] resolved to canonical: ' + GEN_POP_CANONICAL_KEY);
+                } catch (_) {}
+                return canonicalHit.s3_key || canonicalHit.job_id || GEN_POP_CANONICAL_KEY;
+            }
+
+            // Priority 2: max-year fallback (legacy path).
+            const genPopJobs = list.filter(j => {
                 const key = (j.s3_key || j.job_id || '').toLowerCase();
                 const name = (j.project_name || j.display_name || '').toLowerCase();
                 return key.includes('gen_pop') || key.includes('gen pop') || name.includes('gen pop') || name.includes('gen_pop');
             });
             if (genPopJobs.length === 0) return null;
-            // Prefer year from pattern Gen_Pop_YYYY (year immediately after gen_pop_)
             const yearFromGenPopPrefix = (key) => {
                 const k = (key || '').toLowerCase();
                 const match = k.match(/gen_pop_(\d{4})/);
@@ -33705,7 +33739,13 @@
                     bestHasExplicitYear = hasExplicit;
                 }
             }
-            return best.s3_key || best.job_id || null;
+            const resolvedKey = best.s3_key || best.job_id || null;
+            try {
+                console.warn('[genpop] canonical ' + GEN_POP_CANONICAL_KEY
+                    + ' not in jobs list — fell back to max-year: ' + resolvedKey
+                    + ' (year ' + bestYear + ')');
+            } catch (_) {}
+            return resolvedKey;
         }
         // Load Gen Pop file and parse it the same way as any profile; use that for Gen Pop % everywhere (locations, behavioral, demographics).
         // Loads the Gen Pop file with the most recent year in the filename (e.g. Gen Pop 2026).
@@ -93933,12 +93973,25 @@
             locations = condenseDMALocations(locations);
             const isProjection = dashDisplayMode === 'projection';
             
-            // Check if this is the Gen Pop profile
-            const isGenPopProfile = (currentS3Key || '').toUpperCase().includes('GEN_POP') || 
-                                   (currentS3Key || '').toUpperCase().includes('GENPOP') ||
-                                   (currentProfileData?.name || '').toUpperCase().includes('GEN POP');
+            // Check if this is the canonical Gen Pop profile. 2026-07-01
+            // (per user "all indexing throughout unless otherwise selected
+            // should default to be the 2026"): only the CANONICAL Gen Pop
+            // (GEN_POP_CANONICAL_KEY = Gen_Pop_2026.csv) self-mirrors here.
+            // Non-canonical Gen Pop tabs (Gen_Pop_2023.csv, Gen_Pop_2024.csv)
+            // are treated like any other profile for indexing purposes -
+            // their CW Gen Pop column shows canonical 2026 values so that
+            // compare-mode index picker's default (denKey='genpop', which
+            // reads data-cmp-pct-genpop stamped from .genpop-col) indexes
+            // against the canonical, not the older non-canonical year the
+            // user happens to be viewing.
+            const currentKeyUpper = (currentS3Key || '').toUpperCase();
+            const isAnyGenPop = currentKeyUpper.includes('GEN_POP') ||
+                                currentKeyUpper.includes('GENPOP') ||
+                                (currentProfileData?.name || '').toUpperCase().includes('GEN POP');
+            const isCanonicalGenPop = isAnyGenPop &&
+                (currentKeyUpper === (GEN_POP_CANONICAL_KEY || 'Gen_Pop_2026.csv').toUpperCase());
 
-            // For Gen Pop profiles: set genPopPct = pct and index = 100 (it IS the baseline)
+            const isGenPopProfile = isCanonicalGenPop;
             if (isGenPopProfile) {
                 locations.forEach(function(loc) {
                     loc.genPopPct = loc.pct;
@@ -104241,7 +104294,13 @@
                 return;
             }
 
-            const isGenPopProfile = (currentProfileData?.name || '').toUpperCase().includes('GEN POP') || (currentS3Key || '').toUpperCase().includes('GEN_POP');
+            // 2026-07-01: only the CANONICAL Gen Pop profile self-mirrors
+            // its locations as the baseline. Non-canonical Gen Pop years
+            // (Gen_Pop_2023.csv, Gen_Pop_2024.csv) index against the
+            // canonical baseline so users comparing older years still get
+            // meaningful location indexes vs. 2026 Gen Pop.
+            const _keyUp = (currentS3Key || '').toUpperCase();
+            const isGenPopProfile = _keyUp === (GEN_POP_CANONICAL_KEY || 'Gen_Pop_2026.csv').toUpperCase();
             const genPopLocations = isGenPopProfile ? locations : (genPopBaselineData && genPopBaselineData.locations) ? genPopBaselineData.locations : null;
             const genPopAgg = { byState: {}, byRegion: {}, byDma: {} };
             if (genPopLocations) {
