@@ -1,0 +1,121 @@
+# Render Blueprint for Behavioral Graph Web App - DEVELOPMENT ENVIRONMENT
+# This is a separate dev instance for testing changes before deploying to production.
+# Only admin and super_admin users can access this site.
+#
+# To deploy:
+# 1. Create a new Blueprint in Render Dashboard
+# 2. Point it to this file (render-dev.yaml)
+# 3. Set the required secrets in Render Dashboard
+
+services:
+  - type: web
+    name: behavioral-graph-dev
+    runtime: python
+    plan: starter
+    numInstances: 1
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: ./start.sh
+    healthCheckPath: /healthz
+    envVars:
+      # ENVIRONMENT FLAG - This marks this as the dev environment
+      - key: APP_ENV
+        value: "development"
+      - key: APP_USERNAME
+        value: admin
+      - key: APP_PASSWORD
+        value: midgenow!2
+      - key: FLASK_DEBUG
+        value: "true"
+      # Snowflake credentials - set these in Render dashboard
+      - key: SNOWFLAKE_USER
+        sync: false
+      - key: SNOWFLAKE_PASSWORD
+        sync: false
+      - key: SNOWFLAKE_ACCOUNT
+        sync: false
+      - key: SNOWFLAKE_TOKEN
+        sync: false
+      - key: SNOWFLAKE_WAREHOUSE
+        value: "BEHAVIORGRAPH6X"
+      - key: SNOWFLAKE_DATABASE
+        value: "BEHAVIORALGRAPH"
+      - key: SNOWFLAKE_SCHEMA
+        value: "PUBLIC"
+      - key: SNOWFLAKE_ROLE
+        value: "ACCOUNTADMIN"
+      # SMTP Email Configuration (fallback)
+      - key: SMTP_SERVER
+        value: "smtp.gmail.com"
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: "no_reply@crosswalknyc.com"
+      - key: SMTP_PASSWORD
+        value: "Token7778"
+      - key: FROM_EMAIL
+        value: "no_reply@crosswalknyc.com"
+      # Google OAuth for Gmail API (set in Render dashboard)
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      # DEV URL - Update this after creating the service in Render
+      - key: APP_URL
+        value: "https://behavioral-graph-dev.onrender.com"
+      # Gunicorn settings
+      - key: GUNICORN_WORKERS
+        value: "1"
+      - key: GUNICORN_THREADS
+        value: "1"
+      - key: GUNICORN_TIMEOUT
+        value: "300"
+      # Profile-analysis queue (smart concurrent processing).
+      # 1 = strict serial (legacy). 2 = recommended; ClickHouse handles two
+      # concurrent universe scans without thrashing and the LLM phase
+      # parallelizes freely. >3 may saturate CH or hit OpenAI rate limits.
+      - key: BG_PROFILE_QUEUE_WORKERS
+        value: "2"
+      # Cross-tool throttle. Caps total concurrent HEAVY analysis runs across
+      # Profile Analysis + Subscriber IQ (SVOD Acquisition) + ROAS IQ +
+      # Talent Theater + Talent Search + Watch Time + Cross Show + Campaign
+      # ROI + Ticket Sales Tracker + SF/LF + Flywheel Conversion + Ecommerce
+      # IQ. Keep at the same value as BG_PROFILE_QUEUE_WORKERS so that two
+      # heavy runs of any mix can co-exist but a third blocks until a slot
+      # frees. Incidence Check is intentionally NOT throttled (it's a fast
+      # pre-check). Bump cautiously — ClickHouse is the bottleneck, not CPU.
+      - key: BG_HEAVY_ANALYSIS_CONCURRENCY
+        value: "2"
+      # Cross-tool ClickHouse query throttle (see comment in render.yaml).
+      - key: BG_CLICKHOUSE_CONCURRENCY
+        value: "10"
+      # Crash detection: a job whose heartbeat is older than this many seconds
+      # while still 'running' gets auto-marked failed. 1800 = 30 min.
+      - key: BG_JOB_STALE_AFTER_SECONDS
+        value: "1800"
+      # AWS credentials (set in Render dashboard)
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      # Secret key for sessions (set in Render dashboard - use different from prod!)
+      - key: SECRET_KEY
+        sync: false
+
+  # No email cron job for dev - we don't want dev sending automated emails
+
+  # Cron: nightly Talent / Brands ranker refresh — ClickHouse only, no emails.
+  # Runs Layer-1 scoring for every Profile IQ profile against yesterday's
+  # clickstream, populating reference.profile_iq_daily_metrics for the
+  # Ranker IQ leaderboards. 09:00 UTC = 04:00 ET, after the nightly pipeline.
+  - type: cron
+    name: iq-rankers-daily-cron-dev
+    runtime: python
+    schedule: "0 9 * * *"
+    buildCommand: "true"
+    startCommand: |
+      python -c "import urllib.request,os; r=urllib.request.Request(os.environ['APP_URL'].rstrip('/')+'/api/cron/iq-rankers-daily?secret='+os.environ['CRON_SECRET'], method='POST'); print(urllib.request.urlopen(r, timeout=14400).read().decode())"
+    envVars:
+      - key: APP_URL
+        value: "https://behavioralgraph.onrender.com"
+      - key: CRON_SECRET
+        sync: false

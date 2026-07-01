@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Output files
+outputs/
+*.csv
+restored_passwords.txt
+
+# Environment - NEVER COMMIT CREDENTIALS
+.env
+.env.local
+config.py
+*.key
+*.pem
+*credentials*
+*secret*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Cache
+.cache/
+ai_cache/
+netflix_ranker_cache.json
+reelshort_ranker_cache.json
+shortstv_ranker_cache.json
+goodshort_ranker_cache.json
+rokufast_ranker_cache.json
+
+# Backup files — never commit these (they pollute the dashboard cache)
+*.bak
+*.backup
+*.bak.*

@@ -1,0 +1,27 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dark blue background -->
+  <rect width="200" height="200" fill="#0a1929"/>
+  
+  <!-- Outer dark blue outline (darkest, almost matching background) -->
+  <path d="M100 40 C80 45, 45 60, 40 80 C35 100, 50 130, 70 150 C90 170, 120 175, 140 170 C160 165, 175 150, 180 130 C185 110, 170 80, 150 60 C130 45, 110 40, 100 40 Z" 
+        fill="none" 
+        stroke="#1a2a3a" 
+        stroke-width="3"/>
+  
+  <!-- Middle blue outline -->
+  <path d="M100 45 C85 48, 50 62, 45 80 C40 98, 52 125, 70 145 C88 165, 115 168, 135 164 C155 160, 170 145, 175 130 C180 115, 168 85, 150 65 C132 50, 115 45, 100 45 Z" 
+        fill="none" 
+        stroke="#2a4a6a" 
+        stroke-width="2.5"/>
+  
+  <!-- Inner lighter blue outline -->
+  <path d="M100 50 C88 52, 55 64, 50 80 C45 96, 55 120, 72 140 C89 160, 110 162, 130 158 C150 154, 165 140, 170 130 C175 120, 165 90, 150 70 C135 55, 120 50, 100 50 Z" 
+        fill="none" 
+        stroke="#3a6a9a" 
+        stroke-width="2"/>
+  
+  <!-- Central light blue blob -->
+  <path d="M100 55 C90 56, 60 66, 55 80 C50 94, 58 115, 74 135 C90 155, 105 156, 125 152 C145 148, 160 135, 165 130 C170 125, 162 95, 150 75 C138 60, 125 55, 100 55 Z" 
+        fill="#5a9ad9" 
+        opacity="0.9"/>
+</svg>
