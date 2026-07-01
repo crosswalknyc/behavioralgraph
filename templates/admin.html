@@ -8306,9 +8306,15 @@
             if (arrowEl) arrowEl.textContent = userTableSort.dir === 1 ? ' ↑' : ' ↓';
 
             entries.forEach(([username, user]) => {
-                const creditsLeft = user.credits === -1 ? '∞' : user.credits;
-                const creditsClass = user.credits === -1 ? 'unlimited' : (user.credits <= 1 ? 'low' : (user.credits === 0 ? 'empty' : ''));
-                const usagePercent = user.credits === -1 ? 0 : (user.credits_used / (user.credits + user.credits_used) * 100) || 0;
+                // 2026-07-01: users created before the credits field was
+                // required have user.credits === null; without ?? 0 the
+                // template literal below renders the literal text "null"
+                // (see zrose row). Backend _numeric_credits_balance already
+                // treats None → 0, so mirror that here.
+                const creditsSafe = user.credits ?? 0;
+                const creditsLeft = user.credits === -1 ? '∞' : creditsSafe;
+                const creditsClass = user.credits === -1 ? 'unlimited' : (creditsSafe === 0 ? 'empty' : (creditsSafe <= 1 ? 'low' : ''));
+                const usagePercent = user.credits === -1 ? 0 : ((user.credits_used || 0) / (creditsSafe + (user.credits_used || 0)) * 100) || 0;
                 const company = user.company || '-';
                 const department = user.department || '-';
                 
@@ -8589,7 +8595,7 @@
             document.getElementById('newCompany').value = user.company || '';
             document.getElementById('newDepartment').value = user.department || '';
             document.getElementById('newRole').value = user.role;
-            document.getElementById('newCredits').value = user.credits === -1 ? '0' : user.credits;
+            document.getElementById('newCredits').value = user.credits === -1 ? '0' : (user.credits ?? 0);
             document.getElementById('unlimitedCredits').checked = user.credits === -1;
             document.getElementById('allCategories').checked = user.allowed_categories?.includes('*');
             document.getElementById('allRuns').checked = user.allowed_runs?.includes('*');
@@ -9085,7 +9091,7 @@
             rows.push([]);
             rows.push(['[Overview]']);
             rows.push(['Metric', 'Value']);
-            rows.push(['Credits Remaining', user.credits === -1 ? 'Unlimited' : String(user.credits)]);
+            rows.push(['Credits Remaining', user.credits === -1 ? 'Unlimited' : String(user.credits ?? 0)]);
             rows.push(['Credits Used', String(user.credits_used || 0)]);
             rows.push(['Profiles Viewed', String(profilesViewed.length)]);
             rows.push(['Total Actions', String(totalActions)]);
@@ -9348,7 +9354,7 @@
             rows.push([]);
             rows.push(['[Overview]']);
             rows.push(['Metric', 'Value']);
-            rows.push(['Credits Remaining', user.credits === -1 ? 'Unlimited' : String(user.credits)]);
+            rows.push(['Credits Remaining', user.credits === -1 ? 'Unlimited' : String(user.credits ?? 0)]);
             rows.push(['Credits Used', String(user.credits_used || 0)]);
             rows.push(['Profiles Viewed', String(profilesViewed.length)]);
             rows.push(['Total Actions', String(totalActions)]);
