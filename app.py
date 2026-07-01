@@ -4291,6 +4291,8 @@ def update_user(username):
             user['has_share_of_time_run_access'] = bool(req_data['has_share_of_time_run_access'])
         if 'has_blue_iq_access' in req_data:
             user['has_blue_iq_access'] = bool(req_data['has_blue_iq_access'])
+        if 'has_impact_iq_access' in req_data:
+            user['has_impact_iq_access'] = bool(req_data['has_impact_iq_access'])
         if user.get('has_share_of_time_access') is False:
             user['has_share_of_time_run_access'] = False
         if 'auto_access_new' in req_data:
@@ -5419,6 +5421,7 @@ def api_set_company_defaults(company_name):
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
             'has_blue_iq_access': req.get('has_blue_iq_access', False),
+            'has_impact_iq_access': req.get('has_impact_iq_access', True),
             'credits': req.get('credits', 5),
             'auto_access_new': req.get('auto_access_new', {}),
         }
@@ -7564,6 +7567,7 @@ def compute_product_access_flags(user, role):
             'has_share_of_time_run_access': True,
             'has_blue_iq_access': True,
             'has_intent_iq_access': True,
+            'has_impact_iq_access': True,
             'has_helm_iq_access': True,
         }
     u = user or {}
@@ -7755,6 +7759,7 @@ def index():
                            has_share_of_time_run_access=has_share_of_time_run,
                            has_blue_iq_access=has_blue_iq,
                            has_intent_iq_access=has_intent_iq,
+                           has_impact_iq_access=has_impact_iq,
                            has_helm_iq_access=has_helm_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
