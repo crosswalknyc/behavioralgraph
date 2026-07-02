@@ -83683,7 +83683,8 @@
             container.style.display = 'flex';
             if (tucCard) {
                 const cat = _currentProfileCategory();
-                const tucAllowed = ['TALENT','BRAND','SPORT','TRENDS'].includes(cat);
+                const master = (typeof getMasterCategory === 'function' && cat) ? getMasterCategory(cat, false) : cat;
+                const tucAllowed = ['TALENT','BRAND','SPORT','TRENDS'].includes((master || '').toUpperCase());
                 tucCard.style.display = tucAllowed ? '' : 'none';
             }
         }
