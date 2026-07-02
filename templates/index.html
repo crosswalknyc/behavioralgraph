@@ -84418,7 +84418,7 @@
                     h._cmpHasArrow = !!arrow;
                 }
                 const arrowHtml = h._cmpHasArrow ? '<span class="sort-arrow">↓</span>' : '';
-                h.innerHTML = arrowHtml + '<span style="white-space:nowrap;">' + h._cmpOrigLabel.replace(/</g,'&lt;') + '</span><br><span style="font-size:0.6rem;opacity:0.8;white-space:nowrap;">' + headerSuffix.replace(/</g,'&lt;') + '</span>';
+                h.innerHTML = arrowHtml + '<span style="display:flex;flex-direction:column;align-items:inherit;"><span style="white-space:nowrap;">' + h._cmpOrigLabel.replace(/</g,'&lt;') + '</span><span style="font-size:0.6rem;opacity:0.8;white-space:nowrap;">' + headerSuffix.replace(/</g,'&lt;') + '</span></span>';
             });
 
             try {
