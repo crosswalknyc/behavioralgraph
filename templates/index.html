@@ -32707,8 +32707,8 @@
                     <div id="impactCatalog"></div>
                 </div>
                 <div class="iiq2-card">
-                    <h3>Full-conversion cohort</h3>
-                    <p class="card-note">Demographics of the 208 ticket buyers who did every one of the 5 behaviors post-Coachella (interacted, streamed catalog, streamed SWAG LIVE, bought merch, watched NSN). Highest-intent Bieber audience in North America right now - the look-alike seed set.</p>
+                    <h3 id="impactDemosTitle">Full-conversion cohort</h3>
+                    <p class="card-note" id="impactDemosNote">Demographics of the 208 ticket buyers who did every one of the 5 behaviors post-Coachella (interacted, streamed catalog, streamed SWAG LIVE, bought merch, watched NSN). Highest-intent Bieber audience in North America right now - the look-alike seed set.</p>
                     <div class="iiq2-demo-grid" id="impactDemos"></div>
                 </div>
             </div>
@@ -32929,6 +32929,8 @@
                         { label: 'Fandango at Home / Vudu',  pre_pct: 5.912,  pct: 5.234,  style: 'c' },
                         { label: 'Other digital',            pre_pct: 2.894,  pct: 3.457,  style: 'c' }
                     ],
+                    demos_title: 'Full-conversion cohort',
+                    demos_note: 'Demographics of the 208 ticket buyers who did every one of the 5 behaviors post-Coachella (interacted, streamed catalog, streamed SWAG LIVE, bought merch, watched NSN). Highest-intent Bieber audience in North America right now - the look-alike seed set.',
                     demos: {
                         gender: [
                             { label: 'Female',     pct: 87.231, style: 'b' },
@@ -33207,30 +33209,32 @@
                         { label: 'Gametime',             pct: 6.212,  style: 'c' },
                         { label: 'Other',                pct: 4.815,  style: 'c' }
                     ],
+                    demos_title: 'Latin concert ticket buyer',
+                    demos_note: 'Demographics of the 1.31M Latin fans who bought a tour ticket in the 90-day window - the promoter\'s target audience. Skews slightly older and higher-income than the broad Latin fan base, more heavily female, and even more concentrated in Hispanic/Latino identity. Use this as the look-alike seed set for tour marketing.',
                     demos: {
                         gender: [
-                            { label: 'Female',     pct: 58.612, style: 'b' },
-                            { label: 'Male',       pct: 39.412, style: 'b' },
-                            { label: 'Non-binary', pct: 1.976,  style: 'b' }
+                            { label: 'Female',     pct: 62.417, style: 'b' },
+                            { label: 'Male',       pct: 36.128, style: 'b' },
+                            { label: 'Non-binary', pct: 1.455,  style: 'b' }
                         ],
                         age: [
-                            { label: '18-24', pct: 32.417, style: 'a' },
-                            { label: '25-34', pct: 38.612, style: 'a' },
-                            { label: '35-44', pct: 20.117, style: 'a' },
-                            { label: '45+',   pct: 8.854,  style: 'a' }
+                            { label: '18-24', pct: 26.834, style: 'a' },
+                            { label: '25-34', pct: 41.276, style: 'a' },
+                            { label: '35-44', pct: 22.337, style: 'a' },
+                            { label: '45+',   pct: 9.553,  style: 'a' }
                         ],
                         ethnicity: [
-                            { label: 'Hispanic / Latino', pct: 82.317, style: 'd' },
-                            { label: 'White',             pct: 8.417,  style: 'd' },
-                            { label: 'Black',             pct: 4.612,  style: 'd' },
-                            { label: 'Asian',             pct: 2.117,  style: 'd' },
-                            { label: 'Other / mixed',     pct: 2.537,  style: 'd' }
+                            { label: 'Hispanic / Latino', pct: 84.128, style: 'd' },
+                            { label: 'White',             pct: 7.367,  style: 'd' },
+                            { label: 'Black',             pct: 4.283,  style: 'd' },
+                            { label: 'Asian',             pct: 1.872,  style: 'd' },
+                            { label: 'Other / mixed',     pct: 2.350,  style: 'd' }
                         ],
                         income: [
-                            { label: '<$50K',       pct: 31.417, style: 'c' },
-                            { label: '$50K-$99K',   pct: 42.612, style: 'c' },
-                            { label: '$100K-$149K', pct: 18.312, style: 'c' },
-                            { label: '$150K+',      pct: 7.659,  style: 'c' }
+                            { label: '<$50K',       pct: 24.837, style: 'c' },
+                            { label: '$50K-$99K',   pct: 43.611, style: 'c' },
+                            { label: '$100K-$149K', pct: 21.137, style: 'c' },
+                            { label: '$150K+',      pct: 10.415, style: 'c' }
                         ]
                     },
                     insights: [
@@ -33533,6 +33537,8 @@
                 _iiq2RenderHBars('impactCatalog', j.catalog || []);
 
                 // Demographics
+                _setText('impactDemosTitle', j.demos_title || 'Full-conversion cohort');
+                _setText('impactDemosNote',  j.demos_note  || '');
                 var demoBox = document.getElementById('impactDemos');
                 if (demoBox && j.demos) {
                     var blocks = [
