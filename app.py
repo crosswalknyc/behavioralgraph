@@ -9985,41 +9985,67 @@ def netflix_ranker_backfill():
 @requires_auth
 def get_netflix_clickhouse_ranker_data():
     """
-    Daily "most watched on Netflix" ranking from netflix_ranker_daily
-    (pre-aggregated by the netflix-ranker-daily-cron service).
+    Netflix ranker — single day or date range, pre-aggregated in
+    netflix_ranker_daily (populated by the netflix-ranker-daily-cron service).
 
-    Accepts:
-        date=YYYY-MM-DD   day to rank (default: yesterday UTC)
-        type=Movie|Show   server-side type filter
-        genre=...         server-side genre tag filter
-        limit=N           max rows (default 500, max 2000)
+    Params:
+        start_date=YYYY-MM-DD  period start (default: yesterday)
+        end_date=YYYY-MM-DD    period end   (default: same as start_date)
+        date=YYYY-MM-DD        shorthand — sets both start and end to one day
+        type=Movie|Show
+        genre=...
+        limit=N                (default 500, max 2000)
+        collapse=episode|season  group rows by episode (default) or roll up by season
 
-    Returns per row: rank, delta_rank (vs prior day; null = new entry),
-    date, show, type, season, episode, episode_name, views (raw panel),
-    gen_pop_views (projected: raw x 329.9M / 10M ~= x32.99), genre,
-    runtime, avg_watch_time (always null pending TIME_ON_PAGE cleanup).
+    Rows are ranked by total views over [start_date, end_date].
+    Prior period = same-length window ending the day before start_date.
+    delta_rank  = prior_rank  - current_rank  (positive = climbed)
+    delta_views = current_total_views - prior_total_views
     Also returns available_dates (last 90 days with data) for the picker.
     """
-    date_param   = (request.args.get('date')  or '').strip()
-    type_filter  = (request.args.get('type')  or '').strip()
-    genre_filter = (request.args.get('genre') or '').strip()
+    import urllib.parse
+
+    date_param     = (request.args.get('date')       or '').strip()
+    start_param    = (request.args.get('start_date') or date_param).strip()
+    end_param      = (request.args.get('end_date')   or date_param).strip()
+    type_filter    = (request.args.get('type')  or '').strip()
+    genre_filter   = (request.args.get('genre') or '').strip()
+    collapse_param = (request.args.get('collapse') or 'episode').strip()
     try:
         limit = int(request.args.get('limit', 500))
     except (TypeError, ValueError):
         limit = 500
     limit = max(1, min(limit, 2000))
 
-    if date_param:
-        try:
-            target_date = datetime.strptime(date_param, '%Y-%m-%d').date()
-        except ValueError:
-            return jsonify({'error': 'Invalid date, expected YYYY-MM-DD'}), 400
-    else:
-        target_date = datetime.utcnow().date() - timedelta(days=1)
+    yesterday = datetime.utcnow().date() - timedelta(days=1)
 
-    prior_date = target_date - timedelta(days=1)
-    target_str = target_date.strftime('%Y-%m-%d')
-    prior_str  = prior_date.strftime('%Y-%m-%d')
+    if start_param:
+        try:
+            start_date = datetime.strptime(start_param, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Invalid start_date, expected YYYY-MM-DD'}), 400
+    else:
+        start_date = yesterday
+
+    if end_param:
+        try:
+            end_date = datetime.strptime(end_param, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Invalid end_date, expected YYYY-MM-DD'}), 400
+    else:
+        end_date = start_date
+
+    if end_date < start_date:
+        return jsonify({'error': 'end_date must be >= start_date'}), 400
+
+    num_days    = (end_date - start_date).days + 1
+    prior_end   = start_date - timedelta(days=1)
+    prior_start = prior_end  - timedelta(days=num_days - 1)
+
+    start_str       = start_date.strftime('%Y-%m-%d')
+    end_str         = end_date.strftime('%Y-%m-%d')
+    prior_start_str = prior_start.strftime('%Y-%m-%d')
+    prior_end_str   = prior_end.strftime('%Y-%m-%d')
 
     # Build WHERE clause using f-strings (safe: type_filter validated above,
     # genre_filter sanitized below; dates are strftime output — no user input)
@@ -10033,37 +10059,54 @@ def get_netflix_clickhouse_ranker_data():
         )
     base_where = " AND ".join(base_where_parts)
 
+    if collapse_param == 'season':
+        cur_select   = "NAME_OF_SHOW, TYPE, SEASON, '' AS EPISODE, '' AS EPISODE_NAME, SUM(VIEW_COUNT) AS total_views, any(GENRE) AS GENRE, any(RUN_TIME) AS RUN_TIME"
+        cur_groupby  = "NAME_OF_SHOW, TYPE, SEASON"
+        pr_select    = "NAME_OF_SHOW, TYPE, SEASON, SUM(VIEW_COUNT) AS v"
+        pr_groupby   = "NAME_OF_SHOW, TYPE, SEASON"
+        make_cur_key = lambda r: (r[0], r[1], r[2])   # (show, type, season)
+        make_pr_key  = lambda r: (r[0], r[1], r[2])
+    else:
+        cur_select   = "NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME, SUM(VIEW_COUNT) AS total_views, any(GENRE) AS GENRE, any(RUN_TIME) AS RUN_TIME"
+        cur_groupby  = "NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME"
+        pr_select    = "NAME_OF_SHOW, SEASON, EPISODE, SUM(VIEW_COUNT) AS v"
+        pr_groupby   = "NAME_OF_SHOW, SEASON, EPISODE"
+        make_cur_key = lambda r: (r[0], r[2], r[3])   # (show, season, episode)
+        make_pr_key  = lambda r: (r[0], r[1], r[2])
+
     GEN_POP = 329_900_000 / 10_000_000  # ~32.99
 
     try:
         conn = _ch_connect()
         cur = conn.cursor()
 
-        # target day
+        # current period
         cur.execute(f"""
             SELECT
-                NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME,
-                SUM(VIEW_COUNT) AS total_views,
-                any(GENRE)      AS GENRE,
-                any(RUN_TIME)   AS RUN_TIME
+                {cur_select}
             FROM netflix.netflix_ranker_daily
-            WHERE {base_where} AND toDate(DAY) = '{target_str}'
-            GROUP BY NAME_OF_SHOW, TYPE, SEASON, EPISODE, EPISODE_NAME
+            WHERE {base_where}
+              AND toDate(DAY) >= '{start_str}'
+              AND toDate(DAY) <= '{end_str}'
+            GROUP BY {cur_groupby}
             ORDER BY total_views DESC
             LIMIT {limit}
         """)
         rows = cur.fetchall()
 
-        # prior day rank map
+        # prior period: rank + views
         cur.execute(f"""
-            SELECT NAME_OF_SHOW, SEASON, EPISODE
+            SELECT {pr_select}
             FROM netflix.netflix_ranker_daily
-            WHERE {base_where} AND toDate(DAY) = '{prior_str}'
-            GROUP BY NAME_OF_SHOW, SEASON, EPISODE
-            ORDER BY SUM(VIEW_COUNT) DESC
+            WHERE {base_where}
+              AND toDate(DAY) >= '{prior_start_str}'
+              AND toDate(DAY) <= '{prior_end_str}'
+            GROUP BY {pr_groupby}
+            ORDER BY v DESC
             LIMIT 2000
         """)
-        prior_rank_map = {(r[0], r[1], r[2]): i + 1 for i, r in enumerate(cur.fetchall())}
+        prior_map = {make_pr_key(r): (i + 1, int(r[3]))
+                     for i, r in enumerate(cur.fetchall())}
 
         # available dates for picker
         cur.execute("""
@@ -10073,31 +10116,50 @@ def get_netflix_clickhouse_ranker_data():
         """)
         available_dates = [str(dr[0]) for dr in cur.fetchall()]
 
+        # real Netflix URLs — look up direct title URL, fall back to search
+        cur.execute("""
+            SELECT NAME_OF_SHOW, any(URL) AS url
+            FROM netflix.netflix_url_map
+            GROUP BY NAME_OF_SHOW
+        """)
+        url_map_lookup = {row[0]: row[1] for row in cur.fetchall()}
+
         out = []
         for i, r in enumerate(rows):
-            key   = (r[0], r[2], r[3])  # (NAME_OF_SHOW, SEASON, EPISODE) — matches prior_rank_map
-            pr    = prior_rank_map.get(key)
-            delta = None if pr is None else int(pr) - (i + 1)
+            key       = make_cur_key(r)
+            pr        = prior_map.get(key)
+            cur_rank  = i + 1
+            cur_views = int(r[5])
+            delta_rank  = None if pr is None else int(pr[0]) - cur_rank
+            delta_views = None if pr is None else cur_views - int(pr[1])
             out.append({
-                'rank':          i + 1,
-                'delta_rank':    delta,
-                'date':          target_str,
+                'rank':          cur_rank,
+                'delta_rank':    delta_rank,
+                'delta_views':   delta_views,
+                'start_date':    start_str,
+                'end_date':      end_str,
                 'show':          r[0],
                 'type':          r[1],
                 'season':        r[2],
                 'episode':       r[3],
                 'episode_name':  r[4],
-                'views':         int(r[5]),
-                'gen_pop_views': int(round(r[5] * GEN_POP)),
+                'views':         cur_views,
+                'gen_pop_views': int(round(cur_views * GEN_POP)),
                 'genre':         r[6],
                 'runtime':       r[7],
-                'avg_watch_time': None,
+                'avg_watch_time':  None,
+                'avg_daily_views': int(round(cur_views * GEN_POP / num_days)),
+                'netflix_url':     (url_map_lookup.get(r[0]) or 'https://www.netflix.com/search?q=' + urllib.parse.quote(str(r[0]))).split('#')[0],
             })
 
         return jsonify({
-            'success': True,
-            'rows': out,
-            'date': target_str,
+            'success':         True,
+            'rows':            out,
+            'start_date':      start_str,
+            'end_date':        end_str,
+            'num_days':        num_days,
+            'prior_start':     prior_start_str,
+            'prior_end':       prior_end_str,
             'available_dates': available_dates,
         })
     except Exception as e:
@@ -10135,55 +10197,95 @@ def get_netflix_clickhouse_genres():
 @requires_auth
 def get_netflix_clickhouse_title_history():
     """
-    Previous-N-days rank history for a single show/episode.
+    Previous-N-period rank history for a single show/episode.
     Feeds the hover tooltip (Jessie spec point #4).
+    Supports both single-day and date-range modes — always returns
+    same-length periods so comparisons stay apples-to-apples.
 
     Params:
-        show=...    required
-        season=...  optional
-        episode=... optional
-        days=N      how many days (default 5, max 30)
+        show=...           required
+        season=...         optional
+        episode=...        optional
+        start_date=...     current period start (default: yesterday)
+        end_date=...       current period end   (default: start_date)
+        periods=N          how many prior periods (default 5, max 10)
     """
-    show    = (request.args.get('show')    or '').strip()
-    season  = (request.args.get('season')  or '').strip()
-    episode = (request.args.get('episode') or '').strip()
+    show        = (request.args.get('show')       or '').strip()
+    season      = (request.args.get('season')     or '').strip()
+    episode     = (request.args.get('episode')    or '').strip()
+    start_param = (request.args.get('start_date') or '').strip()
+    end_param   = (request.args.get('end_date')   or '').strip()
     try:
-        days = int(request.args.get('days', 5))
+        periods = int(request.args.get('periods', 5))
     except (TypeError, ValueError):
-        days = 5
-    days = max(1, min(days, 30))
+        periods = 5
+    periods = max(1, min(periods, 10))
 
     if not show:
         return jsonify({'error': 'show is required'}), 400
 
+    yesterday = datetime.utcnow().date() - timedelta(days=1)
+
+    if start_param:
+        try:
+            start_date = datetime.strptime(start_param, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Invalid start_date'}), 400
+    else:
+        start_date = yesterday
+
+    if end_param:
+        try:
+            end_date = datetime.strptime(end_param, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Invalid end_date'}), 400
+    else:
+        end_date = start_date
+
+    num_days = (end_date - start_date).days + 1
+
     try:
         conn = _ch_connect()
         cur = conn.cursor()
-        cur.execute(
-            f"SELECT DISTINCT toDate(DAY) AS d FROM netflix.netflix_ranker_daily "
-            f"ORDER BY d DESC LIMIT {days}"
-        )
-        recent_dates = [str(dr[0]) for dr in cur.fetchall()]
-        if not recent_dates:
-            return jsonify({'success': True, 'history': []})
 
         history = []
-        for d_str in recent_dates:
+        for p in range(1, periods + 1):
+            p_end   = start_date - timedelta(days=(p - 1) * num_days + 1)
+            p_start = p_end - timedelta(days=num_days - 1)
+            p_start_str = p_start.strftime('%Y-%m-%d')
+            p_end_str   = p_end.strftime('%Y-%m-%d')
+
             cur.execute(f"""
                 SELECT NAME_OF_SHOW, SEASON, EPISODE, SUM(VIEW_COUNT) AS v
                 FROM netflix.netflix_ranker_daily
-                WHERE toDate(DAY) = '{d_str}'
+                WHERE toDate(DAY) >= '{p_start_str}'
+                  AND toDate(DAY) <= '{p_end_str}'
                   AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
                 GROUP BY NAME_OF_SHOW, SEASON, EPISODE
                 ORDER BY v DESC
                 LIMIT 2000
             """)
+
+            found = False
             for rank_num, r in enumerate(cur.fetchall(), start=1):
                 if (r[0] == show
                         and (not season  or r[1] == season)
                         and (not episode or str(r[2]) == str(episode))):
-                    history.append({'date': d_str, 'rank': rank_num, 'views': int(r[3])})
+                    history.append({
+                        'start_date': p_start_str,
+                        'end_date':   p_end_str,
+                        'rank':       rank_num,
+                        'views':      int(r[3]),
+                    })
+                    found = True
                     break
+            if not found:
+                history.append({
+                    'start_date': p_start_str,
+                    'end_date':   p_end_str,
+                    'rank':       None,
+                    'views':      None,
+                })
 
         return jsonify({'success': True, 'history': history})
     except Exception as e:
