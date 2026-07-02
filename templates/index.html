@@ -84412,8 +84412,13 @@
                 + '.location-row.header .cw-gp-col'
             ));
             headers.forEach(h => {
-                if (h._cmpOrigLabel == null) h._cmpOrigLabel = h.textContent;
-                h.innerHTML = h._cmpOrigLabel + '<br><span style="font-size:0.6rem;opacity:0.8;">' + headerSuffix.replace(/</g,'&lt;') + '</span>';
+                if (h._cmpOrigLabel == null) {
+                    const arrow = h.querySelector('.sort-arrow');
+                    h._cmpOrigLabel = (arrow ? h.textContent.replace(arrow.textContent, '').trim() : h.textContent.trim());
+                    h._cmpHasArrow = !!arrow;
+                }
+                const arrowHtml = h._cmpHasArrow ? '<span class="sort-arrow">↓</span>' : '';
+                h.innerHTML = arrowHtml + '<span style="white-space:nowrap;">' + h._cmpOrigLabel.replace(/</g,'&lt;') + '</span><br><span style="font-size:0.6rem;opacity:0.8;white-space:nowrap;">' + headerSuffix.replace(/</g,'&lt;') + '</span>';
             });
 
             try {
