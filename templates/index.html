@@ -16879,6 +16879,7 @@
                                             <option value="QSR">QSR</option>
                                             <option value="RETAILERS">Retailers</option>
                                             <option value="SECURITY">Security</option>
+                                            <option value="SWEEPSTAKES">Sweepstakes</option>
                                             <option value="TELECOM">Telecom</option>
                                             <option value="TICKETING">Ticketing</option>
                                             <option value="TOY">Toy</option>
@@ -17344,6 +17345,7 @@
                                                     <option value="QSR">QSR</option>
                                                     <option value="RETAILERS">Retailers</option>
                                                     <option value="SECURITY">Security</option>
+                                                    <option value="SWEEPSTAKES">Sweepstakes</option>
                                                     <option value="TELECOM">Telecom</option>
                                                     <option value="TICKETING">Ticketing</option>
                                                     <option value="TOY">Toy</option>
@@ -37043,7 +37045,7 @@
 
             window.helmLoadProfileDropdowns = function helmLoadProfileDropdowns() {
                 if (_helmProfilesLoaded) return;
-                var brandCats = ['ACCESSORIES','ACTIVEWEAR','AMUSEMENT PARKS','APPAREL','AUTOMOBILE','B2B','BANK','BANKS','BANKING','BEAUTY','BETTING','BEVERAGE','CASUAL DINING','CPG','CREDIT PROVIDERS','CREDIT PROVIDER','DIGITAL BANKING','EVENTS','FOOTWEAR','FRANCHISE','GROCERY','INTIMATES','JEWELRY','LOYALTY PROGRAMS','MEMBERSHIP','NON PROFIT/CHARITY','PHARMA','QSR','RETAILERS','SECURITY','TELECOM','TICKETING','TOY','TRAVEL','VENUE','WORKOUT FACILITY'];
+                var brandCats = ['ACCESSORIES','ACTIVEWEAR','AMUSEMENT PARKS','APPAREL','AUTOMOBILE','B2B','BANK','BANKS','BANKING','BEAUTY','BETTING','BEVERAGE','CASUAL DINING','CPG','CREDIT PROVIDERS','CREDIT PROVIDER','DIGITAL BANKING','EVENTS','FOOTWEAR','FRANCHISE','GROCERY','INTIMATES','JEWELRY','LOYALTY PROGRAMS','MEMBERSHIP','NON PROFIT/CHARITY','PHARMA','QSR','RETAILERS','SECURITY','SWEEPSTAKES','TELECOM','TICKETING','TOY','TRAVEL','VENUE','WORKOUT FACILITY'];
                 fetch('/api/jobs?refresh=0', { credentials: 'same-origin' })
                     .then(function(r) { return r.json(); })
                     .then(function(d) {
@@ -107198,7 +107200,7 @@
             // stamped that way. Without 'BANK' here, those profiles fall
             // through to the 'OTHER' master and get hidden because OTHER
             // isn't in masterOrder.
-            'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANK', 'BANKS', 'BANKING', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FOOTWEAR', 'FRANCHISE', 'GROCERY', 'INTIMATES', 'JEWELRY', 'LOYALTY PROGRAMS', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'SECURITY', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
+            'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANK', 'BANKS', 'BANKING', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FOOTWEAR', 'FRANCHISE', 'GROCERY', 'INTIMATES', 'JEWELRY', 'LOYALTY PROGRAMS', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'SECURITY', 'SWEEPSTAKES', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
             'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE', 'PODCAST', 'VERTICAL SHORTS', 'VERTICAL SHORT', 'SERIES - AMAZON / MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - 20TH CENTURY', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
             'GEN POP': ['GEN POP'],
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'STREAMING/PLATFORM', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
