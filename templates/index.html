@@ -75851,11 +75851,11 @@
                 ? (_tixNum / _purNum)
                 : 2.5;
             const _avgPerOrderStr = (Math.round(_avgPerOrder * 10) / 10).toString();
-            const genreTooltip = `Sales = Tickets Sold x $15. Purchasers = Tickets Sold / ${_avgPerOrderStr} (avg group size). Sales are anchored to 70-83% of researched US box office, since our panel only covers digital pre-purchase.`;
+            const genreTooltip = `Sales = Tickets Sold x $15. Purchasers = Tickets Sold / ${_avgPerOrderStr} (avg group size).`;
             genreEl.setAttribute('data-tooltip', genreTooltip);
             const footnoteEl = document.getElementById('tstTheatersFootnote');
             if (footnoteEl) {
-                footnoteEl.textContent = `Sales = Tickets Sold x $15. Purchasers = Tickets Sold / ${_avgPerOrderStr} (avg group size). Sales anchored to 70-83% of researched US box office (panel covers digital pre-purchase only).`;
+                footnoteEl.textContent = `Sales = Tickets Sold x $15. Purchasers = Tickets Sold / ${_avgPerOrderStr} (avg group size).`;
             }
             const cards = [];
             if (d.total_purchasers_us) cards.push({ label: 'US Gen Pop Total Purchasers', value: d.total_purchasers_us, isCurrency: false, sub: '' });
@@ -75870,7 +75870,7 @@
                 } else if (c.label === 'US Gen Pop Total Tickets Sold') {
                     tip = `US Gen Pop tickets sold (= Total Purchasers x ${_avgPerOrderStr} group size). US Gen Pop projections use the 2026 base of 329,900,000.`;
                 } else if (c.label === 'US Gen Pop Ticket Sales') {
-                    tip = 'Total Tickets Sold x $15 ticket price, calibrated to 70-83% of researched US box office (Crosswalk panel covers digital pre-purchase only). ' + TST_GENPOP_TOOLTIP;
+                    tip = 'Total Tickets Sold x $15 ticket price. ' + TST_GENPOP_TOOLTIP;
                 }
                 const subHtml = c.sub ? `<div class="exec-metric-sublabel" style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.85; margin-top: 0.15rem; font-style: italic;">${c.sub.replace(/</g,'&lt;')}</div>` : '';
                 return `<div class="exec-summary-metric has-tooltip" data-tooltip="${(tip||'').replace(/"/g,'&quot;')}"><div class="exec-metric-label">${(c.label||'').replace(/</g,'&lt;')}</div><div class="exec-metric-value">${display.replace(/</g,'&lt;')}</div>${subHtml}</div>`;
@@ -81409,11 +81409,7 @@
         const PROFILE_IQ_MINI_SAMPLE_THRESHOLD = 100000;
         const PROFILE_IQ_MINI_SUFFIX = ' - IQ Mini';
         const PROFILE_IQ_MINI_TOOLTIP_LINES = [
-            'Fewer than 100,000 panelists qualified in the study year alone.',
-            'We recruit from earlier years until the behavior sample reaches 100,000.',
-            'Only study-year digital behavior is scored for every panelist.',
-            'The US projection reflects the original study-year cohort-not the 100k sample.',
-            'Crosswalk n may show ≥100k; US scale stays anchored to the study year.'
+            'Smaller sample size than a standard profile.'
         ];
 
         function shouldAppendIqMiniTitleSuffix(sampleSize, brandName, s3Key) {
