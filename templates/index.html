@@ -21649,7 +21649,38 @@
                 #blueIQView .bq-day-grid { grid-template-columns: 1fr 1fr; }
                 #blueIQView .bq-day-controls { flex-direction: column; align-items: flex-start; }
             }
-            #blueIQView .blue-iq-card-articles { grid-column: span 4; min-height: 320px; }
+            #blueIQView .blue-iq-card-articles {
+                grid-column: span 4;
+                min-height: 320px;
+                max-height: 560px;               /* cap to sibling card height */
+                display: flex;                   /* let body absorb remaining height */
+                flex-direction: column;
+            }
+            /* Card body absorbs the remaining vertical space inside the
+             * capped articles card and scrolls if the article list
+             * exceeds what fits alongside the sibling Search/Social
+             * cards. min-height:0 is required so a flex child is
+             * allowed to shrink below its content size (otherwise
+             * overflow never kicks in). */
+            #blueIQView .blue-iq-card-articles .blue-iq-card-body {
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow-y: auto;
+                overflow-x: hidden;
+                padding-right: 4px;              /* tiny gutter for the scrollbar */
+            }
+            /* Subtle scrollbar so it doesn't visually shout on the
+             * dark card background. */
+            #blueIQView .blue-iq-card-articles .blue-iq-card-body::-webkit-scrollbar {
+                width: 6px;
+            }
+            #blueIQView .blue-iq-card-articles .blue-iq-card-body::-webkit-scrollbar-thumb {
+                background: rgba(255,255,255,0.12);
+                border-radius: 3px;
+            }
+            #blueIQView .blue-iq-card-articles .blue-iq-card-body::-webkit-scrollbar-thumb:hover {
+                background: rgba(255,255,255,0.22);
+            }
             #blueIQView .blue-iq-card-demo     { grid-column: span 6; }
             #blueIQView .blue-iq-card-compare  { grid-column: span 6; }
             #blueIQView .blue-iq-card-title { font-size: 0.92rem; font-weight: 600; margin: 0 0 0.4rem 0; color: var(--text-primary); display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
@@ -22057,6 +22088,15 @@
                 #blueIQView .blue-iq-card-articles,
                 #blueIQView .blue-iq-card-demo,
                 #blueIQView .blue-iq-card-compare { grid-column: span 12; }
+                /* When the articles card stacks full-width there's no
+                 * sibling to match — let it grow naturally instead of
+                 * hiding content behind an internal scrollbar. */
+                #blueIQView .blue-iq-card-articles {
+                    max-height: none;
+                }
+                #blueIQView .blue-iq-card-articles .blue-iq-card-body {
+                    overflow-y: visible;
+                }
             }
         </style>
         <div id="blueIQView">
