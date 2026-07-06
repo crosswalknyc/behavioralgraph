@@ -31873,15 +31873,15 @@
                                 background: linear-gradient(135deg, rgba(20,184,166,0.10) 0%, rgba(229,9,20,0.08) 100%);
                                 border-left: 3px solid #14b8a6;"></div>
 
-                    <!-- Matching pipeline (the funnel that produces the matched cohort) -->
+                    <!-- Cohort construction (exposed vs. control) -->
                     <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92; color: #5eead4;">
-                        🧪 Matching pipeline - how the exposed and control cohorts get built
+                        🧪 Cohort construction - exposed vs. control
                     </h4>
                     <div id="jiqNflxIncrementPipeline" style="margin-bottom: 1rem;"></div>
 
-                    <!-- Cohort balance diagnostic - statistical evidence the cohorts are comparable -->
+                    <!-- Cohort balance - exposed vs. control are aligned -->
                     <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92; color: #5eead4;">
-                        ⚖️ Cohort-balance diagnostic - exposed vs. control are statistically indistinguishable on the matching variables
+                        ⚖️ Cohort balance - exposed vs. control lined up on the variables that matter
                     </h4>
                     <div id="jiqNflxIncrementBalance" style="margin-bottom: 1rem;"></div>
 
@@ -49080,15 +49080,15 @@
                         nflx_migration:              _JIQ_NETFLIX_DATA.nflx_migration,
                         nflx_genre_alignment:        _JIQ_NETFLIX_DATA.nflx_genre_alignment,
                         facts: [
-                            { label: 'Headline',  value: 'Netflix sees the signup, the watch, and the cancel. Crosswalk sees the demand formation, the churn destination, the pre-launch demand curve, the post-watch commerce lift, the in-market advertiser-category signals, the off-Amazon intent path, the pre/post lift on every campaign, the matched-control incrementality, the audience-quality rate card, AND the full competitive streaming marketplace.' },
+                            { label: 'Headline',  value: 'Netflix sees the signup, the watch, and the cancel. Crosswalk sees the demand formation, the churn destination, the pre-launch demand curve, the post-watch commerce lift, the in-market advertiser-category signals, the off-Amazon intent path, the pre/post lift on every campaign, the incrementality read, the audience-quality rate card, AND the full competitive streaming marketplace.' },
                             { label: 'Pre-sub',   value: '62.7% of new Netflix subs are simultaneously in-market for at least one premium advertiser category in the 30d window before signup.' },
                             { label: 'Churn',     value: '56.8% of cancellers subscribe to a competitor within 30d - Hulu, Max, and YouTube Premium lead. Netflix sees zero signal for any of it.' },
                             { label: 'Title',     value: 'The 30d pre-launch demand curve (trailer rewatches, Reddit comments, TikTok hashtag velocity) predicts opening-week viewership weeks before press-play.' },
                             { label: 'Commerce',  value: 'Prestige drama drives 2.41x luxury-fashion lift in the 14d post-binge. Travel doc drives 3.18x destination-search lift in the 7-30d window.' },
                             { label: 'Ad sales',  value: '15 advertiser-ready packs spanning 79.4M U.S. Netflix households, each with a brand-anchored proof signal and a CPM-uplift range.' },
                             { label: 'Amazon',    value: 'Beauty, travel, luxury fashion, jewelry, and premium spirits all over-index Netflix viewer purchase intent AND have under 30% Amazon category share - the budgets Netflix can credibly take from Amazon.' },
-                            { label: 'Attribution', value: 'Dove × Bridgerton S4 case study: +47.6% brand-search lift, +71.4% dove.com visits, +28.4% purchase-proxy lift, -17.9pp cart abandonment in the 30d window vs. a matched-control cohort. This is the framework that justifies premium CPMs and wins performance dollars.' },
-                            { label: 'Incrementality', value: 'Matched-control study design across 4 case studies (Dove × Bridgerton, Toyota × Squid Game, Capital One × Wednesday, Booking.com × Emily in Paris) shows 80%+ of the exposed cohort\'s lift is causally attributable to the buy. SMD < 0.10 on all 8 matching variables. CPM uplift: 38-53% per category.' },
+                            { label: 'Attribution', value: 'Dove × Bridgerton S4 case study: +47.6% brand-search lift, +71.4% dove.com visits, +28.4% purchase-proxy lift, -17.9pp cart abandonment in the 30d post-window vs. an unexposed cohort. This is what justifies premium CPMs and wins performance dollars.' },
+                            { label: 'Incrementality', value: '4 case studies (Dove × Bridgerton, Toyota × Squid Game, Capital One × Wednesday, Booking.com × Emily in Paris) show 80%+ of the exposed cohort\'s lift is causally attributable to the buy. CPM uplift: 38-53% per category.' },
                             { label: 'AQI',         value: '10 priceable segment packs across 70.3M Diamond + Platinum + Gold Netflix HHs - Premium Travel Planners (AQI 92, CPM +57%), Luxury Considerers (89, +52%), High-Intent Tech Buyers (84, +47%), Auto Switchers (81, +44%), Multicultural Growth (79, +41%), Sports/Event Viewers (77, +37%), Beauty Buyers (76, +35%), New Parents (78, +38%), Streaming Superfans (73, +31%), Gen Z Migrators (71, +28%).' },
                             { label: 'Migration',   value: '88.6% of U.S. Netflix HHs are multi-platform streamers. 32.9M inbound + 44.5M outbound 90d cross-platform moves. Top outbound: YouTube (12.3M), Hulu (8.4M), Prime (7.2M). Top inbound: YouTube (9.7M), Hulu (7.1M), Prime (5.4M). 14.2M lapsed subs reactivated in 2026 because of a specific Netflix title - Squid Game S3 alone drove 3.4M.' }
                         ]
@@ -50179,7 +50179,7 @@
                                 'lime'],
                             ['TRUE Incremental Subs',
                                 _jiqFmt(287640),
-                                'vs matched-control cohort',
+                                'net-new attributable to Landman',
                                 'lime'],
                             ['Net-New to Sheridan',
                                 '22.6%',
@@ -59037,7 +59037,7 @@
                       note: 'Abandonment rate on Dove SKU carts FELL 17.9 percentage points in the exposed cohort - the creative reduced consideration-stage friction.' }
                 ],
                 decay_chart: {
-                    label: 'Incremental brand-search lift, exposed vs. matched control',
+                    label: 'Incremental brand-search lift, exposed vs. control',
                     points: [
                         { window: '1d',  lift_pct: 18.4 },
                         { window: '3d',  lift_pct: 28.7 },
@@ -59050,28 +59050,27 @@
                         { window: '60d', lift_pct: 24.3 }
                     ]
                 },
-                pitch: 'Netflix today sells exposure. With Crosswalk, Netflix sold Dove an OUTCOME: +47.6% brand-search lift, +71.4% dove.com visits, +28.4% purchase-proxy lift, -17.9pp cart abandonment - all measured against a matched control cohort with identical demographics, viewing, and pre-flight baseline. Run this framework against every advertiser meeting and CPMs stop being "negotiated" and start being "earned." Performance dollars follow.'
+                pitch: 'Netflix today sells exposure. With Crosswalk, Netflix sold Dove an OUTCOME: +47.6% brand-search lift, +71.4% dove.com visits, +28.4% purchase-proxy lift, -17.9pp cart abandonment - all measured against a control cohort with identical demographics, viewing, and pre-flight baseline. Run this against every advertiser meeting and CPMs stop being "negotiated" and start being "earned." Performance dollars follow.'
             },
 
-            // ── PULL 8 · INCREMENTALITY & MATCHED-CONTROL STUDY DESIGN ──
+            // ── PULL 8 · INCREMENTALITY ──
             nflx_incrementality: {
                 enabled: true,
-                title: 'Incrementality & matched-control study design',
-                subtitle: 'The methodology that turns "your ad reached likely buyers" into "your ad created measurable incremental action." Matched-cohort design isolates the CAUSAL lift - the part of the behavioral movement that would NOT have happened without exposure. This is the methodology that justifies CPM expansion.',
+                title: 'Incrementality',
+                subtitle: 'The read that turns "your ad reached likely buyers" into "your ad created measurable incremental action." Isolates the CAUSAL lift - the part of the behavioral movement that would NOT have happened without exposure. This is what justifies CPM expansion.',
                 question: 'Can Netflix prove that ads changed behavior, not just reached people who were already going to act?',
                 method_bullets: [
                     'Exposed cohort: ad-tier viewers who saw ≥1 in-show impression of the campaign creative',
                     'Control cohort: behaviorally-similar Netflix HHs that were NOT exposed to the campaign',
-                    'Matched on: pre-flight category interest, brand familiarity, demographic profile, prior competitor behavior, Netflix tenure, ad-tier vs. paid tier, geo, HHI',
-                    'Lift = (exposed-cohort post-flight behavior) − (control-cohort post-flight behavior), measured as a percentage delta vs. each cohort\'s OWN pre-flight baseline',
-                    'Statistical significance via paired-difference test with bootstrapped CIs across 1,000 resamples of the matched pairs'
+                    'Aligned on: pre-flight category interest, brand familiarity, demographic profile, prior competitor behavior, Netflix tenure, ad-tier vs. paid tier, geo, HHI',
+                    'Lift = (exposed-cohort post-flight behavior) − (control-cohort post-flight behavior), measured as a percentage delta vs. each cohort\'s OWN pre-flight baseline'
                 ],
                 pipeline: [
-                    { stage: 'Total U.S. Netflix HHs',         value: 79400000, label: 'addressable HH base (projected from n=2,406,790 panelist HHs)' },
+                    { stage: 'Total U.S. Netflix HHs',         value: 79400000, label: 'addressable HH base' },
                     { stage: 'Ad-tier eligible HHs',            value: 32700000, label: 'ad-supported plan, opted-in measurement (41.2% of base)' },
                     { stage: 'Reached by campaign',             value: 14200000, label: '≥1 in-show ad impression on the flight (17.9% of base)' },
                     { stage: 'Exposed cohort (analysis-ready)', value: 14200000, label: 'final exposed set after invalid-traffic exclusion' },
-                    { stage: 'Matched control cohort',          value: 14200000, label: '1:1 nearest-neighbor match on 8 variables' }
+                    { stage: 'Control cohort',                  value: 14200000, label: '1:1 aligned on 8 variables' }
                 ],
                 balance: [
                     { variable: 'Premium-beauty category interest (90d)',    exposed: 28.7, control: 27.4, smd: 0.029, balanced: true },
@@ -59083,7 +59082,7 @@
                     { variable: 'Netflix tenure (avg years)',                exposed:  4.7, control:  4.6, smd: 0.043, balanced: true },
                     { variable: 'Premium-content viewing (Bridgerton-like)', exposed: 47.3, control: 46.9, smd: 0.008, balanced: true }
                 ],
-                balance_note: 'All 8 matching variables are within the SMD < 0.10 threshold considered well-balanced in causal-inference literature - meaning the exposed and control cohorts are statistically indistinguishable on the variables we matched on. Any behavioral delta post-flight is therefore attributable to ad exposure, not to baseline differences.',
+                balance_note: 'Exposed and control cohorts are statistically indistinguishable on all 8 variables. Any behavioral delta post-flight is attributable to ad exposure, not to baseline differences.',
 
                 studies: [
                     {
@@ -59107,7 +59106,7 @@
                         ],
                         headline_metric: 'Brand-search lift',
                         cpm_uplift_pct: 38.4,
-                        win_summary: 'The cleanest single-campaign proof. Brand-search lift, purchase proxy, and time-to-action all show >10x the lift of the matched-control baseline, with paired-difference significance below the p=0.001 threshold across the 30d window.'
+                        win_summary: 'The cleanest single-campaign proof. Brand-search lift, purchase proxy, and time-to-action all show >10x the lift of the control baseline across the 30d window.'
                     },
                     {
                         id: 'toyota_squidgame',
@@ -59179,7 +59178,7 @@
                         win_summary: 'Travel has the longest consideration window, which makes the 60d post-flight design essential. The +47.3% lift on Booking.com date-picker and property-detail sessions held through day 60 - proof the cultural pull of the show extends the campaign\'s tail well beyond the flight.'
                     }
                 ],
-                pitch: 'This is the methodology behind every lift number Netflix + Crosswalk would put in front of an advertiser. The matched-control design rules out the "they were going to buy anyway" objection by construction - because the control cohort is, by every measurable variable, the same audience MINUS the exposure. Whatever the exposed cohort does that the control cohort does NOT do is the incremental impact of the buy. That is the difference between "your ad reached likely buyers" and "your ad created measurable incremental action." That is CPM expansion. And it is repeatable for every advertiser, every show, every quarter.'
+                pitch: 'This is what sits behind every lift number Netflix + Crosswalk would put in front of an advertiser. The design rules out the "they were going to buy anyway" objection by construction - because the control cohort is, by every measurable variable, the same audience MINUS the exposure. Whatever the exposed cohort does that the control cohort does NOT do is the incremental impact of the buy. That is the difference between "your ad reached likely buyers" and "your ad created measurable incremental action." That is CPM expansion. And it is repeatable for every advertiser, every show, every quarter.'
             },
 
             // ── PULL 9 · NETFLIX AUDIENCE QUALITY INDEX ──
