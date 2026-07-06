@@ -37502,6 +37502,43 @@
                 .trim();
         }
 
+        // Article-safe date stripper: removes only PAST year tokens
+        // (1900 through current-year-minus-one) so retrospective
+        // framing like "2023 tax bill" collapses to "tax bill",
+        // while forward-looking references like "2026 Senate race"
+        // and "2028 presidential" survive. Used for the Top
+        // political articles card.
+        //
+        // Also cleans punctuation debris left after year removal:
+        // empty parens `()`, empty brackets `[]`, dangling connectors
+        // ("in and", "and and", ", and"), doubled whitespace, and
+        // trailing dashes / commas / conjunctions. Mirrors
+        // blue_iq._strip_stale_years and article_discovery._strip_stale_years
+        // so all three surfaces produce identical output.
+        function _bqStripStaleYears(s) {
+            if (s == null) return '';
+            var currentYear = new Date().getUTCFullYear();
+            var out = String(s);
+            out = out.replace(/\b((?:19|20)\d{2})\b/g, function(_m, y) {
+                return (parseInt(y, 10) < currentYear) ? '' : y;
+            });
+            out = out
+                .replace(/\(\s*\)/g, '')
+                .replace(/\[\s*\]/g, '')
+                .replace(/\b(?:in|of|from|between|during|since|by)\s+and\b/gi, 'and')
+                .replace(/\band\s+and\b/gi, 'and')
+                .replace(/,\s*and\b/gi, ' and')
+                .replace(/\s+,/g, ',')
+                .replace(/\s+/g, ' ')
+                .replace(/\s+([,.:;)\]!?])/g, '$1')
+                .replace(/([(\[])\s+/g, '$1')
+                .replace(/\b(?:in|of|from|between|during|since|by|and)\s*$/gi, '')
+                .replace(/\s*[\-\u2013\u2014,]\s*$/, '')
+                .replace(/^\s*[\-\u2013\u2014,]\s*/, '')
+                .trim();
+            return out;
+        }
+
         // Brand-color map for search engines + social platforms. Same
         // hue used everywhere a brand row appears (rows here, axis on
         // future charts) so the user develops a quick color↔brand
@@ -38413,13 +38450,21 @@
                 var topicChip = a.topic
                     ? '<span class="bq-article-topic">' + _bqEscape(a.topic) + '</span>'
                     : '';
-                var summaryHtml = a.summary
-                    ? '<div class="blue-iq-article-summary">' + _bqEscape(a.summary) + '</div>'
+                // Strip PAST year tokens ("2023", "2024") from title +
+                // summary so retrospective / anniversary framing doesn't
+                // make the card feel dated. Forward-looking references
+                // ("2026 Senate race", "2028 presidential") survive.
+                // Leaves the underlying URL untouched so clicks still
+                // resolve to the same story.
+                var cleanTitle   = _bqStripStaleYears(a.title || a.url);
+                var cleanSummary = a.summary ? _bqStripStaleYears(a.summary) : '';
+                var summaryHtml  = cleanSummary
+                    ? '<div class="blue-iq-article-summary">' + _bqEscape(cleanSummary) + '</div>'
                     : '';
                 return '<div class="blue-iq-article">'
                      + img
                      + '<div class="blue-iq-article-body">'
-                     + '<p class="blue-iq-article-title"><a href="' + _bqEscape(a.url) + '" target="_blank" rel="noopener">' + _bqEscape(a.title || a.url) + '</a>' + (topicChip ? ' ' + topicChip : '') + '</p>'
+                     + '<p class="blue-iq-article-title"><a href="' + _bqEscape(a.url) + '" target="_blank" rel="noopener">' + _bqEscape(cleanTitle) + '</a>' + (topicChip ? ' ' + topicChip : '') + '</p>'
                      + '<div class="blue-iq-article-meta">' + _bqEscape(a.source || '') + pctLabel + '</div>'
                      + summaryHtml
                      + '</div>'

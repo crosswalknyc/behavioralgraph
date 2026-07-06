@@ -405,13 +405,20 @@ def blue_iq_cache_key(filters: dict) -> str:
             field and folded into rerank at 20% weight. v15 payloads
             carry panel-dominant ordering; bump forces regeneration
             with Trends-primary rankings.
+     v17 — 2026-07-06: 'Top political articles' card no longer
+            surfaces stale/dated titles. Agent prompt now anchors on
+            today's UTC date, requires publish date within trailing
+            7 days, and strips past-year tokens from titles/summaries.
+            _blend_articles_cube applies _strip_stale_years as a
+            belt-and-suspenders backend scrub. v16 payloads carry
+            cached titles with year tokens; bump forces regen.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   16,
+        'version':   17,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -3262,10 +3269,67 @@ def _blend_articles_cube(panel_articles: list[dict], gdelt: list[dict],
         r['reach_share'] = round(r['_weight'] / total_weight, 4)
         r.pop('_weight', None)
 
+    # 6. Belt-and-suspenders: strip stale past-year tokens from title +
+    # summary on ALL blended rows (agent already did this pre-cache but
+    # GDELT + panel-URL-derived titles don't go through the agent). Also
+    # covers legacy S3-cached agent payloads written before the v4 prompt.
+    for r in rows:
+        if r.get('title'):
+            r['title'] = _strip_stale_years(r['title'])
+        if r.get('summary'):
+            r['summary'] = _strip_stale_years(r['summary'])
+
     rows.sort(key=lambda a: (-float(a.get('reach_share') or 0),
                               -int(a.get('interest_score') or 0),
                               -abs(a.get('tone', 0.0))))
     return rows[:30]
+
+
+def _strip_stale_years(s: str) -> str:
+    """Remove past-year tokens (< current UTC year) from a headline / summary.
+
+    Keeps current year and forward-looking cycle references ("2026 Senate
+    race", "2028 presidential") since those are legitimate labels, not
+    stale date markers. Mirrors article_discovery._strip_stale_years and
+    the frontend _bqStripStaleYears helper so all three surfaces produce
+    identical output.
+
+    Also cleans up the leftover punctuation debris after a year is
+    removed: empty parens `()`, empty brackets `[]`, dangling "in and",
+    orphan " and " / " , " sequences, doubled whitespace, and trailing
+    dash / conjunction fragments. This is what turns
+    "Voter rolls purged in Georgia (2024)" into
+    "Voter rolls purged in Georgia" rather than the ugly intermediate
+    "Voter rolls purged in Georgia ()".
+    """
+    if not s:
+        return s
+    current_year = datetime.now(timezone.utc).year
+
+    def _sub(m: 're.Match') -> str:
+        y = int(m.group(0))
+        return '' if y < current_year else str(y)
+
+    out = re.sub(r'\b(?:19|20)\d{2}\b', _sub, s)
+    # Empty bracket / paren pairs left behind by year removal.
+    out = re.sub(r'\(\s*\)', '', out)
+    out = re.sub(r'\[\s*\]', '', out)
+    # Dangling connectors: "in and", "in ,", "and and", ", and", etc.
+    out = re.sub(r'\b(?:in|of|from|between|during|since|by)\s+and\b',
+                 'and', out, flags=re.IGNORECASE)
+    out = re.sub(r'\band\s+and\b', 'and', out, flags=re.IGNORECASE)
+    out = re.sub(r',\s*and\b', ' and', out, flags=re.IGNORECASE)
+    out = re.sub(r'\s+,', ',', out)
+    # Doubled whitespace + punctuation-adjacent whitespace.
+    out = re.sub(r'\s+', ' ', out)
+    out = re.sub(r'\s+([,.:;)\]!?])', r'\1', out)
+    out = re.sub(r'([(\[])\s+', r'\1', out)
+    # Trailing / leading connective debris ("… in and", "… of", "and …").
+    out = re.sub(r'\b(?:in|of|from|between|during|since|by|and)\s*$',
+                 '', out, flags=re.IGNORECASE).rstrip()
+    out = re.sub(r'^\s*[\-\u2013\u2014,]\s*', '', out)
+    out = re.sub(r'\s*[\-\u2013\u2014,]\s*$', '', out)
+    return out.strip()
 
 
 def _build_compare_from_cube(cube: dict, filters: dict) -> dict:
