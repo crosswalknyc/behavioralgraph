@@ -19819,8 +19819,8 @@
                         <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
                         <span class="profile-col has-tooltip" data-tooltip="Total Universe percentage">Total Universe</span>
                         <span class="cw-gp-col has-tooltip" data-tooltip="Gen Pop %">CW Gen Pop</span>
-                        <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Census/Nielsen)">GP Census</span>
-                        <span class="index-col has-tooltip" data-tooltip="Total Universe % ÷ GP Census % × 100 (Census/Nielsen baseline, not CrossWalk panel Gen Pop)">GP Index</span>
+                        <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US">GP Census</span>
+                        <span class="index-col has-tooltip" data-tooltip="Total Universe % ÷ GP Census % × 100">GP Index</span>
                     </div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
                     <div id="locationCountAll" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
@@ -19832,7 +19832,7 @@
                         <span style="display: flex; align-items: center; gap: 0.3rem;">
                             <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                             <span>📊 Regional Breakdown</span>
-                            <span style="font-size: 0.75rem; color: var(--text-secondary); margin-left: 0.5rem;">Aligned to Nielsen Regions</span>
+                            <span style="font-size: 0.75rem; color: var(--text-secondary); margin-left: 0.5rem;"></span>
                         </span>
                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('location', 'Regional Breakdown')" data-tooltip="Export CSV: Download regional breakdown data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'Regional Breakdown')" data-tooltip="Add to Deck: Save the regional breakdown to your presentation deck.">➕</button></span>
                     </h3>
@@ -52521,7 +52521,7 @@
             if (meta) meta.textContent = isBkAn
                 ? ((metaAn.start_date || '') + ' → ' + (metaAn.end_date || '') + ' · US adults actively researching banks · estimated')
                 : (isTvAn
-                    ? 'trailing 12 months · US digital engagers · estimated (no public Nielsen yet)'
+                    ? 'trailing 12 months · US digital engagers · estimated'
                     : 'trailing 12 months · US digital engagers');
 
             // ── L1-L6 layer bars (each layer = horizontal bar, length = high engager count)
