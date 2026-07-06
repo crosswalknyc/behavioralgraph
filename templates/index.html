@@ -18657,16 +18657,16 @@
                                     <div id="jiqWebsiteBlock" style="display: none; margin-top: 0.75rem;">
                                         <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Estimated US monthly visitors (millions) <span style="font-weight: 400; color: var(--text-secondary);">(required)</span></label>
                                         <input type="number" id="jiqMonthlyVisitorsMillions" min="0" step="0.1" placeholder="e.g. 12.3" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Similarweb-style number. Implied audience = monthly &times; (window_days / 30) &times; 0.4 dedup factor (so a 12.3M/mo site on a 90-day window = ~14.8M distinct visitors).</small>
+                                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Monthly unique visitors, in millions.</small>
                                     </div>
 
                                     <div id="jiqTvShowBlock" style="display: none; margin-top: 0.75rem;">
                                         <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Estimated US viewers (millions) <span style="font-weight: 400; color: var(--text-secondary);">(required - click Auto-estimate to look up)</span></label>
                                         <input type="number" id="jiqUsViewersMillions" min="0" step="0.1" placeholder="e.g. 4.2" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Cumulative US viewers (Nielsen, Samba TV, Luminate, Parrot Analytics). Same lookup engine SubscriberIQ uses for show-viewership validation.</small>
+                                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Cumulative US viewers. Click Auto-estimate to look up.</small>
                                     </div>
 
-                                    <small id="jiqTypeHelp" style="display: none; margin-top: 0.6rem; color: var(--text-secondary); font-size: 0.7rem;"><strong>What this turns on:</strong> the dashboard will show a Panel / Estimated / Scaled / Blended toggle. <em>Panel</em> = raw counts our panel saw. <em>Scaled</em> = panel × (implied audience / panel converters) so reach matches reality. <em>Estimated</em> = AI-derived journey for a target of this scale (used when the panel is too sparse). <em>Blended</em> (default) shows real metrics where the panel cohort is &ge;25 converters and estimated where it&apos;s sparser.</small>
+                                    <small id="jiqTypeHelp" style="display: none; margin-top: 0.6rem; color: var(--text-secondary); font-size: 0.7rem;"><strong>What this turns on:</strong> the dashboard will show a Panel / Estimated / Scaled / Blended toggle. <em>Blended</em> (default) is recommended.</small>
                                 </div>
                                 <div id="jiqConvModeBlock" style="display: none; margin-bottom: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--accent-primary); border-radius: 8px; background: rgba(99,102,241,0.05);">
                                     <div style="margin-bottom: 0.75rem;">
@@ -22303,7 +22303,7 @@
             <div class="iiq-panel" id="iiqPanel-conversion">
                 <div style="margin-bottom: 0.65rem;">
                     <h4 style="margin: 0;">Intent to Conversion - project tickets sold + box office</h4>
-                    <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Convert the upper-funnel signals (views, engagement, info-seekers, ticketing-site visitors) into a projected box-office outcome. Defaults are calibrated against GOAT's 2/13–16/26 opening weekend ($35.5M domestic per Box Office Mojo). Drop open the <strong>Secret Sauce</strong> panel to tune the per-layer conversion rates.</div>
+                    <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Convert the upper-funnel signals (views, engagement, info-seekers, ticketing-site visitors) into a projected box-office outcome. Drop open the <strong>Secret Sauce</strong> panel to tune the per-layer conversion rates.</div>
                 </div>
 
                 <div style="display:flex; gap:0.6rem; align-items:end; flex-wrap:wrap; margin-bottom:0.85rem;">
@@ -23052,7 +23052,7 @@
                     + iiqBuildAudiencesHtml()
                     + '<div style="margin: 1.25rem 0 0.5rem;">'
                     +   '<h4 style="margin:0;">Moviegoing-frequency cohorts</h4>'
-                    +   '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">How often this slice of US adults goes to the movies. Source: MPAA THEME 2025 + Statista US Moviegoing Frequency Q1 2026.</div>'
+                    +   '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">How often this slice of US adults goes to the movies.</div>'
                     + '</div>'
                     + iiqBuildCohortsHtml();
             }
@@ -24157,7 +24157,7 @@
                 q1: { short: 'Eng x Category',   title: 'Content Engagement by Category',                                   intro: 'Each category compared on three YTD metrics: share of total views (reach), info-seek % (mid-funnel), and ticketing % (bottom-funnel). Scan a row to see whether a category is high reach / low conversion, low reach / high conversion, or both.' },
                 q2: { short: 'Paid vs. Organic', title: 'Paid vs. Organic Performance',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
                 audiences: { short: '👥 Audiences', title: 'Audiences of interest', intro: 'Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title\'s moviegoing audience. Below: how often each slice of US adults goes to the movies.' },
-                q3: { short: 'Intent to Buy',    title: 'How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date - pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement - scaled by industry conversion rates. Nothing here is a forecast.' },
+                q3: { short: 'Intent to Buy',    title: 'How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers. The subject shows high-intent signals captured to date - pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement - scaled by industry conversion rates. Nothing here is a forecast.' },
                 q4: { short: 'Talent Attribution', title: 'How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Trailer Performance', title: 'Trailer Performance', intro: 'Daily trailer views with overlaid funnel conversion (% of viewers who became info-seekers or visited a ticketing site within 7 days). Second chart traces the PVOD / SVOD search tail that builds after theatrical, peaking at the 5/15 streaming launch.' },
                 q6: { short: 'Cohort Engagement', title: 'Which content drives info-seek + ticketing for each audience?', intro: 'Per-asset attribution sliced by audience. Pick any cohort from the Audiences tab (Steph Curry fans, cast members, family-animation fans, Disney+ family subs, demographic cuts) plus the four moviegoing-frequency cohorts \u2014 each selected cohort gets its own set of columns showing that cohort\'s views, info-seek %, and ticketing % per asset. Cut by platform (YouTube / TikTok / etc.), Paid vs Organic, and asset type to isolate which specific pieces of content are converting which audiences. Same projection helper as Assets / Q1 / Q2 \u2014 numbers ladder up.' },
@@ -26867,8 +26867,7 @@
                         html += '</div>';
                     });
                     html += '<div style="margin-top:0.65rem; font-size:0.62rem; color: var(--text-secondary); line-height:1.4;">'
-                         + escapeHtml(subj.display_name || 'Subject') + ' (cyan) is panel-measured. Comparable titles (purple) take their per-signal shape from realized opening-weekend buyers. Total box office = Box Office Mojo US domestic cumulative gross for each comp.'
-                         + (subj.source ? ' \u00b7 <em>' + escapeHtml(subj.source) + '</em>' : '')
+                         + escapeHtml(subj.display_name || 'Subject') + ' (cyan) is first-party. Comparable titles (purple) take their per-signal shape from realized opening-weekend buyers.'
                          + '</div>';
                     html += '</div>';
                 }
@@ -26881,7 +26880,7 @@
                     var maxCBuyers = Math.max.apply(null, sortedComps.map(function(c){ return Number(c.opening_weekend_buyers)||0; }).concat([1]));
                     html += '<div class="iiq-card" style="padding:1rem;">';
                     html += '<div style="font-size:0.85rem; font-weight:600; color:#e2e8f0; margin-bottom:0.45rem;">Comparable family-animated titles \u2014 realized opening-weekend ticket-buyers</div>';
-                    html += '<div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.55rem;">Source: Box Office Mojo (opening 4-day gross) \u00f7 $' + avgTicket.toFixed(2) + ' avg US ticket (NATO 2024). ' + escapeHtml(subj.display_name || 'Subject') + ' appears in the combined high-intent signals chart above \u2014 only comparable titles are shown here to avoid double-listing.</div>';
+                    html += '<div style="font-size:0.7rem; color: var(--text-secondary); margin-bottom:0.55rem;">' + escapeHtml(subj.display_name || 'Subject') + ' appears in the combined high-intent signals chart above \u2014 only comparable titles are shown here to avoid double-listing.</div>';
                     html += sortedComps.map(function(c) {
                         var label = c.display_name;
                         var sub   = '(opened ' + (c.opening_date || '\u2014') + ')';
