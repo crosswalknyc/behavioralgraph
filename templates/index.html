@@ -28868,7 +28868,7 @@
                                 <thead><tr>
                                     <th data-iq-sort="rank"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Rank within the selected window." style="cursor: pointer; width: 2.5rem;">#</th>
                                     <th data-iq-sort="name"           data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Profile name (click a row to drill down to the profile dashboard)." style="cursor: pointer;">Profile</th>
-                                    <th data-iq-sort="mentions"       data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Total engagements scaled to US gen pop (raw × 329.9M / panel size that day, summed across the window)." style="cursor: pointer; text-align: right;">Engagements</th>
+                                    <th data-iq-sort="mentions"       data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Total engagements in the selected window." style="cursor: pointer; text-align: right;">Engagements</th>
                                     <th data-iq-sort="delta_mentions" data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Engagements change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ Engagements</th>
                                     <th data-iq-sort="delta_evc"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
                                         <span class="iqr-th-with-info">Δ EVC<button type="button" class="iqr-th-info" title="Show EVC methodology" aria-label="Show EVC methodology" onclick="event.stopPropagation(); toggleIQRankerEVCExplainer('{{ m.key }}')">i</button></span>
@@ -30957,7 +30957,7 @@
                          are open via CSS. -->
                     <details class="jiq-disclose">
                         <summary>
-                            <span>🥊 What "lost" to Landman <span style="opacity:0.7; font-weight:400;">(competing shows browsed in the 30d pre-play window)</span></span>
+                            <span>🥊 What "lost" to Landman <span style="opacity:0.7; font-weight:400;">(competing shows browsed before pressing play)</span></span>
                             <span class="jiq-disclose-caret">▼</span>
                         </summary>
                         <div class="jiq-disclose-body">
@@ -38593,7 +38593,7 @@
                   +     '</select>'
                   +   '</span>'
                   + '</h3>'
-                  + '<div class="blue-iq-card-subtitle" style="margin-bottom:0.6rem;">what people in this geography have been searching most over the <em>past 7 days</em>. Scores are peak-day traffic in the window. Updates per-filter. AI/keyword-filtered to political only.</div>'
+                  + '<div class="blue-iq-card-subtitle" style="margin-bottom:0.6rem;">what people in this geography have been searching most over the <em>past 7 days</em>. Scores are peak-day traffic. Updates per-filter. AI/keyword-filtered to political only.</div>'
                   + '<div class="blue-iq-card-body" id="blueIQTrendingBody"></div>'
                   + '</div>';
 
@@ -39426,7 +39426,7 @@
             donation:           { label: 'Hit a donation page',         blurb: 'ActBlue / WinRed / campaign donate page.' },
             social_discussion:  { label: 'Discussed on social',         blurb: 'Reddit, X, FB, IG, TikTok (non-candidate).' },
             other:              { label: 'Did something unrelated',     blurb: 'Next visit was non-political (shopping, weather, etc.).' },
-            abandoned:          { label: 'Abandoned the session',       blurb: 'No follow-up clickstream in the window.' },
+            abandoned:          { label: 'Abandoned the session',       blurb: 'No follow-up clickstream.' },
         };
 
         // Canonical destination palette + order. Shared by the funnel ribbon,
@@ -43948,7 +43948,7 @@
                 + '<th data-bpiq-sort="post_pen"     style="' + thBase + 'text-align:right;">Post %'                                     + arrow('post_pen')     + '</th>'
                 + '<th data-bpiq-sort="lift_rel_pct" style="' + thBase + 'text-align:right;">Brand Lift'                                 + arrow('lift_rel_pct') + '</th>'
                 + '<th data-bpiq-sort="lift_pp"      style="' + thBase + 'text-align:right;">Brand Lift (pp)'                            + arrow('lift_pp')      + '</th>'
-                + '<th data-bpiq-sort="incr_users"   style="' + thBase + 'text-align:right;" title="Post-campaign incremental brand engagers attributable to this platform (post − pre, scaled to US gen pop).">Incremental Consumers' + arrow('incr_users')   + '</th>'
+                + '<th data-bpiq-sort="incr_users"   style="' + thBase + 'text-align:right;" title="Post-campaign incremental brand engagers attributable to this platform.">Incremental Consumers' + arrow('incr_users')   + '</th>'
                 + '<th data-bpiq-sort="bench_cpm"    style="' + thBase + 'text-align:right;color:var(--text-secondary);" title="Industry-benchmarked CPM. Display only - does not enter any calculation.">Benchmark CPM' + arrow('bench_cpm') + '</th>'
                 + '<th data-bpiq-sort="cpm"          style="' + thBase + 'text-align:right;">CPM'                                        + arrow('cpm')          + _bpiqScopeChip() + '</th>'
                 + '<th data-bpiq-sort="emv"          style="' + thBase + 'text-align:right;" title="Incremental Consumers × CPM = EMV.">EMV (Incr × CPM)' + arrow('emv') + '</th>'
@@ -44572,7 +44572,7 @@
                 };
                 tpEl.innerHTML =
                       '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:0.5rem;">'
-                    +   'Each row is a property associated with the brand. <strong>Pre Reach</strong> and <strong>Post Reach</strong> are US-projected unique consumers engaged with that touchpoint in each window. <strong>Lift</strong> = (Post − Pre) / Pre, with <em>new</em> tagged on properties that didn\'t exist pre-campaign (e.g., a capsule or co-occurrence specific to the partnership window).'
+                    +   'Each row is a property associated with the brand. <strong>Pre Reach</strong> and <strong>Post Reach</strong> are US unique consumers engaged with that touchpoint before and after the campaign. <strong>Lift</strong> = (Post − Pre) / Pre, with <em>new</em> tagged on properties that didn\'t exist pre-campaign (e.g., a capsule or co-occurrence specific to the partnership window).'
                     + '</div>'
                     + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
                     +   '<thead><tr style="border-bottom:2px solid var(--border-color);">'
