@@ -38362,9 +38362,15 @@
             var cards = data.cards || {};
             var html = '';
 
-            // CARD A: Issue buckets (drill-down on click)
+            // CARD A: Issue buckets (drill-down on click). Sourced
+            // primarily from Google Trends (rank + bar-width reflect
+            // Trends volume); panel search terms fold in as evidence
+            // and a 20% secondary weight in the rerank.
             html += '<div class="blue-iq-card blue-iq-card-issues">'
-                  + '<h3 class="blue-iq-card-title">Political issue searches <span class="blue-iq-badge">AI-bucketed</span></h3>'
+                  + '<h3 class="blue-iq-card-title">Political issue searches'
+                  +   '<span class="blue-iq-badge">Google Trends</span>'
+                  +   '<span class="blue-iq-card-subtitle">what people in this geography are actually searching about, bucketed into policy issues. Rank + bar width reflect Google Trends volume; panel search terms fold in as supporting evidence.</span>'
+                  + '</h3>'
                   + '<div class="blue-iq-card-body" id="blueIQCardIssuesBody"></div>'
                   + '</div>';
 

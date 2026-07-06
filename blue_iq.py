@@ -398,13 +398,20 @@ def blue_iq_cache_key(filters: dict) -> str:
             "Trending political searches" so DNC marketers can see
             broader cultural context alongside the political view.
             v14 payloads don't carry these fields; bump invalidates.
+     v16 — 2026-07-06: 'Political issue searches' card (issue_buckets)
+            now sources PRIMARILY from Google Trends instead of panel
+            search terms. Bucket count/share/order all derive from
+            Trends volume; panel counts preserved on new panel_count
+            field and folded into rerank at 20% weight. v15 payloads
+            carry panel-dominant ordering; bump forces regeneration
+            with Trends-primary rankings.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   15,
+        'version':   16,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -2037,26 +2044,37 @@ def _augment_buckets_with_external(buckets: list[dict],
 
 
 def _rerank_buckets_blended(buckets: list[dict]) -> list[dict]:
-    """Re-rank buckets by blended panel + external score.
+    """Re-rank buckets by blended Trends + panel + news score.
 
-    Panel signal is the BACKBONE (what people in this slice are actually
-    searching). External signal is the OVERLAY (what's hot nationally /
-    in news right now). We weight panel 70% and external 30% so a
-    breaking-news topic with light panel chatter can rise above a
-    steady-state bucket, but the panel still dominates the order for
-    slices with strong first-party signal.
+    Trends signal is the BACKBONE (2026-07-06 change — users wanted the
+    "Political issue searches" card to reflect what people are actively
+    searching for right now per Google Trends, not what the panel logged).
+    Panel + news signal are OVERLAYS that nudge order for slices with
+    strong first-party chatter or a breaking-news moment.
+
+    Panel signal is read from b['panel_count'] (preserved by
+    compute_panel_view when the primary count field is overwritten with
+    Trends volume). Falls back to b['count'] for legacy fallback paths
+    that never overwrote count.
     """
     if not buckets:
         return buckets
-    max_panel = max((b.get('count') or 0)        for b in buckets) or 1
-    max_trend = max((b.get('trend_score') or 0)  for b in buckets) or 1
-    max_news  = max((b.get('news_count')  or 0)  for b in buckets) or 1
+    def _panel_of(b: dict) -> int:
+        # Prefer the preserved panel_count. Fall back to count only when
+        # panel_count is missing (legacy panel-only fallback path).
+        if 'panel_count' in b:
+            return int(b.get('panel_count') or 0)
+        return int(b.get('count') or 0)
+
+    max_panel = max(_panel_of(b) for b in buckets) or 1
+    max_trend = max(int(b.get('trend_score') or 0) for b in buckets) or 1
+    max_news  = max(int(b.get('news_count')  or 0) for b in buckets) or 1
     for b in buckets:
-        panel_n = (b.get('count') or 0)       / max_panel
-        trend_n = (b.get('trend_score') or 0) / max_trend
-        news_n  = (b.get('news_count')  or 0) / max_news
-        # 70% panel, 20% Trends, 10% news. Keep panel dominant.
-        b['blended_score'] = round(0.70 * panel_n + 0.20 * trend_n + 0.10 * news_n, 4)
+        panel_n = _panel_of(b)                  / max_panel
+        trend_n = (b.get('trend_score') or 0)   / max_trend
+        news_n  = (b.get('news_count')  or 0)   / max_news
+        # 70% Trends, 20% panel, 10% news. Trends dominates.
+        b['blended_score'] = round(0.70 * trend_n + 0.20 * panel_n + 0.10 * news_n, 4)
     buckets.sort(key=lambda b: -b.get('blended_score', 0))
     return buckets
 
@@ -2151,30 +2169,99 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         panel_demo = {}
         panel_journey = []
 
-    # Card A — issue buckets: prefer per-cell panel mapping; fall back to global.
-    issue_buckets = _bucket_search_terms_via_global_map(panel_top_queries, issue_buckets_global)
-    if not issue_buckets and external.get('google_trends_top'):
-        # External-only fallback: bucket Trends terms via the global map too
-        synth = [{'term': r.get('term', ''), 'count': max(1, int(r.get('score', 0)) // 1000)}
-                 for r in external['google_trends_top']]
-        issue_buckets = _bucket_search_terms_via_global_map(synth, issue_buckets_global)
-
-    # Card A — mix in EXTERNAL search-trend signal (Google Trends + GDELT news).
-    # Panel data tells us what THIS audience is searching; external tells us
-    # what's hot nationally + in news right now. Augment every bucket with
-    # both signals, surface new buckets that exist external-only, then
-    # re-rank by a blended score so a breaking news topic with light panel
-    # chatter floats up. We do this BEFORE the politician/articles section
-    # so re-ranked buckets propagate to journey + heatmap + playbook.
+    # Card A — issue buckets: PRIMARY source is Google Trends (2026-07-06).
+    # Rationale: users want the "Political issue searches" card to reflect
+    # what people are actively SEARCHING for per Google Trends, not just
+    # what the panel happens to have logged in the lookback window. Panel
+    # data now folds in as supplementary evidence (sample_queries per
+    # bucket + a secondary weight in the rerank), and the panel is used
+    # as a graceful fallback when Trends returns nothing.
     raw_trends_for_buckets = (external or {}).get('google_trends_top') or []
-    # Re-use the cheap political filter so non-political Trends headlines
-    # (sports, celebrity) don't pollute the buckets.
     politicians_for_filter = set(_load_politicians()[:300])
     trends_political_for_buckets = _filter_trends_to_political(
         raw_trends_for_buckets, politicians_for_filter)
     gdelt_for_buckets = (external or {}).get('gdelt_articles') or []
+
+    # Step 1: seed buckets from Trends (+ GDELT) via topical bucketing.
+    # _augment_buckets_with_external, called with an empty starter list,
+    # emits one row per issue-bucket-that-has-Trends-or-news signal,
+    # each pre-populated with trend_score / trend_queries / news_count /
+    # news_headlines. Every row is initially flagged external_only=True.
     issue_buckets = _augment_buckets_with_external(
-        issue_buckets, trends_political_for_buckets, gdelt_for_buckets)
+        [], trends_political_for_buckets, gdelt_for_buckets)
+
+    # Step 2: promote trend_score into the primary count / share fields
+    # so bucket ordering AND the frontend panel-bar width reflect Trends
+    # volume. Un-flag external_only when we have a real Trends signal
+    # (the dashed placeholder-bar was designed for "no signal at all",
+    # not "Trends signal but no panel").
+    total_trend_score = sum((b.get('trend_score') or 0) for b in issue_buckets) or 1
+    for b in issue_buckets:
+        ts = int(b.get('trend_score') or 0)
+        b['panel_count'] = 0  # will be filled from panel_top_queries below
+        b['count']       = ts
+        b['share']       = round(ts / total_trend_score, 4) if ts > 0 else 0.0
+        if ts > 0:
+            b['external_only'] = False
+
+    # Step 3: fold panel_top_queries into sample_queries as EVIDENCE.
+    # Panel counts also get preserved on b['panel_count'] so the rerank
+    # can give panel a secondary weight without letting it dominate.
+    if panel_top_queries:
+        panel_bucketed = _bucket_search_terms_via_global_map(
+            panel_top_queries, issue_buckets_global, strict=True)
+        panel_map = {pb['bucket']: pb for pb in panel_bucketed}
+        for b in issue_buckets:
+            pb = panel_map.get(b.get('bucket'))
+            if not pb:
+                continue
+            b['panel_count'] = int(pb.get('count') or 0)
+            # Trends terms lead sample_queries (this card is Trends-primary);
+            # panel queries follow as first-party evidence.
+            trend_qs = b.get('trend_queries') or []
+            panel_qs = pb.get('sample_queries') or []
+            merged = list(trend_qs)
+            seen   = {(q or '').lower() for q in merged}
+            for q in panel_qs:
+                k = (q or '').lower()
+                if k and k not in seen:
+                    seen.add(k)
+                    merged.append(q)
+            if merged:
+                b['sample_queries'] = merged[:8]
+
+        # Add panel-only buckets (buckets with panel chatter that Trends
+        # / GDELT didn't hit this window) at count=0 so they still show
+        # as first-party evidence.
+        by_name = {b['bucket']: b for b in issue_buckets}
+        for pb in panel_bucketed:
+            if pb['bucket'] in by_name:
+                continue
+            issue_buckets.append({
+                'bucket':         pb['bucket'],
+                'count':          0,
+                'share':          0.0,
+                'sample_queries': pb.get('sample_queries') or [],
+                'trend':          0.0,
+                'trend_score':    0,
+                'trend_queries':  [],
+                'news_count':     0,
+                'news_headlines': [],
+                'panel_count':    int(pb.get('count') or 0),
+                'external_only':  True,
+            })
+
+    # Step 4: graceful fallback — if Trends returned nothing AND we had
+    # no panel data either, fall back to the (pre-2026-07-06) panel-map
+    # path so the card never goes empty.
+    if not issue_buckets:
+        issue_buckets = _bucket_search_terms_via_global_map(
+            panel_top_queries, issue_buckets_global)
+        for b in issue_buckets:
+            b.setdefault('panel_count', int(b.get('count') or 0))
+        issue_buckets = _augment_buckets_with_external(
+            issue_buckets, trends_political_for_buckets, gdelt_for_buckets)
+
     issue_buckets = _rerank_buckets_blended(issue_buckets)
 
     # Card D — politicians: blend panel + external (Trends + GDELT + Wiki)
