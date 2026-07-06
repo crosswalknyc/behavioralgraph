@@ -32710,7 +32710,7 @@
             <!-- Three-cohort behavior comparison + pre/post lift on treated cohort -->
             <div class="iiq2-card">
                 <h3 id="impactMatrixTitle">Behavior rates by cohort, with pre/post lift on ticket buyers</h3>
-                <p class="card-note" id="impactMatrixNote">Any-occurrence rate in the post-Coachella window for each cohort, side-by-side with the ticket-buyer's matching pre-Coachella window. Lift multiples compare ticket buyers to the matched control panel. This is the causal read of the trigger.</p>
+                <p class="card-note" id="impactMatrixNote">Behavior rates for each cohort, before and after Coachella on the ticket-buyer cohort. Lift multiples compare ticket buyers to the control cohort. This is the causal read of the trigger.</p>
                 <div class="iiq2-matrix-wrap">
                     <table class="iiq2-matrix" id="impactMatrix"></table>
                 </div>
@@ -32778,10 +32778,10 @@
                     display: 'Coachella 2026 -> Justin Bieber -> SWAG LIVE -> Merch -> Catalog -> Never Say Never',
                     trigger_label: 'Coachella 2026',
                     subject_label: 'Justin Bieber',
-                    window_label: 'Apr 10 - Jul 1, 2026 (Coachella weekend 1 through today, 11.7 weeks)',
-                    pre_window_label: 'Jan 22 - Apr 9, 2026 (matched 11.7-week window immediately before Coachella)',
+                    window_label: 'Apr 10 - Jul 1, 2026',
+                    pre_window_label: '',
                     release_label: 'SWAG LIVE (surprise live album)',
-                    release_date: 'Fri Jun 26, 2026 (5 days ago)',
+                    release_date: 'Jun 26, 2026',
                     // Per-journey renderer config so the funnel / matrix are not hardcoded
                     // to the Coachella narrative. See latin-loyalty-2026 below for a genre-
                     // comparison journey that reuses the same tab.
@@ -32789,7 +32789,7 @@
                     stage_trigger_short: 'Coachella',
                     funnel_variant: 'pre_post_lift',
                     funnel_title_prefix: 'Ticket-buyer engagement lift',
-                    funnel_note_html: 'Independent behaviors on the ticket-buyer cohort (n={FOCUS_N}). Each row is measured any-occurrence in its 11.7-week window. Rows are NOT nested - a fan can stream without buying, buy without interacting first, etc. Pre bar = same behavior on the same cohort in the matching pre-Coachella window. Post bar = post-Coachella window. Lift = post rate / pre rate.',
+                    funnel_note_html: 'Independent behaviors on the ticket-buyer cohort. Rows are NOT nested - a fan can stream without buying, buy without interacting first, etc.',
                     matrix_variant: '3cohort_treated',
                     // Three cohorts. The behavior_matrix below reads all three side-by-side.
                     // The funnel below is drawn on the ticket-buyer cohort as the "treated" arm.
@@ -32800,7 +32800,7 @@
                             size: 198463,
                             color: '#94a3b8',
                             emoji: '⚪',
-                            desc: 'Matched panel with zero digital touchpoint to Coachella 2026 in either the pre or post window. Same age, gender, ethnicity, HHI, and baseline music-streaming distribution as the ticket buyers.'
+                            desc: 'Fans with zero digital touchpoint to Coachella 2026. Same age, gender, ethnicity, income, and baseline music-streaming distribution as the ticket buyers - the counterfactual arm.'
                         },
                         {
                             key: 'livestream',
@@ -32808,7 +32808,7 @@
                             size: 9437802,
                             color: '#a78bfa',
                             emoji: '📺',
-                            desc: 'Unique US viewers of Coachella 2026\'s official YouTube livestream across the 6-day event window (Apr 10-12, Apr 17-19). Multi-session viewers deduped to a single UID.'
+                            desc: 'US viewers of Coachella 2026\'s official YouTube livestream across the two festival weekends (Apr 10-12, Apr 17-19).'
                         },
                         {
                             key: 'ticket',
@@ -32816,7 +32816,7 @@
                             size: 199847,
                             color: '#38bdf8',
                             emoji: '🎪',
-                            desc: 'Unique physical attendees of Coachella 2026 Weekend 1 (Apr 10-12) + Weekend 2 (Apr 17-19), deduped for the ~24.7% of ticket-holders who buy both weekends.'
+                            desc: 'US physical attendees of Coachella 2026 - Weekend 1 (Apr 10-12) and Weekend 2 (Apr 17-19).'
                         }
                     ],
                     // Per-behavior any-occurrence rates. This is the causal-read table:
@@ -32846,7 +32846,7 @@
                             ticket_post:  { pct: 19.710, count: 39391 }
                         },
                         {
-                            key: 'swag', label: 'Streamed SWAG LIVE (Jun 26 - Jul 1, 5-day post-drop window)',
+                            key: 'swag', label: 'Streamed SWAG LIVE (since Jun 26 drop)',
                             control:      { pct: 0.821, count: 1630 },
                             livestream:   { pct: 3.428, count: 323538 },
                             ticket_pre:   null,
@@ -32879,7 +32879,7 @@
                         {
                             key: 'stream_catalog',
                             name: 'Streamed his catalog (3+ plays)',
-                            desc: '3+ plays of any Bieber track on a major streaming service in the window. Multi-platform listeners count once.',
+                            desc: '3+ plays of any Bieber track on a major streaming service.',
                             pre_count: 23647, pre_pct: 11.834,
                             post_count: 39391, post_pct: 19.710,
                             emoji: '🎧',
@@ -32889,7 +32889,7 @@
                         {
                             key: 'stream_swag',
                             name: 'Streamed SWAG LIVE (Jun 26 drop)',
-                            desc: 'Streamed the surprise live album SWAG LIVE in the 5-day post-release window (Jun 26 - Jul 1). No pre-window baseline exists because the album did not exist before Jun 26 - every listener here is net-new attributable audience.',
+                            desc: 'Streamed the surprise live album SWAG LIVE. No pre baseline exists because the album did not exist before Jun 26 - every listener is net-new attributable audience.',
                             pre_count: null, pre_pct: null,
                             post_count: 12624, post_pct: 6.317,
                             emoji: '🎤',
@@ -32899,7 +32899,7 @@
                         {
                             key: 'buy',
                             name: 'Bought a Bieber product',
-                            desc: 'Confirmed order on Drew House, an official tour-merch reseller, an official fragrance retailer, or a physical-music vendor. This is the behavior with the largest post/pre lift on the ticket cohort.',
+                            desc: 'Confirmed order on Drew House, an official tour-merch reseller, an official fragrance retailer, or a physical-music vendor. The biggest incremental spend category post-Coachella.',
                             pre_count: 1373, pre_pct: 0.687,
                             post_count: 7894, post_pct: 3.950,
                             emoji: '🛍️',
@@ -32909,7 +32909,7 @@
                         {
                             key: 'watch_nsn',
                             name: 'Watched Never Say Never (2011)',
-                            desc: 'Rented, purchased, or streamed the 2011 documentary on any digital storefront in the window. Deep-catalog conversion - small absolute numbers but a meaningful within-cohort lift.',
+                            desc: 'Rented, purchased, or streamed the 2011 documentary on any digital storefront. Deep-catalog conversion - small absolute numbers, meaningful lift.',
                             pre_count: 226, pre_pct: 0.113,
                             post_count: 436, post_pct: 0.218,
                             emoji: '🎬',
@@ -32922,7 +32922,7 @@
                     // These are multi-touch shares so rows sum >100% within a card - that is
                     // expected. Lift = post_pct / pre_pct.
                     touchpoints_title: 'Where the interaction happened',
-                    touchpoints_note: 'Pre bar = touchpoint mix among the 22,806 pre-Coachella interactors on the ticket cohort. Post bar = touchpoint mix among the 68,347 post-Coachella interactors on the same cohort. Multi-touch, so shares can sum >100%.',
+                    touchpoints_note: 'Where interactors on the ticket cohort saw Bieber content. Multi-touch, so shares can sum >100%.',
                     touchpoints_pre_n: 22806,
                     touchpoints_post_n: 68347,
                     touchpoints: [
@@ -32936,7 +32936,7 @@
                         { label: 'Reddit',                 pre_pct: 5.917,  pct: 4.912,  style: 'a' }
                     ],
                     products_title: 'What they bought',
-                    products_note: 'Pre bar = product mix among the 1,373 pre-Coachella buyers on the ticket cohort. Post bar = product mix among the 7,894 post-Coachella buyers. Watch for tour merch and Drew House share gain on the post side - that is where the incremental spend lives.',
+                    products_note: 'What buyers on the ticket cohort actually bought. Watch tour merch and Drew House share gain post-Coachella - that is where the incremental spend lives.',
                     products_pre_n: 1373,
                     products_post_n: 7894,
                     products: [
@@ -32947,7 +32947,7 @@
                         { label: 'Accessories & other',      pre_pct: 9.811,  pct: 8.216,  style: 'b' }
                     ],
                     streaming_title: 'Where they streamed',
-                    streaming_note: 'Pre bar = platform mix among the 23,647 pre-Coachella catalog streamers on the ticket cohort. Post bar = the 39,391 post-Coachella catalog streamers. YouTube Music picks up share post-Coachella off the SWAG LIVE visual-album drop.',
+                    streaming_note: 'Platform mix among catalog streamers on the ticket cohort. YouTube Music picks up share post-Coachella off the SWAG LIVE visual-album drop.',
                     streaming_pre_n: 23647,
                     streaming_post_n: 39391,
                     streaming: [
@@ -32960,7 +32960,7 @@
                         { label: 'SiriusXM',       pre_pct: 4.217,  pct: 3.817,  style: 'd' }
                     ],
                     catalog_title: 'Where they watched Never Say Never',
-                    catalog_note: 'Digital storefronts that hosted the 2011 documentary. Pre bars show the mix among the 226 pre-Coachella NSN watchers on the same ticket cohort. Post bars show the 436 post-Coachella watchers.',
+                    catalog_note: 'Digital storefronts that hosted the 2011 documentary.',
                     catalog_pre_n: 226,
                     catalog_post_n: 436,
                     catalog: [
@@ -32972,7 +32972,7 @@
                         { label: 'Other digital',            pre_pct: 2.894,  pct: 3.457,  style: 'c' }
                     ],
                     demos_title: 'Full-conversion cohort',
-                    demos_note: 'Demographics of the 208 ticket buyers who did every one of the 5 behaviors post-Coachella (interacted, streamed catalog, streamed SWAG LIVE, bought merch, watched NSN). Highest-intent Bieber audience in North America right now - the look-alike seed set.',
+                    demos_note: 'Demographics of the 208 ticket buyers who touched all 5 downstream Bieber behaviors: interacted, streamed catalog, streamed SWAG LIVE, bought merch, watched NSN. Highest-intent Bieber audience in North America - the look-alike seed set.',
                     demos: {
                         gender: [
                             { label: 'Female',     pct: 87.231, style: 'b' },
@@ -33000,13 +33000,13 @@
                         ]
                     },
                     insights: [
-                        '<strong>Merch is where the Coachella lift is biggest.</strong> 3.95% of ticket buyers bought a Bieber product in the 11.7 weeks after Coachella, versus 0.69% of the same buyers in the matching pre-window - a 5.75x within-cohort lift. Same cohort, same 11.7 weeks, the only thing that changed is Coachella happened in between. At ~$68 blended AOV across Drew House, tour resale, and fragrance, that is roughly $442K of clean, Coachella-attributable incremental Bieber revenue on the ticket cohort alone.',
-                        '<strong>Online interaction jumps 3.0x on the same cohort.</strong> 34.20% interacted with Bieber online post-Coachella, versus 11.41% pre. That is 45,541 incremental interactors on 199,847 ticket buyers. This is the top of the engagement column - and it is the number you use for "how many attributable eyeballs did we deliver".',
-                        '<strong>SWAG LIVE is net-new audience.</strong> The album did not exist before June 26 so there is no pre-window baseline to divide by. 12,624 ticket buyers (6.32%) streamed it in the 5-day window since drop. Every one of those streams is Coachella-primed audience the release would not have reached otherwise - none of them chose Bieber pre-Coachella and then chose the album; the trigger came first.',
-                        '<strong>Never Say Never nearly doubles on the same cohort.</strong> 226 pre-window watchers vs 436 post-window watchers on the same 199,847 people - a 1.93x lift on a deep-catalog title that has been in market since 2011. A live moment moves the long-tail catalog even without a targeted push.',
-                        '<strong>Catalog streaming is the smallest relative lift (1.67x) because it is the biggest baseline.</strong> Bieber is already mainstream, so the streaming lift shows up in intensity per listener rather than in unique-listener count. The behaviors with the LARGEST pre-window baseline show the smallest relative lift - normal for post-event attribution and worth calling out so no one benchmarks merch lift against catalog lift.',
-                        '<strong>The livestream cohort scales the same story 47x wider.</strong> 9.44M unique US YouTube livestream viewers is 47x the ticket cohort. Per-capita lift is roughly half that of ticket buyers, but the absolute Coachella-attributable population is on the order of 30-50x larger. Livestream ad units against a Coachella + surprise-artist context is the highest-ROI ad exposure surfaced in this analysis.',
-                        '<strong>The full-conversion cohort (all 5 behaviors, ticket buyers) is 208 people.</strong> Small, but the highest-intent Bieber audience in North America right now: female (87.2%), 25-34 (46.3%), Hispanic (28.1%, over-indexed), mid-income ($50K-$149K = 65.8%). Look-alike modeling this cohort is the single highest-yield next action from this read.'
+                        '<strong>Merch is where the Coachella lift is biggest.</strong> 3.95% of ticket buyers bought a Bieber product after Coachella, versus 0.69% before - a 5.75x lift on the same 199,847 people. At ~$68 blended AOV across Drew House, tour resale, and fragrance, that is roughly $442K of Coachella-attributable incremental Bieber revenue on the ticket cohort alone.',
+                        '<strong>Online interaction jumps 3.0x.</strong> 34.20% of ticket buyers interacted with Bieber online after Coachella, versus 11.41% before - 45,541 incremental interactors on 199,847 ticket buyers. The top of the engagement column and the number for "how many attributable eyeballs did we deliver".',
+                        '<strong>SWAG LIVE is net-new audience.</strong> The album did not exist before June 26 so there is no pre baseline. 12,624 ticket buyers (6.32%) streamed it since drop. Every one is Coachella-primed audience the release would not have reached otherwise - the trigger came first.',
+                        '<strong>Never Say Never nearly doubles.</strong> 226 watchers before Coachella vs 436 after on the same 199,847 people - a 1.93x lift on a deep-catalog title that has been in market since 2011. A live moment moves the long-tail catalog even without a targeted push.',
+                        '<strong>Catalog streaming is the smallest relative lift (1.67x) because it is the biggest baseline.</strong> Bieber is already mainstream, so the streaming lift shows up in intensity per listener rather than in unique-listener count. The behaviors with the largest baseline show the smallest relative lift - normal, and worth calling out so no one benchmarks merch lift against catalog lift.',
+                        '<strong>The livestream cohort scales the same story 47x wider.</strong> 9.44M US YouTube livestream viewers is 47x the ticket cohort. Per-capita lift is roughly half that of ticket buyers, but the absolute Coachella-attributable population is 30-50x larger. Livestream ad units against a Coachella + surprise-artist context is the highest-ROI ad exposure in this analysis.',
+                        '<strong>The full-conversion cohort (all 5 behaviors, ticket buyers) is 208 people.</strong> Small, but the highest-intent Bieber audience in North America right now: female (87.2%), 25-34 (46.3%), Hispanic (28.1%, over-indexed), mid-income ($50K-$149K = 65.8%). Look-alike expansion from this seed is the single highest-yield next action from this read.'
                     ],
                     hero: [
                         { lbl: 'Interact lift',    val: '3.00x',    sub: '11.41% pre \u2192 34.20% post',            a: '#a78bfa', b: '#8b5cf6' },
@@ -33034,15 +33034,15 @@
                     display: 'Latin fan loyalty vs Pop / R&B / Rap: tour announcement -> ticket -> merch -> resale premium -> multi-concert',
                     trigger_label: 'Tour announcement',
                     subject_label: 'Latin superstar release',
-                    window_label: '90-day window anchored to each artist\'s tour announcement, pooled across 6 Latin superstar tour cycles (Bad Bunny, Karol G, Peso Pluma, Fuerza Regida, Rauw Alejandro, Feid) between Jul 2025 - Jun 2026',
+                    window_label: 'Jul 2025 - Jun 2026 \u00b7 Bad Bunny, Karol G, Peso Pluma, Fuerza Regida, Rauw Alejandro, Feid',
                     pre_window_label: '',
                     release_label: 'Tour on-sale + first-leg shows',
-                    release_date: 'Jul 2025 - Jun 2026 (6 Latin superstar tour cycles pooled)',
+                    release_date: 'Jul 2025 - Jun 2026',
                     focus_cohort_key: 'latin',
                     stage_trigger_short: 'announcement',
                     funnel_variant: 'genre_value_scorecard',
                     funnel_title_prefix: 'Latin-fan value scorecard vs Pop and R&B/Rap',
-                    funnel_note_html: 'Value scorecard for the Latin-fan cohort (n={FOCUS_N}) benchmarked against Pop (88.6M) and R&B/Rap (71.2M) fans. Each row is one live-music behavior measured any-occurrence over a 90-day window. Rows are independent - a Latin fan can stream heavily without buying a ticket, buy a ticket without buying merch, etc. Bars show absolute engagement rates per genre cohort. Latin is highlighted in orange as the focus. Latin over-indexes on every behavior and the gap widens at higher-commitment behaviors (merch, resale premium, multi-concert).',
+                    funnel_note_html: 'Value scorecard for the Latin fan cohort benchmarked against Pop and R&B/Rap fans. Rows are independent - a Latin fan can stream heavily without buying a ticket, buy a ticket without buying merch, etc. Bars show absolute engagement rates per genre cohort. Latin is highlighted in orange as the focus. Latin over-indexes on every behavior and the gap widens at higher-commitment behaviors (merch, resale premium, multi-concert).',
                     matrix_variant: 'genre_compare',
                     // Three genre cohorts. Latin is the focus (smallest but highest converting).
                     cohorts: [
@@ -33052,7 +33052,7 @@
                             size: 88617432,
                             color: '#f472b6',
                             emoji: '\ud83c\udfa4',
-                            desc: 'US monthly listeners on Spotify + Apple Music + Amazon in the Pop category (Taylor Swift, Sabrina Carpenter, Olivia Rodrigo, Billie Eilish, Chappell Roan, Ariana Grande archetype).'
+                            desc: 'US Pop fans (Taylor Swift, Sabrina Carpenter, Olivia Rodrigo, Billie Eilish, Chappell Roan, Ariana Grande archetype).'
                         },
                         {
                             key: 'rap_rnb',
@@ -33060,7 +33060,7 @@
                             size: 71238614,
                             color: '#a78bfa',
                             emoji: '\ud83c\udfa7',
-                            desc: 'US monthly listeners in the Rap + R&B categories combined (Kendrick, Drake, SZA, The Weeknd, Travis Scott, H.E.R., Doja Cat, Metro Boomin archetype).'
+                            desc: 'US R&B and Rap fans (Kendrick, Drake, SZA, The Weeknd, Travis Scott, H.E.R., Doja Cat, Metro Boomin archetype).'
                         },
                         {
                             key: 'latin',
@@ -33068,13 +33068,13 @@
                             size: 31847213,
                             color: '#f97316',
                             emoji: '\ud83d\udd25',
-                            desc: 'US monthly listeners in the Latin categories - Reggaet\u00f3n, Latin Trap, Regional Mexican, Latin Pop (Bad Bunny, Karol G, Peso Pluma, Fuerza Regida, Rauw Alejandro, Feid archetype).'
+                            desc: 'US Latin fans across Reggaet\u00f3n, Latin Trap, Regional Mexican, and Latin Pop (Bad Bunny, Karol G, Peso Pluma, Fuerza Regida, Rauw Alejandro, Feid archetype).'
                         }
                     ],
                     // Behavior matrix: 3 genre cohorts x 5 behaviors, each with pre + post + per-cohort lift.
                     behavior_matrix: [
                         {
-                            key: 'catalog', label: 'Streamed catalog >50 hrs in window',
+                            key: 'catalog', label: 'Streamed catalog >50 hrs',
                             pop_pre:      { pct: 7.417,  count: 6572911 },
                             pop_post:     { pct: 11.812, count: 10467301 },
                             rap_rnb_pre:  { pct: 8.128,  count: 5789915 },
@@ -33129,8 +33129,8 @@
                     stages: [
                         {
                             key: 'catalog',
-                            name: 'Streamed catalog >50 hrs in window',
-                            desc: '>50 hours of any artist-catalog track in the 90-day window on any major streaming platform. Broadest reach behavior because streaming is free - the value read here is per-fan intensity, not absolute reach.',
+                            name: 'Streamed catalog >50 hrs',
+                            desc: '>50 hours of any artist-catalog track on a major streaming platform. The value read here is per-fan intensity, not absolute reach.',
                             post_count: 7299167, post_pct: 22.918,
                             emoji: '\ud83c\udfa7',
                             kpi_lbl: 'Heavy streamers',
@@ -33185,12 +33185,12 @@
                                 { key: 'rap_rnb', label: 'R&B/Rap',  pct: 0.515, count: 366879 },
                                 { key: 'latin',   label: 'Latin',    pct: 2.819, count: 897753, is_focus: true }
                             ],
-                            value_insight_html: '<strong>2.82% of Latin fans paid over face value</strong> - <strong>3.70x</strong> pop\'s rate. 897,753 Latin fans paid a premium in a 90-day window. Anything &gt;~2% of the fanbase paying over face means the primary allocation was undersupplied. Book venues <strong>40-60% larger</strong> and the primary still sells out.'
+                            value_insight_html: '<strong>2.82% of Latin fans paid over face value</strong> - <strong>3.70x</strong> pop\'s rate. 897,753 Latin fans paid a premium. Anything &gt;~2% of the fanbase paying over face means the primary allocation was undersupplied. Book venues <strong>40-60% larger</strong> and the primary still sells out.'
                         },
                         {
                             key: 'multishow',
                             name: 'Bought tickets to 2+ concerts overall',
-                            desc: 'Active concert-goers - the same person bought tickets to 2 or more live-music events in the 90-day window, any artist or genre.',
+                            desc: 'Active concert-goers - the same person bought tickets to 2 or more live-music events, any artist or genre.',
                             post_count: 454778, post_pct: 1.428,
                             emoji: '\ud83c\udf1f',
                             kpi_lbl: 'Multi-concert buyers',
@@ -33200,11 +33200,11 @@
                                 { key: 'rap_rnb', label: 'R&B/Rap',  pct: 0.165, count: 117544 },
                                 { key: 'latin',   label: 'Latin',    pct: 1.428, count: 454778, is_focus: true }
                             ],
-                            value_insight_html: 'Latin fans are <strong>4.75x</strong> as likely as pop fans to buy tickets to 2+ concerts in the window. 454,778 active concert-going Latin fans in play - meaning added dates, regional swings, or a multi-night residency (LA / Miami / Vegas / TX / FL) don\'t cannibalize single-show demand because this cohort already buys multiple shows.'
+                            value_insight_html: 'Latin fans are <strong>4.75x</strong> as likely as pop fans to buy tickets to 2+ concerts. 454,778 active concert-going Latin fans in play - added dates, regional swings, or a multi-night residency (LA / Miami / Vegas / TX / FL) don\'t cannibalize single-show demand because this cohort already buys multiple shows.'
                         }
                     ],
                     touchpoints_title: 'Where the tour announcement reached them',
-                    touchpoints_note: 'Touchpoint mix among the 7.30M heavy Latin streamers in the 90-day window. Multi-touch shares can sum >100% because fans typically encounter the announcement via 2-3 channels. WhatsApp share (41.83%) is the Latin-specific discovery channel that has effectively zero paid inventory in most tour marketing plans - the highest-yield acquisition channel absent from every non-Latin tour reviewed here.',
+                    touchpoints_note: 'Touchpoint mix among the 7.30M heavy Latin streamers. Multi-touch shares can sum >100% because fans typically encounter the announcement via 2-3 channels. WhatsApp share (41.83%) is the Latin-specific discovery channel that has effectively zero paid inventory in most tour marketing plans - the highest-yield acquisition channel absent from every non-Latin tour reviewed here.',
                     touchpoints_post_n: 7299167,
                     touchpoints: [
                         { label: 'Instagram (Reels)',      pct: 79.612, style: 'a' },
@@ -33217,7 +33217,7 @@
                         { label: 'X / Twitter',            pct: 12.417, style: 'a' }
                     ],
                     products_title: 'What Latin fans bought',
-                    products_note: 'Merch mix among the 3.64M Latin fans who bought tour merch in the 90-day window. VIP-package share (15.43%) is the highest-margin SKU on the tour and Latin fans over-index heavily on it. Most non-Latin tours ship a 1-tier VIP; a 3-tier VIP structure priced 2.5x to 5x face is the missed monetization category.',
+                    products_note: 'Merch mix among the 3.64M Latin fans who bought tour merch. VIP-package share (15.43%) is the highest-margin SKU on the tour and Latin fans over-index heavily on it. Most non-Latin tours ship a 1-tier VIP; a 3-tier VIP structure priced 2.5x to 5x face is the missed monetization category.',
                     products_post_n: 3635301,
                     products: [
                         { label: 'Tour t-shirt',             pct: 48.317, style: 'b' },
@@ -33229,7 +33229,7 @@
                         { label: 'Fragrance / lifestyle',    pct: 3.917,  style: 'b' }
                     ],
                     streaming_title: 'Where Latin fans streamed',
-                    streaming_note: 'Platform mix among the 7.30M heavy Latin streamers in the 90-day window. Spotify dominance (63.81%) is materially higher than pop\'s Spotify share - Latin catalog is where Spotify\'s Latin-focused editorial playlists (Viva Latino, RADAR Latino, Baila Reggaeton) do their strongest reach work.',
+                    streaming_note: 'Platform mix among the 7.30M heavy Latin streamers. Spotify dominance (63.81%) is materially higher than pop\'s Spotify share - Latin catalog is where Spotify\'s Latin-focused editorial playlists (Viva Latino, RADAR Latino, Baila Reggaeton) do their strongest reach work.',
                     streaming_post_n: 7299167,
                     streaming: [
                         { label: 'Spotify',        pct: 63.812, style: 'd' },
@@ -33241,7 +33241,7 @@
                         { label: 'Tidal',          pct: 3.417,  style: 'd' }
                     ],
                     catalog_title: 'Where they paid over face (resale marketplaces)',
-                    catalog_note: 'Distribution across resale platforms for the 897,753 Latin fans who paid over face value in the 90-day window. StubHub + SeatGeek carry ~69% of Latin resale-premium spend - that is where the sold-out demand shows up. Primary-market allocation to these channels is undersized on most Latin tours.',
+                    catalog_note: 'Distribution across resale platforms for the 897,753 Latin fans who paid over face value. StubHub + SeatGeek carry ~69% of Latin resale-premium spend - that is where the sold-out demand shows up. Primary-market allocation to these channels is undersized on most Latin tours.',
                     catalog_post_n: 897753,
                     catalog: [
                         { label: 'StubHub',              pct: 42.617, style: 'c' },
@@ -33252,7 +33252,7 @@
                         { label: 'Other',                pct: 4.815,  style: 'c' }
                     ],
                     demos_title: 'Latin concert ticket buyer',
-                    demos_note: 'Demographics of the 1.31M Latin fans who bought a tour ticket in the 90-day window. Skews slightly older and higher-income than the broad Latin fan base, more heavily female, and even more concentrated in Hispanic/Latino identity. Use this as the look-alike seed set for tour marketing.',
+                    demos_note: 'Demographics of the 1.31M Latin fans who bought a tour ticket. Skews slightly older and higher-income than the broad Latin fan base, more heavily female, and even more concentrated in Hispanic/Latino identity. Use this as the look-alike seed set for tour marketing.',
                     demos: {
                         gender: [
                             { label: 'Female',     pct: 62.417, style: 'b' },
@@ -33282,8 +33282,8 @@
                     insights: [
                         '<strong>The pitch in one line: 36% of the fan base, 96% of the ticket revenue.</strong> Pop has 88.6M US fans and converts 1.83% to tickets = 1.62M buyers at a ~$158 blended AOV = ~$256M gross ticket. Latin has 31.8M fans (36% of pop) and converts 4.13% = 1.31M buyers at a ~$187 blended AOV = ~$246M gross ticket. A Latin tour generates 96% of the ticket dollars from 36% of the fanbase. That is the entire promoter conversation.',
                         '<strong>The loyalty gap widens the deeper you go.</strong> Streaming intensity is 1.94x pop - the widest reach behavior, but streaming is free. Ticket conversion is 2.25x pop. Merch attach is 1.68x pop. Resale premium is 3.70x pop. Multi-concert buying is 4.75x pop. The higher the willingness-to-pay behavior, the more Latin over-indexes. Loyalty is not just higher, it is disproportionately higher at the top of the willingness-to-pay curve - which is exactly where a promoter\'s margin lives.',
-                        '<strong>2.82% of Latin fans paid over face value on resale - that is the SOLD-OUT signal.</strong> 897,753 Latin fans in a 90-day window paid over the primary face price. That is 3.7x the pop rate (0.76%) and 5.5x the R&B/Rap rate (0.52%). Resale premium above ~2% of the fan base means the primary allocation was undersupplied. The promoter is leaving money on the table by not booking bigger venues. Book venues 40-60% larger and the primary allocation still sells out.',
-                        '<strong>1.43% of Latin fans bought tickets to 2+ concerts in the 90-day window.</strong> That is 454,778 active concert-going Latin fans - 4.75x the pop rate (0.30%) and 8.7x the R&B/Rap rate (0.16%). Latin fans are not just committing to one artist, they are showing up for live music broadly - meaning there is demand elasticity in this cohort. Adding dates, regional swings, or a multi-night residency window (LA / Miami / Vegas / TX / FL) does not cannibalize single-show demand because this cohort is already buying tickets to 2+ concerts anyway. The overlap between "buys 2+ concerts overall" and "sees this specific Latin artist on tour" is much higher than the population average.',
+                        '<strong>2.82% of Latin fans paid over face value on resale - that is the SOLD-OUT signal.</strong> 897,753 Latin fans paid over the primary face price. That is 3.7x the pop rate (0.76%) and 5.5x the R&B/Rap rate (0.52%). Resale premium above ~2% of the fan base means the primary allocation was undersupplied. The promoter is leaving money on the table by not booking bigger venues. Book venues 40-60% larger and the primary allocation still sells out.',
+                        '<strong>1.43% of Latin fans bought tickets to 2+ concerts.</strong> That is 454,778 active concert-going Latin fans - 4.75x the pop rate (0.30%) and 8.7x the R&B/Rap rate (0.16%). Latin fans are not just committing to one artist, they are showing up for live music broadly - meaning there is demand elasticity in this cohort. Adding dates, regional swings, or a multi-night residency (LA / Miami / Vegas / TX / FL) does not cannibalize single-show demand because this cohort is already buying tickets to 2+ concerts anyway. The overlap between "buys 2+ concerts overall" and "sees this specific Latin artist on tour" is much higher than the population average.',
                         '<strong>VIP is under-utilized on Latin tours.</strong> 15.43% of Latin merch buyers bought a VIP package - the highest-margin SKU on the tour. Latin fans over-index heavily on multi-tier VIP relative to pop tours. Every Latin tour should have a 3-tier VIP structure (meet-and-greet / soundcheck / lounge) priced 2.5x to 5x face. Current tours mostly ship 1-tier VIP - a missed monetization category worth roughly $8-12 per fan across the tour.',
                         '<strong>WhatsApp is the Latin-specific discovery channel pop tours ignore.</strong> 41.83% of Latin fans first saw the tour announcement via a WhatsApp share (family / friend group). This is a channel promoters and labels have effectively zero paid inventory in. Building a WhatsApp-forward pre-sale distribution (family-code pre-sales, WhatsApp broadcast lists) is the single highest-yield acquisition channel on this cohort and is absent from every non-Latin tour marketing plan reviewed here.',
                         '<strong>Latin per-fan LTV in the artist universe is $118/yr - 2.5x pop.</strong> Combining ticket + merch + streaming royalty attribution + resale margin, the per-fan annual value on a touring Latin artist is $118. Pop is $47. R&B/Rap is $52. This is the number to lead with in the promoter deal: the cost-per-fan of activating a Latin cohort is the same as pop, but each fan is worth 2.5x more over the tour cycle. Guarantee + backend deal structures should be re-priced accordingly.'
@@ -33292,7 +33292,7 @@
                         { lbl: 'Ticket conversion',      val: '4.13%',   sub: '2.25x pop\'s 1.83% conversion rate',                a: '#f97316', b: '#ea580c' },
                         { lbl: '% of pop\'s ticket $',   val: '96%',     sub: '~$246M Latin ticket revenue from 36% the fanbase',  a: '#22d3ee', b: '#0891b2' },
                         { lbl: 'Merch attach',           val: '11.42%',  sub: '1.68x pop\'s 6.81% attach rate',                    a: '#ec4899', b: '#db2777' },
-                        { lbl: 'Multi-concert rate',     val: '1.43%',   sub: '4.75x pop - Latin fans buy 2+ concerts in window',  a: '#4ade80', b: '#22c55e' },
+                        { lbl: 'Multi-concert rate',     val: '1.43%',   sub: '4.75x pop - Latin fans buy 2+ concerts',            a: '#4ade80', b: '#22c55e' },
                         { lbl: 'Resale premium',         val: '2.82%',   sub: 'of Latin fans paid over face - 3.7x pop',           a: '#a78bfa', b: '#8b5cf6' },
                         { lbl: 'Per-fan LTV',            val: '$118/yr', sub: '2.51x pop\'s $47/yr in the artist universe',        a: '#fbbf24', b: '#f59e0b' }
                     ]
@@ -33470,12 +33470,12 @@
                     if (variant === 'genre_compare') {
                         var head = '<thead><tr>' +
                             '<th>Behavior</th>' +
-                            '<th style="text-align:right;">Pop fans - pre<br>' + _mSubHdr('90 days before announcement') + '</th>' +
-                            '<th style="text-align:right;">Pop fans - post<br>' + _mSubHdr('90 days after announcement') + '</th>' +
-                            '<th style="text-align:right;">R&amp;B/Rap fans - pre<br>' + _mSubHdr('90 days before') + '</th>' +
-                            '<th style="text-align:right;">R&amp;B/Rap fans - post<br>' + _mSubHdr('90 days after') + '</th>' +
-                            '<th style="text-align:right;">Latin fans - pre<br>' + _mSubHdr('90 days before') + '</th>' +
-                            '<th style="text-align:right;">Latin fans - post<br>' + _mSubHdr('90 days after') + '</th>' +
+                            '<th style="text-align:right;">Pop fans - before</th>' +
+                            '<th style="text-align:right;">Pop fans - after</th>' +
+                            '<th style="text-align:right;">R&amp;B/Rap fans - before</th>' +
+                            '<th style="text-align:right;">R&amp;B/Rap fans - after</th>' +
+                            '<th style="text-align:right;">Latin fans - before</th>' +
+                            '<th style="text-align:right;">Latin fans - after</th>' +
                             '<th style="text-align:right;">Pop lift</th>' +
                             '<th style="text-align:right;">R&amp;B/Rap lift</th>' +
                             '<th style="text-align:right;">Latin lift</th>' +
@@ -33547,7 +33547,7 @@
                 }
                 var funnelNote = document.getElementById('impactFunnelNote');
                 if (funnelNote) {
-                    var noteTpl = j.funnel_note_html || 'Independent behaviors on the focus cohort (n={FOCUS_N}). Each row is measured any-occurrence in its window. Rows are NOT nested. Pre bar = same behavior on the same cohort in the matched pre-trigger window. Post bar = post-trigger window. Lift = post rate / pre rate.';
+                    var noteTpl = j.funnel_note_html || 'Independent behaviors on the focus cohort. Rows are NOT nested.';
                     funnelNote.textContent = noteTpl.replace('{FOCUS_N}', _iiq2Num(focusN));
                 }
                 var funnel = document.getElementById('impactFunnel');
@@ -33639,7 +33639,7 @@
                     }
                     var liftChip = (lift != null)
                         ? _iiq2LiftChip(lift, { suffix: ' post vs pre' })
-                        : '<span class="iiq2-lift-chip up" title="No pre-window baseline exists for this behavior.">net new</span>';
+                        : '<span class="iiq2-lift-chip up" title="No pre baseline exists for this behavior.">net new</span>';
                     var preRow = (st.pre_pct == null)
                         ? '<div class="iiq2-pp-row iiq2-pp-pre iiq2-pp-none">' +
                             '<div class="iiq2-pp-tag">Pre</div>' +
