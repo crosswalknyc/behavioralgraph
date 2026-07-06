@@ -58950,7 +58950,7 @@
             nflx_prepost_attribution: {
                 enabled: true,
                 title: 'Pre & post-ad attribution - Dove × Bridgerton S4 (case study)',
-                subtitle: 'Netflix sells exposure. Crosswalk lets Netflix sell measurable behavioral change - matched-cohort lift on brand search, site visits, retail traffic, product-page engagement, cart behavior, and purchase proxies in the 1/7/14/30/60d window after exposure. The framework is reusable for every brand and every show.',
+                subtitle: 'Netflix sells exposure. Crosswalk lets Netflix sell measurable behavioral change - lift on brand search, site visits, retail traffic, product-page engagement, cart behavior, and purchase proxies at 1, 7, 14, 30, and 60 days after exposure. Reusable for every brand and every show.',
                 campaign: {
                     brand:           'Dove (Unilever)',
                     creative:        'Regency-glow / "real skin softness" 30s spot - culturally aligned to Bridgerton\'s Regency aesthetic',
@@ -59001,7 +59001,7 @@
                 post_signals: [
                     { signal: 'Brand-search lift (dove + dove cream + dove body wash)',
                       exposed_lift_pct: 47.6, control_lift_pct:  3.4, delta_pp: 44.2,
-                      note: 'Branded-search query volume in the 14d post-window indexes 1.47x the exposed cohort\'s pre-flight baseline vs. +3.4% in control. The cleanest single-signal proof of behavioral change.' },
+                      note: 'Branded-search query volume 14d post-exposure indexes 1.47x the exposed cohort\'s pre-flight baseline vs. +3.4% in control. The cleanest single-signal proof of behavioral change.' },
                     { signal: 'Dove.com / Unilever brand site visits',
                       exposed_lift_pct: 71.4, control_lift_pct:  4.2, delta_pp: 67.2,
                       note: 'Direct dove.com sessions - the most-attributable single signal Netflix can show. Indexes 1.71x the cohort\'s own pre-flight baseline.' },
@@ -60002,7 +60002,7 @@
             obs_podcast_wake: {
                 enabled: true,
                 title: 'The director\'s press tour, ranked by tickets it moved',
-                subtitle: '8 weeks. 17 podcast and late-night appearances. The audience-attributable lift in the 7d post-air vs. matched pre-air window, per show.',
+                subtitle: '8 weeks. 17 podcast and late-night appearances. The audience-attributable lift 7d after air, per show.',
                 ranked: [
                     { rank: 1,  show: 'Smartless',                  host: 'Bateman / Arnett / Hayes',    air_date: '2026-04-08', listener_cohort_m: 4.8, ticket_buy_lift_pct: 18.4, search_lift_pct: 24.1, back_catalog_streams_lift_pct: 31.2, incremental_tickets_proj: 47820, note: 'The conversion engine. Biggest podcast cohort + most concentrated 7d ticket-buy spike of the tour.' },
                     { rank: 2,  show: 'NPR Pop Culture Happy Hour', host: 'Linda Holmes',                air_date: '2026-04-22', listener_cohort_m: 1.6, ticket_buy_lift_pct: 28.7, search_lift_pct: 19.4, back_catalog_streams_lift_pct: 24.8, incremental_tickets_proj: 28430, note: 'Highest LIFT rate of the tour. NPR listener overlap with Letterboxd power-users is the prestige-anchor audience.' },
@@ -60225,7 +60225,7 @@
             obs_offscreen_commerce: {
                 enabled: true,
                 title: 'Off-screen commerce wake',
-                subtitle: 'Everything this audience bought in the 30d post-release window that was not a movie ticket.',
+                subtitle: 'Everything this audience bought 30d after release that was not a movie ticket.',
                 soundtrack: {
                     spotify_album_streams_30d_m: 24.7,
                     spotify_top_track: 'Mitski - Nobody (needle-drop)',
@@ -60439,7 +60439,7 @@
             { id: 'intent',    cardId: 'jiqNflxIntentCard',    emoji: '💼', label: 'Intent Packs',    sub: '15 advertiser packs' },
             { id: 'vsamzn',    cardId: 'jiqNflxVsAmznCard',    emoji: '🆚', label: 'vs. Amazon',      sub: 'off-Amazon spend' },
             { id: 'prepost',   cardId: 'jiqNflxPrePostCard',   emoji: '🧪', label: 'Pre/Post Ad',     sub: 'Dove × Bridgerton' },
-            { id: 'increment', cardId: 'jiqNflxIncrementCard', emoji: '🧬', label: 'Incrementality',  sub: 'matched-control' },
+            { id: 'increment', cardId: 'jiqNflxIncrementCard', emoji: '🧬', label: 'Incrementality',  sub: 'causal lift read' },
             { id: 'aqi',       cardId: 'jiqNflxAqiCard',       emoji: '🏅', label: 'AQI',             sub: 'audience quality rate card' },
             { id: 'migration', cardId: 'jiqNflxMigrationCard', emoji: '🌊', label: 'Migration',       sub: 'cross-platform flow' },
             { id: 'genre',     cardId: 'jiqNflxGenreCard',     emoji: '🎬', label: 'Genre Fit',       sub: 'genre × advertiser' },
@@ -62335,7 +62335,7 @@
             if (subEl) subEl.textContent = data.subtitle || '';
             var _incTotal = ((data.pipeline || [])[0] || {}).value || ((_JIQ_NETFLIX_DATA.panel_basis || {}).projected_us_hh || 0);
             _jiqNflxSetCohortMeta('jiqNflxIncrementMeta',
-                'Addressable base for matched-control design',
+                'Addressable base',
                 _incTotal);
 
             // Method strip: the question + the 5 bullets that define
@@ -62596,7 +62596,7 @@
                     +   '<div style="margin-top:0.6rem; padding-top:0.55rem; border-top:1px dashed rgba(255,255,255,0.08);'
                     +                ' font-size:0.74rem; line-height:1.5; color:var(--text-secondary);">'
                     +     '🎯 <strong style="color:var(--text-primary);">' + incShare.toFixed(1) + '%</strong> of the lift the exposed cohort showed is <strong style="color:#5eead4;">causally attributable to the buy</strong>. '
-                    +     'The remaining ' + (100 - incShare).toFixed(1) + '% would have happened in this audience anyway - the matched-control design quantifies it and removes it from what Netflix sells. '
+                    +     'The remaining ' + (100 - incShare).toFixed(1) + '% would have happened in this audience anyway - quantified and removed from what Netflix sells. '
                     +     'That is the difference between correlation and incremental lift.'
                     +   '</div>'
                     + '</div>';
