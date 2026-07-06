@@ -26679,7 +26679,7 @@
                         isSubject:    true,
                         display_name: subj.display_name || 'Subject',
                         opening_date: subj.opening_date || '',
-                        subtitle:     'Subject \u00b7 panel-measured \u00b7 opens ' + (subj.opening_date || '\u2014'),
+                        subtitle:     'Subject \u00b7 opens ' + (subj.opening_date || '\u2014'),
                         bySig:        goatBySig,
                         box_office:   null,
                         barColor:     '#22d3ee',
@@ -26777,7 +26777,7 @@
                     // before opening. Each chip re-renders Q3 with the
                     // selected offset applied per-row via iiqQ3ScaleRowToT.
                     var T_OPTS = [
-                        { v: null, label: 'Realized',  tip: 'Subject = panel-measured to date. Comps = realized opening-weekend buyers.' },
+                        { v: null, label: 'Realized',  tip: 'Subject = to date. Comps = realized opening-weekend buyers.' },
                         { v: 90,   label: 'T-90',      tip: '90 days before each title\u2019s opening.' },
                         { v: 60,   label: 'T-60',      tip: '60 days before opening.' },
                         { v: 30,   label: 'T-30',      tip: '30 days before opening (~1 month out).' },
@@ -26803,7 +26803,7 @@
                     var customChip = '<button type="button" onclick="window.iiqQ3PromptCustomT()" title="Pick any number of days before opening (1-180)." style="background:' + (customActive ? 'rgba(34,211,238,0.18)' : 'rgba(255,255,255,0.04)') + '; border:' + (customActive ? '1px solid rgba(34,211,238,0.55)' : '1px dashed rgba(255,255,255,0.18)') + '; color:' + (customActive ? '#22d3ee' : '#cbd5e1') + '; font-size:0.7rem; padding:0.28rem 0.6rem; border-radius:14px; cursor:pointer; white-space:nowrap;">' + escapeHtml(customLabel) + '</button>';
 
                     var bandLabel = (window._iiqQ3T.offset == null)
-                        ? 'Realized (subject panel-measured to date, comps at opening)'
+                        ? 'Realized (subject to date, comps at opening)'
                         : (window._iiqQ3T.offset === 0
                             ? 'Every title at opening day'
                             : ('Every title at T-' + window._iiqQ3T.offset + ' (' + window._iiqQ3T.offset + ' days before its opening)'));
@@ -28740,8 +28740,8 @@
                                         <th>Type</th>
                                         <th>Season</th>
                                         <th id="nfChEpisodeTh">Episode</th>
-                                        <th title="Panel views projected to US gen pop (&#247;10M &#215; 329.9M)">Viewers (est.)</th>
-                                        <th title="Average projected viewers per day over the period" style="white-space:nowrap;">Avg/Day</th>
+                                        <th title="Estimated US viewers">Viewers (est.)</th>
+                                        <th title="Average viewers per day over the period" style="white-space:nowrap;">Avg/Day</th>
                                         <th title="Open on Netflix" style="white-space:nowrap;">Link</th>
                                         <th>Genre</th>
                                         <th>Runtime</th>
@@ -40774,11 +40774,11 @@
 
             var footer;
             if (agentRowCount > 0 && agentRowCount === Math.min(issueBuckets.length, 8)) {
-                footer = 'All rows are agent-researched: the discovery agent (gpt-4o + web search) derived each issue\'s typical voter path from public sources (Pew, Knight Foundation, Brennan Center, eMarketer). Hover a row for the rationale.';
+                footer = 'All rows are agent-researched. Hover a row for the rationale.';
             } else if (agentRowCount > 0) {
-                footer = agentRowCount + ' of ' + Math.min(issueBuckets.length, 8) + ' rows are agent-researched (hover for rationale). The remaining rows fall back to panel-measured destinations + estimated follow-up.';
+                footer = agentRowCount + ' of ' + Math.min(issueBuckets.length, 8) + ' rows are agent-researched (hover for rationale).';
             } else {
-                footer = 'Steps 1\u20132 are panel-measured. Step 3 is derived from JIQ click-through norms (\u00d70.55 attenuation). An <span class="bq-path-fallback">estimated</span> badge means issue-specific journey data was thin.';
+                footer = 'An <span class="bq-path-fallback">estimated</span> badge means issue-specific journey data was thin.';
             }
 
             return '<div class="bq-path-table">' + rows + '</div>'
