@@ -21649,7 +21649,38 @@
                 #blueIQView .bq-day-grid { grid-template-columns: 1fr 1fr; }
                 #blueIQView .bq-day-controls { flex-direction: column; align-items: flex-start; }
             }
-            #blueIQView .blue-iq-card-articles { grid-column: span 4; min-height: 320px; }
+            #blueIQView .blue-iq-card-articles {
+                grid-column: span 4;
+                min-height: 320px;
+                max-height: 560px;               /* cap to sibling card height */
+                display: flex;                   /* let body absorb remaining height */
+                flex-direction: column;
+            }
+            /* Card body absorbs the remaining vertical space inside the
+             * capped articles card and scrolls if the article list
+             * exceeds what fits alongside the sibling Search/Social
+             * cards. min-height:0 is required so a flex child is
+             * allowed to shrink below its content size (otherwise
+             * overflow never kicks in). */
+            #blueIQView .blue-iq-card-articles .blue-iq-card-body {
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow-y: auto;
+                overflow-x: hidden;
+                padding-right: 4px;              /* tiny gutter for the scrollbar */
+            }
+            /* Subtle scrollbar so it doesn't visually shout on the
+             * dark card background. */
+            #blueIQView .blue-iq-card-articles .blue-iq-card-body::-webkit-scrollbar {
+                width: 6px;
+            }
+            #blueIQView .blue-iq-card-articles .blue-iq-card-body::-webkit-scrollbar-thumb {
+                background: rgba(255,255,255,0.12);
+                border-radius: 3px;
+            }
+            #blueIQView .blue-iq-card-articles .blue-iq-card-body::-webkit-scrollbar-thumb:hover {
+                background: rgba(255,255,255,0.22);
+            }
             #blueIQView .blue-iq-card-demo     { grid-column: span 6; }
             #blueIQView .blue-iq-card-compare  { grid-column: span 6; }
             #blueIQView .blue-iq-card-title { font-size: 0.92rem; font-weight: 600; margin: 0 0 0.4rem 0; color: var(--text-primary); display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
@@ -22057,6 +22088,15 @@
                 #blueIQView .blue-iq-card-articles,
                 #blueIQView .blue-iq-card-demo,
                 #blueIQView .blue-iq-card-compare { grid-column: span 12; }
+                /* When the articles card stacks full-width there's no
+                 * sibling to match — let it grow naturally instead of
+                 * hiding content behind an internal scrollbar. */
+                #blueIQView .blue-iq-card-articles {
+                    max-height: none;
+                }
+                #blueIQView .blue-iq-card-articles .blue-iq-card-body {
+                    overflow-y: visible;
+                }
             }
         </style>
         <div id="blueIQView">
@@ -37502,6 +37542,43 @@
                 .trim();
         }
 
+        // Article-safe date stripper: removes only PAST year tokens
+        // (1900 through current-year-minus-one) so retrospective
+        // framing like "2023 tax bill" collapses to "tax bill",
+        // while forward-looking references like "2026 Senate race"
+        // and "2028 presidential" survive. Used for the Top
+        // political articles card.
+        //
+        // Also cleans punctuation debris left after year removal:
+        // empty parens `()`, empty brackets `[]`, dangling connectors
+        // ("in and", "and and", ", and"), doubled whitespace, and
+        // trailing dashes / commas / conjunctions. Mirrors
+        // blue_iq._strip_stale_years and article_discovery._strip_stale_years
+        // so all three surfaces produce identical output.
+        function _bqStripStaleYears(s) {
+            if (s == null) return '';
+            var currentYear = new Date().getUTCFullYear();
+            var out = String(s);
+            out = out.replace(/\b((?:19|20)\d{2})\b/g, function(_m, y) {
+                return (parseInt(y, 10) < currentYear) ? '' : y;
+            });
+            out = out
+                .replace(/\(\s*\)/g, '')
+                .replace(/\[\s*\]/g, '')
+                .replace(/\b(?:in|of|from|between|during|since|by)\s+and\b/gi, 'and')
+                .replace(/\band\s+and\b/gi, 'and')
+                .replace(/,\s*and\b/gi, ' and')
+                .replace(/\s+,/g, ',')
+                .replace(/\s+/g, ' ')
+                .replace(/\s+([,.:;)\]!?])/g, '$1')
+                .replace(/([(\[])\s+/g, '$1')
+                .replace(/\b(?:in|of|from|between|during|since|by|and)\s*$/gi, '')
+                .replace(/\s*[\-\u2013\u2014,]\s*$/, '')
+                .replace(/^\s*[\-\u2013\u2014,]\s*/, '')
+                .trim();
+            return out;
+        }
+
         // Brand-color map for search engines + social platforms. Same
         // hue used everywhere a brand row appears (rows here, axis on
         // future charts) so the user develops a quick color↔brand
@@ -38362,9 +38439,15 @@
             var cards = data.cards || {};
             var html = '';
 
-            // CARD A: Issue buckets (drill-down on click)
+            // CARD A: Issue buckets (drill-down on click). Sourced
+            // primarily from Google Trends (rank + bar-width reflect
+            // Trends volume); panel search terms fold in as evidence
+            // and a 20% secondary weight in the rerank.
             html += '<div class="blue-iq-card blue-iq-card-issues">'
-                  + '<h3 class="blue-iq-card-title">Political issue searches <span class="blue-iq-badge">AI-bucketed</span></h3>'
+                  + '<h3 class="blue-iq-card-title">Political issue searches'
+                  +   '<span class="blue-iq-badge">Google Trends</span>'
+                  +   '<span class="blue-iq-card-subtitle">what people in this geography are actually searching about, bucketed into policy issues. Rank + bar width reflect Google Trends volume; panel search terms fold in as supporting evidence.</span>'
+                  + '</h3>'
                   + '<div class="blue-iq-card-body" id="blueIQCardIssuesBody"></div>'
                   + '</div>';
 
@@ -38407,13 +38490,21 @@
                 var topicChip = a.topic
                     ? '<span class="bq-article-topic">' + _bqEscape(a.topic) + '</span>'
                     : '';
-                var summaryHtml = a.summary
-                    ? '<div class="blue-iq-article-summary">' + _bqEscape(a.summary) + '</div>'
+                // Strip PAST year tokens ("2023", "2024") from title +
+                // summary so retrospective / anniversary framing doesn't
+                // make the card feel dated. Forward-looking references
+                // ("2026 Senate race", "2028 presidential") survive.
+                // Leaves the underlying URL untouched so clicks still
+                // resolve to the same story.
+                var cleanTitle   = _bqStripStaleYears(a.title || a.url);
+                var cleanSummary = a.summary ? _bqStripStaleYears(a.summary) : '';
+                var summaryHtml  = cleanSummary
+                    ? '<div class="blue-iq-article-summary">' + _bqEscape(cleanSummary) + '</div>'
                     : '';
                 return '<div class="blue-iq-article">'
                      + img
                      + '<div class="blue-iq-article-body">'
-                     + '<p class="blue-iq-article-title"><a href="' + _bqEscape(a.url) + '" target="_blank" rel="noopener">' + _bqEscape(a.title || a.url) + '</a>' + (topicChip ? ' ' + topicChip : '') + '</p>'
+                     + '<p class="blue-iq-article-title"><a href="' + _bqEscape(a.url) + '" target="_blank" rel="noopener">' + _bqEscape(cleanTitle) + '</a>' + (topicChip ? ' ' + topicChip : '') + '</p>'
                      + '<div class="blue-iq-article-meta">' + _bqEscape(a.source || '') + pctLabel + '</div>'
                      + summaryHtml
                      + '</div>'

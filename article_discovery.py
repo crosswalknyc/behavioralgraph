@@ -40,7 +40,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 S3_BUCKET   = os.environ.get('BLUE_IQ_CACHE_BUCKET', 'dashboard-inputs')
-S3_PREFIX   = 'blue_iq/articles/v3/'  # v3: impeachment-inquiry relabel clause (2026-06-29)
+S3_PREFIX   = 'blue_iq/articles/v4/'  # v4: freshness + stale-year strip (2026-07-06)
 CACHE_TTL_S = 12 * 3600                # 12h — articles are time-sensitive
 AGENT_TIMEOUT_S = float(os.environ.get('ARTICLE_AGENT_TIMEOUT', '60'))
 AGENT_MODEL = os.environ.get('ARTICLE_AGENT_MODEL', 'gpt-4o')
@@ -185,6 +185,22 @@ _AGENT_SYSTEM = (
     "the source's actual headline uses the prefixed form, rewrite to\n"
     "the unprefixed label before returning.\n"
     "\n"
+    "FRESHNESS — strict. Every article MUST be published within the\n"
+    "trailing 7 days from TODAY (the date supplied in the user prompt).\n"
+    "Do NOT return retrospective, anniversary, 'year-in-review', or\n"
+    "'looking back at' pieces. Do NOT return articles whose original\n"
+    "publish date is more than 7 days old, even if they are being\n"
+    "re-circulated. If a story broke earlier but has a fresh follow-up\n"
+    "in the last 7 days, cite the follow-up URL.\n"
+    "\n"
+    "STRIP STALE YEARS — do NOT include a past-year token (e.g. '2023',\n"
+    "'2024', '2025') anywhere in title / topic / summary. If the source\n"
+    "headline contains one, rewrite it out (e.g. 'The 2023 GOP tax bill\n"
+    "returns' -> 'The GOP tax bill returns'). Forward-looking year tokens\n"
+    "that describe an election cycle ARE allowed: '2026 Senate races',\n"
+    "'2028 presidential prospects', etc. Rule of thumb: strip any year\n"
+    "before the current year; keep the current year and any future year.\n"
+    "\n"
     "OUTPUT FORMAT: return ONLY a JSON object. No markdown fences, no\n"
     "commentary. First char `{`, last char `}`:\n"
     "\n"
@@ -206,8 +222,21 @@ _AGENT_SYSTEM = (
 
 
 def _build_agent_prompt(geo_type: str, geo_value: str) -> str:
+    # Anchor "the last 7 days" to a concrete date the agent can key off.
+    # Without this the model's internal sense of "today" drifts to the
+    # training cutoff and it happily returns 2023 / 2024 articles.
+    today = datetime.now(timezone.utc)
+    today_iso = today.strftime('%Y-%m-%d')
+    week_ago_iso = (today - _one_week()).strftime('%Y-%m-%d')
+    header = (
+        f"TODAY: {today_iso} (UTC). Trailing 7-day window: {week_ago_iso} "
+        f"through {today_iso}. Every article you return MUST have a\n"
+        f"publish date in that window. Reject anything older, no matter\n"
+        f"how relevant it feels.\n\n"
+    )
+
     if geo_type == 'National' or not geo_value:
-        return (
+        return header + (
             "GEOGRAPHY: National (United States)\n\n"
             "Surface the top ~20 most-read U.S. political articles of the\n"
             "last 7 days. Mix national headlines (Senate, White House,\n"
@@ -216,7 +245,7 @@ def _build_agent_prompt(geo_type: str, geo_value: str) -> str:
             "discourse. Skip sports, entertainment, and human-interest."
         )
     if geo_type == 'State':
-        return (
+        return header + (
             f"GEOGRAPHY: State of {geo_value}\n\n"
             f"Surface the top ~20 most-read political articles relevant to\n"
             f"voters in {geo_value} over the last 7 days. Include:\n"
@@ -231,7 +260,7 @@ def _build_agent_prompt(geo_type: str, geo_value: str) -> str:
             "member station coverage in the source mix."
         )
     if geo_type == 'DMA':
-        return (
+        return header + (
             f"GEOGRAPHY: DMA / Media market: {geo_value}\n\n"
             f"Surface the top ~20 most-read political articles a voter in\n"
             f"the {geo_value} media market is likely encountering. Use the\n"
@@ -243,11 +272,16 @@ def _build_agent_prompt(geo_type: str, geo_value: str) -> str:
             "  - National stories driving local talk-radio / TV news\n"
             "Prefer this DMA's flagship daily + local NPR + AP regional."
         )
-    return (
+    return header + (
         f"GEOGRAPHY: {geo_type} = {geo_value}\n\n"
         "Surface the top 20 most-read U.S. political articles relevant\n"
         "to voters in this area."
     )
+
+
+def _one_week():
+    from datetime import timedelta
+    return timedelta(days=7)
 
 
 # ── Validation ────────────────────────────────────────────────────────────
@@ -260,10 +294,49 @@ VALID_TOPICS = frozenset({
 })
 
 
+def _strip_stale_years(s: str) -> str:
+    """Remove past-year tokens (< current year) from a headline / summary.
+
+    Belt-and-suspenders scrub for cases where the agent doesn't obey the
+    prompt-side "STRIP STALE YEARS" instruction. Only strips years
+    strictly less than the current UTC year, so forward-looking cycle
+    references like "2026 Senate race" and "2028 presidential" survive.
+
+    Mirrors blue_iq._strip_stale_years and the frontend
+    _bqStripStaleYears helper so all three surfaces produce identical
+    output. Also cleans punctuation debris left by year removal
+    (empty parens, dangling connectors, doubled whitespace).
+    """
+    if not s:
+        return s
+    current_year = datetime.now(timezone.utc).year
+
+    def _sub(m: 're.Match') -> str:
+        y = int(m.group(0))
+        return '' if y < current_year else str(y)
+
+    out = re.sub(r'\b(?:19|20)\d{2}\b', _sub, s)
+    out = re.sub(r'\(\s*\)', '', out)
+    out = re.sub(r'\[\s*\]', '', out)
+    out = re.sub(r'\b(?:in|of|from|between|during|since|by)\s+and\b',
+                 'and', out, flags=re.IGNORECASE)
+    out = re.sub(r'\band\s+and\b', 'and', out, flags=re.IGNORECASE)
+    out = re.sub(r',\s*and\b', ' and', out, flags=re.IGNORECASE)
+    out = re.sub(r'\s+,', ',', out)
+    out = re.sub(r'\s+', ' ', out)
+    out = re.sub(r'\s+([,.:;)\]!?])', r'\1', out)
+    out = re.sub(r'([(\[])\s+', r'\1', out)
+    out = re.sub(r'\b(?:in|of|from|between|during|since|by|and)\s*$',
+                 '', out, flags=re.IGNORECASE).rstrip()
+    out = re.sub(r'^\s*[\-\u2013\u2014,]\s*', '', out)
+    out = re.sub(r'\s*[\-\u2013\u2014,]\s*$', '', out)
+    return out.strip()
+
+
 def _validate_article(a: dict) -> Optional[dict]:
     if not isinstance(a, dict):
         return None
-    title = (a.get('title') or '').strip()
+    title = _strip_stale_years((a.get('title') or '').strip())
     url   = (a.get('url') or '').strip()
     if not title or not url:
         return None
@@ -292,12 +365,13 @@ def _validate_article(a: dict) -> Optional[dict]:
     except Exception:
         score = 0
     score = max(0, min(100, score))
+    summary = _strip_stale_years((a.get('summary') or '').strip())
     return {
         'title':          title[:240],
         'url':            url,
         'source':         source,
         'topic':          topic,
-        'summary':        (a.get('summary') or '').strip()[:180],
+        'summary':        summary[:180],
         'interest_score': score,
     }
 
