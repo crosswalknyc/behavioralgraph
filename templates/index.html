@@ -18855,7 +18855,7 @@
                             <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                                 <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
                                     <input type="checkbox" id="talentFitShowTooltips" checked style="cursor: pointer;">
-                                    Show methodology tooltips
+                                    Show tooltips
                                 </label>
                             </div>
                             
@@ -19201,7 +19201,7 @@
                             <div class="dash-imdb-box" id="dashImdbHeader" style="display: none;"></div>
                         </div>
                         <div class="profile-title-and-toolbar-wrap">
-                            <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile methodology...">
+                            <div class="dash-brand-container has-tooltip" id="dashBrandContainer" data-tooltip="Loading profile...">
                                 <div class="dash-brand-box" id="dashBrandNameHeader"></div>
                                 <div class="dash-date-box" id="dashDateRangeHeader"></div>
                                 <div id="dashProfileRunsRow" style="display: none; margin-top: 0.5rem;">
@@ -28767,7 +28767,7 @@
                                     <p class="iqr-subtitle">{{ m.desc }}</p>
                                 </div>
                                 <div class="iqr-actions">
-                                    <button class="iqr-info-chip" type="button" onclick="toggleIQRankerExplainer('{{ m.key }}')" title="Show methodology" aria-controls="iqRankerExplainer-{{ m.key }}">ⓘ How is CW IQ scored?</button>
+                                    <button class="iqr-info-chip" type="button" onclick="toggleIQRankerExplainer('{{ m.key }}')" title="How is CW IQ scored?" aria-controls="iqRankerExplainer-{{ m.key }}">ⓘ How is CW IQ scored?</button>
                                     <button class="iqr-btn" type="button" onclick="openIQRankerCompare('{{ m.key }}')" title="Overlay multiple profiles on one chart">⚖️ Compare</button>
                                     {% if loop.first and (role == 'super_admin' or role == 'admin') %}
                                     <button class="iqr-btn iqr-btn-primary" type="button" onclick="iqRankersLoadDay(this)" id="iqRankersLoadDayBtn-{{ m.key }}">⚡ Load 1 day</button>
@@ -28779,7 +28779,7 @@
                         {% if loop.first %}<div id="iqRankersLoadDayStatus" style="display: none; padding: 0.55rem 0.85rem; margin-bottom: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.78rem; color: var(--text-secondary);"></div>{% endif %}
 
                         <!-- CW IQ formula explainer (toggle via the ⓘ chip) -->
-                        <div id="iqRankerExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="CW IQ scoring methodology">
+                        <div id="iqRankerExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="CW IQ scoring explanation">
                             <button type="button" class="iqr-explain-close" aria-label="Close" onclick="toggleIQRankerExplainer('{{ m.key }}')">✕</button>
                             <h5>📐 CW IQ Score - how it's computed</h5>
                             <div style="margin-bottom: 0.55rem;">A per-day &ldquo;zeitgeist&rdquo; composite scored 0–100. Each day we compute a weighted z-score blend per profile, then squash with a sigmoid:</div>
@@ -28820,7 +28820,7 @@
                         </div>
 
                         <!-- EVC formula explainer (toggled from the EVC column header ⓘ) -->
-                        <div id="iqRankerEVCExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="EVC scoring methodology">
+                        <div id="iqRankerEVCExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="EVC scoring explanation">
                             <button type="button" class="iqr-explain-close" aria-label="Close" onclick="toggleIQRankerEVCExplainer('{{ m.key }}')">✕</button>
                             <h5>📺 EVC - Engagement vs Viewing Correlation</h5>
                             <div style="margin-bottom: 0.55rem;">Of the panel's digital touchpoints that engaged with this profile in the selected window, the share who engaged with the talent then watched their content on a streaming or VOD platform. Reads as: <i>&ldquo;of all the times the panel touched something about this person/brand, what % of those then watched their content on a streaming destination?&rdquo;</i> A high EVC means the audience is actively consuming this entity's content, not just engaging with it.</div>
@@ -28831,7 +28831,7 @@
                         </div>
 
                         <!-- TDL formula explainer (toggled from the TDL column header ⓘ) -->
-                        <div id="iqRankerTDLExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="TDL scoring methodology">
+                        <div id="iqRankerTDLExplainer-{{ m.key }}" class="iqr-explain" role="region" aria-label="TDL scoring explanation">
                             <button type="button" class="iqr-explain-close" aria-label="Close" onclick="toggleIQRankerTDLExplainer('{{ m.key }}')">✕</button>
                             <h5>🛍️ TDL - Talent Driven Lift</h5>
                             <div style="margin-bottom: 0.55rem;">Of the panel's engagers with the profile in the selected window, the share who then viewed or purchased a product recommended by, affiliated with, or featured in a campaign with the profile subject after engaging with the talent. Reads as: <i>&ldquo;of all the digital engagers with the talent, what % of those then engaged with a talent-affiliated brand?&rdquo;</i> A high TDL means engaged attention around this entity is converting to branded products &mdash; a useful proxy for commercial pull.</div>
@@ -28871,13 +28871,13 @@
                                     <th data-iq-sort="mentions"       data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Total engagements in the selected window." style="cursor: pointer; text-align: right;">Engagements</th>
                                     <th data-iq-sort="delta_mentions" data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="Engagements change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ Engagements</th>
                                     <th data-iq-sort="delta_evc"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
-                                        <span class="iqr-th-with-info">Δ EVC<button type="button" class="iqr-th-info" title="Show EVC methodology" aria-label="Show EVC methodology" onclick="event.stopPropagation(); toggleIQRankerEVCExplainer('{{ m.key }}')">i</button></span>
+                                        <span class="iqr-th-with-info">Δ EVC<button type="button" class="iqr-th-info" title="What is EVC?" aria-label="What is EVC?" onclick="event.stopPropagation(); toggleIQRankerEVCExplainer('{{ m.key }}')">i</button></span>
                                     </th>
                                     <th data-iq-sort="delta_tdl"      data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
-                                        <span class="iqr-th-with-info">Δ TDL<button type="button" class="iqr-th-info" title="Show TDL methodology - Talent Driven Lift" aria-label="Show TDL methodology" onclick="event.stopPropagation(); toggleIQRankerTDLExplainer('{{ m.key }}')">i</button></span>
+                                        <span class="iqr-th-with-info">Δ TDL<button type="button" class="iqr-th-info" title="What is TDL (Talent Driven Lift)?" aria-label="What is TDL?" onclick="event.stopPropagation(); toggleIQRankerTDLExplainer('{{ m.key }}')">i</button></span>
                                     </th>
                                     <th data-iq-sort="cw_iq_score"    data-iq-master="{{ m.key }}" style="cursor: pointer; text-align: right;">
-                                        <span class="iqr-th-with-info">CW IQ<button type="button" class="iqr-th-info" title="Show CW IQ methodology" aria-label="Show CW IQ methodology" onclick="event.stopPropagation(); toggleIQRankerExplainer('{{ m.key }}')">i</button></span>
+                                        <span class="iqr-th-with-info">CW IQ<button type="button" class="iqr-th-info" title="What is CW IQ?" aria-label="What is CW IQ?" onclick="event.stopPropagation(); toggleIQRankerExplainer('{{ m.key }}')">i</button></span>
                                     </th>
                                     <th data-iq-sort="delta_cw_iq"    data-iq-master="{{ m.key }}" class="has-tooltip" data-tooltip="CW IQ change vs the equal-length window immediately before this one." style="cursor: pointer; text-align: right;">Δ CW IQ</th>
                                 </tr></thead>
@@ -62207,7 +62207,7 @@
                     +   '<div style="text-align:right;">Exposed</div>'
                     +   '<div style="text-align:right;">Control</div>'
                     +   '<div style="text-align:right;">Index</div>'
-                    +   '<div>Methodology note</div>'
+                    +   '<div>Note</div>'
                     + '</div>'
                     + rows.map(function(r) {
                         var idx     = r.index || 100;
@@ -62418,7 +62418,7 @@
                     + (data.balance_note
                         ? '<div style="margin-top:0.55rem; padding:0.55rem 0.7rem; font-size:0.72rem; line-height:1.5; font-style:italic;'
                           +            ' color:var(--text-secondary); background:rgba(20,184,166,0.06); border-radius:4px; border-left:2px solid rgba(20,184,166,0.4);">'
-                          +     '<strong style="color:#5eead4; font-style:normal;">Methodology note:</strong> ' + _jiqEsc(data.balance_note)
+                          +     '<strong style="color:#5eead4; font-style:normal;">Note:</strong> ' + _jiqEsc(data.balance_note)
                           + '</div>'
                         : '');
             }
@@ -63234,7 +63234,7 @@
                     +   '<div style="font-size:0.95rem; font-weight:700; line-height:1.45; color:var(--text-primary);">' + _jiqEsc(data.question || '') + '</div>'
                     + '</div>'
                     + '<div>'
-                    +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Methodology</div>'
+                    +   '<div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Design</div>'
                     +   '<ul style="font-size:0.74rem; color:var(--text-secondary); line-height:1.5; padding-left:1rem; margin:0;">' + bullets + '</ul>'
                     + '</div>';
             }
