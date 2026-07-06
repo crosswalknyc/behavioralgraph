@@ -38652,7 +38652,7 @@
             // BLUE_IQ_CREATIVE_PLAYS entry (placement + creative direction).
             html += '<div class="blue-iq-card blue-iq-card-playbook" style="grid-column: span 12;">'
                   + '<h3 class="blue-iq-card-title">Creative playbook'
-                  +   '<span class="blue-iq-card-subtitle">for the top issues in this slice: what creative to ship, what placement to buy. Researched per-issue with current web sources (Pew, Edison, eMarketer, recent campaign post-mortems) and grounded in this slice\u2019s panel follow-up behavior.</span>'
+                  +   '<span class="blue-iq-card-subtitle">for the top issues in this slice: what creative to ship, what placement to buy.</span>'
                   + '</h3>'
                   + '<div class="blue-iq-card-body" id="blueIQCreativePlaybook"></div>'
                   + '</div>';
@@ -38690,7 +38690,7 @@
                   +   '<div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.5rem;">'
                   +     'Most common ordered sequence after a voter searches each top issue. '
                   +     'Step 1 \u00b7 the issue search itself. Step 2 \u00b7 the next action voters typically take. Step 3 \u00b7 the most-common follow-up to that. '
-                  +     'Per-issue rows are researched by the discovery agent (gpt-4o + web search) grounded in public research (Pew, Knight Foundation, Brennan Center, eMarketer); hover any row for the rationale.'
+                  +     'Per-issue rows are researched by the discovery agent; hover any row for the rationale.'
                   +   '</div>'
                   +   _bqRenderTopPathsAfterIssue(cards.issue_buckets || [], cards.issue_journey_cross || [], cards.voter_journey || [], cards.issue_paths_agent || [])
                   + '</div>'
