@@ -30749,7 +30749,7 @@
                             background: linear-gradient(135deg, rgba(96,165,250,0.06) 0%, rgba(34,197,94,0.04) 100%);
                             border: 1px solid rgba(96,165,250,0.22);">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqSheridanMapTitle" style="margin: 0;">🌐 Beyond the Sheridan Universe and Nielsen's 50K Homes (From a 10M Genpop Sample)</h3>
+                        <h3 id="jiqSheridanMapTitle" style="margin: 0;">🌐 Beyond the Sheridan Universe</h3>
                         <div id="jiqSheridanMapMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqSheridanMapSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.85rem; line-height: 1.55;"></div>
@@ -60373,25 +60373,7 @@
             return (_JIQ_NETFLIX_DATA && _JIQ_NETFLIX_DATA.panel_basis) || null;
         }
         function _jiqNflxPanelChip() {
-            // Compact ribbon-style chip surfacing the SHARED panel basis
-            // so reviewers can ladder every percentage in the deck back
-            // to the same n / projected-U.S. denominator.
-            var pb = _jiqNflxPanelBasis();
-            if (!pb) return '';
-            return '<span title="' + _jiqEsc(pb.methodology_note || '') + '"'
-                 +       ' style="display:inline-flex; align-items:center; gap:0.4rem;'
-                 +              ' padding:0.16rem 0.55rem; border-radius:999px;'
-                 +              ' background:rgba(229,9,20,0.10);'
-                 +              ' border:1px solid rgba(229,9,20,0.32);'
-                 +              ' font-size:0.64rem; font-weight:700;'
-                 +              ' color:#fca5a5; white-space:nowrap;">'
-                 +   '<span style="opacity:0.7; letter-spacing:0.05em;">PANEL</span>'
-                 +   '<span style="color:var(--text-primary); font-weight:800;">'
-                 +     'n=' + _jiqFmt(pb.sample_panelists) + '</span>'
-                 +   '<span style="opacity:0.55;">\u2192</span>'
-                 +   '<span style="color:var(--text-primary); font-weight:800;">'
-                 +     _jiqNflxAbbrevHH(pb.projected_us_hh) + ' U.S. HHs</span>'
-                 + '</span>';
+            return '';
         }
         function _jiqNflxCohortMeta(label, cohortCount) {
             // Build a meta-line HTML string that anchors a per-pull
@@ -60406,10 +60388,8 @@
                 var pctTxt = pctOfBase >= 10 ? pctOfBase.toFixed(1)
                            : pctOfBase >= 1  ? pctOfBase.toFixed(2)
                                              : pctOfBase.toFixed(3);
-                var nPanel = Math.round(cohortCount / (pb.projection_factor || 32.99));
                 ladder = ' <span style="opacity:0.75;">('
-                       + pctTxt + '% of ' + _jiqNflxAbbrevHH(pb.projected_us_hh) + ' base'
-                       + ' · n=' + _jiqFmt(nPanel) + ' panelist HHs)</span>';
+                       + pctTxt + '% of ' + _jiqNflxAbbrevHH(pb.projected_us_hh) + ' base)</span>';
             }
             return '<span style="display:inline-flex; align-items:center; flex-wrap:wrap; gap:0.55rem;">'
                  +   '<span>' + prefix + ': <strong>' + _jiqFmt(cohortCount || 0) + '</strong>' + ladder + '</span>'
@@ -60521,40 +60501,7 @@
             return (_JIQ_OBSESSION_DATA && _JIQ_OBSESSION_DATA.panel_basis) || null;
         }
         function _jiqObsPanelChip() {
-            var pb = _jiqObsPanelBasis();
-            if (!pb) return '';
-            // Surface the full ladder inline so the math is visible
-            // without hovering the tooltip:
-            //   PANEL n=87,420 → 2.39M HHs ← $71.7M ÷ $15 ÷ 2
-            // The leading "PANEL n=" half shows the observation;
-            // the trailing "← $X ÷ $Y ÷ Z" half shows the box-office
-            // derivation. Both halves resolve to the same projected
-            // ticket-buyer HH count in the middle.
-            var bo = '', divisor = '';
-            if (pb.box_office_usd && pb.avg_ticket_price_usd && pb.tickets_per_buyer) {
-                var boMil = pb.box_office_usd / 1e6;
-                var boTxt = '$' + (boMil >= 100 ? boMil.toFixed(0) : boMil.toFixed(1)) + 'M';
-                bo = '<span style="opacity:0.55;">\u2190</span>'
-                   + '<span style="color:var(--text-primary); font-weight:800;">'
-                   +   _jiqEsc(boTxt) + ' B.O.</span>'
-                   + '<span style="opacity:0.5;">\u00f7 $' + pb.avg_ticket_price_usd
-                   +   ' \u00f7 ' + pb.tickets_per_buyer + '</span>';
-            }
-            return '<span title="' + _jiqEsc(pb.methodology_note || '') + '"'
-                 +       ' style="display:inline-flex; align-items:center; gap:0.4rem;'
-                 +              ' padding:0.16rem 0.55rem; border-radius:999px;'
-                 +              ' background:rgba(168,85,247,0.10);'
-                 +              ' border:1px solid rgba(168,85,247,0.32);'
-                 +              ' font-size:0.64rem; font-weight:700;'
-                 +              ' color:#c4b5fd; white-space:nowrap;">'
-                 +   '<span style="opacity:0.7; letter-spacing:0.05em;">PANEL</span>'
-                 +   '<span style="color:var(--text-primary); font-weight:800;">'
-                 +     'n=' + _jiqFmt(pb.sample_panelists) + '</span>'
-                 +   '<span style="opacity:0.55;">\u2192</span>'
-                 +   '<span style="color:var(--text-primary); font-weight:800;">'
-                 +     _jiqObsAbbrevHH(pb.projected_us_hh) + ' U.S. ticket-buyer HHs</span>'
-                 +   bo
-                 + '</span>';
+            return '';
         }
         function _jiqObsCohortMeta(label, cohortCount) {
             var pb = _jiqObsPanelBasis();
@@ -60565,10 +60512,8 @@
                 var pctTxt = pctOfBase >= 10 ? pctOfBase.toFixed(1)
                            : pctOfBase >= 1  ? pctOfBase.toFixed(2)
                                              : pctOfBase.toFixed(3);
-                var nPanel = Math.round(cohortCount / (pb.projection_factor || 27.34));
                 ladder = ' <span style="opacity:0.75;">('
-                       + pctTxt + '% of ' + _jiqObsAbbrevHH(pb.projected_us_hh) + ' base'
-                       + ' · n=' + _jiqFmt(nPanel) + ' panelist HHs)</span>';
+                       + pctTxt + '% of ' + _jiqObsAbbrevHH(pb.projected_us_hh) + ' base)</span>';
             }
             return '<span style="display:inline-flex; align-items:center; flex-wrap:wrap; gap:0.55rem;">'
                  +   '<span>' + prefix + ': <strong>' + _jiqFmt(cohortCount || 0) + '</strong>' + ladder + '</span>'
@@ -61817,8 +61762,7 @@
                 var _projHH = _pb.projected_us_hh || (data.study_cohort_size || 0);
                 var _addrPctOfBase = (_projHH > 0) ? (totalAddr * 1000000 / _projHH * 100) : 0;
                 topEl.innerHTML = ''
-                    + _jiqTile('Panel sample',       'n=' + _jiqFmt(_pb.sample_panelists || 0), 'Netflix-active panelist HHs', '#fca5a5')
-                    + _jiqTile('Active households',  _jiqFmt(_projHH), 'U.S. Netflix base (' + (_pb.projection_factor || 32.99).toFixed(2) + 'x panel projection)', '#5b6cff')
+                    + _jiqTile('Active households',  _jiqFmt(_projHH), 'U.S. Netflix base', '#5b6cff')
                     + _jiqTile('Total addressable',  totalAddr.toFixed(1) + 'M', _addrPctOfBase.toFixed(0) + '% of base (overlap allowed, 15 packs)', '#5b6cff')
                     + _jiqTile('Largest pack',       _jiqEsc((top3[0] || {}).label || '-'), ((top3[0] || {}).pct_in_market || 0).toFixed(1) + '% of 79.4M base', '#22c55e')
                     + _jiqTile('Top high-CPM pack',  'Luxury fashion', '+28-42% CPM uplift', '#c026d3')
@@ -66203,7 +66147,7 @@
             var podsEl    = document.getElementById('jiqBsPodcasts');
             var implEl    = document.getElementById('jiqBsImplication');
 
-            if (titleEl) titleEl.textContent = '🌐 ' + (s.title || "Beyond the Sheridan Universe and Nielsen's 50K Homes (From a 10M Genpop Sample)");
+            if (titleEl) titleEl.textContent = '🌐 ' + (s.title || "Beyond the Sheridan Universe");
             if (subEl)   subEl.textContent = s.subtitle || '';
             if (metaEl)  metaEl.textContent = ((s.off_paramount_shows || []).length) + ' non-Paramount shows tracked · '
                                             + ((s.competitor_platforms || []).length) + ' competitor platforms';
