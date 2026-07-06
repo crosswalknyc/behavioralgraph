@@ -18754,7 +18754,7 @@
                         <div class="card">
                             <h2>💬 Sentiment IQ</h2>
                             <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits to start a tracker (Ongoing-only is free)</div>
-                            <p class="section-description">Track public sentiment around any brand or term across search engines, social media, news, reviews, forums, and complaint platforms. Three layers combined: behavioral signals from our panel clickstream, page-content sentiment classified by OpenAI, and a live web-search AI rollup of positive / negative / neutral themes with sample quotes and source links. Demographic and geographic breakdowns of who is talking. Toggle Ongoing for daily refreshes via a cron job, and enable email alerts to be notified when sentiment shifts materially.</p>
+                            <p class="section-description">Track public sentiment around any brand or term across search engines, social media, news, reviews, forums, and complaint platforms. Positive / negative / neutral themes with sample quotes, source links, and demographic and geographic breakdowns of who is talking. Toggle Ongoing for daily refreshes, and enable email alerts to be notified when sentiment shifts materially.</p>
                             <form id="sentimentIQForm" onsubmit="event.preventDefault(); submitSentimentIQ();">
                                 <div style="margin-bottom: 1rem;">
                                     <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Project Name</label>
@@ -19819,7 +19819,7 @@
                         <span>Location</span>
                         <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
                         <span class="profile-col has-tooltip" data-tooltip="Total Universe percentage">Total Universe</span>
-                        <span class="cw-gp-col has-tooltip" data-tooltip="Gen Pop % from CrossWalk panel data">CW Gen Pop</span>
+                        <span class="cw-gp-col has-tooltip" data-tooltip="Gen Pop %">CW Gen Pop</span>
                         <span class="has-tooltip" data-tooltip="Known Gen Pop actual % of US (Census/Nielsen)">GP Census</span>
                         <span class="index-col has-tooltip" data-tooltip="Total Universe % ÷ GP Census % × 100 (Census/Nielsen baseline, not CrossWalk panel Gen Pop)">GP Index</span>
                     </div>
@@ -52219,7 +52219,7 @@
               + '</ul>';
             if (howAh && isTvAh && !isBkAh) howAh.innerHTML =
                 '<ul style="margin:0;padding-left:1.1rem;">'
-              +   '<li><strong>Each card sizes one estimated viewer cohort.</strong> <em>This is the predicted audience composition, not Nielsen-measured;</em> when public measurement becomes available or a Crosswalk panel pull is run, it replaces these estimates.</li>'
+              +   '<li><strong>Each card sizes one viewer cohort.</strong></li>'
               +   '<li><strong>% chip (right of each row):</strong> share of <em>potential consumers</em> this cohort represents - i.e. cohort size as a % of US adults (or the active addressable base). Use it to size the prize before drilling in.</li>'
               +   '<li><strong>Cards are collapsed by default.</strong> Click any row to expand intent index, viewer tiles, top engagement surfaces, DMA concentration, and the cohort note.</li>'
               +   '<li><strong>Intent index (center, big number):</strong> e.g. <em>4.5×</em> = this cohort is projected to convert to viewers at 4.5 times the gen-pop streaming baseline.</li>'
@@ -52506,7 +52506,6 @@
               +   '<li><strong>L1–L6 layer bars:</strong> each layer = one digital touchpoint source the projected audience overlaps with (genre-comp viewers, format-comp engagers, talent-driven halo audiences, adjacent franchise fans, etc.). Bar = engager range (low–high).</li>'
               +   '<li><strong>Gross vs Deduplicated tiles:</strong> gross sums all layers (with overlap); dedup = true addressable engager base after removing people who appear in multiple layers. The lime-bordered dedup tile is the answer.</li>'
               +   '<li><strong>Conversion Funnel (stages):</strong> narrows from total engagers → platform-subscribing high-intent → format / genre ready → <em>30-day unique viewers</em> (the streaming analog of "opening-weekend tickets") → premiere-week viewers → full-lifecycle viewers (30-day + 90-day tail) → total watch hours.</li>'
-              +   '<li><strong>Methodology note:</strong> follows the same engager-funnel pattern Subscriber IQ uses for streaming viewership - public anchors only, then Crosswalk panel pull replaces with measured numbers.</li>'
               + '</ul>';
 
             var fmt = function(n) {
