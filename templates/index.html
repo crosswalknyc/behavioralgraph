@@ -17752,7 +17752,7 @@
                                     </div>
                                 </div>
                                 
-                                <p style="font-style: italic; color: var(--text-secondary); font-size: 0.85rem; margin: 1rem 0 0.75rem 0;">To qualify panelists must have purchased tickets from one of the following: FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS</p>
+                                <p style="font-style: italic; color: var(--text-secondary); font-size: 0.85rem; margin: 1rem 0 0.75rem 0;">To qualify, fans must have purchased tickets from one of the following: FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS</p>
                                 <div class="form-actions">
                                     <button type="submit" class="btn-primary btn-run-analysis">🚀 RUN ANALYSIS</button>
                                 </div>
@@ -19081,7 +19081,7 @@
                         <div class="card">
                             <h2>🔍 Incidence Check</h2>
                             <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">No credits required</div>
-                            <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Quickly check the sample size and incidence rate for any search terms before running a full profile analysis. This runs only the universe scan and sample size pipeline (with all boosts applied) so you can see how many panelists match your criteria.</p>
+                            <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Quickly check the sample size and incidence rate for any search terms before running a full profile analysis. See how many people match your criteria.</p>
                             <form id="incidenceCheckForm" onsubmit="return false;">
                                 <div class="form-section">
                                     <div class="form-section-title">Search Parameters</div>
@@ -29014,7 +29014,7 @@
                                 <div class="iqr-context-section-title">Top common-name buckets</div>
                                 <div style="overflow-x: auto;">
                                     <table class="iqr-context-table">
-                                        <thead><tr><th>Common name</th><th class="num">Hits</th><th class="num">Panelists</th></tr></thead>
+                                        <thead><tr><th>Common name</th><th class="num">Hits</th><th class="num">People</th></tr></thead>
                                         <tbody id="iqRankerContextCommonBody"></tbody>
                                     </table>
                                 </div>
@@ -29022,7 +29022,7 @@
                                 <div class="iqr-context-section-title">Top domains</div>
                                 <div style="overflow-x: auto;">
                                     <table class="iqr-context-table">
-                                        <thead><tr><th>Domain</th><th class="num">Hits</th><th class="num">Panelists</th></tr></thead>
+                                        <thead><tr><th>Domain</th><th class="num">Hits</th><th class="num">People</th></tr></thead>
                                         <tbody id="iqRankerContextDomainBody"></tbody>
                                     </table>
                                 </div>
@@ -29030,7 +29030,7 @@
                                 <div class="iqr-context-section-title">Highest-traffic URL paths</div>
                                 <div style="overflow-x: auto;">
                                     <table class="iqr-context-table">
-                                        <thead><tr><th>Domain · Path</th><th class="num">Hits</th><th class="num">Panelists</th></tr></thead>
+                                        <thead><tr><th>Domain · Path</th><th class="num">Hits</th><th class="num">People</th></tr></thead>
                                         <tbody id="iqRankerContextPathBody"></tbody>
                                     </table>
                                 </div>
@@ -29057,7 +29057,7 @@
                 <div class="persistent-sidebar">
                     <div class="sidebar-header-section">
                         <h3>🎬 Impact IQ</h3>
-                        <p style="font-style: italic; font-size: 0.8rem; color: var(--text-secondary); margin: 0.5rem 0 0.75rem 0; line-height: 1.4;">What percent of digital ticket sales came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of panelists who engaged with the specified talent prior to purchasing tickets during your specified window.</p>
+                        <p style="font-style: italic; font-size: 0.8rem; color: var(--text-secondary); margin: 0.5rem 0 0.75rem 0; line-height: 1.4;">What percent of digital ticket sales came from specific talent. This tool takes all confirmed ticket purchases for an event and calculates the percent of fans who engaged with the specified talent prior to purchasing tickets during your specified window.</p>
                         <input type="text" id="ticketSalesSearchInput" class="sidebar-search" placeholder="🔍 Search..." onkeyup="filterTicketSalesProfiles()">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
                             <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
@@ -34072,7 +34072,7 @@
                                     </div>
                                 </div>
                                 
-                                <p style="font-style: italic; color: var(--text-secondary); font-size: 0.85rem; margin: 1rem 0 0.75rem 0;">To qualify panelists must have purchased tickets from one of the following: FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS</p>
+                                <p style="font-style: italic; color: var(--text-secondary); font-size: 0.85rem; margin: 1rem 0 0.75rem 0;">To qualify, fans must have purchased tickets from one of the following: FANDANGO, AMC THEATRES, ALAMO DRAFTHOUSE, CINEMARK THEATRES, REGAL CINEMAS</p>
                                 <div class="form-actions">
                                     <button type="submit" class="btn-primary btn-run-analysis">🚀 RUN ANALYSIS</button>
                                 </div>
@@ -36041,18 +36041,18 @@
                     var showName = parts[0].trim();
                     var platform = effPlatform || (parts.slice(1).join(' - ').trim());
                     if (platform) {
-                        tooltip = 'This profile is of all panelists who are active viewers of ' + showName + ' on ' + platform + '.';
+                        tooltip = 'This profile is of everyone who is an active viewer of ' + showName + ' on ' + platform + '.';
                     } else {
-                        tooltip = 'This profile is of all panelists who are active viewers of ' + showName + '.';
+                        tooltip = 'This profile is of everyone who is an active viewer of ' + showName + '.';
                     }
                 } else if (isGamePlayersProfileCategory(category)) {
                     var gameName = profileMeta.name || profileName;
                     if (gameName && gameName.indexOf(' - ') !== -1) {
                         gameName = gameName.split(' - ')[0].trim();
                     }
-                    tooltip = 'This profile is of all panelists who are players of ' + gameName + '.';
+                    tooltip = 'This profile is of everyone who is an active player of ' + gameName + '.';
                 } else if (category === 'SOCIAL MEDIA' || category === 'STREAMING/PLATFORM' || category === 'STREAMING/MUSIC' || category === 'VIRTUAL MVPD FAST') {
-                    tooltip = 'This profile is of all panelists who are actively engaged with ' + profileName + '. Panelists have visited the platform within the date range below.';
+                    tooltip = 'This profile is of everyone actively engaged with ' + profileName + ', within the date range below.';
                 } else {
                     // Default tooltip for non-SERIES profiles
                     tooltip = 'This profile captures everyone actively engaged with ' + profileName + ' - fans who do not just know of ' + profileName + ' but go out of their way to engage with them across social media, retail, owned and operated web sites, media (read/watch/listen), or search. Digital behavior only.';
