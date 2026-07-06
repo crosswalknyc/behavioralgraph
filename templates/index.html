@@ -37835,7 +37835,6 @@
                 var proj = Math.round(panelists * factor);
                 var tip = _bqEscape(r.name) + '\n'
                         + 'Share of cohort: ' + _bqPct(share) + '\n'
-                        + 'Panelists: ' + _bqNum(panelists) + '\n'
                         + '\u2248 ' + _bqNum(proj) + ' US adults';
                 if (!isNational && natShare > 0) {
                     tip += '\nNational avg: ' + _bqPct(natShare);
@@ -38418,18 +38417,14 @@
             window.__blueIQ.lastData = data;
 
             var label = (f.party || 'All') + ' \u2192 ' + (f.geo_type === 'National' ? 'National' : (f.geo_value || ''));
-            var panelTxt = '';
-            if (data.panel_size != null) {
-                panelTxt = ' \u00b7 ' + _bqNum(data.panel_size) + ' panelists';
-            }
-            meta.textContent = label + panelTxt + ' \u00b7 last ' + (f.lookback_days || 30) + 'd' + (data.cache_hit ? ' \u00b7 cached' : '');
+            meta.textContent = label + ' \u00b7 last ' + (f.lookback_days || 30) + 'd' + (data.cache_hit ? ' \u00b7 cached' : '');
             if (updated && data.generated_at) {
                 var dt = new Date(data.generated_at);
                 updated.textContent = 'Updated ' + dt.toLocaleString();
             }
             if (data.suppressed) {
                 supEl.style.display = 'block';
-                supEl.textContent = data.message || ('Sample below minimum cell size of ' + (data.min_cell_size || 100) + ' panelists. External signals shown where available.');
+                supEl.textContent = data.message || 'Sample below minimum cell size. External signals shown where available.';
             } else {
                 supEl.style.display = 'none';
             }
@@ -75774,7 +75769,7 @@
             const dateRange = meta.date_range || '';
             const movieEl = document.getElementById('tstMovieNameHeader');
             movieEl.textContent = movieName;
-            const movieTooltip = 'Panelists who have confirmed digital ticket purchases to ' + movieName + ' from Fandango, AMC Theaters, Cinemark Theaters, Regal Cinemas or Alamo Drafthouse during ' + dateRange + '.';
+            const movieTooltip = 'People who have confirmed digital ticket purchases to ' + movieName + ' from Fandango, AMC Theaters, Cinemark Theaters, Regal Cinemas or Alamo Drafthouse during ' + dateRange + '.';
             movieEl.setAttribute('data-tooltip', movieTooltip);
             const dateEl = document.getElementById('tstDateRangeHeader');
             dateEl.textContent = dateRange;
@@ -86237,7 +86232,7 @@
                 if (listOpts && listOpts.showHeader) {
                     const hdr = document.createElement('div');
                     hdr.className = 'cmp-stat-list-header';
-                    hdr.textContent = (which === 'sample') ? '📊 Crosswalk Panelists' : '🇺🇸 US';
+                    hdr.textContent = (which === 'sample') ? '📊 Sample' : '🇺🇸 US';
                     hdr.style.cssText = 'font-size:0.78rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--text-secondary, #9ca3af);margin-bottom:0.35rem;line-height:1.2;';
                     wrap.appendChild(hdr);
                 }
@@ -92983,8 +92978,8 @@
                 'GAMES': 'Digital games panelists digitally engaged with.',
                 'GAMING': 'Digital games panelists digitally engaged with.',
                 'MEDIA': 'Digital media publications panelists digitally engaged with.',
-                'INTEREST': 'Panelists overall digital interests as compiled from their entire digital ecosystem usage.',
-                'INTERESTS': 'Panelists overall digital interests as compiled from their entire digital ecosystem usage.',
+                'INTEREST': 'Overall digital interests, compiled from the fan\'s entire digital ecosystem usage.',
+                'INTERESTS': 'Overall digital interests, compiled from the fan\'s entire digital ecosystem usage.',
                 'ACTOR': 'Actors panelists digitally engaged with.',
                 'AFC': 'Teams panelists digitally engaged with.',
                 'SPORTS TEAM': 'Teams panelists digitally engaged with.',
@@ -124138,9 +124133,8 @@
                 </div>`;
             };
             wrap.innerHTML = [
-                mkStat('Engagements (last day, projected)', last.mentions, first.mentions, false),
+                mkStat('Engagements (last day)', last.mentions, first.mentions, false),
                 mkStat('CW IQ',         last.cw_iq_score,   first.cw_iq_score,   true),
-                mkStat('Panel size (last day)', last.panel_size, first.panel_size, false),
             ].join('');
         }
 
