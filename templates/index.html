@@ -49782,13 +49782,13 @@
                     if (titleEl) titleEl.innerHTML = '🎬 ' + _jiqEsc(_crNameOnly) + ' Audience - creator journey funnel';
                     if (bodyEl) bodyEl.innerHTML =
                         '<ul style="margin:0;padding-left:1.1rem;">'
-                      +   '<li><strong>Funnel reads left to right:</strong> <em>Unique watchers (window)</em> → <em>New subs (window)</em> → <em>Family co-watch</em> → <em>' + _jiqEsc(_crBrand || 'commerce') + ' conversions</em>. The full path from "stumbled on a video" to "paying subscriber."</li>'
-                      +   '<li><strong>Unique watchers (window)</strong> - US viewers who watched at least one video on the channel in the analysis window. The total addressable audience for any brand wanting to reach this creator\'s viewers.</li>'
+                      +   '<li><strong>Funnel reads left to right:</strong> <em>Unique watchers</em> → <em>New subs</em> → <em>Family co-watch</em> → <em>' + _jiqEsc(_crBrand || 'commerce') + ' conversions</em>. The full path from "stumbled on a video" to "paying subscriber."</li>'
+                      +   '<li><strong>Unique watchers</strong> - US viewers who watched at least one video on the channel. The total addressable audience for any brand wanting to reach this creator\'s viewers.</li>'
                       +   '<li><strong>Monthly watchers</strong> - avg unique US viewers per month. The "always-on" reach a brand can plan against.</li>'
                       +   '<li><strong>Subscribers</strong> - channel subscribers in the US. The owned-loop audience the creator can re-engage on every drop.</li>'
-                      +   '<li><strong>New subs (window)</strong> - viewers who subscribed during the window. The clearest signal of net-new audience growth.</li>'
+                      +   '<li><strong>New subs</strong> - viewers who subscribed during this window. The clearest signal of net-new audience growth.</li>'
                       +   '<li><strong>Family co-watch watchers</strong> - viewers who watched on a TV / shared session (the highest-LTV slice for STEM-commerce). The household-decision audience.</li>'
-                      +   '<li><strong>' + _jiqEsc(_crBrand || 'Commerce') + ' subs attributed</strong> - post-watch commerce conversions in the 7-day window. The hardest-dollar conversion in the funnel.</li>'
+                      +   '<li><strong>' + _jiqEsc(_crBrand || 'Commerce') + ' subs attributed</strong> - post-watch commerce conversions within 7 days. The hardest-dollar conversion in the funnel.</li>'
                       +   '<li><strong>Marketing-exposed %</strong> - share of watchers reached via any paid or organic discovery surface (algorithm, share, search, push, clips).</li>'
                       +   '<li><strong>What to look for:</strong> if Family Co-Watch % is above 20% of total watchers, the audience is highly receptive to connected-TV + STEM-commerce media; that\'s where the highest-ROAS dollars go.</li>'
                       + '</ul>';
@@ -49800,10 +49800,10 @@
                     if (bodyEl) bodyEl.innerHTML =
                         '<ul style="margin:0;padding-left:1.1rem;">'
                       +   '<li><strong>Funnel reads left to right:</strong> <em>Active researchers</em> → <em>New-account opens</em> → <em>Digital vs traditional split</em> → <em>Cross-shoppers</em>. Three "fates" of a researcher: opened a digital bank, opened a traditional bank, opened both.</li>'
-                      +   '<li><strong>Active researchers</strong> - US adults who actively researched a bank product in the window (browsed comparison sites, ran a banking search, opened a bank PDP). The total in-market opportunity.</li>'
-                      +   '<li><strong>New-account opens</strong> - researchers who actually opened ≥1 new bank account in the window. The conversion rate (opens ÷ researchers) is the category\'s effective close rate.</li>'
+                      +   '<li><strong>Active researchers</strong> - US adults who actively researched a bank product (browsed comparison sites, ran a banking search, opened a bank PDP). The total in-market opportunity.</li>'
+                      +   '<li><strong>New-account opens</strong> - researchers who actually opened ≥1 new bank account. The conversion rate (opens ÷ researchers) is the category\'s effective close rate.</li>'
                       +   '<li><strong>Digital share / Traditional share</strong> - split of new-account opens between digital banks (Chime, SoFi, Cash App, Ally, etc.) and traditional banks (Chase, BofA, Wells, etc.). The steal-share KPI: digital share rising = incumbents bleeding.</li>'
-                      +   '<li><strong>Cross-shoppers</strong> - researchers who opened BOTH a digital AND a traditional account in window. The "soft-switching" segment - kept the legacy primary, added a digital secondary. Highest-LTV upside if you can make your account their primary.</li>'
+                      +   '<li><strong>Cross-shoppers</strong> - researchers who opened BOTH a digital AND a traditional account. The "soft-switching" segment - kept the legacy primary, added a digital secondary. Highest-LTV upside if you can make your account their primary.</li>'
                       +   '<li><strong>Avg banks cross-shopped</strong> - how many bank PDPs a typical researcher visits before applying. Direct indicator of how saturated your share-of-voice needs to be at the comparison-site + paid-search layer.</li>'
                       +   '<li><strong>Marketing-touched %</strong> - share of new-account openers exposed to ≥1 marketing channel pre-application. Higher = the category is being shaped by marketing more than organic discovery.</li>'
                       +   '<li><strong>What to look for:</strong> if digital-share is above category average within a cohort or DMA, that cohort/DMA is already marketing-receptive - concentrate spend there. If avg-banks-cross-shopped is rising, you must be on every comparison site that audience visits or you\'re invisible.</li>'
@@ -49847,7 +49847,7 @@
                         var _capturedNum = _jiqFmt(_capturedU);
                         var _neverNum = _jiqFmt(_neverU > 0 ? _neverU : 0);
                         k = [
-                            ['Unique Visitors (US, in window)', _jiqFmt(kpis.total_users)],
+                            ['Unique Visitors (US)', _jiqFmt(kpis.total_users)],
                             ['Transacted On Site', _jiqFmt(kpis.converted_users)],
                             ['On-Site CR', _jiqFmt(_convU) + '  |  ' + (kpis.conversion_pct != null ? kpis.conversion_pct + '%' : '-')],
                             ['Switched & Bought Elsewhere', _jiqFmt(_swU) + '  |  ' + _swPct + '%'],
@@ -49856,7 +49856,7 @@
                         ];
                     } else {
                         k = [
-                            ['Visitors (US, in window)', _jiqFmt(kpis.total_users)],
+                            ['Visitors (US)', _jiqFmt(kpis.total_users)],
                             ['Transacted On Site',       _jiqFmt(kpis.converted_users)],
                             ['On-Site CR',               (kpis.conversion_pct != null ? kpis.conversion_pct + '%' : '-')],
                             ['Switched & Bought', _jiqFmt(kpis.switched_users)],
@@ -49890,13 +49890,13 @@
                         return (prefix || '') + s + (suffix || '');
                     };
                     k = [
-                        ['Unique watchers (window)', _crFmt(watchers),
+                        ['Unique watchers', _crFmt(watchers),
                          (cr.avg_watch_minutes != null ? 'avg ' + cr.avg_watch_minutes + ' min/video · ' + (cr.avg_videos_in_window || '-') + ' videos / viewer' : '')],
                         ['Monthly avg watchers', _crFmt(monthlyW),
-                         _crSub(watchers ? (monthlyW / watchers * 100) : null, 1, '', ' of in-window reach')],
+                         _crSub(watchers ? (monthlyW / watchers * 100) : null, 1, '', ' of reach')],
                         ['Subscribers (US)', _crFmt(subs),
                          _crSub(watchers ? (subs / watchers * 100) : null, 1, '', ' of watchers')],
-                        ['New subs (window)', _crFmt(newSubs),
+                        ['New subs', _crFmt(newSubs),
                          _crSub(subRate, 2, 'sub rate ', '')],
                         ['Family co-watch watchers', _crFmt(familyCowatch),
                          _crSub(familyPct, 1, '', ' of watchers · highest-LTV slice')],
@@ -49994,7 +49994,7 @@
                             : (_bs + ' exposed');
                     }
                     k = [
-                        ['Active researchers (window)',
+                        ['Active researchers',
                             fmt(researchers),
                             'US adults who researched a bank product · ' + (avgDays ? avgDays + 'd avg journey' : '')],
                         ['New-account opens',
@@ -52327,7 +52327,7 @@
                          +     '<div style="font-size:1.25rem;font-weight:800;color:var(--accent-lime);line-height:1;">' + _jiqFmt(h.est_opening_buyers || 0) + '</div>'
                          +     '<div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;">'
                          +       (isBkAh
-                                  ? (_jiqEsc(h.tile_a_label || 'digital opens (window)'))
+                                  ? (_jiqEsc(h.tile_a_label || 'digital opens'))
                                   : (isTvAh ? 'opening week' : 'opening weekend')) + '</div>'
                          +   '</div>'
                          +   '<div style="text-align:center;">'
@@ -56667,9 +56667,9 @@
             if (summEl) {
                 var arpu    = totals.avg_arpu_monthly_usd;
                 var tiles = [
-                    ['Active subs',         _jiqFmt(totals.subscribers_active_window),                 '365-day window'],
-                    ['New signups',         _jiqFmt(totals.new_signups),                               'in window'],
-                    ['Churned',             _jiqFmt(totals.churned),                                   'in window'],
+                    ['Active subs',         _jiqFmt(totals.subscribers_active_window),                 ''],
+                    ['New signups',         _jiqFmt(totals.new_signups),                               ''],
+                    ['Churned',             _jiqFmt(totals.churned),                                   ''],
                     ['Annualized churn',    (totals.churn_rate_annualized_pct != null ? totals.churn_rate_annualized_pct.toFixed(1) + '%' : '-'),  'rolling'],
                     ['Avg tenure @ churn',  (totals.avg_tenure_at_churn_months   != null ? totals.avg_tenure_at_churn_months.toFixed(1) + ' mo' : '-'),  ''],
                     ['Avg ARPU',            (arpu != null ? ('$' + arpu.toFixed(2)) : '-'),            '/ month'],
