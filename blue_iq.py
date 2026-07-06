@@ -412,13 +412,22 @@ def blue_iq_cache_key(filters: dict) -> str:
             _blend_articles_cube applies _strip_stale_years as a
             belt-and-suspenders backend scrub. v16 payloads carry
             cached titles with year tokens; bump forces regen.
+     v18 — 2026-07-06: 'Political issue searches' card now folds
+            issue_buckets_global (the cube's pre-classified panel
+            buckets) into the response as a FLOOR, so the card always
+            shows a full spread of policy issues even when the daily
+            Trends RSS only surfaces 2-3 political items that collapse
+            into a few unique buckets. Trends signal still drives
+            ordering (70% weight in rerank); panel-only buckets sit
+            below Trends-lit ones. Fixes the "only 3 buckets showing
+            at National" regression from v16.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   17,
+        'version':   18,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -2217,7 +2226,7 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     if panel_top_queries:
         panel_bucketed = _bucket_search_terms_via_global_map(
             panel_top_queries, issue_buckets_global, strict=True)
-        panel_map = {pb['bucket']: pb for pb in panel_bucketed}
+        panel_map = {pb['bucket']: pb for pb in panel_bucketed} if panel_bucketed else {}
         for b in issue_buckets:
             pb = panel_map.get(b.get('bucket'))
             if not pb:
@@ -2241,7 +2250,7 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         # / GDELT didn't hit this window) at count=0 so they still show
         # as first-party evidence.
         by_name = {b['bucket']: b for b in issue_buckets}
-        for pb in panel_bucketed:
+        for pb in (panel_bucketed or []):
             if pb['bucket'] in by_name:
                 continue
             issue_buckets.append({
@@ -2255,6 +2264,39 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
                 'news_count':     0,
                 'news_headlines': [],
                 'panel_count':    int(pb.get('count') or 0),
+                'external_only':  True,
+            })
+
+    # Step 3b: ALWAYS fold in the cube-computed `issue_buckets_global`
+    # as a FLOOR so the card shows a full spread of policy issues even
+    # when the Trends daily-RSS only surfaces 3-5 political items that
+    # collapse into 2-3 unique buckets. issue_buckets_global is the
+    # nightly OpenAI-classified panel result; each row already carries
+    # a sample_queries exemplar list. We dedupe by bucket name and only
+    # ADD new rows — buckets that already have Trends/panel signal keep
+    # their scores; buckets with no signal get added with panel_count=0
+    # and external_only=True, so they sit at the bottom of the rerank
+    # but are still visible to the user. This is the fix for the
+    # 2026-07-06 "only 3 buckets showing" regression.
+    if issue_buckets_global:
+        by_name = {b['bucket']: b for b in issue_buckets}
+        for gb in issue_buckets_global:
+            name = gb.get('bucket')
+            if not name or name in by_name:
+                continue
+            panel_ct = int(gb.get('count') or 0)
+            samples  = list((gb.get('sample_queries') or [])[:8])
+            issue_buckets.append({
+                'bucket':         name,
+                'count':          0,   # Trends-primary: no Trends signal here
+                'share':          0.0,
+                'sample_queries': samples,
+                'trend':          0.0,
+                'trend_score':    0,
+                'trend_queries':  [],
+                'news_count':     0,
+                'news_headlines': [],
+                'panel_count':    panel_ct,
                 'external_only':  True,
             })
 
