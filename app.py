@@ -34,6 +34,18 @@ except Exception as _trends_iq_err:
     _trends_iq = None
     print(f"⚠️ Trends IQ module unavailable at import time: {_trends_iq_err}")
 
+try:
+    import trends_history as _trends_history  # type: ignore
+except Exception as _trends_history_err:
+    _trends_history = None
+    print(f"⚠️ Trends history module unavailable: {_trends_history_err}")
+
+try:
+    import trends_watchlist as _trends_watchlist  # type: ignore
+except Exception as _trends_watchlist_err:
+    _trends_watchlist = None
+    print(f"⚠️ Trends watchlist module unavailable: {_trends_watchlist_err}")
+
 import uuid
 import json
 import csv
@@ -14534,6 +14546,138 @@ def api_trends_iq_data():
         force = bool(req.get('force_refresh'))
         payload = _trends_iq.compute_view(filters, force_refresh=force)
         return jsonify(payload)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/trends-iq/history', methods=['GET'])
+@requires_auth
+def api_trends_iq_history():
+    """Return a per-item historical arc reconstructed from dated snapshots.
+
+    Query params:
+      kind    - search|social|retailer|headline|article|person (soft hint)
+      source  - google|x|tiktok|youtube|instagram|target|walmart|...
+      key     - the item identifier (search term, product name, hashtag)
+      geo     - National|US or State:X|DMA:Y (default National)
+      days    - lookback (default 14, max 60)
+      force   - '1' to bypass the 6h cache
+    """
+    ok, err = _require_trends_iq()
+    if not ok:
+        return err
+    if _trends_history is None:
+        return jsonify({'success': False, 'error': 'History module not loaded'}), 500
+    try:
+        kind   = (request.args.get('kind')   or '').strip().lower()
+        source = (request.args.get('source') or '').strip().lower()
+        key    = (request.args.get('key')    or '').strip()
+        geo    = (request.args.get('geo')    or 'National').strip()
+        days   = int(request.args.get('days') or 14)
+        force  = request.args.get('force') in ('1', 'true', 'yes')
+        if not key:
+            return jsonify({'success': False, 'error': 'key is required'}), 400
+        arc = _trends_history.history_for_item(
+            kind, source, key, geo=geo, days=days, force_refresh=force,
+        )
+        return jsonify({'success': True, 'arc': arc})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# TRENDS IQ - Watchlist / Alerts / Digest
+# ============================================================================
+# Per-user watchlists live at s3://dashboard-inputs/trends_iq_watchlists/
+# {user_slug}.json. Entries reference an arc via (kind, source, key).
+# Adding/removing is idempotent; the daily digest job walks each user's
+# watchlist, diffs yesterday's arc against today's, and emails them.
+def _watchlist_user_key(user: dict) -> str:
+    email = (user.get('email') or user.get('id') or user.get('name') or '').strip().lower()
+    return re.sub(r'[^a-z0-9]+', '_', email).strip('_') or 'anonymous'
+
+
+@app.route('/api/trends-iq/watchlist', methods=['GET'])
+@requires_auth
+def api_trends_iq_watchlist_get():
+    """Return the current user's watchlist with today's arc for each entry."""
+    ok, err = _require_trends_iq()
+    if not ok:
+        return err
+    if _trends_watchlist is None:
+        return jsonify({'success': False, 'error': 'Watchlist module not loaded'}), 500
+    user = get_current_user()
+    slug = _watchlist_user_key(user)
+    try:
+        entries = _trends_watchlist.load_watchlist(slug)
+        enriched = []
+        if _trends_history is not None:
+            for e in entries:
+                arc = _trends_history.history_for_item(
+                    e.get('kind') or '',
+                    e.get('source') or '',
+                    e.get('key') or '',
+                    geo=e.get('geo') or 'National',
+                    days=14,
+                )
+                enriched.append({**e, 'arc': arc})
+        else:
+            enriched = entries
+        return jsonify({'success': True, 'entries': enriched})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/trends-iq/watchlist/add', methods=['POST'])
+@requires_auth
+def api_trends_iq_watchlist_add():
+    ok, err = _require_trends_iq()
+    if not ok:
+        return err
+    if _trends_watchlist is None:
+        return jsonify({'success': False, 'error': 'Watchlist module not loaded'}), 500
+    user = get_current_user()
+    slug = _watchlist_user_key(user)
+    try:
+        req = request.get_json(silent=True) or {}
+        entry = {
+            'kind':   (req.get('kind')   or '').strip().lower(),
+            'source': (req.get('source') or '').strip().lower(),
+            'key':    (req.get('key')    or '').strip(),
+            'geo':    (req.get('geo')    or 'National').strip(),
+            'label':  (req.get('label')  or req.get('key') or '').strip(),
+        }
+        if not entry['key']:
+            return jsonify({'success': False, 'error': 'key is required'}), 400
+        entries = _trends_watchlist.add_entry(slug, entry)
+        return jsonify({'success': True, 'entries': entries})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/trends-iq/watchlist/remove', methods=['POST'])
+@requires_auth
+def api_trends_iq_watchlist_remove():
+    ok, err = _require_trends_iq()
+    if not ok:
+        return err
+    if _trends_watchlist is None:
+        return jsonify({'success': False, 'error': 'Watchlist module not loaded'}), 500
+    user = get_current_user()
+    slug = _watchlist_user_key(user)
+    try:
+        req = request.get_json(silent=True) or {}
+        entries = _trends_watchlist.remove_entry(
+            slug,
+            kind=(req.get('kind') or '').strip().lower(),
+            source=(req.get('source') or '').strip().lower(),
+            key=(req.get('key') or '').strip(),
+        )
+        return jsonify({'success': True, 'entries': entries})
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
