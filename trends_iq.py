@@ -1,7 +1,8 @@
 """
-trends_iq.py - Culture Trends tracker module.
+trends_iq.py - Trends dashboard module.
 
-Sits alongside Culture Ranker in the SELECT PRODUCT dropdown. Answers:
+Grouped with Talent Ranker under the "Trends" section of the SELECT
+PRODUCT dropdown. Answers:
 "what is trending in the US (or in this state / DMA) right now?" across
 six surfaces:
 
