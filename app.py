@@ -14393,7 +14393,7 @@ def api_blue_iq_data():
 
 
 # ============================================================================
-# TRENDS IQ — Culture Trends tracker (sits under Culture Ranker)
+# TRENDS IQ - Trends dashboard (grouped with Talent Ranker under Trends)
 # ============================================================================
 # Aggregates trending searches, headlines, articles by news source, trending
 # people, viral social posts (Reddit/YouTube today; TikTok/X/IG placeholder),
