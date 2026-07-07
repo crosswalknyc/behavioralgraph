@@ -22184,6 +22184,12 @@
             #trendsIQView .tiq-badge { display: inline-flex; align-items: center; padding: 0.1rem 0.45rem; background: rgba(124, 58, 237, 0.18); color: #c4b5fd; border-radius: 10px; font-size: 0.7rem; font-weight: 500; }
             #trendsIQView .tiq-badge.hot { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
             #trendsIQView .tiq-badge.rising { background: rgba(34, 197, 94, 0.18); color: #86efac; }
+            #trendsIQView .tiq-mover-badge { display: inline-flex; align-items: center; gap: 2px; padding: 0.1rem 0.5rem; border-radius: 10px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; }
+            #trendsIQView .tiq-mover-badge.new     { background: rgba(59, 130, 246, 0.22); color: #93c5fd; }
+            #trendsIQView .tiq-mover-badge.up      { background: rgba(34, 197, 94, 0.22);  color: #86efac; }
+            #trendsIQView .tiq-mover-badge.down    { background: rgba(239, 68, 68, 0.22);  color: #fca5a5; }
+            #trendsIQView .tiq-mover-badge.flat    { background: rgba(148, 163, 184, 0.2); color: #cbd5f5; }
+            #trendsIQView .tiq-mover-badge.dropped { background: rgba(239, 68, 68, 0.18);  color: #fca5a5; }
             #trendsIQView .tiq-headline-list { display: flex; flex-direction: column; }
             #trendsIQView .tiq-headline-image { flex: 0 0 64px; width: 64px; height: 48px; background-size: cover; background-position: center; border-radius: 4px; background-color: rgba(255,255,255,0.04); }
             #trendsIQView .tiq-source-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 0.35rem; margin-bottom: 0.35rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
@@ -39476,7 +39482,7 @@
         // /api/trends-iq/data which fans out to Google Trends, GDELT,
         // major news RSS feeds, Reddit, YouTube, and retailer bestseller
         // pages. Every tab renders its own card grid.
-        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'headlines', activeSocial: 'reddit', activeRetailer: 'amazon', inFlight: null };
+        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'movers', activeSocial: 'reddit', activeRetailer: 'amazon', inFlight: null };
 
         function _trendsIQHideAllOtherViews() {
             var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
@@ -39613,6 +39619,7 @@
             }
 
             var tabs = [
+                { key: 'movers',    label: 'Movers',           count: counts.movers    || 0, icon: '🚀' },
                 { key: 'headlines', label: 'Headlines',        count: counts.headlines || 0, icon: '📰' },
                 { key: 'sources',   label: 'By news source',   count: counts.sources   || 0, icon: '🏛️' },
                 { key: 'searches',  label: 'Trending searches',count: counts.searches  || 0, icon: '🔎' },
@@ -39623,7 +39630,7 @@
             var strip = document.getElementById('trendsIQTabStrip');
             strip.style.display = 'flex';
             strip.innerHTML = tabs.map(function(t) {
-                var active = (t.key === (window.__trendsIQ.activeTab || 'headlines')) ? ' active' : '';
+                var active = (t.key === (window.__trendsIQ.activeTab || 'movers')) ? ' active' : '';
                 return '<div class="tiq-tab' + active + '" data-tiq-tab="' + t.key + '" onclick="setTrendsIQTab(\'' + t.key + '\')">' +
                        '<span>' + t.icon + '</span><span>' + t.label + '</span>' +
                        (t.count ? '<span class="tiq-tab-count">' + t.count + '</span>' : '') +
@@ -39632,6 +39639,7 @@
 
             var panels = document.getElementById('trendsIQPanels');
             panels.innerHTML =
+                _renderTIQPanel('movers',    renderTIQMovers(cards.movers || {available:false})) +
                 _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [])) +
                 _renderTIQPanel('sources',   renderTIQArticlesBySource(cards.articles_by_source || [])) +
                 _renderTIQPanel('searches',  renderTIQSearches(cards.trending_searches || [])) +
@@ -39639,7 +39647,7 @@
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || []));
 
-            setTrendsIQTab(window.__trendsIQ.activeTab || 'headlines');
+            setTrendsIQTab(window.__trendsIQ.activeTab || 'movers');
         }
 
         function _renderTIQPanel(key, inner) {
@@ -39655,6 +39663,92 @@
                 el.classList.toggle('active', el.getAttribute('data-tiq-panel') === key);
             });
         };
+
+        // ============================================================
+        // Movers panel: 4-bucket velocity view of trending searches.
+        // Shows Breakout / Rising / Falling / Sustained side-by-side.
+        // Rising / Sustained may be empty on any given day because
+        // Google Trends daily lists don't always overlap across a
+        // 4-8 day window; that's a data-property, not a bug.
+        // ============================================================
+        function _tiqMoverBadge(row) {
+            var rc = row.rank_change;
+            if (rc == null && row.rank_today && !row.rank_prev)  return '<span class="tiq-mover-badge new">NEW</span>';
+            if (rc == null && row.rank_prev  && !row.rank_today) return '<span class="tiq-mover-badge dropped">DROPPED OFF</span>';
+            if (rc == null) return '';
+            if (rc > 0)  return '<span class="tiq-mover-badge up">&#9650; ' + rc + '</span>';
+            if (rc < 0)  return '<span class="tiq-mover-badge down">&#9660; ' + Math.abs(rc) + '</span>';
+            return '<span class="tiq-mover-badge flat">FLAT</span>';
+        }
+
+        function _renderMoverRow(row) {
+            var rankNow  = row.rank_today ? ('#' + row.rank_today) : '';
+            var rankPrev = row.rank_prev  ? ('was #' + row.rank_prev) : '';
+            var ratio    = row.score_ratio ? (row.score_ratio + 'x score') : '';
+            var relatedHtml = (row.related || []).slice(0, 1).map(function(x){ return _tiqEsc(x); }).join('');
+            return '<div class="tiq-row">' +
+                   '<div class="tiq-rank">' + (rankNow || '&mdash;') + '</div>' +
+                   '<div class="tiq-row-body">' +
+                     '<div class="tiq-row-title">' + _tiqEsc(row.term || '') + '</div>' +
+                     '<div class="tiq-row-meta">' +
+                       _tiqMoverBadge(row) +
+                       (rankPrev ? '<span class="tiq-badge">' + rankPrev + '</span>' : '') +
+                       (ratio    ? '<span class="tiq-badge">' + ratio    + '</span>' : '') +
+                       (relatedHtml ? '<span style="opacity:0.75;">' + relatedHtml + '</span>' : '') +
+                     '</div>' +
+                   '</div>' +
+                   '</div>';
+        }
+
+        function _renderMoverBucket(title, subtitle, rows, emptyMsg) {
+            var body;
+            if (!rows || !rows.length) {
+                body = '<div class="tiq-card-sub" style="opacity:0.7;padding:24px 4px;">' + _tiqEsc(emptyMsg) + '</div>';
+            } else {
+                body = rows.map(_renderMoverRow).join('');
+            }
+            return '<div class="tiq-card"><h4>' + title + '</h4>' +
+                   '<div class="tiq-card-sub">' + _tiqEsc(subtitle) + '</div>' +
+                   body +
+                   '</div>';
+        }
+
+        function renderTIQMovers(movers) {
+            movers = movers || {};
+            if (!movers.available) {
+                var note = movers.note || 'Collecting daily snapshots. Movers view unlocks after a few days of history.';
+                return '<div class="tiq-empty">' +
+                       '<div style="font-size:16px;font-weight:600;margin-bottom:6px;">Movers is warming up</div>' +
+                       '<div>' + _tiqEsc(note) + '</div>' +
+                       '</div>';
+            }
+            var span = '';
+            if (movers.today_day && movers.baseline_day) {
+                span = 'Comparing ' + _tiqEsc(movers.today_day) + ' against ' + _tiqEsc(movers.baseline_day) + '.';
+            }
+            var header = '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
+                         'Directional velocity across trending searches. ' + span +
+                         '</div>';
+            var grid = '<div class="tiq-cards-grid">' +
+                _renderMoverBucket('🔥 Breakout',
+                                    'Brand new in the current window; wasn\'t trending last week.',
+                                    movers.breakout,
+                                    'No breakout searches in this window.') +
+                _renderMoverBucket('📈 Climbing',
+                                    'In the top-N both then and now, with rank up 3+ or score up 2x+.',
+                                    movers.rising,
+                                    'No climbers this window - Google Trends daily lists rarely overlap; try again in a few days.') +
+                _renderMoverBucket('📉 Cooling',
+                                    'Slipped in the rankings, or fell off the top list entirely.',
+                                    movers.falling,
+                                    'Nothing has cooled off in this window.') +
+                _renderMoverBucket('⭐ Sustained heat',
+                                    'Ranking similar in both windows: durable interest, not a one-day spike.',
+                                    movers.sustained,
+                                    'No sustained overlap in this window.') +
+                '</div>';
+            return header + grid;
+        }
 
         function renderTIQHeadlines(rows) {
             if (!rows.length) return '<div class="tiq-empty">No trending headlines available for this filter yet.</div>';

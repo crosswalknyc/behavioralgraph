@@ -1519,30 +1519,18 @@ def _undo_consulting_hour_entry(subject, entry_id):
     return False
 
 
-def _add_recurring_grant(subject, *, kind, amount, months, reason, added_by,
-                         direction='grant'):
-    """Schedule a recurring monthly grant (or charge) on a subject.
+def _add_recurring_grant(subject, *, kind, amount, months, reason, added_by):
+    """Schedule a recurring monthly grant on a subject.
 
     kind: 'credits' or 'hours' (minutes for hours grants)
     amount: int (>0). For hours grants this is minutes/month.
     months: int months to run (None = forever until cancelled)
-    direction: 'grant' (default; adds to balance/pool) or 'charge'
-        (subtracts from balance/pool). Only meaningful for kind='credits';
-        'charge' is not supported for consulting hours yet.
     Applies the first month's grant immediately so the balance jumps
     right away; the next tick fires ~30 days later.
     """
     kind = (kind or '').lower()
     if kind not in ('credits', 'hours'):
         raise ValueError("kind must be 'credits' or 'hours'")
-    direction = (direction or 'grant').lower()
-    if direction not in ('grant', 'charge'):
-        raise ValueError("direction must be 'grant' or 'charge'")
-    if direction == 'charge' and kind == 'hours':
-        # Consulting-hour deductions run through _log_consulting_hours
-        # with the "worked" descriptor — a scheduled charge doesn't map
-        # cleanly. Reject rather than silently misapply.
-        raise ValueError("recurring charges only support kind='credits'")
     amount = int(amount)
     if amount <= 0:
         raise ValueError('amount must be positive')
@@ -1555,13 +1543,12 @@ def _add_recurring_grant(subject, *, kind, amount, months, reason, added_by,
     grant = {
         'id': uuid.uuid4().hex[:12],
         'kind': kind,
-        'direction': direction,           # 'grant' | 'charge'
         'amount': amount,
         'months_remaining': months,       # None = forever
         'months_total': months,
         'created_at': now.isoformat(),
         'created_by': added_by or 'admin',
-        'reason': (reason or f'Recurring {kind} {direction}').strip(),
+        'reason': (reason or f'Recurring {kind} grant').strip(),
         # We record last_applied_at so the tick can decide whether a
         # new calendar month has elapsed. First application happens
         # inline below, so we set it to `now` and decrement one month.
@@ -1605,34 +1592,23 @@ def _apply_recurring_grants(data):
             return
         try:
             if grant['kind'] == 'credits':
-                direction = (grant.get('direction') or 'grant').lower()
-                sign = -1 if direction == 'charge' else 1
                 cur = subject.get('credits') if subject_kind_hint == 'user' else subject.get('credit_pool')
                 if cur is None:
                     cur = 0
                 if cur == -1:
-                    # Unlimited balance — grants no-op, charges also no-op
-                    # (you can't run out of unlimited). Still tick so months
-                    # count down and the schedule eventually retires.
-                    pass
+                    pass  # already unlimited — grant is a no-op but still ticks
                 else:
-                    delta = sign * int(grant['amount'])
-                    new_val = cur + delta
-                    # Charges never take the balance negative; clamp at 0
-                    # so a large charge on a small balance just zeroes out.
-                    if direction == 'charge' and new_val < 0:
-                        new_val = 0
+                    new_val = cur + int(grant['amount'])
                     if subject_kind_hint == 'user':
                         subject['credits'] = new_val
                     else:
                         subject['credit_pool'] = new_val
                 # attribution
                 hist = subject.setdefault('credit_attribution_history', [])
-                verb = '[Recurring charge]' if direction == 'charge' else '[Recurring]'
                 hist.insert(0, {
                     'added_at': now.isoformat(),
-                    'credits_added': sign * int(grant['amount']),
-                    'reason': f"{verb} {grant.get('reason','')}".strip(),
+                    'credits_added': int(grant['amount']),
+                    'reason': f"[Recurring] {grant.get('reason','')}".strip(),
                     'added_by': grant.get('created_by') or 'system',
                     'recurring_grant_id': grant.get('id'),
                 })
@@ -5156,20 +5132,15 @@ def api_time_tracking_delete_entry():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/admin/recurring-grants', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@app.route('/api/admin/recurring-grants', methods=['GET', 'POST', 'DELETE'])
 @requires_admin
 def api_recurring_grants():
     """Manage recurring monthly grants (credits or consulting hours).
 
     GET  → list every recurring grant across all users & companies.
-           Optional query filter: ?subject_type=user&subject_name=X to
-           return only that subject's grants (used by the user modal).
     POST body: {subject_type, subject_name, kind: 'credits'|'hours',
                 amount: int, months: int|null, reason: str,
-                direction: 'grant'|'charge' (credits only; default 'grant'),
                 apply_first_immediately: bool}
-    PUT body: {subject_type, subject_name, grant_id,
-               amount?: int, months_remaining?: int|null, reason?: str}
     DELETE body: {subject_type, subject_name, grant_id}
     """
     try:
@@ -5180,28 +5151,10 @@ def api_recurring_grants():
             grants = []
             for uname, u in (data.get('users') or {}).items():
                 for g in (u.get('recurring_grants') or []):
-                    # Ensure legacy grants without a direction field render
-                    # correctly as grants (they were pre-charge support).
-                    grants.append({
-                        **g,
-                        'direction': (g.get('direction') or 'grant'),
-                        'subject_type': 'user',
-                        'subject_name': uname,
-                    })
+                    grants.append({**g, 'subject_type': 'user', 'subject_name': uname})
             for cname, c in (data.get('companies') or {}).items():
                 for g in (c.get('recurring_grants') or []):
-                    grants.append({
-                        **g,
-                        'direction': (g.get('direction') or 'grant'),
-                        'subject_type': 'company',
-                        'subject_name': cname,
-                    })
-            # Optional subject filter (query string) — lets the user modal
-            # ask for just this user's active recurring rules.
-            f_st = (request.args.get('subject_type') or '').lower().strip()
-            f_sn = (request.args.get('subject_name') or '').strip()
-            if f_st and f_sn:
-                grants = [g for g in grants if g['subject_type'] == f_st and g['subject_name'] == f_sn]
+                    grants.append({**g, 'subject_type': 'company', 'subject_name': cname})
             grants.sort(key=lambda g: g.get('created_at', ''), reverse=True)
             return jsonify({'success': True, 'grants': grants})
 
@@ -5222,52 +5175,8 @@ def api_recurring_grants():
             save_users(data)
             return jsonify({'success': True})
 
-        if request.method == 'PUT':
-            # In-place edit of amount / months_remaining / reason. We keep
-            # last_applied_at, months_total, created_at, kind, and direction
-            # untouched so the tick schedule stays coherent. Change direction
-            # or kind by deleting + recreating.
-            grant_id = (req.get('grant_id') or '').strip()
-            if not grant_id:
-                return jsonify({'success': False, 'error': 'grant_id required'}), 400
-            grants = subject.get('recurring_grants') or []
-            target = None
-            for g in grants:
-                if g.get('id') == grant_id:
-                    target = g
-                    break
-            if target is None:
-                return jsonify({'success': False, 'error': 'grant_id not found'}), 404
-            if 'amount' in req:
-                try:
-                    new_amt = int(req.get('amount'))
-                except Exception:
-                    return jsonify({'success': False, 'error': 'amount must be an integer'}), 400
-                if new_amt <= 0:
-                    return jsonify({'success': False, 'error': 'amount must be positive'}), 400
-                target['amount'] = new_amt
-            if 'months_remaining' in req:
-                mr = req.get('months_remaining')
-                if mr in (None, '', 'null'):
-                    target['months_remaining'] = None
-                else:
-                    try:
-                        mr_int = int(mr)
-                    except Exception:
-                        return jsonify({'success': False, 'error': 'months_remaining must be an integer or null'}), 400
-                    if mr_int < 0:
-                        return jsonify({'success': False, 'error': 'months_remaining cannot be negative'}), 400
-                    target['months_remaining'] = mr_int
-            if 'reason' in req:
-                target['reason'] = (req.get('reason') or '').strip() or target.get('reason') or ''
-            target['updated_at'] = datetime.now().isoformat()
-            target['updated_by'] = (get_current_user() or {}).get('username') or 'admin'
-            save_users(data)
-            return jsonify({'success': True, 'grant': target})
-
         # POST — create
         kind = (req.get('kind') or '').lower()
-        direction = (req.get('direction') or 'grant').lower()
         if kind == 'hours':
             hours = int(req.get('hours') or 0)
             minutes = int(req.get('minutes') or 0)
@@ -5276,37 +5185,27 @@ def api_recurring_grants():
             amount = int(req.get('amount') or 0)
         months = req.get('months')
         months = int(months) if months not in (None, '', 0) else None
-        default_reason = f"Recurring {kind} {direction}"
-        reason = (req.get('reason') or '').strip() or default_reason
+        reason = (req.get('reason') or '').strip() or f"Recurring {kind} grant"
         added_by = (get_current_user() or {}).get('username') or 'admin'
         apply_now = bool(req.get('apply_first_immediately', True))
 
         grant = _add_recurring_grant(subject, kind=kind, amount=amount,
-                                     months=months, reason=reason, added_by=added_by,
-                                     direction=direction)
+                                     months=months, reason=reason, added_by=added_by)
         if apply_now:
             if kind == 'credits':
-                sign = -1 if direction == 'charge' else 1
                 if st == 'user':
                     cur = subject.get('credits') or 0
                     if cur != -1:
-                        new_val = cur + sign * amount
-                        if direction == 'charge' and new_val < 0:
-                            new_val = 0
-                        subject['credits'] = new_val
+                        subject['credits'] = cur + amount
                 else:
                     cur = subject.get('credit_pool') or 0
                     if cur != -1:
-                        new_val = cur + sign * amount
-                        if direction == 'charge' and new_val < 0:
-                            new_val = 0
-                        subject['credit_pool'] = new_val
+                        subject['credit_pool'] = cur + amount
                 hist = subject.setdefault('credit_attribution_history', [])
-                verb = '[Recurring charge]' if direction == 'charge' else '[Recurring]'
                 hist.insert(0, {
                     'added_at': datetime.now().isoformat(),
-                    'credits_added': sign * amount,
-                    'reason': f'{verb} {reason}',
+                    'credits_added': amount,
+                    'reason': f'[Recurring] {reason}',
                     'added_by': added_by,
                     'recurring_grant_id': grant['id'],
                 })
