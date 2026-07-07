@@ -22206,6 +22206,13 @@
             #trendsIQView .tiq-search-scroll::-webkit-scrollbar { width: 6px; }
             #trendsIQView .tiq-search-scroll::-webkit-scrollbar-track { background: transparent; }
             #trendsIQView .tiq-search-scroll::-webkit-scrollbar-thumb { background-color: rgba(124,58,237,0.4); border-radius: 3px; }
+            /* Mover bucket scroll: top ~10 rows visible, rest accessed
+               by scroll inside the card. Same visual treatment as the
+               Overall trending searches card. */
+            #trendsIQView .tiq-mover-scroll { max-height: 620px; overflow-y: auto; padding-right: 0.25rem; margin-right: -0.25rem; scrollbar-width: thin; scrollbar-color: rgba(124,58,237,0.4) transparent; }
+            #trendsIQView .tiq-mover-scroll::-webkit-scrollbar { width: 6px; }
+            #trendsIQView .tiq-mover-scroll::-webkit-scrollbar-track { background: transparent; }
+            #trendsIQView .tiq-mover-scroll::-webkit-scrollbar-thumb { background-color: rgba(124,58,237,0.4); border-radius: 3px; }
             #trendsIQView .tiq-person-card { background: rgba(124, 58, 237, 0.06); border: 1px solid rgba(124, 58, 237, 0.18); border-radius: 8px; padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 0.3rem; }
             #trendsIQView .tiq-person-name { font-weight: 600; font-size: 0.9rem; }
             #trendsIQView .tiq-person-mentions { font-size: 0.72rem; color: var(--text-secondary); }
@@ -39771,7 +39778,15 @@
             if (!rows || !rows.length) {
                 body = '<div class="tiq-card-sub" style="opacity:0.7;padding:24px 4px;">' + _tiqEsc(emptyMsg) + '</div>';
             } else {
-                body = rows.map(_renderMoverRow).join('');
+                var rowsHtml = rows.map(_renderMoverRow).join('');
+                // Fit the top ~10 rows in the card's visible area; the
+                // rest are accessible by scrolling inside the card. If
+                // there are 10 or fewer rows the scroll container just
+                // sits at content height with no scrollbar. Above 10,
+                // the max-height kicks in and the scrollbar appears.
+                body = (rows.length > 10)
+                    ? '<div class="tiq-mover-scroll">' + rowsHtml + '</div>'
+                    : rowsHtml;
             }
             return '<div class="tiq-card"><h4>' + title + '</h4>' +
                    '<div class="tiq-card-sub">' + _tiqEsc(subtitle) + '</div>' +
