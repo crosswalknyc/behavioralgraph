@@ -399,42 +399,187 @@ def _read_snapshot(source: str) -> Optional[dict]:
     return data
 
 
-def _snapshot_items_for_geo(snap: dict, state: Optional[str]) -> list[dict]:
+def _snapshot_items_for_geo(snap: dict, state: Optional[str],
+                              keywords: Optional[list[str]] = None) -> list[dict]:
     """Pick the right slice out of a snapshot: state-scoped when the
     user selected a state and the snapshot has per-state data, else
-    fall back to `national`."""
+    return `national` reordered so region-matching items rise to the
+    top (national items still stay in the list as filler)."""
     if not snap:
         return []
     if state:
         by_state = snap.get('by_state') or {}
         if isinstance(by_state, dict):
             if state in by_state and by_state[state]:
-                return by_state[state]
-    return list(snap.get('national') or [])
+                return list(by_state[state])
+    national = list(snap.get('national') or [])
+    if keywords:
+        return _reorder_by_region(national, keywords)
+    return national
+
+
+# ============================================================================
+# Geo keyword expansion — state + DMA -> list of case-insensitive match
+# strings used to reorder national feeds so region-relevant items float
+# to the top. Never drops content; only reorders.
+# ============================================================================
+_STATE_KEYWORDS: dict[str, list[str]] = {
+    'Alabama':        ['alabama', 'birmingham', 'huntsville', 'montgomery', 'mobile', 'tuscaloosa', 'auburn'],
+    'Alaska':         ['alaska', 'anchorage', 'fairbanks', 'juneau'],
+    'Arizona':        ['arizona', 'phoenix', 'tucson', 'mesa', 'scottsdale', 'tempe', 'flagstaff'],
+    'Arkansas':       ['arkansas', 'little rock', 'fayetteville', 'fort smith', 'jonesboro'],
+    'California':     ['california', 'los angeles', 'san francisco', 'san diego', 'sacramento',
+                       'oakland', 'san jose', 'silicon valley', 'hollywood', 'napa',
+                       'palm springs', 'bay area', 'socal', 'norcal', 'calif'],
+    'Colorado':       ['colorado', 'denver', 'boulder', 'colorado springs', 'aurora', 'fort collins'],
+    'Connecticut':    ['connecticut', 'hartford', 'new haven', 'stamford', 'bridgeport', 'greenwich'],
+    'Delaware':       ['delaware', 'wilmington', 'dover'],
+    'Florida':        ['florida', 'miami', 'orlando', 'tampa', 'jacksonville', 'tallahassee',
+                       'st petersburg', 'fort lauderdale', 'palm beach', 'gainesville', 'daytona'],
+    'Georgia':        ['georgia', 'atlanta', 'savannah', 'augusta', 'macon', 'athens'],
+    'Hawaii':         ['hawaii', 'honolulu', 'maui', 'oahu', 'kauai', 'big island'],
+    'Idaho':          ['idaho', 'boise', 'meridian', 'nampa', 'idaho falls', 'pocatello'],
+    'Illinois':       ['illinois', 'chicago', 'springfield', 'peoria', 'rockford', 'naperville', 'joliet'],
+    'Indiana':        ['indiana', 'indianapolis', 'fort wayne', 'evansville', 'south bend'],
+    'Iowa':           ['iowa', 'des moines', 'cedar rapids', 'davenport', 'ames'],
+    'Kansas':         ['kansas', 'wichita', 'topeka', 'kansas city', 'overland park'],
+    'Kentucky':       ['kentucky', 'louisville', 'lexington', 'bowling green'],
+    'Louisiana':      ['louisiana', 'new orleans', 'baton rouge', 'shreveport', 'lafayette'],
+    'Maine':          ['maine', 'portland maine', 'bangor', 'augusta maine'],
+    'Maryland':       ['maryland', 'baltimore', 'annapolis', 'silver spring'],
+    'Massachusetts':  ['massachusetts', 'boston', 'cambridge', 'worcester', 'springfield mass', 'lowell'],
+    'Michigan':       ['michigan', 'detroit', 'grand rapids', 'ann arbor', 'lansing', 'flint'],
+    'Minnesota':      ['minnesota', 'minneapolis', 'st paul', 'saint paul', 'rochester minn', 'duluth'],
+    'Mississippi':    ['mississippi', 'jackson miss', 'gulfport', 'biloxi'],
+    'Missouri':       ['missouri', 'kansas city', 'st louis', 'saint louis', 'springfield mo', 'columbia mo'],
+    'Montana':        ['montana', 'billings', 'missoula', 'bozeman', 'helena'],
+    'Nebraska':       ['nebraska', 'omaha', 'lincoln neb'],
+    'Nevada':         ['nevada', 'las vegas', 'reno', 'henderson', 'sparks'],
+    'New Hampshire':  ['new hampshire', 'manchester nh', 'nashua', 'concord nh'],
+    'New Jersey':     ['new jersey', 'newark', 'jersey city', 'trenton', 'atlantic city', 'hoboken', 'princeton'],
+    'New Mexico':     ['new mexico', 'albuquerque', 'santa fe', 'las cruces'],
+    'New York':       ['new york', 'nyc', 'brooklyn', 'queens', 'bronx', 'manhattan', 'buffalo',
+                       'albany', 'rochester', 'syracuse', 'long island'],
+    'North Carolina': ['north carolina', 'charlotte', 'raleigh', 'greensboro', 'durham', 'winston salem'],
+    'North Dakota':   ['north dakota', 'fargo', 'bismarck', 'grand forks'],
+    'Ohio':           ['ohio', 'columbus', 'cleveland', 'cincinnati', 'toledo', 'akron', 'dayton'],
+    'Oklahoma':       ['oklahoma', 'oklahoma city', 'tulsa', 'norman'],
+    'Oregon':         ['oregon', 'portland oregon', 'eugene', 'salem oregon', 'bend oregon'],
+    'Pennsylvania':   ['pennsylvania', 'philadelphia', 'philly', 'pittsburgh', 'allentown',
+                       'harrisburg', 'lancaster', 'erie'],
+    'Rhode Island':   ['rhode island', 'providence', 'newport'],
+    'South Carolina': ['south carolina', 'charleston sc', 'columbia sc', 'greenville sc', 'myrtle beach'],
+    'South Dakota':   ['south dakota', 'sioux falls', 'rapid city'],
+    'Tennessee':      ['tennessee', 'nashville', 'memphis', 'knoxville', 'chattanooga'],
+    'Texas':          ['texas', 'houston', 'dallas', 'austin', 'san antonio', 'fort worth',
+                       'el paso', 'plano', 'arlington texas', 'corpus christi', 'lubbock'],
+    'Utah':           ['utah', 'salt lake city', 'provo', 'orem'],
+    'Vermont':        ['vermont', 'burlington vt', 'montpelier'],
+    'Virginia':       ['virginia', 'richmond', 'virginia beach', 'norfolk', 'chesapeake',
+                       'arlington va', 'alexandria va'],
+    'Washington':     ['washington state', 'seattle', 'tacoma', 'spokane', 'bellevue', 'olympia'],
+    'West Virginia':  ['west virginia', 'charleston wv', 'huntington wv', 'morgantown'],
+    'Wisconsin':      ['wisconsin', 'milwaukee', 'madison', 'green bay', 'kenosha'],
+    'Wyoming':        ['wyoming', 'cheyenne', 'casper', 'jackson hole'],
+    'District of Columbia': ['washington dc', 'washington d.c.', 'the district'],
+}
+
+
+def _dma_keywords(dma_value: str) -> list[str]:
+    """Extract search-friendly keywords from a Nielsen DMA display name.
+
+    DMA names are space-joined multi-city ("San Francisco Oakland San Jose",
+    "Dallas Fort Worth"). We emit the raw name, all adjacent 2-word windows,
+    and every single word of >=4 letters so headline/product titles that
+    mention any city in the DMA hit.
+    """
+    if not dma_value:
+        return []
+    raw = dma_value.strip()
+    parts = raw.lower().replace('-', ' ').split()
+    kws = [raw.lower()]
+    for i in range(len(parts) - 1):
+        two = f"{parts[i]} {parts[i+1]}"
+        if len(two) >= 6:
+            kws.append(two)
+    for p in parts:
+        if len(p) >= 4:
+            kws.append(p)
+    seen = set()
+    out = []
+    for k in kws:
+        if k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
+def _geo_keywords(state: Optional[str], dma_value: Optional[str]) -> list[str]:
+    """All lowercased match strings that count as "in this region"."""
+    kws: list[str] = []
+    if state:
+        kws.extend(_STATE_KEYWORDS.get(state, [state.lower()]))
+    if dma_value:
+        kws.extend(_dma_keywords(dma_value))
+    # De-dupe while preserving order so higher-priority (state-name)
+    # keywords still lead the list.
+    seen = set()
+    out = []
+    for k in kws:
+        if k and k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
+def _reorder_by_region(items: list[dict],
+                         keywords: list[str],
+                         text_getter=None) -> list[dict]:
+    """Hoist items whose text matches any of `keywords` to the top,
+    keep the rest in their original order behind them. Never drops rows.
+
+    `text_getter(item) -> str` overrides the default text field probe
+    (`title`, then `name`, then `term`). Case-insensitive substring
+    match.
+    """
+    if not keywords or not items:
+        return list(items)
+    def text_for(it: dict) -> str:
+        if text_getter is not None:
+            return (text_getter(it) or '').lower()
+        return (it.get('title') or it.get('name') or it.get('term') or '').lower()
+    matches: list[dict] = []
+    rest: list[dict] = []
+    for it in items:
+        t = text_for(it)
+        (matches if any(k in t for k in keywords) else rest).append(it)
+    return matches + rest
 
 
 # ============================================================================
 # Geo normalization
 # ============================================================================
-def _resolve_geo(filters: dict) -> tuple[str, Optional[str]]:
-    """Return (label, state_name_or_none) for the requested filter.
+def _resolve_geo(filters: dict) -> tuple[str, Optional[str], Optional[str]]:
+    """Return (label, state_name_or_none, dma_name_or_none) for the filter.
 
     State name is what the external helpers accept (California, etc.).
     For DMA filters we bias to the DMA's home state so state-scoped
-    endpoints still return something meaningful.
+    endpoints still return something meaningful AND we pass the DMA
+    display name back so downstream keyword expansion can lift
+    DMA-specific city mentions to the top of national feeds.
     """
     geo_type = (filters.get('geo_type') or 'National').strip()
     geo_value = (filters.get('geo_value') or '').strip()
     if geo_type == 'National' or not geo_value:
-        return 'National', None
+        return 'National', None, None
     if geo_type == 'State':
         name = normalize_state(geo_value) if _HAS_EXTERNAL_SIGNALS else geo_value
-        return (name or geo_value), name
+        return (name or geo_value), name, None
     if geo_type == 'DMA':
         usps = _DMA_HOME_STATE.get(geo_value)
         state_name = _USPS_TO_NAME.get(usps) if usps else None
-        return geo_value, state_name
-    return 'National', None
+        return geo_value, state_name, geo_value
+    return 'National', None, None
 
 
 # ============================================================================
@@ -561,37 +706,28 @@ def _fetch_all_news_feeds() -> list[list[dict]]:
     return out
 
 
-def _filter_by_state(items: list[dict], state: Optional[str]) -> list[dict]:
-    """Keep only items whose title mentions the state (or its USPS code).
+def _filter_by_state(items: list[dict], keywords: Optional[list[str]]) -> list[dict]:
+    """Reorder items so region-relevant ones lead the list; never drops rows.
 
-    Called when the user selected a state filter. If nothing matches we
-    return the full unfiltered list rather than an empty tile - a national
-    headline still counts as trending in every state.
+    The old behavior (`return matches if any else items`) meant most
+    state selections rendered as pure national feeds because typical
+    headlines don't repeat the state name. Now we always keep the full
+    list but hoist keyword-matching items to the top.
     """
-    if not state or not items:
-        return items
-    usps = None
-    for code, name in _USPS_TO_NAME.items():
-        if name == state:
-            usps = code
-            break
-    patterns = [state.lower()]
-    if usps:
-        patterns.append(f' {usps.lower()} ')
-        patterns.append(f' {usps.lower()}.')
-    filt = []
-    for it in items:
-        t = (it.get('title') or '').lower()
-        if any(p in t for p in patterns):
-            filt.append(it)
-    return filt or items
+    if not keywords or not items:
+        return list(items)
+    return _reorder_by_region(items, keywords)
 
 
-def _fetch_trending_headlines_and_sources(state: Optional[str]) -> tuple[list[dict], list[dict]]:
+def _fetch_trending_headlines_and_sources(keywords: Optional[list[str]]
+                                            ) -> tuple[list[dict], list[dict]]:
     """Return (trending_headlines[:15], articles_by_source[all_outlets]).
 
     Aggregates the top item per outlet into the flat "trending headlines"
-    board, and keeps a per-outlet list for the "by source" board.
+    board, and keeps a per-outlet list for the "by source" board. When
+    `keywords` is non-empty, region-matching items rise to the top of
+    each outlet's slice so state / DMA selections visibly re-rank the
+    boards without ever emptying a tile.
     """
     per_source = _fetch_all_news_feeds()
     flat: list[dict] = []
@@ -600,14 +736,14 @@ def _fetch_trending_headlines_and_sources(state: Optional[str]) -> tuple[list[di
         if not outlet_items:
             continue
         source = outlet_items[0].get('source', '')
-        state_filtered = _filter_by_state(outlet_items, state)
+        ordered = _filter_by_state(outlet_items, keywords)
         by_source.append({
             'source':   source,
             'domain':   outlet_items[0].get('domain', ''),
-            'articles': state_filtered[:5],
+            'articles': ordered[:5],
         })
-        if state_filtered:
-            flat.append(state_filtered[0])
+        if ordered:
+            flat.append(ordered[0])
     seen = set()
     dedup = []
     for h in flat:
@@ -792,7 +928,8 @@ def _fetch_reddit_popular(state: Optional[str], lookback_days: int) -> list[dict
     return out[:15]
 
 
-def _fetch_social_trending(state: Optional[str], lookback_days: int) -> dict:
+def _fetch_social_trending(state: Optional[str], lookback_days: int,
+                             keywords: Optional[list[str]] = None) -> dict:
     """Fan out to every social platform's trending endpoint.
 
     Reddit is live at request time via the Atom `/.rss` feed. YouTube,
@@ -800,6 +937,10 @@ def _fetch_social_trending(state: Optional[str], lookback_days: int) -> dict:
     `scripts/trends_scrapers/`. Instagram is scaffolded but doesn't
     have a source wired yet - its snapshot returns `available=False`
     which cascades to a "coming soon" tile in the UI.
+
+    For state / DMA selections, non-Reddit snapshots are reordered by
+    `keywords` so region-mentioning items rise to the top; Reddit is
+    already state-aware via its per-state subreddit merge.
     """
     result = {slug: {'label': label, 'items': [], 'available': avail}
               for slug, label, avail in SOCIAL_PLATFORMS}
@@ -814,7 +955,7 @@ def _fetch_social_trending(state: Optional[str], lookback_days: int) -> dict:
         snap = _read_snapshot(slug)
         if not snap:
             continue
-        items = _snapshot_items_for_geo(snap, state)
+        items = _snapshot_items_for_geo(snap, state, keywords=keywords)
         snap_available = snap.get('available')
         if snap_available is None:
             snap_available = bool(items)
@@ -935,7 +1076,7 @@ def _fetch_amazon_movers() -> list[dict]:
     return out
 
 
-def _fetch_trending_products() -> list[dict]:
+def _fetch_trending_products(keywords: Optional[list[str]] = None) -> list[dict]:
     """Aggregate the retailer tiles.
 
     Amazon runs live at request time. Every other retailer is populated
@@ -943,9 +1084,17 @@ def _fetch_trending_products() -> list[dict]:
     Hetzner nightly cron. Missing / stale snapshots degrade to the
     coming-soon placeholder for that tile.
 
-    Product tiles are always national - retailer bestsellers don't
-    have per-DMA breakouts.
+    Retailer feeds are national by nature (bestseller listings don't
+    ship in per-DMA cuts). For state / DMA selections we reorder each
+    retailer's product list so items whose names mention the region
+    (regional brands, city-tied SKUs, etc.) surface first. National
+    items stay in the list as filler so tiles never render empty.
     """
+    def _reorder_products(items: list[dict]) -> list[dict]:
+        if not keywords or not items:
+            return items
+        return _reorder_by_region(items, keywords, text_getter=lambda it: it.get('name') or '')
+
     result = []
     for slug, label, static_avail in RETAILERS:
         entry = {
@@ -958,8 +1107,14 @@ def _fetch_trending_products() -> list[dict]:
             try:
                 cats = _fetch_amazon_movers()
                 if cats:
-                    entry['categories'] = cats
-                    entry['items']      = cats[0].get('items') or []
+                    reordered_cats = []
+                    for c in cats:
+                        reordered_cats.append({
+                            'category': c.get('category') or c.get('label') or '',
+                            'items':    _reorder_products(c.get('items') or []),
+                        })
+                    entry['categories'] = reordered_cats
+                    entry['items']      = reordered_cats[0].get('items') or []
             except Exception as e:
                 logger.debug("trends_iq amazon movers failed: %s", e)
             result.append(entry)
@@ -967,7 +1122,7 @@ def _fetch_trending_products() -> list[dict]:
 
         snap = _read_snapshot(slug)
         if snap:
-            items = list(snap.get('national') or [])
+            items = _reorder_products(list(snap.get('national') or []))
             entry['items'] = items[:10]
             entry['available'] = bool(items) if snap.get('available') is None \
                 else bool(snap.get('available'))
@@ -979,7 +1134,7 @@ def _fetch_trending_products() -> list[dict]:
                 entry['categories'] = [
                     {
                         'category': c.get('category') or c.get('label') or '',
-                        'items':    (c.get('items') or [])[:10],
+                        'items':    _reorder_products((c.get('items') or []))[:10],
                     }
                     for c in raw_cats if isinstance(c, dict) and (c.get('items') or [])
                 ]
@@ -1029,14 +1184,16 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             cached['from_cache'] = True
             return cached
 
-    label, state = _resolve_geo(filters)
+    label, state, dma_value = _resolve_geo(filters)
     lookback_days = int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS)
+    geo_kws = _geo_keywords(state, dma_value)
 
     tasks = {
         'trending_searches':   lambda: _fetch_trending_searches(state, lookback_days),
-        'headlines_pack':      lambda: _fetch_trending_headlines_and_sources(state),
-        'social_trending':     lambda: _fetch_social_trending(state, lookback_days),
-        'products_by_retailer':lambda: _fetch_trending_products(),
+        'headlines_pack':      lambda: _fetch_trending_headlines_and_sources(geo_kws),
+        'social_trending':     lambda: _fetch_social_trending(state, lookback_days,
+                                                                 keywords=geo_kws),
+        'products_by_retailer':lambda: _fetch_trending_products(keywords=geo_kws),
     }
 
     results: dict = {}
