@@ -2881,7 +2881,7 @@
                         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
                             <input type="number" id="modalAddCreditsAmount" min="1" value="10" style="width: 70px; padding: 0.4rem;">
                             <input type="text" id="modalAddCreditsReason" placeholder="What for (e.g. THE BETTER SISTER)" style="flex: 1; min-width: 140px; padding: 0.4rem;">
-                            <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalDeductCredits"> <span>Deduct (charge)</span></label>
+                            <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalDeductCredits" onchange="_modalCreditsPerMonthChange()"> <span>Deduct (charge)</span></label>
                             <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalCreditsPerMonth" onchange="_modalCreditsPerMonthChange()"> <span>Recurring / month</span></label>
                             <button type="button" class="btn btn-small btn-primary" onclick="addCreditsFromModal()">Apply</button>
                         </div>
@@ -2889,7 +2889,25 @@
                             <label style="display:inline; font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.35rem;">For how many months? (blank = forever until cancelled)</label>
                             <input type="number" id="modalCreditsMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
                         </div>
-                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.35rem;">Grant adds to balance / pool total. Deduct removes from the user&rsquo;s balance or company pool (same as usage). Check <strong>Recurring / month</strong> to auto-grant the same amount every month.</small>
+                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.35rem;">Grant adds to balance. Deduct removes from balance / pool. Check <strong>Recurring / month</strong> to auto-apply the same amount every month; combine <strong>Recurring + Deduct</strong> to schedule a monthly <em>charge</em>.</small>
+                    </div>
+
+                    <!--
+                        Recurring credit rules — lists this user's active
+                        recurring grants and charges, with in-place edit and
+                        delete. Populated by loadUserModalRecurring() when
+                        the modal opens in edit mode (skipped in create mode
+                        because there's no subject to fetch for yet).
+                    -->
+                    <div id="userModalRecurringWrap" class="form-group" style="display: none; margin-top: 0.5rem;">
+                        <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.4rem;">
+                            <span>Recurring credit rules (auto-monthly)</span>
+                            <button type="button" class="btn btn-small btn-secondary" style="padding:0.15rem 0.5rem; font-size:0.7rem;" onclick="loadUserModalRecurring()" title="Refresh list">↻</button>
+                        </label>
+                        <div id="userModalRecurringList" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.4rem; background: var(--bg-input); font-size: 0.8rem;">
+                            <div style="color: var(--text-secondary); text-align:center; padding:0.5rem;">Loading…</div>
+                        </div>
+                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.35rem;">Each rule fires on or shortly after the 1st of every month until months remaining reaches 0 (or forever if unset). Editing amount/months takes effect on the <em>next</em> tick — already-applied months stay.</small>
                     </div>
                 </div>
 
@@ -7288,7 +7306,7 @@
             _ttRefreshRecurringCount();
         }
         async function cancelRecurringGrant(subjectType, subjectName, grantId) {
-            if (!confirm('Cancel this recurring grant? Already-applied months stay; future months will not fire.')) return;
+            if (!confirm('Cancel this recurring rule? Already-applied months stay; future months will not fire.')) return;
             try {
                 const resp = await fetch('/api/admin/recurring-grants', {
                     method: 'DELETE',
@@ -7301,6 +7319,188 @@
                 await openRecurringGrantsModal();  // refresh
             } catch (e) {
                 alert('Failed to cancel: ' + e.message);
+            }
+        }
+
+        // ---- In-user-modal Recurring Rules panel ----
+        // Renders the user's recurring credit rules (grants + charges) with
+        // inline edit + delete. Lives inside the Add/Edit User modal so an
+        // admin can manage active schedules without leaving the flow.
+        async function loadUserModalRecurring() {
+            const wrap = document.getElementById('userModalRecurringWrap');
+            const list = document.getElementById('userModalRecurringList');
+            if (!wrap || !list) return;
+            const editEl = document.getElementById('editUsername');
+            const username = editEl ? (editEl.value || '').trim() : '';
+            // No subject yet (create mode) → hide the panel entirely.
+            if (!username) {
+                wrap.style.display = 'none';
+                return;
+            }
+            wrap.style.display = '';
+            list.innerHTML = '<div style="color: var(--text-secondary); text-align:center; padding:0.5rem;">Loading…</div>';
+            try {
+                const qs = 'subject_type=user&subject_name=' + encodeURIComponent(username);
+                const resp = await fetch('/api/admin/recurring-grants?' + qs, { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.error || 'Failed to load');
+                const grants = data.grants || [];
+                if (grants.length === 0) {
+                    list.innerHTML = '<div style="color: var(--text-secondary); text-align:center; padding:0.5rem; font-size:0.75rem;">No recurring credit rules for this user.</div>';
+                    return;
+                }
+                list.innerHTML = grants.map(g => _renderUserModalRecurringRow(g)).join('');
+            } catch (e) {
+                list.innerHTML = '<div style="color: var(--accent-red, #ff6b6b); text-align:center; padding:0.5rem;">Error: ' + (e.message || 'load failed') + '</div>';
+            }
+        }
+
+        function _renderUserModalRecurringRow(g) {
+            const direction = (g.direction || 'grant').toLowerCase();
+            const isCharge = direction === 'charge';
+            const kindLabel = g.kind === 'hours'
+                ? ((typeof _ttFmtMinutes === 'function' ? _ttFmtMinutes(g.amount) : (g.amount + 'min')) + ' hours')
+                : (g.amount + ' credits');
+            const arrow = isCharge ? '−' : '+';
+            const arrowColor = isCharge ? 'var(--accent-red, #ff6b6b)' : 'var(--accent-green, #4ade80)';
+            const monthsLeft = (g.months_remaining === null || g.months_remaining === undefined) ? '∞' : g.months_remaining;
+            const totalMonths = (g.months_total === null || g.months_total === undefined) ? null : g.months_total;
+            const isExpired = g.months_remaining !== null && g.months_remaining !== undefined && g.months_remaining <= 0;
+            const created = g.created_at ? new Date(g.created_at).toLocaleDateString() : '—';
+            const reason = (g.reason || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            // Row ID lets the edit form target its container for the inline swap.
+            const rowId = 'urrRow-' + g.id;
+            return (
+                '<div id="' + rowId + '" style="display:flex; align-items:center; gap:0.5rem; padding:0.4rem; border-bottom:1px solid var(--border-color); flex-wrap:wrap; ' + (isExpired ? 'opacity:0.55;' : '') + '">'
+                    + '<span style="font-weight:600; color:' + arrowColor + '; font-size:0.9rem; min-width:1.2rem;">' + arrow + '</span>'
+                    + '<span style="font-weight:600;">' + kindLabel + '</span>'
+                    + '<span style="color:var(--text-secondary); font-size:0.7rem;">'
+                        + '/ month · ' + monthsLeft + (totalMonths ? '/' + totalMonths : '') + ' left'
+                        + (isExpired ? ' (done)' : '')
+                    + '</span>'
+                    + '<span style="flex:1; min-width:120px; color:var(--text-secondary); font-size:0.72rem; font-style:italic;">'
+                        + (reason || '(no reason)')
+                    + '</span>'
+                    + '<span style="color:var(--text-secondary); font-size:0.65rem;">' + created + '</span>'
+                    + '<button type="button" class="btn btn-small btn-secondary" style="padding:0.15rem 0.5rem; font-size:0.7rem;" onclick="startEditUserModalRecurring(' + JSON.stringify(g.id) + ')" title="Edit amount, months, or reason">✎ Edit</button>'
+                    + '<button type="button" class="btn btn-small btn-secondary" style="padding:0.15rem 0.5rem; font-size:0.7rem; color:var(--accent-red, #ff6b6b);" onclick="deleteUserModalRecurring(' + JSON.stringify(g.id) + ')" title="Cancel this recurring rule">✖ Delete</button>'
+                + '</div>'
+            );
+        }
+
+        // Cache the last-loaded grants so the edit swap can read
+        // current amount/months without a second fetch.
+        window._userModalRecurringCache = window._userModalRecurringCache || {};
+        async function _cacheUserModalRecurring() {
+            const editEl = document.getElementById('editUsername');
+            const username = editEl ? (editEl.value || '').trim() : '';
+            if (!username) return {};
+            try {
+                const qs = 'subject_type=user&subject_name=' + encodeURIComponent(username);
+                const resp = await fetch('/api/admin/recurring-grants?' + qs, { credentials: 'same-origin' });
+                const data = await resp.json();
+                const map = {};
+                (data.grants || []).forEach(g => { map[g.id] = g; });
+                window._userModalRecurringCache = map;
+                return map;
+            } catch (_) {
+                return {};
+            }
+        }
+
+        async function startEditUserModalRecurring(grantId) {
+            // Rebuild the cache before opening so we always edit fresh
+            // values (another admin may have edited in parallel).
+            const cache = await _cacheUserModalRecurring();
+            const g = cache[grantId];
+            if (!g) {
+                alert('That recurring rule is no longer in the list — reloading.');
+                loadUserModalRecurring();
+                return;
+            }
+            const row = document.getElementById('urrRow-' + grantId);
+            if (!row) return;
+            const monthsVal = (g.months_remaining === null || g.months_remaining === undefined) ? '' : g.months_remaining;
+            const direction = (g.direction || 'grant').toLowerCase();
+            const kindLabel = g.kind === 'hours' ? 'min/mo' : 'credits/mo';
+            row.innerHTML = (
+                '<div style="display:flex; flex-direction:column; gap:0.35rem; width:100%;">'
+                    + '<div style="display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap;">'
+                        + '<span style="font-size:0.7rem; color:var(--text-secondary);">Editing ' + direction + ':</span>'
+                        + '<input type="number" id="urrEditAmount-' + grantId + '" min="1" value="' + g.amount + '" style="width:80px; padding:0.3rem;">'
+                        + '<span style="font-size:0.7rem; color:var(--text-secondary);">' + kindLabel + '</span>'
+                        + '<span style="font-size:0.7rem; color:var(--text-secondary); margin-left:0.5rem;">Months left:</span>'
+                        + '<input type="number" id="urrEditMonths-' + grantId + '" min="0" value="' + monthsVal + '" placeholder="∞" style="width:70px; padding:0.3rem;" title="Blank = forever until cancelled">'
+                    + '</div>'
+                    + '<input type="text" id="urrEditReason-' + grantId + '" value="' + (g.reason || '').replace(/"/g, '&quot;') + '" placeholder="Reason" style="padding:0.3rem; width:100%; box-sizing:border-box;">'
+                    + '<div style="display:flex; gap:0.4rem; justify-content:flex-end;">'
+                        + '<button type="button" class="btn btn-small btn-secondary" onclick="loadUserModalRecurring()">Cancel</button>'
+                        + '<button type="button" class="btn btn-small btn-primary" onclick="saveEditUserModalRecurring(' + JSON.stringify(grantId) + ')">Save</button>'
+                    + '</div>'
+                + '</div>'
+            );
+        }
+
+        async function saveEditUserModalRecurring(grantId) {
+            const editEl = document.getElementById('editUsername');
+            const username = editEl ? (editEl.value || '').trim() : '';
+            if (!username) return;
+            const amtEl = document.getElementById('urrEditAmount-' + grantId);
+            const monthsEl = document.getElementById('urrEditMonths-' + grantId);
+            const reasonEl = document.getElementById('urrEditReason-' + grantId);
+            const amount = amtEl ? parseInt(amtEl.value, 10) : NaN;
+            if (isNaN(amount) || amount < 1) {
+                alert('Amount must be a positive number.');
+                return;
+            }
+            // Blank months field → forever (send null). Zero explicitly means
+            // "already exhausted" and is allowed via the backend range check.
+            const monthsRaw = monthsEl ? (monthsEl.value || '').trim() : '';
+            const months_remaining = monthsRaw === '' ? null : parseInt(monthsRaw, 10);
+            const reason = reasonEl ? (reasonEl.value || '').trim() : '';
+            try {
+                const resp = await fetch('/api/admin/recurring-grants', {
+                    method: 'PUT',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        subject_type: 'user', subject_name: username,
+                        grant_id: grantId, amount, months_remaining, reason,
+                    }),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!(resp.ok && data.success)) {
+                    alert('Failed to save: ' + (data.error || 'Unknown error'));
+                    return;
+                }
+                if (typeof showToast === 'function') showToast('Recurring rule updated');
+                loadUserModalRecurring();
+            } catch (e) {
+                alert('Error: ' + (e.message || 'Save failed'));
+            }
+        }
+
+        async function deleteUserModalRecurring(grantId) {
+            const editEl = document.getElementById('editUsername');
+            const username = editEl ? (editEl.value || '').trim() : '';
+            if (!username) return;
+            if (!confirm('Cancel this recurring rule?\n\nAlready-applied months stay; future months will not fire.')) return;
+            try {
+                const resp = await fetch('/api/admin/recurring-grants', {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ subject_type: 'user', subject_name: username, grant_id: grantId }),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (!(resp.ok && data.success)) {
+                    alert('Failed to delete: ' + (data.error || 'Unknown'));
+                    return;
+                }
+                if (typeof showToast === 'function') showToast('Recurring rule cancelled');
+                loadUserModalRecurring();
+            } catch (e) {
+                alert('Error: ' + (e.message || 'Delete failed'));
             }
         }
 
@@ -8488,6 +8688,9 @@
             if (_openRecurRow) _openRecurRow.style.display = 'none';
             const _openRecurMonths = document.getElementById('creditsRecurringMonths');
             if (_openRecurMonths) _openRecurMonths.value = '';
+            // No subject yet in create mode → hide the recurring-rules list.
+            const _openRulesWrap = document.getElementById('userModalRecurringWrap');
+            if (_openRulesWrap) _openRulesWrap.style.display = 'none';
             document.getElementById('allCategories').checked = true;
             document.getElementById('allRuns').checked = true;
             document.getElementById('allBehavioralCategories').checked = true;
@@ -8756,6 +8959,13 @@
             document.getElementById('activityExportCadence').value = user.activity_export_cadence || '';
 
             document.getElementById('userModal').classList.add('show');
+
+            // Populate the recurring-rules list for this user (fires only in
+            // edit mode; create mode leaves editUsername blank and the
+            // loader hides the panel).
+            if (typeof loadUserModalRecurring === 'function') {
+                loadUserModalRecurring();
+            }
         }
 
         function userModalSetAvatarPreview(srcOrDataUrl, initialsFor) {
@@ -9264,13 +9474,28 @@
         }
 
         function _modalCreditsPerMonthChange() {
-            // Recurring monthly is a grant flow only — hide Deduct + Months row toggle.
-            const per = document.getElementById('modalCreditsPerMonth').checked;
+            // Recurring / month controls the visibility of the "for how many
+            // months" row. Deduct is now compatible with Recurring — the
+            // combination schedules a recurring monthly CHARGE (routed to
+            // /api/admin/recurring-grants with direction='charge'). We
+            // update the Apply button label to make the outgoing action
+            // obvious before the admin clicks.
+            const per = document.getElementById('modalCreditsPerMonth');
+            const deduct = document.getElementById('modalDeductCredits');
             const monthsRow = document.getElementById('modalCreditsMonthsRow');
-            if (monthsRow) monthsRow.style.display = per ? '' : 'none';
-            const deductEl = document.getElementById('modalDeductCredits');
-            if (deductEl && per) deductEl.checked = false;
-            if (deductEl) deductEl.disabled = per;
+            if (monthsRow) monthsRow.style.display = (per && per.checked) ? '' : 'none';
+            const btn = document.querySelector('button[onclick="addCreditsFromModal()"]');
+            if (btn) {
+                if (per && per.checked && deduct && deduct.checked) {
+                    btn.textContent = 'Schedule monthly charge';
+                } else if (per && per.checked) {
+                    btn.textContent = 'Schedule monthly grant';
+                } else if (deduct && deduct.checked) {
+                    btn.textContent = 'Deduct now';
+                } else {
+                    btn.textContent = 'Apply';
+                }
+            }
         }
 
         async function addCreditsFromModal() {
@@ -9291,10 +9516,14 @@
                 return;
             }
 
-            // Recurring monthly grant → different endpoint (also applies first month immediately).
+            // Recurring monthly → different endpoint (also applies first
+            // month immediately). Recurring + Deduct = recurring charge;
+            // Recurring alone = recurring grant. See _modalCreditsPerMonthChange
+            // for the button-label + copy that mirrors this branching.
             if (perMonth) {
                 const monthsRaw = (monthsEl && monthsEl.value) ? monthsEl.value : '';
                 const months = monthsRaw ? parseInt(monthsRaw, 10) : null;
+                const direction = deduct ? 'charge' : 'grant';
                 try {
                     const resp = await fetch('/api/admin/recurring-grants', {
                         method: 'POST',
@@ -9303,16 +9532,24 @@
                         body: JSON.stringify({
                             subject_type: 'user', subject_name: username,
                             kind: 'credits', amount: credits, months, reason,
+                            direction,
                             apply_first_immediately: true,
                         }),
                     });
                     const data = await resp.json().catch(() => ({}));
                     if (resp.ok && data.success) {
                         if (typeof showToast === 'function') {
-                            showToast(`Recurring grant scheduled: ${credits} credits/mo` + (months ? ` × ${months} mo` : ' (until cancelled)') + ' • first month applied now');
+                            const verb = direction === 'charge' ? 'charge' : 'grant';
+                            showToast(`Recurring ${verb} scheduled: ${credits} credits/mo`
+                                + (months ? ` × ${months} mo` : ' (until cancelled)')
+                                + ' • first month applied now');
+                        }
+                        // Refresh the in-modal list so the new rule shows up.
+                        if (typeof loadUserModalRecurring === 'function') {
+                            loadUserModalRecurring();
                         }
                     } else {
-                        if (typeof showToast === 'function') showToast(data.error || 'Failed to schedule recurring grant', true);
+                        if (typeof showToast === 'function') showToast(data.error || 'Failed to schedule recurring rule', true);
                     }
                 } catch (e) {
                     if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not schedule'), true);
