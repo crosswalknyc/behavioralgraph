@@ -201,7 +201,7 @@ def _render_email(user_slug: str, alerts: list[dict],
 
     text_lines.append("--")
     text_lines.append("Open Trends IQ to manage your watchlist:")
-    text_lines.append("https://www.behavioralgraph.com/  (Trends section)")
+    text_lines.append("https://www.behavioralgraph.com/  (Culture Ranker -> Trends)")
     html_lines.append("<hr style='margin:24px 0;border:0;border-top:1px solid #ddd;'/>")
     html_lines.append("<p style='color:#666;font-size:0.9em;'>Manage your watchlist in Trends IQ: <a href='https://www.behavioralgraph.com/'>open the dashboard</a>.</p>")
     return subject, ''.join(html_lines), '\n'.join(text_lines)
