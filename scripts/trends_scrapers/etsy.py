@@ -28,20 +28,34 @@ logger = logging.getLogger(__name__)
 
 
 ETSY_URLS = [
-    ('Popular Right Now', 'https://www.etsy.com/market/popular_right_now'),
-    ('Bestsellers',       'https://www.etsy.com/market/bestsellers'),
-    ('Trending Gifts',    'https://www.etsy.com/market/trending_gifts'),
+    # /trending and /featured/editors-picks resolve to real product
+    # grids for logged-in users (via donated cookies). The old
+    # /market/* paths 404 or redirect to a market lander with no
+    # listings when accessed with a fresh session.
+    ('Trending Now',       'https://www.etsy.com/trending'),
+    ('Editors Picks',      'https://www.etsy.com/featured/editors-picks'),
+    ('Popular Right Now',  'https://www.etsy.com/market/popular_right_now'),
 ]
 
 
-_LISTING_RE = re.compile(
-    r'<a\s+class="[^"]*listing-link[^"]*"\s+href="(https://www\.etsy\.com/listing/[^"]+)"'
-    r'([\s\S]{0,4000}?)</a>',
+# Etsy's `<a class="listing-link ...">` tag carries the href AND the
+# title in its OPENING attributes; the class + href aren't necessarily
+# adjacent (Etsy interleaves data-listing-id, data-palette-listing-image,
+# etc.), so the old class-then-href pattern missed every real listing.
+# We now match the whole opening tag and pull href / title out of the
+# attribute blob independently, then walk 4KB forward for img + price.
+_LISTING_OPEN_RE = re.compile(
+    r'<a\b([^>]*\bclass="[^"]*\blisting-link\b[^"]*"[^>]*)>',
     re.IGNORECASE,
 )
-_TITLE_RE = re.compile(r'title="([^"]{5,240})"', re.IGNORECASE)
-_IMG_RE   = re.compile(r'src="(https://i\.etsystatic\.com/[^"]+)"', re.IGNORECASE)
-_PRICE_RE = re.compile(
+_HREF_RE       = re.compile(
+    r'\bhref="(https://www\.etsy\.com/listing/[^"]+)"',
+    re.IGNORECASE,
+)
+_TITLE_ATTR_RE = re.compile(r'\btitle="([^"]{5,240})"', re.IGNORECASE)
+_IMG_RE        = re.compile(r'src="(https://i\.etsystatic\.com/[^"]+)"',
+                              re.IGNORECASE)
+_PRICE_RE      = re.compile(
     r'<span[^>]*class="[^"]*currency-value[^"]*"[^>]*>\$?([0-9,.]+)</span>',
     re.IGNORECASE,
 )
@@ -50,21 +64,25 @@ _PRICE_RE = re.compile(
 def _parse_etsy_listing(html: str, limit: int = 10) -> list[dict]:
     seen: set[str] = set()
     out: list[dict] = []
-    for m in _LISTING_RE.finditer(html):
-        url = m.group(1).split('?')[0]
-        chunk = m.group(2)
-        listing_id_match = re.search(r'/listing/([0-9]+)/', url)
-        if not listing_id_match:
+    for m in _LISTING_OPEN_RE.finditer(html):
+        attrs = m.group(1)
+        href_m  = _HREF_RE.search(attrs)
+        title_m = _TITLE_ATTR_RE.search(attrs)
+        if not href_m or not title_m:
             continue
-        listing_id = listing_id_match.group(1)
+        url = href_m.group(1).split('?')[0]
+        listing_id_m = re.search(r'/listing/([0-9]+)/', url)
+        if not listing_id_m:
+            continue
+        listing_id = listing_id_m.group(1)
         if listing_id in seen:
             continue
-        title_m = _TITLE_RE.search(chunk)
-        img_m   = _IMG_RE.search(chunk)
-        price_m = _PRICE_RE.search(chunk)
-        if not title_m:
-            continue
         seen.add(listing_id)
+        # Image and price live in the tag body after the anchor opens.
+        tail_start = m.end()
+        tail = html[tail_start:tail_start + 4000]
+        img_m   = _IMG_RE.search(tail)
+        price_m = _PRICE_RE.search(tail)
         out.append({
             'rank':       len(out) + 1,
             'name':       unescape(title_m.group(1)).strip()[:180],
