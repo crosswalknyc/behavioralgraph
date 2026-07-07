@@ -57,7 +57,10 @@ from pathlib import Path
 
 
 # Domains we want donations for. Order = scraper priority (Instagram first
-# because it's the highest-friction to re-establish; retailers later).
+# because it's the highest-friction to re-establish; retailers next; then
+# streaming services). ESPN+ and HBO Max/Max come through the Disney+ and
+# Hulu bundles respectively - donating disneyplus.com covers ESPN+, and
+# donating hulu.com covers Max on the bundle plan.
 DEFAULT_DOMAINS = [
     'instagram.com',
     'target.com',
@@ -68,6 +71,15 @@ DEFAULT_DOMAINS = [
     'bestbuy.com',
     'nike.com',
     'ulta.com',
+    # Streaming - top 5 services (Netflix scrapes public TSVs, no cookies
+    # needed). Bundle notes:
+    #   - disneyplus.com session unlocks Disney+ and ESPN+
+    #   - hulu.com session unlocks Hulu and Max (on bundle plan)
+    'disneyplus.com',
+    'hulu.com',
+    'max.com',
+    'amazon.com',      # for Prime Video (same session as amazon shopping)
+    'plus.espn.com',   # only needed if ESPN+ not on Disney bundle
 ]
 
 S3_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')

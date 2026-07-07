@@ -278,6 +278,27 @@ RETAILERS = [
     ('lululemon','Lululemon', False),
 ]
 
+
+# ============================================================================
+# Streaming platform trending config
+# ============================================================================
+# Netflix uses the public per-country / global TSV feeds and is always
+# available (no auth). The rest are cookie-donation Playwright scrapers
+# populated by the daily suite - `available` flips to True at read time
+# once a fresh snapshot lands. Notes:
+#   - Max entitlement comes bundled with Hulu on the Disney+/Hulu/Max
+#     plan but streams on max.com; scraper hits max.com directly.
+#   - ESPN+ comes bundled with Disney+ but streams on plus.espn.com;
+#     scraper hits plus.espn.com directly.
+STREAMING_PLATFORMS = [
+    ('netflix',    'Netflix',      True),
+    ('disneyplus', 'Disney+',      False),
+    ('hulu',       'Hulu',         False),
+    ('max',        'Max',          False),
+    ('primevideo', 'Prime Video',  False),
+    ('espnplus',   'ESPN+',        False),
+]
+
 # How old a snapshot can be before we treat the source as unavailable
 # again. Two days = one missed nightly + one buffer. Bump if a scraper
 # is flaky.
@@ -1467,6 +1488,55 @@ def _fetch_social_trending(state: Optional[str], lookback_days: int,
 
 
 # ============================================================================
+# Card 5b: Trending on streaming (Netflix, Disney+, Hulu, Max, Prime, ESPN+)
+# ============================================================================
+def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
+                                keywords: Optional[list[str]] = None) -> dict:
+    """Fan out to every streaming platform's daily snapshot.
+
+    Netflix is populated by the public TSV scraper (no auth). The rest
+    are Playwright + donated-cookie scrapers - they'll return
+    `available=False` until Jenna donates cookies for that domain.
+
+    Geographic filtering is minimal here: rankings are inherently
+    national (Netflix per-country data is US; the others are all
+    US-Netflix / US-Disney+ etc.). We still honor `keywords` for the
+    reordering pass so state / DMA selections nudge locally-flavored
+    titles up (e.g. "Yellowstone" for MT, "The Wire" for MD).
+    """
+    result = {slug: {'label': label, 'items': [], 'available': avail}
+              for slug, label, avail in STREAMING_PLATFORMS}
+
+    for slug, label, _static_avail in STREAMING_PLATFORMS:
+        snap = _read_snapshot(slug)
+        if not snap:
+            continue
+        items = _snapshot_items_for_geo(snap, state, keywords=keywords)
+        snap_available = snap.get('available')
+        if snap_available is None:
+            snap_available = bool(items)
+        payload = {
+            'label':      label,
+            'items':      items[:20],
+            'available':  bool(snap_available),
+            'fetched_at': snap.get('fetched_at'),
+        }
+        # Netflix ships extra metadata (week, per-category breakouts)
+        # the frontend uses for the "week of..." subtitle.
+        if slug == 'netflix':
+            for extra in ('week_us', 'week_global',
+                           'us_films', 'us_tv',
+                           'global_films_en', 'global_tv_en',
+                           'global_films_nonen', 'global_tv_nonen'):
+                if extra in snap:
+                    payload[extra] = snap[extra]
+        if snap.get('error'):
+            payload['note'] = f"latest snapshot: {snap['error']}"
+        result[slug] = payload
+    return result
+
+
+# ============================================================================
 # Card 6: Trending products by retailer
 # ============================================================================
 _AMAZON_ITEM_RE = re.compile(
@@ -1704,6 +1774,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         'headlines_pack':      lambda: _fetch_trending_headlines_and_sources(geo_kws),
         'social_trending':     lambda: _fetch_social_trending(state, lookback_days,
                                                                  keywords=geo_kws),
+        'streaming_trending':  lambda: _fetch_streaming_trending(state, lookback_days,
+                                                                    keywords=geo_kws),
         'products_by_retailer':lambda: _fetch_trending_products(keywords=geo_kws),
         'movers':              lambda: compute_search_movers(state),
     }
@@ -1721,10 +1793,11 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
 
     trending_searches = results.get('trending_searches') or []
     headlines, articles_by_source = results.get('headlines_pack') or ([], [])
-    social_trending   = results.get('social_trending') or {}
-    products          = results.get('products_by_retailer') or []
-    movers            = results.get('movers') or {'available': False,
-                                                    'note': 'warming up'}
+    social_trending    = results.get('social_trending') or {}
+    streaming_trending = results.get('streaming_trending') or {}
+    products           = results.get('products_by_retailer') or []
+    movers             = results.get('movers') or {'available': False,
+                                                     'note': 'warming up'}
 
     trending_people = _fetch_trending_people(headlines, trending_searches, lookback_days)
 
@@ -1752,6 +1825,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'articles_by_source':             articles_by_source,
             'trending_people':                trending_people,
             'social_trending':                social_trending,
+            'streaming_trending':             streaming_trending,
             'products_by_retailer':           products,
             'movers':                         movers,
         },
@@ -1765,6 +1839,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'sources':       len(articles_by_source),
             'people':        len(trending_people),
             'retailers':     len(products),
+            'streaming':     sum(1 for p in streaming_trending.values()
+                                    if (p or {}).get('available')),
             'movers':    (len(movers.get('breakout') or []) +
                            len(movers.get('rising')   or []) +
                            len(movers.get('falling')  or []) +

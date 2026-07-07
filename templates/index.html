@@ -39675,6 +39675,7 @@
                 { key: 'searches',  label: 'Trending searches',count: counts.searches  || 0, icon: '🔎' },
                 { key: 'people',    label: 'Trending people',  count: counts.people    || 0, icon: '👤' },
                 { key: 'social',    label: 'Social',           count: 0,                     icon: '💬' },
+                { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺' },
                 { key: 'products',  label: 'Products',         count: counts.retailers || 0, icon: '🛍️' },
                 { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★' },
             ];
@@ -39700,6 +39701,7 @@
                 })) +
                 _renderTIQPanel('people',    renderTIQPeople(cards.trending_people || [])) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
+                _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
 
@@ -40100,6 +40102,124 @@
             });
         };
 
+        // Preferred platform tab order. Netflix leads because its public
+        // TSV feed is always populated; the rest fall behind once cookies
+        // are donated. Anything unknown appends at the end.
+        var _tiqStreamOrder = ['netflix', 'disneyplus', 'hulu', 'max', 'primevideo', 'espnplus'];
+
+        function renderTIQStreaming(streaming) {
+            var allKeys = Object.keys(streaming || {});
+            if (!allKeys.length) {
+                return '<div class="tiq-empty">Streaming rankings are warming up.</div>';
+            }
+            // Order platforms deterministically, unknowns last.
+            var keys = _tiqStreamOrder.filter(function(k) { return streaming[k]; })
+                .concat(allKeys.filter(function(k) { return _tiqStreamOrder.indexOf(k) === -1; }));
+
+            // Pick default active platform: the first one with data.
+            if (!window.__trendsIQ.activeStreaming ||
+                !streaming[window.__trendsIQ.activeStreaming]) {
+                var firstWithData = keys.find(function(k) {
+                    return (streaming[k] || {}).available;
+                }) || keys[0];
+                window.__trendsIQ.activeStreaming = firstWithData;
+            }
+
+            var tabs = keys.map(function(k) {
+                var s = streaming[k] || {};
+                var active = (k === window.__trendsIQ.activeStreaming) ? ' active' : '';
+                var unavail = !s.available ? ' unavailable' : '';
+                return '<div class="tiq-social-tab' + active + unavail + '" onclick="setTrendsIQStreaming(\'' + k + '\')">' + _tiqEsc(s.label || k) + '</div>';
+            }).join('');
+
+            var panels = keys.map(function(k) {
+                var s = streaming[k] || {};
+                var active = (k === window.__trendsIQ.activeStreaming) ? ' active' : '';
+                var body;
+                if (!s.available) {
+                    var domainHint = {
+                        'disneyplus': 'disneyplus.com',
+                        'hulu':       'hulu.com',
+                        'max':        'max.com',
+                        'primevideo': 'amazon.com',
+                        'espnplus':   'plus.espn.com'
+                    }[k] || '';
+                    var extraNote = domainHint ?
+                        ' Donate cookies for <code>' + domainHint + '</code> to light this up.' : '';
+                    body = '<div class="tiq-placeholder">' +
+                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + ' is warming up</div>' +
+                           '<div>Rankings pull from your logged-in session.' + extraNote + '</div>' +
+                           '</div>';
+                } else if (!(s.items || []).length) {
+                    body = '<div class="tiq-empty">No trending titles right now.</div>';
+                } else {
+                    // Netflix ships week + split Films/TV lists that look
+                    // cleaner as two side-by-side lists than one interleaved.
+                    if (k === 'netflix' && ((s.us_films || []).length || (s.us_tv || []).length)) {
+                        var weekLabel = s.week_us ? 'Week of ' + _tiqEsc(s.week_us) : '';
+                        var subtitle = 'Top 10 in the US on Netflix. ' + weekLabel;
+                        var renderCol = function(label, rows) {
+                            var lis = (rows || []).map(function(it, i) {
+                                var meta = (it.weeks_in_top10 > 0)
+                                    ? '<span class="tiq-badge">wk ' + it.weeks_in_top10 + '</span>' : '';
+                                var streamKey = it.title;
+                                return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
+                                       '<div class="tiq-row-body">' +
+                                       '<div class="tiq-row-title"><a href="' + _tiqEsc(it.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>' +
+                                       _tiqActions('streaming', k, streamKey, streamKey, 'National') + '</div>' +
+                                       (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
+                                       '</div></div>';
+                            }).join('');
+                            return '<div class="tiq-card"><h4>' + _tiqEsc(label) + '</h4>' +
+                                   '<div class="tiq-headline-list">' + (lis || '<div class="tiq-empty">No data.</div>') + '</div></div>';
+                        };
+                        body = '<div class="tiq-card-sub" style="margin-bottom:12px;">' + subtitle + '</div>' +
+                               '<div class="tiq-cards-grid" style="grid-template-columns: 1fr 1fr;">' +
+                               renderCol('Films (US)', s.us_films) +
+                               renderCol('TV (US)',    s.us_tv) +
+                               '</div>';
+                    } else {
+                        var subtitle2 = 'What is trending on ' + _tiqEsc(s.label || k) + ' right now.';
+                        body = '<div class="tiq-cards-grid" style="grid-template-columns: 1fr;">' +
+                               '<div class="tiq-card"><h4>' + _tiqEsc(s.label || k) + ' - trending now</h4>' +
+                               '<div class="tiq-card-sub">' + subtitle2 + '</div>' +
+                               '<div class="tiq-headline-list">' +
+                               s.items.map(function(it, i) {
+                                   var badges = '';
+                                   if (it.category_display) badges += '<span class="tiq-badge">' + _tiqEsc(it.category_display) + '</span>';
+                                   if (it.collection && it.collection !== 'Home') badges += '<span>' + _tiqEsc(it.collection) + '</span>';
+                                   if (typeof it.weeks_in_top10 === 'number' && it.weeks_in_top10 > 0) badges += '<span class="tiq-badge">wk ' + it.weeks_in_top10 + '</span>';
+                                   var streamKey = it.title;
+                                   return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
+                                          '<div class="tiq-row-body">' +
+                                          '<div class="tiq-row-title"><a href="' + _tiqEsc(it.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>' +
+                                          _tiqActions('streaming', k, streamKey, streamKey, 'National') + '</div>' +
+                                          (badges ? '<div class="tiq-row-meta">' + badges + '</div>' : '') +
+                                          '</div></div>';
+                               }).join('') +
+                               '</div></div></div>';
+                    }
+                }
+                return '<div class="tiq-social-panel' + active + '" data-tiq-streaming="' + k + '">' + body + '</div>';
+            }).join('');
+            return '<div class="tiq-social-tabs">' + tabs + '</div>' + panels;
+        }
+
+        window.setTrendsIQStreaming = function(key) {
+            window.__trendsIQ.activeStreaming = key;
+            var streaming = (window.__trendsIQ.lastData &&
+                             window.__trendsIQ.lastData.cards &&
+                             window.__trendsIQ.lastData.cards.streaming_trending) || {};
+            document.querySelectorAll('#trendsIQPanels [data-tiq-panel="streaming"] .tiq-social-tab').forEach(function(el) {
+                var s = streaming[key] || {};
+                var isActive = el.textContent.trim().toLowerCase() === (s.label || key).toLowerCase();
+                el.classList.toggle('active', isActive);
+            });
+            document.querySelectorAll('#trendsIQPanels [data-tiq-streaming]').forEach(function(el) {
+                el.classList.toggle('active', el.getAttribute('data-tiq-streaming') === key);
+            });
+        };
+
         function renderTIQProducts(retailers) {
             if (!retailers.length) return '<div class="tiq-empty">No retailer feeds returned data.</div>';
             var tabs = retailers.map(function(r) {
@@ -40268,6 +40388,7 @@
                 })) +
                 _renderTIQPanel('people',    renderTIQPeople(cards.trending_people || [])) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
+                _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
             setTrendsIQTab(window.__trendsIQ.activeTab || 'movers');

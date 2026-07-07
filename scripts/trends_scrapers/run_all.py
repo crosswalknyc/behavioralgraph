@@ -49,6 +49,16 @@ SCRAPERS = [
     ('sephora',   'scripts.trends_scrapers.sephora',    'Sephora',   'retailer'),
     ('target',    'scripts.trends_scrapers.target',     'Target',    'retailer'),
     ('walmart',   'scripts.trends_scrapers.walmart',    'Walmart',   'retailer'),
+    # Streaming platforms. Netflix uses public TSV data (no auth). The
+    # others read Jenna's donated cookies via cookie_domain=<host>.
+    # ESPN+ and Max are bundled via Disney+ and Hulu respectively, but
+    # each streams on its own domain and needs its own scraper.
+    ('netflix',    'scripts.trends_scrapers.netflix',       'Netflix',     'streaming'),
+    ('disneyplus', 'scripts.trends_scrapers.disneyplus',    'Disney+',     'streaming'),
+    ('hulu',       'scripts.trends_scrapers.hulu',          'Hulu',        'streaming'),
+    ('max',        'scripts.trends_scrapers.max_streaming', 'Max',         'streaming'),
+    ('primevideo', 'scripts.trends_scrapers.primevideo',    'Prime Video', 'streaming'),
+    ('espnplus',   'scripts.trends_scrapers.espnplus',      'ESPN+',       'streaming'),
 ]
 
 
@@ -151,29 +161,38 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{'source':<12} {'kind':<9} {'count':>6}  {'elapsed':>8}  error")
     print('-' * 70)
     fail_count = 0
-    empty_retailer_sources: list[str] = []
+    empty_sources: list[tuple[str, str]] = []  # (source, kind) that need cookies
     for r in sorted(results, key=lambda x: x.get('source', '')):
         err = r.get('error') or ''
         if err:
             fail_count += 1
         count = len(r.get('national') or [])
-        if r.get('kind') == 'retailer' and count == 0:
-            empty_retailer_sources.append(r.get('source', ''))
-        print(f"{r.get('source', ''):<12} {r.get('kind', ''):<9} "
+        kind = r.get('kind') or ''
+        if count == 0 and kind in {'retailer', 'streaming'}:
+            empty_sources.append((r.get('source', ''), kind))
+        print(f"{r.get('source', ''):<12} {kind:<9} "
                f"{count:>6}  "
                f"{(r.get('orchestrator_elapsed_s') or r.get('scrape_elapsed_s') or 0):>7.1f}s  "
                f"{err[:60]}")
 
-    # Empty retailer feeds are almost always a bot-block. Print the
-    # exact `donate_cookies.py` command the operator needs to run.
-    if empty_retailer_sources:
+    # Empty retailer / streaming feeds are almost always a bot-block or
+    # a missing session. Print the exact `donate_cookies.py` command the
+    # operator needs to run. Netflix uses public TSVs so it's never in
+    # this list even when it fails (that would be a network issue, not
+    # a cookie issue).
+    if empty_sources:
         domain_map = {
-            'target':    'target.com',    'walmart':   'walmart.com',
-            'etsy':      'etsy.com',      'sephora':   'sephora.com',
-            'lululemon': 'lululemon.com', 'bestbuy':   'bestbuy.com',
-            'nike':      'nike.com',      'ulta':      'ulta.com',
+            # Retailers
+            'target':     'target.com',     'walmart':    'walmart.com',
+            'etsy':       'etsy.com',       'sephora':    'sephora.com',
+            'lululemon':  'lululemon.com',  'bestbuy':    'bestbuy.com',
+            'nike':       'nike.com',       'ulta':       'ulta.com',
+            # Streaming
+            'disneyplus': 'disneyplus.com', 'hulu':       'hulu.com',
+            'max':        'max.com',        'primevideo': 'amazon.com',
+            'espnplus':   'plus.espn.com',
         }
-        need = [domain_map[s] for s in empty_retailer_sources if s in domain_map]
+        need = [domain_map[s] for s, _k in empty_sources if s in domain_map]
         if need:
             print()
             print(f"COOKIE_DONATION_NEEDED: {', '.join(need)}")
