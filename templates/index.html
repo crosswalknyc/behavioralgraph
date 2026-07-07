@@ -22222,6 +22222,41 @@
             #trendsIQView .tiq-product-name a:hover { color: #a78bfa; }
             #trendsIQView .tiq-product-price { margin-top: 0.35rem; font-size: 0.82rem; font-weight: 700; color: #34d399; letter-spacing: 0.01em; }
             body[data-theme="light"] #trendsIQView .tiq-product-price { color: #059669; }
+
+            #trendsIQView .tiq-actions { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; opacity: 0.6; transition: opacity 0.15s; }
+            #trendsIQView .tiq-row:hover .tiq-actions,
+            #trendsIQView .tiq-product-card:hover .tiq-actions,
+            #trendsIQView .tiq-person-card:hover .tiq-actions { opacity: 1; }
+            #trendsIQView .tiq-action-btn { cursor: pointer; background: transparent; border: 1px solid rgba(255,255,255,0.12); color: var(--text-secondary); border-radius: 6px; padding: 2px 6px; font-size: 0.78rem; line-height: 1; user-select: none; transition: all 0.15s; }
+            #trendsIQView .tiq-action-btn:hover { border-color: rgba(167, 139, 250, 0.5); color: #a78bfa; }
+            #trendsIQView .tiq-action-btn.watched { background: rgba(250, 204, 21, 0.08); border-color: rgba(250, 204, 21, 0.45); color: #facc15; }
+
+            #trendsIQView .tiq-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 10050; display: flex; align-items: center; justify-content: center; padding: 24px; }
+            #trendsIQView .tiq-modal { background: #0f172a; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; max-width: 720px; width: 100%; max-height: 88vh; overflow-y: auto; padding: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+            body[data-theme="light"] #trendsIQView .tiq-modal { background: #fff; color: #1a1a2e; }
+            #trendsIQView .tiq-modal h3 { margin: 0 0 6px 0; font-size: 1.2rem; color: var(--text-primary); }
+            #trendsIQView .tiq-modal .tiq-modal-sub { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 18px; }
+            #trendsIQView .tiq-modal .tiq-close { float: right; cursor: pointer; background: transparent; border: none; color: var(--text-secondary); font-size: 1.4rem; padding: 0 6px; }
+            #trendsIQView .tiq-modal .tiq-arc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
+            #trendsIQView .tiq-modal .tiq-arc-stat { background: rgba(255,255,255,0.03); padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); }
+            body[data-theme="light"] #trendsIQView .tiq-modal .tiq-arc-stat { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); }
+            #trendsIQView .tiq-modal .tiq-arc-stat-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin-bottom: 4px; }
+            #trendsIQView .tiq-modal .tiq-arc-stat-value { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); }
+            #trendsIQView .tiq-modal .tiq-arc-chart { background: rgba(124, 58, 237, 0.04); border: 1px solid rgba(124, 58, 237, 0.18); border-radius: 10px; padding: 16px; margin: 12px 0; }
+            #trendsIQView .tiq-modal .tiq-momentum-tag { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
+            #trendsIQView .tiq-momentum-tag.breakout { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+            #trendsIQView .tiq-momentum-tag.rising { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+            #trendsIQView .tiq-momentum-tag.falling { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+            #trendsIQView .tiq-momentum-tag.sustained { background: rgba(167, 139, 250, 0.15); color: #a78bfa; }
+            #trendsIQView .tiq-momentum-tag.new { background: rgba(250, 204, 21, 0.15); color: #facc15; }
+            #trendsIQView .tiq-momentum-tag.new_arc { background: rgba(250, 204, 21, 0.15); color: #facc15; }
+            #trendsIQView .tiq-momentum-tag.dropped { background: rgba(156, 163, 175, 0.15); color: #9ca3af; }
+            #trendsIQView .tiq-momentum-tag.unknown { background: rgba(156, 163, 175, 0.1); color: #9ca3af; }
+
+            #trendsIQView .tiq-watch-empty { padding: 3rem 1.5rem; text-align: center; color: var(--text-secondary); }
+            #trendsIQView .tiq-watch-empty-title { font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.6rem; }
+            #trendsIQView .tiq-watch-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 8px; }
+            body[data-theme="light"] #trendsIQView .tiq-watch-row { border-color: rgba(0,0,0,0.08); }
             #trendsIQView .tiq-empty { padding: 2rem; text-align: center; color: var(--text-secondary); font-size: 0.88rem; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.08); }
             #trendsIQView .tiq-placeholder { padding: 2rem 1rem; text-align: center; color: var(--text-secondary); font-size: 0.85rem; background: rgba(124, 58, 237, 0.04); border: 1px dashed rgba(124, 58, 237, 0.22); border-radius: 10px; }
             #trendsIQView .tiq-placeholder .tiq-placeholder-title { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem; }
@@ -39620,6 +39655,7 @@
                 updatedAt.textContent = 'Updated ' + d.toLocaleString();
             }
 
+            var watchCount = (window.__trendsIQ.watchList || []).length;
             var tabs = [
                 { key: 'movers',    label: 'Movers',           count: counts.movers    || 0, icon: '🚀' },
                 { key: 'headlines', label: 'Headlines',        count: counts.headlines || 0, icon: '📰' },
@@ -39628,14 +39664,16 @@
                 { key: 'people',    label: 'Trending people',  count: counts.people    || 0, icon: '👤' },
                 { key: 'social',    label: 'Social',           count: 0,                     icon: '💬' },
                 { key: 'products',  label: 'Products',         count: counts.retailers || 0, icon: '🛍️' },
+                { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★' },
             ];
             var strip = document.getElementById('trendsIQTabStrip');
             strip.style.display = 'flex';
             strip.innerHTML = tabs.map(function(t) {
                 var active = (t.key === (window.__trendsIQ.activeTab || 'movers')) ? ' active' : '';
+                var badgeId = (t.key === 'watchlist') ? ' id="trendsIQWatchBadge"' : '';
                 return '<div class="tiq-tab' + active + '" data-tiq-tab="' + t.key + '" onclick="setTrendsIQTab(\'' + t.key + '\')">' +
                        '<span>' + t.icon + '</span><span>' + t.label + '</span>' +
-                       (t.count ? '<span class="tiq-tab-count">' + t.count + '</span>' : '') +
+                       (t.count ? '<span class="tiq-tab-count"' + badgeId + '>' + t.count + '</span>' : (t.key === 'watchlist' ? '<span class="tiq-tab-count"' + badgeId + ' style="display:none;"></span>' : '')) +
                        '</div>';
             }).join('');
 
@@ -39647,9 +39685,18 @@
                 _renderTIQPanel('searches',  renderTIQSearches(cards.trending_searches || [])) +
                 _renderTIQPanel('people',    renderTIQPeople(cards.trending_people || [])) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
-                _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || []));
+                _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
+                _renderTIQPanel('watchlist', renderTIQWatchlist());
 
             setTrendsIQTab(window.__trendsIQ.activeTab || 'movers');
+
+            if (!window.__trendsIQ.watchReady) {
+                tiqLoadWatchlist().then(function() {
+                    // Repaint stars once we know what's watched. The
+                    // watchlist tab also picks up its content here.
+                    _tiqRepaintActivePanel();
+                });
+            }
         }
 
         function _renderTIQPanel(key, inner) {
@@ -39691,7 +39738,8 @@
             return '<div class="tiq-row">' +
                    '<div class="tiq-rank">' + (rankNow || '&mdash;') + '</div>' +
                    '<div class="tiq-row-body">' +
-                     '<div class="tiq-row-title">' + _tiqEsc(row.term || '') + '</div>' +
+                     '<div class="tiq-row-title">' + _tiqEsc(row.term || '') +
+                     _tiqActions('search', 'google', row.term || '', row.term || '', 'National') + '</div>' +
                      '<div class="tiq-row-meta">' +
                        _tiqMoverBadge(row) +
                        (rankPrev ? '<span class="tiq-badge">' + rankPrev + '</span>' : '') +
@@ -39763,7 +39811,8 @@
                         '<div class="tiq-rank">' + (i + 1) + '</div>' +
                         img +
                         '<div class="tiq-row-body">' +
-                        '<div class="tiq-row-title"><a href="' + _tiqEsc(r.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(r.title) + '</a></div>' +
+                        '<div class="tiq-row-title"><a href="' + _tiqEsc(r.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(r.title) + '</a>' +
+                        _tiqActions('headline', 'gdelt', r.title, r.title, r.geo || 'National') + '</div>' +
                         '<div class="tiq-row-meta"><span class="tiq-badge">' + _tiqEsc(r.source || '') + '</span>' +
                         (r.seendate ? '<span>' + _tiqEsc(r.seendate) + '</span>' : '') +
                         '</div></div></div>';
@@ -39814,7 +39863,8 @@
                     var hot = r.days_trending >= 3;
                     html += '<div class="tiq-row"><div class="tiq-rank">' + globalRank + '</div>' +
                             '<div class="tiq-row-body">' +
-                            '<div class="tiq-row-title">' + _tiqEsc(r.term) + '</div>' +
+                            '<div class="tiq-row-title">' + _tiqEsc(r.term) +
+                            _tiqActions('search', 'google', r.term, r.term, 'National') + '</div>' +
                             '<div class="tiq-row-meta">' +
                             (r.score ? '<span class="tiq-badge">' + _tiqNum(r.score) + ' searches</span>' : '') +
                             (r.days_trending ? '<span class="tiq-badge' + (hot ? ' hot' : '') + '">' + r.days_trending + 'd trending</span>' : '') +
@@ -39891,7 +39941,8 @@
                 var mentionsProj  = Number(p.mentions_projected  != null ? p.mentions_projected  : (Number(p.mentions)  || 0) * 329990000) || 0;
                 var pageviewsProj = Number(p.pageviews_projected != null ? p.pageviews_projected : (Number(p.pageviews) || 0) * 329990000) || 0;
                 html += '<div class="tiq-person-card">' +
-                        '<div class="tiq-person-name">' + _tiqEsc(p.name) + '</div>' +
+                        '<div class="tiq-person-name">' + _tiqEsc(p.name) +
+                        _tiqActions('person', 'gdelt', p.name, p.name, 'National') + '</div>' +
                         '<div class="tiq-person-mentions">' + _tiqNum(mentionsProj) + ' mentions' +
                         (pageviewsProj ? ' &middot; ' + _tiqNum(pageviewsProj) + ' pageviews' : '') +
                         '</div>' +
@@ -39931,9 +39982,11 @@
                                if (typeof it.score === 'number') meta += '<span class="tiq-badge">' + _tiqNum(it.score) + ' upvotes</span>';
                                if (typeof it.comments === 'number') meta += '<span>' + _tiqNum(it.comments) + ' comments</span>';
                                if (it.subreddit) meta += '<span>r/' + _tiqEsc(it.subreddit) + '</span>';
+                               var socialKey = it.title || it.topic || it.hashtag || '';
                                return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                                       '<div class="tiq-row-body">' +
-                                      '<div class="tiq-row-title"><a href="' + _tiqEsc(it.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a></div>' +
+                                      '<div class="tiq-row-title"><a href="' + _tiqEsc(it.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>' +
+                                      _tiqActions('social', k, socialKey, socialKey, 'National') + '</div>' +
                                       (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
                                       '</div></div>';
                            }).join('') +
@@ -39990,6 +40043,7 @@
                                               '<div class="tiq-product-rank">#' + (p.rank || '') + '</div>' +
                                               '<div class="tiq-product-name"><a href="' + _tiqEsc(p.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(p.name) + '</a></div>' +
                                               priceHtml +
+                                              _tiqActions('retailer', r.retailer, p.name, p.name, 'National') +
                                               '</div></div>';
                                    }).join('') +
                                    '</div></div>';
@@ -40013,6 +40067,295 @@
                 el.classList.toggle('active', el.getAttribute('data-tiq-retailer') === key);
             });
         };
+
+        // ============================================================
+        // Watchlist + historical arcs (Phase 1c)
+        // Every trending row gets two actions: watch (star) and open
+        // the historical arc drilldown (📈). Watchlist state is cached
+        // in window.__trendsIQ.watchSet so re-renders don't need a
+        // roundtrip; the roundtrip only happens on toggle.
+        // ============================================================
+        window.__trendsIQ = window.__trendsIQ || {};
+        window.__trendsIQ.watchSet   = window.__trendsIQ.watchSet   || new Set();
+        window.__trendsIQ.watchList  = window.__trendsIQ.watchList  || [];
+        window.__trendsIQ.watchReady = window.__trendsIQ.watchReady || false;
+
+        function _tiqWatchKey(kind, source, key) {
+            return String(kind || '').toLowerCase() + '|'
+                 + String(source || '').toLowerCase() + '|'
+                 + String(key || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        }
+
+        function _tiqActions(kind, source, key, label, geo) {
+            var wk = _tiqWatchKey(kind, source, key);
+            var watched = window.__trendsIQ.watchSet.has(wk);
+            var esc = function(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); };
+            var args = "'" + esc(kind) + "','" + esc(source) + "','" + esc(key) + "','" + esc(label || key) + "','" + esc(geo || 'National') + "'";
+            return '<span class="tiq-actions">' +
+                   '<span class="tiq-action-btn' + (watched ? ' watched' : '') + '"' +
+                   ' title="' + (watched ? 'Remove from watchlist' : 'Add to watchlist') + '"' +
+                   ' onclick="event.stopPropagation(); tiqToggleWatch(' + args + ')">' +
+                   (watched ? '★' : '☆') + '</span>' +
+                   '<span class="tiq-action-btn" title="View historical arc"' +
+                   ' onclick="event.stopPropagation(); tiqShowDrilldown(' + args + ')">📈</span>' +
+                   '</span>';
+        }
+
+        window.tiqLoadWatchlist = function() {
+            return fetch('/api/trends-iq/watchlist', { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.success) return;
+                    var list = data.entries || [];
+                    window.__trendsIQ.watchList = list;
+                    var set = new Set();
+                    list.forEach(function(e) { set.add(_tiqWatchKey(e.kind, e.source, e.key)); });
+                    window.__trendsIQ.watchSet = set;
+                    window.__trendsIQ.watchReady = true;
+                    // Repaint stars on whatever tab is active without
+                    // refetching the full trends payload.
+                    var badge = document.getElementById('trendsIQWatchBadge');
+                    if (badge) badge.textContent = list.length || '';
+                })
+                .catch(function() { /* stay silent - no-watch is the safe default */ });
+        };
+
+        window.tiqToggleWatch = function(kind, source, key, label, geo) {
+            var wk = _tiqWatchKey(kind, source, key);
+            var watched = window.__trendsIQ.watchSet.has(wk);
+            var url = watched ? '/api/trends-iq/watchlist/remove' : '/api/trends-iq/watchlist/add';
+            // Optimistic: flip the local set + repaint all matching stars.
+            if (watched) window.__trendsIQ.watchSet.delete(wk);
+            else         window.__trendsIQ.watchSet.add(wk);
+            document.querySelectorAll('#trendsIQView .tiq-actions').forEach(function(el) {
+                // Re-render is expensive; just retoggle the class on the
+                // one button that matches this key. Cheap and reliable.
+            });
+            // Full repaint of visible panels is cleaner:
+            _tiqRepaintActivePanel();
+            fetch(url, {
+                method:  'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ kind: kind, source: source, key: key, geo: geo, label: label }),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data && data.success) {
+                    window.__trendsIQ.watchList = data.entries || [];
+                    var badge = document.getElementById('trendsIQWatchBadge');
+                    if (badge) badge.textContent = window.__trendsIQ.watchList.length || '';
+                } else {
+                    // Revert on failure.
+                    if (watched) window.__trendsIQ.watchSet.add(wk);
+                    else         window.__trendsIQ.watchSet.delete(wk);
+                    _tiqRepaintActivePanel();
+                }
+            })
+            .catch(function() {
+                if (watched) window.__trendsIQ.watchSet.add(wk);
+                else         window.__trendsIQ.watchSet.delete(wk);
+                _tiqRepaintActivePanel();
+            });
+        };
+
+        function _tiqRepaintActivePanel() {
+            var data = window.__trendsIQ.lastData;
+            if (!data || !data.cards) return;
+            // Repaint the two panels most likely to have visible stars.
+            var cards = data.cards;
+            var panels = document.getElementById('trendsIQPanels');
+            if (!panels) return;
+            panels.innerHTML =
+                _renderTIQPanel('movers',    renderTIQMovers(cards.movers || {available:false})) +
+                _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [])) +
+                _renderTIQPanel('sources',   renderTIQArticlesBySource(cards.articles_by_source || [])) +
+                _renderTIQPanel('searches',  renderTIQSearches(cards.trending_searches || [])) +
+                _renderTIQPanel('people',    renderTIQPeople(cards.trending_people || [])) +
+                _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
+                _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
+                _renderTIQPanel('watchlist', renderTIQWatchlist());
+            setTrendsIQTab(window.__trendsIQ.activeTab || 'movers');
+        }
+
+        // ---------- Historical arc drilldown ----------
+        window.tiqShowDrilldown = function(kind, source, key, label, geo) {
+            var overlay = document.createElement('div');
+            overlay.className = 'tiq-modal-overlay';
+            overlay.onclick = function(e) { if (e.target === overlay) tiqCloseDrilldown(); };
+            overlay.id = 'tiqDrilldownOverlay';
+            overlay.innerHTML =
+                '<div class="tiq-modal">' +
+                '<button class="tiq-close" onclick="tiqCloseDrilldown()">×</button>' +
+                '<h3>' + _tiqEsc(label || key) + '</h3>' +
+                '<div class="tiq-modal-sub">Loading historical arc...</div>' +
+                '</div>';
+            document.body.appendChild(overlay);
+            var params = new URLSearchParams({
+                kind: kind || '', source: source || '', key: key || '',
+                geo: geo || 'National', days: '14',
+            });
+            fetch('/api/trends-iq/history?' + params.toString(), { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.success || !data.arc) {
+                        overlay.querySelector('.tiq-modal-sub').textContent = 'No historical data yet - snapshots are still accumulating.';
+                        return;
+                    }
+                    _tiqRenderDrilldown(overlay, data.arc, label, kind, source, key, geo);
+                })
+                .catch(function() {
+                    overlay.querySelector('.tiq-modal-sub').textContent = 'Failed to load history.';
+                });
+        };
+
+        window.tiqCloseDrilldown = function() {
+            var o = document.getElementById('tiqDrilldownOverlay');
+            if (o) o.parentNode.removeChild(o);
+        };
+
+        function _tiqRenderDrilldown(overlay, arc, label, kind, source, key, geo) {
+            var stats = [
+                { label: 'Current rank',  value: (arc.current_rank != null ? '#' + arc.current_rank : '-') },
+                { label: 'Best rank',     value: (arc.best_rank    != null ? '#' + arc.best_rank    : '-') },
+                { label: 'Days present',  value: (arc.present_days || 0) + '/' + (arc.total_days || 0) },
+                { label: 'First seen',    value: (arc.first_seen   || '-') },
+            ].map(function(s) {
+                return '<div class="tiq-arc-stat">' +
+                       '<div class="tiq-arc-stat-label">' + s.label + '</div>' +
+                       '<div class="tiq-arc-stat-value">' + _tiqEsc(String(s.value)) + '</div>' +
+                       '</div>';
+            }).join('');
+
+            var mom = String(arc.momentum || 'unknown').toLowerCase();
+            var wk = _tiqWatchKey(kind, source, key);
+            var watched = window.__trendsIQ.watchSet.has(wk);
+            var esc = function(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); };
+            var args = "'" + esc(kind) + "','" + esc(source) + "','" + esc(key) + "','" + esc(label || key) + "','" + esc(geo || 'National') + "'";
+
+            var body =
+                '<button class="tiq-close" onclick="tiqCloseDrilldown()">×</button>' +
+                '<h3>' + _tiqEsc(label || key) + ' ' +
+                    '<span class="tiq-momentum-tag ' + mom + '">' + mom + '</span></h3>' +
+                '<div class="tiq-modal-sub">' +
+                    _tiqEsc(kind || '') + ' &middot; ' + _tiqEsc(source || '') +
+                    ' &middot; ' + _tiqEsc(geo || 'National') +
+                '</div>' +
+                '<div class="tiq-arc-chart">' + _tiqSparklineSVG(arc.days || []) + '</div>' +
+                '<div class="tiq-arc-stats">' + stats + '</div>' +
+                '<div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">' +
+                    '<button class="tiq-action-btn' + (watched ? ' watched' : '') +
+                            '" style="padding: 6px 12px; font-size: 0.85rem;"' +
+                            ' onclick="tiqToggleWatch(' + args + '); tiqCloseDrilldown();">' +
+                    (watched ? '★ Watching' : '☆ Add to watchlist') +
+                    '</button>' +
+                '</div>';
+            overlay.querySelector('.tiq-modal').innerHTML = body;
+        }
+
+        // Sparkline: rank flipped so higher-on-chart = better rank.
+        function _tiqSparklineSVG(days) {
+            if (!days || !days.length) return '<div style="color:var(--text-secondary); font-size:0.85rem;">No arc data.</div>';
+            var W = 600, H = 120, PADX = 20, PADY = 18;
+            var innerW = W - PADX * 2, innerH = H - PADY * 2;
+            var ranks = days.map(function(d) { return d.rank == null ? null : Number(d.rank); });
+            var present = ranks.filter(function(r) { return r != null; });
+            if (!present.length) {
+                return '<div style="color:var(--text-secondary); font-size:0.85rem;">This item is new today. Come back tomorrow to see the arc form.</div>';
+            }
+            var maxRank = Math.max.apply(null, present);
+            var minRank = Math.min.apply(null, present);
+            // Guard: single-day, or all same rank
+            if (maxRank === minRank) { maxRank = minRank + 1; }
+            var stepX = innerW / Math.max(1, days.length - 1);
+            var pts = [];
+            var circles = '';
+            var xLabels = '';
+            days.forEach(function(d, i) {
+                var x = PADX + i * stepX;
+                var showLabel = (i === 0 || i === days.length - 1 || i % Math.max(1, Math.floor(days.length / 4)) === 0);
+                if (showLabel) {
+                    xLabels += '<text x="' + x + '" y="' + (H - 2) + '" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.45)">' +
+                               (d.date || '').slice(5) + '</text>';
+                }
+                if (d.rank != null) {
+                    // Flip so rank 1 sits at the top
+                    var yFrac = (Number(d.rank) - minRank) / (maxRank - minRank);
+                    var y = PADY + yFrac * innerH;
+                    pts.push(x + ',' + y);
+                    circles += '<circle cx="' + x + '" cy="' + y + '" r="3.5" fill="#a78bfa"><title>' +
+                               (d.date || '') + ' rank #' + d.rank + '</title></circle>';
+                } else {
+                    // Absent day - hollow marker at the top edge
+                    var y2 = PADY + innerH + 6;
+                    circles += '<circle cx="' + x + '" cy="' + y2 + '" r="2" fill="none" stroke="rgba(255,255,255,0.25)"><title>' +
+                               (d.date || '') + ' (absent)</title></circle>';
+                }
+            });
+            // Piecewise polyline that skips absent days
+            var polyPieces = [];
+            var running = [];
+            for (var i = 0; i < days.length; i++) {
+                if (days[i].rank != null) {
+                    var x = PADX + i * stepX;
+                    var yFrac = (Number(days[i].rank) - minRank) / (maxRank - minRank);
+                    var y = PADY + yFrac * innerH;
+                    running.push(x + ',' + y);
+                } else if (running.length) {
+                    polyPieces.push(running.join(' '));
+                    running = [];
+                }
+            }
+            if (running.length) polyPieces.push(running.join(' '));
+            var polys = polyPieces.map(function(pts) {
+                return '<polyline points="' + pts + '" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+            }).join('');
+            // Y-axis marker: best rank on top, worst on bottom
+            var yLabels =
+                '<text x="' + (PADX - 4) + '" y="' + (PADY + 4) + '" text-anchor="end" font-size="9" fill="rgba(255,255,255,0.45)">#' + minRank + '</text>' +
+                '<text x="' + (PADX - 4) + '" y="' + (PADY + innerH) + '" text-anchor="end" font-size="9" fill="rgba(255,255,255,0.45)">#' + maxRank + '</text>';
+            return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="120" preserveAspectRatio="none">' +
+                   polys + circles + xLabels + yLabels +
+                   '</svg>';
+        }
+
+        function renderTIQWatchlist() {
+            var list = window.__trendsIQ.watchList || [];
+            if (!list.length) {
+                return '<div class="tiq-watch-empty">' +
+                       '<div class="tiq-watch-empty-title">Your watchlist is empty</div>' +
+                       '<div>Star (★) any trending item to track its arc here and receive a daily digest email when it moves.</div>' +
+                       '</div>';
+            }
+            var html = '<div class="tiq-card"><h4>★ Your watchlist</h4>' +
+                       '<div class="tiq-card-sub">' + list.length + ' item' + (list.length === 1 ? '' : 's') + ' tracked. Click any row to view its arc.</div>';
+            list.forEach(function(e) {
+                var arc = e.arc || {};
+                var mom = String(arc.momentum || 'unknown').toLowerCase();
+                var esc = function(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); };
+                var args = "'" + esc(e.kind) + "','" + esc(e.source) + "','" + esc(e.key) + "','" + esc(e.label || e.key) + "','" + esc(e.geo || 'National') + "'";
+                html +=
+                    '<div class="tiq-watch-row" onclick="tiqShowDrilldown(' + args + ')" style="cursor:pointer;">' +
+                    '<div>' +
+                        '<div style="font-weight:600;">' + _tiqEsc(e.label || e.key) + '</div>' +
+                        '<div style="font-size:0.75rem; opacity:0.7;">' +
+                            _tiqEsc(e.kind || '') + ' &middot; ' + _tiqEsc(e.source || '') + ' &middot; ' + _tiqEsc(e.geo || 'National') +
+                        '</div>' +
+                    '</div>' +
+                    '<div style="text-align:right;">' +
+                        '<div style="font-size:0.7rem; opacity:0.6;">CURRENT</div>' +
+                        '<div style="font-weight:700;">' + (arc.current_rank != null ? '#' + arc.current_rank : '-') + '</div>' +
+                    '</div>' +
+                    '<div style="text-align:right;">' +
+                        '<div style="font-size:0.7rem; opacity:0.6;">BEST</div>' +
+                        '<div style="font-weight:700;">' + (arc.best_rank != null ? '#' + arc.best_rank : '-') + '</div>' +
+                    '</div>' +
+                    '<span class="tiq-momentum-tag ' + mom + '">' + mom + '</span>' +
+                    '</div>';
+            });
+            html += '</div>';
+            return html;
+        }
 
         // ===================== SF CONVERSION VIEW =====================
         let sfConvProfiles = [];
