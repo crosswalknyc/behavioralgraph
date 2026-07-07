@@ -4146,6 +4146,13 @@ def create_user():
             'role': role,
             'credits': req_data.get('credits', cd.get('credits', 5) if cd else 5),
             'credits_used': 0,
+            # Consulting-hour pool (minutes; -1 = unlimited). Mirrors credits.
+            # Company defaults may seed a starting pool for new hires.
+            'consulting_hour_pool': int(req_data.get(
+                'consulting_hour_pool',
+                (cd.get('consulting_hour_pool', 0) if cd else 0) or 0
+            ) or 0),
+            'consulting_hour_pool_used': 0,
             'created_at': datetime.now().isoformat(),
             'last_login': None,
             'access_expires': req_data.get('access_expires'),
@@ -4262,6 +4269,21 @@ def update_user(username):
             user['credits'] = req_data['credits']
         if 'credit_ceiling' in req_data:
             user['credit_ceiling'] = req_data['credit_ceiling']
+        # Consulting-hour pool (int minutes; -1 = unlimited). Direct-assign
+        # matches the credits pattern above — the value overwrites the pool
+        # total (not the used counter). Callers that want to *add* minutes
+        # go through /api/admin/time-tracking/grant instead so the grant is
+        # logged in consulting_hour_grants for audit.
+        if 'consulting_hour_pool' in req_data:
+            raw = req_data['consulting_hour_pool']
+            if raw is None:
+                user['consulting_hour_pool'] = 0
+            else:
+                try:
+                    user['consulting_hour_pool'] = int(raw)
+                except (TypeError, ValueError):
+                    return jsonify({'success': False, 'error': 'consulting_hour_pool must be an integer (minutes; -1 = unlimited)'}), 400
+            user.setdefault('consulting_hour_pool_used', 0)
         if 'credit_source' in req_data:
             user['credit_source'] = req_data['credit_source']
         if 'access_expires' in req_data:
@@ -4901,6 +4923,77 @@ def api_update_company_credits(company_name):
         return jsonify({'success': True, 'credit_pool': pool['credit_pool'],
                         'credit_pool_used': pool.get('credit_pool_used', 0),
                         'credit_pool_remaining': remaining})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/companies/<path:company_name>/consulting-hours', methods=['PUT'])
+@requires_admin
+def api_update_company_consulting_hours(company_name):
+    """Update a company's consulting-hour pool total or add minutes.
+
+    Mirrors /credits for hours. Payload accepts either:
+      - `pool_minutes`: set the pool to this exact value (-1 = unlimited)
+      - `add_minutes`: add this many minutes to the current pool (ignored
+        when pool is -1). This path also records a `consulting_hour_grants`
+        attribution entry so the change is auditable, matching how
+        _grant_consulting_hours() works for individual users.
+
+    Callers may send `hours` and/or `minutes` alongside `add_minutes` to
+    keep the frontend forms simple; the total is (hours*60 + minutes).
+    """
+    try:
+        req = request.get_json() or {}
+        data = load_users()
+        companies = data.setdefault('companies', {})
+        if company_name not in companies:
+            companies[company_name] = {
+                'created_at': datetime.now().isoformat(),
+                'credit_pool': 0,
+                'credit_pool_used': 0,
+                'consulting_hour_pool': 0,
+                'consulting_hour_pool_used': 0,
+            }
+        c = companies[company_name]
+        c.setdefault('consulting_hour_pool', 0)
+        c.setdefault('consulting_hour_pool_used', 0)
+
+        if 'pool_minutes' in req:
+            try:
+                new_val = int(req['pool_minutes'])
+            except (TypeError, ValueError):
+                return jsonify({'success': False, 'error': 'pool_minutes must be an integer'}), 400
+            if new_val < -1:
+                return jsonify({'success': False, 'error': 'pool_minutes must be >= -1'}), 400
+            c['consulting_hour_pool'] = new_val
+
+        add_min = 0
+        if 'add_minutes' in req:
+            try:
+                add_min += int(req['add_minutes'] or 0)
+            except (TypeError, ValueError):
+                pass
+        if 'hours' in req or 'minutes' in req:
+            try:
+                add_min += int(req.get('hours') or 0) * 60 + int(req.get('minutes') or 0)
+            except (TypeError, ValueError):
+                pass
+        if add_min:
+            reason = (req.get('reason') or 'Consulting hours added by admin').strip()
+            added_by = (get_current_user() or {}).get('username') or 'admin'
+            _grant_consulting_hours(c, add_min, reason=reason, granted_by=added_by)
+
+        save_users(data)
+        pool = c.get('consulting_hour_pool') or 0
+        used = c.get('consulting_hour_pool_used') or 0
+        remaining = -1 if pool == -1 else max(pool - used, 0)
+        return jsonify({
+            'success': True,
+            'consulting_hour_pool': pool,
+            'consulting_hour_pool_used': used,
+            'consulting_hour_pool_remaining': remaining,
+            'unlimited': pool == -1,
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -14393,7 +14486,7 @@ def api_blue_iq_data():
 
 
 # ============================================================================
-# TRENDS IQ — Culture Trends tracker (sits under Culture Ranker)
+# TRENDS IQ - Trends dashboard (grouped with Talent Ranker under Trends)
 # ============================================================================
 # Aggregates trending searches, headlines, articles by news source, trending
 # people, viral social posts (Reddit/YouTube today; TikTok/X/IG placeholder),

@@ -2173,9 +2173,15 @@
                         <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Credits Used</div>
                         <div style="font-size: 1.5rem; font-weight: 700; color: #e67e22;" id="cdCreditsUsed">0</div>
                     </div>
-                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem 1rem; cursor:pointer;" id="cdConsultingHoursCard" onclick="_cdOpenConsultingDetail()" title="Open Time Tracking detail">
-                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Consulting Hours</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: #a065ff;" id="cdConsultingHoursUsed">0h 0m</div>
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem 1rem;" id="cdConsultingHoursCard">
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem; display:flex; align-items:center; justify-content:space-between; gap:0.4rem;">
+                            <span>Consulting Hours</span>
+                            <span style="display:flex; gap:0.3rem;">
+                                <a href="#" onclick="_cdOpenAdjustHours(event)" style="font-size:0.65rem; color:#a065ff; text-transform:none; letter-spacing:normal; text-decoration:underline;">Adjust</a>
+                                <a href="#" onclick="_cdOpenConsultingDetail(); event.preventDefault();" style="font-size:0.65rem; color:var(--text-secondary); text-transform:none; letter-spacing:normal; text-decoration:underline;">Detail</a>
+                            </span>
+                        </div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #a065ff; cursor:pointer;" id="cdConsultingHoursUsed" onclick="_cdOpenConsultingDetail()" title="Open Time Tracking detail">0h 0m</div>
                         <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.1rem;" id="cdConsultingHoursDetail">— remaining</div>
                     </div>
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem 1rem;">
@@ -2196,6 +2202,38 @@
                         <input type="number" id="addPoolCredits" value="10" min="1" style="width:80px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;">
                         <button class="btn btn-small btn-secondary" onclick="addCompanyPoolCredits()">Add</button>
                         <button class="btn btn-small btn-secondary" onclick="document.getElementById('adjustCreditsRow').style.display='none'" style="margin-left:auto;">Close</button>
+                    </div>
+                </div>
+
+                <!--
+                    Adjust Consulting Hours pool — parallel to the credit
+                    pool controls above but stored in minutes internally
+                    (matches _consulting_hour_state). "Set Pool Total"
+                    takes hours + minutes and REPLACES the pool value
+                    (or -1 for unlimited). "Add to Pool" adds to it and
+                    also drops a consulting_hour_grants attribution row.
+                    Hidden by default; opened by clicking the Consulting
+                    Hours stat card's Adjust link (or via
+                    _cdOpenAdjustHours()).
+                -->
+                <div id="adjustHoursRow" style="display:none; margin-bottom:1rem; padding:0.65rem 0.85rem; border:1px solid #a065ff; border-radius:8px; background:rgba(160,101,255,0.06);">
+                    <div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.4rem;">Company-wide consulting-hour pool. Time logged against this company (from the Time Tracking tab) draws from this balance. Check <strong>Unlimited</strong> for no cap.</div>
+                    <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                        <label style="font-size:0.8rem;color:var(--text-secondary);">Set Pool Total:</label>
+                        <input type="number" id="adjustHoursPoolH" min="0" value="0" style="width:70px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;" placeholder="h">
+                        <span style="font-size:0.75rem;color:var(--text-secondary);">h</span>
+                        <input type="number" id="adjustHoursPoolM" min="0" max="59" value="0" style="width:60px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;" placeholder="m">
+                        <span style="font-size:0.75rem;color:var(--text-secondary);">m</span>
+                        <label class="checkbox-group" style="margin:0; font-size:0.75rem;"><input type="checkbox" id="adjustHoursPoolUnlimited"> <span>Unlimited</span></label>
+                        <button class="btn btn-primary btn-small" onclick="setCompanyHoursPoolTotal()">Set</button>
+                        <span style="color:var(--border-color);font-size:0.75rem;">|</span>
+                        <label style="font-size:0.8rem;color:var(--text-secondary);">Add to Pool:</label>
+                        <input type="number" id="addHoursPoolH" min="0" value="0" style="width:60px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;" placeholder="h">
+                        <span style="font-size:0.7rem;color:var(--text-secondary);">h</span>
+                        <input type="number" id="addHoursPoolM" min="0" max="59" value="30" style="width:60px;padding:0.25rem 0.4rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;" placeholder="m">
+                        <span style="font-size:0.7rem;color:var(--text-secondary);">m</span>
+                        <button class="btn btn-small btn-secondary" onclick="addCompanyHoursPool()">Add</button>
+                        <button class="btn btn-small btn-secondary" onclick="document.getElementById('adjustHoursRow').style.display='none'" style="margin-left:auto;">Close</button>
                     </div>
                 </div>
 
@@ -2893,15 +2931,75 @@
                     </div>
 
                     <!--
-                        Recurring credit rules — lists this user's active
-                        recurring grants and charges, with in-place edit and
-                        delete. Populated by loadUserModalRecurring() when
-                        the modal opens in edit mode (skipped in create mode
-                        because there's no subject to fetch for yet).
+                        Consulting Hours pool — mirrors the CREDITS block
+                        above. Storage is in minutes internally (matches
+                        _consulting_hour_state). The UI shows hours +
+                        minutes as two inputs so admins don't have to do
+                        mental math. Recurring / month schedules a monthly
+                        auto-grant through /api/admin/recurring-grants with
+                        kind='hours' (same mechanism as recurring credits).
+                    -->
+                    <div class="form-group">
+                        <label>Consulting Hours</label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                            <input type="number" id="newConsultingHours" value="0" min="0" style="width: 90px;" placeholder="hours">
+                            <span style="font-size:0.75rem; color:var(--text-secondary);">h</span>
+                            <input type="number" id="newConsultingMinutes" value="0" min="0" max="59" style="width: 70px;" placeholder="min">
+                            <span style="font-size:0.75rem; color:var(--text-secondary);">m pool</span>
+                            <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
+                                <input type="checkbox" id="unlimitedConsultingHours" onchange="toggleUnlimitedHours()">
+                                <span>Unlimited</span>
+                            </label>
+                            <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
+                                <input type="checkbox" id="hoursRecurringMonthly" onchange="_newHoursRecurringChange()">
+                                <span>Recurring / month</span>
+                            </label>
+                        </div>
+                        <div id="hoursRecurringMonthsRow" style="display:none; margin-top: 0.4rem;">
+                            <label style="display:inline; font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.35rem;">For how many months? (blank = forever until cancelled)</label>
+                            <input type="number" id="hoursRecurringMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
+                        </div>
+                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Total pool available to this user. Time logged from the Time Tracking tab draws down this balance. Check <strong>Recurring / month</strong> to auto-grant this many hours on the 1st of every month.</small>
+                    </div>
+
+                    <!--
+                        In-modal "Log or grant hours" panel (parallel to
+                        Add-or-deduct credits). Only shown in edit mode
+                        (there's no user to log time against yet at create).
+                        Routes to /api/admin/time-tracking/log for worked-hours
+                        (draws from pool) or /api/admin/time-tracking/grant
+                        for grants (adds to pool).
+                    -->
+                    <div id="addHoursInModalWrap" class="form-group" style="display: none;">
+                        <label>Log or grant consulting hours</label>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                            <input type="number" id="modalAddHoursH" min="0" value="0" style="width: 60px; padding: 0.4rem;" placeholder="h">
+                            <span style="font-size:0.75rem; color:var(--text-secondary);">h</span>
+                            <input type="number" id="modalAddHoursM" min="0" max="59" value="30" style="width: 60px; padding: 0.4rem;" placeholder="m">
+                            <span style="font-size:0.75rem; color:var(--text-secondary);">m</span>
+                            <input type="text" id="modalAddHoursReason" placeholder="What for (e.g. Q3 planning call)" style="flex: 1; min-width: 140px; padding: 0.4rem;">
+                            <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalHoursLogWorked" onchange="_modalHoursPerMonthChange()"> <span>Log worked</span></label>
+                            <label class="checkbox-group" style="margin: 0; white-space: nowrap;"><input type="checkbox" id="modalHoursPerMonth" onchange="_modalHoursPerMonthChange()"> <span>Recurring / month</span></label>
+                            <button type="button" class="btn btn-small btn-primary" onclick="addHoursFromModal()">Apply</button>
+                        </div>
+                        <div id="modalHoursMonthsRow" style="display:none; margin-top: 0.4rem;">
+                            <label style="display:inline; font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.35rem;">For how many months? (blank = forever until cancelled)</label>
+                            <input type="number" id="modalHoursMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
+                        </div>
+                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.35rem;">Grant adds hours to the user's pool. <strong>Log worked</strong> deducts from the pool as billable time (recorded in the Time Tracking ledger). <strong>Recurring / month</strong> schedules an auto-grant on the 1st of every month.</small>
+                    </div>
+
+                    <!--
+                        Recurring credit + hour rules — lists this user's
+                        active recurring grants and charges (both kinds),
+                        with in-place edit and delete. Populated by
+                        loadUserModalRecurring() when the modal opens in
+                        edit mode (skipped in create mode because there's
+                        no subject to fetch for yet).
                     -->
                     <div id="userModalRecurringWrap" class="form-group" style="display: none; margin-top: 0.5rem;">
                         <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.4rem;">
-                            <span>Recurring credit rules (auto-monthly)</span>
+                            <span>Recurring credit &amp; hour rules (auto-monthly)</span>
                             <button type="button" class="btn btn-small btn-secondary" style="padding:0.15rem 0.5rem; font-size:0.7rem;" onclick="loadUserModalRecurring()" title="Refresh list">↻</button>
                         </label>
                         <div id="userModalRecurringList" style="border: 1px solid var(--border-color); border-radius: 6px; padding: 0.4rem; background: var(--bg-input); font-size: 0.8rem;">
@@ -4527,6 +4625,83 @@
                 const data = await resp.json();
                 if (data.success) { loadCompanyEmployees(_currentCompany); loadCompanies(); }
                 else alert('Error: ' + (data.error || 'Unknown'));
+            } catch (e) { alert('Failed: ' + e.message); }
+        }
+
+        // ---- Company Consulting-Hour Pool (parallel to Credit Pool) ----
+        // The card has an "Adjust" link that reveals the adjustHoursRow
+        // (hidden by default). Set replaces the total, Add appends to it.
+        // Both routes hit /api/admin/companies/<name>/consulting-hours and
+        // refresh the stat card + company list on success.
+        function _cdOpenAdjustHours(e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            const row = document.getElementById('adjustHoursRow');
+            if (!row) return;
+            row.style.display = (row.style.display === 'none' || !row.style.display) ? '' : 'none';
+            // Prefill the Set inputs with the current pool so admins can
+            // eyeball what they're changing from before submitting.
+            if (_currentCompany && row.style.display !== 'none') {
+                fetch(`/api/admin/time-tracking/entries?subject_type=company&subject_name=${encodeURIComponent(_currentCompany)}`, { credentials: 'same-origin' })
+                    .then(r => r.json())
+                    .then(d => {
+                        if (!d || !d.success) return;
+                        const uEl = document.getElementById('adjustHoursPoolUnlimited');
+                        const hEl = document.getElementById('adjustHoursPoolH');
+                        const mEl = document.getElementById('adjustHoursPoolM');
+                        if (uEl) uEl.checked = !!d.unlimited;
+                        if (hEl) hEl.value = d.unlimited ? '0' : Math.floor((d.pool_minutes || 0) / 60);
+                        if (mEl) mEl.value = d.unlimited ? '0' : ((d.pool_minutes || 0) % 60);
+                    })
+                    .catch(() => {});
+            }
+        }
+
+        async function setCompanyHoursPoolTotal() {
+            if (!_currentCompany) return;
+            const uEl = document.getElementById('adjustHoursPoolUnlimited');
+            const h = parseInt(document.getElementById('adjustHoursPoolH')?.value, 10) || 0;
+            const m = parseInt(document.getElementById('adjustHoursPoolM')?.value, 10) || 0;
+            const poolMinutes = (uEl && uEl.checked) ? -1 : (h * 60 + m);
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(_currentCompany)}/consulting-hours`, {
+                    method: 'PUT', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pool_minutes: poolMinutes })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    if (typeof showToast === 'function') {
+                        showToast(data.unlimited ? 'Consulting-hour pool set to unlimited'
+                            : `Consulting-hour pool set to ${h}h ${m}m`);
+                    }
+                    _cdRefreshConsultingHours(_currentCompany);
+                    loadCompanies();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown'));
+                }
+            } catch (e) { alert('Failed: ' + e.message); }
+        }
+
+        async function addCompanyHoursPool() {
+            if (!_currentCompany) return;
+            const h = parseInt(document.getElementById('addHoursPoolH')?.value, 10) || 0;
+            const m = parseInt(document.getElementById('addHoursPoolM')?.value, 10) || 0;
+            const total = h * 60 + m;
+            if (total < 1) { alert('Enter a positive amount (hours + minutes).'); return; }
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(_currentCompany)}/consulting-hours`, {
+                    method: 'PUT', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hours: h, minutes: m, reason: 'Added from company detail' })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    if (typeof showToast === 'function') showToast(`Added ${h}h ${m}m to consulting-hour pool`);
+                    _cdRefreshConsultingHours(_currentCompany);
+                    loadCompanies();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown'));
+                }
             } catch (e) { alert('Failed: ' + e.message); }
         }
 
@@ -7358,8 +7533,9 @@
         function _renderUserModalRecurringRow(g) {
             const direction = (g.direction || 'grant').toLowerCase();
             const isCharge = direction === 'charge';
+            // Hours format: "2h 30m consulting". Credits format: "250 credits".
             const kindLabel = g.kind === 'hours'
-                ? ((typeof _ttFmtMinutes === 'function' ? _ttFmtMinutes(g.amount) : (g.amount + 'min')) + ' hours')
+                ? ((typeof _ttFmtMinutes === 'function' ? _ttFmtMinutes(g.amount) : (g.amount + 'm')) + ' consulting')
                 : (g.amount + ' credits');
             const arrow = isCharge ? '−' : '+';
             const arrowColor = isCharge ? 'var(--accent-red, #ff6b6b)' : 'var(--accent-green, #4ade80)';
@@ -8688,9 +8864,25 @@
             if (_openRecurRow) _openRecurRow.style.display = 'none';
             const _openRecurMonths = document.getElementById('creditsRecurringMonths');
             if (_openRecurMonths) _openRecurMonths.value = '';
-            // No subject yet in create mode → hide the recurring-rules list.
+            // Consulting hours: reset the pool inputs + recurring flag on create.
+            const _hInit = document.getElementById('newConsultingHours');
+            if (_hInit) { _hInit.value = '0'; _hInit.disabled = false; }
+            const _mInit = document.getElementById('newConsultingMinutes');
+            if (_mInit) { _mInit.value = '0'; _mInit.disabled = false; }
+            const _uHours = document.getElementById('unlimitedConsultingHours');
+            if (_uHours) _uHours.checked = false;
+            const _hRecur = document.getElementById('hoursRecurringMonthly');
+            if (_hRecur) { _hRecur.checked = false; _hRecur.disabled = false; }
+            const _hRecurRow = document.getElementById('hoursRecurringMonthsRow');
+            if (_hRecurRow) _hRecurRow.style.display = 'none';
+            const _hRecurMonths = document.getElementById('hoursRecurringMonths');
+            if (_hRecurMonths) _hRecurMonths.value = '';
+            // No subject yet in create mode → hide the recurring-rules list
+            // AND the log-or-grant hours panel (no user to log time against).
             const _openRulesWrap = document.getElementById('userModalRecurringWrap');
             if (_openRulesWrap) _openRulesWrap.style.display = 'none';
+            const _openHoursWrap = document.getElementById('addHoursInModalWrap');
+            if (_openHoursWrap) _openHoursWrap.style.display = 'none';
             document.getElementById('allCategories').checked = true;
             document.getElementById('allRuns').checked = true;
             document.getElementById('allBehavioralCategories').checked = true;
@@ -8936,6 +9128,51 @@
             const modalReason = document.getElementById('modalAddCreditsReason');
             if (modalAmt) modalAmt.value = '10';
             if (modalReason) modalReason.value = '';
+
+            // Consulting hours: prefill pool + always show log-or-grant panel
+            // in edit mode (even for unlimited pools — you can still log
+            // worked time against an unlimited pool for tracking purposes).
+            const chPoolRaw = user.consulting_hour_pool;
+            const chPool = (chPoolRaw === null || chPoolRaw === undefined) ? 0 : chPoolRaw;
+            const chUnlimited = chPool === -1;
+            const chH = document.getElementById('newConsultingHours');
+            const chM = document.getElementById('newConsultingMinutes');
+            const chU = document.getElementById('unlimitedConsultingHours');
+            if (chU) chU.checked = chUnlimited;
+            if (chH) {
+                chH.value = chUnlimited ? '0' : Math.floor((chPool || 0) / 60);
+                chH.disabled = chUnlimited;
+            }
+            if (chM) {
+                chM.value = chUnlimited ? '0' : ((chPool || 0) % 60);
+                chM.disabled = chUnlimited;
+            }
+            // Recurring / month is a NEW-schedule flow — never prefilled from
+            // the user record (existing schedules live in the Recurring
+            // credit & hour rules list below). Reset on every open.
+            const chRecur = document.getElementById('hoursRecurringMonthly');
+            if (chRecur) {
+                chRecur.checked = false;
+                chRecur.disabled = chUnlimited;
+            }
+            const chRecurRow = document.getElementById('hoursRecurringMonthsRow');
+            if (chRecurRow) chRecurRow.style.display = 'none';
+            const chRecurMonths = document.getElementById('hoursRecurringMonths');
+            if (chRecurMonths) chRecurMonths.value = '';
+            const addHoursWrap = document.getElementById('addHoursInModalWrap');
+            if (addHoursWrap) addHoursWrap.style.display = 'block';
+            const modalHoursH = document.getElementById('modalAddHoursH');
+            const modalHoursM = document.getElementById('modalAddHoursM');
+            const modalHoursReason = document.getElementById('modalAddHoursReason');
+            const modalHoursWorked = document.getElementById('modalHoursLogWorked');
+            const modalHoursPerMonth = document.getElementById('modalHoursPerMonth');
+            if (modalHoursH) modalHoursH.value = '0';
+            if (modalHoursM) modalHoursM.value = '30';
+            if (modalHoursReason) modalHoursReason.value = '';
+            if (modalHoursWorked) modalHoursWorked.checked = false;
+            if (modalHoursPerMonth) modalHoursPerMonth.checked = false;
+            // Sync the Apply button label to the initial state.
+            if (typeof _modalHoursPerMonthChange === 'function') _modalHoursPerMonthChange();
             
             // Load team members for this user
             currentEditingUserTeam = user.collab_team || [];
@@ -9587,6 +9824,148 @@
             }
         }
 
+        // Companion to _modalCreditsPerMonthChange for the hours panel.
+        // Also updates the Apply button label so the outgoing action is
+        // obvious before click. "Log worked" + "Recurring" is disallowed
+        // (you can't schedule a monthly work-log). If both are checked
+        // simultaneously we treat "Log worked" as winning and clear the
+        // Recurring flag on the fly.
+        function _modalHoursPerMonthChange() {
+            const per = document.getElementById('modalHoursPerMonth');
+            const worked = document.getElementById('modalHoursLogWorked');
+            const monthsRow = document.getElementById('modalHoursMonthsRow');
+            // Log-worked wins over recurring (work-logs are historical, not scheduled).
+            if (per && per.checked && worked && worked.checked) {
+                per.checked = false;
+            }
+            if (monthsRow) monthsRow.style.display = (per && per.checked) ? '' : 'none';
+            const btn = document.querySelector('button[onclick="addHoursFromModal()"]');
+            if (btn) {
+                if (per && per.checked) {
+                    btn.textContent = 'Schedule monthly grant';
+                } else if (worked && worked.checked) {
+                    btn.textContent = 'Log worked time';
+                } else {
+                    btn.textContent = 'Grant hours';
+                }
+            }
+        }
+
+        async function addHoursFromModal() {
+            const username = document.getElementById('editUsername') && document.getElementById('editUsername').value;
+            if (!username) return;
+            const hEl = document.getElementById('modalAddHoursH');
+            const mEl = document.getElementById('modalAddHoursM');
+            const reasonEl = document.getElementById('modalAddHoursReason');
+            const workedEl = document.getElementById('modalHoursLogWorked');
+            const perMonthEl = document.getElementById('modalHoursPerMonth');
+            const monthsEl = document.getElementById('modalHoursMonths');
+            if (!hEl || !mEl) return;
+            const hours = parseInt(hEl.value, 10) || 0;
+            const minutes = parseInt(mEl.value, 10) || 0;
+            const totalMinutes = hours * 60 + minutes;
+            if (totalMinutes < 1) {
+                if (typeof showToast === 'function') showToast('Enter a positive amount of time (hours + minutes)', true);
+                return;
+            }
+            const worked = !!(workedEl && workedEl.checked);
+            const perMonth = !!(perMonthEl && perMonthEl.checked);
+            const reason = (reasonEl && reasonEl.value || '').trim()
+                || (worked ? 'Consulting time logged by admin' : 'Consulting hours granted by admin');
+
+            // Recurring monthly grant → /api/admin/recurring-grants kind='hours'.
+            // (Recurring + Log worked is blocked in _modalHoursPerMonthChange.)
+            if (perMonth) {
+                const monthsRaw = (monthsEl && monthsEl.value) ? monthsEl.value : '';
+                const months = monthsRaw ? parseInt(monthsRaw, 10) : null;
+                try {
+                    const resp = await fetch('/api/admin/recurring-grants', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            subject_type: 'user', subject_name: username,
+                            kind: 'hours', hours, minutes, months, reason,
+                            apply_first_immediately: true,
+                        }),
+                    });
+                    const data = await resp.json().catch(() => ({}));
+                    if (resp.ok && data.success) {
+                        if (typeof showToast === 'function') {
+                            showToast(`Recurring hours grant scheduled: ${hours}h ${minutes}m/mo`
+                                + (months ? ` × ${months} mo` : ' (until cancelled)')
+                                + ' • first month applied now');
+                        }
+                        if (typeof loadUserModalRecurring === 'function') loadUserModalRecurring();
+                    } else {
+                        if (typeof showToast === 'function') showToast(data.error || 'Failed to schedule recurring hours', true);
+                    }
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not schedule'), true);
+                }
+                return;
+            }
+
+            // Log-worked: draws from pool + records ledger entry.
+            if (worked) {
+                try {
+                    const resp = await fetch('/api/admin/time-tracking/log', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            subject_type: 'user', subject_name: username,
+                            hours, minutes, description: reason,
+                        }),
+                    });
+                    const data = await resp.json().catch(() => ({}));
+                    if (resp.ok && data.success) {
+                        if (typeof showToast === 'function') showToast(`Logged ${hours}h ${minutes}m worked`);
+                        // Reset amount fields so the admin can't accidentally
+                        // double-submit the same block of time. Refresh
+                        // in-modal remaining if a stat card shows it.
+                        if (hEl) hEl.value = '0';
+                        if (mEl) mEl.value = '0';
+                    } else {
+                        if (typeof showToast === 'function') showToast(data.error || 'Failed to log time', true);
+                    }
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not log'), true);
+                }
+                return;
+            }
+
+            // Grant: adds to pool.
+            try {
+                const resp = await fetch('/api/admin/time-tracking/grant', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        subject_type: 'user', subject_name: username,
+                        hours, minutes, reason,
+                    }),
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (resp.ok && data.success) {
+                    if (typeof showToast === 'function') showToast(`Granted ${hours}h ${minutes}m to pool`);
+                    // Bump the visible pool total so the admin sees the effect.
+                    const hInput = document.getElementById('newConsultingHours');
+                    const mInput = document.getElementById('newConsultingMinutes');
+                    if (hInput && mInput && !document.getElementById('unlimitedConsultingHours').checked) {
+                        const cur = (parseInt(hInput.value, 10) || 0) * 60 + (parseInt(mInput.value, 10) || 0);
+                        const next = cur + totalMinutes;
+                        hInput.value = Math.floor(next / 60);
+                        mInput.value = next % 60;
+                    }
+                } else {
+                    if (typeof showToast === 'function') showToast(data.error || 'Failed to grant hours', true);
+                }
+            } catch (e) {
+                if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not grant'), true);
+            }
+        }
+
         function showExportUserInfoModal() {
             const by = document.getElementById('exportUserInfoBy');
             const userWrap = document.getElementById('exportUserInfoUserWrap');
@@ -9849,6 +10228,33 @@
         function _newCreditsRecurringChange() {
             const per = document.getElementById('creditsRecurringMonthly');
             const row = document.getElementById('creditsRecurringMonthsRow');
+            if (row) row.style.display = (per && per.checked) ? '' : 'none';
+        }
+
+        // Same treatment for the top-level Consulting Hours pool. Unlimited
+        // is mutually-exclusive with Recurring (you can't top up an already
+        // unlimited pool). Recurring reveals the "for how many months" row.
+        function toggleUnlimitedHours() {
+            const cb = document.getElementById('unlimitedConsultingHours');
+            const hEl = document.getElementById('newConsultingHours');
+            const mEl = document.getElementById('newConsultingMinutes');
+            const recur = document.getElementById('hoursRecurringMonthly');
+            const row = document.getElementById('hoursRecurringMonthsRow');
+            if (!cb) return;
+            if (cb.checked) {
+                if (hEl) { hEl.value = '0'; hEl.disabled = true; }
+                if (mEl) { mEl.value = '0'; mEl.disabled = true; }
+                if (recur) { recur.checked = false; recur.disabled = true; }
+                if (row) row.style.display = 'none';
+            } else {
+                if (hEl) hEl.disabled = false;
+                if (mEl) mEl.disabled = false;
+                if (recur) recur.disabled = false;
+            }
+        }
+        function _newHoursRecurringChange() {
+            const per = document.getElementById('hoursRecurringMonthly');
+            const row = document.getElementById('hoursRecurringMonthsRow');
             if (row) row.style.display = (per && per.checked) ? '' : 'none';
         }
 
@@ -11081,6 +11487,16 @@
                 department: document.getElementById('newDepartment').value,
                 role: document.getElementById('newRole').value,
                 credits: document.getElementById('unlimitedCredits').checked ? -1 : parseInt(document.getElementById('newCredits').value),
+                // Consulting-hour pool total (int minutes; -1 = unlimited).
+                // Read the two side-by-side inputs (hours + minutes) and
+                // collapse into a single minute count for the backend.
+                consulting_hour_pool: (function () {
+                    const uEl = document.getElementById('unlimitedConsultingHours');
+                    if (uEl && uEl.checked) return -1;
+                    const h = parseInt((document.getElementById('newConsultingHours') || {}).value, 10) || 0;
+                    const m = parseInt((document.getElementById('newConsultingMinutes') || {}).value, 10) || 0;
+                    return h * 60 + m;
+                })(),
                 access_expires: document.getElementById('unlimitedAccess').checked ? null : document.getElementById('accessExpires').value,
                 allowed_categories: document.getElementById('allCategories').checked ? ['*'] : 
                     Array.from(document.querySelectorAll('#categoryCheckboxes .cat-checkbox:checked')).map(cb => cb.value),
@@ -11244,11 +11660,59 @@
                         }
                     }
 
+                    // Schedule a recurring monthly HOURS grant if the admin
+                    // ticked "Recurring / month" next to the Consulting Hours
+                    // field. Same pattern as credits above — the number in
+                    // the hours+minutes boxes becomes the monthly grant
+                    // amount. Skipped when Unlimited is on. apply_first_immediately
+                    // is false because the pool total we just set covers the
+                    // first month (no double-add).
+                    const hRecurEl = document.getElementById('hoursRecurringMonthly');
+                    const hUnlimEl = document.getElementById('unlimitedConsultingHours');
+                    if (savedUsername && hRecurEl && hRecurEl.checked && !(hUnlimEl && hUnlimEl.checked)) {
+                        const rawH = parseInt((document.getElementById('newConsultingHours') || {}).value, 10) || 0;
+                        const rawM = parseInt((document.getElementById('newConsultingMinutes') || {}).value, 10) || 0;
+                        const totalMin = rawH * 60 + rawM;
+                        const monthsRaw = (document.getElementById('hoursRecurringMonths') || {}).value || '';
+                        const months = monthsRaw ? parseInt(monthsRaw, 10) : null;
+                        if (totalMin > 0) {
+                            try {
+                                const hgResp = await fetch('/api/admin/recurring-grants', {
+                                    method: 'POST',
+                                    credentials: 'same-origin',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        subject_type: 'user',
+                                        subject_name: savedUsername,
+                                        kind: 'hours',
+                                        hours: rawH,
+                                        minutes: rawM,
+                                        months,
+                                        reason: 'Recurring monthly consulting-hour grant (user modal)',
+                                        apply_first_immediately: false,
+                                    }),
+                                });
+                                const hgData = await hgResp.json().catch(() => ({}));
+                                if (!(hgResp.ok && hgData.success)) {
+                                    showToast('User saved but recurring hours grant failed: ' + (hgData.error || 'Unknown'), true);
+                                }
+                            } catch (e) {
+                                showToast('User saved but recurring hours grant errored: ' + (e.message || 'unknown'), true);
+                            }
+                        }
+                    }
+
                     let message = isEdit ? 'User updated successfully!' : 'User created successfully!';
                     if (recurEl && recurEl.checked && !(unlimEl && unlimEl.checked)) {
                         const monthsRaw = (document.getElementById('creditsRecurringMonths') || {}).value || '';
                         const amt = parseInt(document.getElementById('newCredits').value, 10);
                         message += ` 🔁 Recurring ${amt} credits/mo` + (monthsRaw ? ` × ${monthsRaw} months` : ' scheduled');
+                    }
+                    if (hRecurEl && hRecurEl.checked && !(hUnlimEl && hUnlimEl.checked)) {
+                        const monthsRaw = (document.getElementById('hoursRecurringMonths') || {}).value || '';
+                        const rawH = parseInt((document.getElementById('newConsultingHours') || {}).value, 10) || 0;
+                        const rawM = parseInt((document.getElementById('newConsultingMinutes') || {}).value, 10) || 0;
+                        message += ` ⏱️ Recurring ${rawH}h ${rawM}m/mo` + (monthsRaw ? ` × ${monthsRaw} months` : ' scheduled');
                     }
 
                     // Show email status if available
