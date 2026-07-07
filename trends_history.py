@@ -204,6 +204,13 @@ _SCRAPER_KIND_MAP = {
     'nike':      'retailer',
     'ulta':      'retailer',
     'amazon':    'retailer',
+    # Streaming platforms - all use `title` as their row key
+    'netflix':    'streaming',
+    'disneyplus': 'streaming',
+    'hulu':       'streaming',
+    'max':        'streaming',
+    'primevideo': 'streaming',
+    'espnplus':   'streaming',
 }
 
 
