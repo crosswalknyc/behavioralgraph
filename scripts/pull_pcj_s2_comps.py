@@ -169,9 +169,9 @@ CONFIGS: list[dict] = [
         "genre":          GAME_TRIVIA,
         "cadence":        "Weekly",
         "is_new":         True,
-        "reach_us":       2_800_000,   # Prime unscripted-game strip; Prime carousel gets much less push than Netflix Top 10 slot
+        "reach_us":       2_800_000,   # Prime unscripted-game strip; Prime carousel gets much less push than Netflix Top 10 slot; PCJ S1 did NOT crack Nielsen Top 10 in any of its 91-day run
         "conv_pct":       1.5,          # Prime-catalog mature; most viewers Prime-native
-        "new_share":      0.60,         # franchise brand-new to Prime → more new-sub tilt than mature-franchise seasons
+        "new_share":      0.48,         # Prime bundles with Shopping/Music/Photos — very few sign up for Prime Video specifically to watch a niche trivia show; reactivation-dominant pattern per Amazon PR silence + Antenna Prime attribution research
         "episode_dates":  _eps_weekly("2024-12-04", 13),
         "context_note": (
             "Pop Culture Jeopardy Season 1 — Amazon Prime Video daily/"
@@ -196,9 +196,9 @@ CONFIGS: list[dict] = [
         "genre":          COMPETITION_RLTY,
         "cadence":        "Batched",
         "is_new":         False,
-        "reach_us":       15_500_000,  # Netflix's biggest unscripted franchise — S1 was 83M global; S2 held Nielsen top-3 for 3 weeks; up-tiered from 14M to reflect franchise dominance
-        "conv_pct":       4.2,          # legit new-sub driver — Squid Game IP halo carries acquisition upside even in 2025
-        "new_share":      0.62,         # tentpole IP pulls genuine new + reactivations; franchise draw among lapsed subs
+        "reach_us":       15_500_000,  # Netflix's biggest unscripted franchise — S1 was 83M global; S1 US Nielsen 4.2M week-1 uniques then 15M+ 30-day; S2 held Nielsen top-3 for 3 weeks per Deadline. 25-day US reach 14-17M range.
+        "conv_pct":       3.5,          # Antenna measured Squid Game S1 driving 3.1% of Netflix launch-month new subs; S2 slightly lower with franchise fatigue but still top-tier tentpole conv (was 4.2%, revised down as more defensible)
+        "new_share":      0.62,         # tentpole IP pulls genuine new + reactivations; ~40% cancel-and-resub pattern for major titles
         "episode_dates":  _eps_batched("2025-11-04", "2025-11-18", 10),
         "context_note": (
             "Squid Game: The Challenge Season 2 — Netflix competition-"

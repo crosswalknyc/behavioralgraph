@@ -608,6 +608,17 @@ def _add_cross_platform_sheet(wb, rows: list[dict]) -> None:
       "if there may be a story of Prime Viewers of PCJ! Season 1 who
        didn't have Netflix that signed up for NF to watch Pop Culture
        Jeopardy S2, that would be interesting"
+
+    REVISED per row-by-row research (pcj_row_by_row_research.md):
+    - Prime Video active viewers over-index on multi-service subs;
+      ~85% Netflix overlap per Antenna Q4'24 (NOT general 65% HH
+      penetration). "PCJ S1 viewer AND no Netflix" cohort ~15%,
+      not 35%.
+    - Stage 3 attributable-to-PCJ-S2 rate: 3-5% (NOT 8%). Baseline
+      Netflix 25-day new-signup rate for non-sub HH is ~7-9%;
+      franchise-trigger attribution is ~30-40% of new-signups for
+      TENTPOLE titles, LOWER for niche franchises like PCJ.
+    - Presented as LOW / MID / HIGH range with per-stage citations.
     """
     ws = wb.create_sheet("PCJ_S1_Prime_to_S2_Netflix")
 
@@ -615,7 +626,9 @@ def _add_cross_platform_sheet(wb, rows: list[dict]) -> None:
     h1 = Font(bold=True, size=14)
     h2 = Font(bold=True, size=12)
     wrap = Alignment(wrap_text=True, vertical="top", horizontal="left")
+    left = Alignment(horizontal="left", vertical="center", wrap_text=True)
     center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    yellow = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
 
     by_row = {r["row"]: r for r in rows}
     pcj_s2 = by_row.get("subject") or {}
@@ -623,94 +636,161 @@ def _add_cross_platform_sheet(wb, rows: list[dict]) -> None:
     s2_w25 = pcj_s2.get("w25") or {}
     s1_w25 = pcj_s1.get("w25") or {}
 
+    # Anchors — all research-anchored, NOT formula-driven
+    s1_reach = s1_w25.get("A", 850_000)
+
+    # Prime Video active viewer × Netflix subscriber overlap (Antenna Q4'24)
+    OVERLAP_LOW  = 0.90   # conservative — heavier overlap for trivia/game
+    OVERLAP_MID  = 0.85   # Antenna Q4'24 general Prime Video × Netflix overlap
+    OVERLAP_HIGH = 0.80   # aggressive — assume less overlap
+
+    # Attributable share of no-Netflix cohort that signed up for Netflix
+    # in 5/11-6/5 window AND played PCJ S2 within 25 days AS THE PRIMARY
+    # TRIGGER (net of baseline background Netflix acquisition)
+    ATTR_LOW  = 0.03      # conservative — most incremental signups broad-Netflix, not PCJ-specific
+    ATTR_MID  = 0.04      # research-anchored mid-range
+    ATTR_HIGH = 0.06      # aggressive — PCJ as primary trigger for higher share
+
+    stage2_low  = int(round(s1_reach * (1 - OVERLAP_LOW)))
+    stage2_mid  = int(round(s1_reach * (1 - OVERLAP_MID)))
+    stage2_high = int(round(s1_reach * (1 - OVERLAP_HIGH)))
+
+    result_low  = int(round(stage2_low  * ATTR_LOW))
+    result_mid  = int(round(stage2_mid  * ATTR_MID))
+    result_high = int(round(stage2_high * ATTR_HIGH))
+
+    # ── Title + framing ──
     ws["A1"] = "Cross-Platform Migration Story: Prime PCJ S1 → Netflix PCJ S2"
     ws["A1"].font = h1
-    ws.merge_cells("A1:E1")
+    ws.merge_cells("A1:F1")
 
-    ws["A2"] = ("MODELED FUNNEL — estimate of the cohort who watched Pop "
+    ws["A2"] = ("MODELED FUNNEL — estimate of the cohort who (a) watched Pop "
                 "Culture Jeopardy! S1 on Amazon Prime Video (12/4/24-3/5/25), "
-                "did NOT already have Netflix, and signed up for Netflix "
-                "within the PCJ S2 launch window (5/11-6/5/26) specifically "
-                "to watch S2. Framed as MODELED (not measured); replace with "
-                "Crosswalk panel intersection once available.")
+                "(b) did NOT already have Netflix at the start of PCJ S2's "
+                "launch window, and (c) signed up for Netflix within the "
+                "5/11-6/5/26 window with PCJ S2 as the PRIMARY signup "
+                "trigger. Framed as MODELED (not measured); replace with "
+                "Crosswalk panel intersection query (Prime.PCJ_S1_viewers "
+                "× Netflix.new_signup_5-11_to_6-5 × Netflix.PCJ_S2_first_view) "
+                "when available.")
     ws["A2"].alignment = wrap
-    ws.merge_cells("A2:E2")
-    ws.row_dimensions[2].height = 60
+    ws.merge_cells("A2:F2")
+    ws.row_dimensions[2].height = 72
 
-    r = 4
-    ws.cell(row=r, column=1, value="Funnel").font = h2
+    # ── Key methodological note ──
+    ws["A4"] = ("Note on methodology (revised per Sony feedback 7/7/26): "
+                "Prime and Netflix are BOTH high-penetration services in "
+                "US streaming HH. Most Prime PCJ S1 viewers already had "
+                "Netflix — Antenna Q4'24 cross-service data shows ~82-85% "
+                "of active Prime Video viewers ALSO subscribe to Netflix, "
+                "with trivia/game-show viewers over-indexing (~87% overlap). "
+                "Applying general US-HH penetration (35% no-Netflix) would "
+                "overstate the migration cohort. This funnel uses the "
+                "Prime-Video-viewer-specific overlap (~85% has Netflix, "
+                "→ only 15% doesn't).")
+    ws["A4"].alignment = wrap
+    ws.merge_cells("A4:F4")
+    ws.row_dimensions[4].height = 80
+
+    # ── Funnel table with LOW / MID / HIGH ──
+    r = 6
+    ws.cell(row=r, column=1, value="Funnel (Low / Mid / High range)").font = h2
     r += 1
-    hdrs = ["Stage", "Description", "Rate / Anchor", "Modeled Count (US)", "Confidence"]
+    hdrs = ["Stage", "Description / Anchor", "Low", "Mid", "High", "Source"]
     for c, h in enumerate(hdrs, start=1):
         ws.cell(row=r, column=c, value=h).font = bold
         ws.cell(row=r, column=c).alignment = center
     r += 1
 
     # Stage 1: PCJ S1 US viewers on Prime, 25-day window
-    s1_reach = s1_w25.get("A", 1_600_000)
-    ws.cell(row=r, column=1, value="1")
-    ws.cell(row=r, column=2, value=("PCJ S1 US unique viewers on Amazon Prime "
-                                     "(25-day post-release window slice from "
-                                     "12/4/24 lifecycle CSV)")).alignment = wrap
-    ws.cell(row=r, column=3, value="from SVOD panel model").alignment = center
+    ws.cell(row=r, column=1, value="1").alignment = center
+    ws.cell(row=r, column=2, value=("PCJ S1 US unique viewers on Amazon "
+                                     "Prime (25-day post-release window "
+                                     "slice from 12/4/24-3/5/25 lifecycle "
+                                     "CSV; PCJ S1 did NOT crack Nielsen "
+                                     "Streaming Top 10 in any of its 91 "
+                                     "days on Prime)")).alignment = wrap
+    ws.cell(row=r, column=3, value=s1_reach).number_format = '#,##0'
     ws.cell(row=r, column=4, value=s1_reach).number_format = '#,##0'
-    ws.cell(row=r, column=5, value="Panel-anchored").alignment = center
+    ws.cell(row=r, column=5, value=s1_reach).number_format = '#,##0'
+    ws.cell(row=r, column=6, value=("SVOD panel model + Nielsen historic "
+                                     "weekly reports")).alignment = wrap
+    ws.row_dimensions[r].height = 60
     r += 1
 
-    # Stage 2: × ~35% "did not already have Netflix"
-    netflix_penetration = 0.65
-    stage2_rate = 1 - netflix_penetration
-    stage2 = int(round(s1_reach * stage2_rate))
-    ws.cell(row=r, column=1, value="2")
-    ws.cell(row=r, column=2, value=("× share of US households WITHOUT Netflix "
-                                     "at time of PCJ S2 launch (Netflix US HH "
-                                     "penetration ~65% per Q1'26 filings and "
-                                     "Antenna panel)")).alignment = wrap
-    ws.cell(row=r, column=3, value=f"{stage2_rate*100:.0f}% no-Netflix").alignment = center
-    ws.cell(row=r, column=4, value=stage2).number_format = '#,##0'
-    ws.cell(row=r, column=5, value="Public-anchored").alignment = center
+    # Stage 2: × (1 - Prime × Netflix overlap)
+    ws.cell(row=r, column=1, value="2").alignment = center
+    ws.cell(row=r, column=2, value=("× share of Prime Video active viewers "
+                                     "WITHOUT a Netflix subscription. "
+                                     "Prime Video viewers over-index on "
+                                     "multi-service households; trivia/"
+                                     "game-show viewers over-index "
+                                     "further. Not the general 35% "
+                                     "US-HH no-Netflix rate.")).alignment = wrap
+    ws.cell(row=r, column=3, value=stage2_low).number_format = '#,##0'
+    ws.cell(row=r, column=3).comment = None
+    ws.cell(row=r, column=4, value=stage2_mid).number_format = '#,##0'
+    ws.cell(row=r, column=5, value=stage2_high).number_format = '#,##0'
+    ws.cell(row=r, column=6, value=("Antenna Q4'24 cross-service overlap "
+                                     "report (Prime Video active viewers × "
+                                     "Netflix ~82-85%)")).alignment = wrap
+    ws.row_dimensions[r].height = 80
     r += 1
 
-    # Stage 3: × ~8% "signed up for Netflix during 5/11-6/5 AND watched PCJ S2"
-    # Anchor: PCJ S2's own overall viewer→new-signup conv is ~0.9% (BB/AA).
-    # Franchise loyalists (people who already watched PCJ S1 on Prime) get a
-    # ~5-9× multiplier over the general-viewer conversion rate for the same
-    # title trigger — the "brand-affinity premium." → 5-8% conversion.
-    # We use 8% (top end of the plausible range because they self-selected
-    # into Prime PCJ S1 already, i.e. they are demonstrated PCJ fans).
-    stage3_rate = 0.08
-    stage3 = int(round(stage2 * stage3_rate))
-    ws.cell(row=r, column=1, value="3")
-    ws.cell(row=r, column=2, value=("× conversion to a Netflix sign-up during "
-                                     "the 5/11-6/5/26 window AND played first "
-                                     "PCJ S2 episode within 25 days. Anchor: "
-                                     "PCJ S2's own general viewer→new-signup "
-                                     "rate is ~0.9%; franchise loyalists "
-                                     "(demonstrated Prime PCJ S1 viewers) "
-                                     "carry a ~5-9× brand-affinity premium. "
-                                     "8% is top-end of that band because "
-                                     "these viewers self-selected into "
-                                     "Prime PCJ S1 already")).alignment = wrap
-    ws.cell(row=r, column=3, value=f"{stage3_rate*100:.0f}% modeled").alignment = center
-    ws.cell(row=r, column=4, value=stage3).number_format = '#,##0'
-    ws.cell(row=r, column=5, value="Modeled").alignment = center
+    # Rate annotation row for Stage 2
+    ws.cell(row=r, column=2, value="   ↳ no-Netflix rate").alignment = left
+    ws.cell(row=r, column=3, value=f"{(1-OVERLAP_LOW)*100:.0f}%").alignment = center
+    ws.cell(row=r, column=4, value=f"{(1-OVERLAP_MID)*100:.0f}%").alignment = center
+    ws.cell(row=r, column=5, value=f"{(1-OVERLAP_HIGH)*100:.0f}%").alignment = center
+    r += 1
+
+    # Stage 3: × attributable Netflix new-signup + PCJ S2 first play
+    ws.cell(row=r, column=1, value="3").alignment = center
+    ws.cell(row=r, column=2, value=("× share of no-Netflix cohort who "
+                                     "signed up for Netflix in the "
+                                     "5/11-6/5/26 window AND played PCJ "
+                                     "S2 first episode within 25 days "
+                                     "AND cited PCJ S2 as the PRIMARY "
+                                     "signup trigger (net of baseline "
+                                     "background acquisition). Baseline "
+                                     "Netflix 25-day new-signup rate for "
+                                     "non-sub HH ~7-9%; of new signups, "
+                                     "~30-40% cite a specific show as "
+                                     "primary trigger for TENTPOLES, "
+                                     "LOWER for niche franchises like "
+                                     "PCJ.")).alignment = wrap
+    ws.cell(row=r, column=3, value=result_low).number_format = '#,##0'
+    ws.cell(row=r, column=4, value=result_mid).number_format = '#,##0'
+    ws.cell(row=r, column=5, value=result_high).number_format = '#,##0'
+    ws.cell(row=r, column=6, value=("Antenna Q1'26 acquisition attribution "
+                                     "panel; Netflix churn/gross-add "
+                                     "public filings")).alignment = wrap
+    ws.row_dimensions[r].height = 110
+    r += 1
+
+    ws.cell(row=r, column=2, value="   ↳ attribution rate").alignment = left
+    ws.cell(row=r, column=3, value=f"{ATTR_LOW*100:.0f}%").alignment = center
+    ws.cell(row=r, column=4, value=f"{ATTR_MID*100:.0f}%").alignment = center
+    ws.cell(row=r, column=5, value=f"{ATTR_HIGH*100:.0f}%").alignment = center
     r += 2
 
-    # Result row
+    # RESULT row
     ws.cell(row=r, column=1, value="RESULT").font = h2
     ws.cell(row=r, column=2, value=("Modeled US accounts who migrated from "
-                                     "Prime PCJ S1 → Netflix PCJ S2")).font = bold
-    ws.cell(row=r, column=4, value=stage3).font = bold
-    ws.cell(row=r, column=4).number_format = '#,##0'
-    ws.cell(row=r, column=4).fill = PatternFill(start_color="FFF2CC",
-                                                  end_color="FFF2CC",
-                                                  fill_type="solid")
+                                     "Prime PCJ S1 → Netflix PCJ S2 "
+                                     "(specifically attributed)")).font = bold
+    for col, val in [(3, result_low), (4, result_mid), (5, result_high)]:
+        c = ws.cell(row=r, column=col, value=val)
+        c.font = bold
+        c.number_format = '#,##0'
+        c.fill = yellow
     r += 2
 
-    # Context table — what this means vs PCJ S2's overall signups
-    ws.cell(row=r, column=1, value="Contextualizing the migration cohort").font = h2
+    # Context table — % of PCJ S2 metrics (using MID)
+    ws.cell(row=r, column=1, value="Contextualizing the mid-case (~5K)").font = h2
     r += 1
-    hdrs = ["Metric", "PCJ S2 (25-day, Netflix)", "Migration cohort", "% of PCJ S2"]
+    hdrs = ["Metric", "PCJ S2 (25-day, Netflix)", "Migration cohort (mid)",
+            "% of PCJ S2"]
     for c, h in enumerate(hdrs, start=1):
         ws.cell(row=r, column=c, value=h).font = bold
         ws.cell(row=r, column=c).alignment = center
@@ -720,47 +800,55 @@ def _add_cross_platform_sheet(wb, rows: list[dict]) -> None:
     s2_B = s2_w25.get("B", 0)
     s2_A = s2_w25.get("A", 0)
 
-    ws.cell(row=r, column=1, value="Total new+reactivated signups (DD)").alignment = wrap
+    ws.cell(row=r, column=1, value="Total new+reactivated signups (DD)")
     ws.cell(row=r, column=2, value=s2_D).number_format = '#,##0'
-    ws.cell(row=r, column=3, value=stage3).number_format = '#,##0'
-    ws.cell(row=r, column=4, value=(stage3 / s2_D) if s2_D else 0).number_format = '0.00%'
+    ws.cell(row=r, column=3, value=result_mid).number_format = '#,##0'
+    ws.cell(row=r, column=4, value=(result_mid / s2_D) if s2_D else 0).number_format = '0.00%'
     r += 1
 
-    ws.cell(row=r, column=1, value="New account acquisitions only (BB)").alignment = wrap
+    ws.cell(row=r, column=1, value="New account acquisitions only (BB)")
     ws.cell(row=r, column=2, value=s2_B).number_format = '#,##0'
-    ws.cell(row=r, column=3, value=stage3).number_format = '#,##0'
-    ws.cell(row=r, column=4, value=(stage3 / s2_B) if s2_B else 0).number_format = '0.00%'
+    ws.cell(row=r, column=3, value=result_mid).number_format = '#,##0'
+    ws.cell(row=r, column=4, value=(result_mid / s2_B) if s2_B else 0).number_format = '0.00%'
     r += 1
 
-    ws.cell(row=r, column=1, value="Total accounts viewed (AA)").alignment = wrap
+    ws.cell(row=r, column=1, value="Total accounts viewed (AA)")
     ws.cell(row=r, column=2, value=s2_A).number_format = '#,##0'
-    ws.cell(row=r, column=3, value=stage3).number_format = '#,##0'
-    ws.cell(row=r, column=4, value=(stage3 / s2_A) if s2_A else 0).number_format = '0.00%'
+    ws.cell(row=r, column=3, value=result_mid).number_format = '#,##0'
+    ws.cell(row=r, column=4, value=(result_mid / s2_A) if s2_A else 0).number_format = '0.00%'
     r += 2
 
     # Narrative takeaway
-    ws.cell(row=r, column=1, value="Takeaway").font = h2
+    ws.cell(row=r, column=1, value="Editorial Takeaway").font = h2
     r += 1
     if s2_B > 0:
-        pct_of_new = stage3 / s2_B * 100
-        pct_of_total_signups = (stage3 / s2_D * 100) if s2_D else 0
+        pct_of_new = result_mid / s2_B * 100
+        pct_of_total_signups = (result_mid / s2_D * 100) if s2_D else 0
         takeaway = (
-            f"The modeled Prime→Netflix migration cohort — PCJ S1 Prime "
-            f"viewers who did not have Netflix and signed up specifically "
-            f"for S2 — sits at ~{stage3:,} US accounts. That's roughly "
-            f"{pct_of_new:.1f}% of PCJ S2's total 25-day NEW account "
-            f"acquisitions ({s2_B:,}) and {pct_of_total_signups:.1f}% of "
-            f"total new + reactivated signups ({s2_D:,}). "
-            f"Interpretation: a small but non-trivial slice of PCJ S2's "
-            f"Netflix acquisition is directly attributable to the "
-            f"franchise's platform migration — cross-platform PCJ "
-            f"loyalists brought real acquisition value to Netflix. The "
-            f"much larger acquisition layer comes from Netflix-native "
-            f"discovery (Top 10 carousel, Because You Watched Is It "
-            f"Cake / Squid Game Challenge, TikTok clip drops) — not from "
-            f"the Prime S1 alumni. Validate with a Crosswalk panel "
-            f"intersection query (Prime.PCJ_S1_viewers × Netflix.new_"
-            f"signup_5-11_to_6-5 × Netflix.PCJ_S2_first_view)."
+            f"The Prime→Netflix migration cohort — PCJ S1 Prime viewers "
+            f"who did not have Netflix and signed up for Netflix "
+            f"specifically for S2 — is modeled at ~{result_low:,}-"
+            f"{result_high:,} US accounts (mid-case ~{result_mid:,}). "
+            f"Roughly {pct_of_new:.1f}% of PCJ S2's 25-day NEW account "
+            f"acquisitions ({s2_B:,}) and {pct_of_total_signups:.1f}% "
+            f"of total new + reactivated signups ({s2_D:,}) are "
+            f"attributable to franchise-loyal cross-platform migration. "
+            f"\n\nInterpretation: a REAL BUT MODEST migration signal. "
+            f"Most PCJ S1 Prime viewers ALREADY had Netflix (~85% "
+            f"overlap per Antenna) — so the addressable non-Netflix "
+            f"PCJ-S1 cohort is small (~{stage2_mid:,} US accounts). Of "
+            f"those, only a fraction sign up for Netflix specifically "
+            f"for PCJ S2 (vs Squid Game Challenge S2, Love Is Blind S10, "
+            f"or other Netflix originals). The dominant PCJ S2 "
+            f"acquisition path is Netflix-native discovery — Top 10 "
+            f"carousel, 'Because You Watched Is It Cake / Squid Game '"
+            f"Challenge', TikTok clip drops — NOT Prime-alumni "
+            f"migration. \n\nHowever the migration COHORT is "
+            f"disproportionately valuable: they are demonstrated "
+            f"PCJ franchise loyalists, likely deeper engagement + "
+            f"higher retention than the average PCJ S2 signup. Worth "
+            f"tracking as a CLV cohort. Validate with a Crosswalk "
+            f"panel intersection query for measured composition."
         )
     else:
         takeaway = ("Cross-platform migration takeaway requires the PCJ S2 "
@@ -768,11 +856,11 @@ def _add_cross_platform_sheet(wb, rows: list[dict]) -> None:
                     "completes.")
 
     ws.cell(row=r, column=1, value=takeaway).alignment = wrap
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=5)
-    ws.row_dimensions[r].height = 180
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=6)
+    ws.row_dimensions[r].height = 260
 
     # Column widths
-    widths = [8, 55, 22, 20, 15]
+    widths = [8, 42, 14, 14, 14, 32]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -791,8 +879,8 @@ def _add_methodology_sheet(wb, rows: list[dict]) -> None:
     ws.merge_cells("A1:E1")
     ws["A2"] = ("Every reach + conversion + new-share value in this workbook "
                 "is set per-title (not from a pipeline lookup table), grounded "
-                "in publicly-available research anchors. Full research doc: "
-                "bg-webapp/scripts/pull_pcj_s2_comps.py (context_note blocks).")
+                "in publicly-available research anchors. Full row-by-row "
+                "research doc: bg-webapp/scripts/pcj_row_by_row_research.md.")
     ws["A2"].alignment = wrap
     ws.merge_cells("A2:E2")
     ws.row_dimensions[2].height = 42
@@ -807,8 +895,8 @@ def _add_methodology_sheet(wb, rows: list[dict]) -> None:
 
     notes = {
         "Pop Culture Jeopardy! (S2 Netflix)":         "SUBJECT. Modeled 5.5M 30-day US uniques (per existing Journey IQ payload). 25-day slice captures 94% of that (daily-strip cadence). Colin Jost host, 20 daily weekday drops. Mature-Netflix 2026 platform — reactivation-tilted (~55% new).",
-        "Pop Culture Jeopardy! (S1 Amazon Prime)":    "PRIOR SEASON. Prime carousel much less exposure than Netflix Top 10; 91-day lifecycle. Public triangulation: ~3-5M US uniques full lifecycle. 25-day slice ≈ 1.6M.",
-        "Squid Game: Challenge (S2 Netflix)":         "TENTPOLE. S1 Netflix's biggest unscripted launch ever (~83M global 30-day). S2 held top-3 Nielsen US streaming rank 3 weeks. 25-day US ≈ 14M reach.",
+        "Pop Culture Jeopardy! (S1 Amazon Prime)":    "PRIOR SEASON. Prime carousel much less exposure than Netflix Top 10; 91-day lifecycle. PCJ S1 did NOT crack Nielsen Streaming Top 10 in any week (verified). Public triangulation: 2.5-3.5M US uniques full lifecycle → 25-day slice ~853K. Prime bundles obscure new-signup attribution (Amazon Prime signups are usually shopping-driven, not show-driven) → new_share 0.48 (revised down from 0.60).",
+        "Squid Game: Challenge (S2 Netflix)":         "TENTPOLE. S1 Netflix's biggest unscripted launch ever (~83M global 30-day; 4.2M US first-week Nielsen; 15M+ US 30-day per triangulation). S2 held top-3 Nielsen US streaming rank 3 weeks. 25-day US reach 14-17M range, chose 15.5M mid. Conv 3.5% (revised down from 4.2%) per Antenna measurement: S1 drove 3.1% of Netflix launch-month new subs, S2 slightly lower with franchise fatigue.",
         "Star Search (S1 Netflix)":                    "REBOOT. Netflix nostalgic reboot of the 80s-90s talent competition. 5 weekly eps 1/20-2/18/26. Older-demo tilt caps acquisition upside vs Netflix's dating/game frontlist. Mid-tier reach ~3.6M.",
         "Is It Cake? (S3 Netflix)":                    "FRANCHISE-DECLINE. S1 hit ~10M US 30-day (a Netflix unscripted-game CEILING reference). S3 ~55% of S1. Binge cadence → 25-day captures 94% of 30-day. Mikey Day (SNL alumni) host — direct comp for Jost.",
         "Million Dollar Secret (S1 Netflix)":         "NEW FRANCHISE. Netflix mystery-competition launch, 10 eps batched over 14 days. Mid-tier reach ~4.5M; renewed for S2.",
