@@ -25,6 +25,7 @@ import json
 import logging
 import re
 import sys
+from html import unescape
 from typing import Any
 
 from ._base import run_scraper
@@ -33,10 +34,25 @@ from ._playwright import render_pages
 logger = logging.getLogger(__name__)
 
 
+# Target rotates N-codes for its landing pages roughly quarterly, so
+# when these URLs 404 the fix is to grab fresh ones from the homepage's
+# nav (curl target.com and look for /c/*-/N-* hrefs). Last refreshed
+# 2026-07-07.
 TARGET_URLS = [
-    ('Top Selling',    'https://www.target.com/c/top-deals/-/N-4xu13'),
-    ('Trending',       'https://www.target.com/c/what-s-new/-/N-t80ha'),
-    ('Bestsellers',    'https://www.target.com/c/target-bullseye-shop/-/N-8gvfl'),
+    ('Top Deals',        'https://www.target.com/c/top-deals/-/N-4xw74'),
+    ('Whats New',        'https://www.target.com/c/what-s-new/-/N-o9rnh'),
+    ('Back to School',   'https://www.target.com/c/back-to-school-top-100/-/N-jf6ea'),
+]
+
+
+# Product cards on Target's PLP hydrate client-side; the SSR HTML ships
+# an empty React shell. These selectors are what appears once the
+# `redsky_aggregations/plp_search_v2` call returns and React renders.
+_TARGET_HYDRATE_SELECTORS = [
+    'div[data-test="@web/ProductCard/ProductCardVariantDefault"]',
+    'div[data-test="@web/site-top-of-funnel/ProductCardWrapper"]',
+    'a[data-test="product-title"]',
+    '[data-test="itemTitleTextLink"]',
 ]
 
 
@@ -46,19 +62,85 @@ _NEXT_DATA_RE = re.compile(
 )
 
 
+# DOM-based extractors (Target lazy-renders products via React, so the
+# SSR HTML we get first has 0 tcin but after hydration each card wraps
+# in @web/ProductCard/ProductCardVariantWrapper with view-transition-name
+# carrying the tcin, plus a @web/ProductCard/title anchor with aria-label
+# and a "current-price" span.
+# Card chunks average ~40KB apart on Target's PLPs (product images
+# swap on hover so each card carries two full <picture> blocks). Cap
+# at 80KB per card to give plenty of headroom.
+_PRODUCT_CARD_RE = re.compile(
+    r'data-test="@web/ProductCard/ProductCardVariantWrapper"'
+    r'[^>]*style="[^"]*product-info-(\d+)'
+    r'([\s\S]{0,80000}?)'
+    r'(?=data-test="@web/ProductCard/ProductCardVariantWrapper"|$)',
+    re.IGNORECASE,
+)
+_TITLE_ANCHOR_RE = re.compile(
+    r'aria-label="([^"]{5,240})"[^>]*data-test="@web/ProductCard/title"',
+    re.IGNORECASE,
+)
+_TITLE_HREF_RE = re.compile(
+    r'data-test="@web/ProductCard/title"[^>]*href="([^"]+)"',
+    re.IGNORECASE,
+)
+_CARD_IMG_RE = re.compile(
+    r'src="(https://target\.scene7\.com/is/image/Target/[^"]+)"',
+    re.IGNORECASE,
+)
+_CARD_PRICE_RE = re.compile(
+    r'data-test="current-price"[^>]*>\s*<span>\$?([0-9,.]+)</span>',
+    re.IGNORECASE,
+)
+
+
 def _extract_from_html(html: str, limit: int = 10) -> list[dict]:
-    """Target's page format churns; we try three parse paths in order:
+    """Target's PLP hydrates via React AFTER SSR ships. Two parse paths:
 
-    1. Next.js `__NEXT_DATA__` script (current SSR shape - most reliable
-       when they don't classify us as a bot).
-    2. Legacy `window.__TGT_DATA__ = {...};` assignment (older layouts).
-    3. Any `"products": [...]` array anywhere in the body (last resort).
+    1. DOM-based (post-hydration): find every ProductCard chunk and pull
+       the tcin (from view-transition-name), title (aria-label of the
+       @web/ProductCard/title anchor), url (its href), image (first
+       scene7 src), and price (current-price span). This is what fires
+       once Playwright waits for hydration.
+    2. Legacy JSON fallback: `__NEXT_DATA__`, `__TGT_DATA__`, or a
+       `"products": [...]` array in the body - only relevant on the rare
+       pages that still SSR their product grid.
 
-    Target's Next.js server-side rendering sets `props.isBot: true` when
-    it can't verify the client, which strips products from the payload
-    entirely. When we see that flag we log it so the operator knows the
-    fix is to donate fresh cookies, not to patch the parser.
+    We try DOM first because that's what modern Target ships. When
+    Target flags props.isBot in __NEXT_DATA__ we log a warning so the
+    operator knows to donate fresh cookies.
     """
+    out: list[dict] = []
+    seen: set[str] = set()
+    for m in _PRODUCT_CARD_RE.finditer(html):
+        tcin = m.group(1)
+        chunk = m.group(2)
+        if tcin in seen:
+            continue
+        title_m = _TITLE_ANCHOR_RE.search(chunk)
+        href_m  = _TITLE_HREF_RE.search(chunk)
+        img_m   = _CARD_IMG_RE.search(chunk)
+        price_m = _CARD_PRICE_RE.search(chunk)
+        if not title_m or not href_m:
+            continue
+        seen.add(tcin)
+        url = href_m.group(1).split('#')[0].split('?')[0]
+        if url.startswith('/'):
+            url = 'https://www.target.com' + url
+        out.append({
+            'rank':  len(out) + 1,
+            'name':  unescape(title_m.group(1)).strip()[:180],
+            'url':   url,
+            'image': img_m.group(1) if img_m else '',
+            'price': f"${price_m.group(1)}" if price_m else '',
+            'tcin':  tcin,
+        })
+        if len(out) >= limit:
+            return out
+
+    # Fall-through: JSON-based extraction for the rare pages that
+    # actually SSR their products. Also detects the app-layer bot flag.
     m = _NEXT_DATA_RE.search(html)
     if m:
         try:
@@ -71,8 +153,6 @@ def _extract_from_html(html: str, limit: int = 10) -> list[dict]:
                 logger.warning("target: props.isBot=True in __NEXT_DATA__ - "
                                 "app-layer flagged us. Donate fresh cookies: "
                                 "python3 scripts/trends_scrapers/donate_cookies.py target.com")
-            out: list[dict] = []
-            seen: set[str] = set()
             _walk(data, seen, out, limit)
             if out:
                 return out
@@ -85,8 +165,6 @@ def _extract_from_html(html: str, limit: int = 10) -> list[dict]:
         except json.JSONDecodeError:
             data = None
         if isinstance(data, dict):
-            out = []
-            seen = set()
             _walk(data, seen, out, limit)
             if out:
                 return out
@@ -95,10 +173,10 @@ def _extract_from_html(html: str, limit: int = 10) -> list[dict]:
     if m:
         try:
             arr = json.loads(m.group(1))
+            out.extend(_from_products_array(arr, limit - len(out)))
         except json.JSONDecodeError:
-            return []
-        return _from_products_array(arr, limit)
-    return []
+            pass
+    return out
 
 
 def _from_products_array(arr: list, limit: int) -> list[dict]:
@@ -175,7 +253,9 @@ def _walk(node, seen: set[str], out: list[dict], limit: int) -> None:
 def fetch() -> dict[str, Any]:
     rendered = render_pages(TARGET_URLS,
                              homepage='https://www.target.com/',
-                             cookie_domain='target.com')
+                             cookie_domain='target.com',
+                             wait_selectors=_TARGET_HYDRATE_SELECTORS,
+                             hydration_wait_ms=12000)
     categories: list[dict] = []
     for label, html in rendered:
         items = _extract_from_html(html, limit=10)

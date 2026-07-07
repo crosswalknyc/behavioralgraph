@@ -111,11 +111,20 @@ def render_pages(pages: list[tuple[str, str]], *,
                  cookie_domain: Optional[str] = None,
                  wait_ms: int = 3500,
                  scroll_ms: int = 1500,
-                 timeout_ms: int = 45000) -> list[tuple[str, str]]:
+                 timeout_ms: int = 45000,
+                 wait_selectors: Optional[list[str]] = None,
+                 hydration_wait_ms: int = 10000) -> list[tuple[str, str]]:
     """Render each `(label, url)` and return list of `(label, html)`.
 
     Pass `cookie_domain='target.com'` (etc.) to auto-inject the latest
     donated cookies for that domain. See `donate_cookies.py`.
+
+    `wait_selectors` is a list of CSS selectors. If any of them appears
+    in the DOM within `hydration_wait_ms`, we consider the page ready
+    and snapshot immediately after (so client-side-rendered product
+    grids like Target's have time to hydrate). If none appears within
+    the budget we still fall through to the fixed `wait_ms` timer, so
+    servers that ship products directly in SSR HTML aren't slowed down.
 
     On import failure or launch failure returns [] so callers can degrade
     gracefully to a "coming soon" tile.
@@ -179,7 +188,24 @@ def render_pages(pages: list[tuple[str, str]], *,
             try:
                 page.goto(url, wait_until='domcontentloaded',
                            timeout=timeout_ms)
-                page.wait_for_timeout(wait_ms + random.randint(0, 800))
+                # If the caller supplied hydration selectors, try each in
+                # turn. First one that appears wins; if none does, we
+                # fall through to the fixed wait_ms (same as before).
+                hydrated = False
+                if wait_selectors:
+                    per_sel_budget = max(1000, hydration_wait_ms // max(1, len(wait_selectors)))
+                    for sel in wait_selectors:
+                        try:
+                            page.wait_for_selector(sel, timeout=per_sel_budget,
+                                                     state='attached')
+                            hydrated = True
+                            logger.debug("playwright %s: hydrated on selector %s",
+                                          label, sel)
+                            break
+                        except Exception:
+                            continue
+                if not hydrated:
+                    page.wait_for_timeout(wait_ms + random.randint(0, 800))
                 page.mouse.wheel(0, 2400)
                 page.wait_for_timeout(scroll_ms)
                 html = page.content()
