@@ -39588,9 +39588,19 @@
         }
 
         function _tiqEsc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-        function _tiqNum(n) { n = Number(n); if (!isFinite(n)) return '0'; if (n >= 1e6) return (n/1e6).toFixed(1) + 'M'; if (n >= 1e3) return (n/1e3).toFixed(1) + 'K'; return String(Math.round(n)); }
+        function _tiqNum(n) {
+            n = Number(n);
+            if (!isFinite(n)) return '0';
+            var abs = Math.abs(n);
+            if (abs >= 1e12) return (n/1e12).toFixed(1) + 'T';
+            if (abs >= 1e9)  return (n/1e9 ).toFixed(1) + 'B';
+            if (abs >= 1e6)  return (n/1e6 ).toFixed(1) + 'M';
+            if (abs >= 1e3)  return (n/1e3 ).toFixed(1) + 'K';
+            return String(Math.round(n));
+        }
 
         function renderTrendsIQ(data) {
+            window.__trendsIQ.lastData = data;
             var cards = data.cards || {};
             var counts = data.counts || {};
             var filters = data.filters || {};
@@ -39721,17 +39731,73 @@
             return html;
         }
 
+        // Sort trending people by the selected mode.
+        function _tiqSortPeople(rows, mode) {
+            var arr = (rows || []).slice();
+            if (mode === 'name') {
+                arr.sort(function(a, b) { return String(a.name || '').localeCompare(String(b.name || '')); });
+            } else if (mode === 'pageviews') {
+                arr.sort(function(a, b) {
+                    var av = Number(a.pageviews_projected != null ? a.pageviews_projected : (a.pageviews || 0)) || 0;
+                    var bv = Number(b.pageviews_projected != null ? b.pageviews_projected : (b.pageviews || 0)) || 0;
+                    return bv - av;
+                });
+            } else {
+                // Default: mentions desc, pageviews as tiebreaker.
+                arr.sort(function(a, b) {
+                    var am = Number(a.mentions_projected != null ? a.mentions_projected : (a.mentions || 0)) || 0;
+                    var bm = Number(b.mentions_projected != null ? b.mentions_projected : (b.mentions || 0)) || 0;
+                    if (bm !== am) return bm - am;
+                    var ap = Number(a.pageviews_projected != null ? a.pageviews_projected : (a.pageviews || 0)) || 0;
+                    var bp = Number(b.pageviews_projected != null ? b.pageviews_projected : (b.pageviews || 0)) || 0;
+                    return bp - ap;
+                });
+            }
+            return arr;
+        }
+
+        // Set the sort mode and re-render just the trending-people panel.
+        window.setTrendsIQPeopleSort = function(mode) {
+            window.__trendsIQ.peopleSort = mode || 'mentions';
+            var rows = (window.__trendsIQ.lastData && window.__trendsIQ.lastData.cards
+                        && window.__trendsIQ.lastData.cards.trending_people) || [];
+            var panel = document.querySelector('#trendsIQPanels .tiq-panel[data-tiq-panel="people"]');
+            if (panel) panel.innerHTML = renderTIQPeople(rows);
+        };
+
         function renderTIQPeople(rows) {
             if (!rows.length) return '<div class="tiq-empty">No trending people surfaced for this filter yet.</div>';
+            var mode = window.__trendsIQ.peopleSort || 'mentions';
+            var sorted = _tiqSortPeople(rows, mode);
+            var opts = [
+                { v: 'mentions',  label: 'Mentions (high to low)' },
+                { v: 'pageviews', label: 'Pageviews (high to low)' },
+                { v: 'name',      label: 'Name (A to Z)' },
+            ].map(function(o) {
+                var sel = (o.v === mode) ? ' selected' : '';
+                return '<option value="' + o.v + '"' + sel + '>' + o.label + '</option>';
+            }).join('');
             var html = '<div class="tiq-card"><h4>👤 Trending people</h4>' +
-                       '<div class="tiq-card-sub">Names appearing across headlines and search terms in this window.</div>' +
+                       '<div class="tiq-card-sub" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">' +
+                       '<span>Names appearing across headlines and search terms in this window. Projected to US gen pop (329.99M).</span>' +
+                       '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;opacity:0.85;">' +
+                         'Sort:&nbsp;' +
+                         '<select onchange="setTrendsIQPeopleSort(this.value)" ' +
+                                 'style="background:#111827;color:#fff;border:1px solid #374151;' +
+                                        'border-radius:6px;padding:4px 8px;font-size:12px;">' +
+                           opts +
+                         '</select>' +
+                       '</span>' +
+                       '</div>' +
                        '<div class="tiq-people-grid">';
-            rows.forEach(function(p) {
+            sorted.forEach(function(p) {
                 var context = (p.context || []).slice(0, 1).map(function(c) { return _tiqEsc(c); }).join('');
+                var mentionsProj  = Number(p.mentions_projected  != null ? p.mentions_projected  : (Number(p.mentions)  || 0) * 329990000) || 0;
+                var pageviewsProj = Number(p.pageviews_projected != null ? p.pageviews_projected : (Number(p.pageviews) || 0) * 329990000) || 0;
                 html += '<div class="tiq-person-card">' +
                         '<div class="tiq-person-name">' + _tiqEsc(p.name) + '</div>' +
-                        '<div class="tiq-person-mentions">' + p.mentions + ' mentions' +
-                        (p.pageviews ? ' &middot; ' + _tiqNum(p.pageviews) + ' pageviews' : '') +
+                        '<div class="tiq-person-mentions">' + _tiqNum(mentionsProj) + ' mentions' +
+                        (pageviewsProj ? ' &middot; ' + _tiqNum(pageviewsProj) + ' pageviews' : '') +
                         '</div>' +
                         (context ? '<div class="tiq-person-context">' + context + '</div>' : '') +
                         '</div>';

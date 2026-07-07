@@ -712,6 +712,15 @@ def _fetch_trending_people(headlines: list[dict],
         except Exception as e:
             logger.debug("trends_iq wikipedia lookup failed: %s", e)
 
+    # Project raw counts up to US gen pop (329.99M). Both fields are the
+    # raw count multiplied by 329_990_000 so the front end can display
+    # "gen-pop-scaled" numbers consistent with the rest of the dashboard.
+    # Raw counts stay on each row too so the frontend can toggle if needed.
+    _US_GEN_POP = 329_990_000
+    for p in people:
+        p['mentions_projected']  = int(p.get('mentions')  or 0) * _US_GEN_POP
+        p['pageviews_projected'] = int(p.get('pageviews') or 0) * _US_GEN_POP
+
     return people
 
 
