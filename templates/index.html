@@ -39776,26 +39776,40 @@
             if (movers.today_day && movers.baseline_day) {
                 span = 'Comparing ' + _tiqEsc(movers.today_day) + ' against ' + _tiqEsc(movers.baseline_day) + '.';
             }
+            // Only render buckets that actually have data. Google Trends
+            // daily lists turn over hard between days, so Climbing and
+            // Sustained often can't populate; showing empty tiles reads
+            // worse than dropping them.
+            var buckets = [
+                { title: '🔥 Breakout',      sub: 'Brand new in the current window; wasn\'t trending last week.',                       rows: movers.breakout  },
+                { title: '📈 Climbing',      sub: 'In the top-N both then and now, with rank up 3+ or score up 2x+.',                    rows: movers.rising    },
+                { title: '📉 Cooling',       sub: 'Slipped in the rankings, or fell off the top list entirely.',                        rows: movers.falling   },
+                { title: '⭐ Sustained heat', sub: 'Ranking similar in both windows: durable interest, not a one-day spike.',            rows: movers.sustained },
+            ];
+            var populated = buckets.filter(function(b) { return b.rows && b.rows.length; });
+            if (!populated.length) {
+                return '<div class="tiq-empty">' +
+                       '<div style="font-size:16px;font-weight:600;margin-bottom:6px;">Movers is warming up</div>' +
+                       '<div>No directional signal yet in this window. Try again once a few more days of snapshots have accumulated, or switch to another geo.</div>' +
+                       '</div>';
+            }
             var header = '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
                          'Directional velocity across trending searches. ' + span +
                          '</div>';
-            var grid = '<div class="tiq-cards-grid">' +
-                _renderMoverBucket('🔥 Breakout',
-                                    'Brand new in the current window; wasn\'t trending last week.',
-                                    movers.breakout,
-                                    'No breakout searches in this window.') +
-                _renderMoverBucket('📈 Climbing',
-                                    'In the top-N both then and now, with rank up 3+ or score up 2x+.',
-                                    movers.rising,
-                                    'No climbers this window - Google Trends daily lists rarely overlap; try again in a few days.') +
-                _renderMoverBucket('📉 Cooling',
-                                    'Slipped in the rankings, or fell off the top list entirely.',
-                                    movers.falling,
-                                    'Nothing has cooled off in this window.') +
-                _renderMoverBucket('⭐ Sustained heat',
-                                    'Ranking similar in both windows: durable interest, not a one-day spike.',
-                                    movers.sustained,
-                                    'No sustained overlap in this window.') +
+            // Choose a responsive grid template based on how many buckets
+            // have data so 2 populated buckets don't look forlorn stretched
+            // across 4 columns.
+            var cols;
+            switch (populated.length) {
+                case 1:  cols = '1fr';                 break;
+                case 2:  cols = '1fr 1fr';             break;
+                case 3:  cols = '1fr 1fr 1fr';         break;
+                default: cols = 'repeat(4, minmax(200px, 1fr))';
+            }
+            var grid = '<div class="tiq-cards-grid" style="grid-template-columns: ' + cols + ';">' +
+                populated.map(function(b) {
+                    return _renderMoverBucket(b.title, b.sub, b.rows, '');
+                }).join('') +
                 '</div>';
             return header + grid;
         }
