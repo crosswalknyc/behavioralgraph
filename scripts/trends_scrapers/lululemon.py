@@ -111,7 +111,8 @@ def fetch() -> dict[str, Any]:
     categories = _fetch_via_requests()
     if not categories:
         rendered = render_pages(LULU_URLS,
-                                  homepage='https://shop.lululemon.com/')
+                                  homepage='https://shop.lululemon.com/',
+                                  cookie_domain='lululemon.com')
         for label, html in rendered:
             items = _extract_from_next_data(html, limit=10)
             if items:

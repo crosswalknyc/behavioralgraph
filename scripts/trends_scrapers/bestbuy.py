@@ -101,7 +101,8 @@ def fetch() -> dict[str, Any]:
     categories = _fetch_via_requests()
     if not categories:
         rendered = render_pages(BESTBUY_CATEGORIES,
-                                  homepage='https://www.bestbuy.com/')
+                                  homepage='https://www.bestbuy.com/',
+                                  cookie_domain='bestbuy.com')
         for label, html in rendered:
             items = _parse_bestbuy_listing(html, limit=10)
             if items:

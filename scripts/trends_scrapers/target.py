@@ -40,28 +40,65 @@ TARGET_URLS = [
 ]
 
 
+_NEXT_DATA_RE = re.compile(
+    r'<script[^>]+id="__NEXT_DATA__"[^>]*>(.+?)</script>',
+    re.DOTALL | re.IGNORECASE,
+)
+
+
 def _extract_from_html(html: str, limit: int = 10) -> list[dict]:
-    """Target embeds a Redux __TGT_DATA__ blob in every listing page."""
+    """Target's page format churns; we try three parse paths in order:
+
+    1. Next.js `__NEXT_DATA__` script (current SSR shape - most reliable
+       when they don't classify us as a bot).
+    2. Legacy `window.__TGT_DATA__ = {...};` assignment (older layouts).
+    3. Any `"products": [...]` array anywhere in the body (last resort).
+
+    Target's Next.js server-side rendering sets `props.isBot: true` when
+    it can't verify the client, which strips products from the payload
+    entirely. When we see that flag we log it so the operator knows the
+    fix is to donate fresh cookies, not to patch the parser.
+    """
+    m = _NEXT_DATA_RE.search(html)
+    if m:
+        try:
+            data = json.loads(m.group(1))
+        except json.JSONDecodeError:
+            data = None
+        if isinstance(data, dict):
+            is_bot = (((data.get('props') or {}).get('isBot')) is True)
+            if is_bot:
+                logger.warning("target: props.isBot=True in __NEXT_DATA__ - "
+                                "app-layer flagged us. Donate fresh cookies: "
+                                "python3 scripts/trends_scrapers/donate_cookies.py target.com")
+            out: list[dict] = []
+            seen: set[str] = set()
+            _walk(data, seen, out, limit)
+            if out:
+                return out
+
     m = re.search(r'window\.__TGT_DATA__\s*=\s*({.+?})\s*;\s*</script>',
                    html, re.DOTALL)
-    if not m:
-        m = re.search(r'"products":\s*(\[[^\]]{500,50000}\])',
-                       html, re.DOTALL)
-        if not m:
-            return []
+    if m:
+        try:
+            data = json.loads(m.group(1))
+        except json.JSONDecodeError:
+            data = None
+        if isinstance(data, dict):
+            out = []
+            seen = set()
+            _walk(data, seen, out, limit)
+            if out:
+                return out
+
+    m = re.search(r'"products":\s*(\[[^\]]{500,50000}\])', html, re.DOTALL)
+    if m:
         try:
             arr = json.loads(m.group(1))
         except json.JSONDecodeError:
             return []
         return _from_products_array(arr, limit)
-    try:
-        data = json.loads(m.group(1))
-    except json.JSONDecodeError:
-        return []
-    out: list[dict] = []
-    seen: set[str] = set()
-    _walk(data, seen, out, limit)
-    return out
+    return []
 
 
 def _from_products_array(arr: list, limit: int) -> list[dict]:
@@ -136,7 +173,9 @@ def _walk(node, seen: set[str], out: list[dict], limit: int) -> None:
 
 
 def fetch() -> dict[str, Any]:
-    rendered = render_pages(TARGET_URLS, homepage='https://www.target.com/')
+    rendered = render_pages(TARGET_URLS,
+                             homepage='https://www.target.com/',
+                             cookie_domain='target.com')
     categories: list[dict] = []
     for label, html in rendered:
         items = _extract_from_html(html, limit=10)
