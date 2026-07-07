@@ -1187,6 +1187,16 @@ _AMAZON_DP_RE = re.compile(
     r'href="(/[^"]*/dp/[A-Z0-9]{10}[^"]*)"',
     re.IGNORECASE,
 )
+# Amazon renders the visible price via a whole+fraction span pair AND
+# a screen-reader `<span class="a-offscreen">$X.YY</span>` copy. The
+# offscreen span is the most stable target across their layout churn,
+# and the p13n-sc-price class shows up on the bestsellers grid. We
+# accept either.
+_AMAZON_PRICE_RE = re.compile(
+    r'<span[^>]*class="[^"]*(?:a-offscreen|_cDEzb_p13n-sc-price|p13n-sc-price)[^"]*"[^>]*>'
+    r'\s*(\$[0-9][0-9,]*(?:\.[0-9]{2})?)\s*</span>',
+    re.IGNORECASE,
+)
 # Fall back to slug-derived names when Amazon's product-title span is
 # hidden behind a churning CSS-hash class. The slug is the segment
 # between the leading `/` and `/dp/`.
@@ -1228,10 +1238,14 @@ def _parse_amazon_movers(body: str, limit: int = 10) -> list[dict]:
         if asin in seen_asins:
             continue
         chunk = m.group(2)
-        img_m = _AMAZON_IMG_RE.search(chunk)
-        dp_m = _AMAZON_DP_RE.search(chunk)
-        image = img_m.group(1) if img_m else ''
-        dp_path = dp_m.group(1) if dp_m else ''
+        img_m   = _AMAZON_IMG_RE.search(chunk)
+        dp_m    = _AMAZON_DP_RE.search(chunk)
+        price_m = _AMAZON_PRICE_RE.search(chunk)
+        image   = img_m.group(1) if img_m else ''
+        dp_path = dp_m.group(1)  if dp_m  else ''
+        # The a-offscreen span often duplicates the price for accessibility
+        # AND for the "was" strikethrough; take the first hit (current price).
+        price   = price_m.group(1).strip() if price_m else ''
         name = _slug_to_name(dp_path)
         if not name:
             continue
@@ -1241,6 +1255,7 @@ def _parse_amazon_movers(body: str, limit: int = 10) -> list[dict]:
             'name':  name[:180],
             'url':   f'https://www.amazon.com{dp_path.split("/ref=")[0]}',
             'image': image,
+            'price': price,
             'asin':  asin,
         })
         if len(items) >= limit:
