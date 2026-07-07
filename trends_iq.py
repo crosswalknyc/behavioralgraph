@@ -226,13 +226,21 @@ NEWS_FEEDS = [
 # Reddit public JSON works without auth (needs UA). Other platforms lack a
 # no-auth trending endpoint; those tiles render "coming soon" placeholders
 # so the surface is discoverable and can be lit up as feeds are added.
+# Reddit is fetched live at request time (Atom RSS, no auth). Every other
+# platform is populated by the daily scraper suite under
+# `scripts/trends_scrapers/` which writes snapshots to
+# `s3://dashboard-inputs/trends_iq_snapshots/latest/{source}.json`.
+# The `available` flag flips to True at read time if a fresh snapshot
+# exists (see _fetch_social_trending), so an outage on one platform's
+# scraper degrades to the coming-soon placeholder instead of a hard fail.
+# Facebook has no viable public trending source and is intentionally
+# omitted (was previously a coming-soon tile; removed 2026-07-07).
 SOCIAL_PLATFORMS = [
     ('reddit',    'Reddit',    True),
     ('youtube',   'YouTube',   False),
     ('tiktok',    'TikTok',    False),
     ('instagram', 'Instagram', False),
     ('x',         'X',         False),
-    ('facebook',  'Facebook',  False),
 ]
 
 
@@ -251,6 +259,10 @@ AMAZON_MOVERS_FEEDS = [
     ('Toys & Games',      'https://www.amazon.com/Best-Sellers-Toys-Games/zgbs/toys-and-games/'),
 ]
 
+# Amazon is fetched live at request time (server-rendered Bestsellers).
+# Every other retailer is populated by the daily scraper suite under
+# `scripts/trends_scrapers/`. `available` flips to True at read time when
+# a fresh snapshot is present.
 RETAILERS = [
     ('amazon',   'Amazon',    True),
     ('target',   'Target',    False),
@@ -261,6 +273,13 @@ RETAILERS = [
     ('nike',     'Nike',      False),
     ('lululemon','Lululemon', False),
 ]
+
+# How old a snapshot can be before we treat the source as unavailable
+# again. Two days = one missed nightly + one buffer. Bump if a scraper
+# is flaky.
+_SNAPSHOT_MAX_AGE_S = int(os.environ.get('TRENDS_IQ_SNAPSHOT_MAX_AGE_S',
+                                            str(2 * 24 * 3600)))
+_SNAPSHOT_PREFIX    = 'trends_iq_snapshots/latest/'
 
 
 # ============================================================================
@@ -343,6 +362,55 @@ def _cache_put(filters: dict, payload: dict) -> None:
                        ContentType='application/json')
     except Exception as e:
         logger.debug("trends_iq cache put failed: %s", e)
+
+
+# ============================================================================
+# Daily snapshot reader
+# ============================================================================
+# Each source under `scripts/trends_scrapers/` writes a normalized JSON to
+# `s3://dashboard-inputs/trends_iq_snapshots/latest/{source}.json` every
+# morning. The read side is best-effort: missing or stale snapshots fall
+# back to the "coming soon" placeholder for that tile.
+def _read_snapshot(source: str) -> Optional[dict]:
+    s3 = _s3_client()
+    if s3 is None:
+        return None
+    key = f'{_SNAPSHOT_PREFIX}{source}.json'
+    try:
+        resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=key)
+    except Exception:
+        return None
+    try:
+        data = json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception as e:
+        logger.debug("trends_iq _read_snapshot %s parse failed: %s", source, e)
+        return None
+    fetched_at = data.get('fetched_at')
+    if fetched_at:
+        try:
+            fetched_dt = datetime.fromisoformat(fetched_at.replace('Z', '+00:00'))
+            age_s = (datetime.now(timezone.utc) - fetched_dt).total_seconds()
+            if age_s > _SNAPSHOT_MAX_AGE_S:
+                logger.info("trends_iq snapshot %s is %.0fh old; treating as unavailable",
+                             source, age_s / 3600.0)
+                return None
+        except Exception:
+            pass
+    return data
+
+
+def _snapshot_items_for_geo(snap: dict, state: Optional[str]) -> list[dict]:
+    """Pick the right slice out of a snapshot: state-scoped when the
+    user selected a state and the snapshot has per-state data, else
+    fall back to `national`."""
+    if not snap:
+        return []
+    if state:
+        by_state = snap.get('by_state') or {}
+        if isinstance(by_state, dict):
+            if state in by_state and by_state[state]:
+                return by_state[state]
+    return list(snap.get('national') or [])
 
 
 # ============================================================================
@@ -718,10 +786,11 @@ def _fetch_reddit_popular(state: Optional[str], lookback_days: int) -> list[dict
 def _fetch_social_trending(state: Optional[str], lookback_days: int) -> dict:
     """Fan out to every social platform's trending endpoint.
 
-    Reddit is live via the Atom /.rss feed. YouTube, TikTok, X, Instagram,
-    and Facebook require authenticated APIs or headless browser scraping;
-    they render as a "coming soon" tile so the surface is discoverable and
-    users know each platform is on the roadmap.
+    Reddit is live at request time via the Atom `/.rss` feed. YouTube,
+    TikTok, and X are populated from S3 snapshots written by
+    `scripts/trends_scrapers/`. Instagram is scaffolded but doesn't
+    have a source wired yet - its snapshot returns `available=False`
+    which cascades to a "coming soon" tile in the UI.
     """
     result = {slug: {'label': label, 'items': [], 'available': avail}
               for slug, label, avail in SOCIAL_PLATFORMS}
@@ -729,6 +798,25 @@ def _fetch_social_trending(state: Optional[str], lookback_days: int) -> dict:
         result['reddit']['items']  = _fetch_reddit_popular(state, lookback_days)
     except Exception as e:
         logger.debug("trends_iq reddit failed: %s", e)
+
+    for slug, label, _static_avail in SOCIAL_PLATFORMS:
+        if slug == 'reddit':
+            continue
+        snap = _read_snapshot(slug)
+        if not snap:
+            continue
+        items = _snapshot_items_for_geo(snap, state)
+        snap_available = snap.get('available')
+        if snap_available is None:
+            snap_available = bool(items)
+        result[slug] = {
+            'label':     label,
+            'items':     items[:20],
+            'available': bool(snap_available),
+            'fetched_at': snap.get('fetched_at'),
+        }
+        if snap.get('error'):
+            result[slug]['note'] = f"latest snapshot: {snap['error']}"
     return result
 
 
@@ -841,19 +929,23 @@ def _fetch_amazon_movers() -> list[dict]:
 def _fetch_trending_products() -> list[dict]:
     """Aggregate the retailer tiles.
 
-    Currently wires Amazon; other retailers stay in "coming soon" mode
-    until a feed is wired up. Every retailer gets a row so the shape of
-    the surface is stable across runs.
+    Amazon runs live at request time. Every other retailer is populated
+    from S3 snapshots written by `scripts/trends_scrapers/` on the
+    Hetzner nightly cron. Missing / stale snapshots degrade to the
+    coming-soon placeholder for that tile.
+
+    Product tiles are always national - retailer bestsellers don't
+    have per-DMA breakouts.
     """
     result = []
-    for slug, label, avail in RETAILERS:
+    for slug, label, static_avail in RETAILERS:
         entry = {
             'retailer':  slug,
             'label':     label,
-            'available': avail,
+            'available': static_avail,
             'items':     [],
         }
-        if slug == 'amazon' and avail:
+        if slug == 'amazon':
             try:
                 cats = _fetch_amazon_movers()
                 if cats:
@@ -861,6 +953,30 @@ def _fetch_trending_products() -> list[dict]:
                     entry['items']      = cats[0].get('items') or []
             except Exception as e:
                 logger.debug("trends_iq amazon movers failed: %s", e)
+            result.append(entry)
+            continue
+
+        snap = _read_snapshot(slug)
+        if snap:
+            items = list(snap.get('national') or [])
+            entry['items'] = items[:10]
+            entry['available'] = bool(items) if snap.get('available') is None \
+                else bool(snap.get('available'))
+            raw_cats = snap.get('categories') or []
+            if raw_cats:
+                # Scrapers emit `{label, items}`; the frontend + Amazon path
+                # use `{category, items}`. Normalize on read so tile
+                # rendering stays uniform.
+                entry['categories'] = [
+                    {
+                        'category': c.get('category') or c.get('label') or '',
+                        'items':    (c.get('items') or [])[:10],
+                    }
+                    for c in raw_cats if isinstance(c, dict) and (c.get('items') or [])
+                ]
+            entry['fetched_at'] = snap.get('fetched_at')
+            if snap.get('error'):
+                entry['note'] = f"latest snapshot: {snap['error']}"
         result.append(entry)
     return result
 
