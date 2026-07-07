@@ -39649,7 +39649,7 @@
         function renderTIQHeadlines(rows) {
             if (!rows.length) return '<div class="tiq-empty">No trending headlines available for this filter yet.</div>';
             var html = '<div class="tiq-card"><h4>📰 Top trending headlines</h4>' +
-                       '<div class="tiq-card-sub">Aggregated across major news outlets, ranked by cross-source pickup.</div>' +
+                       '<div class="tiq-card-sub">Aggregated across major news outlets.</div>' +
                        '<div class="tiq-headline-list">';
             rows.forEach(function(r, i) {
                 var img = r.image ? '<div class="tiq-headline-image" style="background-image: url(\'' + _tiqEsc(r.image) + '\')"></div>' : '<div class="tiq-headline-image"></div>';
