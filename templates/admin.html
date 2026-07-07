@@ -7382,8 +7382,8 @@
                         + (reason || '(no reason)')
                     + '</span>'
                     + '<span style="color:var(--text-secondary); font-size:0.65rem;">' + created + '</span>'
-                    + '<button type="button" class="btn btn-small btn-secondary" style="padding:0.15rem 0.5rem; font-size:0.7rem;" onclick="startEditUserModalRecurring(' + JSON.stringify(g.id) + ')" title="Edit amount, months, or reason">✎ Edit</button>'
-                    + '<button type="button" class="btn btn-small btn-secondary" style="padding:0.15rem 0.5rem; font-size:0.7rem; color:var(--accent-red, #ff6b6b);" onclick="deleteUserModalRecurring(' + JSON.stringify(g.id) + ')" title="Cancel this recurring rule">✖ Delete</button>'
+                    + '<button type="button" class="btn btn-small btn-secondary" style="padding:0.15rem 0.5rem; font-size:0.7rem;" onclick="startEditUserModalRecurring(\'' + g.id + '\')" title="Edit amount, months, or reason">✎ Edit</button>'
+                    + '<button type="button" class="btn btn-small btn-secondary" style="padding:0.15rem 0.5rem; font-size:0.7rem; color:var(--accent-red, #ff6b6b);" onclick="deleteUserModalRecurring(\'' + g.id + '\')" title="Cancel this recurring rule">✖ Delete</button>'
                 + '</div>'
             );
         }
@@ -7435,7 +7435,7 @@
                     + '<input type="text" id="urrEditReason-' + grantId + '" value="' + (g.reason || '').replace(/"/g, '&quot;') + '" placeholder="Reason" style="padding:0.3rem; width:100%; box-sizing:border-box;">'
                     + '<div style="display:flex; gap:0.4rem; justify-content:flex-end;">'
                         + '<button type="button" class="btn btn-small btn-secondary" onclick="loadUserModalRecurring()">Cancel</button>'
-                        + '<button type="button" class="btn btn-small btn-primary" onclick="saveEditUserModalRecurring(' + JSON.stringify(grantId) + ')">Save</button>'
+                        + '<button type="button" class="btn btn-small btn-primary" onclick="saveEditUserModalRecurring(\'' + grantId + '\')">Save</button>'
                     + '</div>'
                 + '</div>'
             );

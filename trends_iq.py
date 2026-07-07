@@ -66,6 +66,7 @@ try:
         US_STATE_TO_ISO,
         _USPS_TO_NAME,
         normalize_state,
+        _trends_snap_get,
     )
     _HAS_EXTERNAL_SIGNALS = True
 except Exception as _ext_err:
@@ -85,6 +86,9 @@ except Exception as _ext_err:
 
     def normalize_state(state):
         return state
+
+    def _trends_snap_get(geo, day_iso):
+        return None
 
 
 # ============================================================================
@@ -611,6 +615,204 @@ def _fetch_trending_searches(state: Optional[str], lookback_days: int) -> list[d
             'last_seen':      r.get('last_seen') or '',
         })
     return out
+
+
+# ============================================================================
+# Card 1b: Movers (Rising / Falling / Breakout / Sustained)
+# ----------------------------------------------------------------------------
+# Diffs a small "current window" of Google Trends snapshots against an
+# older "baseline window" and buckets terms by directional signal. Uses
+# the same per-day snapshot storage the aggregate trending-searches
+# view already reads from, so no new data collection required.
+#
+# We aggregate ACROSS a window on both sides (rather than single-day
+# vs single-day) because Google Trends returns very different top-N
+# sets each day; single-day comparisons rarely overlap enough for
+# Rising / Sustained buckets to fire meaningfully.
+# ============================================================================
+_MOVERS_CURRENT_WINDOW  = 2    # days included in "now" (today + yesterday)
+_MOVERS_BASELINE_START  = 4    # days ago the baseline window starts
+_MOVERS_BASELINE_WINDOW = 4    # days included in the baseline window
+_MOVERS_RANK_THRESHOLD  = 3    # rank delta to count as rising/falling
+_MOVERS_SCORE_UP_RATIO  = 2.0  # score ratio to count as rising
+_MOVERS_SCORE_DN_RATIO  = 0.5  # score ratio to count as falling
+
+
+def _movers_state_to_geo(state: Optional[str]) -> str:
+    """Return the geo code the per-day trends snapshot uses (US or US-XX)."""
+    if state and _HAS_EXTERNAL_SIGNALS:
+        code = US_STATE_TO_ISO.get(state)
+        if code:
+            return code
+    return 'US'
+
+
+def _movers_aggregate_window(geo: str, day_offsets: Iterable[int],
+                                today: datetime) -> tuple[list[dict], Optional[str], Optional[str]]:
+    """Merge snapshots across a window of days into a single ranked list.
+
+    Terms are deduped case-insensitively. Score = MAX seen in the window.
+    Rank = position in the score-desc sorted output. Returns the merged
+    rows plus the earliest and latest snapshot dates that contributed.
+    """
+    by_term: dict[str, dict] = {}
+    days_used: list[str] = []
+    for off in day_offsets:
+        d_iso = (today - timedelta(days=off)).date().isoformat()
+        rows = _trends_snap_get(geo, d_iso)
+        if not rows:
+            continue
+        days_used.append(d_iso)
+        for r in rows:
+            term = (r.get('term') or '').strip()
+            if not term:
+                continue
+            key = term.lower()
+            score = int(r.get('score') or 0)
+            existing = by_term.get(key)
+            if existing is None or score > int(existing.get('score') or 0):
+                by_term[key] = {
+                    'term':    term,
+                    'score':   score,
+                    'related': list(r.get('related') or [])[:5],
+                }
+    if not by_term:
+        return [], None, None
+    merged = sorted(by_term.values(), key=lambda r: -int(r.get('score') or 0))
+    return merged, min(days_used), max(days_used)
+
+
+def _movers_annotate(row: dict, today_rank: Optional[int],
+                       prev_rank: Optional[int], prev_score: Optional[int],
+                       bucket: str) -> dict:
+    """Attach movers metadata to a copy of the source row."""
+    out = dict(row)
+    out['bucket']       = bucket
+    out['rank_today']   = today_rank + 1 if today_rank is not None else None
+    out['rank_prev']    = prev_rank  + 1 if prev_rank  is not None else None
+    out['score_prev']   = int(prev_score) if prev_score is not None else None
+    if today_rank is not None and prev_rank is not None:
+        out['rank_change'] = prev_rank - today_rank
+    else:
+        out['rank_change'] = None
+    if prev_score and out.get('score'):
+        out['score_ratio'] = round(out['score'] / max(prev_score, 1), 2)
+    else:
+        out['score_ratio'] = None
+    return out
+
+
+def compute_search_movers(state: Optional[str]) -> dict:
+    """Compute Movers buckets for trending searches.
+
+    Compares today's per-day snapshot to the closest baseline snapshot
+    around _MOVERS_BASELINE_DAYS ago. Returns:
+
+      {
+        'breakout':   [...],   # new in today's list, wasn't in baseline
+        'rising':     [...],   # rank up >= 3 OR score >= 2x baseline
+        'falling':    [...],   # rank down >= 3 OR score <= 0.5x baseline
+        'sustained':  [...],   # in both, mostly flat
+        'baseline_day': 'YYYY-MM-DD',
+        'today_day':    'YYYY-MM-DD',
+        'available':    True/False,
+        'note':         optional string when unavailable,
+      }
+
+    When there isn't enough history yet, returns
+    `{available: False, note: 'warming up'}` so the UI can render a
+    "collecting data" placeholder instead of empty tiles.
+    """
+    result = {
+        'breakout':   [],
+        'rising':     [],
+        'falling':    [],
+        'sustained':  [],
+        'baseline_day': None,
+        'today_day':    None,
+        'available':    False,
+        'note':         None,
+    }
+    if not _HAS_EXTERNAL_SIGNALS:
+        result['note'] = 'external_signals unavailable'
+        return result
+
+    now = datetime.now(timezone.utc)
+    geo = _movers_state_to_geo(state)
+
+    current_offsets  = list(range(0, _MOVERS_CURRENT_WINDOW))
+    baseline_offsets = list(range(_MOVERS_BASELINE_START,
+                                    _MOVERS_BASELINE_START + _MOVERS_BASELINE_WINDOW))
+
+    today_rows, today_start, today_end = _movers_aggregate_window(
+        geo, current_offsets, now)
+    baseline_rows, baseline_start, baseline_end = _movers_aggregate_window(
+        geo, baseline_offsets, now)
+
+    if not today_rows or not baseline_rows:
+        result['note'] = 'warming up - need more days of history'
+        result['today_day']    = today_end   or today_start   or None
+        result['baseline_day'] = baseline_end or baseline_start or None
+        return result
+
+    today_by_term = {(r.get('term') or '').strip().lower(): (i, r)
+                       for i, r in enumerate(today_rows)
+                       if (r.get('term') or '').strip()}
+    base_by_term  = {(r.get('term') or '').strip().lower(): (i, r)
+                       for i, r in enumerate(baseline_rows)
+                       if (r.get('term') or '').strip()}
+
+    seen_keys: set[str] = set()
+
+    for term_key, (rank_today, row) in today_by_term.items():
+        seen_keys.add(term_key)
+        if term_key not in base_by_term:
+            result['breakout'].append(
+                _movers_annotate(row, rank_today, None, None, 'breakout')
+            )
+            continue
+        rank_prev, prev_row = base_by_term[term_key]
+        rank_change = rank_prev - rank_today
+        score_now   = int(row.get('score') or 0)
+        score_prev  = int(prev_row.get('score') or 0)
+        ratio = (score_now / max(score_prev, 1)) if score_prev else float('inf')
+        annotated = _movers_annotate(row, rank_today, rank_prev, score_prev,
+                                       bucket='sustained')
+        if rank_change >= _MOVERS_RANK_THRESHOLD or ratio >= _MOVERS_SCORE_UP_RATIO:
+            annotated['bucket'] = 'rising'
+            result['rising'].append(annotated)
+        elif rank_change <= -_MOVERS_RANK_THRESHOLD or (score_prev > 0 and ratio <= _MOVERS_SCORE_DN_RATIO):
+            annotated['bucket'] = 'falling'
+            result['falling'].append(annotated)
+        else:
+            result['sustained'].append(annotated)
+
+    # Terms that were in the baseline but have dropped off today.
+    for term_key, (rank_prev, prev_row) in base_by_term.items():
+        if term_key in seen_keys:
+            continue
+        result['falling'].append(
+            _movers_annotate(prev_row, None, rank_prev, int(prev_row.get('score') or 0),
+                              bucket='falling')
+        )
+
+    # Deterministic ordering within each bucket.
+    result['breakout'].sort(key=lambda r: (r.get('rank_today') or 999,
+                                              -int(r.get('score') or 0)))
+    result['rising'].sort(   key=lambda r: (-(r.get('rank_change') or 0),
+                                              -int(r.get('score') or 0)))
+    result['falling'].sort(  key=lambda r: (r.get('rank_change') or 0,
+                                              -int(r.get('score_prev') or 0)))
+    result['sustained'].sort(key=lambda r: (r.get('rank_today') or 999,
+                                              -int(r.get('score') or 0)))
+
+    for bucket in ('breakout', 'rising', 'falling', 'sustained'):
+        result[bucket] = result[bucket][:25]
+
+    result['available']    = True
+    result['today_day']    = today_end or today_start
+    result['baseline_day'] = baseline_end or baseline_start
+    return result
 
 
 # ============================================================================
@@ -1194,6 +1396,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         'social_trending':     lambda: _fetch_social_trending(state, lookback_days,
                                                                  keywords=geo_kws),
         'products_by_retailer':lambda: _fetch_trending_products(keywords=geo_kws),
+        'movers':              lambda: compute_search_movers(state),
     }
 
     results: dict = {}
@@ -1211,6 +1414,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     headlines, articles_by_source = results.get('headlines_pack') or ([], [])
     social_trending   = results.get('social_trending') or {}
     products          = results.get('products_by_retailer') or []
+    movers            = results.get('movers') or {'available': False,
+                                                    'note': 'warming up'}
 
     trending_people = _fetch_trending_people(headlines, trending_searches, lookback_days)
 
@@ -1232,6 +1437,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'trending_people':      trending_people,
             'social_trending':      social_trending,
             'products_by_retailer': products,
+            'movers':               movers,
         },
         'counts': {
             'searches':  len(trending_searches),
@@ -1239,6 +1445,10 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'sources':   len(articles_by_source),
             'people':    len(trending_people),
             'retailers': len(products),
+            'movers':    (len(movers.get('breakout') or []) +
+                           len(movers.get('rising')   or []) +
+                           len(movers.get('falling')  or []) +
+                           len(movers.get('sustained') or [])),
         },
     }
 
