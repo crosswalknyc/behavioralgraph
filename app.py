@@ -28,6 +28,12 @@ except Exception as _intent_iq_err:
     _intent_iq = None
     print(f"⚠️ Intent IQ module unavailable at import time: {_intent_iq_err}")
 
+try:
+    import trends_iq as _trends_iq  # type: ignore
+except Exception as _trends_iq_err:
+    _trends_iq = None
+    print(f"⚠️ Trends IQ module unavailable at import time: {_trends_iq_err}")
+
 import uuid
 import json
 import csv
@@ -4139,6 +4145,7 @@ def create_user():
             'has_blue_iq_access': req_data.get('has_blue_iq_access', cd.get('has_blue_iq_access', False) if cd else False),
             'has_impact_iq_access': req_data.get('has_impact_iq_access', cd.get('has_impact_iq_access', True) if cd else True),
             'impact_iq_journeys': req_data.get('impact_iq_journeys', cd.get('impact_iq_journeys', ['*']) if cd else ['*']) or ['*'],
+            'has_trends_iq_access': req_data.get('has_trends_iq_access', cd.get('has_trends_iq_access', False) if cd else False),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
@@ -4292,6 +4299,8 @@ def update_user(username):
             user['has_share_of_time_run_access'] = bool(req_data['has_share_of_time_run_access'])
         if 'has_blue_iq_access' in req_data:
             user['has_blue_iq_access'] = bool(req_data['has_blue_iq_access'])
+        if 'has_trends_iq_access' in req_data:
+            user['has_trends_iq_access'] = bool(req_data['has_trends_iq_access'])
         if 'has_impact_iq_access' in req_data:
             user['has_impact_iq_access'] = bool(req_data['has_impact_iq_access'])
         if 'impact_iq_journeys' in req_data:
@@ -4708,6 +4717,7 @@ def restore_defaults_all_users():
             user['has_blue_iq_access'] = False
             user['has_impact_iq_access'] = True
             user['impact_iq_journeys'] = ['*']
+            user['has_trends_iq_access'] = False
             count += 1
         save_users(data)
         return jsonify({'success': True, 'message': f'Restored defaults for {count} user(s)', 'count': count})
@@ -5435,6 +5445,7 @@ def api_set_company_defaults(company_name):
             'has_blue_iq_access': req.get('has_blue_iq_access', False),
             'has_impact_iq_access': req.get('has_impact_iq_access', True),
             'impact_iq_journeys': req.get('impact_iq_journeys', ['*']) or ['*'],
+            'has_trends_iq_access': req.get('has_trends_iq_access', False),
             'credits': req.get('credits', 5),
             'auto_access_new': req.get('auto_access_new', {}),
         }
@@ -5500,6 +5511,7 @@ def api_reset_company_users(company_name):
                 user['has_blue_iq_access'] = cd.get('has_blue_iq_access', False)
                 user['has_impact_iq_access'] = cd.get('has_impact_iq_access', True)
                 user['impact_iq_journeys'] = list(cd.get('impact_iq_journeys', ['*']) or ['*'])
+                user['has_trends_iq_access'] = cd.get('has_trends_iq_access', False)
                 user['credits'] = cd.get('credits', 5)
                 user['auto_access_new'] = dict(cd.get('auto_access_new', {}))
             else:
@@ -5528,6 +5540,7 @@ def api_reset_company_users(company_name):
                 user['has_blue_iq_access'] = False
                 user['has_impact_iq_access'] = True
                 user['impact_iq_journeys'] = ['*']
+                user['has_trends_iq_access'] = False
                 user['credits'] = 5
                 user['auto_access_new'] = {}
             if user.get('has_share_of_time_access') is False:
@@ -7585,6 +7598,7 @@ def compute_product_access_flags(user, role):
             'has_impact_iq_access': True,
             'impact_iq_journeys': ['*'],
             'has_helm_iq_access': True,
+            'has_trends_iq_access': True,
         }
     u = user or {}
     has_sot_view = bool(u.get('has_share_of_time_access', True))
@@ -7621,6 +7635,7 @@ def compute_product_access_flags(user, role):
         'has_impact_iq_access': bool(u.get('has_impact_iq_access', True)),
         'impact_iq_journeys': list(u.get('impact_iq_journeys', ['*']) or ['*']),
         'has_helm_iq_access': role == 'super_admin',
+        'has_trends_iq_access': bool(u.get('has_trends_iq_access', False)),
     }
 
 
@@ -7719,6 +7734,7 @@ def index():
     has_impact_iq = _acc.get('has_impact_iq_access', True)
     impact_iq_journeys = _acc.get('impact_iq_journeys', ['*']) or ['*']
     has_helm_iq = _acc.get('has_helm_iq_access', False)
+    has_trends_iq = _acc.get('has_trends_iq_access', False)
 
     # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
@@ -7780,6 +7796,7 @@ def index():
                            has_impact_iq_access=has_impact_iq,
                            impact_iq_journeys=impact_iq_journeys,
                            has_helm_iq_access=has_helm_iq,
+                           has_trends_iq_access=has_trends_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -14365,6 +14382,63 @@ def api_blue_iq_data():
 
 
 # ============================================================================
+# TRENDS IQ — Culture Trends tracker (sits under Culture Ranker)
+# ============================================================================
+# Aggregates trending searches, headlines, articles by news source, trending
+# people, viral social posts (Reddit/YouTube today; TikTok/X/IG placeholder),
+# and top-10 trending products per retailer. Filter by DMA / State / National.
+# See bg-webapp/trends_iq.py for the module surface.
+def _require_trends_iq():
+    """Return (False, error_response) if Trends IQ isn't available for this user."""
+    user = get_current_user()
+    if not user:
+        return False, (jsonify({'success': False, 'error': 'Not authenticated'}), 401)
+    role = _normalize_role(user.get('role', 'user'))
+    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+    if not acc.get('has_trends_iq_access'):
+        return False, (jsonify({'success': False, 'error': 'Trends IQ access not enabled'}), 403)
+    if _trends_iq is None:
+        return False, (jsonify({'success': False, 'error': 'Trends IQ module not loaded'}), 500)
+    return True, None
+
+
+@app.route('/api/trends-iq/filter-options', methods=['GET'])
+@requires_auth
+def api_trends_iq_filter_options():
+    """Return the available filter choices (geo types + states + DMAs)."""
+    ok, err = _require_trends_iq()
+    if not ok:
+        return err
+    try:
+        return jsonify({'success': True, **_trends_iq.get_filter_options()})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/trends-iq/data', methods=['POST'])
+@requires_auth
+def api_trends_iq_data():
+    """Compute (or fetch cached) Trends IQ view for the given filters."""
+    ok, err = _require_trends_iq()
+    if not ok:
+        return err
+    try:
+        req = request.get_json(silent=True) or {}
+        filters = {
+            'geo_type':      req.get('geo_type'),
+            'geo_value':     req.get('geo_value'),
+            'lookback_days': req.get('lookback_days'),
+        }
+        force = bool(req.get('force_refresh'))
+        payload = _trends_iq.compute_view(filters, force_refresh=force)
+        return jsonify(payload)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================================
 # INTENT IQ — Title-scoped marketing-intent measurement
 # ============================================================================
 # Surfaced as the "Intent IQ" product (added to the view-nav dropdown). Title
@@ -18165,6 +18239,7 @@ DEFAULT_HIDDEN_PRODUCTS = {
     'subscriberIQ': False,
     'journeyIQ': False,
     'rankerIQ': False,
+    'trendsIQ': False,
     'blueIQ': False,
     'hedgeFundIQ': False,
     'llmoIQ': False,

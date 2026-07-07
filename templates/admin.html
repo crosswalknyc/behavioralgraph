@@ -1884,6 +1884,10 @@
                                 <span>🟦 Blue IQ</span>
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="trendsIQ" onchange="updateHiddenProduct('trendsIQ', this.checked)">
+                                <span>📈 Trends</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="hedgeFundIQ" onchange="updateHiddenProduct('hedgeFundIQ', this.checked)">
                                 <span>📈 Fin IQ</span>
                             </label>
@@ -3200,6 +3204,16 @@
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasBlueIQAccess">
                                 <span style="font-weight: 600;">🗳️ BLUE IQ</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Trends IQ Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasTrendsIQAccess">
+                                <span style="font-weight: 600;">📈 TRENDS</span>
                             </label>
                         </div>
                     </div>
@@ -6703,7 +6717,7 @@
         // <option> values in templates/index.html #viewNavDropdown.
         let hiddenProductsData = {
             profileIQ: false, subscriberIQ: false, journeyIQ: false,
-            rankerIQ: false, blueIQ: false, hedgeFundIQ: false,
+            rankerIQ: false, trendsIQ: false, blueIQ: false, hedgeFundIQ: false,
             llmoIQ: false, sfConversion: false, intentIQ: false,
             impactIQ: false,
             roasIQ: false, brandPartnershipIQ: false, flywheelConversion: false,
@@ -8624,6 +8638,8 @@
             document.getElementById('hasLLMOIQAccess').checked = user.has_llmo_iq_access === true; // Default false
             var biqAccess = document.getElementById('hasBlueIQAccess');
             if (biqAccess) biqAccess.checked = user.has_blue_iq_access === true; // Default false
+            var tiqAccess = document.getElementById('hasTrendsIQAccess');
+            if (tiqAccess) tiqAccess.checked = user.has_trends_iq_access === true; // Default false
             var iiqAccess = document.getElementById('hasImpactIQAccess');
             if (iiqAccess) iiqAccess.checked = user.has_impact_iq_access !== false; // Default true (opt-out)
             setImpactIQJourneys(user.impact_iq_journeys);
@@ -10811,6 +10827,7 @@
                 analysis_iq_modules: getAnalysisIQModules() || [],
                 has_llmo_iq_access: document.getElementById('hasLLMOIQAccess').checked,
                 has_blue_iq_access: !!(document.getElementById('hasBlueIQAccess') && document.getElementById('hasBlueIQAccess').checked),
+                has_trends_iq_access: !!(document.getElementById('hasTrendsIQAccess') && document.getElementById('hasTrendsIQAccess').checked),
                 has_impact_iq_access: !!(document.getElementById('hasImpactIQAccess') && document.getElementById('hasImpactIQAccess').checked),
                 impact_iq_journeys: getImpactIQJourneys(),
                 has_talent_fit_access: document.getElementById('hasTalentFitAccess').checked,
