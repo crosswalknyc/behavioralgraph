@@ -589,20 +589,89 @@ def _resolve_geo(filters: dict) -> tuple[str, Optional[str], Optional[str]]:
 # ============================================================================
 # Card 1: Trending searches
 # ============================================================================
+# Wide-pool aggregator lives further down (see _wide_pool_get and
+# scripts/trends_scrapers/google_trends_wide.py). For US-national we
+# prefer that pool because it contains ~10x more unique terms per day
+# than the narrow single-geo RSS. State/DMA queries fall back to the
+# narrow snapshot path (state-level wide pool would require per-state
+# aggregation which we skip for now).
+_SEARCH_POOL_CAP = 300  # top-N returned to the frontend; overall card scrolls
+
+
+def _wide_pool_aggregate(lookback_days: int) -> list[dict]:
+    """Aggregate the wide multi-geo daily snapshots across a window.
+
+    Returns rows shaped like `trends_top_issues` (`term`, `score`,
+    `related`, `days_trending`, `first_seen`, `last_seen`) so callers
+    can treat both paths identically. Empty list if no wide-pool
+    snapshots exist yet.
+    """
+    today = datetime.now(timezone.utc).date()
+    by_term: dict[str, dict] = {}
+    for off in range(max(1, lookback_days)):
+        d_iso = (today - timedelta(days=off)).isoformat()
+        rows = _wide_pool_get(d_iso)
+        if not rows:
+            continue
+        for r in rows:
+            term = (r.get('term') or '').strip()
+            if not term:
+                continue
+            key = term.lower()
+            score = int(r.get('score') or 0)
+            entry = by_term.get(key)
+            if entry is None:
+                by_term[key] = {
+                    'term':           term,
+                    'score':          score,
+                    'related':        list(r.get('related') or [])[:6],
+                    'days_trending':  1,
+                    'first_seen':     d_iso,
+                    'last_seen':      d_iso,
+                }
+                continue
+            if score > entry['score']:
+                entry['score'] = score
+                entry['term']  = term
+            entry['days_trending'] += 1
+            if d_iso < entry['first_seen']:
+                entry['first_seen'] = d_iso
+            if d_iso > entry['last_seen']:
+                entry['last_seen'] = d_iso
+            seen = {x.lower() for x in entry['related']}
+            for rel in r.get('related') or []:
+                if rel.lower() not in seen:
+                    entry['related'].append(rel)
+                    seen.add(rel.lower())
+            entry['related'] = entry['related'][:6]
+    return sorted(by_term.values(), key=lambda x: -x['score'])
+
+
 def _fetch_trending_searches(state: Optional[str], lookback_days: int) -> list[dict]:
     """Google Trends daily search snapshots for the requested geography.
 
-    Delegates to external_signals.trends_top_issues which handles the S3
-    snapshot cache and RSS parsing. Filters out empty terms and caps at
-    the top 40 by score.
+    For US-national requests, reads the wide multi-geo daily pool
+    (union of US + 15 large states, ~80 unique terms/day) so the
+    Overall card has real depth to scroll through and the category
+    cards have enough material to slice up. Falls back to the narrow
+    single-geo snapshot when the wide pool hasn't been populated yet.
+    For state / DMA queries, uses the state-level RSS snapshot.
     """
+    rows: list[dict] = []
     try:
-        rows = trends_top_issues(state=state, lookback_days=lookback_days) or []
+        if state:
+            rows = trends_top_issues(state=state, lookback_days=lookback_days) or []
+        else:
+            wide = _wide_pool_aggregate(lookback_days)
+            if wide:
+                rows = wide
+            else:
+                rows = trends_top_issues(state=None, lookback_days=lookback_days) or []
     except Exception as e:
         logger.debug("trends_iq searches failed: %s", e)
         return []
     out = []
-    for r in rows[:40]:
+    for r in rows[:_SEARCH_POOL_CAP]:
         term = (r.get('term') or '').strip()
         if not term:
             continue
@@ -615,6 +684,199 @@ def _fetch_trending_searches(state: Optional[str], lookback_days: int) -> list[d
             'last_seen':      r.get('last_seen') or '',
         })
     return out
+
+
+# ============================================================================
+# Card 1a: Search-term categorization
+# ----------------------------------------------------------------------------
+# Slices the "Trending searches" pool into topical buckets so each card
+# in the 5-up layout (Overall / Entertainment / Retail / Politics /
+# Finance) shows a coherent, scannable list. Matching is done on the
+# term itself PLUS the related-news titles Google Trends returns with
+# each item; the related snippets are much richer text than the raw
+# search term and dramatically improve category recall.
+#
+# Rules:
+#   - A term can match multiple categories (e.g. "trump tariff nvidia"
+#     hits politics + finance). We de-duplicate at bucket time by
+#     capping each bucket to the top N by score.
+#   - Category priority is intentional. When a term is ambiguous the
+#     earlier category in the dict wins for the visible ordering. In
+#     practice ordering rarely matters because we cap each list at 20
+#     and each list is independently score-sorted.
+#   - Word-boundary matching for short tokens (e.g. "fed", "gop") to
+#     avoid false hits like "federal express" -> finance.
+# ============================================================================
+_SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
+    'entertainment': [
+        # streaming platforms + shows
+        'netflix', 'disney+', 'disney plus', 'hulu', 'hbo', 'max',
+        'amazon prime video', 'paramount+', 'paramount plus', 'peacock',
+        'apple tv', 'youtube tv',
+        # tv / film
+        'movie', 'film', 'trailer', 'series', 'season', 'episode',
+        'premiere', 'sequel', 'reboot', 'oscar', 'emmy', 'grammy',
+        'golden globes', 'sundance', 'cannes', 'box office',
+        # music
+        'concert', 'tour', 'album', 'song', 'billboard', 'lyrics',
+        'spotify', 'apple music',
+        # sports (culturally entertainment)
+        'fifa', 'world cup', 'super bowl', 'stanley cup', 'olympics',
+        'world series', 'nba finals', 'wnba', 'ncaa', 'march madness',
+        'nfl', 'nba', 'mlb', 'nhl', 'mls', 'ufc', 'boxing', 'wwe',
+        'espn', 'fox sports', 'sportscenter',
+        ' vs ', 'vs.', 'defeat', 'beats', 'scores', 'goal', 'match',
+        ' fc', 'united fc', 'city fc', 'championship', 'playoff',
+        'draft', 'rookie',
+        # celebs / people categories often searched
+        'taylor swift', 'beyonce', 'kardashian', 'kanye', 'drake',
+        'travis kelce', 'lebron', 'messi', 'ronaldo',
+        # unambiguous major-sport team names (single-word teams like
+        # "Chiefs" or "Patriots" are omitted because they hit non-sport
+        # meanings too often).
+        'warriors', 'lakers', 'celtics', 'clippers', 'knicks',
+        'bulls', 'bucks', '76ers', 'sixers', 'mavericks', 'nuggets',
+        'yankees', 'dodgers', 'red sox', 'astros', 'phillies',
+        'padres', 'blue jays', 'brewers', 'diamondbacks', 'cardinals',
+        '49ers', 'seahawks', 'steelers', 'packers', 'ravens',
+        'raiders', 'bengals', 'buccaneers',
+        'canadiens', 'canucks', 'oilers', 'penguins', 'flyers',
+        # league-generic phrases that scan as roster / game news
+        'starting lineup', 'signed a contract', 'traded to', 'traded from',
+        'head coach', 'assistant coach', 'general manager',
+    ],
+    'retail': [
+        # retailers
+        'amazon', 'walmart', 'target', 'costco', 'best buy', 'macy',
+        'kohl', 'nordstrom', 'wayfair', 'home depot', 'lowe',
+        'ikea', 'trader joe', 'whole foods', 'aldi', 'shein', 'temu',
+        # apparel / footwear brands (avoid ambiguous single words like 'gap')
+        'nike', 'adidas', 'lululemon', 'zara', 'old navy',
+        'american eagle', 'abercrombie', 'uniqlo', 'patagonia',
+        'jordan brand', 'yeezy', 'new balance',
+        # beauty
+        'sephora', 'ulta', 'rare beauty', 'fenty', 'drunk elephant',
+        # shopping events / deals - keep compound forms only; single
+        # words like 'sale' and 'deal' catch "on sale", "one-year deal",
+        # "record deal", etc. and pollute the retail card.
+        'summer sale', 'flash sale', 'clearance sale', 'discount code',
+        'coupon code', 'black friday', 'cyber monday', 'prime day',
+        'holiday deals', 'best deals', 'top deals', 'clearance',
+        # products
+        'iphone', 'airpods', 'ipad', 'macbook', 'ps5', 'xbox',
+        'nintendo switch', 'meta quest', 'pixel phone', 'samsung galaxy',
+        'sneaker', 'jeans',
+    ],
+    'politics': [
+        # figures (current + recent). Full names so we don't false-hit
+        # sports figures with common first names (Vance Joseph, Ryan Walz).
+        'donald trump', 'joe biden', 'kamala harris', 'obama', 'clinton',
+        'bernie sanders', 'aoc', 'ocasio-cortez', 'desantis', 'ramaswamy',
+        'nikki haley', 'jd vance', 'tim walz', 'gavin newsom',
+        'chuck schumer', 'mitch mcconnell', 'nancy pelosi', 'mike johnson',
+        'hakeem jeffries',
+        # global leaders
+        'putin', 'xi jinping', 'netanyahu', 'zelensky', 'keir starmer',
+        'emmanuel macron',
+        # process / concepts (avoid single-word 'president' which hits
+        # FIFA / league / union / bank presidents. Use compound forms.)
+        'president trump', 'president biden', 'president harris',
+        'vice president', 'presidential election', 'us president',
+        'senator', 'congress', 'senate', 'house of representatives',
+        'primary election', 'presidential debate', 'ballot', 'vote count',
+        'polling place', 'gop', 'democrat', 'republican', 'campaign trail',
+        'inauguration', 'impeach', 'indictment', 'guilty verdict',
+        # geopolitics
+        'ukraine war', 'israel', 'gaza', 'palestin', 'russia sanction',
+        'iran nuclear', 'north korea', 'china tariff', 'nato',
+        # institutions / policy
+        'white house', 'pentagon', 'state department', 'supreme court',
+        'scotus', 'doj', 'fbi', 'immigration policy', 'border wall',
+        'abortion ban', 'roe v wade',
+    ],
+    'finance': [
+        # markets - compound forms only; single words like 'stock' and
+        # 'shares' catch "livestock", "share the news", "market a product",
+        # and pollute the finance card.
+        'nasdaq', 'dow jones', 's&p 500', 'sp500',
+        'stock market', 'stock price', 'stock jumps', 'stock drops',
+        'shares climb', 'shares fall', 'shares surge', 'shares plunge',
+        'market rally', 'sell-off', 'sell off', 'ipo pricing',
+        'quarterly earnings', 'dividend', 'buyback', 'merger',
+        'acquisition',
+        # macro
+        'inflation', 'interest rate', 'rate cut', 'rate hike',
+        'recession', 'gdp', 'unemployment rate', 'cpi', 'ppi', 'tariff',
+        'jobs report', 'nonfarm payroll',
+        # institutions (compound to avoid short-token false hits)
+        'federal reserve', 'fed rate', 'fed cut', 'fed hike',
+        'fed meeting', 'jerome powell', 'janet yellen', 'us treasury',
+        'wall street', 'goldman sachs', 'jpmorgan', 'blackrock',
+        'berkshire', 'warren buffett',
+        # crypto
+        'bitcoin', 'btc', 'ethereum', 'crypto', 'coinbase',
+        'stablecoin',
+        # bellwether tickers - use "stock" suffix for common-word brands
+        'nvidia', 'tesla stock', 'apple stock', 'microsoft stock',
+        'meta stock', 'amazon stock', 'palantir', 'amd stock',
+    ],
+}
+# Short tokens matched by word boundary to prevent false positives like
+# "gop" matching "gopro", "btc" matching "batch", "gdp" matching
+# "gdpr", etc.
+_SHORT_KEYWORD_TOKENS = {
+    'gop', 'btc', 'gdp', 'cpi', 'ppi', 'ipo pricing',
+    'aoc', 'doj', 'fbi', 'nato', 'scotus',
+}
+
+
+def _categorize_search_term(term: str, related: Iterable[str]) -> list[str]:
+    """Return the list of category slugs a search term matches.
+
+    Empty list = uncategorized (will only appear in Overall). A term
+    can match multiple categories; the calling code decides whether to
+    show a term in more than one column.
+    """
+    hay_parts = [term or '']
+    hay_parts.extend(list(related or []))
+    hay = ' \u2022 '.join(hay_parts).lower()
+    matched: list[str] = []
+    for cat, keywords in _SEARCH_CATEGORY_KEYWORDS.items():
+        for kw in keywords:
+            kw_l = kw.lower()
+            if kw_l in _SHORT_KEYWORD_TOKENS:
+                # Word-boundary match to avoid false positives.
+                if re.search(r'\b' + re.escape(kw_l.strip()) + r'\b', hay):
+                    matched.append(cat)
+                    break
+            else:
+                if kw_l in hay:
+                    matched.append(cat)
+                    break
+    return matched
+
+
+def _bucket_searches_by_category(rows: list[dict], per_bucket: int = 30
+                                    ) -> dict[str, list[dict]]:
+    """Split trending searches into the four topical buckets.
+
+    Rows arrive already sorted by score descending (from the fetch
+    path), so we just walk once, tag each row with its matching
+    categories, and append to the corresponding bucket while the
+    bucket is under its cap.
+    """
+    buckets: dict[str, list[dict]] = {
+        'entertainment': [],
+        'retail':        [],
+        'politics':      [],
+        'finance':       [],
+    }
+    for r in rows:
+        cats = _categorize_search_term(r.get('term') or '', r.get('related') or [])
+        for c in cats:
+            if c in buckets and len(buckets[c]) < per_bucket:
+                buckets[c].append(r)
+    return buckets
 
 
 # ============================================================================
@@ -1466,6 +1728,12 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
 
     trending_people = _fetch_trending_people(headlines, trending_searches, lookback_days)
 
+    # Split the trending search pool into the 5-card layout the UI renders:
+    # Overall (all rows, scrollable) + Entertainment / Retail / Politics /
+    # Finance (top 20 each). Category buckets are computed from the same
+    # underlying list so counts add up predictably.
+    searches_by_category = _bucket_searches_by_category(trending_searches, per_bucket=30)
+
     now = datetime.now(timezone.utc)
     payload = {
         'success':      True,
@@ -1478,20 +1746,25 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         'generated_at': now.isoformat(),
         'stale_until':  (now + timedelta(seconds=CACHE_TTL_S)).isoformat(),
         'cards': {
-            'trending_searches':    trending_searches,
-            'trending_headlines':   headlines,
-            'articles_by_source':   articles_by_source,
-            'trending_people':      trending_people,
-            'social_trending':      social_trending,
-            'products_by_retailer': products,
-            'movers':               movers,
+            'trending_searches':              trending_searches,
+            'trending_searches_by_category':  searches_by_category,
+            'trending_headlines':             headlines,
+            'articles_by_source':             articles_by_source,
+            'trending_people':                trending_people,
+            'social_trending':                social_trending,
+            'products_by_retailer':           products,
+            'movers':                         movers,
         },
         'counts': {
-            'searches':  len(trending_searches),
-            'headlines': len(headlines),
-            'sources':   len(articles_by_source),
-            'people':    len(trending_people),
-            'retailers': len(products),
+            'searches':      len(trending_searches),
+            'entertainment': len(searches_by_category.get('entertainment') or []),
+            'retail':        len(searches_by_category.get('retail')        or []),
+            'politics':      len(searches_by_category.get('politics')      or []),
+            'finance':       len(searches_by_category.get('finance')       or []),
+            'headlines':     len(headlines),
+            'sources':       len(articles_by_source),
+            'people':        len(trending_people),
+            'retailers':     len(products),
             'movers':    (len(movers.get('breakout') or []) +
                            len(movers.get('rising')   or []) +
                            len(movers.get('falling')  or []) +

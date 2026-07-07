@@ -22196,6 +22196,18 @@
             #trendsIQView .tiq-source-name { font-weight: 600; font-size: 0.9rem; }
             #trendsIQView .tiq-source-domain { font-size: 0.72rem; color: var(--text-secondary); }
             #trendsIQView .tiq-people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.65rem; }
+            /* 5-up searches layout: Overall (scrollable) + 4 category cards.
+               auto-fill wraps to 3->2->1 columns on narrower viewports. */
+            #trendsIQView .tiq-searches-grid { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 1rem; align-items: start; }
+            @media (max-width: 1400px) { #trendsIQView .tiq-searches-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); } }
+            #trendsIQView .tiq-search-cat-card { min-width: 0; }
+            #trendsIQView .tiq-search-cat-card h4 { font-size: 0.9rem; }
+            #trendsIQView .tiq-search-cat-card .tiq-row-title { font-size: 0.82rem; }
+            #trendsIQView .tiq-search-cat-scroll { }
+            #trendsIQView .tiq-search-scroll { max-height: 640px; overflow-y: auto; padding-right: 0.25rem; margin-right: -0.25rem; scrollbar-width: thin; scrollbar-color: rgba(124,58,237,0.4) transparent; }
+            #trendsIQView .tiq-search-scroll::-webkit-scrollbar { width: 6px; }
+            #trendsIQView .tiq-search-scroll::-webkit-scrollbar-track { background: transparent; }
+            #trendsIQView .tiq-search-scroll::-webkit-scrollbar-thumb { background-color: rgba(124,58,237,0.4); border-radius: 3px; }
             #trendsIQView .tiq-person-card { background: rgba(124, 58, 237, 0.06); border: 1px solid rgba(124, 58, 237, 0.18); border-radius: 8px; padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 0.3rem; }
             #trendsIQView .tiq-person-name { font-weight: 600; font-size: 0.9rem; }
             #trendsIQView .tiq-person-mentions { font-size: 0.72rem; color: var(--text-secondary); }
@@ -39682,7 +39694,10 @@
                 _renderTIQPanel('movers',    renderTIQMovers(cards.movers || {available:false})) +
                 _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [])) +
                 _renderTIQPanel('sources',   renderTIQArticlesBySource(cards.articles_by_source || [])) +
-                _renderTIQPanel('searches',  renderTIQSearches(cards.trending_searches || [])) +
+                _renderTIQPanel('searches',  renderTIQSearches({
+                    all:         cards.trending_searches             || [],
+                    by_category: cards.trending_searches_by_category || {},
+                })) +
                 _renderTIQPanel('people',    renderTIQPeople(cards.trending_people || [])) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
@@ -39862,32 +39877,95 @@
             return html;
         }
 
-        function renderTIQSearches(rows) {
-            if (!rows.length) return '<div class="tiq-empty">No trending searches available for this filter yet.</div>';
-            var html = '<div class="tiq-cards-grid">';
-            var chunks = [];
-            var pageSize = 20;
-            for (var i = 0; i < rows.length; i += pageSize) chunks.push(rows.slice(i, i + pageSize));
-            chunks.forEach(function(chunk, idx) {
-                html += '<div class="tiq-card"><h4>🔎 Trending searches ' + (chunks.length > 1 ? ('(' + (idx * pageSize + 1) + '-' + (idx * pageSize + chunk.length) + ')') : '') + '</h4>' +
-                        '<div class="tiq-card-sub">Peak search interest in the selected window.</div>';
-                chunk.forEach(function(r, i) {
-                    var globalRank = idx * pageSize + i + 1;
-                    var relatedHtml = (r.related || []).slice(0, 2).map(function(x) { return _tiqEsc(x); }).join(' &middot; ');
-                    var hot = r.days_trending >= 3;
-                    html += '<div class="tiq-row"><div class="tiq-rank">' + globalRank + '</div>' +
-                            '<div class="tiq-row-body">' +
-                            '<div class="tiq-row-title">' + _tiqEsc(r.term) +
-                            _tiqActions('search', 'google', r.term, r.term, 'National') + '</div>' +
-                            '<div class="tiq-row-meta">' +
-                            (r.score ? '<span class="tiq-badge">' + _tiqNum(r.score) + ' searches</span>' : '') +
-                            (r.days_trending ? '<span class="tiq-badge' + (hot ? ' hot' : '') + '">' + r.days_trending + 'd trending</span>' : '') +
-                            (relatedHtml ? '<span style="opacity:0.75;">' + relatedHtml + '</span>' : '') +
-                            '</div></div></div>';
-                });
-                html += '</div>';
-            });
-            html += '</div>';
+        // Render one search-term row. Shared across all 5 cards so the
+        // rank / badges / related-context styling stays consistent.
+        function _tiqRenderSearchRow(r, rank) {
+            var relatedHtml = (r.related || []).slice(0, 2).map(function(x) { return _tiqEsc(x); }).join(' &middot; ');
+            var hot = r.days_trending >= 3;
+            return '<div class="tiq-row"><div class="tiq-rank">' + rank + '</div>' +
+                   '<div class="tiq-row-body">' +
+                   '<div class="tiq-row-title">' + _tiqEsc(r.term) +
+                   _tiqActions('search', 'google', r.term, r.term, 'National') + '</div>' +
+                   '<div class="tiq-row-meta">' +
+                   (r.score ? '<span class="tiq-badge">' + _tiqNum(r.score) + ' searches</span>' : '') +
+                   (r.days_trending ? '<span class="tiq-badge' + (hot ? ' hot' : '') + '">' + r.days_trending + 'd trending</span>' : '') +
+                   (relatedHtml ? '<span style="opacity:0.75;">' + relatedHtml + '</span>' : '') +
+                   '</div></div></div>';
+        }
+
+        // Renders one card in the searches row. `scrollable=true` gives
+        // the Overall card a fixed height and vertical scroll so it can
+        // hold the full top 300 without pushing everything else down.
+        function _tiqRenderSearchCard(title, subtitle, rows, opts) {
+            opts = opts || {};
+            var scrollable = !!opts.scrollable;
+            var emptyMsg   = opts.emptyMsg || 'No trending searches in this category right now.';
+            var body;
+            if (!rows || !rows.length) {
+                body = '<div class="tiq-card-sub" style="opacity:0.7;padding:16px 4px;">' + _tiqEsc(emptyMsg) + '</div>';
+            } else {
+                var maxItems = opts.maxItems || rows.length;
+                body = rows.slice(0, maxItems).map(function(r, i) {
+                    return _tiqRenderSearchRow(r, i + 1);
+                }).join('');
+                if (scrollable) {
+                    body = '<div class="tiq-search-scroll">' + body + '</div>';
+                }
+            }
+            return '<div class="tiq-card tiq-search-cat-card' + (scrollable ? ' tiq-search-cat-scroll' : '') + '">' +
+                   '<h4>' + title + '</h4>' +
+                   '<div class="tiq-card-sub">' + _tiqEsc(subtitle) + '</div>' +
+                   body +
+                   '</div>';
+        }
+
+        // Payload shape:
+        //   compute_view.cards.trending_searches                = flat list (up to 300)
+        //   compute_view.cards.trending_searches_by_category    = { entertainment, retail, politics, finance }
+        // The renderer accepts either the flat list (legacy) or the
+        // structured `{ all, by_category }` object we build in
+        // renderTrendsIQData below.
+        function renderTIQSearches(payload) {
+            var overall, byCat;
+            if (Array.isArray(payload)) {
+                overall = payload;
+                byCat = {};
+            } else {
+                payload = payload || {};
+                overall = payload.all || [];
+                byCat = payload.by_category || {};
+            }
+            if (!overall.length) {
+                return '<div class="tiq-empty">No trending searches available for this filter yet.</div>';
+            }
+            var overallSub = 'Top ' + Math.min(overall.length, 300) +
+                             ' trending queries. Scroll to see the full pool.';
+            var html = '<div class="tiq-searches-grid">' +
+                _tiqRenderSearchCard('\uD83D\uDD0E Overall',
+                                       overallSub,
+                                       overall,
+                                       { scrollable: true, maxItems: 300 }) +
+                _tiqRenderSearchCard('\uD83C\uDFAC Entertainment',
+                                       'Movies, TV, music, sports, and celebs.',
+                                       byCat.entertainment,
+                                       { maxItems: 20,
+                                         emptyMsg: 'No entertainment searches in this window.' }) +
+                _tiqRenderSearchCard('\uD83D\uDECD Retail',
+                                       'Brands, products, and shopping intent.',
+                                       byCat.retail,
+                                       { maxItems: 20,
+                                         emptyMsg: 'No retail searches in this window.' }) +
+                _tiqRenderSearchCard('\uD83C\uDFDB Politics',
+                                       'Elections, policy, and geopolitics.',
+                                       byCat.politics,
+                                       { maxItems: 20,
+                                         emptyMsg: 'No political searches in this window.' }) +
+                _tiqRenderSearchCard('\uD83D\uDCB0 Finance / Wall St',
+                                       'Markets, macro, and bellwether tickers.',
+                                       byCat.finance,
+                                       { maxItems: 20,
+                                         emptyMsg: 'No finance searches in this window.' }) +
+                '</div>';
             return html;
         }
 
@@ -40184,7 +40262,10 @@
                 _renderTIQPanel('movers',    renderTIQMovers(cards.movers || {available:false})) +
                 _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [])) +
                 _renderTIQPanel('sources',   renderTIQArticlesBySource(cards.articles_by_source || [])) +
-                _renderTIQPanel('searches',  renderTIQSearches(cards.trending_searches || [])) +
+                _renderTIQPanel('searches',  renderTIQSearches({
+                    all:         cards.trending_searches             || [],
+                    by_category: cards.trending_searches_by_category || {},
+                })) +
                 _renderTIQPanel('people',    renderTIQPeople(cards.trending_people || [])) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
