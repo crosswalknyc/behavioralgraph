@@ -647,9 +647,36 @@ def _movers_state_to_geo(state: Optional[str]) -> str:
     return 'US'
 
 
+# Wide-pool location. The wide daily snapshot (US + top 15 states unioned)
+# is written by scripts.trends_scrapers.google_trends_wide as part of the
+# nightly scraper suite. When present, we prefer it over the narrow US-only
+# snapshot because it has ~10-20x more unique terms per day, which is what
+# actually makes day-over-day overlap possible (and therefore Climbing /
+# Sustained buckets non-empty).
+_WIDE_TRENDS_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')
+_WIDE_TRENDS_PREFIX = 'blue_iq/trends_rss_wide/v1/'
+
+
+def _wide_pool_get(day_iso: str) -> Optional[list[dict]]:
+    """Read the wide (multi-geo) daily pool for `day_iso`. None on miss."""
+    try:
+        import boto3  # type: ignore
+        s3 = boto3.client('s3', region_name=os.environ.get('AWS_REGION') or 'us-east-2')
+        key = f'{_WIDE_TRENDS_PREFIX}{day_iso}.json'
+        resp = s3.get_object(Bucket=_WIDE_TRENDS_BUCKET, Key=key)
+        data = json.loads(resp['Body'].read().decode('utf-8'))
+        return data.get('terms') or []
+    except Exception:
+        return None
+
+
 def _movers_aggregate_window(geo: str, day_offsets: Iterable[int],
                                 today: datetime) -> tuple[list[dict], Optional[str], Optional[str]]:
     """Merge snapshots across a window of days into a single ranked list.
+
+    Prefers the wide multi-geo daily pool when present (much larger term
+    set -> real day-over-day overlap); falls back to the narrow single-geo
+    snapshot for backward compatibility.
 
     Terms are deduped case-insensitively. Score = MAX seen in the window.
     Rank = position in the score-desc sorted output. Returns the merged
@@ -657,9 +684,14 @@ def _movers_aggregate_window(geo: str, day_offsets: Iterable[int],
     """
     by_term: dict[str, dict] = {}
     days_used: list[str] = []
+    use_wide = (geo == 'US')  # wide pool is US-national only
     for off in day_offsets:
         d_iso = (today - timedelta(days=off)).date().isoformat()
-        rows = _trends_snap_get(geo, d_iso)
+        rows: Optional[list[dict]] = None
+        if use_wide:
+            rows = _wide_pool_get(d_iso)
+        if rows is None:
+            rows = _trends_snap_get(geo, d_iso)
         if not rows:
             continue
         days_used.append(d_iso)
