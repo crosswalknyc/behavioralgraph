@@ -71,6 +71,13 @@ except ImportError:
 S3_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')
 S3_LATEST_PREFIX = 'trends_iq_snapshots/latest/'
 S3_DATED_PREFIX  = 'trends_iq_snapshots/{date}/'
+S3_COOKIES_PREFIX = 'trends_iq_cookies/'
+
+# Donated cookies older than this are ignored - most retailer/session
+# cookies expire in 30-90 days but the anti-bot session tokens (Akamai
+# _abck, DataDome datadome, PerimeterX _px) rotate faster, and stale
+# ones look more suspicious than none at all. 48h is the sweet spot.
+DEFAULT_COOKIE_MAX_AGE_H = 48
 
 DEFAULT_HTTP_TIMEOUT_S = 20
 DEFAULT_RETRY_COUNT    = 3
@@ -126,6 +133,7 @@ def http_get(url: str, *, timeout: int = DEFAULT_HTTP_TIMEOUT_S,
              retries: int = DEFAULT_RETRY_COUNT,
              headers: dict | None = None,
              cookies: dict | None = None,
+             cookie_domain: str | None = None,
              impersonate: str = 'chrome124') -> Optional[Any]:
     """GET with retries + jittered backoff. Returns None if every attempt
     fails. Never raises - callers should check `.ok`.
@@ -133,7 +141,20 @@ def http_get(url: str, *, timeout: int = DEFAULT_HTTP_TIMEOUT_S,
     When curl_cffi is available (recommended for retailer scrapes) we use
     its Chrome-TLS impersonation to slip past JA3-fingerprint bot walls.
     Falls back to plain `requests` if curl_cffi isn't installed.
+
+    Pass `cookie_domain='target.com'` (etc.) to auto-inject donated
+    cookies for that domain. Explicit `cookies=...` still wins on key
+    collisions.
     """
+    if cookie_domain:
+        donated = load_donated_cookies(cookie_domain)
+        if donated:
+            merged = dict(donated)
+            if cookies:
+                merged.update(cookies)
+            cookies = merged
+            logger.info("http_get %s: injected %d donated cookies for %s",
+                         url, len(donated), cookie_domain)
     last_err = None
     for attempt in range(retries):
         try:
@@ -202,6 +223,130 @@ def write_snapshot(source: str, payload: dict, *,
         key_dated = f'{dated_prefix}{source}.json'
         s3.put_object(Bucket=S3_BUCKET, Key=key_dated, Body=body,
                        ContentType='application/json')
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Donated cookies
+# ────────────────────────────────────────────────────────────────────────────
+# In-process cache so we don't hit S3 once per HTTP call. Keyed by domain,
+# value is (donated_at_epoch, {cookies + metadata}). Cleared on process
+# restart, which happens daily via the cron.
+_COOKIE_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+def _load_cookie_payload(domain: str) -> Optional[dict]:
+    """Read the raw donation payload for `domain` from S3. Cached in
+    process. Returns the full payload dict {donated_at, cookies, ...}
+    or None if no donation exists."""
+    cached = _COOKIE_CACHE.get(domain)
+    if cached is not None:
+        return cached[1]
+    try:
+        s3 = _s3_client()
+        key = f'{S3_COOKIES_PREFIX}{domain}.json'
+        resp = s3.get_object(Bucket=S3_BUCKET, Key=key)
+        raw = resp['Body'].read().decode('utf-8')
+        payload = json.loads(raw)
+    except Exception as e:
+        logger.debug("no cookie donation for %s: %s", domain, e)
+        _COOKIE_CACHE[domain] = (time.time(), {})
+        return None
+    _COOKIE_CACHE[domain] = (time.time(), payload)
+    return payload
+
+
+def _cookie_age_hours(payload: dict) -> Optional[float]:
+    donated_at = payload.get('donated_at') if payload else None
+    if not donated_at:
+        return None
+    try:
+        dt = datetime.fromisoformat(donated_at.replace('Z', '+00:00'))
+    except Exception:
+        return None
+    delta = datetime.now(timezone.utc) - dt
+    return delta.total_seconds() / 3600.0
+
+
+def load_donated_cookies(domain: str, *,
+                         max_age_hours: float = DEFAULT_COOKIE_MAX_AGE_H
+                         ) -> dict[str, str]:
+    """Return a `{name: value}` cookie dict for `domain`, suitable for
+    plugging into `requests.get(cookies=...)` or `curl_cffi.get(cookies=...)`.
+
+    Returns `{}` when there's no donation, when it's stale, or when the
+    S3 read fails - so callers can always use this without guards.
+    """
+    payload = _load_cookie_payload(domain)
+    if not payload:
+        return {}
+    age = _cookie_age_hours(payload)
+    if age is not None and age > max_age_hours:
+        logger.info("donated cookies for %s are %.1fh old (>%.1fh) - ignoring",
+                     domain, age, max_age_hours)
+        return {}
+    out: dict[str, str] = {}
+    for c in payload.get('cookies') or []:
+        name  = c.get('name')
+        value = c.get('value')
+        if name and value:
+            out[name] = value
+    return out
+
+
+def load_donated_cookies_playwright(domain: str, *,
+                                     max_age_hours: float = DEFAULT_COOKIE_MAX_AGE_H
+                                     ) -> list[dict]:
+    """Return a list of cookie dicts formatted for Playwright's
+    `context.add_cookies(...)`. Same freshness rules as
+    `load_donated_cookies`."""
+    payload = _load_cookie_payload(domain)
+    if not payload:
+        return []
+    age = _cookie_age_hours(payload)
+    if age is not None and age > max_age_hours:
+        return []
+    out: list[dict] = []
+    for c in payload.get('cookies') or []:
+        name = c.get('name')
+        value = c.get('value')
+        dom = c.get('domain') or f'.{domain}'
+        if not (name and value):
+            continue
+        entry = {
+            'name':   name,
+            'value':  value,
+            'domain': dom,
+            'path':   c.get('path') or '/',
+        }
+        if c.get('expires'):
+            entry['expires'] = int(c['expires'])
+        if c.get('secure'):
+            entry['secure'] = True
+        if c.get('httpOnly'):
+            entry['httpOnly'] = True
+        # Playwright requires sameSite in {Strict, Lax, None}. Default Lax.
+        entry['sameSite'] = c.get('sameSite') or 'Lax'
+        out.append(entry)
+    return out
+
+
+def cookie_donation_status(domain: str) -> dict:
+    """Return a small dict describing the freshness of the donation for
+    `domain`. Used by `cookies_status.py` and by scraper log lines."""
+    payload = _load_cookie_payload(domain)
+    if not payload:
+        return {'domain': domain, 'donated': False}
+    age_h = _cookie_age_hours(payload)
+    fresh = age_h is not None and age_h <= DEFAULT_COOKIE_MAX_AGE_H
+    return {
+        'domain':     domain,
+        'donated':    True,
+        'age_hours':  round(age_h, 1) if age_h is not None else None,
+        'count':      len(payload.get('cookies') or []),
+        'donated_at': payload.get('donated_at'),
+        'donor_host': payload.get('donor_host'),
+        'fresh':      fresh,
+    }
 
 
 def read_snapshot(source: str) -> Optional[dict]:

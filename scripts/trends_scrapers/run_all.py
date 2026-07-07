@@ -150,14 +150,33 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{'source':<12} {'kind':<9} {'count':>6}  {'elapsed':>8}  error")
     print('-' * 70)
     fail_count = 0
+    empty_retailer_sources: list[str] = []
     for r in sorted(results, key=lambda x: x.get('source', '')):
         err = r.get('error') or ''
         if err:
             fail_count += 1
+        count = len(r.get('national') or [])
+        if r.get('kind') == 'retailer' and count == 0:
+            empty_retailer_sources.append(r.get('source', ''))
         print(f"{r.get('source', ''):<12} {r.get('kind', ''):<9} "
-               f"{len(r.get('national') or []):>6}  "
+               f"{count:>6}  "
                f"{(r.get('orchestrator_elapsed_s') or r.get('scrape_elapsed_s') or 0):>7.1f}s  "
                f"{err[:60]}")
+
+    # Empty retailer feeds are almost always a bot-block. Print the
+    # exact `donate_cookies.py` command the operator needs to run.
+    if empty_retailer_sources:
+        domain_map = {
+            'target':    'target.com',    'walmart':   'walmart.com',
+            'etsy':      'etsy.com',      'sephora':   'sephora.com',
+            'lululemon': 'lululemon.com', 'bestbuy':   'bestbuy.com',
+            'nike':      'nike.com',      'ulta':      'ulta.com',
+        }
+        need = [domain_map[s] for s in empty_retailer_sources if s in domain_map]
+        if need:
+            print()
+            print(f"COOKIE_DONATION_NEEDED: {', '.join(need)}")
+            print(f"From your laptop:  python3 scripts/trends_scrapers/donate_cookies.py {' '.join(need)}")
 
     return 0 if fail_count < len(results) else 2
 

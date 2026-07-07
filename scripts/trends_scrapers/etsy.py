@@ -95,7 +95,8 @@ def fetch() -> dict[str, Any]:
     categories = _fetch_via_requests()
     if not categories:
         rendered = render_pages(ETSY_URLS,
-                                  homepage='https://www.etsy.com/')
+                                  homepage='https://www.etsy.com/',
+                                  cookie_domain='etsy.com')
         for label, html in rendered:
             items = _parse_etsy_listing(html, limit=10)
             if items:

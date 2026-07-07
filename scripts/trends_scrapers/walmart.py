@@ -109,6 +109,7 @@ def _extract_from_html(html: str, limit: int = 10) -> list[dict]:
 def fetch() -> dict[str, Any]:
     rendered = render_pages(WALMART_URLS,
                               homepage='https://www.walmart.com/',
+                              cookie_domain='walmart.com',
                               wait_ms=4000, scroll_ms=2000)
     categories: list[dict] = []
     for label, html in rendered:

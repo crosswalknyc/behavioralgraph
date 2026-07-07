@@ -126,7 +126,8 @@ def fetch() -> dict[str, Any]:
     categories = _fetch_via_requests()
     if not categories:
         rendered = render_pages(SEPHORA_URLS,
-                                  homepage='https://www.sephora.com/')
+                                  homepage='https://www.sephora.com/',
+                                  cookie_domain='sephora.com')
         for label, html in rendered:
             items = _extract_from_next_data(html, limit=10)
             if items:
