@@ -2859,14 +2859,22 @@
                     </div>
                     <div class="form-group">
                         <label>Credits</label>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
-                            <input type="number" id="newCredits" value="5" min="-1" style="flex: 1;">
+                        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                            <input type="number" id="newCredits" value="5" min="-1" style="flex: 1; min-width: 120px;">
                             <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
                                 <input type="checkbox" id="unlimitedCredits" onchange="toggleUnlimited()">
                                 <span>Unlimited</span>
                             </label>
+                            <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
+                                <input type="checkbox" id="creditsRecurringMonthly" onchange="_newCreditsRecurringChange()">
+                                <span>Recurring / month</span>
+                            </label>
                         </div>
-                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Set to -1 or check Unlimited for no limit</small>
+                        <div id="creditsRecurringMonthsRow" style="display:none; margin-top: 0.4rem;">
+                            <label style="display:inline; font-size: 0.7rem; color: var(--text-secondary); margin-right: 0.35rem;">For how many months? (blank = forever until cancelled)</label>
+                            <input type="number" id="creditsRecurringMonths" min="1" placeholder="e.g. 6" style="width: 90px; padding: 0.3rem 0.5rem;">
+                        </div>
+                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Set to -1 or check Unlimited for no limit. Check <strong>Recurring / month</strong> to auto-grant this many credits on the 1st of every month.</small>
                     </div>
                     <div id="addCreditsInModalWrap" class="form-group" style="display: none;">
                         <label>Add or deduct credits (with reason)</label>
@@ -8474,6 +8482,12 @@
             document.getElementById('newRole').value = 'user';
             document.getElementById('newCredits').value = '5';
             document.getElementById('unlimitedCredits').checked = false;
+            const _openRecur = document.getElementById('creditsRecurringMonthly');
+            if (_openRecur) { _openRecur.checked = false; _openRecur.disabled = false; }
+            const _openRecurRow = document.getElementById('creditsRecurringMonthsRow');
+            if (_openRecurRow) _openRecurRow.style.display = 'none';
+            const _openRecurMonths = document.getElementById('creditsRecurringMonths');
+            if (_openRecurMonths) _openRecurMonths.value = '';
             document.getElementById('allCategories').checked = true;
             document.getElementById('allRuns').checked = true;
             document.getElementById('allBehavioralCategories').checked = true;
@@ -8614,6 +8628,18 @@
             document.getElementById('newRole').value = user.role;
             document.getElementById('newCredits').value = user.credits === -1 ? '0' : (user.credits ?? 0);
             document.getElementById('unlimitedCredits').checked = user.credits === -1;
+            // Recurring / month is a NEW-schedule flow — never prefilled from
+            // the user record (existing schedules live under the Time Tracking
+            // tab's Recurring Grants manager). Reset every time we open edit.
+            const _editRecur = document.getElementById('creditsRecurringMonthly');
+            if (_editRecur) {
+                _editRecur.checked = false;
+                _editRecur.disabled = user.credits === -1;
+            }
+            const _editRecurRow = document.getElementById('creditsRecurringMonthsRow');
+            if (_editRecurRow) _editRecurRow.style.display = 'none';
+            const _editRecurMonths = document.getElementById('creditsRecurringMonths');
+            if (_editRecurMonths) _editRecurMonths.value = '';
             document.getElementById('allCategories').checked = user.allowed_categories?.includes('*');
             document.getElementById('allRuns').checked = user.allowed_runs?.includes('*');
             document.getElementById('allBehavioralCategories').checked = user.allowed_behavioral_categories?.includes('*') ?? true; // Default true
@@ -9566,10 +9592,27 @@
             if (checkbox.checked) {
                 input.value = '-1';
                 input.disabled = true;
+                // Unlimited users don't need monthly top-ups — force off + hide.
+                const recur = document.getElementById('creditsRecurringMonthly');
+                if (recur) { recur.checked = false; recur.disabled = true; }
+                const row = document.getElementById('creditsRecurringMonthsRow');
+                if (row) row.style.display = 'none';
             } else {
                 input.value = '5';
                 input.disabled = false;
+                const recur = document.getElementById('creditsRecurringMonthly');
+                if (recur) recur.disabled = false;
             }
+        }
+
+        // Toggles the "for how many months?" row when the top-level CREDITS
+        // Recurring / month checkbox is flipped. Kept parallel to
+        // _modalCreditsPerMonthChange() so both credit-entry surfaces
+        // behave identically.
+        function _newCreditsRecurringChange() {
+            const per = document.getElementById('creditsRecurringMonthly');
+            const row = document.getElementById('creditsRecurringMonthsRow');
+            if (row) row.style.display = (per && per.checked) ? '' : 'none';
         }
 
         // Collapsible Dashboard Section Toggle
@@ -10924,8 +10967,53 @@
                         }
                     }
                     
+                    // Schedule a recurring monthly credit grant if the admin
+                    // ticked "Recurring / month" next to the CREDITS field.
+                    // The number in the credits box is treated as the monthly
+                    // grant amount (matches the user's expectation: "on the
+                    // 1st of each month they get another 250 credits").
+                    // Skipped when Unlimited is checked (no ceiling to top up).
+                    const recurEl = document.getElementById('creditsRecurringMonthly');
+                    const unlimEl = document.getElementById('unlimitedCredits');
+                    if (savedUsername && recurEl && recurEl.checked && !(unlimEl && unlimEl.checked)) {
+                        const monthlyAmt = parseInt(document.getElementById('newCredits').value, 10);
+                        const monthsRaw = (document.getElementById('creditsRecurringMonths') || {}).value || '';
+                        const months = monthsRaw ? parseInt(monthsRaw, 10) : null;
+                        if (!isNaN(monthlyAmt) && monthlyAmt > 0) {
+                            try {
+                                const rgResp = await fetch('/api/admin/recurring-grants', {
+                                    method: 'POST',
+                                    credentials: 'same-origin',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        subject_type: 'user',
+                                        subject_name: savedUsername,
+                                        kind: 'credits',
+                                        amount: monthlyAmt,
+                                        months,
+                                        reason: 'Recurring monthly credit allotment (user modal)',
+                                        // First month already applied via the credits ceiling we
+                                        // just set — don't double-add here.
+                                        apply_first_immediately: false,
+                                    }),
+                                });
+                                const rgData = await rgResp.json().catch(() => ({}));
+                                if (!(rgResp.ok && rgData.success)) {
+                                    showToast('User saved but recurring grant failed: ' + (rgData.error || 'Unknown'), true);
+                                }
+                            } catch (e) {
+                                showToast('User saved but recurring grant errored: ' + (e.message || 'unknown'), true);
+                            }
+                        }
+                    }
+
                     let message = isEdit ? 'User updated successfully!' : 'User created successfully!';
-                    
+                    if (recurEl && recurEl.checked && !(unlimEl && unlimEl.checked)) {
+                        const monthsRaw = (document.getElementById('creditsRecurringMonths') || {}).value || '';
+                        const amt = parseInt(document.getElementById('newCredits').value, 10);
+                        message += ` 🔁 Recurring ${amt} credits/mo` + (monthsRaw ? ` × ${monthsRaw} months` : ' scheduled');
+                    }
+
                     // Show email status if available
                     if (data.email_status) {
                         if (data.email_status === 'sent') {
