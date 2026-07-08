@@ -66,6 +66,41 @@ _TITLE_KEYS = (
 )
 
 
+# Nav shell / profile / UI chrome that the SPA state blob keeps
+# alongside actual content. Every one of these was a false positive on
+# hulu.com in the first live run (2026-07-07): profile picker labels
+# ("Jenna", "Anastasia", "Guest"), top-nav categories ("Movies",
+# "Sports", "Search", "Account", "My Stuff"), and settings pages.
+# Match is case-insensitive on the whole title.
+_NAV_STOPWORDS = frozenset({
+    # top-level nav
+    'home', 'movies', 'tv', 'series', 'shows', 'sports', 'live',
+    'live tv', 'kids', 'browse', 'my stuff', 'my list', 'watchlist',
+    'search', 'account', 'settings', 'help', 'log out', 'sign out',
+    'sign in', 'log in', 'profile', 'profiles', 'switch profile',
+    'add profile', 'edit profile', 'manage profiles', 'guest',
+    'downloads', 'notifications', 'menu', 'more', 'discover',
+    'originals', 'new', 'popular', 'trending', 'featured', 'network',
+    'networks', 'channels', 'hubs', 'collections', 'espn', 'espn+',
+    'hulu', 'disney+', 'max', 'netflix', 'prime video', 'peacock',
+    'apple tv+', 'paramount+',
+    # ratings / classifiers that leak as titles
+    'tv-14', 'tv-ma', 'tv-pg', 'tv-y', 'tv-y7', 'tv-g',
+    'r', 'pg-13', 'pg', 'nr', 'g',
+})
+
+
+# A real content deep-link on any streaming service almost always
+# contains one of these path segments. Reject nodes whose URL is just
+# `/`, `/profiles/...`, `/account`, etc.
+_CONTENT_URL_HINTS = (
+    '/browse/', '/details/', '/detail/', '/watch/', '/video/',
+    '/videos/', '/movie/', '/movies/', '/series/', '/show/',
+    '/shows/', '/programs/', '/episode/', '/live/', '/gp/video/detail/',
+    '/gp/video/watchparty/', '/originals/', '/dp/',
+)
+
+
 def _extract_json_blobs(html: str) -> list[Any]:
     """Return every plausible JSON payload we can pull out of the HTML."""
     blobs: list[Any] = []
@@ -121,20 +156,36 @@ def _pull_title(node: dict) -> Optional[str]:
 def _looks_like_title_node(node: dict) -> bool:
     """A title node usually has BOTH a title-ish field AND a type/id
     marker that says this is a content item (not a marketing card /
-    button / nav link)."""
+    button / nav link).
+
+    Hardened 2026-07-07 after the Hulu run returned "Jenna", "Movies",
+    "Sports" (profile picker + top nav) as if they were trending
+    titles. New rules:
+      1. Reject when `type`/`kind`/`__typename` looks like nav/profile/UI chrome
+      2. Require at least one strong content marker (id / contentType /
+         image) AND either a length > 3 words OR an explicit programType
+    """
     if not any(k in node for k in _TITLE_KEYS):
         return False
-    # Reject obvious non-content nodes
-    node_type = str(node.get('type') or node.get('kind') or '').lower()
-    if node_type in {'button', 'link', 'menu', 'nav', 'header', 'footer',
-                       'banner', 'ad', 'advertisement', 'promo'}:
+    node_type = str(
+        node.get('type') or node.get('kind') or node.get('__typename') or ''
+    ).lower()
+    nav_ish = ('button', 'link', 'menu', 'nav', 'tab', 'header', 'footer',
+               'banner', 'ad', 'advertisement', 'promo', 'profile',
+               'profileswitcher', 'profileselector', 'navitem',
+               'menuitem', 'navigation', 'settings', 'preferences',
+               'account', 'auth', 'signin', 'signout', 'login', 'logout')
+    if any(tag in node_type for tag in nav_ish):
         return False
-    # Require at least one content-marker sibling
-    markers = ('contentId', 'seriesId', 'programId', 'itemId', 'id',
-                'contentType', 'programType', 'family', 'mediaId',
-                'callToAction', 'watchUrl', 'href', 'url', 'image',
-                'artwork', 'images', 'thumbnail')
-    return any(m in node for m in markers)
+    # Strong content markers: platform-specific IDs, artwork, or a
+    # programType/contentType that names a real media kind.
+    strong_markers = ('contentId', 'seriesId', 'programId', 'itemId',
+                      'mediaId', 'family', 'contentType', 'programType',
+                      'image', 'artwork', 'images', 'thumbnail', 'poster',
+                      'tileImage', 'canonicalPath', 'canonicalUrl')
+    if not any(m in node for m in strong_markers):
+        return False
+    return True
 
 
 def _pull_url(node: dict, base_host: str) -> str:
@@ -200,11 +251,41 @@ def parse_streaming_html(html: str, *, host: str,
             key = title.lower()
             if key in seen:
                 continue
+            # Nav shell / profile / UI chrome slips past the type-check
+            # when the SPA stores it in the same shape as content. Guard
+            # with a stopword list and a URL-pattern check.
+            if key in _NAV_STOPWORDS:
+                continue
+            url = _pull_url(node, host)
+            # Require a URL that looks like a content deep-link. If
+            # there's no URL at all OR the URL is just the domain root
+            # OR a profile/account path, skip.
+            url_lower = url.lower()
+            if url_lower == f'https://{host.lower()}/' or url_lower == f'https://{host.lower()}':
+                continue
+            if '/profile' in url_lower or '/account' in url_lower or '/settings' in url_lower:
+                continue
+            if not any(hint in url_lower for hint in _CONTENT_URL_HINTS):
+                # Allow when the node has strong content signals even
+                # without a URL hint - some services only put the id in
+                # the tile and load via API. But require an image AND
+                # a contentType/programType so we don't drift back to
+                # nav-junk territory.
+                has_image = any(k in node for k in ('image', 'images',
+                                                    'artwork', 'poster',
+                                                    'thumbnail', 'tileImage'))
+                has_program_type = any(
+                    isinstance(node.get(k), str)
+                    for k in ('programType', 'contentType', 'itemType',
+                              'family', 'mediaType')
+                )
+                if not (has_image and has_program_type):
+                    continue
             seen.add(key)
             out.append({
                 'rank':             len(out) + 1,
                 'title':            title,
-                'url':              _pull_url(node, host),
+                'url':              url,
                 'category_display': _classify(node),
                 # `collection` fills in per-service from the containing
                 # rail label - see individual scrapers.
