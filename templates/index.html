@@ -2152,6 +2152,166 @@
             line-height: 1.4;
         }
 
+        /* Clickable / expandable Media Mix drill-down */
+        .mkt-mix-hint {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.6rem;
+            background: rgba(139, 92, 246, 0.08);
+            border: 1px dashed rgba(139, 92, 246, 0.35);
+            border-radius: 8px;
+        }
+        .mkt-mix-row-clickable {
+            cursor: pointer;
+            padding: 0.5rem 0.6rem;
+            margin: 0 -0.5rem;
+            border-radius: 8px;
+            transition: background 0.15s ease;
+        }
+        .mkt-mix-row-clickable:hover { background: rgba(139, 92, 246, 0.08); }
+        .mkt-mix-row-clickable.open { background: rgba(139, 92, 246, 0.12); }
+        .mkt-mix-chev {
+            display: inline-block;
+            width: 0.9rem;
+            color: var(--accent-cyan);
+            font-size: 0.85rem;
+            transition: transform 0.15s ease;
+            user-select: none;
+        }
+        .mkt-mix-detail {
+            margin: 0 -0.5rem 0.4rem;
+            padding: 0.75rem 1rem 1rem 1.75rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+            border-left: 3px solid rgba(139, 92, 246, 0.5);
+        }
+        body[data-theme="light"] .mkt-mix-detail { background: rgba(0, 0, 0, 0.03); }
+        .mkt-mix-drill-head {
+            font-size: 0.72rem;
+            font-family: 'Space Mono', monospace;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 0.6rem;
+        }
+        .mkt-mix-drill-inner { display: flex; flex-direction: column; gap: 0.6rem; }
+        .mkt-mix-drill-empty { color: var(--text-secondary); font-size: 0.82rem; font-style: italic; }
+
+        .mkt-mix-plat {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem 0.65rem;
+        }
+        .mkt-mix-plat-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+        .mkt-mix-plat-head:hover .mkt-mix-plat-title { color: var(--accent-cyan); }
+        .mkt-mix-plat-title {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            transition: color 0.15s ease;
+        }
+        .mkt-mix-plat-chev {
+            display: inline-block;
+            width: 0.9rem;
+            color: var(--accent-cyan);
+            font-size: 0.8rem;
+            user-select: none;
+        }
+        .mkt-mix-plat-meta { display: flex; gap: 0.5rem; align-items: center; }
+        .mkt-mix-plat-share {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            font-variant-numeric: tabular-nums;
+            min-width: 3rem;
+            text-align: right;
+        }
+        .mkt-mix-plat-sig {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+            line-height: 1.4;
+            padding-left: 1.35rem;
+        }
+        .mkt-mix-plat-note { color: var(--text-primary); }
+
+        .mkt-mix-plat-detail {
+            margin-top: 0.55rem;
+            padding: 0.65rem 0.75rem 0.75rem;
+            background: rgba(139, 92, 246, 0.06);
+            border-radius: 6px;
+            border: 1px solid rgba(139, 92, 246, 0.15);
+        }
+        body[data-theme="light"] .mkt-mix-plat-detail { background: rgba(139, 92, 246, 0.05); }
+        .mkt-mix-fmt-head {
+            font-size: 0.7rem;
+            font-family: 'Space Mono', monospace;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 0.45rem;
+        }
+        .mkt-mix-fmt-list { display: flex; flex-direction: column; gap: 0.35rem; }
+        .mkt-mix-fmt-row {
+            display: grid;
+            grid-template-columns: 1fr 48px 100px;
+            gap: 0.55rem;
+            align-items: center;
+            font-size: 0.78rem;
+            padding: 0.25rem 0;
+        }
+        .mkt-mix-fmt-row + .mkt-mix-fmt-row { border-top: 1px dashed rgba(255,255,255,0.05); padding-top: 0.4rem; }
+        body[data-theme="light"] .mkt-mix-fmt-row + .mkt-mix-fmt-row { border-top: 1px dashed rgba(0,0,0,0.06); }
+        .mkt-mix-fmt-name { color: var(--text-primary); font-weight: 500; }
+        .mkt-mix-fmt-pct {
+            color: var(--accent-cyan);
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+            font-size: 0.82rem;
+        }
+        .mkt-mix-fmt-bar {
+            background: rgba(255,255,255,0.06);
+            border-radius: 4px;
+            height: 6px;
+            overflow: hidden;
+        }
+        body[data-theme="light"] .mkt-mix-fmt-bar { background: rgba(0,0,0,0.06); }
+        .mkt-mix-fmt-fill {
+            height: 100%;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #8b5cf6, #66d9ef);
+        }
+        .mkt-mix-fmt-note {
+            grid-column: 1 / -1;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            line-height: 1.35;
+            padding-left: 0.1rem;
+            margin-top: -0.15rem;
+        }
+        .mkt-mix-fmt-empty {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            padding: 0.5rem 0;
+        }
+        @media (max-width: 700px) {
+            .mkt-mix-fmt-row { grid-template-columns: 1fr 42px; }
+            .mkt-mix-fmt-bar { grid-column: 1 / -1; }
+        }
+
         /* Platform playbook cards */
         .marketing-platform-grid {
             display: grid;
@@ -80989,6 +81149,162 @@
                 display:     { label: 'Programmatic Display',  icon: '🌐', baseline: 12, description: 'Trade Desk / DV360. Always-on contextual, retargeting, and custom lookalikes.' }
             };
 
+            // Canonical ad-format allocation per platform. Percents should
+            // sum to ~100 within each platform. These are 2026 planner
+            // defaults — the drill-down uses them to answer "within this
+            // platform, what should I buy?" independent of audience data.
+            // Keyed by PLATFORMS[].key so the drill-down can match by key.
+            const PLATFORM_AD_FORMATS = {
+                meta: [
+                    { name: 'Reels (short vertical video, 9-15s)', pct: 35, note: 'Best CPMs, highest scroll velocity' },
+                    { name: 'Advantage+ Shopping / Sales campaigns', pct: 20, note: 'Auto-optimized, conversion floor' },
+                    { name: 'Feed video (mid-funnel)',               pct: 20, note: 'Strong retention, brand story' },
+                    { name: 'Stories (vertical + tap-through)',      pct: 15, note: 'Frequency + retargeting' },
+                    { name: 'Feed static + carousel',                pct: 10, note: 'Efficient reach fallback' }
+                ],
+                tiktok: [
+                    { name: 'Spark Ads (boost creator content)',     pct: 40, note: 'Native, outperforms brand-first units' },
+                    { name: 'In-Feed video (5-15s, sound-on)',       pct: 30, note: 'Native placement' },
+                    { name: 'TopView / Brand Takeover',              pct: 15, note: 'High-impact awareness' },
+                    { name: 'Branded Hashtag Challenge / Effect',    pct: 10, note: 'Launches with creative budget' },
+                    { name: 'Shopping / Live Shopping',              pct:  5, note: 'Test for commerce brands' }
+                ],
+                youtube: [
+                    { name: 'In-stream pre-roll (skippable)',        pct: 35, note: 'Efficient CPV, brand-safe' },
+                    { name: 'YouTube Shorts',                        pct: 25, note: 'Vertical, mobile-first, low CPMs' },
+                    { name: 'Bumper (6s non-skippable)',             pct: 15, note: 'Reach + frequency booster' },
+                    { name: 'In-feed video discovery',               pct: 15, note: 'Intent-based, targeted' },
+                    { name: 'YouTube Masthead / CTV takeover',       pct: 10, note: 'Launch or tentpole days only' }
+                ],
+                snap: [
+                    { name: 'Snap Ads (5-6s vertical video)',        pct: 50, note: 'Core format' },
+                    { name: 'Story Ads / Discover placements',       pct: 25, note: 'Editorial context' },
+                    { name: 'AR Lens experiences',                   pct: 15, note: 'Creative-heavy, high engagement' },
+                    { name: 'Commercials (non-skippable, premium)',  pct: 10, note: 'Reach + brand-safe premium' }
+                ],
+                x: [
+                    { name: 'Promoted video (autoplay in feed)',     pct: 40, note: 'Core video buy' },
+                    { name: 'Promoted post + carousel',              pct: 30, note: 'Efficient conversation' },
+                    { name: 'Trend Takeover / Timeline Takeover',    pct: 20, note: 'Launch/tentpole days' },
+                    { name: 'Amplify pre-roll (video partners)',     pct: 10, note: 'Brand safety upgrade' }
+                ],
+                reddit: [
+                    { name: 'Promoted posts (image/video)',          pct: 55, note: 'Subreddit-targeted' },
+                    { name: 'Free-form / Conversation Ads',          pct: 25, note: 'Native, higher engagement' },
+                    { name: 'Trending Takeover',                     pct: 20, note: 'Launches only' }
+                ],
+                pinterest: [
+                    { name: 'Idea Pins (native video)',              pct: 35, note: 'Saveable, evergreen' },
+                    { name: 'Standard Pins (static image)',          pct: 30, note: 'Efficient reach' },
+                    { name: 'Shopping Ads (product feed)',           pct: 25, note: 'Product-tagged' },
+                    { name: 'Collections / Carousel',                pct: 10, note: 'Consideration' }
+                ],
+                linkedin: [
+                    { name: 'Sponsored Content (single + carousel)', pct: 40, note: 'In-feed, targeting by role/company' },
+                    { name: 'Video ads (autoplay)',                  pct: 25, note: 'Brand + thought leadership' },
+                    { name: 'Message / Conversation Ads',            pct: 20, note: 'Lead-gen, high CPC but qualified' },
+                    { name: 'Text / Dynamic Ads (right rail)',       pct: 15, note: 'Cheap impressions' }
+                ],
+                google_search: [
+                    { name: 'Branded + competitor keywords',         pct: 30, note: 'Defensive, high ROAS' },
+                    { name: 'Non-branded / category intent',         pct: 30, note: 'Demand capture' },
+                    { name: 'Performance Max (PMax)',                pct: 25, note: 'Cross-surface AI; needs audience signals' },
+                    { name: 'Shopping (retail only)',                pct: 10, note: 'When product feed exists' },
+                    { name: 'Discovery / Demand Gen',                pct:  5, note: 'Upper-funnel expansion' }
+                ],
+                bing_ai: [
+                    { name: 'Bing Search (branded + long-tail)',     pct: 50, note: 'Older demos, cheaper CPCs' },
+                    { name: 'Microsoft Audience Network (native)',   pct: 30, note: 'MSN, Outlook, Edge placements' },
+                    { name: 'ChatGPT / Copilot conversational (test)', pct: 20, note: 'Small budget, future-facing' }
+                ],
+                amazon_ads: [
+                    { name: 'Sponsored Products (SP)',               pct: 40, note: 'On-Amazon search-intent' },
+                    { name: 'Sponsored Brands (SB) + video',         pct: 25, note: 'Brand store traffic' },
+                    { name: 'Amazon DSP (off-Amazon + CTV via Freevee/Fire TV)', pct: 25, note: 'Reach + retargeting' },
+                    { name: 'Sponsored Display',                     pct: 10, note: 'Product page + off-site' }
+                ],
+                walmart_connect: [
+                    { name: 'Sponsored Products (onsite)',           pct: 45, note: 'Search + browse placements' },
+                    { name: 'Sponsored Brands + video',              pct: 20, note: 'Awareness on WMT.com' },
+                    { name: 'Onsite Display / Homepage',             pct: 15, note: 'Reach placements' },
+                    { name: 'Offsite via TTD DSP',                   pct: 20, note: 'Attribution back to WMT sales' }
+                ],
+                target_roundel: [
+                    { name: 'Onsite Search + Browse',                pct: 40, note: 'Category placements' },
+                    { name: 'Offsite Display + Video',               pct: 30, note: 'Retargeting Target guests' },
+                    { name: 'CTV via Roundel Media Network',         pct: 20, note: 'Brand halo' },
+                    { name: 'In-store digital + Circle promos',      pct: 10, note: 'Omnichannel layer' }
+                ],
+                hulu: [
+                    { name: '30s / 15s CTV in-stream',               pct: 55, note: 'Standard length, non-skip' },
+                    { name: 'Binge Ads / Pause Ads',                 pct: 15, note: 'Innovative units, high recall' },
+                    { name: 'Disney+ / ESPN+ co-buy (household)',    pct: 20, note: 'Cross-service reach' },
+                    { name: 'Interactive / GatewayGo',               pct: 10, note: 'Response-driven CTV' }
+                ],
+                netflix: [
+                    { name: '30s / 15s pre-roll + mid-roll',         pct: 65, note: 'Standard buy via Microsoft Ads or TTD' },
+                    { name: 'Sponsorships (Top 10, tentpoles)',      pct: 25, note: 'Higher CPM, unique inventory' },
+                    { name: 'Pause + branded moments',               pct: 10, note: 'Emerging placements' }
+                ],
+                peacock: [
+                    { name: '30s / 15s in-stream',                   pct: 60, note: 'NBCU One Platform buy' },
+                    { name: 'Sports + tentpole sponsorships',        pct: 25, note: 'NBC/Bravo/Universal contexts' },
+                    { name: 'Interactive Shoppable ads',             pct: 15, note: 'Growing surface on Peacock' }
+                ],
+                max: [
+                    { name: '30s / 15s in-stream',                   pct: 70, note: 'Premium HBO context' },
+                    { name: 'Tentpole / season sponsorship',         pct: 30, note: 'Prestige show halo' }
+                ],
+                ytv_youtubeTV: [
+                    { name: 'Live sports pre-roll + mid-roll',       pct: 60, note: 'Sports + news day-parts' },
+                    { name: 'Programmatic Guaranteed CTV',           pct: 25, note: 'Automated at scale' },
+                    { name: 'Cable-network channel takeovers',       pct: 15, note: 'Sponsorship-style buys' }
+                ],
+                roku: [
+                    { name: 'OneView DSP in-stream',                 pct: 45, note: 'CTV across Roku inventory' },
+                    { name: 'Roku Homescreen Billboard',             pct: 20, note: 'High-impact awareness' },
+                    { name: 'AVOD channel placements',               pct: 20, note: 'Roku Channel + partners' },
+                    { name: 'Action Ads (Marquee / CTA)',            pct: 15, note: 'Response-driven' }
+                ],
+                tubi_pluto: [
+                    { name: '30s / 15s pre-roll (AVOD standard)',    pct: 70, note: 'Core ad-supported inventory' },
+                    { name: 'Pause + interactive units',             pct: 15, note: 'Emerging inventory' },
+                    { name: 'Sponsorship / branded content',         pct: 15, note: 'Curated genre channels' }
+                ],
+                spotify: [
+                    { name: 'Audio Everywhere (15-30s spots)',       pct: 45, note: 'Core music + podcast ads' },
+                    { name: 'Video Takeover / Sponsored Sessions',   pct: 20, note: 'Higher-attention units' },
+                    { name: 'Podcast Ads via Spotify Ad Network',    pct: 25, note: 'Host-read + DAI' },
+                    { name: 'Sponsored Playlist + Marquee',          pct: 10, note: 'Discovery surfaces' }
+                ],
+                pandora_iheart: [
+                    { name: 'Audio pre-roll + mid-roll (30s)',       pct: 55, note: 'Standard streaming audio buy' },
+                    { name: 'Podcast host-read / DAI',               pct: 25, note: 'iHeart podcasts + SXM Media' },
+                    { name: 'Sponsorship of stations / shows',       pct: 15, note: 'SiriusXM programming' },
+                    { name: 'Companion display',                     pct:  5, note: 'Attribution layer' }
+                ],
+                podcast: [
+                    { name: 'Host-read baked-in (60s)',              pct: 40, note: 'Highest CPM, best attribution' },
+                    { name: 'Dynamic Ad Insertion (30-60s)',         pct: 35, note: 'Scale + measurement' },
+                    { name: 'Programmatic (Triton, Megaphone)',      pct: 15, note: 'Efficient reach' },
+                    { name: 'Series sponsorship / branded content',  pct: 10, note: 'Tentpole shows' }
+                ],
+                twitch_gaming: [
+                    { name: 'Twitch mid-roll video',                 pct: 30, note: 'Live streamer inventory' },
+                    { name: 'Rewarded video (Unity, AppLovin)',      pct: 30, note: 'Highest completion, opt-in' },
+                    { name: 'In-game display / native (Anzu, Bidstack)', pct: 20, note: 'In-world contextual' },
+                    { name: 'Roblox / Fortnite branded worlds',      pct: 15, note: 'Deep-engagement plays' },
+                    { name: 'Direct streamer sponsorship',           pct:  5, note: 'Creator deals' }
+                ],
+                dsp_display: [
+                    { name: 'Contextual + retargeting display',      pct: 40, note: 'Baseline always-on' },
+                    { name: 'Programmatic video (VAST outstream + instream)', pct: 25, note: 'Cross-site reach' },
+                    { name: 'Native (Outbrain, Taboola)',            pct: 15, note: 'Editorial context' },
+                    { name: 'DOOH (place-based digital)',            pct: 15, note: 'Contextual moment ads' },
+                    { name: 'High-impact homepage takeovers',        pct:  5, note: 'Launch days only' }
+                ]
+            };
+
             function _mkNorm(s) { return (s || '').toString().toUpperCase().replace(/[^\w/]/g, ' ').replace(/\s+/g, ' ').trim(); }
 
             function _mkBehav() {
@@ -81174,26 +81490,145 @@
                 return rows;
             }
 
+            // Compute the % of a bucket's spend that goes to each PLATFORMS
+            // entry in that bucket. Weight = max(panel reach, 8) so
+            // platforms with no signal still get a modest allocation and
+            // aren't dropped entirely — a planner still wants to know that
+            // e.g. LinkedIn exists as an option even if there's no direct
+            // panel signal in the profile. Returns [{platform, sig, weight,
+            // share, priority}] sorted by share desc.
+            function _mkComputePlatformSharesInBucket(bucket) {
+                const platsInBucket = PLATFORMS.filter(p => p.bucket === bucket);
+                if (!platsInBucket.length) return [];
+                const enriched = platsInBucket.map(p => {
+                    const sig = _mkFindPlatformSignal(p);
+                    const pct = sig ? sig.pct : 0;
+                    // Non-signal platforms get a small floor so they don't
+                    // vanish; signal platforms get boosted by their panel
+                    // reach. Cap at 100 to keep the normalization sane.
+                    const weight = sig ? Math.min(100, Math.max(pct, 8)) : 6;
+                    return { platform: p, sig, pct, weight };
+                });
+                const total = enriched.reduce((s, r) => s + r.weight, 0) || 1;
+                enriched.forEach(r => {
+                    r.share = 100 * r.weight / total;
+                    r.priority = r.sig ? _mkPriorityForPct(r.sig.pct, r.sig.index) : { key: 'nosignal', label: 'No Signal' };
+                });
+                enriched.sort((a, b) => b.share - a.share);
+                return enriched;
+            }
+
+            // Render the ad-format allocation for a single platform.
+            function _mkRenderAdFormatsForPlatform(platformKey) {
+                const formats = PLATFORM_AD_FORMATS[platformKey];
+                if (!formats || !formats.length) {
+                    return '<div class="mkt-mix-fmt-empty">Ad-format guidance not yet coded for this platform. Default to a 60/25/15 split of video / static / high-impact.</div>';
+                }
+                const max = Math.max(...formats.map(f => f.pct || 0)) || 100;
+                return `<div class="mkt-mix-fmt-list">` + formats.map(f => {
+                    const w = Math.max(0, (f.pct / max) * 100);
+                    return `
+                        <div class="mkt-mix-fmt-row">
+                            <div class="mkt-mix-fmt-name">${(f.name||'').replace(/</g,'&lt;')}</div>
+                            <div class="mkt-mix-fmt-pct">${f.pct}%</div>
+                            <div class="mkt-mix-fmt-bar"><div class="mkt-mix-fmt-fill" style="width:${w.toFixed(1)}%"></div></div>
+                            <div class="mkt-mix-fmt-note">${(f.note||'').replace(/</g,'&lt;')}</div>
+                        </div>`;
+                }).join('') + `</div>`;
+            }
+
+            // Render the full drill-down block for one bucket: per-platform
+            // shares + expandable ad-format detail underneath each.
+            function _mkRenderMixBucketDetail(bucket) {
+                const shares = _mkComputePlatformSharesInBucket(bucket);
+                if (!shares.length) return '<div class="mkt-mix-drill-empty">No platforms defined for this bucket.</div>';
+                return `<div class="mkt-mix-drill-inner">
+                    <div class="mkt-mix-drill-head">Within this channel, allocate spend across:</div>
+                    ${shares.map((r, idx) => {
+                        const p = r.platform;
+                        const sigLabel = r.sig
+                            ? `${r.sig.pct.toFixed(0)}% panel reach · ${Math.round(r.sig.index)} idx`
+                            : 'No direct panel signal';
+                        return `
+                            <div class="mkt-mix-plat">
+                                <div class="mkt-mix-plat-head" onclick="toggleMixPlatform('${bucket}', ${idx})">
+                                    <div class="mkt-mix-plat-title">
+                                        <span class="mkt-mix-plat-chev" data-mix-plat-chev="${bucket}-${idx}">▸</span>
+                                        <span style="font-size:1.05rem;">${p.icon}</span>
+                                        <span>${p.name.replace(/</g,'&lt;')}</span>
+                                    </div>
+                                    <div class="mkt-mix-plat-meta">
+                                        <span class="marketing-plat-priority ${r.priority.key}">${r.priority.label}</span>
+                                        <span class="mkt-mix-plat-share">${r.share.toFixed(0)}%</span>
+                                    </div>
+                                </div>
+                                <div class="mkt-mix-plat-sig">${sigLabel} · <span class="mkt-mix-plat-note">${p.buyingNote}</span></div>
+                                <div class="mkt-mix-plat-detail" id="mkt-mix-plat-detail-${bucket}-${idx}" style="display:none;">
+                                    <div class="mkt-mix-fmt-head">Ad-format allocation within ${p.name.replace(/</g,'&lt;')}:</div>
+                                    ${_mkRenderAdFormatsForPlatform(p.key)}
+                                </div>
+                            </div>`;
+                    }).join('')}
+                </div>`;
+            }
+
+            // Click handler: toggle a media-mix bucket row's drill-down open/closed.
+            window.toggleMediaMixRow = function(bucket) {
+                const detail = document.getElementById('mkt-mix-detail-' + bucket);
+                const chev   = document.getElementById('mkt-mix-chev-' + bucket);
+                const row    = document.getElementById('mkt-mix-row-' + bucket);
+                if (!detail) return;
+                const isOpen = detail.style.display === 'block';
+                if (isOpen) {
+                    detail.style.display = 'none';
+                    if (chev) chev.textContent = '▸';
+                    if (row) row.classList.remove('open');
+                } else {
+                    // Lazy-render on first open (avoids computing all drill-downs upfront)
+                    if (!detail.dataset.rendered) {
+                        detail.innerHTML = _mkRenderMixBucketDetail(bucket);
+                        detail.dataset.rendered = '1';
+                    }
+                    detail.style.display = 'block';
+                    if (chev) chev.textContent = '▾';
+                    if (row) row.classList.add('open');
+                }
+            };
+
+            // Click handler: toggle a per-platform ad-format detail open/closed.
+            window.toggleMixPlatform = function(bucket, idx) {
+                const el = document.getElementById(`mkt-mix-plat-detail-${bucket}-${idx}`);
+                const chev = document.querySelector(`[data-mix-plat-chev="${bucket}-${idx}"]`);
+                if (!el) return;
+                const isOpen = el.style.display === 'block';
+                el.style.display = isOpen ? 'none' : 'block';
+                if (chev) chev.textContent = isOpen ? '▸' : '▾';
+            };
+
             function _mkRenderMediaMix() {
                 const el = document.getElementById('marketingMediaMix');
                 if (!el) return;
                 const rows = _mkComputeMediaMix();
                 if (!rows.length) { el.innerHTML = '<div class="marketing-empty">No data.</div>'; return; }
                 const max = rows[0].share || 100;
-                el.innerHTML = rows.map(r => {
+                el.innerHTML = `<div class="mkt-mix-hint">💡 Click any channel to see the per-platform split and, within each platform, the recommended ad-format allocation.</div>` + rows.map(r => {
                     const w = Math.max(0, (r.share / max) * 100);
                     const note = r.topSignal
                         ? `${r.description} <b>Signal:</b> ${r.topSignal.name} at ${r.topSignal.pct.toFixed(0)}% panel reach${r.contributorCount > 1 ? ` (${r.contributorCount} platforms in bucket)` : ''}.`
                         : r.description + ' No direct panel signal — sized to baseline only.';
                     return `
-                        <div class="marketing-mix-row">
-                            <div class="marketing-mix-label">${r.icon} ${r.label.replace(/</g,'&lt;')}</div>
+                        <div class="marketing-mix-row mkt-mix-row-clickable" id="mkt-mix-row-${r.bucket}" onclick="toggleMediaMixRow('${r.bucket}')">
+                            <div class="marketing-mix-label">
+                                <span class="mkt-mix-chev" id="mkt-mix-chev-${r.bucket}">▸</span>
+                                ${r.icon} ${r.label.replace(/</g,'&lt;')}
+                            </div>
                             <div class="marketing-mix-pct">${r.share.toFixed(0)}%</div>
                             <div class="marketing-mix-barwrap">
                                 <div class="marketing-mix-bartrack"><div class="marketing-mix-barfill" style="width:${w.toFixed(1)}%"></div></div>
                                 <div class="marketing-mix-note">${note}</div>
                             </div>
-                        </div>`;
+                        </div>
+                        <div class="mkt-mix-detail" id="mkt-mix-detail-${r.bucket}" style="display:none;"></div>`;
                 }).join('');
             }
 
