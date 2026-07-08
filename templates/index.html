@@ -108144,18 +108144,63 @@
             btn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
         }
         
+        // 2026-07-08: position dropdown using getBoundingClientRect so it
+        // opens DOWNWARD from the button and escapes the parent
+        // .action-buttons-row's overflow: hidden clip.
+        function _positionTabExportDropdown() {
+            const dropdown = document.getElementById('tabExportDropdown');
+            if (!dropdown) return;
+            // Find the button that triggers this dropdown (the sibling before the menu).
+            const wrapper = dropdown.closest('.dash-dropdown');
+            const btn = wrapper ? wrapper.querySelector('.dash-action-btn') : null;
+            const rect = (btn || dropdown).getBoundingClientRect();
+            // Position immediately below the button, aligned to its left edge.
+            const gap = 4;
+            let top = rect.bottom + gap;
+            let left = rect.left;
+            // Clamp to the viewport so it never gets pushed off-screen on
+            // narrow browsers (menu is up to ~260px wide).
+            const menuWidth = Math.max(dropdown.offsetWidth || 0, 220);
+            const maxLeft = Math.max(4, window.innerWidth - menuWidth - 8);
+            if (left > maxLeft) left = maxLeft;
+            if (left < 4) left = 4;
+            dropdown.style.top = top + 'px';
+            dropdown.style.left = left + 'px';
+            dropdown.style.right = 'auto';
+            dropdown.style.bottom = 'auto';
+        }
         function toggleExportMenu() {
             const dropdown = document.getElementById('tabExportDropdown');
-            if (dropdown) {
-                dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            if (!dropdown) return;
+            const isOpen = dropdown.style.display === 'block';
+            if (isOpen) {
+                dropdown.style.display = 'none';
+                window.removeEventListener('scroll', _positionTabExportDropdown, true);
+                window.removeEventListener('resize', _positionTabExportDropdown);
+            } else {
+                dropdown.style.display = 'block';
+                _positionTabExportDropdown();
+                // Reposition on scroll (capture so we catch scrolls inside
+                // nested containers too) and on window resize so the menu
+                // tracks the button if the page moves under it.
+                window.addEventListener('scroll', _positionTabExportDropdown, true);
+                window.addEventListener('resize', _positionTabExportDropdown);
             }
         }
         
         // Close dropdown when clicking outside
         document.addEventListener('click', function(e) {
             const dropdown = document.getElementById('tabExportDropdown');
-            if (dropdown && !e.target.closest('.dash-dropdown')) {
+            if (!dropdown) return;
+            // Don't close on clicks inside the dropdown itself (its parent
+            // .dash-dropdown wrapper is not an ancestor because the menu
+            // is position:fixed and stays in the DOM tree but visually
+            // detaches — so we also check the menu directly).
+            if (e.target.closest('.dash-dropdown') || e.target.closest('#tabExportDropdown')) return;
+            if (dropdown.style.display === 'block') {
                 dropdown.style.display = 'none';
+                window.removeEventListener('scroll', _positionTabExportDropdown, true);
+                window.removeEventListener('resize', _positionTabExportDropdown);
             }
         });
         
