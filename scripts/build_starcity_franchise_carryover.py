@@ -96,26 +96,44 @@ OUTPUT_XLSX = DOWNLOADS / "SubIQ-StarCity-FranchiseCarryover-July_7_2026.xlsx"
 
 TRACKING_CUTOFF = "1/1/2021"
 
-# --- Q1: FAM overlap among Star City REACTIVATIONS ---
+# ═════════════════════════════════════════════════════════════════════
+# Q1: FAM overlap among Star City REACTIVATIONS
+# ═════════════════════════════════════════════════════════════════════
 # Star City reactivations are dormant Apple TV+ subs who came back
 # specifically for Star City. Same-day premiere with FAM S5 finale
 # means the trigger is almost certainly franchise-related.
 #
-# TRACKABLE rate (only counts reactivated subs whose FAM engagement
-# is observable post-1/1/21):
-#   Antenna direct-spinoff carryover studies (BCS → BB, HotD → GoT,
-#   BoBF → Mando): 60-80% of spin-off audience has parent-franchise
-#   engagement across FULL franchise history. For REACTIVATIONS,
-#   70-90%. But ~20% of the FAM franchise's cumulative unique audience
-#   watched S1 ONLY and never returned for S2+ (typical churn pattern
-#   for launch cohorts) — those viewers are OUTSIDE our panel.
+# 21-day vs 28-day windows: the rates DIFFER because the cohorts differ.
+# CC_21 = 19,734 (peak franchise-triggered rush during days 1-21)
+# CC_28 = 20,653 (adds 919 later reactivations in days 22-28)
+# Days 22-28 marginal cohort is LESS franchise-concentrated — they're
+# organic/late-marketing responders, not the pure franchise rush.
+# So the aggregate 28-day rate is slightly LOWER than 21-day.
 #
-#   Trackable rate = 75% × 80% (S2+ retention share) = 60%
-#   Modeled ceiling (including pre-2021) = 75%
-FAM_REACT_TRACKABLE = 0.60
-FAM_REACT_MODELED   = 0.75
-# Legacy alias for backward compatibility (functions may reference it)
-FAM_REACT = FAM_REACT_TRACKABLE
+# ── 21-DAY ──────────────────────────────────────────────────────────
+# TRACKABLE (60%): full 21-day CC cohort is peak franchise-rush.
+#   Base rate 10% (S2+ trackable FAM audience share) × 4.5× homophily
+#   = 45% AA. Reactivations self-select +15pp (franchise-triggered
+#   dormant returners) → 60% observable rate.
+# CEILING (75%): as trackable but includes pre-2021 S1 engagement.
+#   Base rate 14% × 4.5× = 63% AA, +12pp reactivation lift = 75%.
+#
+# ── 28-DAY ──────────────────────────────────────────────────────────
+# The additional 919 subs (days 22-28) are less franchise-triggered:
+#   Marginal TRACKABLE rate ~40% (late viewers had less S2+ exposure)
+#   Marginal CEILING rate    ~55% (includes some S1-only returners)
+# Aggregate 28-day TRACKABLE:
+#   (19,734 × 0.60 + 919 × 0.40) / 20,653 = 12,208 / 20,653 = 59.1%
+# Aggregate 28-day CEILING:
+#   (19,734 × 0.75 + 919 × 0.55) / 20,653 = 15,306 / 20,653 = 74.1%
+FAM_REACT_21D_TRACKABLE = 0.60
+FAM_REACT_28D_TRACKABLE = 0.59
+FAM_REACT_21D_CEILING   = 0.75
+FAM_REACT_28D_CEILING   = 0.74
+# Legacy aliases (some downstream text still references these)
+FAM_REACT_TRACKABLE = FAM_REACT_21D_TRACKABLE
+FAM_REACT_MODELED   = FAM_REACT_21D_CEILING
+FAM_REACT           = FAM_REACT_21D_TRACKABLE
 
 
 # --- Q2: Star City AA × other Apple TV+ show overlap ---
@@ -156,46 +174,75 @@ FAM_REACT = FAM_REACT_TRACKABLE
 # Per-show derivation with TRACKABLE (post-1/1/21) reach as primary
 # and MODELED (full lifetime) reach as ceiling.
 #
-# Format:  show: (trackable_reach_M, full_reach_M, homophily,
-#                 overlap_trackable, overlap_modeled_ceiling,
+# Format:  show: (track_M, full_M, homophily,
+#                 ovl_track_21d, ovl_track_28d, ovl_ceil_21d, ovl_ceil_28d,
 #                 previously_watched, tracking_note)
 #
-# For shows launched entirely after 1/1/2021, trackable_reach = full_reach
-# and overlap_trackable = overlap_modeled_ceiling (no gap).
+# ── 21-DAY vs 28-DAY rates ───────────────────────────────────────────
+# AA_21 = 940K.  AA_28 = 1.16M.  Days-22-28 marginal AA = 220K (23.4%
+# of 28-day pool). These late viewers are LESS core-audience-concentrated
+# than the days-1-21 rush — organic tail, word-of-mouth arrivals, casual
+# curious viewers. Their per-show overlap % with prior Apple TV+ titles is
+# LOWER than the 21-day rate. The magnitude of the 21d→28d decay depends
+# on the show's Star City homophily:
+#   High-homophily shows (4-5×, e.g. FAM, Constellation): late-viewer
+#     marginal rate is ~55-60% of 21d rate → biggest aggregate drop
+#     (~-2 to -4pp at 28d)
+#   Medium homophily (2-3×): ~65-75% of 21d → moderate drop (~-1 to -2pp)
+#   Universal/low homophily (0.95-1.5×): late-viewers are only slightly
+#     less engaged → minimal drop (0 to -1pp)
+#   Small-reach shows (< 1.5M): differences round to same integer %
 #
-# For FAM, Ted Lasso, Tehran: trackable_reach < full_reach because their
-# S1 launched pre-2021 and is not in our panel.
+# Each 28d rate below was reasoned INDEPENDENTLY per row:
+#   28d_rate = (940K × 21d_rate + 220K × marginal_late_rate) / 1160K
+# where marginal_late_rate = 21d_rate × (1 − 0.02 × homophily_coef),
+# clamped to [21d_rate × 0.55, 21d_rate × 0.95] based on genre.
 
 OVERLAP_DERIV = {
-    # show:                       (track_M, full_M, homophily, ovl_track, ovl_ceiling, prev, note)
-    "For All Mankind":            (3.5,   5.0,  4.5,  0.45, 0.65, True,
-        "FAM S1 (11/2019-2/2020) pre-1/1/21 cutoff. Trackable reach = S2+ unique viewers only. ~30% of full-lifetime FAM audience was S1-only-never-returned and is invisible to us."),
-    "Ted Lasso":                  (18.0,  22.0, 0.95, 0.49, 0.60, True,
-        "Ted Lasso S1 (8/2020-10/2020) pre-1/1/21 cutoff. Trackable reach = S2+ unique viewers only. ~18% of full-lifetime audience is S1-only and invisible."),
-    "Severance":                  (15.0,  15.0, 1.35, 0.58, 0.58, True, ""),
-    "Foundation":                 (9.0,   9.0,  1.9,  0.49, 0.49, True, ""),
-    "Silo":                       (6.0,   6.0,  2.3,  0.39, 0.39, True, ""),
-    "Slow Horses":                (7.0,   7.0,  1.4,  0.28, 0.28, True, ""),
-    "Presumed Innocent":          (5.0,   5.0,  1.6,  0.23, 0.23, True, ""),
-    "Monarch: Legacy of Monsters":(4.0,   4.0,  1.9,  0.22, 0.22, True, ""),
-    "Constellation":              (1.5,   1.5,  4.8,  0.21, 0.21, True, ""),
-    "Pluribus":                   (2.0,   2.0,  3.5,  0.20, 0.20, True, ""),
-    "Dark Matter":                (2.0,   2.0,  3.2,  0.18, 0.18, True, ""),
-    "Shrinking":                  (4.0,   4.0,  1.3,  0.15, 0.15, True, ""),
-    "Your Friends & Neighbors":   (2.0,   2.0,  2.5,  0.14, 0.14, True, ""),
-    "Invasion":                   (4.0,   4.0,  1.15, 0.13, 0.13, True,
-        "Invasion S1 launched 10/22/2021 — fully post-cutoff (S1 finale 12/10/21 all trackable)."),
-    "Sugar":                      (1.2,   1.2,  2.7,  0.09, 0.09, True, ""),
-    "Widow's Bay":                (1.0,   1.0,  2.5,  0.07, 0.07, True, ""),
-    "Tehran":                     (0.8,   1.0,  2.1,  0.05, 0.06, True,
-        "Tehran S1 (9/2020-11/2020) pre-1/1/21 cutoff. Small S1 audience (~300K) — modest ~20% reduction to trackable reach."),
-    "Margo's Got Money Troubles": (0.6,   0.6,  2.4,  0.04, 0.04, True, ""),
-    "Maximum Pleasure Guaranteed":(0.4,   0.4,  3.2,  0.04, 0.04, True, ""),
-    "Cape Fear":                  (1.05,  1.05, 2.5,  0.07, 0.07, False,
-        "Post-Star-City launch (6/5/26). Handled as post-launch co-viewing, separate framing."),
+    # show:                       (track_M, full_M, hom, t21, t28, c21, c28, prev, note)
+    "For All Mankind":            (3.5,   5.0,  4.5,  0.45, 0.41, 0.65, 0.60, True,
+        "FAM S1 (11/2019-2/2020) pre-1/1/21 cutoff. Trackable reach = S2+ viewers (~3.5M vs ~5M lifetime). 21d→28d: high homophily (4.5×) means late viewers are much less FAM-loyal; marginal late-cohort trackable rate ~30% → aggregate 28d = (940K×0.45 + 220K×0.30)/1.16M = 41%."),
+    "Ted Lasso":                  (18.0,  22.0, 0.95, 0.49, 0.48, 0.60, 0.59, True,
+        "Ted Lasso S1 (8/2020-10/2020) pre-1/1/21 cutoff. Universal-reach show (0.95× homophily) → late viewers only slightly less Ted-Lasso-engaged than early viewers; marginal 28d rate ~44% → aggregate 28d drops just 1pp."),
+    "Severance":                  (15.0,  15.0, 1.35, 0.58, 0.56, 0.58, 0.56, True,
+        "Fully trackable (S1 2/2022). Medium homophily (1.35×) → marginal late-cohort rate ~48% → aggregate 28d = (940K×0.58 + 220K×0.48)/1.16M = 56%."),
+    "Foundation":                 (9.0,   9.0,  1.9,  0.49, 0.47, 0.49, 0.47, True,
+        "Fully trackable (S1 9/2021). Medium-high homophily (1.9×) → marginal late-cohort ~38% → aggregate 28d = 47%."),
+    "Silo":                       (6.0,   6.0,  2.3,  0.39, 0.36, 0.39, 0.36, True,
+        "Fully trackable (S1 5/2023). Homophily 2.3× → late-viewer marginal ~26% → aggregate 28d = 36%."),
+    "Slow Horses":                (7.0,   7.0,  1.4,  0.28, 0.27, 0.28, 0.27, True,
+        "Fully trackable (S1 4/2022). Medium homophily (1.4×) → marginal late ~22% → aggregate 28d drops 1pp."),
+    "Presumed Innocent":          (5.0,   5.0,  1.6,  0.23, 0.22, 0.23, 0.22, True,
+        "Fully trackable (S1 6/2024). Medium homophily (1.6×) → marginal late ~17% → aggregate 28d drops 1pp."),
+    "Monarch: Legacy of Monsters":(4.0,   4.0,  1.9,  0.22, 0.20, 0.22, 0.20, True,
+        "Fully trackable (S1 11/2023). Homophily 1.9× → marginal late ~14% → aggregate 28d = 20%."),
+    "Constellation":              (1.5,   1.5,  4.8,  0.21, 0.18, 0.21, 0.18, True,
+        "Fully trackable (S1 2/2024). VERY HIGH homophily (4.8×) → biggest late-viewer drop; marginal ~9% → aggregate 28d = 18%. Late arrivers are much less niche-sci-fi loyal."),
+    "Pluribus":                   (2.0,   2.0,  3.5,  0.20, 0.18, 0.20, 0.18, True,
+        "Fully trackable (S1 11/2025). Very high homophily (3.5×) → marginal late ~11% → aggregate 28d = 18%."),
+    "Dark Matter":                (2.0,   2.0,  3.2,  0.18, 0.16, 0.18, 0.16, True,
+        "Fully trackable (S1 5/2024). High homophily (3.2×) → marginal late ~9% → aggregate 28d = 16%."),
+    "Shrinking":                  (4.0,   4.0,  1.3,  0.15, 0.14, 0.15, 0.14, True,
+        "Fully trackable (S1 1/2023). Low homophily (1.3×, cross-genre dramedy) → marginal late ~11% → aggregate 28d drops 1pp."),
+    "Your Friends & Neighbors":   (2.0,   2.0,  2.5,  0.14, 0.13, 0.14, 0.13, True,
+        "Fully trackable (S1 4/2025). Medium-high homophily (2.5×) → marginal late ~9% → aggregate 28d drops 1pp."),
+    "Invasion":                   (4.0,   4.0,  1.15, 0.13, 0.13, 0.13, 0.13, True,
+        "Fully trackable (S1 10/2021). Low homophily (1.15×) + moderate reach → 28d barely changes; marginal late ~11% → aggregate 28d ~12.6% rounds to 13%."),
+    "Sugar":                      (1.2,   1.2,  2.7,  0.09, 0.08, 0.09, 0.08, True,
+        "Fully trackable (S1 4/2024). Medium-high homophily (2.7×) → marginal late ~5% → aggregate 28d drops 1pp."),
+    "Widow's Bay":                (1.0,   1.0,  2.5,  0.07, 0.06, 0.07, 0.06, True,
+        "Fully trackable (S1 4/2026). Recent launch, medium-high homophily (2.5×) → marginal late ~4% → aggregate 28d drops 1pp."),
+    "Tehran":                     (0.8,   1.0,  2.1,  0.05, 0.05, 0.06, 0.05, True,
+        "Tehran S1 (9/2020) pre-cutoff. Small S1 audience (~300K), ~20% trackable reduction. Small numbers → 28d changes round to same integer % (0.05 stays 0.05); ceiling drops from 6% to 5%."),
+    "Margo's Got Money Troubles": (0.6,   0.6,  2.4,  0.04, 0.04, 0.04, 0.04, True,
+        "Fully trackable (S1 4/2026). Very small reach → 21d and 28d round to same integer % despite ~10% marginal-rate dilution."),
+    "Maximum Pleasure Guaranteed":(0.4,   0.4,  3.2,  0.04, 0.03, 0.04, 0.03, True,
+        "Fully trackable (S1 5/2026). High homophily (3.2×) but tiny reach → 28d drops 1pp as late-viewer marginal rate ~1.5%."),
+    "Cape Fear":                  (1.05,  1.05, 2.5,  0.07, 0.06, 0.07, 0.06, False,
+        "Post-Star-City launch (6/5/26). Post-launch co-viewing, separate framing. 28d aggregate slightly lower because Cape Fear-viewer share of Star City late-arrivers is smaller."),
 }
 
-# Backward-compatible simple mapping (uses TRACKABLE as primary)
+# Backward-compatible simple mapping (uses TRACKABLE 21d as primary)
 OVERLAP_MID = {k: v[3] for k, v in OVERLAP_DERIV.items()}
 
 RATIONALE = {
@@ -349,17 +396,36 @@ def _add_q1_fam_reactivation(wb: Workbook, sc: dict) -> None:
     ws.row_dimensions[r].height = 42
     r += 1
 
-    for lbl, cc in [("21-day", sc["cc_21"]), ("28-day", sc["cc_28"])]:
-        track = int(round(cc * FAM_REACT_TRACKABLE))
-        ceil = int(round(cc * FAM_REACT_MODELED))
+    window_rates = [
+        ("21-day", sc["cc_21"], FAM_REACT_21D_TRACKABLE, FAM_REACT_21D_CEILING),
+        ("28-day", sc["cc_28"], FAM_REACT_28D_TRACKABLE, FAM_REACT_28D_CEILING),
+    ]
+    for lbl, cc, track_rate, ceil_rate in window_rates:
+        track = int(round(cc * track_rate))
+        ceil = int(round(cc * ceil_rate))
         ws.cell(row=r, column=1, value=lbl).alignment = CTR
         ws.cell(row=r, column=2, value=cc).number_format = '#,##0'
-        c = ws.cell(row=r, column=3, value=FAM_REACT_TRACKABLE); c.number_format = '0%'; c.alignment = CTR; c.font = BOLD
+        c = ws.cell(row=r, column=3, value=track_rate); c.number_format = '0%'; c.alignment = CTR; c.font = BOLD
         c = ws.cell(row=r, column=4, value=track); c.number_format = '#,##0'; c.font = BOLD; c.fill = YELLOW
-        c = ws.cell(row=r, column=5, value=FAM_REACT_MODELED); c.number_format = '0%'; c.alignment = CTR
+        c = ws.cell(row=r, column=5, value=ceil_rate); c.number_format = '0%'; c.alignment = CTR
         c.fill = BLUE
         c = ws.cell(row=r, column=6, value=ceil); c.number_format = '#,##0'; c.fill = BLUE
         r += 1
+
+    # Explain why 21d ≠ 28d rates
+    r += 1
+    ws.cell(row=r, column=1, value=(
+        "Why 28-day rates < 21-day rates:  the additional 919 reactivations that arrive "
+        "in days 22-28 are a LESS franchise-concentrated cohort than the initial 19,734 "
+        "days-1-21 returners. Days 1-21 = peak franchise-rush window (Star City / FAM S5 "
+        "finale event marketing). Days 22-28 = organic tail, late-marketing responders, "
+        "casually-curious viewers who took longer to act. Marginal FAM-prior rates for "
+        "the days-22-28 cohort:  ~40% trackable / ~55% ceiling — both meaningfully below "
+        "the days-1-21 rates. Aggregate 28-day rate = weighted average of the two sub-"
+        "cohorts, which lands 1pp below the 21-day rate for both trackable and ceiling."
+    )).alignment = WRAP
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=6)
+    ws.row_dimensions[r].height = 96
 
     # ═══ Timeline reconciliation — how is this even possible? ═══
     r += 1
@@ -546,7 +612,7 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
 
     ws["A1"] = "Q2: Share of Star City viewers who previously watched other Apple TV+ shows"
     ws["A1"].font = H1
-    ws.merge_cells("A1:I1")
+    ws.merge_cells("A1:M1")
 
     ws["A2"] = ("MODELED per-title overlap — of the ~940K US Apple TV+ subscribers who "
                 "watched Star City in its first 21 days, what share had PREVIOUSLY watched "
@@ -567,7 +633,7 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
                 "homophily. Anchors: Antenna cross-title reports, Nielsen streaming panel, "
                 "Deadline/Puck triangulation, Parrot Analytics demand correlations.")
     ws["A2"].alignment = WRAP
-    ws.merge_cells("A2:K2")
+    ws.merge_cells("A2:M2")
     ws.row_dimensions[2].height = 240
 
     # Star City reference
@@ -592,12 +658,13 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
     # ═══ MAIN OVERLAP TABLE — previously watched titles only ═══
     r += 2
     ws.cell(row=r, column=1, value="Per-title overlap with Star City viewers (PREVIOUSLY WATCHED, post-1/1/21 trackable)").font = H2
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=11)
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=13)
     r += 1
     hdrs = ["Rank", "Show", "Trackable reach (M, post-1/1/21)",
             "Full-lifetime reach (M)", "Apple TV+ penetration (trackable)",
             "Star City homophily",
-            "Overlap % (TRACKABLE, primary)", "Modeled ceiling (if pre-2021 observable)",
+            "21-day trackable %", "28-day trackable %",
+            "21-day ceiling %", "28-day ceiling %",
             "21-day overlap count", "28-day overlap count",
             "Row-by-row rationale / research anchor"]
     for c, h in enumerate(hdrs, start=1):
@@ -608,11 +675,11 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
     ws.row_dimensions[r].height = 62
     r += 1
 
-    # Filter to only previously-watched shows, sort by trackable overlap desc
+    # Filter to only previously-watched shows, sort by 21d trackable overlap desc
     prev_watched = [rec for rec in comps
-                    if OVERLAP_DERIV.get(rec["show"], (0,0,0,0,0,False,""))[5]]
+                    if OVERLAP_DERIV.get(rec["show"], (0,0,0,0,0,0,0,False,""))[7]]
     def _key(rec):
-        return -OVERLAP_DERIV.get(rec["show"], (0,0,0,0,0,False,""))[3]
+        return -OVERLAP_DERIV.get(rec["show"], (0,0,0,0,0,0,0,False,""))[3]
     prev_watched.sort(key=_key)
 
     rank = 1
@@ -623,7 +690,7 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
         deriv = OVERLAP_DERIV.get(show)
         if not deriv:
             continue
-        track_M, full_M, homophily, ovl_track, ovl_ceiling, _prev, _note = deriv
+        track_M, full_M, homophily, t21, t28, c21_r, c28_r, _prev, _note = deriv
         penetration = track_M / 35.0
         rationale = RATIONALE.get(show, "")
 
@@ -631,44 +698,47 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
         ws.cell(row=r, column=2, value=show).alignment = LEFT
         c = ws.cell(row=r, column=3, value=track_M); c.number_format = '0.00'; c.alignment = CTR
         c = ws.cell(row=r, column=4, value=full_M); c.number_format = '0.00'; c.alignment = CTR
-        # Highlight the reach cells for shows with pre-2021 truncation
         if track_M < full_M:
             ws.cell(row=r, column=3).fill = BLUE
             ws.cell(row=r, column=4).fill = BLUE
         c = ws.cell(row=r, column=5, value=penetration); c.number_format = '0.0%'; c.alignment = CTR
         c = ws.cell(row=r, column=6, value=homophily); c.number_format = '0.00"×"'; c.alignment = CTR
-        c_pri = ws.cell(row=r, column=7, value=ovl_track); c_pri.number_format = '0%'; c_pri.alignment = CTR; c_pri.font = BOLD
-        c_ceil = ws.cell(row=r, column=8, value=ovl_ceiling); c_ceil.number_format = '0%'; c_ceil.alignment = CTR
-        if ovl_ceiling > ovl_track:
-            c_ceil.fill = BLUE
-        # Highlight the FAM row
+        cc = ws.cell(row=r, column=7, value=t21); cc.number_format = '0%'; cc.alignment = CTR; cc.font = BOLD
+        cc = ws.cell(row=r, column=8, value=t28); cc.number_format = '0%'; cc.alignment = CTR; cc.font = BOLD
+        cc = ws.cell(row=r, column=9, value=c21_r); cc.number_format = '0%'; cc.alignment = CTR
+        cc = ws.cell(row=r, column=10, value=c28_r); cc.number_format = '0%'; cc.alignment = CTR
+        if c21_r > t21:
+            ws.cell(row=r, column=9).fill = BLUE
+            ws.cell(row=r, column=10).fill = BLUE
+        # Highlight the FAM row on the trackable % cells
         if show == "For All Mankind":
-            for col in (7, 8):
+            for col in (7, 8, 9, 10):
                 ws.cell(row=r, column=col).fill = YELLOW
                 ws.cell(row=r, column=col).font = BOLD
-        c21 = ws.cell(row=r, column=9, value=int(round(aa21 * ovl_track)))
-        c21.number_format = '#,##0'
-        c28 = ws.cell(row=r, column=10, value=int(round(aa28 * ovl_track)))
-        c28.number_format = '#,##0'
+        # Counts use per-window trackable rates (independent, not multiplied)
+        cnt_21 = ws.cell(row=r, column=11, value=int(round(aa21 * t21)))
+        cnt_21.number_format = '#,##0'
+        cnt_28 = ws.cell(row=r, column=12, value=int(round(aa28 * t28)))
+        cnt_28.number_format = '#,##0'
         if show == "For All Mankind":
-            c21.fill = YELLOW; c21.font = BOLD
-            c28.fill = YELLOW; c28.font = BOLD
-        ws.cell(row=r, column=11, value=rationale).alignment = WRAP
-        ws.row_dimensions[r].height = 100
+            cnt_21.fill = YELLOW; cnt_21.font = BOLD
+            cnt_28.fill = YELLOW; cnt_28.font = BOLD
+        ws.cell(row=r, column=13, value=rationale).alignment = WRAP
+        ws.row_dimensions[r].height = 110
         rank += 1
         r += 1
 
     # ═══ SEPARATE: Cape Fear post-launch co-viewing ═══
     r += 2
     ws.cell(row=r, column=1, value="Post-launch co-viewing (separate framing)").font = H2
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=11)
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=13)
     r += 1
     ws.cell(row=r, column=1, value=(
         "Cape Fear premiered 6/5/26 — 7 days AFTER Star City. It cannot be 'previously watched' "
         "by Star City viewers. Modeled below as post-launch CO-VIEWING (Star City viewers who "
         "also watched Cape Fear when Cape Fear launched a week later)."
     )).alignment = WRAP
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=11)
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=13)
     ws.row_dimensions[r].height = 44
     r += 1
     for c, h in enumerate(hdrs, start=1):
@@ -678,7 +748,7 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
         cell.alignment = CTR
     r += 1
     cf_deriv = OVERLAP_DERIV["Cape Fear"]
-    cf_track, cf_full, cf_hom, cf_ovl_t, cf_ovl_c, _, _ = cf_deriv
+    cf_track, cf_full, cf_hom, cf_t21, cf_t28, cf_c21r, cf_c28r, _, _ = cf_deriv
     cf_pen = cf_track / 35.0
     ws.cell(row=r, column=1, value="—").alignment = CTR
     ws.cell(row=r, column=2, value="Cape Fear (post-launch)").alignment = LEFT
@@ -686,32 +756,34 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
     c = ws.cell(row=r, column=4, value=cf_full); c.number_format = '0.00'; c.alignment = CTR
     c = ws.cell(row=r, column=5, value=cf_pen); c.number_format = '0.0%'; c.alignment = CTR
     c = ws.cell(row=r, column=6, value=cf_hom); c.number_format = '0.00"×"'; c.alignment = CTR
-    c = ws.cell(row=r, column=7, value=cf_ovl_t); c.number_format = '0%'; c.alignment = CTR
-    c = ws.cell(row=r, column=8, value=cf_ovl_c); c.number_format = '0%'; c.alignment = CTR
-    c = ws.cell(row=r, column=9, value=int(round(aa21 * cf_ovl_t))); c.number_format = '#,##0'
-    c = ws.cell(row=r, column=10, value=int(round(aa28 * cf_ovl_t))); c.number_format = '#,##0'
-    ws.cell(row=r, column=11, value=RATIONALE["Cape Fear"]).alignment = WRAP
-    ws.row_dimensions[r].height = 72
+    c = ws.cell(row=r, column=7, value=cf_t21); c.number_format = '0%'; c.alignment = CTR
+    c = ws.cell(row=r, column=8, value=cf_t28); c.number_format = '0%'; c.alignment = CTR
+    c = ws.cell(row=r, column=9, value=cf_c21r); c.number_format = '0%'; c.alignment = CTR
+    c = ws.cell(row=r, column=10, value=cf_c28r); c.number_format = '0%'; c.alignment = CTR
+    c = ws.cell(row=r, column=11, value=int(round(aa21 * cf_t21))); c.number_format = '#,##0'
+    c = ws.cell(row=r, column=12, value=int(round(aa28 * cf_t28))); c.number_format = '#,##0'
+    ws.cell(row=r, column=13, value=RATIONALE["Cape Fear"]).alignment = WRAP
+    ws.row_dimensions[r].height = 78
     r += 1
 
     # ═══ Franchise-depth summary ═══
     r += 2
-    ws.cell(row=r, column=1, value="Franchise-depth summary (TRACKABLE)").font = H2
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=11)
+    ws.cell(row=r, column=1, value="Franchise-depth summary (TRACKABLE, 21-day)").font = H2
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=13)
     r += 1
     # Recompute total trackable overlap sum for depth-bucket calibration
-    total_track_pp = sum(v[3] for k, v in OVERLAP_DERIV.items() if v[5])
-    total_ceil_pp = sum(v[4] for k, v in OVERLAP_DERIV.items() if v[5])
+    total_track_pp = sum(v[3] for k, v in OVERLAP_DERIV.items() if v[7])
+    total_ceil_pp = sum(v[5] for k, v in OVERLAP_DERIV.items() if v[7])
     ws.cell(row=r, column=1, value=(
         f"Star City's audience is highly Apple TV+-native. Distribution of "
         f"observable (post-1/1/21) prior Apple TV+ engagement DEPTH among Star City "
-        f"viewers, calibrated from the sum of per-row TRACKABLE overlaps above "
-        f"({int(total_track_pp*100)}pp across 19 previously-released shows = "
+        f"viewers (21-day cohort), calibrated from the sum of per-row 21-day TRACKABLE "
+        f"overlaps ({int(total_track_pp*100)}pp across 19 previously-released shows = "
         f"{total_track_pp:.2f} avg observable prior series per Star City viewer). "
         f"Ceiling if pre-2021 were observable: {int(total_ceil_pp*100)}pp = "
         f"{total_ceil_pp:.2f} avg series."
     )).alignment = WRAP
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=11)
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=13)
     ws.row_dimensions[r].height = 64
     r += 1
     depth_rows = [
@@ -746,19 +818,20 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
         c = ws.cell(row=r, column=3, value=int(round(aa21 * share))); c.number_format = '#,##0'
         c = ws.cell(row=r, column=4, value=int(round(aa28 * share))); c.number_format = '#,##0'
         ws.cell(row=r, column=5, value=note).alignment = WRAP
-        ws.merge_cells(start_row=r, start_column=5, end_row=r, end_column=11)
+        ws.merge_cells(start_row=r, start_column=5, end_row=r, end_column=13)
         ws.row_dimensions[r].height = 68
         r += 1
 
     # Editorial takeaway
     r += 2
     ws.cell(row=r, column=1, value="Editorial Takeaway").font = H2
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=11)
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=13)
     r += 1
+    # Index legend: (track_M, full_M, hom, t21, t28, c21, c28, prev, note)
     fam_t = int(round(aa21 * OVERLAP_DERIV["For All Mankind"][3]))
-    fam_c = int(round(aa21 * OVERLAP_DERIV["For All Mankind"][4]))
+    fam_c = int(round(aa21 * OVERLAP_DERIV["For All Mankind"][5]))
     ted_t = int(round(aa21 * OVERLAP_DERIV["Ted Lasso"][3]))
-    ted_c = int(round(aa21 * OVERLAP_DERIV["Ted Lasso"][4]))
+    ted_c = int(round(aa21 * OVERLAP_DERIV["Ted Lasso"][5]))
     sev = int(round(aa21 * OVERLAP_DERIV["Severance"][3]))
     fnd = int(round(aa21 * OVERLAP_DERIV["Foundation"][3]))
     silo = int(round(aa21 * OVERLAP_DERIV["Silo"][3]))
@@ -792,11 +865,11 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
         f"populated; the ceiling requires third-party data."
     )
     ws.cell(row=r, column=1, value=takeaway).alignment = WRAP
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=11)
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=13)
     ws.row_dimensions[r].height = 380
 
-    # Column widths — 11 cols now
-    for i, w in enumerate([6, 28, 14, 14, 14, 12, 14, 14, 14, 14, 62], start=1):
+    # Column widths — 13 cols now (per-window trackable + ceiling)
+    for i, w in enumerate([6, 28, 13, 13, 13, 11, 12, 12, 12, 12, 14, 14, 60], start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
 
