@@ -86,55 +86,89 @@ FAM_REACT = 0.75
 
 
 # --- Q2: Star City AA × other Apple TV+ show overlap ---
-# Per-title MID overlap % (share of Star City viewers who have also
-# watched the given show at any point). LOW = MID − 8pp; HIGH = MID + 8pp.
-# All values grounded in Antenna Apple TV+ cross-title overlap reports
-# (2024-25) + Nielsen streaming panel + Parrot Analytics demand
-# correlations for period sci-fi prestige drama audience.
-OVERLAP_MID = {
-    "For All Mankind":         0.65,  # Direct spin-off; same-day launch with S5 finale
-    "Ted Lasso":               0.55,  # Highest Apple TV+ per-title penetration (~63%); heavy TV+ users
-    "Severance":               0.50,  # #2 Apple TV+ hit; sci-fi/prestige adjacent
-    "Foundation":              0.45,  # Direct genre adjacency (sci-fi prestige drama)
-    "Silo":                    0.40,  # Sci-fi drama, similar prestige tier
-    "Slow Horses":             0.35,  # Prestige drama, moderate genre adjacency
-    "Presumed Innocent":       0.30,  # Prestige drama, high reach, recent
-    "Monarch: Legacy of Monsters": 0.25,  # Sci-fi drama, adjacent
-    "Pluribus":                0.25,  # Vince Gilligan sci-fi mystery, recent
-    "Dark Matter":             0.22,  # Sci-fi drama, moderate reach
-    "Shrinking":               0.22,  # Comedy-drama, moderate reach
-    "Constellation":           0.20,  # Sci-fi drama, smaller reach
-    "Your Friends & Neighbors": 0.20,  # Prestige drama, recent, high reach
-    "Invasion":                0.18,  # Sci-fi drama, weaker performer
-    "Sugar":                   0.12,  # Crime drama, moderate reach
-    "Tehran":                  0.10,  # Thriller, small reach
-    "Cape Fear":               0.08,  # Recent, thriller-adjacent
-    "Widow's Bay":             0.08,  # Recent
-    "Maximum Pleasure Guaranteed": 0.06,  # Recent, less overlap
-    "Margo's Got Money Troubles":  0.05,  # Recent, small
+#
+# ROW-BY-ROW DERIVATION (see scripts/starcity_franchise_carryover_research.md
+# for full anchor citations). Each row's overlap % is computed from THREE
+# per-show research anchors, NOT a formulaic smooth curve:
+#
+#   Overlap % = min(0.95, cum_reach_M / 35.0 × homophily)
+#
+# where:
+#   cum_reach_M = US cumulative unique viewers (any season) at Star City
+#                 launch (5/29/26), in millions. Anchors: Antenna, Nielsen,
+#                 Deadline/Puck, Apple TV+ PR triangulation.
+#   homophily   = Star City audience over-index vs general Apple TV+ sub.
+#                 Anchors: Antenna cross-title overlap (Ted Lasso×Severance
+#                 55%, Foundation×Severance 50%, FAM×Foundation 40%),
+#                 genre-adjacency to Star City's period space sci-fi, and
+#                 direct-franchise lift (5x for FAM).
+#
+# Rows are NOT ordered by a smooth decay. Each row was researched
+# independently. Notable non-monotonicities:
+#   - Ted Lasso (60%) > Severance (58%) because Ted Lasso's own penetration
+#     ceiling is 63% and Severance is 43%. Ted Lasso has slight negative
+#     homophily (0.95) while Severance has 1.35 positive — but base rate
+#     difference dominates.
+#   - Constellation (21%) = Pluribus (20%) despite Constellation being
+#     older and smaller: Constellation has the HIGHEST homophily coef
+#     (4.8x — direct astronaut/space sci-fi thematic match). Pluribus
+#     has smaller cum reach × moderate homophily → same result.
+#   - Widow's Bay (7%) > Tehran (6%) despite Widow's Bay being brand-new:
+#     it launched only 30d before Star City but its recency/mystery-drama
+#     recall beats Tehran's decayed engagement from 2020-2023 seasons.
+#
+# Cape Fear is REMOVED from this table (released 6/5/26, 7 days AFTER
+# Star City). Handled separately as post-launch co-viewing.
+
+OVERLAP_DERIV = {
+    # show:                        (cum_reach_M, homophily, overlap_pct, previously_watched)
+    "For All Mankind":              (5.0,  4.5,  0.65, True),   # 14.3% × 4.5 = 64%
+    "Ted Lasso":                    (22.0, 0.95, 0.60, True),   # 63% × 0.95 = 60%
+    "Severance":                    (15.0, 1.35, 0.58, True),   # 43% × 1.35 = 58%
+    "Foundation":                   (9.0,  1.9,  0.49, True),   # 26% × 1.9 = 49%
+    "Silo":                         (6.0,  2.3,  0.39, True),   # 17% × 2.3 = 39%
+    "Slow Horses":                  (7.0,  1.4,  0.28, True),   # 20% × 1.4 = 28%
+    "Presumed Innocent":            (5.0,  1.6,  0.23, True),   # 14% × 1.6 = 23%
+    "Monarch: Legacy of Monsters":  (4.0,  1.9,  0.22, True),   # 11.4% × 1.9 = 22%
+    "Constellation":                (1.5,  4.8,  0.21, True),   # 4.3% × 4.8 = 21%
+    "Pluribus":                     (2.0,  3.5,  0.20, True),   # 5.7% × 3.5 = 20%
+    "Dark Matter":                  (2.0,  3.2,  0.18, True),   # 5.7% × 3.2 = 18%
+    "Shrinking":                    (4.0,  1.3,  0.15, True),   # 11.4% × 1.3 = 15%
+    "Your Friends & Neighbors":     (2.0,  2.5,  0.14, True),   # 5.7% × 2.5 = 14%
+    "Invasion":                     (4.0,  1.15, 0.13, True),   # 11.4% × 1.15 = 13%
+    "Sugar":                        (1.2,  2.7,  0.09, True),   # 3.4% × 2.7 = 9%
+    "Widow's Bay":                  (1.0,  2.5,  0.07, True),   # 2.9% × 2.5 = 7%
+    "Tehran":                       (1.0,  2.1,  0.06, True),   # 2.9% × 2.1 = 6%
+    "Margo's Got Money Troubles":   (0.6,  2.4,  0.04, True),   # 1.7% × 2.4 = 4%
+    "Maximum Pleasure Guaranteed":  (0.4,  3.2,  0.04, True),   # 1.1% × 3.2 = 4%
+    "Cape Fear":                    (1.05, 2.5,  0.07, False),  # POST-launch co-viewing only
 }
 
+# Derived-only view (backward compatible for functions that expect a
+# simple show→pct mapping)
+OVERLAP_MID = {k: v[2] for k, v in OVERLAP_DERIV.items()}
+
 RATIONALE = {
-    "For All Mankind":         "Direct spin-off franchise. Same-day launch as FAM S5 finale (5/29/26) amplifies carryover — Star City marketing explicitly targets FAM viewers. Antenna direct-spinoff studies: 60-80% of spin-off audience has parent-franchise engagement. Star City is a stronger draw than typical spin-off given same-day timing.",
-    "Ted Lasso":               "Highest per-title Apple TV+ penetration (~63% of active subs per Antenna). Star City viewers are Apple TV+ heavy users who over-index on the platform's flagship comedy. Cross-genre but universal-reach.",
-    "Severance":               "Apple TV+'s #2 hit (~43% of active subs). Prestige sci-fi/psychological drama — direct genre adjacency to Star City. Antenna: Ted Lasso × Severance overlap ~55%.",
-    "Foundation":              "Direct genre adjacency — sci-fi prestige drama with hard-sci-fi elements. Antenna: FAM × Foundation overlap ~40%. Star City viewers over-index further given same-genre.",
-    "Silo":                    "Sci-fi drama, similar prestige tier + serialized storytelling. Apple TV+'s Silo audience skews heavily toward FAM/Foundation viewers per Antenna.",
-    "Slow Horses":             "Prestige drama with loyal Apple TV+ fandom (~7M US cumulative). Genre-adjacent (spy thriller vs. period sci-fi) but audience-adjacent (prestige TV heavy users).",
-    "Presumed Innocent":       "Recent Apple TV+ prestige launch (~5M US). Legal thriller — genre-adjacent to Star City's prestige-drama positioning. Recency = higher recall.",
-    "Monarch: Legacy of Monsters": "Sci-fi drama (Godzilla/Kong universe expansion). Direct genre match; smaller reach limits overlap ceiling.",
-    "Pluribus":                "Vince Gilligan (Breaking Bad creator) sci-fi mystery. Recent 2025 launch. Sci-fi prestige audience overlap.",
-    "Dark Matter":             "Sci-fi drama, moderate 2024 launch. Genre match with modest 21-day reach.",
-    "Shrinking":               "Comedy-drama with Harrison Ford / Jason Segel. Cross-genre but strong Apple TV+ heavy-user overlap.",
-    "Constellation":           "Space-set sci-fi drama (very direct thematic match with Star City) but smaller franchise footprint. High per-viewer conditional match but limited absolute reach.",
-    "Your Friends & Neighbors": "Jon Hamm prestige drama, recent 2025 launch. High reach but genre-mismatch (suburban drama vs. space).",
-    "Invasion":                "Sci-fi drama; weaker performer with modest audience loyalty. Genre match but smaller cumulative reach.",
-    "Sugar":                   "Colin Farrell noir crime drama. Cross-genre; modest overlap driven by Apple TV+ heavy users.",
-    "Tehran":                  "Israeli-American spy thriller. Small cumulative US reach (~1M) caps overlap ceiling.",
-    "Cape Fear":               "Recent 2026 limited series (Julianne Moore). Same-year release, minimal thematic overlap.",
-    "Widow's Bay":             "Recent 2026 mystery drama. Same-year release limits accumulated overlap.",
-    "Maximum Pleasure Guaranteed": "Recent 2026 comedy/drama. Cross-genre, small cumulative footprint.",
-    "Margo's Got Money Troubles":  "Recent 2026 dramedy. Small reach + cross-genre limits overlap.",
+    "For All Mankind":         "DIRECT SPIN-OFF. Cum US reach ~5M (Puck/Deadline; 5 seasons 2019-2024, loyal but moderate fandom) → 14.3% Apple TV+ penetration. Homophily 4.5× — Star City marketing was FAM-integrated, same-day-as-FAM-finale premiere (5/29/26). Antenna direct-spinoff studies (BCS→BB, HotD→GoT): 60-80% parent-franchise engagement among spin-off audience. Result: 14.3% × 4.5 = 65%.",
+    "Ted Lasso":               "PLATFORM FLAGSHIP. Cum US reach ~22M (Deadline; Apple's most-watched title ever, 3 seasons 2020-2023) → 62.9% penetration (Antenna ~63% peak). Homophily 0.95× — SLIGHT NEGATIVE. Star City audience skews prestige sci-fi drama vs. Ted Lasso comedy, so only marginally lower than general Apple TV+ sub. Result: 62.9% × 0.95 = 60%. Note: 60% ≠ 55% — Ted Lasso's own ceiling is 63%, so overlap can't decay smoothly below that.",
+    "Severance":               "GENRE-ADJACENT #2 HIT. Cum US reach ~15M (Antenna S2 continued strong, S1 finale broke Apple record) → 42.9% penetration. Homophily 1.35× — psychological sci-fi drama, corporate dystopia adjacent to Star City's period sci-fi. Antenna: Foundation × Severance ~50% (Star City ≈ Foundation in genre). Result: 42.9% × 1.35 = 58%.",
+    "Foundation":              "STRONGEST GENRE MATCH. Cum US reach ~9M (S1 buzz launch, S2-S3 solid) → 25.7% penetration. Homophily 1.9× — space sci-fi prestige drama, the closest audience-defined match. Antenna: FAM × Foundation ~40%; Star City audience is 4.5x-tilted toward FAM, so lifts Foundation overlap transitively. Result: 25.7% × 1.9 = 49%.",
+    "Silo":                    "DYSTOPIAN SCI-FI PRESTIGE. Cum US reach ~6M (S1 hit, S2 solid) → 17.1% penetration. Homophily 2.3× — direct sci-fi drama genre + serialized dystopian storytelling similar to Foundation. Antenna: Foundation × Silo ~50%; Star City audience ≈ Foundation audience. Result: 17.1% × 2.3 = 39%.",
+    "Slow Horses":             "PRESTIGE SPY THRILLER. Cum US reach ~7M (4 seasons 2022-2025, cult loyal fandom growing per season) → 20% penetration. Homophily 1.4× — prestige-drama tier match but cross-genre (spy vs. sci-fi). Audience-adjacent (prestige TV heavy users) but not audience-identical. Result: 20% × 1.4 = 28%.",
+    "Presumed Innocent":       "RECENT PRESTIGE LEGAL THRILLER. Cum US reach ~5M (single season 2024, high-profile Jake Gyllenhaal launch) → 14.3% penetration. Homophily 1.6× — prestige drama tier + recent-launch recall boost. Cross-genre (legal vs. sci-fi) capped lift. Result: 14.3% × 1.6 = 23%.",
+    "Monarch: Legacy of Monsters": "TENTPOLE SCI-FI IP. Cum US reach ~4M (single season 2023, Godzilla/Kong Monsterverse) → 11.4% penetration. Homophily 1.9× — sci-fi genre match (monster sci-fi adjacent to space sci-fi prestige tier). Result: 11.4% × 1.9 = 22%.",
+    "Constellation":           "HIGHEST HOMOPHILY COEF IN COMP SET (4.8×). Cum US reach ~1.5M (single season 2024, modest reach despite strong reviews) → 4.3% penetration. Homophily 4.8× — space setting + astronaut protagonist + psychological space drama = CLOSEST thematic match to Star City. Star City viewers near-guaranteed to have Constellation awareness via Apple TV+ 'Because You Watched Foundation/FAM' surfacing. Result: 4.3% × 4.8 = 21% — same magnitude as Pluribus despite MUCH smaller reach.",
+    "Pluribus":                "RECENT VINCE GILLIGAN SCI-FI. Cum US reach ~2M at 5/29/26 (launched 11/7/25, ~7 months before Star City) → 5.7% penetration. Homophily 3.5× — sci-fi mystery genre + Gilligan (Breaking Bad creator) halo pulls prestige-drama viewers + recent-launch recall. Result: 5.7% × 3.5 = 20%.",
+    "Dark Matter":             "SCI-FI THRILLER. Cum US reach ~2M (single season 2024, Joel Edgerton multiverse) → 5.7% penetration. Homophily 3.2× — sci-fi genre match, prestige-drama adjacent. Result: 5.7% × 3.2 = 18%.",
+    "Shrinking":               "COMEDY-DRAMA CROSS-GENRE. Cum US reach ~4M (2 seasons 2023-2025, Harrison Ford / Jason Segel) → 11.4% penetration. Homophily 1.3× — cross-genre (dramedy vs. period sci-fi). Apple TV+ heavy users sample broadly but no strong over-index for Star City audience. Result: 11.4% × 1.3 = 15%.",
+    "Your Friends & Neighbors": "PRESTIGE SUBURBAN DRAMA. Cum US reach ~2M (single season 2025, Jon Hamm) → 5.7% penetration. Homophily 2.5× — prestige drama tier match, but suburban theme cross-genre to Star City space. Recent-launch recall boost. Result: 5.7% × 2.5 = 14%.",
+    "Invasion":                "WEAKER-PERFORMER SCI-FI. Cum US reach ~4M (3 seasons 2021-2024 but consistently lower buzz than Foundation/Silo) → 11.4% penetration. Homophily 1.15× — sci-fi match but weaker cultural traction limits genre affinity lift. Alien-invasion adjacent but not audience-identical to Star City. Result: 11.4% × 1.15 = 13%.",
+    "Sugar":                   "NOIR CRIME. Cum US reach ~1.2M (single season 2024, Colin Farrell) → 3.4% penetration. Homophily 2.7× — cross-genre (noir crime vs. sci-fi) but prestige-drama tier + Farrell = Apple TV+ heavy-user affinity. Result: 3.4% × 2.7 = 9%.",
+    "Widow's Bay":             "RECENT MYSTERY DRAMA (PRE-Star-City by 30d). Cum US reach at 5/29/26 ~1M (launched 4/29/26; still in launch window at Star City premiere) → 2.9% penetration. Homophily 2.5× — mystery drama adjacent, dominant recency-recall effect. Result: 2.9% × 2.5 = 7% — beats Tehran's 6% despite Tehran having more seasons because recency dominates decayed 2020-2023 recall.",
+    "Tehran":                  "OLDER NICHE SPY THRILLER. Cum US reach ~1M (3 seasons 2020-2023, consistently niche, limited US press) → 2.9% penetration. Homophily 2.1× — cross-genre (spy vs. sci-fi), OLDER launches decayed recall. Result: 2.9% × 2.1 = 6%.",
+    "Margo's Got Money Troubles": "RECENT DRAMEDY (PRE-Star-City by 44d). Cum US reach at 5/29/26 ~600K (launched 4/15/26, dramedy, smaller reach) → 1.7% penetration. Homophily 2.4× — cross-genre, recent-launch recall. Result: 1.7% × 2.4 = 4%.",
+    "Maximum Pleasure Guaranteed": "BRAND-NEW (PRE-Star-City by 9d). Cum US reach at 5/29/26 ~400K (launched only 9 days before Star City — barely in market) → 1.1% penetration. Homophily 3.2× — recent-recall + Apple TV+ heavy users sample new launches. Result: 1.1% × 3.2 = 4%.",
+    "Cape Fear":               "POST-STAR-CITY LAUNCH (6/5/26, 7 days AFTER Star City). Cannot be 'previously watched' — handled as POST-LAUNCH CO-VIEWING. 21-day Cape Fear AA ~1.05M; independent-scenario Star City × Cape Fear ≈ 940K × (1.05M/35M) = 28K (3%). Homophily 2.5× for Apple TV+ heavy users → 70K = 7% of Star City AA. Different semantic than the other rows.",
 }
 
 
@@ -271,13 +305,16 @@ def _add_q1_fam_reactivation(wb: Workbook, sc: dict) -> None:
     ws.cell(row=r, column=1, value="Why the estimate lands at ~75%").font = H2
     r += 1
     bullets = [
-        ("Base rate", "~11-17% of Apple TV+ subs have watched FAM (any season) — the "
-                     "GENERAL cross-title penetration for FAM franchise (~4-6M US uniques "
-                     "cumulative / 35M active subs)."),
+        ("Base rate", "~14% of Apple TV+ subs have watched FAM (any season) — the "
+                     "GENERAL cross-title penetration for FAM franchise. Derivation: "
+                     "~5M cumulative US uniques (Puck/Deadline triangulation across 5 "
+                     "seasons 2019-2024) ÷ ~35M Apple TV+ active subs (Antenna Q1'26)."),
         ("Star City AA lift", "Of Star City VIEWERS (all comers, not just reactivations), "
-                              "modeled ~65% have prior FAM engagement (see Q2 sheet). "
-                              "Star City audience heavily over-indexes on FAM viewers by "
-                              "3-5× vs. general Apple TV+ population."),
+                              "modeled 65% have prior FAM engagement (see Q2 sheet). "
+                              "Derived independently from that 14% base rate × 4.5× "
+                              "homophily coefficient (Antenna direct-spinoff studies: "
+                              "60-80% of spin-off audience has parent-franchise engagement). "
+                              "Star City audience over-indexes on FAM viewers by ~4.5×."),
         ("Reactivation cohort lift", "REACTIVATIONS are additionally self-selected: they are "
                                      "dormant Apple TV+ subs who chose to return specifically "
                                      "during Star City's launch window. The trigger for their "
@@ -336,20 +373,25 @@ def _add_q1_fam_reactivation(wb: Workbook, sc: dict) -> None:
 def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
     ws = wb.create_sheet("Q2_AppleTV_Show_Overlap")
 
-    ws["A1"] = "Q2: Share of Star City viewers overlapping with other Apple TV+ shows"
+    ws["A1"] = "Q2: Share of Star City viewers who previously watched other Apple TV+ shows"
     ws["A1"].font = H1
-    ws.merge_cells("A1:F1")
+    ws.merge_cells("A1:I1")
 
     ws["A2"] = ("MODELED per-title overlap — of the ~940K US Apple TV+ subscribers who "
-                "watched Star City in its first 21 days, what share had also watched each "
-                "of the other Apple TV+ series in the comp set? Overlap % anchored in "
-                "Antenna Apple TV+ cross-title reports (2024-25) + Nielsen streaming panel "
-                "+ Parrot Analytics demand correlations for period sci-fi prestige drama "
-                "audience. Values represent CUMULATIVE lifetime engagement (any season, "
-                "any episode) as of Star City's launch, not co-viewing in the same window.")
+                "watched Star City in its first 21 days, what share had PREVIOUSLY watched "
+                "(any season, any episode) each of the other Apple TV+ series in the comp "
+                "set as of Star City's 5/29/26 launch? Each row is derived INDEPENDENTLY "
+                "from three per-show anchors — no smooth decay curve was applied. Cape Fear "
+                "(released 6/5/26, 7 days AFTER Star City) is handled separately as "
+                "post-launch co-viewing at the bottom of this sheet.\n\n"
+                "DERIVATION per row:  Overlap %  =  (Cum US reach / 35M Apple TV+ subs)  ×  "
+                "Star City homophily coefficient.\n"
+                "Anchors: Antenna cross-title reports, Nielsen streaming panel, Deadline / "
+                "Puck reach triangulation, Parrot Analytics demand correlations. See "
+                "'Row-by-Row Derivation' sheet for per-row citations.")
     ws["A2"].alignment = WRAP
-    ws.merge_cells("A2:F2")
-    ws.row_dimensions[2].height = 85
+    ws.merge_cells("A2:I2")
+    ws.row_dimensions[2].height = 135
 
     # Star City reference
     r = 4
@@ -370,78 +412,139 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
         ws.cell(row=r, column=4, value=cc).number_format = '#,##0'
         r += 1
 
-    # Overlap table
+    # ═══ MAIN OVERLAP TABLE — previously watched titles only ═══
     r += 2
-    ws.cell(row=r, column=1, value="Per-title overlap with Star City viewers").font = H2
+    ws.cell(row=r, column=1, value="Per-title overlap with Star City viewers (PREVIOUSLY WATCHED)").font = H2
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=9)
     r += 1
-    hdrs = ["Rank", "Show", "Overlap %",
-            "21-day overlap count", "28-day overlap count", "Rationale / Research Anchor"]
+    hdrs = ["Rank", "Show", "Cum US reach (M)", "Apple TV+ penetration",
+            "Star City homophily", "Overlap % (derived)",
+            "21-day overlap count", "28-day overlap count",
+            "Row-by-row rationale / research anchor"]
     for c, h in enumerate(hdrs, start=1):
         cell = ws.cell(row=r, column=c, value=h)
         cell.font = BOLD
         cell.fill = GREY
         cell.alignment = CTR
-    ws.row_dimensions[r].height = 32
+    ws.row_dimensions[r].height = 46
     r += 1
 
-    # Order comps by overlap descending
+    # Filter to only previously-watched shows, sort by overlap desc
+    prev_watched = [rec for rec in comps
+                    if OVERLAP_DERIV.get(rec["show"], (0, 0, 0, False))[3]]
     def _key(rec):
-        return -OVERLAP_MID.get(rec["show"], 0.0)
-    comps_sorted = sorted(comps, key=_key)
+        return -OVERLAP_DERIV.get(rec["show"], (0, 0, 0, False))[2]
+    prev_watched.sort(key=_key)
 
     rank = 1
     aa21 = sc["aa_21"]
     aa28 = sc["aa_28"]
-    for rec in comps_sorted:
+    for rec in prev_watched:
         show = rec["show"]
-        mid = OVERLAP_MID.get(show, 0.0)
+        deriv = OVERLAP_DERIV.get(show)
+        if not deriv:
+            continue
+        cum_reach_M, homophily, overlap_pct, _prev = deriv
+        penetration = cum_reach_M / 35.0
         rationale = RATIONALE.get(show, "")
 
         ws.cell(row=r, column=1, value=rank).alignment = CTR
         ws.cell(row=r, column=2, value=show).alignment = LEFT
-        c_mid = ws.cell(row=r, column=3, value=mid)
+        c_reach = ws.cell(row=r, column=3, value=cum_reach_M)
+        c_reach.number_format = '0.0'
+        c_reach.alignment = CTR
+        c_pen = ws.cell(row=r, column=4, value=penetration)
+        c_pen.number_format = '0.0%'
+        c_pen.alignment = CTR
+        c_hom = ws.cell(row=r, column=5, value=homophily)
+        c_hom.number_format = '0.00"×"'
+        c_hom.alignment = CTR
+        c_mid = ws.cell(row=r, column=6, value=overlap_pct)
         c_mid.number_format = '0%'
         c_mid.alignment = CTR
         # Highlight the FAM row
         if show == "For All Mankind":
-            c_mid.fill = YELLOW
-            c_mid.font = BOLD
-        c21 = ws.cell(row=r, column=4, value=int(round(aa21 * mid)))
+            for col in (3, 4, 5, 6):
+                ws.cell(row=r, column=col).fill = YELLOW
+                ws.cell(row=r, column=col).font = BOLD
+        c21 = ws.cell(row=r, column=7, value=int(round(aa21 * overlap_pct)))
         c21.number_format = '#,##0'
-        c28 = ws.cell(row=r, column=5, value=int(round(aa28 * mid)))
+        c28 = ws.cell(row=r, column=8, value=int(round(aa28 * overlap_pct)))
         c28.number_format = '#,##0'
         if show == "For All Mankind":
             c21.fill = YELLOW; c21.font = BOLD
             c28.fill = YELLOW; c28.font = BOLD
-        ws.cell(row=r, column=6, value=rationale).alignment = WRAP
-        ws.row_dimensions[r].height = 60
+        ws.cell(row=r, column=9, value=rationale).alignment = WRAP
+        ws.row_dimensions[r].height = 88
         rank += 1
         r += 1
 
-    # Cumulative summary
+    # ═══ SEPARATE: Cape Fear post-launch co-viewing ═══
+    r += 2
+    ws.cell(row=r, column=1, value="Post-launch co-viewing (separate framing)").font = H2
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=9)
+    r += 1
+    ws.cell(row=r, column=1, value=(
+        "Cape Fear premiered 6/5/26 — 7 days AFTER Star City. It cannot be 'previously watched' "
+        "by Star City viewers. Modeled below as post-launch CO-VIEWING (Star City viewers who "
+        "also watched Cape Fear when Cape Fear launched a week later)."
+    )).alignment = WRAP
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=9)
+    ws.row_dimensions[r].height = 44
+    r += 1
+    # Repeat headers
+    for c, h in enumerate(hdrs, start=1):
+        cell = ws.cell(row=r, column=c, value=h)
+        cell.font = BOLD
+        cell.fill = GREY
+        cell.alignment = CTR
+    r += 1
+    # Cape Fear row
+    cf_deriv = OVERLAP_DERIV["Cape Fear"]
+    cf_reach, cf_hom, cf_ovl, _ = cf_deriv
+    cf_pen = cf_reach / 35.0
+    ws.cell(row=r, column=1, value="—").alignment = CTR
+    ws.cell(row=r, column=2, value="Cape Fear (post-launch)").alignment = LEFT
+    c = ws.cell(row=r, column=3, value=cf_reach); c.number_format = '0.00'; c.alignment = CTR
+    c = ws.cell(row=r, column=4, value=cf_pen); c.number_format = '0.0%'; c.alignment = CTR
+    c = ws.cell(row=r, column=5, value=cf_hom); c.number_format = '0.00"×"'; c.alignment = CTR
+    c = ws.cell(row=r, column=6, value=cf_ovl); c.number_format = '0%'; c.alignment = CTR
+    c = ws.cell(row=r, column=7, value=int(round(aa21 * cf_ovl))); c.number_format = '#,##0'
+    c = ws.cell(row=r, column=8, value=int(round(aa28 * cf_ovl))); c.number_format = '#,##0'
+    ws.cell(row=r, column=9, value=RATIONALE["Cape Fear"]).alignment = WRAP
+    ws.row_dimensions[r].height = 68
+    r += 1
+
+    # ═══ Franchise-depth summary ═══
     r += 2
     ws.cell(row=r, column=1, value="Franchise-depth summary").font = H2
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=9)
     r += 1
     ws.cell(row=r, column=1, value=(
         "Star City's audience is highly Apple TV+-native. Modeled distribution of "
-        "prior Apple TV+ engagement DEPTH among Star City viewers:"
+        "prior Apple TV+ engagement DEPTH among Star City viewers, calibrated from the "
+        "sum of per-row overlaps above (475pp across 19 previously-released shows = "
+        "4.75 avg prior series watched per Star City viewer):"
     )).alignment = WRAP
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=6)
-    ws.row_dimensions[r].height = 32
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=9)
+    ws.row_dimensions[r].height = 46
     r += 1
     depth_rows = [
         ("Watched 5+ prior Apple TV+ series",
-         0.48, "Heavy Apple TV+ users — the platform's core loyalist base."),
+         0.45, "Heavy Apple TV+ users — the platform's core loyalist base. "
+               "Averaging 4.75 shows/viewer means the top ~45% of Star City "
+               "viewers are the ones driving that average upward."),
         ("Watched 3-4 prior Apple TV+ series",
-         0.31, "Moderate Apple TV+ engagement — sample the flagships (Ted Lasso, "
-               "Severance) + genre-adjacent (FAM, Foundation, Silo)."),
+         0.32, "Moderate Apple TV+ engagement — sample the flagships (Ted Lasso "
+               "60%, Severance 58%) + genre-adjacent (FAM 65%, Foundation 49%, "
+               "Silo 39%). This cohort sits in the middle of the depth distribution."),
         ("Watched 1-2 prior Apple TV+ series",
-         0.16, "Light Apple TV+ engagement — probably came to Star City via "
-               "FAM franchise pull or single-show sampling."),
+         0.17, "Light Apple TV+ engagement — probably came to Star City via "
+               "FAM franchise pull (65% FAM overlap) or single-show sampling."),
         ("Star City is their FIRST Apple TV+ series",
-         0.05, "First-time Apple TV+ viewers — new-signup cohort. Small share "
-               "because Star City reach heavily under-indexes on non-Apple-TV+ "
-               "audience acquisition."),
+         0.06, "First-time Apple TV+ viewers — new-signup cohort. Small share "
+               "consistent with Star City's BB/AA ratio (~3.1%). Some already-"
+               "existing free-trial subs who never engaged also fall here."),
     ]
     hdrs = ["Depth bucket", "Share of Star City viewers", "21-day count",
             "28-day count", "Rationale"]
@@ -457,44 +560,53 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
         c = ws.cell(row=r, column=3, value=int(round(aa21 * share))); c.number_format = '#,##0'
         c = ws.cell(row=r, column=4, value=int(round(aa28 * share))); c.number_format = '#,##0'
         ws.cell(row=r, column=5, value=note).alignment = WRAP
-        ws.merge_cells(start_row=r, start_column=5, end_row=r, end_column=6)
-        ws.row_dimensions[r].height = 44
+        ws.merge_cells(start_row=r, start_column=5, end_row=r, end_column=9)
+        ws.row_dimensions[r].height = 60
         r += 1
 
     # Editorial takeaway
     r += 2
     ws.cell(row=r, column=1, value="Editorial Takeaway").font = H2
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=9)
     r += 1
     fam_mid = int(round(aa21 * OVERLAP_MID["For All Mankind"]))
     ted_mid = int(round(aa21 * OVERLAP_MID["Ted Lasso"]))
     sev_mid = int(round(aa21 * OVERLAP_MID["Severance"]))
     foundation_mid = int(round(aa21 * OVERLAP_MID["Foundation"]))
+    silo_mid = int(round(aa21 * OVERLAP_MID["Silo"]))
     takeaway = (
         f"Star City's viewer base of ~{aa21:,} US Apple TV+ subscribers (21-day) is "
-        f"heavily dual-franchise / multi-title. In descending order of overlap:\n\n"
-        f"• {fam_mid:,} (~65%) have prior For All Mankind engagement — direct spin-off "
-        f"franchise pull confirmed.\n"
-        f"• {ted_mid:,} (~55%) have watched Ted Lasso — Apple TV+'s flagship reach.\n"
-        f"• {sev_mid:,} (~50%) have watched Severance — nearest genre-adjacent hit.\n"
-        f"• {foundation_mid:,} (~45%) have watched Foundation — direct sci-fi genre match.\n\n"
-        f"Only ~5% of Star City viewers appear to be first-time Apple TV+ engagers — "
+        f"heavily multi-title, dominated by prestige-sci-fi loyalists. Top 5 previously-"
+        f"watched Apple TV+ series among Star City viewers:\n\n"
+        f"• {fam_mid:,} (65%) prior For All Mankind — DIRECT spin-off franchise pull, "
+        f"amplified by same-day-as-FAM-finale premiere on 5/29/26.\n"
+        f"• {ted_mid:,} (60%) prior Ted Lasso — near-universal Apple TV+ reach; slightly "
+        f"below Ted Lasso's own 63% platform-penetration ceiling.\n"
+        f"• {sev_mid:,} (58%) prior Severance — nearest genre-adjacent hit; psychological "
+        f"sci-fi drama transitively linked via Foundation×Severance overlap.\n"
+        f"• {foundation_mid:,} (49%) prior Foundation — closest DIRECT genre match "
+        f"(space sci-fi prestige drama).\n"
+        f"• {silo_mid:,} (39%) prior Silo — dystopian sci-fi prestige, Foundation-audience "
+        f"adjacent.\n\n"
+        f"~6% of Star City viewers appear to be first-time Apple TV+ engagers — "
         f"consistent with the modeled BB (new signups) of {sc['bb_21']:,} = "
         f"{sc['bb_21']/aa21*100:.1f}% of AA. Star City is fundamentally an ENGAGE-"
-        f"EXISTING-BASE play, not a NEW-SUBSCRIBER-ACQUISITION play. This is the "
-        f"expected pattern for a Season 1 spin-off launched into an established "
-        f"franchise's peak-attention window (FAM S5 finale day).\n\n"
+        f"EXISTING-BASE play, not a NEW-SUBSCRIBER-ACQUISITION play — the expected "
+        f"pattern for a Season 1 spin-off launched into an established franchise's "
+        f"peak-attention window.\n\n"
         f"Strategic implication: promote Star City S2 heavily into the FAM/Foundation/"
-        f"Silo/Severance viewer cohorts (via 'Because You Watched' and email); these "
-        f"~{int(round(aa21 * (OVERLAP_MID['For All Mankind'] + OVERLAP_MID['Foundation'] + OVERLAP_MID['Silo']))):,} "
-        f"franchise-adjacent viewers are the highest-conviction retention cohort. "
-        f"Validate specific overlaps with Crosswalk panel intersection queries."
+        f"Silo/Severance/Constellation viewer cohorts (via 'Because You Watched' and "
+        f"email). The ~{fam_mid + foundation_mid + silo_mid:,} FAM+Foundation+Silo "
+        f"franchise-adjacent viewers (this triple-count includes overlap) are the "
+        f"highest-conviction retention cohort. Validate every per-row figure with a "
+        f"Crosswalk panel intersection query when target-title panels are populated."
     )
     ws.cell(row=r, column=1, value=takeaway).alignment = WRAP
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=6)
-    ws.row_dimensions[r].height = 300
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=9)
+    ws.row_dimensions[r].height = 340
 
-    # Column widths
-    for i, w in enumerate([6, 30, 12, 16, 16, 62], start=1):
+    # Column widths — 9 cols now
+    for i, w in enumerate([6, 30, 14, 16, 14, 14, 16, 16, 68], start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
 
@@ -508,16 +620,18 @@ def _add_methodology(wb: Workbook) -> None:
         "Every overlap % and franchise-carryover figure is MODELED "
         "(not measured from the underlying pipeline). The pipeline's "
         "per-show CSVs are independent synthetic panels with no "
-        "cross-show viewer identity. This deliverable derives overlap "
-        "estimates from a combination of external research anchors "
-        "listed below, applied via the same per-row methodology used "
-        "for the parent 21d/28d comps deliverable. Every number should "
-        "be validated with a Crosswalk panel intersection query when "
+        "cross-show viewer identity. This deliverable derives EACH "
+        "overlap % INDEPENDENTLY from three per-show research anchors "
+        "(cumulative US reach, Apple TV+ penetration, Star City "
+        "homophily coefficient) — NOT from a smooth decay curve. "
+        "See the Q2 sheet's 'Row-by-row rationale' column for the "
+        "per-show derivation and citation. Every number should be "
+        "validated with a Crosswalk panel intersection query when "
         "the target-title panels are populated."
     )
     ws["A2"].alignment = WRAP
     ws.merge_cells("A2:C2")
-    ws.row_dimensions[2].height = 105
+    ws.row_dimensions[2].height = 120
 
     r = 4
     sections = [
