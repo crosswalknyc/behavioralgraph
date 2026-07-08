@@ -1338,13 +1338,27 @@ def _fetch_trending_headlines_and_sources(keywords: Optional[list[str]]
 # ============================================================================
 # Card 4: Trending people
 # ============================================================================
-# Simple proper-noun extractor tuned for headlines. Keeps runs of two-plus
-# capitalized tokens (first + last name style). Skips a stopword list of
-# common capitalized non-names that show up at the start of headlines.
+# Proper-noun extractor tuned for headlines, with anti-false-positive
+# filters so events / teams / tournaments / media titles don't get
+# counted as people.
+#
+# Rules (a captured Title Case run is REJECTED if ANY of these fire):
+#   1. Any single token is in _STOPWORDS_UC (nationalities, days, months,
+#      generic headline noise). Never appears in a real person's name.
+#   2. Any single token is in _NON_PERSON_TOKENS (event/team/tournament
+#      words like "Cup", "Bowl", "Derby", "Aces", "Cowboys",
+#      "Wimbledon", "Quarterfinals", "Bracket", "Prediction", ...).
+#   3. The whole normalized phrase is in _NON_PERSON_PHRASES (curated
+#      multi-word patterns that pass token checks but aren't people:
+#      "Home Run", "Wall Street", "Supreme Court", ...).
 _STOPWORDS_UC = {
     'The', 'This', 'That', 'These', 'Those', 'Their', 'These', 'His', 'Her',
     'US', 'USA', 'UK', 'EU', 'UN', 'NATO', 'NASA', 'FBI', 'CIA', 'SEC', 'IRS',
-    'North', 'South', 'East', 'West', 'New', 'Old', 'Live', 'Breaking', 'Watch',
+    'Live', 'Breaking', 'Watch',
+    # NOTE: 'North', 'South', 'East', 'West', 'New', 'Old' intentionally
+    # NOT blocked as tokens - they're valid name components (Kanye West,
+    # Adam West, Simon East, Oliver North, Cindi Old, etc.). The
+    # _NON_PERSON_PHRASES check handles "New York", "Los Angeles", etc.
     'Video', 'Photos', 'Report', 'Update', 'Exclusive', 'Opinion', 'Editorial',
     'Analysis', 'Explainer', 'Fact', 'Check', 'Guide', 'Column', 'Podcast',
     'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
@@ -1352,68 +1366,278 @@ _STOPWORDS_UC = {
     'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
     'America', 'American', 'Americans', 'China', 'Chinese', 'Russia', 'Russian',
     'Israel', 'Israeli', 'Ukraine', 'Ukrainian', 'Iran', 'Iranian',
-    'Trump', 'Biden', 'Harris',
+    'Trump', 'Biden',
     'Republicans', 'Democrats', 'Republican', 'Democrat',
-    'Congress', 'Senate', 'House', 'White', 'House', 'Court', 'Supreme',
-    'Wall', 'Street', 'Main', 'Street',
+    'Congress', 'Senate',
+    # NOTE: 'White', 'West', 'House', 'Court', 'Supreme', 'Wall',
+    # 'Street', 'Main', 'North', 'South', 'East', 'Harris' intentionally
+    # NOT blocked here because they're common surname components
+    # (Betty White, Kanye West, Kamala Harris, Adam West, ...). The
+    # _NON_PERSON_PHRASES check catches "White House", "Wall Street",
+    # "Supreme Court", "Main Street" as full phrases instead.
+}
+
+# Tokens that appear in events / tournaments / teams / media titles and
+# NEVER appear as a component of a real person's name. If any token in
+# a captured Title Case run is in this set, we reject the run.
+_NON_PERSON_TOKENS = {
+    # sports events / tournaments / rounds
+    'Cup', 'Bowl', 'Derby', 'Bracket', 'Brackets', 'Series', 'League',
+    'Championship', 'Championships', 'Tournament', 'Tournaments',
+    'Semifinal', 'Semifinals', 'Quarterfinal', 'Quarterfinals',
+    'Finals', 'Playoff', 'Playoffs', 'Marathon', 'Master', 'Masters',
+    'Slam', 'Preseason', 'Postseason', 'All-Star', 'Allstar',
+    'Draft', 'Combine',
+    # major events by proper name (never a person's first/last name)
+    'Wimbledon', 'Olympics', 'Olympiad', 'Paralympics', 'Coachella',
+    'Sundance', 'Emmys', 'Oscars', 'Grammys',
+    # TV / media descriptors
+    'Season', 'Episode', 'Trailer', 'Premiere', 'Finale', 'Recap',
+    'Preview', 'Highlights', 'Prediction', 'Predictions', 'Odds',
+    'Rankings', 'Roundup', 'Standings', 'Boxscore', 'Scorecard',
+    # journalism descriptors
+    'Report', 'Update', 'Analysis', 'Editorial', 'Column', 'Podcast',
+    'Interview', 'Exclusive', 'Breaking', 'Newsletter', 'Bulletin',
+    # descriptors that never appear in a person's name
+    'Late', 'Early', 'Best', 'Top', 'Latest', 'First', 'Live', 'Real',
+    'Fake', 'Full', 'Total', 'Final', 'Ultimate', 'Home', 'Away',
+    'Home-Run', 'Homerun',
+    # match/game units
+    'Round', 'Match', 'Matchup', 'Matchups', 'Game', 'Games', 'Ranked',
+    # common title-case verbs / function words that show up in headlines
+    # when a headline uses Title Case ("Matchups Are Set", "Wins Big",
+    # "Says Trade Off"). These NEVER form part of a real person's name.
+    'Are', 'Is', 'Was', 'Were', 'Will', 'Would', 'Could', 'Should',
+    'Been', 'Have', 'Had', 'Has', 'May', 'Might', 'Must', 'Set',
+    'Ends', 'Wins', 'Loses', 'Sets', 'Beats', 'Falls', 'Rises',
+    'Says', 'Said', 'Reveals', 'Reports', 'Announced', 'Announces',
+    'Backs', 'Blasts', 'Brings', 'Calls', 'Confirms', 'Denies',
+    'Faces', 'Files', 'Finds', 'Gets', 'Hits', 'Joins', 'Leads',
+    'Leaves', 'Loses', 'Meets', 'Names', 'Opens', 'Picks', 'Plans',
+    'Plays', 'Posts', 'Reaches', 'Rejects', 'Returns', 'Ruled',
+    'Rules', 'Sees', 'Sells', 'Sends', 'Shares', 'Shows', 'Signs',
+    'Sits', 'Speaks', 'Sparks', 'Stops', 'Suspends', 'Takes',
+    'Talks', 'Tells', 'Tops', 'Trades', 'Turns', 'Warns', 'Wants',
+    'Reveal', 'Reveals', 'Reveals',
+    # MLB teams
+    'Yankees', 'Dodgers', 'Mets', 'Braves', 'Cubs', 'Marlins',
+    'Guardians', 'Nationals', 'Orioles', 'Athletics', 'Pirates',
+    'Cardinals', 'Padres', 'Phillies', 'Astros', 'Brewers',
+    'Diamondbacks', 'Rangers', 'Rays', 'Twins', 'Angels', 'Royals',
+    'Reds', 'Sox', 'Giants', 'Mariners',
+    # NBA / WNBA teams
+    'Warriors', 'Lakers', 'Celtics', 'Bulls', 'Bucks', 'Knicks',
+    'Clippers', 'Mavericks', 'Nuggets', 'Rockets', 'Timberwolves',
+    'Pistons', 'Cavaliers', 'Raptors', 'Grizzlies', 'Pelicans',
+    'Suns', 'Blazers', 'Spurs', 'Magic', 'Heat', 'Hawks', 'Sixers',
+    '76ers', 'Trail', 'Sparks', 'Storm', 'Aces', 'Liberty', 'Sun',
+    'Mercury', 'Sky', 'Mystics', 'Dream', 'Wings', 'Fever',
+    # NFL teams
+    'Chiefs', 'Patriots', 'Bills', 'Dolphins', 'Jets', 'Ravens',
+    'Bengals', 'Browns', 'Steelers', 'Texans', 'Colts', 'Jaguars',
+    'Titans', 'Broncos', 'Raiders', 'Chargers', 'Falcons', 'Panthers',
+    'Saints', 'Vikings', 'Packers', 'Lions', 'Bears', 'Buccaneers',
+    'Rams', '49ers', 'Seahawks', 'Cowboys', 'Eagles', 'Giants',
+    'Commanders',
+    # NHL teams
+    'Canadiens', 'Canucks', 'Oilers', 'Penguins', 'Flyers', 'Bruins',
+    'Blackhawks', 'Sharks', 'Ducks', 'Coyotes', 'Predators', 'Blues',
+    'Wild', 'Avalanche', 'Stars', 'Hurricanes', 'Panthers',
+    'Lightning', 'Devils', 'Islanders', 'Capitals', 'Senators',
+    'Maple', 'Leafs',
+    # college mascots that show up in sports headlines
+    'Wolverines', 'Buckeyes', 'Sooners', 'Longhorns', 'Aggies',
+    'Volunteers', 'Bulldogs', 'Gators', 'Seminoles', 'Tar',
+    'Heels', 'Blue', 'Devils', 'Wildcats', 'Cardinals', 'Cavaliers',
+    'Hokies', 'Hurricanes', 'Wolfpack', 'Tigers', 'Bulldogs',
+    'Ducks', 'Trojans', 'Bruins', 'Huskies', 'Cougars',
+    # cities whose Title Case form is almost always a team name
+    'Vegas',
+    # music / entertainment brand tokens
+    'BTS', 'BLACKPINK', 'Grammys', 'Coachella',
+}
+
+# Curated multi-word phrases that pass the token check but aren't
+# people. Normalized lowercase, hyphen -> space, whitespace collapsed.
+_NON_PERSON_PHRASES = {
+    'world cup', 'super bowl', 'stanley cup', 'home run',
+    'all star', 'all stars', 'grand slam', 'champions league',
+    'premier league', 'la liga', 'serie a', 'ryder cup',
+    'us open', 'french open', 'australian open', 'masters tournament',
+    'formula 1', 'formula one', 'nascar cup',
+    'wall street', 'main street', 'white house', 'oval office',
+    'supreme court', 'united states', 'united nations',
+    'new york', 'los angeles', 'san francisco', 'las vegas',
+    'silicon valley', 'wall street',
+    # common headline stock phrases
+    'trade deadline', 'free agency', 'training camp', 'summer league',
+    'preseason game', 'playoff run',
+    # team-name color-word fragments (surface only when the "Sox"/"Jays"
+    # suffix has already been trimmed off): "Boston Red" from "Boston
+    # Red Sox", "Chicago White" from "Chicago White Sox", etc.
+    'boston red', 'chicago white', 'toronto blue',
+    # venues that show up as Title Case runs in sports headlines
+    'madison square garden', 'yankee stadium', 'fenway park',
+    'wrigley field', 'dodger stadium', 'staples center',
+    'crypto arena', 'chase center', 'sofi stadium',
+    'radio city', 'radio city music hall', 'kia forum',
+    # geographic proper-noun phrases that shouldn't count as people
+    'new york city', 'los angeles', 'san francisco', 'las vegas',
+    'silicon valley', 'south beach', 'south park', 'new jersey',
+    'new mexico', 'new orleans', 'new hampshire',
+    'north carolina', 'south carolina', 'north dakota',
+    'south dakota', 'west virginia', 'east coast', 'west coast',
+    # media / show titles that repeat in headlines
+    'saturday night', 'saturday night live', 'sunday night',
+    'monday night', 'thursday night',
 }
 
 _NAME_RE = re.compile(
-    r'\b([A-Z][a-z]+(?:[- ][A-Z][a-z]+){1,3})\b'
+    # 2-4 capitalized-word runs. Each word starts with a capital letter
+    # followed by AT LEAST ONE lowercase letter (so all-caps abbrevs like
+    # WNBA / NBA / NFL / MLB / MLS / NHL / NCAA / UFC / PGA / LPGA don't
+    # get captured as a name token), then any mix of letters + apostrophe
+    # + hyphen. Allows single or multi-word runs joined by space.
+    r"\b([A-Z][a-z][A-Za-z'\-]*(?: [A-Z][a-z][A-Za-z'\-]*){1,3})\b"
 )
 
 
 def _extract_person_names(text: str) -> list[str]:
+    """Extract likely person names from a headline / query / caption.
+
+    Applies four cascading filters:
+      1. Reject if any token is in _STOPWORDS_UC (generic headline noise)
+      2. Reject if any token is in _NON_PERSON_TOKENS (event/team/media)
+      3. Reject if the normalized full phrase is in _NON_PERSON_PHRASES
+      4. Trim trailing possessive tokens (e.g. "Mets' Carson Benge" ->
+         "Carson Benge") so team names on the left don't inflate the
+         captured span.
+    """
     if not text:
         return []
-    hits = []
+    hits: list[str] = []
     for m in _NAME_RE.finditer(text):
         name = m.group(1).strip()
-        parts = re.split(r'[- ]', name)
-        if any(p in _STOPWORDS_UC for p in parts):
-            continue
+        parts = [p for p in name.split(' ') if p]
+        # Trim tokens from either end that are clearly non-person (team,
+        # league, tournament, media word). This handles patterns like
+        # "Mets' Carson Benge" -> "Carson Benge" and "Geno Auriemma WNBA"
+        # -> "Geno Auriemma". Middle-of-run reject is left to the whole-
+        # phrase check below.
+        def _is_bad_token(tok: str) -> bool:
+            stripped = tok.rstrip("'s").rstrip("'")
+            return (stripped in _STOPWORDS_UC
+                    or stripped in _NON_PERSON_TOKENS
+                    or tok in _STOPWORDS_UC
+                    or tok in _NON_PERSON_TOKENS)
+        while parts and _is_bad_token(parts[0]):
+            parts = parts[1:]
+        while parts and _is_bad_token(parts[-1]):
+            parts = parts[:-1]
         if len(parts) < 2:
             continue
-        hits.append(name)
+        # After trim, any bad token INSIDE the run (rare, but possible
+        # when a team name sits between two people names) is a full
+        # reject: the run isn't a single person's name.
+        if any(_is_bad_token(p) for p in parts):
+            continue
+        # Additional hyphen-split token check: catches "All-Star",
+        # "Home-Run" as single tokens that would slip through the
+        # space-only split above.
+        hyphen_parts = re.split(r'[- ]', ' '.join(parts))
+        if any(hp in _STOPWORDS_UC or hp in _NON_PERSON_TOKENS
+               for hp in hyphen_parts):
+            continue
+        clean = ' '.join(parts)
+        normalized = re.sub(r'[-_]+', ' ', clean).strip().lower()
+        normalized = re.sub(r'\s+', ' ', normalized)
+        if normalized in _NON_PERSON_PHRASES:
+            continue
+        hits.append(clean)
     return hits
 
 
 def _fetch_trending_people(headlines: list[dict],
                             search_terms: list[dict],
-                            lookback_days: int) -> list[dict]:
-    """Mine trending people from the assembled headlines + search terms.
+                            lookback_days: int,
+                            articles_by_source: Optional[list[dict]] = None,
+                            social_trending: Optional[dict] = None) -> list[dict]:
+    """Mine trending people from headlines + searches + news articles + social.
 
-    Names weighted by mentions across sources + search-trend score if the
-    name (or one of its tokens) also shows up as a trending term. Returns
-    the top 20.
+    Every source contributes to a shared mention counter, weighted so
+    that a name appearing across DIFFERENT source types (news + search +
+    social) ranks above a name that only spikes in one silo. Extra
+    filters in `_extract_person_names` keep events / teams / tournaments
+    from getting counted as people.
+
+    Sources (all optional except headlines + search_terms):
+      - headlines: trending news headlines (weight 1)
+      - search_terms: Google Trends queries + related snippets (weight 2)
+      - articles_by_source: full article-by-outlet grid (weight 1)
+      - social_trending: Reddit/X/YouTube/TikTok/Instagram items (weight 2)
     """
-    corpus = []
-    for h in headlines:
-        corpus.append(('headline', h.get('title', ''), h.get('source', ''), h.get('url', '')))
-    for s in search_terms:
-        corpus.append(('search',   s.get('term', ''),  '',                    ''))
+    corpus: list[tuple[str, str, str, str]] = []
+    for h in (headlines or []):
+        corpus.append(('headline', h.get('title', ''),
+                        h.get('source', ''), h.get('url', '')))
+    for s in (search_terms or []):
+        corpus.append(('search', s.get('term', ''), '', ''))
         for rel in (s.get('related') or []):
             corpus.append(('search', rel, '', ''))
+    for src in (articles_by_source or []):
+        source_name = src.get('source', '') or ''
+        for art in (src.get('articles') or []):
+            corpus.append(('article', art.get('title', '') or '',
+                            source_name, art.get('url', '') or ''))
+    if social_trending:
+        for slug, block in social_trending.items():
+            if not isinstance(block, dict):
+                continue
+            label = block.get('label', slug) or slug
+            for it in (block.get('items') or []):
+                if not isinstance(it, dict):
+                    continue
+                for field in ('title', 'description', 'caption'):
+                    text_val = it.get(field) or ''
+                    if text_val:
+                        corpus.append(('social', text_val, label,
+                                        it.get('url', '') or ''))
 
     counts: Counter = Counter()
+    source_diversity: dict[str, set[str]] = defaultdict(set)
     contexts: dict[str, list[str]] = defaultdict(list)
     for kind, text, source, url in corpus:
         for name in _extract_person_names(text):
-            counts[name] += (2 if kind == 'search' else 1)
-            snippet = text.strip()
+            if kind == 'search' or kind == 'social':
+                counts[name] += 2
+            else:
+                counts[name] += 1
+            source_diversity[name].add(kind)
+            snippet = (text or '').strip()
             if snippet and len(contexts[name]) < 3:
                 contexts[name].append(snippet[:140])
 
-    people = []
-    for name, cnt in counts.most_common(30):
+    # Cross-source diversity bonus: names that show up across multiple
+    # source types (news + search + social) get a lift so they beat
+    # single-silo spikes.
+    for name in list(counts.keys()):
+        kinds = source_diversity.get(name, set())
+        if len(kinds) >= 3:
+            counts[name] += 3
+        elif len(kinds) == 2:
+            counts[name] += 1
+
+    people: list[dict] = []
+    for name, cnt in counts.most_common(80):
         if cnt < 2:
             continue
         people.append({
             'name':      name,
             'mentions':  cnt,
             'context':   contexts.get(name, [])[:3],
+            'sources':   sorted(source_diversity.get(name, [])),
         })
-        if len(people) >= 20:
+        if len(people) >= 40:
             break
 
     if people:
@@ -1860,7 +2084,13 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     movers             = results.get('movers') or {'available': False,
                                                      'note': 'warming up'}
 
-    trending_people = _fetch_trending_people(headlines, trending_searches, lookback_days)
+    trending_people = _fetch_trending_people(
+        headlines,
+        trending_searches,
+        lookback_days,
+        articles_by_source=articles_by_source,
+        social_trending=social_trending,
+    )
 
     # Split the trending search pool into the 5-card layout the UI renders:
     # Overall (all rows, scrollable) + Entertainment / Retail / Politics /
