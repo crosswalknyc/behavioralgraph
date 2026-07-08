@@ -47,8 +47,9 @@ logger = logging.getLogger('local_residential_run')
 # The list of scraper module names to run. Add here when a new residential-
 # only scraper is added.
 RESIDENTIAL_SCRAPERS = [
-    ('disneyplus', 'Disney+'),
-    ('espnplus',   'ESPN+'),
+    ('disneyplus',    'Disney+'),
+    ('espnplus',      'ESPN+'),
+    ('max_streaming', 'Max'),
 ]
 
 
