@@ -205,6 +205,8 @@ NEWS_FEEDS = [
     ('CNN',             'https://rss.cnn.com/rss/cnn_topstories.rss',                    'cnn.com'),
     ('New York Times',  'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml',    'nytimes.com'),
     ('Fox News',        'https://feeds.foxnews.com/foxnews/latest',                     'foxnews.com'),
+    ('MSNBC',           'https://www.msnbc.com/feed/',                                  'msnbc.com'),
+    ('CNBC',            'https://www.cnbc.com/id/100003114/device/rss/rss.html',        'cnbc.com'),
     ('NBC News',        'https://feeds.nbcnews.com/nbcnews/public/news',                'nbcnews.com'),
     ('CBS News',        'https://www.cbsnews.com/latest/rss/main',                      'cbsnews.com'),
     ('ABC News',        'https://abcnews.go.com/abcnews/topstories',                    'abcnews.go.com'),
@@ -847,32 +849,141 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         'nintendo switch', 'meta quest', 'pixel phone', 'samsung galaxy',
         'sneaker', 'jeans',
     ],
+    # Conservative-coded political interest. Priority-ordered ABOVE
+    # `politics` so a Trump / MAGA / border-wall search peels off into
+    # this bucket instead of the neutral politics bucket. Terms are
+    # chosen to be diagnostic of right-leaning search interest, not
+    # just "any Republican appears in the story" - compound forms and
+    # named figures dominate for precision. Global leaders and neutral
+    # process terms (Congress, ballot, etc.) stay in `politics`.
+    'conservative': [
+        # Trump orbit
+        'donald trump', 'president trump', 'trump admin', 'trump administration',
+        'trump rally', 'trump indictment', 'trump verdict', 'melania',
+        'ivanka trump', 'don trump jr', 'donald trump jr', 'don jr',
+        'eric trump', 'barron trump', 'lara trump',
+        # MAGA / movement
+        'maga', 'make america great again', 'america first',
+        # right-lean figures
+        'jd vance', 'marjorie taylor greene', 'mtg', 'matt gaetz',
+        'lauren boebert', 'josh hawley', 'ted cruz', 'jim jordan',
+        'mike johnson', 'kevin mccarthy', 'ron desantis', 'desantis',
+        'vivek ramaswamy', 'ramaswamy', 'nikki haley', 'tulsi gabbard',
+        'rfk jr', 'robert kennedy jr', 'pete hegseth', 'kash patel',
+        'stephen miller', 'scott bessent', 'linda mcmahon', 'elise stefanik',
+        # right-lean media / commentators
+        'fox news', 'newsmax', 'oann', 'breitbart', 'daily wire',
+        'the federalist', 'national review', 'epoch times',
+        'tucker carlson', 'ben shapiro', 'charlie kirk', 'matt walsh',
+        'dan bongino', 'jack posobiec', 'laura ingraham', 'sean hannity',
+        'megyn kelly', 'candace owens',
+        # border / immigration (right framing)
+        'border wall', 'border crisis', 'mass deportation', 'deportation raid',
+        'ice raid', 'illegal alien', 'illegal aliens', 'illegals',
+        'sanctuary city', 'chain migration', 'secure the border',
+        'invasion at the border',
+        # guns / 2A
+        'second amendment', 'gun rights', 'concealed carry',
+        # culture war (right framing)
+        'parental rights', 'dont say gay', "don't say gay",
+        'critical race theory', 'crt', 'anti-woke', 'woke agenda',
+        'trans athlete', 'trans athletes', 'gender ideology',
+        "save women's sports", 'protect women',
+        # election integrity (right framing)
+        'voter id', 'ballot harvesting', 'dominion voting', 'stolen election',
+        'rigged election', 'election fraud', '2020 stolen',
+        # religious / values
+        'religious liberty', 'family values',
+        # Trump-legal / opposition figures (right POV = "witch hunt")
+        'mar-a-lago raid', 'hunter biden', 'biden crime family',
+        'laptop from hell', 'jan 6 hostages', 'january 6 hostages',
+        'alvin bragg', 'letitia james', 'jack smith prosecutor',
+        # right-lean economic framings
+        'tax cut', 'tax cuts', 'drill baby drill', 'energy dominance',
+    ],
+    # Progressive-coded political interest. Same rationale as
+    # `conservative` above - peels partisan-left searches off the
+    # neutral politics bucket. Democratic figures whose search
+    # audience skews activist / policy-focused live here; centrist
+    # institution names stay in `politics`.
+    'progressive': [
+        # Dem figures
+        'joe biden', 'president biden', 'kamala harris', 'kamala',
+        'obama', 'michelle obama', 'elizabeth warren',
+        'bernie sanders', 'bernie', 'aoc', 'ocasio-cortez',
+        'ilhan omar', 'rashida tlaib', 'jasmine crockett',
+        'pramila jayapal', 'ayanna pressley', 'ro khanna',
+        'katie porter', 'raphael warnock', 'jon ossoff',
+        'tim walz', 'gavin newsom', 'newsom', 'pete buttigieg',
+        'buttigieg', 'gretchen whitmer', 'whitmer', 'andy beshear',
+        'wes moore', 'hakeem jeffries', 'chuck schumer',
+        'nancy pelosi', 'zohran mamdani', 'mamdani',
+        # left-lean media
+        'msnbc', 'mother jones', 'the nation magazine', 'jacobin',
+        'democracy now', 'common dreams',
+        # climate
+        'climate crisis', 'climate change', 'green new deal',
+        'fossil fuel', 'big oil', 'oil pipeline', 'keystone xl',
+        'climate emergency', 'greenhouse gas',
+        # gun-control framing
+        'gun control', 'gun violence', 'assault weapons ban',
+        'red flag law', 'gun reform',
+        # reproductive rights (left framing)
+        'reproductive rights', 'abortion rights', 'roe v wade', 'roe',
+        'dobbs decision', 'abortion access', 'ivf access',
+        'contraception access', 'medication abortion',
+        # LGBTQ
+        'lgbtq', 'trans rights', 'trans healthcare',
+        'gender-affirming care', 'gender affirming care',
+        'pride month', 'marriage equality',
+        # healthcare
+        'medicare for all', 'universal healthcare', 'single payer',
+        'single-payer', 'health care for all',
+        # student debt
+        'student debt', 'student loan forgiveness',
+        'student loan cancellation',
+        # labor
+        'minimum wage', 'living wage', 'fight for 15', 'uaw strike',
+        'unionize',
+        # racial justice
+        'black lives matter', 'blm', 'george floyd', 'defund the police',
+        'criminal justice reform', 'mass incarceration', 'cash bail',
+        'systemic racism', 'reparations',
+        # immigrant rights (left framing)
+        'immigrant rights', 'family separation', 'dreamers',
+        'daca', 'path to citizenship',
+        # voting rights (left framing)
+        'voting rights', 'voter suppression', 'gerrymandering',
+        'john lewis voting rights',
+        # Gaza / Palestine (left framing)
+        'gaza ceasefire', 'free palestine', 'palestine solidarity',
+        'ceasefire now',
+        # economic populism (left framing)
+        'wealth tax', 'billionaire tax', 'tax the rich',
+    ],
     'politics': [
-        # figures (current + recent). Full names so we don't false-hit
-        # sports figures with common first names (Vance Joseph, Ryan Walz).
-        'donald trump', 'joe biden', 'kamala harris', 'obama', 'clinton',
-        'bernie sanders', 'aoc', 'ocasio-cortez', 'desantis', 'ramaswamy',
-        'nikki haley', 'jd vance', 'tim walz', 'gavin newsom',
-        'chuck schumer', 'mitch mcconnell', 'nancy pelosi', 'mike johnson',
-        'hakeem jeffries',
+        # Global leaders and neutral process terms only. Named
+        # partisan figures now peel off into `conservative` or
+        # `progressive` above; this bucket catches genuinely neutral
+        # or center political news (Congress procedure, foreign
+        # policy, generic election coverage) that doesn't lean either
+        # way.
+        'clinton',
         # global leaders
         'putin', 'xi jinping', 'netanyahu', 'zelensky', 'keir starmer',
         'emmanuel macron',
-        # process / concepts (avoid single-word 'president' which hits
-        # FIFA / league / union / bank presidents. Use compound forms.)
-        'president trump', 'president biden', 'president harris',
-        'vice president', 'presidential election', 'us president',
+        # process / institutions (bipartisan)
+        'presidential election', 'us president', 'vice president',
         'senator', 'congress', 'senate', 'house of representatives',
         'primary election', 'presidential debate', 'ballot', 'vote count',
         'polling place', 'gop', 'democrat', 'republican', 'campaign trail',
         'inauguration', 'impeach', 'indictment', 'guilty verdict',
-        # geopolitics
+        # geopolitics (neutral coverage)
         'ukraine war', 'israel', 'gaza', 'palestin', 'russia sanction',
         'iran nuclear', 'north korea', 'china tariff', 'nato',
-        # institutions / policy
+        # institutions
         'white house', 'pentagon', 'state department', 'supreme court',
-        'scotus', 'doj', 'fbi', 'immigration policy', 'border wall',
-        'abortion ban', 'roe v wade',
+        'scotus', 'doj', 'fbi', 'immigration policy',
     ],
     'finance': [
         # markets - compound forms only; single words like 'stock' and
@@ -912,6 +1023,9 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
 _SHORT_KEYWORD_TOKENS = {
     'gop', 'btc', 'gdp', 'cpi', 'ppi', 'ipo pricing',
     'aoc', 'doj', 'fbi', 'nato', 'scotus',
+    # partisan short tokens
+    'maga', 'mtg', 'blm', 'crt', 'dei', '2a',
+    'rfk jr', 'ccw',
 }
 
 
@@ -923,7 +1037,17 @@ _SHORT_KEYWORD_TOKENS = {
 # Trump has been a 'great leader'"; the Mets trade news mentions
 # "Bigger Sell-Off Coming?"). Entertainment gets highest priority so
 # those bleeds get correctly classified as sports/entertainment.
-_CATEGORY_PRIORITY = ('entertainment', 'retail', 'politics', 'finance')
+#
+# `conservative` and `progressive` sit BEFORE `politics` so partisan
+# searches (Trump / MAGA / AOC / roe / etc.) peel off into their
+# lean-specific buckets first, leaving `politics` as the neutral /
+# institutional / centrist catch-all (Congress procedure, foreign
+# policy, ballots, etc.).
+_CATEGORY_PRIORITY = (
+    'entertainment', 'retail',
+    'conservative', 'progressive', 'politics',
+    'finance',
+)
 
 
 def _categorize_search_term(term: str, related: Iterable[str]) -> list[str]:
@@ -985,6 +1109,8 @@ def _bucket_searches_by_category(rows: list[dict], per_bucket: int = 30
     buckets: dict[str, list[dict]] = {
         'entertainment': [],
         'retail':        [],
+        'conservative':  [],
+        'progressive':   [],
         'politics':      [],
         'finance':       [],
         'overall':       [],
@@ -2163,6 +2289,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'searches':      len(trending_searches),
             'entertainment': len(searches_by_category.get('entertainment') or []),
             'retail':        len(searches_by_category.get('retail')        or []),
+            'conservative':  len(searches_by_category.get('conservative')  or []),
+            'progressive':   len(searches_by_category.get('progressive')   or []),
             'politics':      len(searches_by_category.get('politics')      or []),
             'finance':       len(searches_by_category.get('finance')       or []),
             'headlines':     len(headlines),
