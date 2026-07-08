@@ -39940,25 +39940,37 @@
 
         // Payload shape:
         //   compute_view.cards.trending_searches                = flat list (up to 300)
-        //   compute_view.cards.trending_searches_by_category    = { entertainment, retail, politics, finance }
+        //   compute_view.cards.trending_searches_by_category    = {
+        //     entertainment, retail, politics, finance,
+        //     overall  <- uncategorized rows only (catch-all)
+        //   }
         // The renderer accepts either the flat list (legacy) or the
         // structured `{ all, by_category }` object we build in
-        // renderTrendsIQData below.
+        // renderTrendsIQData below. When `by_category.overall` is
+        // present we use it for the Overall card so we don't duplicate
+        // rows that already appear in a specific bucket.
         function renderTIQSearches(payload) {
-            var overall, byCat;
+            var overall, byCat, allPool;
             if (Array.isArray(payload)) {
                 overall = payload;
                 byCat = {};
+                allPool = payload;
             } else {
                 payload = payload || {};
-                overall = payload.all || [];
+                allPool = payload.all || [];
                 byCat = payload.by_category || {};
+                // Prefer the uncategorized-only overall bucket. Fall
+                // back to the flat pool if the backend hasn't populated
+                // it (older payloads / edge cases).
+                overall = (byCat.overall && byCat.overall.length)
+                          ? byCat.overall
+                          : allPool;
             }
-            if (!overall.length) {
+            if (!overall.length && !allPool.length) {
                 return '<div class="tiq-empty">No trending searches available for this filter yet.</div>';
             }
             var overallSub = 'Top ' + Math.min(overall.length, 300) +
-                             ' trending queries. Scroll to see the full pool.';
+                             ' uncategorized queries. Scroll to see the full pool.';
             var html = '<div class="tiq-searches-grid">' +
                 _tiqRenderSearchCard('\uD83D\uDD0E Overall',
                                        overallSub,

@@ -733,10 +733,13 @@ def _fetch_trending_searches(state: Optional[str], lookback_days: int) -> list[d
 # ============================================================================
 _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
     'entertainment': [
-        # streaming platforms + shows
-        'netflix', 'disney+', 'disney plus', 'hulu', 'hbo', 'max',
+        # streaming platforms + shows. "max" and "hbo" alone false-hit
+        # "iphone 18 pro max", "hbo documentary" etc. - require the
+        # compound form "hbo max" (or specific show names) so this
+        # bucket doesn't sweep in every product with "Max" in its SKU.
+        'netflix', 'disney+', 'disney plus', 'hulu', 'hbo max',
         'amazon prime video', 'paramount+', 'paramount plus', 'peacock',
-        'apple tv', 'youtube tv',
+        'apple tv', 'apple tv+', 'youtube tv',
         # tv / film
         'movie', 'film', 'trailer', 'series', 'season', 'episode',
         'premiere', 'sequel', 'reboot', 'oscar', 'emmy', 'grammy',
@@ -757,14 +760,28 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         'travis kelce', 'lebron', 'messi', 'ronaldo',
         # unambiguous major-sport team names (single-word teams like
         # "Chiefs" or "Patriots" are omitted because they hit non-sport
-        # meanings too often).
+        # meanings too often; "Giants", "Rangers", "Tigers" omitted for
+        # the same reason - too many non-sport hits).
         'warriors', 'lakers', 'celtics', 'clippers', 'knicks',
         'bulls', 'bucks', '76ers', 'sixers', 'mavericks', 'nuggets',
         'yankees', 'dodgers', 'red sox', 'astros', 'phillies',
         'padres', 'blue jays', 'brewers', 'diamondbacks', 'cardinals',
+        'mets', 'braves', 'cubs', 'marlins', 'guardians',
+        'nationals', 'orioles', 'rays', 'athletics', 'pirates',
         '49ers', 'seahawks', 'steelers', 'packers', 'ravens',
         'raiders', 'bengals', 'buccaneers',
         'canadiens', 'canucks', 'oilers', 'penguins', 'flyers',
+        # tennis / golf / global-sport surnames that trend regularly
+        'djokovic', 'nadal', 'federer', 'alcaraz', 'sinner',
+        'sabalenka', 'gauff', 'swiatek',
+        'tiger woods', 'rory mcilroy', 'scottie scheffler',
+        # F1
+        'formula 1', 'formula one', ' f1 ', 'verstappen', 'hamilton',
+        # tennis / motorsport / soccer meta terms
+        'wimbledon', 'us open', 'australian open', 'french open',
+        'grand slam', 'masters tournament', 'ryder cup',
+        'champions league', 'premier league', 'la liga', 'serie a',
+        'bundesliga',
         # league-generic phrases that scan as roster / game news
         'starting lineup', 'signed a contract', 'traded to', 'traded from',
         'head coach', 'assistant coach', 'general manager',
@@ -825,9 +842,14 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         'nasdaq', 'dow jones', 's&p 500', 'sp500',
         'stock market', 'stock price', 'stock jumps', 'stock drops',
         'shares climb', 'shares fall', 'shares surge', 'shares plunge',
-        'market rally', 'sell-off', 'sell off', 'ipo pricing',
-        'quarterly earnings', 'dividend', 'buyback', 'merger',
-        'acquisition',
+        'market rally', 'market sell-off', 'market sell off',
+        'stock sell-off', 'stock sell off', 'ipo pricing',
+        'quarterly earnings', 'dividend', 'buyback',
+        # "merger" and "acquisition" without qualifiers hit sports
+        # trade news ("Mets acquire reliever...") - tighten to compound
+        # M&A forms only.
+        'corporate merger', 'company acquisition', 'merger deal',
+        'acquisition deal',
         # macro
         'inflation', 'interest rate', 'rate cut', 'rate hike',
         'recession', 'gdp', 'unemployment rate', 'cpi', 'ppi', 'tariff',
@@ -854,51 +876,87 @@ _SHORT_KEYWORD_TOKENS = {
 }
 
 
-def _categorize_search_term(term: str, related: Iterable[str]) -> list[str]:
-    """Return the list of category slugs a search term matches.
+# Priority order for single-category assignment. A term that matches
+# multiple category keyword lists is placed in the first matching
+# category from this list. Rationale: sports and celebrity terms very
+# often bleed into political or financial headlines via their related
+# text (e.g. Gianni Infantino's related stories mention "President
+# Trump has been a 'great leader'"; the Mets trade news mentions
+# "Bigger Sell-Off Coming?"). Entertainment gets highest priority so
+# those bleeds get correctly classified as sports/entertainment.
+_CATEGORY_PRIORITY = ('entertainment', 'retail', 'politics', 'finance')
 
-    Empty list = uncategorized (will only appear in Overall). A term
-    can match multiple categories; the calling code decides whether to
-    show a term in more than one column.
+
+def _categorize_search_term(term: str, related: Iterable[str]) -> list[str]:
+    """Return the single-category assignment for a search term as a
+    one-element list (kept as a list for API stability with previous
+    callers that iterated over `cats`).
+
+    Empty list = uncategorized. The term appears ONLY in the Overall
+    card (the catch-all) - it does not appear in any specific bucket.
+
+    Categorization is done term-first (strongest signal), then falls
+    back to related-text (weaker signal). Once a category matches at
+    ANY priority level, we return immediately without checking lower-
+    priority categories. This prevents multi-bucket duplication and
+    lets a "fifa" hit in entertainment beat a "president trump" hit
+    that appears in the same related-text blob.
     """
-    hay_parts = [term or '']
-    hay_parts.extend(list(related or []))
-    hay = ' \u2022 '.join(hay_parts).lower()
-    matched: list[str] = []
-    for cat, keywords in _SEARCH_CATEGORY_KEYWORDS.items():
-        for kw in keywords:
+    term_l = (term or '').lower()
+    related_l = [(r or '').lower() for r in (related or [])]
+
+    def _kw_matches(hay: str, kw_l: str) -> bool:
+        if kw_l in _SHORT_KEYWORD_TOKENS:
+            return re.search(r'\b' + re.escape(kw_l.strip()) + r'\b', hay) is not None
+        return kw_l in hay
+
+    # Pass 1: try to match against the TERM only. A term hit is a
+    # much stronger signal than a related-text hit ("gianni infantino"
+    # in the term is definitely a sports search; "president trump" in
+    # related text is just news context).
+    for cat in _CATEGORY_PRIORITY:
+        for kw in _SEARCH_CATEGORY_KEYWORDS.get(cat, []):
+            if _kw_matches(term_l, kw.lower()):
+                return [cat]
+
+    # Pass 2: fall back to related-text matching. Same priority order,
+    # so entertainment still wins over politics/finance when both
+    # match in the related blob.
+    for cat in _CATEGORY_PRIORITY:
+        for kw in _SEARCH_CATEGORY_KEYWORDS.get(cat, []):
             kw_l = kw.lower()
-            if kw_l in _SHORT_KEYWORD_TOKENS:
-                # Word-boundary match to avoid false positives.
-                if re.search(r'\b' + re.escape(kw_l.strip()) + r'\b', hay):
-                    matched.append(cat)
-                    break
-            else:
-                if kw_l in hay:
-                    matched.append(cat)
-                    break
-    return matched
+            if any(_kw_matches(r, kw_l) for r in related_l):
+                return [cat]
+
+    return []
 
 
 def _bucket_searches_by_category(rows: list[dict], per_bucket: int = 30
                                     ) -> dict[str, list[dict]]:
-    """Split trending searches into the four topical buckets.
+    """Split trending searches into the four topical buckets PLUS an
+    "overall" catch-all of uncategorized terms.
 
-    Rows arrive already sorted by score descending (from the fetch
-    path), so we just walk once, tag each row with its matching
-    categories, and append to the corresponding bucket while the
-    bucket is under its cap.
+    Rows arrive already sorted by score descending. Each term goes to
+    AT MOST one topical bucket (per `_categorize_search_term`). Terms
+    that don't match any category are appended to the "overall" bucket
+    instead - so Overall is a proper catch-all and doesn't duplicate
+    what's already visible in Entertainment / Retail / Politics /
+    Finance.
     """
     buckets: dict[str, list[dict]] = {
         'entertainment': [],
         'retail':        [],
         'politics':      [],
         'finance':       [],
+        'overall':       [],
     }
     for r in rows:
         cats = _categorize_search_term(r.get('term') or '', r.get('related') or [])
+        if not cats:
+            buckets['overall'].append(r)
+            continue
         for c in cats:
-            if c in buckets and len(buckets[c]) < per_bucket:
+            if c in buckets and c != 'overall' and len(buckets[c]) < per_bucket:
                 buckets[c].append(r)
     return buckets
 
