@@ -22206,10 +22206,12 @@
             #trendsIQView .tiq-search-scroll::-webkit-scrollbar { width: 6px; }
             #trendsIQView .tiq-search-scroll::-webkit-scrollbar-track { background: transparent; }
             #trendsIQView .tiq-search-scroll::-webkit-scrollbar-thumb { background-color: rgba(124,58,237,0.4); border-radius: 3px; }
-            /* Mover bucket scroll: top ~10 rows visible, rest accessed
-               by scroll inside the card. Same visual treatment as the
-               Overall trending searches card. */
-            #trendsIQView .tiq-mover-scroll { max-height: 620px; overflow-y: auto; padding-right: 0.25rem; margin-right: -0.25rem; scrollbar-width: thin; scrollbar-color: rgba(124,58,237,0.4) transparent; }
+            /* Mover bucket scroll: card body caps at the same visible
+               height as the Overall trending searches card so the two
+               end at the same y position and any overflow turns into
+               an in-card scroll. Every mover bucket wraps its rows in
+               this container regardless of row count. */
+            #trendsIQView .tiq-mover-scroll { max-height: 640px; overflow-y: auto; padding-right: 0.25rem; margin-right: -0.25rem; scrollbar-width: thin; scrollbar-color: rgba(124,58,237,0.4) transparent; }
             #trendsIQView .tiq-mover-scroll::-webkit-scrollbar { width: 6px; }
             #trendsIQView .tiq-mover-scroll::-webkit-scrollbar-track { background: transparent; }
             #trendsIQView .tiq-mover-scroll::-webkit-scrollbar-thumb { background-color: rgba(124,58,237,0.4); border-radius: 3px; }
@@ -39779,16 +39781,17 @@
                 body = '<div class="tiq-card-sub" style="opacity:0.7;padding:24px 4px;">' + _tiqEsc(emptyMsg) + '</div>';
             } else {
                 var rowsHtml = rows.map(_renderMoverRow).join('');
-                // Fit the top ~10 rows in the card's visible area; the
-                // rest are accessible by scrolling inside the card. If
-                // there are 10 or fewer rows the scroll container just
-                // sits at content height with no scrollbar. Above 10,
-                // the max-height kicks in and the scrollbar appears.
-                body = (rows.length > 10)
-                    ? '<div class="tiq-mover-scroll">' + rowsHtml + '</div>'
-                    : rowsHtml;
+                // Always wrap in the scroll container so the card body
+                // caps at the same visible height as the Overall
+                // trending searches card next to it - even with a small
+                // row count the scroll container just sits at content
+                // height (no scrollbar); above the cap, the scrollbar
+                // appears and the card stops growing. Prevents the
+                // "movers bucket is taller than the searches card"
+                // visual mismatch when each row is text-heavy.
+                body = '<div class="tiq-mover-scroll">' + rowsHtml + '</div>';
             }
-            return '<div class="tiq-card"><h4>' + title + '</h4>' +
+            return '<div class="tiq-card tiq-mover-bucket"><h4>' + title + '</h4>' +
                    '<div class="tiq-card-sub">' + _tiqEsc(subtitle) + '</div>' +
                    body +
                    '</div>';
