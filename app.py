@@ -12879,6 +12879,301 @@ def get_profiles_without_images():
         }), 500
 
 
+# =====================================================================================
+# Bulk backfill of missing profile images (Admin -> Profile Images tab)
+# -------------------------------------------------------------------------------------
+# Reuses the same resolver rules as scripts/backfill_profile_images.py:
+#   TALENT   -> IMDB headshot, then Wikipedia, then DuckDuckGo image
+#   CONTENT  -> IMDB title poster, then Wikipedia, then DuckDuckGo image
+#            (Adult Animation, cable, series, etc. hit the DuckDuckGo fallback)
+#   BRAND / PLATFORMS / SPORT / OTHER -> Wikipedia, DuckDuckGo image, Google favicon
+#
+# Runs in a background daemon thread so the HTTP request returns immediately.
+# Progress is tracked in `_bfi_status` and polled from the admin UI.
+# =====================================================================================
+
+_bfi_lock = threading.Lock()
+_bfi_status: dict = {
+    'running': False,
+    'started_at': None,
+    'finished_at': None,
+    'total': 0,
+    'processed': 0,
+    'ok': 0,
+    'skipped': 0,
+    'failed': 0,
+    'cancel_requested': False,
+    'current_profile': None,
+    'log_tail': [],
+    'started_by': None,
+    'error': None,
+}
+_BFI_LOG_TAIL_MAX = 40
+
+
+def _bfi_log(msg: str) -> None:
+    """Append a status line visible to the polling UI. Keeps only the last N."""
+    with _bfi_lock:
+        tail = _bfi_status['log_tail']
+        tail.append(msg)
+        if len(tail) > _BFI_LOG_TAIL_MAX:
+            del tail[: len(tail) - _BFI_LOG_TAIL_MAX]
+    try:
+        print(f"[bfi] {msg}")
+    except Exception:
+        pass
+
+
+def _bfi_run(started_by: str) -> None:
+    """Worker: iterate profiles missing images, resolve + upload one at a time.
+
+    Serial (single-threaded) on purpose:
+      * IMDB / Wikipedia both throttle aggressive concurrent lookups.
+      * Serial also means S3 image-cache writes don't collide with each other.
+      * The scripts/backfill_profile_images.py CLI can still be used for bigger
+        parallel batch runs from an admin box.
+    """
+    global profile_image_cache, profile_image_cache_dirty
+    try:
+        from image_backfill import (
+            master_category, normalize_search_name,
+            resolve_image_url, download_image,
+        )
+    except Exception as e:
+        with _bfi_lock:
+            _bfi_status['running'] = False
+            _bfi_status['error'] = f'import failed: {e}'
+            _bfi_status['finished_at'] = datetime.now().isoformat()
+        return
+
+    if not s3_client:
+        with _bfi_lock:
+            _bfi_status['running'] = False
+            _bfi_status['error'] = 'S3 client unavailable'
+            _bfi_status['finished_at'] = datetime.now().isoformat()
+        return
+
+    try:
+        load_profile_image_cache(force=True)
+        if not s3_cache.get('loaded'):
+            load_persisted_cache()
+
+        # Enumerate profiles the same way get_profiles_without_images does.
+        raw_profiles: list[dict] = []
+        files = s3_cache.get('files', []) or []
+        if not files:
+            for job in s3_cache.get('jobs', []) or []:
+                name = job.get('project_name') or job.get('brand') or job.get('job_id', '')
+                if name and '- Avid Fan' not in name:
+                    raw_profiles.append({'name': name, 'category': job.get('category', 'UNCATEGORIZED')})
+        else:
+            for f in files:
+                name = f.get('project_name', '')
+                if name and '- Avid Fan' not in name:
+                    raw_profiles.append({'name': name, 'category': f.get('category', 'UNCATEGORIZED')})
+
+        # Group cohort variants (e.g. "Netflix - Avid Fan 2025") under the base
+        # subject so we only look up "Netflix" once and every variant benefits.
+        groups: dict[str, dict] = {}
+        for p in raw_profiles:
+            canonical = normalize_search_name(p['name']) or p['name']
+            key = canonical.lower().strip()
+            cur = groups.get(key)
+            if cur is None or len(p['name']) < len(cur['storage_name']):
+                groups[key] = {
+                    'storage_name': p['name'] if p['name'].lower().strip() == key else canonical,
+                    'search_name': canonical,
+                    'category': p['category'],
+                    'variants': (cur['variants'] if cur else []) + [p['name']],
+                }
+            else:
+                cur['variants'].append(p['name'])
+
+        def has_custom(name: str) -> bool:
+            entry = profile_image_cache.get((name or '').lower().strip(), {})
+            return bool(entry.get('is_custom') and entry.get('image_url'))
+
+        eligible: list[dict] = []
+        for key, g in groups.items():
+            if has_custom(g['storage_name']) or any(has_custom(v) for v in g['variants']):
+                continue
+            eligible.append(g)
+
+        with _bfi_lock:
+            _bfi_status['total'] = len(eligible)
+            _bfi_status['processed'] = 0
+            _bfi_status['ok'] = 0
+            _bfi_status['skipped'] = 0
+            _bfi_status['failed'] = 0
+
+        _bfi_log(f'starting backfill: {len(eligible)} profiles need images')
+
+        if not eligible:
+            _bfi_log('nothing to do — every profile already has an image')
+            return
+
+        CHECKPOINT_EVERY = 10
+        pending_writes = 0
+
+        for idx, g in enumerate(eligible, 1):
+            with _bfi_lock:
+                if _bfi_status['cancel_requested']:
+                    _bfi_log('cancel requested — stopping')
+                    break
+                _bfi_status['current_profile'] = g['storage_name']
+
+            master = master_category(g['category'])
+            try:
+                img_url, source = resolve_image_url(g['search_name'], master)
+            except Exception as e:
+                img_url, source = None, f'error:{e}'
+
+            prefix = f"[{master}] {g['storage_name']}"
+
+            if not img_url:
+                with _bfi_lock:
+                    _bfi_status['skipped'] += 1
+                _bfi_log(f'{prefix} SKIPPED ({source})')
+            else:
+                downloaded = download_image(img_url)
+                if not downloaded:
+                    with _bfi_lock:
+                        _bfi_status['failed'] += 1
+                    _bfi_log(f'{prefix} DOWNLOAD-FAIL src={source}')
+                else:
+                    data, ext = downloaded
+                    content_type = 'image/jpeg' if ext == 'jpg' else f'image/{ext}'
+                    s3_key = f'profile-images/{uuid.uuid4().hex}.{ext}'
+                    try:
+                        s3_client.put_object(
+                            Bucket=S3_BUCKET,
+                            Key=s3_key,
+                            Body=data,
+                            ContentType=content_type,
+                        )
+                        cache_key = g['storage_name'].lower().strip()
+                        entry = {
+                            'image_url': f'/api/profile-image-file/{s3_key}',
+                            'title': g['storage_name'],
+                            'source': 'custom',
+                            'is_custom': True,
+                            'cached_at': datetime.now().isoformat(),
+                            'backfill_source': source,
+                            'backfill_origin': img_url,
+                        }
+                        profile_image_cache[cache_key] = entry
+                        profile_image_cache_dirty = True
+                        pending_writes += 1
+                        with _bfi_lock:
+                            _bfi_status['ok'] += 1
+                        _bfi_log(f'{prefix} OK src={source}')
+                    except Exception as e:
+                        with _bfi_lock:
+                            _bfi_status['failed'] += 1
+                        _bfi_log(f'{prefix} S3-UPLOAD-FAIL {e}')
+
+            with _bfi_lock:
+                _bfi_status['processed'] = idx
+
+            # Periodic checkpoint so partial progress survives worker restarts /
+            # premature cancels.
+            if pending_writes >= CHECKPOINT_EVERY:
+                try:
+                    save_profile_image_cache()
+                    _bfi_log(f'checkpoint saved after {idx} profiles')
+                except Exception as e:
+                    _bfi_log(f'checkpoint failed: {e}')
+                pending_writes = 0
+
+        # Final flush
+        if pending_writes:
+            try:
+                save_profile_image_cache()
+                _bfi_log('final image cache saved')
+            except Exception as e:
+                _bfi_log(f'final save failed: {e}')
+
+        with _bfi_lock:
+            done = _bfi_status['processed']
+            ok = _bfi_status['ok']
+            sk = _bfi_status['skipped']
+            fa = _bfi_status['failed']
+        _bfi_log(f'done: {ok} images added, {sk} skipped, {fa} failed (of {done})')
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        with _bfi_lock:
+            _bfi_status['error'] = str(e)
+        _bfi_log(f'FATAL: {e}')
+    finally:
+        with _bfi_lock:
+            _bfi_status['running'] = False
+            _bfi_status['finished_at'] = datetime.now().isoformat()
+            _bfi_status['current_profile'] = None
+
+
+@app.route('/api/admin/backfill-missing-images', methods=['POST'])
+@requires_admin
+def start_backfill_missing_images():
+    """Kick off the background backfill job for every profile missing an image.
+
+    Returns 200 with `{'started': True}` if a new job was started, or
+    `{'started': False, 'reason': 'already_running'}` if one is in progress.
+    """
+    global _bfi_status
+    with _bfi_lock:
+        if _bfi_status['running']:
+            return jsonify({
+                'success': True,
+                'started': False,
+                'reason': 'already_running',
+                'status': dict(_bfi_status),
+            })
+        # Reset state for a fresh run
+        _bfi_status = {
+            'running': True,
+            'started_at': datetime.now().isoformat(),
+            'finished_at': None,
+            'total': 0,
+            'processed': 0,
+            'ok': 0,
+            'skipped': 0,
+            'failed': 0,
+            'cancel_requested': False,
+            'current_profile': None,
+            'log_tail': [],
+            'started_by': session.get('username') or 'admin',
+            'error': None,
+        }
+    t = threading.Thread(
+        target=_bfi_run,
+        args=(_bfi_status['started_by'],),
+        daemon=True,
+        name='profile-image-backfill',
+    )
+    t.start()
+    return jsonify({'success': True, 'started': True, 'status': dict(_bfi_status)})
+
+
+@app.route('/api/admin/backfill-status', methods=['GET'])
+@requires_admin
+def get_backfill_status():
+    """Return a snapshot of the current backfill run's progress (or last run)."""
+    with _bfi_lock:
+        return jsonify({'success': True, 'status': dict(_bfi_status)})
+
+
+@app.route('/api/admin/backfill-cancel', methods=['POST'])
+@requires_admin
+def cancel_backfill_missing_images():
+    """Cooperative cancel — the worker checks this flag between profiles."""
+    with _bfi_lock:
+        if not _bfi_status['running']:
+            return jsonify({'success': True, 'cancelled': False, 'reason': 'not_running'})
+        _bfi_status['cancel_requested'] = True
+    return jsonify({'success': True, 'cancelled': True})
+
+
 @app.route('/api/share', methods=['POST'])
 @requires_auth
 def create_share_link():

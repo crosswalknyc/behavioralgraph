@@ -1221,10 +1221,32 @@
                     <div class="card-header">
                         <h2>🖼️ Profiles Missing Images</h2>
                         <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-small btn-primary" id="btnBackfillImages" onclick="startBackfillMissingImages()" title="Auto-populate every missing image: IMDB for talent, IMDB posters for shows/movies, Wikipedia/Google logos for brands, image search for anything else.">✨ Populate Missing Images</button>
                             <button class="btn btn-small btn-secondary" onclick="loadProfileImages()">↻ Refresh</button>
                         </div>
                     </div>
-                    
+
+                    <!-- Backfill progress panel (hidden until job starts) -->
+                    <div id="backfillPanel" style="display: none; margin: 0 0 1rem 0; padding: 0.85rem 1rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
+                            <div style="font-weight: 600; color: var(--text-primary);">
+                                <span id="backfillHeadline">Populating missing images…</span>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span id="backfillStats" style="font-size: 0.85rem; color: var(--text-secondary);">0 / 0</span>
+                                <button class="btn btn-small btn-secondary" id="btnBackfillCancel" onclick="cancelBackfillMissingImages()" style="display: none;">✕ Cancel</button>
+                            </div>
+                        </div>
+                        <div style="margin-top: 0.5rem; height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden;">
+                            <div id="backfillBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #7c5cff 0%, #4dd4ff 100%); transition: width 0.4s ease;"></div>
+                        </div>
+                        <div id="backfillCurrent" style="margin-top: 0.4rem; font-size: 0.8rem; color: var(--text-secondary); font-style: italic; min-height: 1em;"></div>
+                        <details style="margin-top: 0.5rem;">
+                            <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.8rem;">Show log</summary>
+                            <pre id="backfillLog" style="margin: 0.4rem 0 0 0; max-height: 160px; overflow-y: auto; font-size: 0.72rem; line-height: 1.35; background: rgba(0,0,0,0.35); color: #b7c3d6; padding: 0.5rem 0.6rem; border-radius: 6px; white-space: pre-wrap;"></pre>
+                        </details>
+                    </div>
+
                     <div class="content-filters">
                         <input type="text" id="imageSearch" class="content-search" placeholder="🔍 Search profiles..." onkeyup="filterImageProfiles()">
                         <select id="imageCategoryFilter" class="category-filter" onchange="filterImageProfiles()">
@@ -7793,6 +7815,146 @@
             // Use the existing profile image modal
             openProfileImageModal(profileName, '');
         }
+
+        // ============ BULK BACKFILL: POPULATE MISSING IMAGES ============
+        //
+        // Wires up the "✨ Populate Missing Images" button. Uses the same
+        // resolution rules as scripts/backfill_profile_images.py:
+        //   TALENT  -> IMDB headshot, then Wikipedia, then image search
+        //   CONTENT (shows/movies/adult animation) -> IMDB poster, then Wiki, then image search
+        //   BRAND / PLATFORMS / SPORT / OTHER -> Wikipedia logo, then image search, then Google favicon
+        //
+        // Backend runs in a background thread, we poll for progress every 2s.
+
+        let _bfiPollTimer = null;
+        let _bfiPrevRunning = false;
+
+        async function startBackfillMissingImages() {
+            const btn = document.getElementById('btnBackfillImages');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Starting…'; }
+            try {
+                const resp = await fetch('/api/admin/backfill-missing-images', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                const data = await resp.json();
+                if (!data || !data.success) {
+                    throw new Error((data && data.error) || 'Failed to start backfill');
+                }
+                if (data.started === false && data.reason === 'already_running') {
+                    // Fine — just attach to the running job.
+                }
+                showBackfillPanel();
+                startBackfillPolling();
+            } catch (e) {
+                alert('Could not start image backfill: ' + (e.message || e));
+                if (btn) { btn.disabled = false; btn.textContent = '✨ Populate Missing Images'; }
+            }
+        }
+
+        async function cancelBackfillMissingImages() {
+            const cbtn = document.getElementById('btnBackfillCancel');
+            if (cbtn) { cbtn.disabled = true; cbtn.textContent = '⏳ Cancelling…'; }
+            try {
+                await fetch('/api/admin/backfill-cancel', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                });
+            } catch (_) { /* best-effort */ }
+        }
+
+        function showBackfillPanel() {
+            const panel = document.getElementById('backfillPanel');
+            if (panel) panel.style.display = 'block';
+        }
+
+        function startBackfillPolling() {
+            if (_bfiPollTimer) return;
+            _bfiPollTimer = setInterval(pollBackfillStatus, 2000);
+            pollBackfillStatus();
+        }
+
+        function stopBackfillPolling() {
+            if (_bfiPollTimer) {
+                clearInterval(_bfiPollTimer);
+                _bfiPollTimer = null;
+            }
+        }
+
+        async function pollBackfillStatus() {
+            try {
+                const resp = await fetch('/api/admin/backfill-status', { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (!data || !data.success) return;
+                renderBackfillStatus(data.status || {});
+            } catch (_) {
+                // Silent — will retry on next tick.
+            }
+        }
+
+        function renderBackfillStatus(st) {
+            const btn = document.getElementById('btnBackfillImages');
+            const cancelBtn = document.getElementById('btnBackfillCancel');
+            const headline = document.getElementById('backfillHeadline');
+            const stats = document.getElementById('backfillStats');
+            const bar = document.getElementById('backfillBar');
+            const cur = document.getElementById('backfillCurrent');
+            const log = document.getElementById('backfillLog');
+
+            const total = st.total || 0;
+            const done = st.processed || 0;
+            const ok = st.ok || 0;
+            const skipped = st.skipped || 0;
+            const failed = st.failed || 0;
+            const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : (st.running ? 3 : 0);
+
+            if (bar) bar.style.width = pct + '%';
+            if (stats) stats.textContent = `${done} / ${total}  ·  ✅ ${ok}  ·  ⏭ ${skipped}  ·  ❌ ${failed}`;
+            if (cur) cur.textContent = st.current_profile ? `Now: ${st.current_profile}` : '';
+            if (log && Array.isArray(st.log_tail)) log.textContent = st.log_tail.join('\n');
+
+            if (st.running) {
+                if (headline) headline.textContent = '✨ Populating missing images…';
+                if (btn) { btn.disabled = true; btn.textContent = '⏳ Running…'; }
+                if (cancelBtn) cancelBtn.style.display = '';
+                _bfiPrevRunning = true;
+            } else {
+                if (headline) {
+                    if (st.error) {
+                        headline.textContent = '❌ Backfill failed';
+                    } else if (st.cancel_requested) {
+                        headline.textContent = '⚠️ Backfill cancelled';
+                    } else if (st.started_at) {
+                        headline.textContent = '✅ Backfill complete';
+                    } else {
+                        headline.textContent = 'Idle';
+                    }
+                }
+                if (btn) { btn.disabled = false; btn.textContent = '✨ Populate Missing Images'; }
+                if (cancelBtn) { cancelBtn.style.display = 'none'; cancelBtn.disabled = false; cancelBtn.textContent = '✕ Cancel'; }
+                // Auto-refresh the list once when a run finishes so new images appear.
+                if (_bfiPrevRunning) {
+                    _bfiPrevRunning = false;
+                    setTimeout(() => { try { loadProfileImages(); } catch (_) {} }, 400);
+                }
+                stopBackfillPolling();
+            }
+        }
+
+        // If a backfill is already in progress when the admin loads this tab
+        // (e.g. started in another tab or after a page reload), reattach.
+        document.addEventListener('DOMContentLoaded', function () {
+            fetch('/api/admin/backfill-status', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(d => {
+                    if (d && d.success && d.status && d.status.running) {
+                        showBackfillPanel();
+                        startBackfillPolling();
+                    }
+                })
+                .catch(() => { /* fine — user hasn't started one yet */ });
+        });
         
         async function removeProfileImage(encodedName) {
             const profileName = decodeURIComponent(encodedName);
