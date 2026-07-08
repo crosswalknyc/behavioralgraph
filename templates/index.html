@@ -109250,19 +109250,59 @@
          *  alone since the intent is ambiguous.
          *
          *  Mutates `bySubject` and `displayNames` directly. */
+        // 2026-07-08: DO NOT merge a stub into a target whose extra tokens
+        // are a REGIONAL/COUNTRY/LANGUAGE qualifier. Without this guard,
+        // brands like "Netflix" would silently fold into "Netflix UK" (the
+        // only group starting with "netflix "), making the base "Netflix"
+        // profile invisible in the sidebar. The list below covers the
+        // qualifier tokens we see across the S3 profile catalog; extend as
+        // new regional/variant conventions ship. Match is case-insensitive
+        // and applies to the FIRST word after the stub. Multi-token
+        // regions like "United States" or "New Zealand" fall through the
+        // first-word check because their leading token is caught here too.
+        const _REGION_QUALIFIER_TOKENS = new Set([
+            // ISO-ish country / region codes
+            'us','usa','uk','gb','eu','ca','can','mx','au','nz','de','fr','es','it',
+            'jp','kr','cn','in','br','ar','cl','co','pe','ve','pt','nl','be','ch',
+            'se','no','dk','fi','ie','za','ng','ke','eg','sa','ae','tr','il','ru',
+            'ua','pl','cz','gr','ro','hu','sk','at','th','vn','id','ph','my','sg',
+            'tw','hk',
+            // Full names
+            'america','american','americas','canada','canadian','mexico','mexican',
+            'europe','european','asia','asian','africa','african','latin','latino','latina',
+            'international','global','worldwide',
+            'britain','british','england','english','scotland','scottish','ireland','irish',
+            'france','french','germany','german','spain','spanish','italy','italian',
+            'japan','japanese','china','chinese','korea','korean','india','indian',
+            'brazil','brazilian','australia','australian',
+            // Language / demo qualifiers
+            'espanol','español','hispanic',
+            // Product/tier qualifiers we've seen mis-fire as stub extensions
+            'plus','premium','basic','standard','free','pro','max','mini','lite'
+        ]);
+        function _isRegionQualifierExtension(stub, targetKey) {
+            const extra = targetKey.slice(stub.length + 1); // drop "stub "
+            if (!extra) return false;
+            const firstToken = extra.split(/[\s\-]/)[0].toLowerCase();
+            return _REGION_QUALIFIER_TOKENS.has(firstToken);
+        }
         function mergeStubGroupsIntoCanonical(bySubject, displayNames) {
             const stubKeys = Object.keys(bySubject).filter(k => k && !k.includes(' '));
             stubKeys.forEach(stub => {
                 const targets = Object.keys(bySubject).filter(k =>
                     k !== stub && k.startsWith(stub + ' ')
                 );
-                if (targets.length === 1) {
-                    const target = targets[0];
-                    bySubject[target] = bySubject[target].concat(bySubject[stub]);
-                    delete bySubject[stub];
-                    // displayNames[target] is already the longer canonical
-                    // form; nothing to update.
-                }
+                if (targets.length !== 1) return;
+                const target = targets[0];
+                // Skip merge when the target is a regional/variant of the
+                // stub (e.g. "netflix" -> "netflix uk"). Preserves the
+                // intended "reba" -> "reba mcentire" collapse because
+                // "mcentire" is not a region qualifier.
+                if (_isRegionQualifierExtension(stub, target)) return;
+                bySubject[target] = bySubject[target].concat(bySubject[stub]);
+                delete bySubject[stub];
+                // displayNames[target] is already the longer canonical
+                // form; nothing to update.
             });
         }
 
