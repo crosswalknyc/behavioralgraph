@@ -23,9 +23,13 @@ CAPTURES = [
         'disneyplus', 'disneyplus.com',
         'https://www.disneyplus.com/',
         [
-            ('home',     'https://www.disneyplus.com/home'),
-            ('new',      'https://www.disneyplus.com/browse/new'),
-            ('originals', 'https://www.disneyplus.com/originals'),
+            # Public /browse/* pages serve a real catalog even without a
+            # logged-in session - great for our use case.
+            ('browse_espn',      'https://www.disneyplus.com/browse/espn'),
+            ('browse_originals', 'https://www.disneyplus.com/browse/originals'),
+            ('browse_marvel',    'https://www.disneyplus.com/browse/marvel'),
+            ('browse_movies',    'https://www.disneyplus.com/browse/movies'),
+            ('browse_series',    'https://www.disneyplus.com/browse/series'),
         ],
     ),
     (
