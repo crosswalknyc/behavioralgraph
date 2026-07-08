@@ -3326,18 +3326,25 @@
             position: relative;
         }
 
+        /* 2026-07-08: dropdown opens DOWNWARD from the button using
+           position: fixed with JS-computed coords (see toggleExportMenu).
+           position: fixed lets it escape the parent .action-buttons-row's
+           overflow: hidden (which is needed for the scroll-collapse
+           animation) so the menu is never clipped or hidden behind the
+           toolbar / DATA CUTS pill above the button. */
         .dash-dropdown-menu {
-            position: absolute;
-            bottom: 100%;
-            left: 0;
-            margin-bottom: 0.5rem;
+            position: fixed;
+            top: auto;
+            left: auto;
+            bottom: auto;
+            margin: 0;
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 6px;
             min-width: 220px;
             width: max-content;
-            z-index: 1000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 10000;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.45);
             white-space: nowrap;
         }
 

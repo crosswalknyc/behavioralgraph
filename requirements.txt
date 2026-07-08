@@ -24,6 +24,12 @@ google-api-python-client==2.118.0
 PyGithub==2.1.1
 yt-dlp>=2025.10.14
 requests>=2.32.0
+# Trends IQ: richer Google Trends data than the public RSS.
+# Wraps the same /_/TrendsUi/data/batchexecute endpoint the new
+# trends.google.com/trending UI uses. Gives volume, growth %,
+# started time, trend breakdown keywords, and per-trend news
+# articles - a 30x depth increase over RSS (~370 US trends vs ~12).
+trendspy>=0.1.6
 # BPIQ "Deck with Analysis" exporter - migration/bpiq_deck_builder.py
 # uses python-pptx for slide construction and Pillow for the
 # Crosswalk wordmark + cover-image center-crop.

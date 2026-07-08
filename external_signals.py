@@ -209,8 +209,120 @@ def _trends_snap_put(geo: str, day_iso: str, rows: list[dict]) -> None:
         logger.debug("trends snapshot put failed for %s/%s: %s", geo, day_iso, e)
 
 
+def _trendspy_fetch_today(geo: str, *,
+                          fetch_news_top_n: int = 30) -> list[dict]:
+    """Fetch trending searches via `trendspy`, matching the new
+    `trends.google.com/trending` UI. Returns rows with the same keys as
+    the RSS fallback PLUS the richer fields the UI shows:
+
+      - volume              (int, e.g. 200000)
+      - volume_growth_pct   (int, e.g. 1000 for +1,000%)
+      - started_ts          (unix seconds when the trend started)
+      - trend_keywords      (list of "Trend breakdown" queries)
+      - news_articles       (list of {title,url,source,image,time} - only
+                              populated for the top `fetch_news_top_n`
+                              trends to keep S3 payload + latency bounded)
+
+    Returns `[]` on any failure so the caller can fall back to RSS.
+    """
+    try:
+        from trendspy import Trends  # type: ignore
+    except ImportError:
+        logger.debug("trendspy not installed - falling back to RSS")
+        return []
+    try:
+        tr = Trends()
+        trends = tr.trending_now(geo=geo, hours=24) or []
+    except Exception as e:
+        logger.debug("trendspy trending_now geo=%s failed: %s", geo, e)
+        return []
+
+    rows: list[dict] = []
+    for t in trends:
+        term = (getattr(t, 'keyword', None) or '').strip()
+        if not term:
+            continue
+        volume = int(getattr(t, 'volume', 0) or 0)
+        growth = int(getattr(t, 'volume_growth_pct', 0) or 0)
+        started_ts_raw = getattr(t, 'started_timestamp', None)
+        # trendspy returns a list; take the first element when present
+        if isinstance(started_ts_raw, list) and started_ts_raw:
+            started_ts = int(started_ts_raw[0])
+        elif isinstance(started_ts_raw, (int, float)):
+            started_ts = int(started_ts_raw)
+        else:
+            started_ts = 0
+        trend_keywords = list(getattr(t, 'trend_keywords', None) or [])
+        rows.append({
+            'term':               term,
+            'score':              volume or _score_from_growth(growth),
+            'related':            [],
+            'volume':             volume,
+            'volume_growth_pct':  growth,
+            'started_ts':         started_ts,
+            'trend_keywords':     trend_keywords[:12],
+            'topics':             list(getattr(t, 'topics', None) or []),
+            'news_articles':      [],
+            '_news_tokens':       list(getattr(t, 'news_tokens', None) or []),
+        })
+
+    # Fetch news articles for the top-N trends so each row's `related`
+    # array carries real article titles (used by the search-term
+    # categorizer downstream) and each row has a `news_articles` array
+    # with structured metadata (source, url, image, time).
+    try:
+        for row in rows[:fetch_news_top_n]:
+            tokens = row.pop('_news_tokens', None)
+            if not tokens:
+                continue
+            try:
+                articles = tr.trending_now_news_by_ids(tokens[:3]) or []
+            except Exception as e:
+                logger.debug("trending_now_news_by_ids failed for %s: %s",
+                              row['term'], e)
+                articles = []
+            row['news_articles'] = [{
+                'title':  getattr(a, 'title', '') or '',
+                'url':    getattr(a, 'url', '') or '',
+                'source': getattr(a, 'source', '') or '',
+                'image':  getattr(a, 'picture', '') or '',
+                'time':   getattr(a, 'time', 0) or 0,
+            } for a in articles[:6]]
+            row['related'] = [a['title'] for a in row['news_articles'] if a['title']][:6]
+    except Exception as e:
+        logger.debug("trendspy news fetch pass failed: %s", e)
+
+    # Drop the temp `_news_tokens` field for rows we didn't fetch news for
+    for row in rows:
+        row.pop('_news_tokens', None)
+
+    return sorted(rows, key=lambda x: -(x.get('volume') or 0))
+
+
+def _score_from_growth(growth_pct: int) -> int:
+    """Fallback score when volume is unavailable. Maps growth % to a
+    reasonable magnitude so items don't collapse to zero."""
+    if growth_pct >= 1000:
+        return 100000
+    if growth_pct >= 500:
+        return 50000
+    if growth_pct >= 200:
+        return 20000
+    return max(1000, growth_pct * 10)
+
+
 def _trends_fetch_today(geo: str) -> list[dict]:
-    """Fetch and parse the live RSS for `geo` (one ~24h snapshot)."""
+    """Fetch trending searches for `geo` (one ~24h snapshot).
+
+    Prefers `trendspy` (the same backend the new trends.google.com/trending
+    UI uses - gives ~30x the depth of the RSS plus volume, growth %,
+    started time, and trend breakdown keywords). Falls back to the
+    public RSS endpoint if trendspy is unavailable or fails.
+    """
+    rich = _trendspy_fetch_today(geo)
+    if rich:
+        return rich
+
     body = _trends_rss_fetch(geo)
     if not body:
         return []
@@ -240,7 +352,16 @@ def _trends_fetch_today(geo: str) -> list[dict]:
             t = ni.find('ht:news_item_title', ns)
             if t is not None and (t.text or '').strip():
                 related.append(t.text.strip())
-        out.append({'term': term, 'score': score, 'related': related[:6]})
+        out.append({
+            'term':               term,
+            'score':              score,
+            'related':            related[:6],
+            'volume':             score,
+            'volume_growth_pct':  0,
+            'started_ts':         0,
+            'trend_keywords':     [],
+            'news_articles':      [],
+        })
 
     # De-dupe within the single-day fetch (RSS sometimes repeats items).
     by_term: dict[str, dict] = {}
@@ -312,7 +433,10 @@ def trends_top_issues(state: Optional[str] = None, lookback_days: int = 7) -> li
 
     # 3. Aggregate across days: max score, union of related (newest day
     #    first so newer related-news titles appear first), days_trending
-    #    count, first_seen / last_seen day-iso.
+    #    count, first_seen / last_seen day-iso, and take the peak-day's
+    #    rich fields (volume, growth, started_ts, trend_keywords,
+    #    news_articles) so the UI shows the strongest snapshot of each
+    #    trend across the window.
     by_term: dict[str, dict] = {}
     for day_iso, rows in per_day:
         for row in rows:
@@ -323,6 +447,13 @@ def trends_top_issues(state: Optional[str] = None, lookback_days: int = 7) -> li
             score = int(row.get('score') or 0)
             related = list(row.get('related') or [])
             existing = by_term.get(key)
+            rich = {
+                'volume':              int(row.get('volume') or 0),
+                'volume_growth_pct':   int(row.get('volume_growth_pct') or 0),
+                'started_ts':          int(row.get('started_ts') or 0),
+                'trend_keywords':      list(row.get('trend_keywords') or []),
+                'news_articles':       list(row.get('news_articles') or []),
+            }
             if existing is None:
                 by_term[key] = {
                     'term':            term,
@@ -331,11 +462,17 @@ def trends_top_issues(state: Optional[str] = None, lookback_days: int = 7) -> li
                     'days_trending':   1,
                     'first_seen':      day_iso,
                     'last_seen':       day_iso,
+                    **rich,
                 }
                 continue
             if score > existing['score']:
                 existing['score'] = score
                 existing['term']  = term  # prefer casing of peak day
+                # Peak-day rich fields win
+                for k in ('volume', 'volume_growth_pct', 'started_ts',
+                           'trend_keywords', 'news_articles'):
+                    if rich.get(k):
+                        existing[k] = rich[k]
             existing['days_trending'] += 1
             if day_iso < existing['first_seen']:
                 existing['first_seen'] = day_iso
@@ -349,6 +486,15 @@ def trends_top_issues(state: Optional[str] = None, lookback_days: int = 7) -> li
                     existing['related'].append(r)
                     seen_rel.add(r.lower())
             existing['related'] = existing['related'][:6]
+            # Union trend_keywords across days (dedupe, keep first-seen
+            # order so peak-day keywords stay near the top).
+            if rich.get('trend_keywords'):
+                seen_kw = {k.lower() for k in (existing.get('trend_keywords') or [])}
+                for kw in rich['trend_keywords']:
+                    if kw and kw.lower() not in seen_kw:
+                        existing.setdefault('trend_keywords', []).append(kw)
+                        seen_kw.add(kw.lower())
+                existing['trend_keywords'] = (existing.get('trend_keywords') or [])[:12]
 
     return sorted(by_term.values(), key=lambda x: -x['score'])
 
