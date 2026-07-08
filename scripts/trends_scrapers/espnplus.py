@@ -1,12 +1,14 @@
 """
 ESPN+ trending scraper.
 
-ESPN+ is bundled with Disney+ on the Disney bundle plan. If Jenna's
-disneyplus.com session already carries ESPN+ entitlement, we can piggy-
-back on those cookies. Otherwise donate plus.espn.com cookies directly.
+ESPN+ programming lives at `disneyplus.com/browse/espn` under the
+Disney bundle. It's a public catalog page - no auth cookies required
+to render the content. Uses the exact same stitchDocument parser as
+the Disney+ scraper (see `disneyplus.py`).
 
-Donate via:
-    python3 scripts/trends_scrapers/donate_cookies.py --domain plus.espn.com
+IP-gate note: same story as Disney+ - Bamgrid IP-gates datacenter
+ranges. Run this scraper from a residential IP (Jenna's laptop) or
+a residential proxy. See `local_residential_run.py`.
 
 Standalone:
     python3 -m scripts.trends_scrapers.espnplus
@@ -15,79 +17,58 @@ Standalone:
 from __future__ import annotations
 
 import logging
-import re
 import sys
-from html import unescape
 from typing import Any
 
-from ._base import run_scraper
+from ._base import run_scraper, http_get
 from ._playwright import render_pages
-from ._streaming_common import parse_streaming_html
+from .disneyplus import _extract_disneyplus, _BAMGRID_ERROR_MARKER
 
 logger = logging.getLogger(__name__)
 
 
-ESPN_URLS = [
-    ('Home',    'https://plus.espn.com/'),
-    ('Live',    'https://www.espn.com/watch/'),
-    ('Sports',  'https://www.espn.com/watch/collections'),
+ESPNPLUS_URLS = [
+    # /browse/espn is the only ESPN+ landing on disneyplus.com. Other
+    # sport-shaped paths (/browse/sports, /browse/football, etc.) return
+    # a hard 404 - Disney+ organizes ESPN+ content into leagues/shows
+    # deeper inside /browse/espn, not into top-level browse paths.
+    ('browse_espn', 'https://www.disneyplus.com/browse/espn'),
 ]
 
 
-_ESPN_HYDRATE_SELECTORS = [
-    'a[data-testid="tile"]',
-    'div[data-testid="card"]',
-    'a[href*="/watch/"]',
-    'div.WatchCard',
-]
-
-
-# ESPN's watch cards render as `<a class="WatchCard__Link" ... aria-label="...">`
-_ESPN_CARD_RE = re.compile(
-    r'<a[^>]+class="[^"]*WatchCard[^"]*"[^>]*href="([^"]+)"[^>]*'
-    r'aria-label="([^"]{5,180})"',
-    re.IGNORECASE,
-)
-
-
-def _extract_from_dom(html: str, limit: int = 20) -> list[dict]:
-    seen: set[str] = set()
-    out: list[dict] = []
-    for m in _ESPN_CARD_RE.finditer(html):
-        href  = m.group(1)
-        title = unescape(m.group(2)).strip()
-        key = title.lower()
-        if key in seen or len(title) < 5:
+def _fetch_via_http(pages: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    results: list[tuple[str, str]] = []
+    for label, url in pages:
+        r = http_get(url, timeout=30, cookie_domain='disneyplus.com')
+        if r is None:
             continue
-        seen.add(key)
-        url = href if href.startswith('http') else f'https://www.espn.com{href}'
-        out.append({
-            'rank':             len(out) + 1,
-            'title':            title,
-            'url':              url,
-            'category_display': 'Live' if '/live' in href.lower() else '',
-            'collection':       '',
-        })
-        if len(out) >= limit:
-            break
-    return out
+        try:
+            html = r.text if hasattr(r, 'text') else r.decode('utf-8')
+        except Exception:
+            continue
+        results.append((label, html))
+    return results
 
 
 def fetch() -> dict[str, Any]:
-    # Try Disney bundle cookies first (many users get ESPN+ via bundle);
-    # fall back to standalone plus.espn.com session.
-    rendered = render_pages(ESPN_URLS,
-                             homepage='https://www.espn.com/',
-                             cookie_domain='plus.espn.com',
-                             wait_selectors=_ESPN_HYDRATE_SELECTORS,
-                             hydration_wait_ms=10000)
+    rendered = render_pages(ESPNPLUS_URLS,
+                             homepage='https://www.disneyplus.com/',
+                             cookie_domain='disneyplus.com',
+                             wait_ms=4000,
+                             scroll_ms=2500,
+                             hydration_wait_ms=12000)
+
+    if rendered and all(_BAMGRID_ERROR_MARKER in html and len(html) < 200_000
+                        for _, html in rendered):
+        logger.warning("espnplus: all pages returned the Bamgrid IP-gate "
+                        "error shell. Datacenter IP is being blocked; run "
+                        "from a residential IP.")
+        rendered = _fetch_via_http(ESPNPLUS_URLS)
 
     all_items: list[dict] = []
     seen: set[str] = set()
     for label, html in rendered:
-        items = parse_streaming_html(html, host='www.espn.com', limit=25)
-        if not items:
-            items = _extract_from_dom(html, limit=25)
+        items = _extract_disneyplus(html)
         for it in items:
             key = it['title'].lower()
             if key in seen:
@@ -98,9 +79,9 @@ def fetch() -> dict[str, Any]:
         logger.info("espnplus %s: parsed %d titles from %d-byte HTML",
                      label, len(items), len(html))
 
-    for i, it in enumerate(all_items[:20], start=1):
+    for i, it in enumerate(all_items[:25], start=1):
         it['rank'] = i
-    return {'national': all_items[:20]}
+    return {'national': all_items[:25]}
 
 
 if __name__ == '__main__':

@@ -49,16 +49,16 @@ SCRAPERS = [
     ('sephora',   'scripts.trends_scrapers.sephora',    'Sephora',   'retailer'),
     ('target',    'scripts.trends_scrapers.target',     'Target',    'retailer'),
     ('walmart',   'scripts.trends_scrapers.walmart',    'Walmart',   'retailer'),
-    # Streaming platforms. Netflix uses public TSV data (no auth). The
-    # others read Jenna's donated cookies via cookie_domain=<host>.
-    # ESPN+ and Max are bundled via Disney+ and Hulu respectively, but
-    # each streams on its own domain and needs its own scraper.
+    # Streaming platforms. Netflix uses public TSV data (no auth). Hulu +
+    # Prime Video use donated cookies via cookie_domain=<host>. Disney+
+    # and ESPN+ are NOT in this list because Disney's Bamgrid CDN
+    # IP-gates datacenter ranges - those two run from Jenna's laptop
+    # via `local_residential_run.py`. Max is deferred until she donates
+    # cookies from play.max.com (marketing max.com donation returns the
+    # "GET HBO MAX" landing page).
     ('netflix',    'scripts.trends_scrapers.netflix',       'Netflix',     'streaming'),
-    ('disneyplus', 'scripts.trends_scrapers.disneyplus',    'Disney+',     'streaming'),
     ('hulu',       'scripts.trends_scrapers.hulu',          'Hulu',        'streaming'),
-    ('max',        'scripts.trends_scrapers.max_streaming', 'Max',         'streaming'),
     ('primevideo', 'scripts.trends_scrapers.primevideo',    'Prime Video', 'streaming'),
-    ('espnplus',   'scripts.trends_scrapers.espnplus',      'ESPN+',       'streaming'),
 ]
 
 
@@ -187,10 +187,11 @@ def main(argv: list[str] | None = None) -> int:
             'etsy':       'etsy.com',       'sephora':    'sephora.com',
             'lululemon':  'lululemon.com',  'bestbuy':    'bestbuy.com',
             'nike':       'nike.com',       'ulta':       'ulta.com',
-            # Streaming
-            'disneyplus': 'disneyplus.com', 'hulu':       'hulu.com',
+            # Streaming (Disney+ / ESPN+ intentionally omitted - they
+            # run from Jenna's laptop via local_residential_run.py
+            # because Bamgrid IP-gates Hetzner)
+            'hulu':       'hulu.com',
             'max':        'max.com',        'primevideo': 'amazon.com',
-            'espnplus':   'plus.espn.com',
         }
         need = [domain_map[s] for s, _k in empty_sources if s in domain_map]
         if need:

@@ -287,10 +287,12 @@ RETAILERS = [
 # available (no auth). The rest are cookie-donation Playwright scrapers
 # populated by the daily suite - `available` flips to True at read time
 # once a fresh snapshot lands. Notes:
+#   - Disney+ and ESPN+ run from a residential IP (Jenna's laptop via
+#     `scripts/trends_scrapers/local_residential_run.py`) because Disney's
+#     Bamgrid CDN IP-gates Hetzner's datacenter range. ESPN+ programming
+#     lives on disneyplus.com/browse/espn.
 #   - Max entitlement comes bundled with Hulu on the Disney+/Hulu/Max
 #     plan but streams on max.com; scraper hits max.com directly.
-#   - ESPN+ comes bundled with Disney+ but streams on plus.espn.com;
-#     scraper hits plus.espn.com directly.
 STREAMING_PLATFORMS = [
     ('netflix',    'Netflix',      True),
     ('disneyplus', 'Disney+',      False),

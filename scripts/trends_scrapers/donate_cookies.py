@@ -79,7 +79,10 @@ DEFAULT_DOMAINS = [
     'hulu.com',
     'max.com',
     'amazon.com',      # for Prime Video (same session as amazon shopping)
-    'plus.espn.com',   # only needed if ESPN+ not on Disney bundle
+    # ESPN+ intentionally omitted - programming lives at
+    # disneyplus.com/browse/espn (Disney bundle), so the disneyplus.com
+    # cookie already covers it. Add 'plus.espn.com' here only if you
+    # ever want to scrape the standalone ESPN+ web player.
 ]
 
 S3_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')
