@@ -19304,11 +19304,18 @@
             <div class="action-buttons-row">
                 <div class="content-action-buttons" id="contentActionButtons">
                     <div class="dash-dropdown">
-                        <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, or full report as PDF." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
+                        <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, full report as PDF, or a designed analysis deck (.pptx)." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
                         <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
                             <a href="javascript:void(0)" onclick="exportToCSV(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📄 Current Page (CSV)</a>
                             <a href="javascript:void(0)" onclick="exportAllPNG(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">🖼️ All Charts (PNG)</a>
                             <a href="javascript:void(0)" onclick="exportPDF(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📑 Full Report (PDF)</a>
+                            <!-- LISA-style analysis deck (.pptx). Server builder
+                                 lives at migration/profile_iq_deck_builder.py.
+                                 Single-profile deck uses the currently loaded
+                                 dashboard payload; combined deck packages every
+                                 open profile tab into a comparison deck. -->
+                            <a href="javascript:void(0)" id="profileIqDeckLink" onclick="exportProfileIqDeck(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">🎨 Analysis Deck (.pptx)</a>
+                            <a href="javascript:void(0)" id="profileIqCombinedDeckLink" onclick="exportProfileIqCombinedDeck(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📊 Combined Deck (All Open Profiles)</a>
                         </div>
                     </div>
                     <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
@@ -104871,6 +104878,153 @@
             doc.setDrawColor(60, 60, 90);
             doc.setLineWidth(0.4);
             doc.line(40, 78, W - 40, 78);
+        }
+
+        // =====================================================================
+        //  Profile IQ deck export (single + combined)
+        // ---------------------------------------------------------------------
+        //  Mirrors the BPIQ _bpiqExportDeck() flow: POST the live dashboard
+        //  payload to /api/profile-iq/export-deck (or -combined-deck), stream
+        //  back a .pptx blob, trigger the browser download. Server-side
+        //  designer lives at migration/profile_iq_deck_builder.py.
+        // =====================================================================
+
+        function _profileIqBuildPayloadFromTab(tab) {
+            // A tab is { id, name, dateRange, data (parsed) }. We snapshot the
+            // parsed dashboard shape (demographics + demographicsIndex +
+            // demographicsGenPop + demographicsProjection + behavioral +
+            // locations + sample/projection counters) — same fields the
+            // backend deck builder's payload normalizer already understands.
+            if (!tab || !tab.data) return null;
+            const d = tab.data;
+            return {
+                name: tab.name || d.name || 'Audience',
+                brandCategory: d.brandCategory || '',
+                sampleSize: d.sampleSize || 0,
+                projectedUS: d.projectedUS || 0,
+                dateRange: tab.dateRange || d.dateRange || '',
+                demographics: d.demographics || {},
+                demographicsIndex: d.demographicsIndex || {},
+                demographicsGenPop: d.demographicsGenPop || {},
+                demographicsProjection: d.demographicsProjection || {},
+                behavioral: d.behavioral || {},
+                locations: d.locations || [],
+                interests: d.interests || {},
+            };
+        }
+
+        function _profileIqBuildActivePayload() {
+            // Prefer the live currentDashboardData (in case the user edited
+            // Gen Pop mode or applied filters), fall back to the active tab.
+            const parsed = (typeof currentDashboardData !== 'undefined' && currentDashboardData) || null;
+            const meta = (typeof currentProfileData !== 'undefined' && currentProfileData) || null;
+            if (!parsed && !meta) return null;
+            return {
+                name: (meta && meta.name) ||
+                      (typeof selectedDashProfile === 'string' && selectedDashProfile) ||
+                      'Audience',
+                brandCategory: (parsed && parsed.brandCategory) || (meta && meta.brandCategory) || '',
+                sampleSize: (parsed && parsed.sampleSize) || (meta && meta.sampleSize) || 0,
+                projectedUS: (parsed && parsed.projectedUS) || (meta && meta.projectedUS) || 0,
+                dateRange: (meta && meta.dateRange) || (parsed && parsed.dateRange) || '',
+                demographics: (parsed && parsed.demographics) || {},
+                demographicsIndex: (parsed && parsed.demographicsIndex) || {},
+                demographicsGenPop: (parsed && parsed.demographicsGenPop) || {},
+                demographicsProjection: (parsed && parsed.demographicsProjection) || {},
+                behavioral: (parsed && parsed.behavioral) || {},
+                locations: (parsed && parsed.locations) || [],
+                interests: (parsed && parsed.interests) || {},
+            };
+        }
+
+        async function exportProfileIqDeck() {
+            const data = _profileIqBuildActivePayload();
+            if (!data || !data.name || data.name === 'Audience' ||
+                (!data.demographics || Object.keys(data.demographics).length === 0)) {
+                alert('Open a profile first, then try again.');
+                return;
+            }
+            showNotification('🎨 Designing deck (10–15s)…', 'info');
+            try {
+                const resp = await fetch('/api/profile-iq/export-deck', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ data: data }),
+                });
+                if (!resp.ok) {
+                    let err = 'HTTP ' + resp.status;
+                    try { const j = await resp.json(); if (j && j.error) err = j.error; } catch (_) {}
+                    throw new Error(err);
+                }
+                const blob = await resp.blob();
+                const safe = String(data.name).replace(/[^a-zA-Z0-9._-]+/g, '_') || 'Profile';
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = safe + '_Audience_Profile.pptx';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+                showNotification('✅ Deck downloaded', 'success');
+            } catch (e) {
+                console.error('Profile IQ deck export failed', e);
+                showNotification('❌ Deck export failed: ' + (e && e.message ? e.message : e), 'error');
+            }
+        }
+
+        async function exportProfileIqCombinedDeck() {
+            // Collect every open profile tab; fall back to just the active
+            // one if the tab list is empty (e.g. only one profile loaded).
+            const tabs = (typeof openProfileTabs !== 'undefined' && Array.isArray(openProfileTabs))
+                ? openProfileTabs : [];
+            let payloads = tabs.map(_profileIqBuildPayloadFromTab).filter(x => x && x.name);
+            if (payloads.length === 0) {
+                const active = _profileIqBuildActivePayload();
+                if (active) payloads = [active];
+            }
+            if (payloads.length === 0) {
+                alert('No open profiles to combine.');
+                return;
+            }
+            if (payloads.length === 1) {
+                if (!confirm('Only one profile is open. Combined decks compare 2+ profiles side by side. Export a single-profile deck instead?')) {
+                    return;
+                }
+                await exportProfileIqDeck();
+                return;
+            }
+            showNotification(`🎨 Designing combined deck for ${payloads.length} profiles…`, 'info');
+            try {
+                const resp = await fetch('/api/profile-iq/export-combined-deck', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        profiles: payloads.map(p => ({ data: p })),
+                    }),
+                });
+                if (!resp.ok) {
+                    let err = 'HTTP ' + resp.status;
+                    try { const j = await resp.json(); if (j && j.error) err = j.error; } catch (_) {}
+                    throw new Error(err);
+                }
+                const blob = await resp.blob();
+                const names = payloads.slice(0, 4)
+                    .map(p => String(p.name).replace(/[^a-zA-Z0-9]+/g, ''))
+                    .join('_vs_') || 'Combined';
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = names + '_Audience_Comparison.pptx';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+                showNotification('✅ Combined deck downloaded', 'success');
+            } catch (e) {
+                console.error('Profile IQ combined deck export failed', e);
+                showNotification('❌ Combined deck export failed: ' + (e && e.message ? e.message : e), 'error');
+            }
         }
 
         async function exportPDF() {

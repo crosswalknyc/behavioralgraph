@@ -35743,6 +35743,168 @@ def export_brand_partnership_iq_deck():
 
 
 # =====================================================================
+#  PROFILE IQ deck export (Analysis Deck + Combined Deck)
+# -----------------------------------------------------------
+# Mirrors the BPIQ export-deck flow above but drives the Profile IQ
+# ``currentDashboardData`` payload through
+# ``migration/profile_iq_deck_builder.py``. Two endpoints:
+#
+#   /api/profile-iq/export-deck            single active profile
+#   /api/profile-iq/export-combined-deck   list of every open profile tab
+#
+# The builder handles image fetching, LISA-style layout, and combined-
+# deck comparison slides in one place.
+# =====================================================================
+
+
+def _resolve_profile_image_url_from_name(profile_name: str) -> str:
+    """Look up the admin-managed custom image URL for a Profile IQ subject.
+
+    Falls back to '' when nothing is registered. Uses the same lookup keys
+    the frontend uses (``_profile_image_lookup_keys`` covers cohort/date
+    variants like "Green Day - Avid Fan 2025" → "Green Day").
+    """
+    if not profile_name:
+        return ''
+    try:
+        load_profile_image_cache()
+    except Exception:
+        pass
+    try:
+        keys = _profile_image_lookup_keys(profile_name)
+    except Exception:
+        keys = [profile_name.lower().strip()]
+    for k in keys:
+        entry = (profile_image_cache or {}).get(k) or {}
+        url = (entry.get('image_url') or '').strip()
+        if url:
+            return url
+    return ''
+
+
+@app.route('/api/profile-iq/export-deck', methods=['POST'])
+@requires_auth
+def export_profile_iq_deck():
+    """Build a LISA-style Profile IQ analysis deck (.pptx) for one subject."""
+    try:
+        from migration.profile_iq_deck_builder import build_deck, suggested_filename
+    except ImportError as exc:
+        return jsonify({
+            'success': False,
+            'error': (
+                'Deck builder is not available on this server '
+                f'({exc.name or exc}). The python-pptx and Pillow packages '
+                'must be installed in the deployment.'
+            ),
+        }), 503
+    try:
+        payload = request.get_json(force=True, silent=True) or {}
+        data = payload.get('data') or {}
+        if not data:
+            return jsonify({'success': False,
+                            'error': 'data payload required'}), 400
+
+        # Prefer explicit image_url from the caller, fall back to the admin
+        # cache using the profile name so the cover always tries to include
+        # the same photo the dashboard shows in its header.
+        image_url = (payload.get('image_url') or '').strip()
+        if not image_url:
+            image_url = _resolve_profile_image_url_from_name(
+                (data.get('name') or '').strip()
+            )
+
+        pptx_bytes = build_deck(
+            data,
+            image_url=image_url or None,
+            category=(payload.get('category') or data.get('brandCategory')
+                      or data.get('brand_category') or None),
+        )
+        fname = suggested_filename(data, ext='pptx')
+        from flask import send_file
+        return send_file(
+            io.BytesIO(pptx_bytes),
+            mimetype=('application/vnd.openxmlformats-officedocument.'
+                      'presentationml.presentation'),
+            as_attachment=True,
+            download_name=fname,
+            max_age=0,
+        )
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/profile-iq/export-combined-deck', methods=['POST'])
+@requires_auth
+def export_profile_iq_combined_deck():
+    """Build a comparative deck across multiple Profile IQ subjects.
+
+    Frontend POSTs ``{ profiles: [ { data: {...}, image_url?, category? }, ... ] }``
+    where each entry is one open tab. Each ``data`` payload is the same
+    ``currentDashboardData`` shape that the single-profile endpoint accepts.
+    """
+    try:
+        from migration.profile_iq_deck_builder import (
+            build_combined_deck, suggested_combined_filename,
+        )
+    except ImportError as exc:
+        return jsonify({
+            'success': False,
+            'error': (
+                'Deck builder is not available on this server '
+                f'({exc.name or exc}). The python-pptx and Pillow packages '
+                'must be installed in the deployment.'
+            ),
+        }), 503
+    try:
+        payload = request.get_json(force=True, silent=True) or {}
+        entries = payload.get('profiles') or []
+        if not entries or not isinstance(entries, list):
+            return jsonify({'success': False,
+                            'error': 'profiles array required'}), 400
+
+        # Normalize each entry into the shape build_combined_deck expects
+        normalized = []
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            d = dict(e.get('data') or {})
+            if not d:
+                continue
+            img = (e.get('image_url') or '').strip()
+            if not img:
+                img = _resolve_profile_image_url_from_name(
+                    (d.get('name') or '').strip())
+            if img and not d.get('image_url'):
+                d['image_url'] = img
+            cat = e.get('category')
+            if cat and not d.get('brand_category') and not d.get('brandCategory'):
+                d['brand_category'] = cat
+            normalized.append(d)
+
+        if not normalized:
+            return jsonify({'success': False,
+                            'error': 'no valid profile payloads found'}), 400
+
+        pptx_bytes = build_combined_deck(normalized)
+        fname = suggested_combined_filename(normalized, ext='pptx')
+        from flask import send_file
+        return send_file(
+            io.BytesIO(pptx_bytes),
+            mimetype=('application/vnd.openxmlformats-officedocument.'
+                      'presentationml.presentation'),
+            as_attachment=True,
+            download_name=fname,
+            max_age=0,
+        )
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+# =====================================================================
 #  DIGITAL JOURNEY IQ  -  BSFS-style journey reconstruction
 # =====================================================================
 #
