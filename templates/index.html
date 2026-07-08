@@ -2482,32 +2482,7 @@
         }
         .marketing-geo-summary p { margin: 0; font-size: 0.83rem; line-height: 1.5; color: var(--text-primary); }
 
-        /* Creative & retargeting */
-        .marketing-creative { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
-        @media (max-width: 900px) { .marketing-creative { grid-template-columns: 1fr; } }
-        .marketing-creative-panel {
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 0.85rem 1rem;
-        }
-        .marketing-creative-panel h4 {
-            margin: 0 0 0.55rem;
-            font-size: 0.82rem;
-            font-family: 'Space Mono', monospace;
-            color: var(--text-secondary);
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-        }
-        .marketing-creative-panel ul {
-            margin: 0;
-            padding-left: 1.1rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.3rem;
-        }
-        .marketing-creative-panel li { font-size: 0.83rem; line-height: 1.4; color: var(--text-primary); }
-
+        /* Retargeting */
         .marketing-retarget { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.75rem; }
         .marketing-retarget-card {
             background: var(--bg-input);
@@ -19841,7 +19816,7 @@
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                                    <button class="tab-btn tool-tab has-tooltip" data-feature="marketing" data-tooltip="Marketing: Digital ad buying playbook — media mix, per-platform priority, lookalike seed spec, geo targeting, and creative notes." onclick="showTab('marketing')"><span class="tab-icon">📣</span><span class="tab-label">MARKETING</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                    <button class="tab-btn tool-tab has-tooltip" data-feature="marketing" data-tooltip="Marketing: Digital ad buying playbook — media mix, per-platform priority, lookalike seed spec, geo targeting, and retargeting." onclick="showTab('marketing')"><span class="tab-icon">📣</span><span class="tab-label">MARKETING</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                 </div>
                                 <div class="toolbar-section-label">ANALYSIS TOOLS</div>
@@ -21068,7 +21043,6 @@
                         <button class="marketing-subtab"        data-mkt-tab="platforms" onclick="showMarketingSection('platforms')" role="tab">📱 <span>Platform Playbook</span></button>
                         <button class="marketing-subtab"        data-mkt-tab="lookalike" onclick="showMarketingSection('lookalike')" role="tab">🎯 <span>Lookalike Seed</span></button>
                         <button class="marketing-subtab"        data-mkt-tab="geo"       onclick="showMarketingSection('geo')"       role="tab">📍 <span>Geo Targeting</span></button>
-                        <button class="marketing-subtab"        data-mkt-tab="creative"  onclick="showMarketingSection('creative')"  role="tab">🎨 <span>Creative</span></button>
                         <button class="marketing-subtab"        data-mkt-tab="retarget"  onclick="showMarketingSection('retarget')"  role="tab">🔄 <span>Retargeting</span></button>
                         <button class="marketing-subtab"        data-mkt-tab="ai"        onclick="showMarketingSection('ai')"        role="tab">✨ <span>AI Playbook</span></button>
                     </div>
@@ -21103,14 +21077,6 @@
                             <span class="marketing-section-sub">Top-indexing DMAs. Buy geo-fenced when concentration is high, otherwise layer as a DMA multiplier on national.</span>
                         </div>
                         <div id="marketingGeoBlock" class="marketing-geo"></div>
-                    </section>
-
-                    <section class="marketing-section marketing-sub-panel" data-mkt-panel="creative">
-                        <div class="marketing-section-head">
-                            <h3>Creative &amp; Messaging Notes</h3>
-                            <span class="marketing-section-sub">Cultural touchpoints to reference in creative, tone cues from the demo mix, and category anti-affinities to avoid.</span>
-                        </div>
-                        <div id="marketingCreativeBlock" class="marketing-creative"></div>
                     </section>
 
                     <section class="marketing-section marketing-sub-panel" data-mkt-panel="retarget">
@@ -81875,66 +81841,6 @@
                     </div>`;
             }
 
-            // ---------- Creative & messaging ----------
-            function _mkRenderCreative() {
-                const el = document.getElementById('marketingCreativeBlock');
-                if (!el) return;
-                const behav = _mkBehav();
-                const talent = _mkItemsFromCats(['TALENT','ACTOR','MUSICIAN','ATHLETE']).slice(0, 8);
-                const persona = _mkItemsFromCats(['PERSONA']).slice(0, 6);
-                const genre = _mkItemsFromCats(['GENRE','GENRES','TV GENRE','MOVIE GENRE']).slice(0, 6);
-
-                // Anti-affinities: brands with index < 60 that ARE in data
-                // (implies audience actively avoids these categories/brands)
-                const antiCandidates = [];
-                Object.keys(behav).forEach(cat => {
-                    (behav[cat] || []).forEach(it => {
-                        const idx = Number(it.index) || 0;
-                        const pct = Number(it.pct) || 0;
-                        if (idx > 0 && idx <= 55 && pct >= 2) {
-                            antiCandidates.push({ name: it.name, pct, idx, cat });
-                        }
-                    });
-                });
-                antiCandidates.sort((a,b) => a.idx - b.idx);
-                const anti = antiCandidates.slice(0, 6);
-
-                // Tone from demographics
-                const median = _mkMedianAge();
-                const gender = _mkGenderSkew();
-                const topEth = _mkTopDemo('ethnicity', 2);
-                const topInc = _mkTopDemo('income', 1)[0];
-                const toneBits = [];
-                if (median) {
-                    if (median < 28) toneBits.push('Gen Z / early millennial voice: fast cuts, meme fluency, creator-first.');
-                    else if (median < 38) toneBits.push('Millennial voice: nostalgic hooks, self-deprecating humor, character-driven.');
-                    else if (median < 50) toneBits.push('Gen X voice: irreverent, direct, less brand-y, more useful.');
-                    else toneBits.push('Boomer/Gen X+ voice: clear value prop, trusted spokespeople, less slang.');
-                }
-                if (gender.primary === 'Female' && gender.pct >= 60) toneBits.push('Female-forward creative: cast, POV, story choices.');
-                if (gender.primary === 'Male' && gender.pct >= 60) toneBits.push('Male-forward creative: cast, POV, story choices.');
-                if (topInc && (topInc.bucket || '').match(/100|150|200|\$1|\$2/)) toneBits.push('Premium/aspirational cues — higher-income skew tolerates a slower build and finer production.');
-                if (topEth.length) toneBits.push('Casting + cultural references should reflect top ethnicity mix: ' + topEth.map(e => `${e.bucket} ${e.pct.toFixed(0)}%`).join(', ') + '.');
-
-                const li = (arr) => arr.length ? arr.map(x => `<li>${(x||'').toString().replace(/</g,'&lt;')}</li>`).join('') : '<li style="color:var(--text-secondary);">—</li>';
-
-                el.innerHTML = `
-                    <div class="marketing-creative-panel">
-                        <h4>Cultural touchpoints</h4>
-                        <ul>${li([...talent.slice(0,4).map(t => `${t.name} (${Math.round(Number(t.index)||0)} idx)`),
-                                 ...genre.slice(0,3).map(t => `${t.name}`),
-                                 ...persona.slice(0,3).map(t => `${t.name}`)])}</ul>
-                    </div>
-                    <div class="marketing-creative-panel">
-                        <h4>Tone &amp; craft cues</h4>
-                        <ul>${li(toneBits)}</ul>
-                    </div>
-                    <div class="marketing-creative-panel">
-                        <h4>Anti-affinities — avoid or reframe</h4>
-                        <ul>${li(anti.map(a => `${a.name} (${a.idx} idx — under-indexes)`))}</ul>
-                    </div>`;
-            }
-
             // ---------- Retargeting ----------
             function _mkRenderRetarget() {
                 const el = document.getElementById('marketingRetargetBlock');
@@ -82040,7 +81946,7 @@
                 if (!d || !d.behavioral) {
                     if (heroName) heroName.textContent = 'Marketing';
                     if (heroSub)  heroSub.textContent = 'Load a profile to generate a media plan, per-platform buying guide, and lookalike seed spec.';
-                    ['marketingSnapshotRow','marketingMediaMix','marketingPlatformGrid','marketingLookalike','marketingGeoBlock','marketingCreativeBlock','marketingRetargetBlock']
+                    ['marketingSnapshotRow','marketingMediaMix','marketingPlatformGrid','marketingLookalike','marketingGeoBlock','marketingRetargetBlock']
                         .forEach(id => { const e = document.getElementById(id); if (e) e.innerHTML = '<div class="marketing-empty">No profile loaded.</div>'; });
                     // Still apply current sub-tab so the empty-state text renders in the right place
                     if (typeof window.showMarketingSection === 'function') window.showMarketingSection(_mktActiveSection);
@@ -82048,13 +81954,12 @@
                 }
                 const name = _mkProfileName();
                 if (heroName) heroName.textContent = `${name} — Marketing Playbook`;
-                if (heroSub)  heroSub.textContent  = `Ad-buying media mix, per-platform priority, lookalike seed, geo + creative notes derived from ${formatNumber(Number(d.sampleSize||0))} panelists and their trailing-12-month digital behavior.`;
+                if (heroSub)  heroSub.textContent  = `Ad-buying media mix, per-platform priority, lookalike seed, geo targeting, and retargeting surfaces derived from ${formatNumber(Number(d.sampleSize||0))} panelists and their trailing-12-month digital behavior.`;
                 _mkRenderSnapshot();
                 _mkRenderMediaMix();
                 _mkRenderPlatformGrid();
                 _mkRenderLookalike();
                 _mkRenderGeo();
-                _mkRenderCreative();
                 _mkRenderRetarget();
                 // Preserve the user's active sub-tab across re-renders (e.g. Refresh
                 // click, profile switch). Default to 'mix' the first time.
