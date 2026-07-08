@@ -40409,6 +40409,13 @@
         }
 
         // ---------- Historical arc drilldown ----------
+        // Fires from the 📈 button on every Trends IQ row. Fetches an
+        // arc from /api/trends-iq/history and renders a sparkline modal.
+        // 401 handling: the endpoint is @requires_auth so if the Flask
+        // session cookie got invalidated (this happens whenever Render
+        // deploys a new build without a stable SECRET_KEY env var), we
+        // surface a "session expired" state with a Log in button rather
+        // than a silent "Failed to load".
         window.tiqShowDrilldown = function(kind, source, key, label, geo) {
             var overlay = document.createElement('div');
             overlay.className = 'tiq-modal-overlay';
@@ -40426,16 +40433,37 @@
                 geo: geo || 'National', days: '14',
             });
             fetch('/api/trends-iq/history?' + params.toString(), { credentials: 'same-origin' })
-                .then(function(r) { return r.json(); })
+                .then(function(r) {
+                    if (r.status === 401) {
+                        // Session cookie is gone or was signed with an old
+                        // SECRET_KEY. Show a re-auth prompt in the modal.
+                        var sub = overlay.querySelector('.tiq-modal-sub');
+                        if (sub) {
+                            sub.innerHTML = 'Your session expired. ' +
+                                '<a href="/login" style="color:#a78bfa;text-decoration:underline;">Log in again</a> ' +
+                                'to view historical arcs.';
+                        }
+                        return null;
+                    }
+                    if (!r.ok) {
+                        throw new Error('history HTTP ' + r.status);
+                    }
+                    return r.json();
+                })
                 .then(function(data) {
+                    if (!data) return;  // 401 handled above
                     if (!data.success || !data.arc) {
-                        overlay.querySelector('.tiq-modal-sub').textContent = 'No historical data yet - snapshots are still accumulating.';
+                        overlay.querySelector('.tiq-modal-sub').textContent =
+                            data && data.error
+                                ? ('Could not load history: ' + data.error)
+                                : 'No historical data yet - snapshots are still accumulating.';
                         return;
                     }
                     _tiqRenderDrilldown(overlay, data.arc, label, kind, source, key, geo);
                 })
-                .catch(function() {
-                    overlay.querySelector('.tiq-modal-sub').textContent = 'Failed to load history.';
+                .catch(function(e) {
+                    var sub = overlay.querySelector('.tiq-modal-sub');
+                    if (sub) sub.textContent = 'Failed to load history: ' + (e && e.message ? e.message : 'network error');
                 });
         };
 
