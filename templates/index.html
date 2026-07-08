@@ -85586,7 +85586,14 @@
                     h._cmpHasArrow = !!arrow;
                 }
                 const arrowHtml = h._cmpHasArrow ? '<span class="sort-arrow">↓</span>' : '';
-                h.innerHTML = arrowHtml + h._cmpOrigLabel.replace(/</g,'&lt;') + '<br><span style="font-size:0.6rem;opacity:0.8;white-space:nowrap;">' + headerSuffix.replace(/</g,'&lt;') + '</span>';
+                if (h._cmpHasArrow) {
+                    h.style.display = 'inline-grid';
+                    h.style.gridTemplateColumns = 'auto 1fr';
+                    h.style.alignItems = 'start';
+                    h.innerHTML = arrowHtml + '<span style="grid-column:2;">' + h._cmpOrigLabel.replace(/</g,'&lt;') + '<br><span style="font-size:0.6rem;opacity:0.8;white-space:nowrap;">' + headerSuffix.replace(/</g,'&lt;') + '</span></span>';
+                } else {
+                    h.innerHTML = h._cmpOrigLabel.replace(/</g,'&lt;') + '<br><span style="font-size:0.6rem;opacity:0.8;white-space:nowrap;">' + headerSuffix.replace(/</g,'&lt;') + '</span>';
+                }
             });
 
             try {
