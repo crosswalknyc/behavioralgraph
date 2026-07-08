@@ -51,7 +51,7 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Iterable, Optional
 
 import requests
@@ -2140,5 +2140,101 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     }
 
     _cache_put(filters, payload)
+    _write_history_snapshots(headlines, trending_people)
     payload['from_cache'] = False
     return payload
+
+
+# ============================================================================
+# Historical snapshot writer for headlines + trending people
+# ============================================================================
+# The history endpoint reads dated JSON at
+# `trends_iq_snapshots/{YYYY-MM-DD}/gdelt.json` (headlines) and
+# `trends_iq_snapshots/{YYYY-MM-DD}/gdelt-people.json` (people). Every
+# scraper source drops its own file at that same prefix; this helper
+# does the same for the two GDELT-derived cards so their history
+# button has data to render.
+#
+# Idempotent per UTC day: uses an if-not-exists check so hot dashboard
+# reloads don't rewrite S3 constantly. First-of-day request wins.
+_HISTORY_SNAPSHOT_PREFIX = 'trends_iq_snapshots/'
+_SNAPSHOT_WRITE_STATE: dict[str, str] = {}
+
+
+def _snapshot_key(source: str, day_iso: str) -> str:
+    return f'{_HISTORY_SNAPSHOT_PREFIX}{day_iso}/{source}.json'
+
+
+def _put_dated_snapshot(source: str, day_iso: str, rows: list[dict]) -> None:
+    """Write a dated snapshot if today's copy doesn't already exist.
+
+    Wrapped in a broad try/except: history is nice-to-have, we never
+    want to fail the dashboard build if S3 hiccups.
+    """
+    if _SNAPSHOT_WRITE_STATE.get(source) == day_iso:
+        return
+    try:
+        s3 = _s3_client()
+        key = _snapshot_key(source, day_iso)
+        try:
+            s3.head_object(Bucket=S3_CACHE_BUCKET, Key=key)
+            _SNAPSHOT_WRITE_STATE[source] = day_iso
+            return
+        except Exception:
+            pass
+        payload = {
+            'source':     source,
+            'fetched_at': datetime.now(timezone.utc).isoformat(),
+            'national':   rows,
+        }
+        s3.put_object(
+            Bucket=S3_CACHE_BUCKET, Key=key,
+            Body=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+            ContentType='application/json',
+        )
+        _SNAPSHOT_WRITE_STATE[source] = day_iso
+        logger.info("wrote history snapshot s3://%s/%s (%d rows)",
+                     S3_CACHE_BUCKET, key, len(rows))
+    except Exception as e:
+        logger.debug("history snapshot write failed for %s: %s", source, e)
+
+
+def _write_history_snapshots(headlines: list[dict],
+                              trending_people: list[dict]) -> None:
+    """Snapshot the two GDELT-derived cards for `trends_history`.
+
+    Both files share the `{'national': [...]}` layout so
+    `trends_history.history_for_scraper` reads them the same way it
+    reads Netflix/Target/Instagram snapshots.
+    """
+    day_iso = date.today().isoformat()
+
+    headline_rows = []
+    for i, h in enumerate(headlines or []):
+        title = (h.get('title') or '').strip()
+        if not title:
+            continue
+        headline_rows.append({
+            'rank':   i + 1,
+            'title':  title,
+            'url':    h.get('url', ''),
+            'source': h.get('source', ''),
+            'geo':    h.get('geo', 'National'),
+        })
+    if headline_rows:
+        _put_dated_snapshot('gdelt', day_iso, headline_rows)
+
+    people_rows = []
+    for i, p in enumerate(trending_people or []):
+        name = (p.get('name') or '').strip()
+        if not name:
+            continue
+        people_rows.append({
+            'rank':      i + 1,
+            'name':      name,
+            'mentions':  int(p.get('mentions') or 0),
+            'pageviews': int(p.get('pageviews') or 0),
+            'context':   p.get('context') or [],
+        })
+    if people_rows:
+        _put_dated_snapshot('gdelt-people', day_iso, people_rows)
