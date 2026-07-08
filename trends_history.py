@@ -211,7 +211,21 @@ _SCRAPER_KIND_MAP = {
     'max':        'streaming',
     'primevideo': 'streaming',
     'espnplus':   'streaming',
+    # GDELT-derived cards: headlines and trending people. Both share the
+    # source name `gdelt` in the frontend (`_tiqActions('headline',
+    # 'gdelt', ...)` and `_tiqActions('person', 'gdelt', ...)`); the
+    # snapshot source names differ so the dispatcher below routes by
+    # kind. See `_gdelt_source_for_kind`.
+    'gdelt':         'headline',
+    'gdelt-people':  'person',
 }
+
+
+def _gdelt_source_for_kind(kind: str) -> str:
+    """Map the frontend `gdelt` source + kind pair to the actual
+    snapshot file: headlines live in `gdelt.json`, people live in
+    `gdelt-people.json`."""
+    return 'gdelt-people' if (kind or '').lower() == 'person' else 'gdelt'
 
 
 def _item_key_from_scraper_row(source: str, row: dict) -> str:
@@ -283,6 +297,16 @@ def history_for_item(kind: str, source: str, key: str, *,
 
     if source == 'google' or kind == 'search':
         arc = history_for_search(key, geo=geo, days=days)
+    elif source == 'gdelt':
+        # Route by kind: headlines live in gdelt.json, people live in
+        # gdelt-people.json. The frontend passes source='gdelt' for
+        # both cards, so we resolve to the right snapshot file here.
+        real_source = _gdelt_source_for_kind(kind)
+        arc = history_for_scraper(real_source, key, days=days, geo=geo)
+        # Restore the caller-facing kind label (dispatcher swapped it
+        # to `person` via the _SCRAPER_KIND_MAP lookup).
+        arc['source'] = 'gdelt'
+        arc['kind']   = kind or arc.get('kind')
     elif source in _SCRAPER_KIND_MAP:
         arc = history_for_scraper(source, key, days=days, geo=geo)
     else:
