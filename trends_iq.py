@@ -643,6 +643,13 @@ def _wide_pool_aggregate(lookback_days: int) -> list[dict]:
                 continue
             key = term.lower()
             score = int(r.get('score') or 0)
+            rich = {
+                'volume':             int(r.get('volume') or 0),
+                'volume_growth_pct':  int(r.get('volume_growth_pct') or 0),
+                'started_ts':         int(r.get('started_ts') or 0),
+                'trend_keywords':     list(r.get('trend_keywords') or []),
+                'news_articles':      list(r.get('news_articles') or []),
+            }
             entry = by_term.get(key)
             if entry is None:
                 by_term[key] = {
@@ -652,11 +659,16 @@ def _wide_pool_aggregate(lookback_days: int) -> list[dict]:
                     'days_trending':  1,
                     'first_seen':     d_iso,
                     'last_seen':      d_iso,
+                    **rich,
                 }
                 continue
             if score > entry['score']:
                 entry['score'] = score
                 entry['term']  = term
+                for k in ('volume', 'volume_growth_pct', 'started_ts',
+                           'trend_keywords', 'news_articles'):
+                    if rich.get(k):
+                        entry[k] = rich[k]
             entry['days_trending'] += 1
             if d_iso < entry['first_seen']:
                 entry['first_seen'] = d_iso
@@ -668,29 +680,49 @@ def _wide_pool_aggregate(lookback_days: int) -> list[dict]:
                     entry['related'].append(rel)
                     seen.add(rel.lower())
             entry['related'] = entry['related'][:6]
+            if rich.get('trend_keywords'):
+                seen_kw = {kw.lower() for kw in (entry.get('trend_keywords') or [])}
+                for kw in rich['trend_keywords']:
+                    if kw and kw.lower() not in seen_kw:
+                        entry.setdefault('trend_keywords', []).append(kw)
+                        seen_kw.add(kw.lower())
+                entry['trend_keywords'] = (entry.get('trend_keywords') or [])[:12]
     return sorted(by_term.values(), key=lambda x: -x['score'])
 
 
 def _fetch_trending_searches(state: Optional[str], lookback_days: int) -> list[dict]:
     """Google Trends daily search snapshots for the requested geography.
 
-    For US-national requests, reads the wide multi-geo daily pool
-    (union of US + 15 large states, ~80 unique terms/day) so the
-    Overall card has real depth to scroll through and the category
-    cards have enough material to slice up. Falls back to the narrow
-    single-geo snapshot when the wide pool hasn't been populated yet.
-    For state / DMA queries, uses the state-level RSS snapshot.
+    Primary source is `trends_top_issues` which now prefers trendspy
+    under the hood (matches the trends.google.com/trending UI - gives
+    ~360 US trends/day with volume, growth %, started time, trend
+    breakdown keywords, and per-trend news articles). The pre-existing
+    wide multi-geo daily pool (populated by scripts/trends_scrapers/
+    google_trends_wide.py on Hetzner) supplements when trendspy is
+    thin - we union both sources for the US-national feed so any term
+    that shows up in either lands on the dashboard.
     """
     rows: list[dict] = []
     try:
         if state:
             rows = trends_top_issues(state=state, lookback_days=lookback_days) or []
         else:
-            wide = _wide_pool_aggregate(lookback_days)
-            if wide:
-                rows = wide
+            primary = trends_top_issues(state=None, lookback_days=lookback_days) or []
+            wide    = _wide_pool_aggregate(lookback_days) or []
+            # Union: keep every row from primary (rich fields intact),
+            # then append wide-pool rows whose term isn't already in
+            # primary (so we don't overwrite trendspy's rich fields
+            # with the older snapshot shape).
+            if primary and wide:
+                seen = {(r.get('term') or '').lower() for r in primary}
+                for w in wide:
+                    t = (w.get('term') or '').strip()
+                    if t and t.lower() not in seen:
+                        primary.append(w)
+                        seen.add(t.lower())
+                rows = primary
             else:
-                rows = trends_top_issues(state=None, lookback_days=lookback_days) or []
+                rows = primary or wide
     except Exception as e:
         logger.debug("trends_iq searches failed: %s", e)
         return []
@@ -700,12 +732,19 @@ def _fetch_trending_searches(state: Optional[str], lookback_days: int) -> list[d
         if not term:
             continue
         out.append({
-            'term':           term,
-            'score':          int(r.get('score') or 0),
-            'related':        list(r.get('related') or [])[:5],
-            'days_trending':  int(r.get('days_trending') or 1),
-            'first_seen':     r.get('first_seen') or '',
-            'last_seen':      r.get('last_seen') or '',
+            'term':               term,
+            'score':              int(r.get('score') or 0),
+            'related':            list(r.get('related') or [])[:5],
+            'days_trending':      int(r.get('days_trending') or 1),
+            'first_seen':         r.get('first_seen') or '',
+            'last_seen':          r.get('last_seen') or '',
+            # Rich fields from trendspy (empty when only RSS is
+            # available - the frontend handles both).
+            'volume':             int(r.get('volume') or 0),
+            'volume_growth_pct':  int(r.get('volume_growth_pct') or 0),
+            'started_ts':         int(r.get('started_ts') or 0),
+            'trend_keywords':     list(r.get('trend_keywords') or [])[:12],
+            'news_articles':      list(r.get('news_articles') or [])[:6],
         })
     return out
 

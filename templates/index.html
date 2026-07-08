@@ -1934,6 +1934,404 @@
             color: var(--text-primary);
         }
 
+        /* ===== Marketing Tab ===== */
+        .marketing-container {
+            padding: 1.25rem 1.5rem 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.75rem;
+            color: var(--text-primary);
+        }
+        .marketing-header {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .marketing-hero {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1.5rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(102, 217, 239, 0.08));
+            border: 1px solid rgba(139, 92, 246, 0.35);
+            border-radius: 14px;
+            padding: 1.25rem 1.5rem;
+            flex-wrap: wrap;
+        }
+        .marketing-hero-title { display: flex; gap: 1rem; align-items: flex-start; min-width: 0; flex: 1 1 340px; }
+        .marketing-hero-icon { font-size: 2.4rem; line-height: 1; margin-top: 0.15rem; }
+        .marketing-hero-eyebrow {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.14em;
+            color: #a78bfa;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .marketing-hero h2 {
+            margin: 0.15rem 0 0.3rem;
+            font-size: 1.65rem;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+        .marketing-hero-sub {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            max-width: 640px;
+        }
+        .marketing-hero-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .marketing-btn {
+            padding: 0.5rem 0.95rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-input);
+            color: var(--text-primary);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .marketing-btn:hover { border-color: #a78bfa; color: #ffffff; background: rgba(139, 92, 246, 0.18); }
+        .marketing-btn-primary { background: #6366f1; border-color: #6366f1; color: #ffffff; }
+        .marketing-btn-primary:hover { background: #7c3aed; border-color: #7c3aed; color: #ffffff; }
+
+        .marketing-snapshot-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.75rem;
+        }
+        .marketing-snap-tile {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+        .marketing-snap-label {
+            font-size: 0.68rem;
+            font-family: 'Space Mono', monospace;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        .marketing-snap-value {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.15;
+        }
+        .marketing-snap-sub {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            margin-top: 0.05rem;
+        }
+
+        .marketing-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem 1.5rem;
+        }
+        .marketing-section-head {
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+        .marketing-section-head h3 {
+            margin: 0;
+            font-family: 'Space Mono', monospace;
+            font-size: 1.05rem;
+            letter-spacing: 0.02em;
+            color: var(--accent-cyan);
+            font-weight: 700;
+        }
+        .marketing-section-sub {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        /* Media mix rows */
+        .marketing-mediamix { display: flex; flex-direction: column; gap: 0.6rem; }
+        .marketing-mix-row {
+            display: grid;
+            grid-template-columns: 190px 60px 1fr;
+            gap: 0.9rem;
+            align-items: center;
+        }
+        .marketing-mix-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .marketing-mix-pct {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            text-align: right;
+        }
+        .marketing-mix-barwrap {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        .marketing-mix-bartrack {
+            background: rgba(255,255,255,0.06);
+            border-radius: 6px;
+            height: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        body[data-theme="light"] .marketing-mix-bartrack { background: rgba(0,0,0,0.06); }
+        .marketing-mix-barfill {
+            height: 100%;
+            border-radius: 6px;
+            background: linear-gradient(90deg, #8b5cf6, #66d9ef);
+        }
+        .marketing-mix-note {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        /* Platform playbook cards */
+        .marketing-platform-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 0.9rem;
+        }
+        .marketing-plat-card {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+        }
+        .marketing-plat-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .marketing-plat-title {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            font-weight: 700;
+            font-size: 0.98rem;
+            color: var(--text-primary);
+        }
+        .marketing-plat-icon { font-size: 1.1rem; }
+        .marketing-plat-priority {
+            font-size: 0.65rem;
+            letter-spacing: 0.08em;
+            padding: 0.18rem 0.5rem;
+            border-radius: 999px;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-family: 'Space Mono', monospace;
+        }
+        .marketing-plat-priority.high { background: rgba(16, 185, 129, 0.18); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); }
+        .marketing-plat-priority.medium { background: rgba(102, 217, 239, 0.16); color: #66d9ef; border: 1px solid rgba(102, 217, 239, 0.4); }
+        .marketing-plat-priority.consider { background: rgba(253, 151, 31, 0.16); color: #fd971f; border: 1px solid rgba(253, 151, 31, 0.4); }
+        .marketing-plat-priority.skip { background: rgba(239, 68, 68, 0.14); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.35); }
+        .marketing-plat-priority.nosignal { background: rgba(148, 163, 184, 0.14); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); }
+        .marketing-plat-metrics {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+        .marketing-plat-metric b { color: var(--text-primary); font-weight: 700; }
+        .marketing-plat-seed {
+            font-size: 0.78rem;
+            line-height: 1.45;
+            color: var(--text-secondary);
+        }
+        .marketing-plat-seed b { color: var(--text-primary); font-weight: 600; }
+        .marketing-plat-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.15rem; }
+        .marketing-plat-tag {
+            background: rgba(139, 92, 246, 0.14);
+            color: #c4b5fd;
+            border: 1px solid rgba(139, 92, 246, 0.35);
+            border-radius: 999px;
+            padding: 0.15rem 0.55rem;
+            font-size: 0.68rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        body[data-theme="light"] .marketing-plat-tag { color: #6d28d9; background: rgba(139, 92, 246, 0.10); }
+
+        /* Lookalike composer */
+        .marketing-lookalike {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        @media (max-width: 900px) { .marketing-lookalike { grid-template-columns: 1fr; } }
+        .marketing-look-panel {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+        }
+        .marketing-look-panel h4 {
+            margin: 0 0 0.55rem;
+            font-size: 0.82rem;
+            font-family: 'Space Mono', monospace;
+            color: var(--text-secondary);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .marketing-look-list { display: flex; flex-direction: column; gap: 0.35rem; }
+        .marketing-look-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.5rem;
+            font-size: 0.83rem;
+        }
+        .marketing-look-row span:last-child { color: var(--accent-cyan); font-weight: 700; font-variant-numeric: tabular-nums; }
+        .marketing-look-seed {
+            grid-column: 1 / -1;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+        }
+        .marketing-look-seed textarea {
+            width: 100%;
+            min-height: 200px;
+            font-family: 'Space Mono', 'Courier New', monospace;
+            font-size: 0.78rem;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            resize: vertical;
+            line-height: 1.5;
+            box-sizing: border-box;
+        }
+
+        /* Geo */
+        .marketing-geo { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1rem; }
+        @media (max-width: 900px) { .marketing-geo { grid-template-columns: 1fr; } }
+        .marketing-geo-table {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.35rem 0.35rem;
+            overflow: hidden;
+        }
+        .marketing-geo-table table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        .marketing-geo-table th {
+            text-align: left;
+            padding: 0.5rem 0.75rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+        }
+        .marketing-geo-table td {
+            padding: 0.4rem 0.75rem;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        body[data-theme="light"] .marketing-geo-table td { border-bottom: 1px solid rgba(0,0,0,0.05); }
+        .marketing-geo-table tr:last-child td { border-bottom: 0; }
+        .marketing-geo-idx { font-weight: 700; font-variant-numeric: tabular-nums; }
+        .marketing-geo-idx.over { color: #10b981; }
+        .marketing-geo-idx.under { color: #ef4444; }
+        .marketing-geo-summary {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+        }
+        .marketing-geo-summary h4 {
+            margin: 0;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.78rem;
+            letter-spacing: 0.06em;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        .marketing-geo-summary p { margin: 0; font-size: 0.83rem; line-height: 1.5; color: var(--text-primary); }
+
+        /* Creative & retargeting */
+        .marketing-creative { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+        @media (max-width: 900px) { .marketing-creative { grid-template-columns: 1fr; } }
+        .marketing-creative-panel {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+        }
+        .marketing-creative-panel h4 {
+            margin: 0 0 0.55rem;
+            font-size: 0.82rem;
+            font-family: 'Space Mono', monospace;
+            color: var(--text-secondary);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .marketing-creative-panel ul {
+            margin: 0;
+            padding-left: 1.1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .marketing-creative-panel li { font-size: 0.83rem; line-height: 1.4; color: var(--text-primary); }
+
+        .marketing-retarget { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.75rem; }
+        .marketing-retarget-card {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.7rem 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .marketing-retarget-title { font-weight: 700; font-size: 0.9rem; color: var(--text-primary); display: flex; gap: 0.4rem; align-items: center; }
+        .marketing-retarget-body { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4; }
+
+        .marketing-ai-output {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            font-size: 0.88rem;
+            line-height: 1.65;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+        }
+        .marketing-ai-output h1, .marketing-ai-output h2, .marketing-ai-output h3 {
+            color: var(--accent-cyan);
+            margin: 1rem 0 0.5rem;
+        }
+        .marketing-empty {
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
         .strategic-card {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
@@ -2928,18 +3326,25 @@
             position: relative;
         }
 
+        /* 2026-07-08: dropdown opens DOWNWARD from the button using
+           position: fixed with JS-computed coords (see toggleExportMenu).
+           position: fixed lets it escape the parent .action-buttons-row's
+           overflow: hidden (which is needed for the scroll-collapse
+           animation) so the menu is never clipped or hidden behind the
+           toolbar / DATA CUTS pill above the button. */
         .dash-dropdown-menu {
-            position: absolute;
-            bottom: 100%;
-            left: 0;
-            margin-bottom: 0.5rem;
+            position: fixed;
+            top: auto;
+            left: auto;
+            bottom: auto;
+            margin: 0;
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 6px;
             min-width: 220px;
             width: max-content;
-            z-index: 1000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 10000;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.45);
             white-space: nowrap;
         }
 
@@ -19226,6 +19631,7 @@
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                    <button class="tab-btn tool-tab has-tooltip" data-feature="marketing" data-tooltip="Marketing: Digital ad buying playbook — media mix, per-platform priority, lookalike seed spec, geo targeting, and creative notes." onclick="showTab('marketing')"><span class="tab-icon">📣</span><span class="tab-label">MARKETING</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                 </div>
                                 <div class="toolbar-section-label">ANALYSIS TOOLS</div>
@@ -20416,7 +20822,87 @@
                 </div>
 
             </div>
-            
+
+            <!-- Marketing Tab -->
+            <div id="tab-marketing" class="tab-content">
+                <div class="marketing-container" id="marketingContainer">
+                    <div class="marketing-header">
+                        <div class="marketing-hero">
+                            <div class="marketing-hero-title">
+                                <span class="marketing-hero-icon">📣</span>
+                                <div>
+                                    <div class="marketing-hero-eyebrow">Digital Ad Buying Playbook</div>
+                                    <h2 id="marketingHeroName">Marketing</h2>
+                                    <div class="marketing-hero-sub" id="marketingHeroSub">Load a profile to generate a media plan, per-platform buying guide, and lookalike seed spec.</div>
+                                </div>
+                            </div>
+                            <div class="marketing-hero-actions">
+                                <button class="marketing-btn marketing-btn-secondary" onclick="renderMarketingTab()">↻ Refresh</button>
+                                <button class="marketing-btn marketing-btn-secondary" onclick="copyMarketingLookalikeSeed()">📋 Copy Seed</button>
+                                <button class="marketing-btn marketing-btn-primary" onclick="generateMarketingAIPlaybook()">✨ Generate AI Playbook</button>
+                            </div>
+                        </div>
+                        <div id="marketingSnapshotRow" class="marketing-snapshot-row"></div>
+                    </div>
+
+                    <section class="marketing-section">
+                        <div class="marketing-section-head">
+                            <h3>Recommended Media Mix</h3>
+                            <span class="marketing-section-sub">Suggested budget allocation, weighted by this audience's panel-observed digital behavior over the trailing 12 months.</span>
+                        </div>
+                        <div id="marketingMediaMix" class="marketing-mediamix"></div>
+                    </section>
+
+                    <section class="marketing-section">
+                        <div class="marketing-section-head">
+                            <h3>Ad Platform Playbook</h3>
+                            <span class="marketing-section-sub">Per-platform priority, panel reach, and top brands to seed lookalikes.</span>
+                        </div>
+                        <div id="marketingPlatformGrid" class="marketing-platform-grid"></div>
+                    </section>
+
+                    <section class="marketing-section">
+                        <div class="marketing-section-head">
+                            <h3>Lookalike Audience Composition</h3>
+                            <span class="marketing-section-sub">Paste-ready seed spec for building lookalikes on Meta, TikTok, Google Customer Match, and DSPs.</span>
+                        </div>
+                        <div id="marketingLookalike" class="marketing-lookalike"></div>
+                    </section>
+
+                    <section class="marketing-section">
+                        <div class="marketing-section-head">
+                            <h3>Geo Targeting</h3>
+                            <span class="marketing-section-sub">Top-indexing DMAs. Buy geo-fenced when concentration is high, otherwise layer as a DMA multiplier on national.</span>
+                        </div>
+                        <div id="marketingGeoBlock" class="marketing-geo"></div>
+                    </section>
+
+                    <section class="marketing-section">
+                        <div class="marketing-section-head">
+                            <h3>Creative &amp; Messaging Notes</h3>
+                            <span class="marketing-section-sub">Cultural touchpoints to reference in creative, tone cues from the demo mix, and category anti-affinities to avoid.</span>
+                        </div>
+                        <div id="marketingCreativeBlock" class="marketing-creative"></div>
+                    </section>
+
+                    <section class="marketing-section">
+                        <div class="marketing-section-head">
+                            <h3>Retargeting &amp; Always-On Surfaces</h3>
+                            <span class="marketing-section-sub">Where this audience naturally spends time — best surfaces for sequential messaging and always-on brand presence.</span>
+                        </div>
+                        <div id="marketingRetargetBlock" class="marketing-retarget"></div>
+                    </section>
+
+                    <section class="marketing-section" id="marketingAISection" style="display:none;">
+                        <div class="marketing-section-head">
+                            <h3>✨ AI-Generated Ad Playbook</h3>
+                            <span class="marketing-section-sub">Auto-generated strategic narrative you can paste into a brief.</span>
+                        </div>
+                        <div id="marketingAIOutput" class="marketing-ai-output"></div>
+                    </section>
+                </div>
+            </div>
+
             <!-- Profile Selection Modal (Exec Summary / Key Insight Builder / Ecosystem) -->
             <div id="profileSelectionModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeProfileSelectionModal()">
                 <div class="modal-content profile-selection-modal-content">
@@ -22182,6 +22668,23 @@
             #trendsIQView .tiq-badge { display: inline-flex; align-items: center; padding: 0.1rem 0.45rem; background: rgba(124, 58, 237, 0.18); color: #c4b5fd; border-radius: 10px; font-size: 0.7rem; font-weight: 500; }
             #trendsIQView .tiq-badge.hot { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
             #trendsIQView .tiq-badge.rising { background: rgba(34, 197, 94, 0.18); color: #86efac; }
+            /* Rich Google Trends fields: volume / growth / started time /
+               "Trend breakdown" query chips / per-trend news thumbnails.
+               These match the layout of trends.google.com/trending. */
+            #trendsIQView .tiq-badge.tiq-vol { background: rgba(59, 130, 246, 0.22); color: #93c5fd; }
+            #trendsIQView .tiq-badge.tiq-growth { background: rgba(34, 197, 94, 0.18); color: #86efac; }
+            #trendsIQView .tiq-badge.tiq-growth.tiq-growth-hot { background: rgba(34, 197, 94, 0.28); color: #4ade80; font-weight: 600; }
+            #trendsIQView .tiq-started { font-size: 0.7rem; color: var(--text-secondary); opacity: 0.85; }
+            #trendsIQView .tiq-breakdown { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 0.35rem; }
+            #trendsIQView .tiq-chip { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; color: #c4b5fd; background: rgba(124, 58, 237, 0.14); border: 1px solid rgba(124, 58, 237, 0.28); text-decoration: none; transition: background 0.15s; }
+            #trendsIQView .tiq-chip:hover { background: rgba(124, 58, 237, 0.28); color: #ddd6fe; }
+            #trendsIQView .tiq-search-news { display: flex; flex-direction: column; gap: 6px; margin-top: 0.5rem; padding-top: 0.4rem; border-top: 1px dashed rgba(255,255,255,0.06); }
+            #trendsIQView .tiq-search-news-item { display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit; padding: 3px 0; }
+            #trendsIQView .tiq-search-news-item:hover .tiq-search-news-title { color: #a78bfa; }
+            #trendsIQView .tiq-search-news-img { flex: 0 0 42px; width: 42px; height: 32px; background-size: cover; background-position: center; border-radius: 4px; background-color: rgba(255,255,255,0.04); }
+            #trendsIQView .tiq-search-news-body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+            #trendsIQView .tiq-search-news-source { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+            #trendsIQView .tiq-search-news-title { font-size: 0.75rem; color: var(--text-primary); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
             #trendsIQView .tiq-mover-badge { display: inline-flex; align-items: center; gap: 2px; padding: 0.1rem 0.5rem; border-radius: 10px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em; }
             #trendsIQView .tiq-mover-badge.new     { background: rgba(59, 130, 246, 0.22); color: #93c5fd; }
             #trendsIQView .tiq-mover-badge.up      { background: rgba(34, 197, 94, 0.22);  color: #86efac; }
@@ -39899,20 +40402,101 @@
             return html;
         }
 
+        // Format a search volume as "50K+", "1M+", etc. Google's UI
+        // rounds down to the nearest tier ceiling; we mirror that so
+        // the number reads the same as trends.google.com.
+        function _tiqFormatVolume(v) {
+            v = Number(v) || 0;
+            if (v <= 0) return '';
+            if (v >= 1000000) return Math.floor(v / 1000000) + 'M+';
+            if (v >= 1000)    return Math.floor(v / 1000)    + 'K+';
+            if (v >= 100)     return '100+';
+            return v + '+';
+        }
+
+        // "3 hours ago", "22 hours ago", "yesterday", etc.
+        function _tiqRelativeTime(unixSec) {
+            unixSec = Number(unixSec) || 0;
+            if (!unixSec) return '';
+            var deltaS = Math.floor(Date.now() / 1000) - unixSec;
+            if (deltaS < 60)              return 'just now';
+            if (deltaS < 3600)            return Math.floor(deltaS / 60) + ' min ago';
+            if (deltaS < 3600 * 48)       return Math.floor(deltaS / 3600) + ' hours ago';
+            if (deltaS < 3600 * 24 * 14)  return Math.floor(deltaS / 86400) + ' days ago';
+            return new Date(unixSec * 1000).toISOString().slice(0, 10);
+        }
+
         // Render one search-term row. Shared across all 5 cards so the
-        // rank / badges / related-context styling stays consistent.
+        // rank / badges / breakdown chip / news-strip styling stays
+        // consistent. Falls back gracefully when trendspy fields are
+        // missing (e.g. RSS-only days) so old snapshots keep rendering.
         function _tiqRenderSearchRow(r, rank) {
-            var relatedHtml = (r.related || []).slice(0, 2).map(function(x) { return _tiqEsc(x); }).join(' &middot; ');
-            var hot = r.days_trending >= 3;
+            var volLabel  = _tiqFormatVolume(r.volume || r.score || 0);
+            var growth    = Number(r.volume_growth_pct || 0);
+            var started   = _tiqRelativeTime(r.started_ts || 0);
+            var hot       = r.days_trending >= 3;
+            var breakdown = (r.trend_keywords || []).slice(0, 6);
+            var news      = (r.news_articles  || []).slice(0, 2);
+
+            var badges = '';
+            if (volLabel) {
+                badges += '<span class="tiq-badge tiq-vol">' + _tiqEsc(volLabel) + '</span>';
+            }
+            if (growth > 0) {
+                var growthCls = growth >= 500 ? ' tiq-growth-hot' : '';
+                badges += '<span class="tiq-badge tiq-growth' + growthCls + '">+' +
+                          (growth >= 1000 ? '1,000%' : (growth + '%')) + '</span>';
+            }
+            if (r.days_trending) {
+                badges += '<span class="tiq-badge' + (hot ? ' hot' : '') + '">' +
+                          r.days_trending + 'd trending</span>';
+            }
+            if (started) {
+                badges += '<span class="tiq-started">' + _tiqEsc(started) + '</span>';
+            }
+
+            var chips = '';
+            if (breakdown.length) {
+                chips = '<div class="tiq-breakdown">' +
+                        breakdown.map(function(kw) {
+                            var q = encodeURIComponent(kw);
+                            return '<a class="tiq-chip" href="https://www.google.com/search?q=' + q +
+                                   '" target="_blank" rel="noopener">' + _tiqEsc(kw) + '</a>';
+                        }).join('') +
+                        '</div>';
+            }
+
+            var newsHtml = '';
+            if (news.length) {
+                newsHtml = '<div class="tiq-search-news">' +
+                    news.map(function(a) {
+                        var img = a.image ?
+                            '<div class="tiq-search-news-img" style="background-image:url(\'' +
+                            _tiqEsc(a.image) + '\')"></div>' : '';
+                        return '<a class="tiq-search-news-item" href="' + _tiqEsc(a.url || '#') +
+                               '" target="_blank" rel="noopener">' +
+                               img +
+                               '<span class="tiq-search-news-body">' +
+                               '<span class="tiq-search-news-source">' + _tiqEsc(a.source || '') + '</span>' +
+                               '<span class="tiq-search-news-title">' + _tiqEsc(a.title || '') + '</span>' +
+                               '</span></a>';
+                    }).join('') +
+                    '</div>';
+            } else if ((r.related || []).length) {
+                // No structured articles - fall back to titles-only line
+                newsHtml = '<div class="tiq-row-meta" style="opacity:0.75;">' +
+                           (r.related || []).slice(0, 2).map(function(x) { return _tiqEsc(x); }).join(' &middot; ') +
+                           '</div>';
+            }
+
             return '<div class="tiq-row"><div class="tiq-rank">' + rank + '</div>' +
                    '<div class="tiq-row-body">' +
                    '<div class="tiq-row-title">' + _tiqEsc(r.term) +
                    _tiqActions('search', 'google', r.term, r.term, 'National') + '</div>' +
-                   '<div class="tiq-row-meta">' +
-                   (r.score ? '<span class="tiq-badge">' + _tiqNum(r.score) + ' searches</span>' : '') +
-                   (r.days_trending ? '<span class="tiq-badge' + (hot ? ' hot' : '') + '">' + r.days_trending + 'd trending</span>' : '') +
-                   (relatedHtml ? '<span style="opacity:0.75;">' + relatedHtml + '</span>' : '') +
-                   '</div></div></div>';
+                   (badges ? '<div class="tiq-row-meta">' + badges + '</div>' : '') +
+                   chips +
+                   newsHtml +
+                   '</div></div>';
         }
 
         // Renders one card in the searches row. `scrollable=true` gives
@@ -80167,7 +80751,8 @@
             media: { icon: '📺', title: 'Media', desc: 'Media consumption patterns including TV, streaming, social media preferences.' },
             content: { icon: '🎬', title: 'Content', desc: 'Content consumption preferences including genres, formats, and viewing habits.' },
             segmentation: { icon: '🎛️', title: 'Segment Builder', desc: 'Build custom audience segments with demographic and behavioral filters.' },
-            comparison: { icon: '⚖️', title: 'Compare', desc: 'Side-by-side comparison of multiple profiles.' }
+            comparison: { icon: '⚖️', title: 'Compare', desc: 'Side-by-side comparison of multiple profiles.' },
+            marketing: { icon: '📣', title: 'Marketing', desc: 'Digital ad buying playbook: media mix, per-platform priority, lookalike seed spec, geo targeting, and creative notes.' }
         };
         
         function updateSegmentBuilderTitle() {
@@ -80200,6 +80785,723 @@
             }
         }
         
+        // =====================================================================
+        // MARKETING TAB — Digital ad buying playbook
+        // Renders from currentDashboardData: media mix, per-platform priority,
+        // lookalike seed spec, geo targeting, creative notes, retargeting.
+        // Everything is data-driven off panel-observed reach (pct) and index.
+        // =====================================================================
+        (function() {
+            const CH_ICON = {
+                paidSocial: '📱', paidSearch: '🔎', ctv: '📺', onlineVideo: '▶️',
+                display: '🌐', audio: '🎧', podcast: '🎙️', gaming: '🎮', retail: '🛒'
+            };
+
+            // Canonical marketing platform definitions.
+            // Each entry maps a media-buying surface to the brand names to look
+            // for in the panel data. `panelCats` are the category buckets to
+            // search first (fastest lookup); `matchNames` are brand-name
+            // substrings (case-insensitive). `bucket` = which media-mix channel.
+            const PLATFORMS = [
+                { key: 'meta', icon: '📘', name: 'Meta (Facebook + Instagram)', bucket: 'paidSocial',
+                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE', 'SOCIAL/MEDIA'],
+                  matchNames: ['facebook', 'instagram'],
+                  aggregateLabel: 'Combined Facebook + Instagram reach',
+                  buyingNote: 'Use Advantage+ campaigns. Seed with the top brands below as engaged-audience lookalikes; layer age + income + top DMAs. Both feeds and Reels.' },
+                { key: 'tiktok', icon: '🎵', name: 'TikTok', bucket: 'paidSocial',
+                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE'],
+                  matchNames: ['tiktok'],
+                  buyingNote: 'Spark Ads on creator content typically outperform brand-first units. Interest targeting: use the top brands/creators below as behavior seeds.' },
+                { key: 'youtube', icon: '▶️', name: 'YouTube (video + Shorts)', bucket: 'onlineVideo',
+                  panelCats: ['SOCIAL MEDIA', 'STREAMING/PLATFORM', 'STREAMING/VIDEO'],
+                  matchNames: ['youtube'],
+                  buyingNote: 'Buy via Google Ads. Custom Intent + Custom Affinity based on the search terms below. Pre-roll for reach, in-feed video Shorts for engagement.' },
+                { key: 'snap', icon: '👻', name: 'Snapchat', bucket: 'paidSocial',
+                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE'],
+                  matchNames: ['snapchat', 'snap'],
+                  buyingNote: 'Skews younger. Vertical video 5-6s. Ideal for reach among 18-34.' },
+                { key: 'x', icon: '𝕏', name: 'X (Twitter)', bucket: 'paidSocial',
+                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE'],
+                  matchNames: ['twitter', ' x ', 'x/twitter', 'x,'],
+                  matchExact: ['x'],
+                  buyingNote: 'Best for live moments, sports, news, and B2B. Conversation topics targeting still competitive.' },
+                { key: 'reddit', icon: '🤖', name: 'Reddit', bucket: 'paidSocial',
+                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE'],
+                  matchNames: ['reddit'],
+                  buyingNote: 'Subreddit-level targeting is the moat. Native, non-promotional creative wins. Great for tech, gaming, finance, hobbyist audiences.' },
+                { key: 'pinterest', icon: '📌', name: 'Pinterest', bucket: 'paidSocial',
+                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE'],
+                  matchNames: ['pinterest'],
+                  buyingNote: 'Skews female + planners. Idea/product/collections ads work well for retail, home, wedding, beauty.' },
+                { key: 'linkedin', icon: '💼', name: 'LinkedIn', bucket: 'paidSocial',
+                  panelCats: ['SOCIAL MEDIA', 'SOCIAL MEDIA/USE'],
+                  matchNames: ['linkedin'],
+                  buyingNote: 'Only justified for B2B, high-income, or professional/education audiences. Expensive CPMs; keep it for lead-gen or awareness among decision-makers.' },
+                { key: 'google_search', icon: '🔎', name: 'Google Search + PMax', bucket: 'paidSearch',
+                  panelCats: ['SEARCH ENGINE', 'SEARCH ENGINE/AI', 'SEARCH/ENGINE'],
+                  matchNames: ['google'],
+                  aggregateLabel: 'Google search panel reach',
+                  buyingNote: 'Always-on. Add branded, competitor conquesting, and category-intent keywords. Layer Performance Max with the audience signals from top-brand lookalikes.' },
+                { key: 'bing_ai', icon: '🧠', name: 'Bing + AI Search (Copilot, ChatGPT, Perplexity)', bucket: 'paidSearch',
+                  panelCats: ['SEARCH ENGINE', 'SEARCH ENGINE/AI'],
+                  matchNames: ['bing', 'chatgpt', 'perplexity', 'copilot', 'gemini'],
+                  buyingNote: 'Bing Ads for search-intent tail. AI-search ads emerging surface; test small budgets for future-proofing.' },
+                { key: 'amazon_ads', icon: '📦', name: 'Amazon Ads + DSP', bucket: 'retail',
+                  panelCats: ['RETAIL', 'MOST PURCHASED BRANDS', 'MPB'],
+                  matchNames: ['amazon'],
+                  buyingNote: 'Sponsored Products for consideration + Amazon DSP for CTV/audio retargeting. Retail media is 20-25% of most digital budgets in 2026.' },
+                { key: 'walmart_connect', icon: '🛒', name: 'Walmart Connect', bucket: 'retail',
+                  panelCats: ['RETAIL', 'MOST PURCHASED BRANDS', 'MPB'],
+                  matchNames: ['walmart'],
+                  buyingNote: 'Onsite + offsite via The Trade Desk. Strong for CPG, grocery, household. Match investment to Walmart panel reach.' },
+                { key: 'target_roundel', icon: '🎯', name: 'Target (Roundel)', bucket: 'retail',
+                  panelCats: ['RETAIL', 'MOST PURCHASED BRANDS', 'MPB'],
+                  matchNames: ['target'],
+                  matchExact: ['target'],
+                  buyingNote: 'Great for beauty, apparel, home, and family CPG when Target reach is high.' },
+                { key: 'hulu', icon: '📺', name: 'Hulu (Disney Advertising)', bucket: 'ctv',
+                  panelCats: ['STREAMING/PLATFORM', 'STREAMING/VIDEO', 'STREAMING VIDEO', 'VMVPD', 'FAST'],
+                  matchNames: ['hulu'],
+                  buyingNote: 'Disney Advertising DRAX platform. Combine with ESPN+ / Disney+ for household reach. Great mid-funnel CTV.' },
+                { key: 'netflix', icon: '🎬', name: 'Netflix (ad tier)', bucket: 'ctv',
+                  panelCats: ['STREAMING/PLATFORM', 'STREAMING/VIDEO', 'STREAMING VIDEO'],
+                  matchNames: ['netflix'],
+                  buyingNote: 'Growing ad tier. Bought via Microsoft Ads or Trade Desk. Premium CPMs; strong when Netflix reach in this audience > Gen Pop.' },
+                { key: 'peacock', icon: '🦚', name: 'Peacock', bucket: 'ctv',
+                  panelCats: ['STREAMING/PLATFORM', 'STREAMING/VIDEO', 'STREAMING VIDEO', 'VMVPD', 'FAST'],
+                  matchNames: ['peacock'],
+                  buyingNote: 'NBCU One Platform. Best when this audience over-indexes on NBC content, sports, or Bravo/Universal properties.' },
+                { key: 'max', icon: '🎭', name: 'Max / HBO', bucket: 'ctv',
+                  panelCats: ['STREAMING/PLATFORM', 'STREAMING/VIDEO', 'STREAMING VIDEO'],
+                  matchNames: ['max', 'hbo'],
+                  buyingNote: 'Premium CTV audience. Ad tier expanding. Buy via WBD ad platform or DSP.' },
+                { key: 'ytv_youtubeTV', icon: '📡', name: 'YouTube TV / vMVPD live', bucket: 'ctv',
+                  panelCats: ['VMVPD', 'FAST', 'BROADCAST/CABLE', 'STREAMING/PLATFORM'],
+                  matchNames: ['youtube tv', 'sling', 'fubo', 'philo', 'directv stream'],
+                  buyingNote: 'Live TV replacement audience. Great for sports + news day-parts. Buy via Google Ads (YouTube TV) or direct.' },
+                { key: 'roku', icon: '🟪', name: 'Roku Channel / RokuADS', bucket: 'ctv',
+                  panelCats: ['STREAMING/PLATFORM', 'STREAMING/VIDEO', 'FAST'],
+                  matchNames: ['roku'],
+                  buyingNote: 'OneView DSP + Roku homescreen. Strong for AVOD/FAST audience and connected-home brands.' },
+                { key: 'tubi_pluto', icon: '📼', name: 'Tubi / Pluto TV / FAST', bucket: 'ctv',
+                  panelCats: ['STREAMING/PLATFORM', 'FAST', 'STREAMING/VIDEO'],
+                  matchNames: ['tubi', 'pluto', 'freevee', 'xumo'],
+                  buyingNote: 'Ad-supported free streaming. Reach cord-cutters and price-sensitive households. Efficient CPMs.' },
+                { key: 'spotify', icon: '🎵', name: 'Spotify', bucket: 'audio',
+                  panelCats: ['STREAMING/MUSIC', 'STREAMING MUSIC'],
+                  matchNames: ['spotify'],
+                  buyingNote: 'Audio ads + video takeover + podcast pre-roll (Megaphone). Real-time context targeting available.' },
+                { key: 'pandora_iheart', icon: '📻', name: 'Pandora / iHeart / SiriusXM', bucket: 'audio',
+                  panelCats: ['STREAMING/MUSIC', 'PODCAST', 'RADIO'],
+                  matchNames: ['pandora', 'iheart', 'siriusxm', 'sirius'],
+                  buyingNote: 'SiriusXM Media (owns Pandora + Stitcher). Strong for older demos + streaming audio + podcast bundling.' },
+                { key: 'podcast', icon: '🎙️', name: 'Podcast Networks (host-read + programmatic)', bucket: 'podcast',
+                  panelCats: ['PODCAST', 'STREAMING/MUSIC'],
+                  matchNames: ['podcast', 'apple podcast', 'wondery', 'spotify podcast'],
+                  buyingNote: 'Blend host-read (Wondery, iHeart, SXM Media) + programmatic dynamic insertion (Triton, Megaphone). Attribute via Podscribe / Barometric.' },
+                { key: 'twitch_gaming', icon: '🎮', name: 'Twitch + Gaming/In-app', bucket: 'gaming',
+                  panelCats: ['GAMING', 'GAMES', 'GAMING/CONSOLE', 'STREAMING/PLATFORM'],
+                  matchNames: ['twitch', 'xbox', 'playstation', 'nintendo', 'steam', 'roblox', 'fortnite'],
+                  buyingNote: 'Twitch via Amazon DSP. In-app gaming via Unity Ads, AppLovin, Vungle. Rewarded video is highest completion.' },
+                { key: 'dsp_display', icon: '🌐', name: 'Programmatic Display + Video (The Trade Desk, DV360)', bucket: 'display',
+                  panelCats: [],
+                  matchNames: [],
+                  buyingNote: 'Always-on baseline: contextual + retargeting + 3P segments. Use top brand seeds below to build custom LiveRamp / Trade Desk lookalikes.' }
+            ];
+
+            // Media-mix channel labels + baseline weights (a floor so no channel
+            // drops out entirely for a normally-behaved audience). Weights get
+            // amplified by observed panel reach for the platforms above.
+            const CHANNEL_META = {
+                paidSocial:  { label: 'Paid Social',           icon: '📱', baseline: 12, description: 'Meta, TikTok, Snap, X, Reddit, Pinterest, LinkedIn — sized to social-media panel reach.' },
+                paidSearch:  { label: 'Paid Search',           icon: '🔎', baseline: 14, description: 'Google Search + PMax + Bing/AI. Always-on demand capture.' },
+                ctv:         { label: 'Connected TV / OTT',    icon: '📺', baseline: 10, description: 'Hulu, Netflix, Peacock, Max, YouTube TV, Roku, Tubi/Pluto. Sized to streaming panel reach.' },
+                onlineVideo: { label: 'Online Video (YouTube)',icon: '▶️', baseline:  8, description: 'YouTube pre-roll + Shorts + in-feed. Sized to YouTube panel reach.' },
+                audio:       { label: 'Streaming Audio',       icon: '🎧', baseline:  4, description: 'Spotify, Pandora/iHeart/SXM. Sized to music-streaming panel reach.' },
+                podcast:     { label: 'Podcast',               icon: '🎙️', baseline:  4, description: 'Host-read + programmatic. Sized to podcast panel reach.' },
+                gaming:      { label: 'Gaming / In-app',       icon: '🎮', baseline:  3, description: 'Twitch, in-app rewarded video, Roblox/Fortnite when relevant.' },
+                retail:      { label: 'Retail Media',          icon: '🛒', baseline:  8, description: 'Amazon Ads/DSP, Walmart Connect, Target Roundel, Instacart. Sized to shopper reach.' },
+                display:     { label: 'Programmatic Display',  icon: '🌐', baseline: 12, description: 'Trade Desk / DV360. Always-on contextual, retargeting, and custom lookalikes.' }
+            };
+
+            function _mkNorm(s) { return (s || '').toString().toUpperCase().replace(/[^\w/]/g, ' ').replace(/\s+/g, ' ').trim(); }
+
+            function _mkBehav() {
+                const d = (typeof currentDashboardData !== 'undefined') ? currentDashboardData : null;
+                return (d && d.behavioral) ? d.behavioral : {};
+            }
+            function _mkDemos() {
+                const d = (typeof currentDashboardData !== 'undefined') ? currentDashboardData : null;
+                return (d && d.demographics) ? d.demographics : {};
+            }
+            function _mkLocs() {
+                const d = (typeof currentDashboardData !== 'undefined') ? currentDashboardData : null;
+                return (d && Array.isArray(d.locations)) ? d.locations : [];
+            }
+            function _mkProfileName() {
+                const p = (typeof currentProfileData !== 'undefined') ? currentProfileData : null;
+                return (p && p.name) ? p.name : 'This Audience';
+            }
+
+            // Return items from the given category names, deduped by name (case
+            // insensitive). Sorted by pct descending.
+            function _mkItemsFromCats(catNames) {
+                const behav = _mkBehav();
+                const seen = new Set();
+                const out = [];
+                (catNames || []).forEach(cat => {
+                    const items = behav[cat];
+                    if (!Array.isArray(items)) return;
+                    items.forEach(it => {
+                        const nm = (it && it.name) ? _mkNorm(it.name) : '';
+                        if (!nm || seen.has(nm)) return;
+                        seen.add(nm);
+                        out.push(it);
+                    });
+                });
+                out.sort((a, b) => (Number(b.pct)||0) - (Number(a.pct)||0));
+                return out;
+            }
+
+            // Find a brand within a platform definition.
+            // Returns { pct, index, name, matched: [items] } or null.
+            function _mkFindPlatformSignal(plat) {
+                const items = _mkItemsFromCats(plat.panelCats);
+                const wanted = (plat.matchNames || []).map(s => s.trim().toLowerCase()).filter(Boolean);
+                const wantedExact = (plat.matchExact || []).map(s => s.trim().toLowerCase());
+                const matched = items.filter(it => {
+                    const nm = (it.name || '').toLowerCase();
+                    if (!nm) return false;
+                    if (wantedExact.some(x => nm === x)) return true;
+                    return wanted.some(w => nm.includes(w));
+                });
+                if (matched.length === 0) return null;
+                // Aggregate reach for platforms with multiple brand components
+                // (e.g. Meta = FB + IG). Use max index across matched brands as
+                // the platform's index signal, and combined pct floored at max.
+                const pcts = matched.map(m => Number(m.pct) || 0);
+                const idxs = matched.map(m => Number(m.index) || 0).filter(x => x > 0);
+                const pctMax = Math.max(...pcts);
+                // Use blended pct: max + 0.5 * (rest) capped at 100, so a
+                // combined Meta reach doesn't undercount vs either FB or IG
+                // alone but also doesn't naively double-count.
+                const pctBlend = matched.length === 1
+                    ? pctMax
+                    : Math.min(100, pctMax + pcts.slice(1).sort((a,b)=>b-a).reduce((s,x) => s + x*0.35, 0));
+                const idx = idxs.length ? Math.max(...idxs) : 100;
+                return { pct: pctBlend, pctMax, index: idx, matched };
+            }
+
+            function _mkPriorityForPct(pct, index) {
+                if (pct >= 25) return { key: 'high',    label: 'High Priority' };
+                if (pct >= 12) return { key: 'medium',  label: 'Medium Priority' };
+                if (pct >= 5)  return { key: 'consider',label: 'Consider' };
+                return { key: 'skip', label: 'Low Priority' };
+            }
+
+            function _mkMedianAge() {
+                try {
+                    if (typeof calculateMedianAgeFromDistribution === 'function') {
+                        const age = _mkDemos().age || {};
+                        return calculateMedianAgeFromDistribution(age);
+                    }
+                } catch(_) {}
+                return null;
+            }
+
+            function _mkTopDemo(name, N=3) {
+                const demo = _mkDemos()[name] || {};
+                const rows = Object.keys(demo).map(k => ({ bucket: k, pct: Number(demo[k]) || 0 }))
+                    .filter(r => r.pct > 0)
+                    .sort((a,b) => b.pct - a.pct);
+                return rows.slice(0, N);
+            }
+
+            function _mkGenderSkew() {
+                const g = _mkDemos().gender || {};
+                const f = Number(g['Female'] || g['FEMALE'] || 0);
+                const m = Number(g['Male'] || g['MALE'] || 0);
+                if (!f && !m) return { primary: '—', pct: 0 };
+                if (f >= m) return { primary: 'Female', pct: f };
+                return { primary: 'Male', pct: m };
+            }
+
+            // ---------- Snapshot tiles ----------
+            function _mkRenderSnapshot() {
+                const el = document.getElementById('marketingSnapshotRow');
+                if (!el) return;
+                const d = (typeof currentDashboardData !== 'undefined') ? currentDashboardData : null;
+                if (!d) return;
+                const proj = Number(d.projectedUS || 0);
+                const sample = Number(d.sampleSize || 0);
+                const median = _mkMedianAge();
+                const gender = _mkGenderSkew();
+                const topAge = _mkTopDemo('age', 1)[0];
+                const topEth = _mkTopDemo('ethnicity', 1)[0];
+                const topInc = _mkTopDemo('income', 1)[0];
+                // Digital-addressable proxy: max panel reach across SOCIAL MEDIA + SEARCH
+                const socialItems = _mkItemsFromCats(['SOCIAL MEDIA','SOCIAL MEDIA/USE']);
+                const searchItems = _mkItemsFromCats(['SEARCH ENGINE','SEARCH ENGINE/AI']);
+                const topPanel = Math.max(
+                    socialItems.length ? Number(socialItems[0].pct)||0 : 0,
+                    searchItems.length ? Number(searchItems[0].pct)||0 : 0
+                );
+                const addressable = topPanel > 0 ? Math.round(topPanel * proj / 100) : proj;
+
+                const tiles = [
+                    { label: 'US Universe',        value: formatNumber(proj),                              sub: 'Projected total audience' },
+                    { label: 'Digitally Reachable', value: formatNumber(addressable),                       sub: 'Top-platform panel reach × universe' },
+                    { label: 'Sample',             value: formatNumber(sample),                             sub: 'Panelists in this segment' },
+                    { label: 'Median Age',         value: (median && median > 0) ? median.toFixed(0) : '—', sub: 'Weighted from age distribution' },
+                    { label: 'Skew',               value: gender.primary,                                   sub: gender.pct ? gender.pct.toFixed(0) + '% ' + gender.primary : '—' },
+                    { label: 'Top Age',            value: topAge ? topAge.bucket : '—',                     sub: topAge ? topAge.pct.toFixed(0) + '% of audience' : '' },
+                    { label: 'Top Ethnicity',      value: topEth ? topEth.bucket : '—',                     sub: topEth ? topEth.pct.toFixed(0) + '% of audience' : '' },
+                    { label: 'Top Income',         value: topInc ? topInc.bucket : '—',                     sub: topInc ? topInc.pct.toFixed(0) + '% of audience' : '' }
+                ];
+                el.innerHTML = tiles.map(t => `
+                    <div class="marketing-snap-tile">
+                        <div class="marketing-snap-label">${t.label}</div>
+                        <div class="marketing-snap-value">${(t.value || '').toString().replace(/</g,'&lt;')}</div>
+                        <div class="marketing-snap-sub">${(t.sub || '').replace(/</g,'&lt;')}</div>
+                    </div>`).join('');
+            }
+
+            // ---------- Media Mix ----------
+            // For each channel, compute a weight = baseline + top-platform reach
+            // signal. Normalize to 100%. Attach a short reasoning note derived
+            // from the signal used.
+            function _mkComputeMediaMix() {
+                // Collect per-platform reach into a map by bucket
+                const bucketSignal = {}; // bucket -> {topPct, topName, count}
+                PLATFORMS.forEach(p => {
+                    const sig = _mkFindPlatformSignal(p);
+                    if (!sig) return;
+                    const b = bucketSignal[p.bucket] || { topPct: 0, topName: '', count: 0, contributors: [] };
+                    b.count += 1;
+                    b.contributors.push({ name: p.name, pct: sig.pct });
+                    if (sig.pct > b.topPct) {
+                        b.topPct = sig.pct;
+                        b.topName = p.name;
+                    }
+                    bucketSignal[p.bucket] = b;
+                });
+                // Weight formula: baseline + 0.9 * topPct + 0.15 * (sum of extra contributor pcts)
+                const rows = [];
+                Object.keys(CHANNEL_META).forEach(bucket => {
+                    const meta = CHANNEL_META[bucket];
+                    const sig = bucketSignal[bucket];
+                    const topPct = sig ? sig.topPct : 0;
+                    const rest = sig ? sig.contributors.slice().sort((a,b)=>b.pct-a.pct).slice(1).reduce((s,c)=>s+c.pct,0) : 0;
+                    const weight = meta.baseline + 0.9 * topPct + 0.15 * rest;
+                    rows.push({
+                        bucket,
+                        label: meta.label,
+                        icon: meta.icon,
+                        weight,
+                        topSignal: sig ? { name: sig.topName, pct: sig.topPct } : null,
+                        contributorCount: sig ? sig.count : 0,
+                        description: meta.description
+                    });
+                });
+                const total = rows.reduce((s,r)=>s+r.weight,0) || 1;
+                rows.forEach(r => { r.share = 100 * r.weight / total; });
+                rows.sort((a,b) => b.share - a.share);
+                return rows;
+            }
+
+            function _mkRenderMediaMix() {
+                const el = document.getElementById('marketingMediaMix');
+                if (!el) return;
+                const rows = _mkComputeMediaMix();
+                if (!rows.length) { el.innerHTML = '<div class="marketing-empty">No data.</div>'; return; }
+                const max = rows[0].share || 100;
+                el.innerHTML = rows.map(r => {
+                    const w = Math.max(0, (r.share / max) * 100);
+                    const note = r.topSignal
+                        ? `${r.description} <b>Signal:</b> ${r.topSignal.name} at ${r.topSignal.pct.toFixed(0)}% panel reach${r.contributorCount > 1 ? ` (${r.contributorCount} platforms in bucket)` : ''}.`
+                        : r.description + ' No direct panel signal — sized to baseline only.';
+                    return `
+                        <div class="marketing-mix-row">
+                            <div class="marketing-mix-label">${r.icon} ${r.label.replace(/</g,'&lt;')}</div>
+                            <div class="marketing-mix-pct">${r.share.toFixed(0)}%</div>
+                            <div class="marketing-mix-barwrap">
+                                <div class="marketing-mix-bartrack"><div class="marketing-mix-barfill" style="width:${w.toFixed(1)}%"></div></div>
+                                <div class="marketing-mix-note">${note}</div>
+                            </div>
+                        </div>`;
+                }).join('');
+            }
+
+            // ---------- Platform Playbook cards ----------
+            function _mkRenderPlatformGrid() {
+                const el = document.getElementById('marketingPlatformGrid');
+                if (!el) return;
+                const median = _mkMedianAge();
+                const gender = _mkGenderSkew();
+                const topDMAs = _mkLocs()
+                    .filter(l => (l.name || '').toString().toUpperCase() !== 'UNITED STATES')
+                    .sort((a,b) => (Number(b.pct)||0) - (Number(a.pct)||0))
+                    .slice(0, 3)
+                    .map(l => l.name)
+                    .filter(Boolean);
+                // Top MPB / retail brands to seed lookalike custom audiences
+                const topAffinity = _mkItemsFromCats(['MOST PURCHASED BRANDS','MPB','APPAREL/FOOTWEAR','QSR','RETAIL','TALENT','MUSICIAN','ACTOR'])
+                    .slice(0, 6).map(x => x.name).filter(Boolean);
+
+                const cards = PLATFORMS.map(p => {
+                    const sig = _mkFindPlatformSignal(p);
+                    let priority, pctLabel, indexLabel, seedBrands;
+                    if (!sig) {
+                        priority = { key: 'nosignal', label: 'No Signal' };
+                        pctLabel = '—';
+                        indexLabel = '—';
+                        seedBrands = [];
+                    } else {
+                        priority = _mkPriorityForPct(sig.pct, sig.index);
+                        pctLabel = sig.pct.toFixed(0) + '% reach';
+                        indexLabel = (sig.index > 0 ? Math.round(sig.index) : '—') + ' idx';
+                        seedBrands = sig.matched.slice(0, 3).map(m => m.name);
+                    }
+                    const audienceBits = [];
+                    if (median) audienceBits.push(`age ${Math.max(18, median-8)}-${median+10}`);
+                    if (gender.primary && gender.primary !== '—') audienceBits.push(gender.primary.toLowerCase() + '-lean');
+                    if (topDMAs.length) audienceBits.push('DMAs: ' + topDMAs.join(', '));
+
+                    return `
+                        <div class="marketing-plat-card">
+                            <div class="marketing-plat-head">
+                                <div class="marketing-plat-title"><span class="marketing-plat-icon">${p.icon}</span>${p.name.replace(/</g,'&lt;')}</div>
+                                <span class="marketing-plat-priority ${priority.key}">${priority.label}</span>
+                            </div>
+                            <div class="marketing-plat-metrics">
+                                <div class="marketing-plat-metric"><b>${pctLabel}</b></div>
+                                <div class="marketing-plat-metric"><b>${indexLabel}</b></div>
+                            </div>
+                            <div class="marketing-plat-seed"><b>Buying note.</b> ${p.buyingNote}</div>
+                            <div class="marketing-plat-seed"><b>Audience.</b> ${audienceBits.join(' · ') || '—'}</div>
+                            ${(seedBrands.length || topAffinity.length) ? `
+                                <div>
+                                    <div class="marketing-plat-seed" style="margin-bottom:0.2rem;"><b>Seed / interests</b></div>
+                                    <div class="marketing-plat-tags">
+                                        ${(seedBrands.length ? seedBrands : topAffinity.slice(0,4)).map(x => `<span class="marketing-plat-tag">${(x||'').replace(/</g,'&lt;')}</span>`).join('')}
+                                    </div>
+                                </div>` : ''}
+                        </div>`;
+                }).join('');
+                el.innerHTML = cards;
+            }
+
+            // ---------- Lookalike composition ----------
+            function _mkFormatDemoRows(demoName, N=5) {
+                const rows = _mkTopDemo(demoName, 100).slice(0, N);
+                return rows.map(r => `
+                    <div class="marketing-look-row"><span>${(r.bucket||'').replace(/</g,'&lt;')}</span><span>${r.pct.toFixed(1)}%</span></div>`).join('');
+            }
+
+            function _mkBuildLookalikeSeedText() {
+                const name = _mkProfileName();
+                const lines = [];
+                lines.push(`AUDIENCE SEED SPEC — ${name.toUpperCase()}`);
+                const d = (typeof currentDashboardData !== 'undefined') ? currentDashboardData : null;
+                if (d) {
+                    lines.push(`US Universe: ${formatNumber(Number(d.projectedUS||0))} · Sample: ${formatNumber(Number(d.sampleSize||0))}`);
+                }
+                const median = _mkMedianAge();
+                if (median) lines.push(`Median age: ${median.toFixed(0)}`);
+                lines.push('');
+                const demoBlock = (label, key) => {
+                    const rows = _mkTopDemo(key, 6);
+                    if (!rows.length) return null;
+                    return `${label}: ${rows.map(r => `${r.bucket} (${r.pct.toFixed(0)}%)`).join(', ')}`;
+                };
+                const demoLines = [
+                    demoBlock('AGE', 'age'),
+                    demoBlock('GENDER', 'gender'),
+                    demoBlock('ETHNICITY', 'ethnicity'),
+                    demoBlock('INCOME', 'income'),
+                    demoBlock('EDUCATION', 'education'),
+                    demoBlock('OCCUPATION', 'occupation'),
+                    demoBlock('PARENTAL', 'parental_status'),
+                    demoBlock('RELATIONSHIP', 'relationship')
+                ].filter(Boolean);
+                lines.push(...demoLines);
+                lines.push('');
+                const topDMAs = _mkLocs()
+                    .filter(l => (l.name || '').toString().toUpperCase() !== 'UNITED STATES')
+                    .sort((a,b) => (Number(b.index)||0) - (Number(a.index)||0))
+                    .slice(0, 10);
+                if (topDMAs.length) {
+                    lines.push('TOP DMAs (by index): ' + topDMAs.map(l => `${l.name} (${(Number(l.index)||0).toFixed(0)} idx)`).join(', '));
+                }
+                lines.push('');
+                const seedCats = [
+                    ['SOCIAL SEED', ['SOCIAL MEDIA','SOCIAL MEDIA/USE']],
+                    ['CONTENT SEED', ['STREAMING/PLATFORM','STREAMING/MUSIC','PODCAST','GAMING']],
+                    ['BRAND SEED', ['MOST PURCHASED BRANDS','MPB','APPAREL/FOOTWEAR','QSR','RETAIL']],
+                    ['TALENT / CULTURAL SEED', ['TALENT','ACTOR','MUSICIAN','ATHLETE','PERSONA']]
+                ];
+                seedCats.forEach(([label, cats]) => {
+                    const top = _mkItemsFromCats(cats).slice(0, 6).map(i => i.name).filter(Boolean);
+                    if (top.length) lines.push(`${label}: ${top.join(', ')}`);
+                });
+                return lines.join('\n');
+            }
+
+            let _mkLookalikeSeedText = '';
+            window.copyMarketingLookalikeSeed = function() {
+                if (!_mkLookalikeSeedText) _mkLookalikeSeedText = _mkBuildLookalikeSeedText();
+                const ta = document.getElementById('marketingLookalikeSeedTA');
+                if (ta) { ta.select(); }
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(_mkLookalikeSeedText).then(() => {
+                            _mkFlash('Seed copied to clipboard.');
+                        }).catch(() => {
+                            _mkFlash('Copy failed — text is selected in the box, use Cmd/Ctrl+C.');
+                        });
+                    } else if (ta) {
+                        document.execCommand('copy');
+                        _mkFlash('Seed copied to clipboard.');
+                    }
+                } catch(_) {}
+            };
+            function _mkFlash(msg) {
+                try {
+                    if (typeof window.showToast === 'function') { window.showToast(msg); return; }
+                } catch(_) {}
+                console.log('[marketing] ' + msg);
+            }
+
+            function _mkRenderLookalike() {
+                const el = document.getElementById('marketingLookalike');
+                if (!el) return;
+                _mkLookalikeSeedText = _mkBuildLookalikeSeedText();
+                const panel = (title, body) => `
+                    <div class="marketing-look-panel">
+                        <h4>${title}</h4>
+                        <div class="marketing-look-list">${body || '<div class="marketing-empty" style="padding:0.5rem;">No data</div>'}</div>
+                    </div>`;
+                el.innerHTML = `
+                    ${panel('Age (up to 5)',        _mkFormatDemoRows('age',5))}
+                    ${panel('Gender',               _mkFormatDemoRows('gender',5))}
+                    ${panel('Ethnicity (up to 5)',  _mkFormatDemoRows('ethnicity',5))}
+                    ${panel('Income (up to 5)',     _mkFormatDemoRows('income',5))}
+                    ${panel('Education (up to 5)',  _mkFormatDemoRows('education',5))}
+                    ${panel('Parental Status',      _mkFormatDemoRows('parental_status',5))}
+                    <div class="marketing-look-seed">
+                        <h4 style="margin:0 0 0.5rem;font-family:'Space Mono',monospace;font-size:0.8rem;color:var(--text-secondary);letter-spacing:0.06em;text-transform:uppercase;">Paste-ready seed spec</h4>
+                        <textarea id="marketingLookalikeSeedTA" readonly>${_mkLookalikeSeedText.replace(/</g,'&lt;')}</textarea>
+                        <div style="margin-top:0.5rem;display:flex;gap:0.5rem;">
+                            <button class="marketing-btn marketing-btn-primary" onclick="copyMarketingLookalikeSeed()">📋 Copy Seed</button>
+                            <span style="font-size:0.75rem;color:var(--text-secondary);align-self:center;">Paste into Meta Custom Audiences, TikTok Ad Manager, Google Customer Match, or your DSP.</span>
+                        </div>
+                    </div>`;
+            }
+
+            // ---------- Geo ----------
+            function _mkRenderGeo() {
+                const el = document.getElementById('marketingGeoBlock');
+                if (!el) return;
+                const locs = _mkLocs()
+                    .filter(l => l && l.name && l.name.toString().toUpperCase() !== 'UNITED STATES')
+                    .slice();
+                if (!locs.length) { el.innerHTML = '<div class="marketing-empty">No geographic data.</div>'; return; }
+                // Rank by index (over-index tells us where they are unusually concentrated)
+                const byIndex = locs.slice().sort((a,b) => (Number(b.index)||0) - (Number(a.index)||0)).slice(0, 12);
+                const byPct = locs.slice().sort((a,b) => (Number(b.pct)||0) - (Number(a.pct)||0)).slice(0, 5);
+                const top5Concentration = byPct.reduce((s,l) => s + (Number(l.pct)||0), 0);
+                let concentrationVerdict;
+                if (top5Concentration >= 45) concentrationVerdict = 'high concentration — geo-fenced buys (DMA-only) will be very efficient. Consider OOH in top 3.';
+                else if (top5Concentration >= 25) concentrationVerdict = 'moderate concentration — run national with DMA multipliers of 1.5-2.5× on the top 10.';
+                else concentrationVerdict = 'diffuse audience — buy national and layer light DMA multipliers (1.1-1.3×) only.';
+
+                const rowsHtml = byIndex.map(l => {
+                    const idx = Number(l.index) || 0;
+                    const pct = Number(l.pct) || 0;
+                    const gpp = Number(l.genPopPct) || 0;
+                    const cls = idx >= 110 ? 'over' : (idx > 0 && idx <= 90 ? 'under' : '');
+                    return `<tr>
+                        <td>${(l.name||'').replace(/</g,'&lt;')}</td>
+                        <td>${pct.toFixed(1)}%</td>
+                        <td>${gpp.toFixed(1)}%</td>
+                        <td class="marketing-geo-idx ${cls}">${Math.round(idx)}</td>
+                    </tr>`;
+                }).join('');
+                el.innerHTML = `
+                    <div class="marketing-geo-table">
+                        <table>
+                            <thead><tr><th>DMA</th><th>% Audience</th><th>% Gen Pop</th><th>Index</th></tr></thead>
+                            <tbody>${rowsHtml}</tbody>
+                        </table>
+                    </div>
+                    <div class="marketing-geo-summary">
+                        <h4>Buying Verdict</h4>
+                        <p><b>Top 5 DMAs concentrate ${top5Concentration.toFixed(0)}% of the audience</b> — ${concentrationVerdict}</p>
+                        <h4>Priority DMAs (by index)</h4>
+                        <p>${byIndex.slice(0,5).map(l => `<b>${l.name}</b> (${Math.round(Number(l.index)||0)} idx)`).join(', ')}</p>
+                        <h4>Volume DMAs (by share)</h4>
+                        <p>${byPct.map(l => `<b>${l.name}</b> (${(Number(l.pct)||0).toFixed(1)}%)`).join(', ')}</p>
+                    </div>`;
+            }
+
+            // ---------- Creative & messaging ----------
+            function _mkRenderCreative() {
+                const el = document.getElementById('marketingCreativeBlock');
+                if (!el) return;
+                const behav = _mkBehav();
+                const talent = _mkItemsFromCats(['TALENT','ACTOR','MUSICIAN','ATHLETE']).slice(0, 8);
+                const persona = _mkItemsFromCats(['PERSONA']).slice(0, 6);
+                const genre = _mkItemsFromCats(['GENRE','GENRES','TV GENRE','MOVIE GENRE']).slice(0, 6);
+
+                // Anti-affinities: brands with index < 60 that ARE in data
+                // (implies audience actively avoids these categories/brands)
+                const antiCandidates = [];
+                Object.keys(behav).forEach(cat => {
+                    (behav[cat] || []).forEach(it => {
+                        const idx = Number(it.index) || 0;
+                        const pct = Number(it.pct) || 0;
+                        if (idx > 0 && idx <= 55 && pct >= 2) {
+                            antiCandidates.push({ name: it.name, pct, idx, cat });
+                        }
+                    });
+                });
+                antiCandidates.sort((a,b) => a.idx - b.idx);
+                const anti = antiCandidates.slice(0, 6);
+
+                // Tone from demographics
+                const median = _mkMedianAge();
+                const gender = _mkGenderSkew();
+                const topEth = _mkTopDemo('ethnicity', 2);
+                const topInc = _mkTopDemo('income', 1)[0];
+                const toneBits = [];
+                if (median) {
+                    if (median < 28) toneBits.push('Gen Z / early millennial voice: fast cuts, meme fluency, creator-first.');
+                    else if (median < 38) toneBits.push('Millennial voice: nostalgic hooks, self-deprecating humor, character-driven.');
+                    else if (median < 50) toneBits.push('Gen X voice: irreverent, direct, less brand-y, more useful.');
+                    else toneBits.push('Boomer/Gen X+ voice: clear value prop, trusted spokespeople, less slang.');
+                }
+                if (gender.primary === 'Female' && gender.pct >= 60) toneBits.push('Female-forward creative: cast, POV, story choices.');
+                if (gender.primary === 'Male' && gender.pct >= 60) toneBits.push('Male-forward creative: cast, POV, story choices.');
+                if (topInc && (topInc.bucket || '').match(/100|150|200|\$1|\$2/)) toneBits.push('Premium/aspirational cues — higher-income skew tolerates a slower build and finer production.');
+                if (topEth.length) toneBits.push('Casting + cultural references should reflect top ethnicity mix: ' + topEth.map(e => `${e.bucket} ${e.pct.toFixed(0)}%`).join(', ') + '.');
+
+                const li = (arr) => arr.length ? arr.map(x => `<li>${(x||'').toString().replace(/</g,'&lt;')}</li>`).join('') : '<li style="color:var(--text-secondary);">—</li>';
+
+                el.innerHTML = `
+                    <div class="marketing-creative-panel">
+                        <h4>Cultural touchpoints</h4>
+                        <ul>${li([...talent.slice(0,4).map(t => `${t.name} (${Math.round(Number(t.index)||0)} idx)`),
+                                 ...genre.slice(0,3).map(t => `${t.name}`),
+                                 ...persona.slice(0,3).map(t => `${t.name}`)])}</ul>
+                    </div>
+                    <div class="marketing-creative-panel">
+                        <h4>Tone &amp; craft cues</h4>
+                        <ul>${li(toneBits)}</ul>
+                    </div>
+                    <div class="marketing-creative-panel">
+                        <h4>Anti-affinities — avoid or reframe</h4>
+                        <ul>${li(anti.map(a => `${a.name} (${a.idx} idx — under-indexes)`))}</ul>
+                    </div>`;
+            }
+
+            // ---------- Retargeting ----------
+            function _mkRenderRetarget() {
+                const el = document.getElementById('marketingRetargetBlock');
+                if (!el) return;
+                const surfaces = [
+                    { name: 'Social feeds',    icon: '📱', cats: ['SOCIAL MEDIA','SOCIAL MEDIA/USE'],   note: 'Retarget site visitors with carousel + video. Sequential messaging: awareness → consideration → conversion.' },
+                    { name: 'CTV / streaming', icon: '📺', cats: ['STREAMING/PLATFORM','STREAMING/VIDEO','VMVPD','FAST'], note: 'Frequency-cap 3-4/wk. Cross-device: retarget CTV exposures on mobile display next day.' },
+                    { name: 'Streaming audio',icon: '🎧', cats: ['STREAMING/MUSIC'],                   note: 'Companion display + audio ad on Spotify/Pandora. Great always-on brand presence layer.' },
+                    { name: 'Podcast',        icon: '🎙️', cats: ['PODCAST'],                           note: 'Host-read for brand-affinity halo; programmatic for retargeting + measurable attribution.' },
+                    { name: 'Gaming',         icon: '🎮', cats: ['GAMING','GAMES','GAMING/CONSOLE'],   note: 'Rewarded video for opt-in engagement; Twitch mid-roll for community reach.' },
+                    { name: 'Retail media',   icon: '🛒', cats: ['RETAIL','MOST PURCHASED BRANDS','MPB'], note: 'Amazon DSP + Walmart Connect: retarget cart-abandoners on-net, drive incremental purchase.' }
+                ];
+                const cards = surfaces.map(s => {
+                    const items = _mkItemsFromCats(s.cats);
+                    const top = items.slice(0, 4);
+                    if (!top.length) return null;
+                    return `
+                        <div class="marketing-retarget-card">
+                            <div class="marketing-retarget-title">${s.icon} ${s.name}</div>
+                            <div class="marketing-retarget-body"><b>Top surfaces:</b> ${top.map(t => `${t.name} (${(Number(t.pct)||0).toFixed(0)}%)`).join(', ')}</div>
+                            <div class="marketing-retarget-body">${s.note}</div>
+                        </div>`;
+                }).filter(Boolean).join('');
+                el.innerHTML = cards || '<div class="marketing-empty">No retargeting surfaces detected in the data.</div>';
+            }
+
+            // ---------- AI Playbook ----------
+            window.generateMarketingAIPlaybook = async function() {
+                const section = document.getElementById('marketingAISection');
+                const out = document.getElementById('marketingAIOutput');
+                if (!section || !out) return;
+                section.style.display = 'block';
+                out.innerHTML = '<div style="color:var(--text-secondary);">✨ Generating AI ad playbook...</div>';
+                try {
+                    const d = (typeof currentDashboardData !== 'undefined') ? currentDashboardData : {};
+                    const p = (typeof currentProfileData !== 'undefined') ? currentProfileData : {};
+                    const payload = {
+                        profile: {
+                            name: p.name || _mkProfileName(),
+                            sampleSize: d.sampleSize || 0,
+                            projectedUS: d.projectedUS || 0,
+                            demographics: d.demographics || {},
+                            behavioral: d.behavioral || {},
+                            locations: (d.locations || []).slice(0, 15)
+                        }
+                    };
+                    const res = await fetch('/api/ai/marketing', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const j = await res.json();
+                    if (!res.ok || j.error) {
+                        out.innerHTML = `<div style="color:var(--index-under);">${(j.error||'AI request failed').replace(/</g,'&lt;')}</div>`;
+                        return;
+                    }
+                    const raw = (j.strategy || '').toString();
+                    // Simple markdown → html: bold, headers, line breaks
+                    const html = raw
+                        .replace(/</g, '&lt;')
+                        .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+                        .replace(/^###\s?(.+)$/gm, '<h3>$1</h3>')
+                        .replace(/^##\s?(.+)$/gm, '<h2>$1</h2>')
+                        .replace(/^#\s?(.+)$/gm, '<h1>$1</h1>');
+                    out.innerHTML = html;
+                } catch(e) {
+                    out.innerHTML = `<div style="color:var(--index-under);">AI request failed: ${(e.message||'').replace(/</g,'&lt;')}</div>`;
+                }
+            };
+
+            // ---------- Main entry ----------
+            window.renderMarketingTab = function() {
+                const container = document.getElementById('marketingContainer');
+                if (!container) return;
+                const d = (typeof currentDashboardData !== 'undefined') ? currentDashboardData : null;
+                const heroName = document.getElementById('marketingHeroName');
+                const heroSub  = document.getElementById('marketingHeroSub');
+                if (!d || !d.behavioral) {
+                    if (heroName) heroName.textContent = 'Marketing';
+                    if (heroSub)  heroSub.textContent = 'Load a profile to generate a media plan, per-platform buying guide, and lookalike seed spec.';
+                    ['marketingSnapshotRow','marketingMediaMix','marketingPlatformGrid','marketingLookalike','marketingGeoBlock','marketingCreativeBlock','marketingRetargetBlock']
+                        .forEach(id => { const e = document.getElementById(id); if (e) e.innerHTML = '<div class="marketing-empty">No profile loaded.</div>'; });
+                    return;
+                }
+                const name = _mkProfileName();
+                if (heroName) heroName.textContent = `${name} — Marketing Playbook`;
+                if (heroSub)  heroSub.textContent  = `Ad-buying media mix, per-platform priority, lookalike seed, geo + creative notes derived from ${formatNumber(Number(d.sampleSize||0))} panelists and their trailing-12-month digital behavior.`;
+                _mkRenderSnapshot();
+                _mkRenderMediaMix();
+                _mkRenderPlatformGrid();
+                _mkRenderLookalike();
+                _mkRenderGeo();
+                _mkRenderCreative();
+                _mkRenderRetarget();
+                // Clear any stale AI output on refresh (but keep visible section state)
+            };
+        })();
+
         // Make showTab globally accessible
         window.showTab = function(tabName) {
             const tabEl = document.getElementById('tab-' + tabName);
@@ -80250,6 +81552,7 @@
                     'content': 'CONTENT',
                     'segmentation': 'SEGMENT',
                     'comparison': 'COMPARE',
+                    'marketing': 'MARKETING',
                     'collaboration': 'WORKSPACE'
                 };
                 
@@ -80325,6 +81628,12 @@
             if (tabName === 'demographics') {
                 // Load profile selector in sidebar
                 loadDashboardProfiles();
+            }
+
+            if (tabName === 'marketing') {
+                // Lazy render — data lives on currentDashboardData already
+                try { if (typeof renderMarketingTab === 'function') renderMarketingTab(); }
+                catch (e) { console.warn('[showTab] marketing render failed', e); }
             }
 
             if (tabName === 'rankers') {
@@ -106835,18 +108144,63 @@
             btn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
         }
         
+        // 2026-07-08: position dropdown using getBoundingClientRect so it
+        // opens DOWNWARD from the button and escapes the parent
+        // .action-buttons-row's overflow: hidden clip.
+        function _positionTabExportDropdown() {
+            const dropdown = document.getElementById('tabExportDropdown');
+            if (!dropdown) return;
+            // Find the button that triggers this dropdown (the sibling before the menu).
+            const wrapper = dropdown.closest('.dash-dropdown');
+            const btn = wrapper ? wrapper.querySelector('.dash-action-btn') : null;
+            const rect = (btn || dropdown).getBoundingClientRect();
+            // Position immediately below the button, aligned to its left edge.
+            const gap = 4;
+            let top = rect.bottom + gap;
+            let left = rect.left;
+            // Clamp to the viewport so it never gets pushed off-screen on
+            // narrow browsers (menu is up to ~260px wide).
+            const menuWidth = Math.max(dropdown.offsetWidth || 0, 220);
+            const maxLeft = Math.max(4, window.innerWidth - menuWidth - 8);
+            if (left > maxLeft) left = maxLeft;
+            if (left < 4) left = 4;
+            dropdown.style.top = top + 'px';
+            dropdown.style.left = left + 'px';
+            dropdown.style.right = 'auto';
+            dropdown.style.bottom = 'auto';
+        }
         function toggleExportMenu() {
             const dropdown = document.getElementById('tabExportDropdown');
-            if (dropdown) {
-                dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            if (!dropdown) return;
+            const isOpen = dropdown.style.display === 'block';
+            if (isOpen) {
+                dropdown.style.display = 'none';
+                window.removeEventListener('scroll', _positionTabExportDropdown, true);
+                window.removeEventListener('resize', _positionTabExportDropdown);
+            } else {
+                dropdown.style.display = 'block';
+                _positionTabExportDropdown();
+                // Reposition on scroll (capture so we catch scrolls inside
+                // nested containers too) and on window resize so the menu
+                // tracks the button if the page moves under it.
+                window.addEventListener('scroll', _positionTabExportDropdown, true);
+                window.addEventListener('resize', _positionTabExportDropdown);
             }
         }
         
         // Close dropdown when clicking outside
         document.addEventListener('click', function(e) {
             const dropdown = document.getElementById('tabExportDropdown');
-            if (dropdown && !e.target.closest('.dash-dropdown')) {
+            if (!dropdown) return;
+            // Don't close on clicks inside the dropdown itself (its parent
+            // .dash-dropdown wrapper is not an ancestor because the menu
+            // is position:fixed and stays in the DOM tree but visually
+            // detaches — so we also check the menu directly).
+            if (e.target.closest('.dash-dropdown') || e.target.closest('#tabExportDropdown')) return;
+            if (dropdown.style.display === 'block') {
                 dropdown.style.display = 'none';
+                window.removeEventListener('scroll', _positionTabExportDropdown, true);
+                window.removeEventListener('resize', _positionTabExportDropdown);
             }
         });
         
