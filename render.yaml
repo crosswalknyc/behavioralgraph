@@ -100,6 +100,12 @@ services:
       # Cron secret for /api/cron/* endpoints (shared between web + cron services)
       - key: CRON_SECRET
         value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"
+      # Flask session signing key. MUST be stable across deploys or every
+      # existing session cookie is invalidated (users bounce to 401 on every
+      # API call). generateValue creates one random value on first deploy
+      # and preserves it across future deploys.
+      - key: SECRET_KEY
+        generateValue: true
 
   # Cron: run scheduled activity CSV exports daily at 6:00 UTC
   - type: cron
