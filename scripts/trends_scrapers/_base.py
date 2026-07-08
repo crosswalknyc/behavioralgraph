@@ -134,7 +134,8 @@ def http_get(url: str, *, timeout: int = DEFAULT_HTTP_TIMEOUT_S,
              headers: dict | None = None,
              cookies: dict | None = None,
              cookie_domain: str | None = None,
-             impersonate: str = 'chrome124') -> Optional[Any]:
+             impersonate: str = 'chrome124',
+             use_proxy: bool = False) -> Optional[Any]:
     """GET with retries + jittered backoff. Returns None if every attempt
     fails. Never raises - callers should check `.ok`.
 
@@ -145,6 +146,12 @@ def http_get(url: str, *, timeout: int = DEFAULT_HTTP_TIMEOUT_S,
     Pass `cookie_domain='target.com'` (etc.) to auto-inject donated
     cookies for that domain. Explicit `cookies=...` still wins on key
     collisions.
+
+    Pass `use_proxy=True` to route through the IPRoyal residential
+    proxy (config via IPROYAL_PROXY_* env vars). Silently falls back to
+    a direct connection if the env vars aren't set. Only turn this on
+    for sites that IP-block datacenter ranges (Max, Walmart, Best Buy,
+    Sephora, Lululemon, Disney+) - most retailers are fine over direct.
     """
     if cookie_domain:
         donated = load_donated_cookies(cookie_domain)
@@ -155,6 +162,19 @@ def http_get(url: str, *, timeout: int = DEFAULT_HTTP_TIMEOUT_S,
             cookies = merged
             logger.info("http_get %s: injected %d donated cookies for %s",
                          url, len(donated), cookie_domain)
+
+    proxies = None
+    if use_proxy:
+        from ._proxy import get_proxy_config, curl_cffi_proxies
+        proxy_cfg = get_proxy_config()
+        proxies   = curl_cffi_proxies(proxy_cfg)
+        if proxies:
+            logger.info("http_get %s: using residential proxy %s",
+                         url, proxy_cfg['host'])
+        else:
+            logger.info("http_get %s: use_proxy=True but IPROYAL_PROXY_* "
+                         "not configured; falling back to direct", url)
+
     last_err = None
     for attempt in range(retries):
         try:
@@ -162,10 +182,12 @@ def http_get(url: str, *, timeout: int = DEFAULT_HTTP_TIMEOUT_S,
                 r = _cc_requests.get(url, headers=headers or browser_headers(),
                                        cookies=cookies, timeout=timeout,
                                        impersonate=impersonate,
+                                       proxies=proxies,
                                        allow_redirects=True)
             else:
                 r = requests.get(url, headers=headers or browser_headers(),
                                   cookies=cookies, timeout=timeout,
+                                  proxies=proxies,
                                   allow_redirects=True)
             status = getattr(r, 'status_code', 0)
             if status == 429 or status >= 500:

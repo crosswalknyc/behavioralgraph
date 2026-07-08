@@ -77,11 +77,15 @@ def _try_stealth(page) -> None:
         logger.debug("playwright_stealth failed: %s", e)
 
 
-def _launch_browser(pw, *, prefer_chrome: bool = True):
+def _launch_browser(pw, *, prefer_chrome: bool = True,
+                     proxy: Optional[dict] = None):
     """Launch a browser, preferring real Google Chrome (channel='chrome')
     over the bundled Chromium. Falls back to Chromium if Chrome isn't
     installed. Uses --headless=new which is much harder to detect than
     the classic --headless.
+
+    `proxy` is the dict returned by `_proxy.playwright_proxy()` -
+    {server, username, password}. Pass None to bypass the proxy.
     """
     common_args = [
         '--no-sandbox',
@@ -93,16 +97,20 @@ def _launch_browser(pw, *, prefer_chrome: bool = True):
         # so navigator.webdriver == false and userAgentData looks real.
         '--headless=new',
     ]
+    launch_kwargs = {'headless': True, 'args': common_args}
+    if proxy:
+        launch_kwargs['proxy'] = proxy
     if prefer_chrome:
         try:
-            b = pw.chromium.launch(channel='chrome', headless=True,
-                                    args=common_args)
-            logger.info("playwright launched: channel=chrome (system Google Chrome)")
+            b = pw.chromium.launch(channel='chrome', **launch_kwargs)
+            logger.info("playwright launched: channel=chrome (system Google Chrome)%s",
+                         '  proxy=' + proxy['server'] if proxy else '')
             return b, 'chrome'
         except Exception as e:
             logger.info("channel=chrome unavailable (%s), falling back to Chromium", e)
-    b = pw.chromium.launch(headless=True, args=common_args)
-    logger.info("playwright launched: bundled Chromium")
+    b = pw.chromium.launch(**launch_kwargs)
+    logger.info("playwright launched: bundled Chromium%s",
+                 '  proxy=' + proxy['server'] if proxy else '')
     return b, 'chromium'
 
 
@@ -113,7 +121,8 @@ def render_pages(pages: list[tuple[str, str]], *,
                  scroll_ms: int = 1500,
                  timeout_ms: int = 45000,
                  wait_selectors: Optional[list[str]] = None,
-                 hydration_wait_ms: int = 10000) -> list[tuple[str, str]]:
+                 hydration_wait_ms: int = 10000,
+                 use_proxy: bool = False) -> list[tuple[str, str]]:
     """Render each `(label, url)` and return list of `(label, html)`.
 
     Pass `cookie_domain='target.com'` (etc.) to auto-inject the latest
@@ -126,6 +135,11 @@ def render_pages(pages: list[tuple[str, str]], *,
     the budget we still fall through to the fixed `wait_ms` timer, so
     servers that ship products directly in SSR HTML aren't slowed down.
 
+    Pass `use_proxy=True` to route every request through the IPRoyal
+    residential proxy (config via IPROYAL_PROXY_* env vars). Silently
+    disables if the env vars aren't set. Enable this only for sites
+    that IP-gate datacenter ranges - it costs proxy bandwidth per byte.
+
     On import failure or launch failure returns [] so callers can degrade
     gracefully to a "coming soon" tile.
     """
@@ -136,10 +150,20 @@ def render_pages(pages: list[tuple[str, str]], *,
                         "then `python3 -m playwright install-deps chromium`")
         return []
 
+    proxy_dict = None
+    if use_proxy:
+        from ._proxy import get_proxy_config, playwright_proxy
+        cfg = get_proxy_config()
+        proxy_dict = playwright_proxy(cfg)
+        if not proxy_dict:
+            logger.info("playwright: use_proxy=True but IPROYAL_PROXY_* not "
+                         "configured; falling back to direct")
+
     results: list[tuple[str, str]] = []
     with sp() as pw:
         try:
-            browser, channel = _launch_browser(pw, prefer_chrome=True)
+            browser, channel = _launch_browser(pw, prefer_chrome=True,
+                                                 proxy=proxy_dict)
         except Exception as e:
             logger.warning("playwright launch failed: %s", e)
             return []

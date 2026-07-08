@@ -50,3 +50,4 @@ rokufast_ranker_cache.json
 *.bak
 *.backup
 *.bak.*
+.env.iproyal_proxy
