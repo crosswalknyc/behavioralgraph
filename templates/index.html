@@ -2029,6 +2029,56 @@
             margin-top: 0.05rem;
         }
 
+        /* Sub-tab bar — each Marketing card is its own tab */
+        .marketing-subtabs {
+            display: flex;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+            padding: 0.35rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+        .marketing-subtab {
+            display: inline-flex;
+            gap: 0.4rem;
+            align-items: center;
+            padding: 0.55rem 0.9rem;
+            border-radius: 8px;
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-secondary);
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+            font-family: inherit;
+        }
+        .marketing-subtab:hover {
+            background: rgba(139, 92, 246, 0.10);
+            color: var(--text-primary);
+            border-color: rgba(139, 92, 246, 0.25);
+        }
+        .marketing-subtab.active {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.28), rgba(102, 217, 239, 0.18));
+            color: #ffffff;
+            border-color: rgba(139, 92, 246, 0.55);
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.25);
+        }
+        body[data-theme="light"] .marketing-subtab { color: var(--text-primary); }
+        body[data-theme="light"] .marketing-subtab.active { color: #ffffff; }
+        @media (max-width: 700px) {
+            .marketing-subtab span { display: none; }
+            .marketing-subtab { padding: 0.5rem 0.7rem; font-size: 1rem; }
+        }
+
+        .marketing-sub-panel { display: none; }
+        .marketing-sub-panel.active { display: block; }
+
         .marketing-section {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
@@ -20845,7 +20895,18 @@
                         <div id="marketingSnapshotRow" class="marketing-snapshot-row"></div>
                     </div>
 
-                    <section class="marketing-section">
+                    <!-- Sub-tab navigation — each card is now its own tab -->
+                    <div class="marketing-subtabs" id="marketingSubtabs" role="tablist">
+                        <button class="marketing-subtab active" data-mkt-tab="mix"       onclick="showMarketingSection('mix')"      role="tab" aria-selected="true">📊 <span>Media Mix</span></button>
+                        <button class="marketing-subtab"        data-mkt-tab="platforms" onclick="showMarketingSection('platforms')" role="tab">📱 <span>Platform Playbook</span></button>
+                        <button class="marketing-subtab"        data-mkt-tab="lookalike" onclick="showMarketingSection('lookalike')" role="tab">🎯 <span>Lookalike Seed</span></button>
+                        <button class="marketing-subtab"        data-mkt-tab="geo"       onclick="showMarketingSection('geo')"       role="tab">📍 <span>Geo Targeting</span></button>
+                        <button class="marketing-subtab"        data-mkt-tab="creative"  onclick="showMarketingSection('creative')"  role="tab">🎨 <span>Creative</span></button>
+                        <button class="marketing-subtab"        data-mkt-tab="retarget"  onclick="showMarketingSection('retarget')"  role="tab">🔄 <span>Retargeting</span></button>
+                        <button class="marketing-subtab"        data-mkt-tab="ai"        onclick="showMarketingSection('ai')"        role="tab">✨ <span>AI Playbook</span></button>
+                    </div>
+
+                    <section class="marketing-section marketing-sub-panel active" data-mkt-panel="mix">
                         <div class="marketing-section-head">
                             <h3>Recommended Media Mix</h3>
                             <span class="marketing-section-sub">Suggested budget allocation, weighted by this audience's panel-observed digital behavior over the trailing 12 months.</span>
@@ -20853,7 +20914,7 @@
                         <div id="marketingMediaMix" class="marketing-mediamix"></div>
                     </section>
 
-                    <section class="marketing-section">
+                    <section class="marketing-section marketing-sub-panel" data-mkt-panel="platforms">
                         <div class="marketing-section-head">
                             <h3>Ad Platform Playbook</h3>
                             <span class="marketing-section-sub">Per-platform priority, panel reach, and top brands to seed lookalikes.</span>
@@ -20861,7 +20922,7 @@
                         <div id="marketingPlatformGrid" class="marketing-platform-grid"></div>
                     </section>
 
-                    <section class="marketing-section">
+                    <section class="marketing-section marketing-sub-panel" data-mkt-panel="lookalike">
                         <div class="marketing-section-head">
                             <h3>Lookalike Audience Composition</h3>
                             <span class="marketing-section-sub">Paste-ready seed spec for building lookalikes on Meta, TikTok, Google Customer Match, and DSPs.</span>
@@ -20869,7 +20930,7 @@
                         <div id="marketingLookalike" class="marketing-lookalike"></div>
                     </section>
 
-                    <section class="marketing-section">
+                    <section class="marketing-section marketing-sub-panel" data-mkt-panel="geo">
                         <div class="marketing-section-head">
                             <h3>Geo Targeting</h3>
                             <span class="marketing-section-sub">Top-indexing DMAs. Buy geo-fenced when concentration is high, otherwise layer as a DMA multiplier on national.</span>
@@ -20877,7 +20938,7 @@
                         <div id="marketingGeoBlock" class="marketing-geo"></div>
                     </section>
 
-                    <section class="marketing-section">
+                    <section class="marketing-section marketing-sub-panel" data-mkt-panel="creative">
                         <div class="marketing-section-head">
                             <h3>Creative &amp; Messaging Notes</h3>
                             <span class="marketing-section-sub">Cultural touchpoints to reference in creative, tone cues from the demo mix, and category anti-affinities to avoid.</span>
@@ -20885,7 +20946,7 @@
                         <div id="marketingCreativeBlock" class="marketing-creative"></div>
                     </section>
 
-                    <section class="marketing-section">
+                    <section class="marketing-section marketing-sub-panel" data-mkt-panel="retarget">
                         <div class="marketing-section-head">
                             <h3>Retargeting &amp; Always-On Surfaces</h3>
                             <span class="marketing-section-sub">Where this audience naturally spends time — best surfaces for sequential messaging and always-on brand presence.</span>
@@ -20893,12 +20954,16 @@
                         <div id="marketingRetargetBlock" class="marketing-retarget"></div>
                     </section>
 
-                    <section class="marketing-section" id="marketingAISection" style="display:none;">
+                    <section class="marketing-section marketing-sub-panel" id="marketingAISection" data-mkt-panel="ai">
                         <div class="marketing-section-head">
                             <h3>✨ AI-Generated Ad Playbook</h3>
-                            <span class="marketing-section-sub">Auto-generated strategic narrative you can paste into a brief.</span>
+                            <span class="marketing-section-sub">Auto-generated strategic narrative you can paste into a brief. Click <b>Generate AI Playbook</b> in the header to run.</span>
                         </div>
-                        <div id="marketingAIOutput" class="marketing-ai-output"></div>
+                        <div id="marketingAIOutput" class="marketing-ai-output">
+                            <div style="color:var(--text-secondary);text-align:center;padding:1.5rem;">
+                                ✨ Click <b>Generate AI Playbook</b> in the header to produce a strategic narrative for this audience.
+                            </div>
+                        </div>
                     </section>
                 </div>
             </div>
@@ -81430,12 +81495,37 @@
                 el.innerHTML = cards || '<div class="marketing-empty">No retargeting surfaces detected in the data.</div>';
             }
 
+            // ---------- Sub-tab navigation ----------
+            let _mktActiveSection = 'mix';
+            window.showMarketingSection = function(key) {
+                if (!key) key = _mktActiveSection || 'mix';
+                _mktActiveSection = key;
+                // Toggle sub-tab button active state
+                document.querySelectorAll('#marketingSubtabs .marketing-subtab').forEach(btn => {
+                    const isActive = btn.getAttribute('data-mkt-tab') === key;
+                    btn.classList.toggle('active', isActive);
+                    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                });
+                // Show only the matching panel
+                document.querySelectorAll('.marketing-sub-panel').forEach(panel => {
+                    panel.classList.toggle('active', panel.getAttribute('data-mkt-panel') === key);
+                });
+                // Scroll the marketing container back to the top so the newly
+                // revealed panel starts at its heading (not mid-scroll).
+                const container = document.getElementById('marketingContainer');
+                if (container && container.parentElement) {
+                    try { container.parentElement.scrollTop = 0; } catch(_) {}
+                }
+            };
+
             // ---------- AI Playbook ----------
             window.generateMarketingAIPlaybook = async function() {
-                const section = document.getElementById('marketingAISection');
                 const out = document.getElementById('marketingAIOutput');
-                if (!section || !out) return;
-                section.style.display = 'block';
+                if (!out) return;
+                // Switch to the AI sub-tab so the output is visible immediately.
+                if (typeof window.showMarketingSection === 'function') {
+                    window.showMarketingSection('ai');
+                }
                 out.innerHTML = '<div style="color:var(--text-secondary);">✨ Generating AI ad playbook...</div>';
                 try {
                     const d = (typeof currentDashboardData !== 'undefined') ? currentDashboardData : {};
@@ -81486,6 +81576,8 @@
                     if (heroSub)  heroSub.textContent = 'Load a profile to generate a media plan, per-platform buying guide, and lookalike seed spec.';
                     ['marketingSnapshotRow','marketingMediaMix','marketingPlatformGrid','marketingLookalike','marketingGeoBlock','marketingCreativeBlock','marketingRetargetBlock']
                         .forEach(id => { const e = document.getElementById(id); if (e) e.innerHTML = '<div class="marketing-empty">No profile loaded.</div>'; });
+                    // Still apply current sub-tab so the empty-state text renders in the right place
+                    if (typeof window.showMarketingSection === 'function') window.showMarketingSection(_mktActiveSection);
                     return;
                 }
                 const name = _mkProfileName();
@@ -81498,7 +81590,14 @@
                 _mkRenderGeo();
                 _mkRenderCreative();
                 _mkRenderRetarget();
-                // Clear any stale AI output on refresh (but keep visible section state)
+                // Preserve the user's active sub-tab across re-renders (e.g. Refresh
+                // click, profile switch). Default to 'mix' the first time.
+                if (typeof window.showMarketingSection === 'function') {
+                    window.showMarketingSection(_mktActiveSection);
+                }
+                // Note: AI output is intentionally NOT cleared on refresh so a
+                // previously generated playbook stays visible until the user
+                // clicks Generate again.
             };
         })();
 
