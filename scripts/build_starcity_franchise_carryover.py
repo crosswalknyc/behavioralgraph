@@ -81,10 +81,8 @@ OUTPUT_XLSX = DOWNLOADS / "SubIQ-StarCity-FranchiseCarryover-July_7_2026.xlsx"
 # Breaking Bad, House of Dragon → Game of Thrones): spin-off audience
 # 60-80% has parent-franchise engagement. For REACTIVATIONS
 # specifically (self-selected franchise-triggered returners), rate is
-# HIGHER (70-90%).
-FAM_REACT_LOW  = 0.60
-FAM_REACT_MID  = 0.75
-FAM_REACT_HIGH = 0.85
+# HIGHER (70-90%). Point estimate 75% — research-anchored midpoint.
+FAM_REACT = 0.75
 
 
 # --- Q2: Star City AA × other Apple TV+ show overlap ---
@@ -249,31 +247,28 @@ def _add_q1_fam_reactivation(wb: Workbook, sc: dict) -> None:
     r += 1
 
     r += 1
-    hdrs = ["Window", "Reactivations (CC)", "LOW\n(60% FAM-history)",
-            "MID\n(75% FAM-history)", "HIGH\n(85% FAM-history)", "Confidence"]
+    hdrs = ["Window", "Reactivations (CC)", "FAM-history rate",
+            "Modeled FAM-carryover reactivations", "Confidence"]
     for c, h in enumerate(hdrs, start=1):
         cell = ws.cell(row=r, column=c, value=h)
         cell.font = BOLD
         cell.fill = GREY
         cell.alignment = CTR
-    ws.row_dimensions[r].height = 40
+    ws.row_dimensions[r].height = 32
     r += 1
 
     for lbl, cc in [("21-day", sc["cc_21"]), ("28-day", sc["cc_28"])]:
-        lo = int(round(cc * FAM_REACT_LOW))
-        mid = int(round(cc * FAM_REACT_MID))
-        hi = int(round(cc * FAM_REACT_HIGH))
+        mid = int(round(cc * FAM_REACT))
         ws.cell(row=r, column=1, value=lbl).alignment = CTR
         ws.cell(row=r, column=2, value=cc).number_format = '#,##0'
-        c_lo = ws.cell(row=r, column=3, value=lo); c_lo.number_format = '#,##0'
+        c_pct = ws.cell(row=r, column=3, value=FAM_REACT); c_pct.number_format = '0%'; c_pct.alignment = CTR
         c_md = ws.cell(row=r, column=4, value=mid); c_md.number_format = '#,##0'; c_md.font = BOLD; c_md.fill = YELLOW
-        c_hi = ws.cell(row=r, column=5, value=hi); c_hi.number_format = '#,##0'
-        ws.cell(row=r, column=6, value="Modeled").alignment = CTR
+        ws.cell(row=r, column=5, value="Modeled").alignment = CTR
         r += 1
 
     # Reasoning breakdown
     r += 2
-    ws.cell(row=r, column=1, value="Why the estimate lands at ~75% for MID case").font = H2
+    ws.cell(row=r, column=1, value="Why the estimate lands at ~75%").font = H2
     r += 1
     bullets = [
         ("Base rate", "~11-17% of Apple TV+ subs have watched FAM (any season) — the "
@@ -290,9 +285,10 @@ def _add_q1_fam_reactivation(wb: Workbook, sc: dict) -> None:
                                      "premiered same day as FAM S5 finale — the platform's "
                                      "biggest FAM-audience event of the year). ~+10pp lift "
                                      "over Star City AA overlap rate."),
-        ("Result", "60% LOW / 75% MID / 85% HIGH. Mid case ~75% is the research-anchored "
-                   "estimate; wider than the AA-based 65% because reactivations are "
-                   "franchise-triggered by definition."),
+        ("Result", "~75% is the research-anchored point estimate — sits inside the "
+                   "70-90% band Antenna reports for franchise-triggered spin-off "
+                   "reactivations, and slightly above Star City's AA-level FAM overlap "
+                   "(65%) because reactivations are franchise-triggered by definition."),
     ]
     for lbl, txt in bullets:
         ws.cell(row=r, column=1, value=lbl).font = BOLD
@@ -307,31 +303,33 @@ def _add_q1_fam_reactivation(wb: Workbook, sc: dict) -> None:
     ws.cell(row=r, column=1, value="Executive Takeaway").font = H2
     r += 1
     cc21 = sc["cc_21"]
-    mid21 = int(round(cc21 * FAM_REACT_MID))
+    cc28 = sc["cc_28"]
+    mid21 = int(round(cc21 * FAM_REACT))
+    mid28 = int(round(cc28 * FAM_REACT))
     txt = (
-        f"Of Star City's ~{cc21:,} reactivated Apple TV+ subscribers in the first 21 "
-        f"days post-launch, roughly {int(round(cc21*FAM_REACT_LOW)):,}-"
-        f"{int(round(cc21*FAM_REACT_HIGH)):,} had previously watched For All Mankind "
-        f"(mid case ~{mid21:,}, or ~75%). This is dramatically higher than the "
-        f"~11-17% general FAM-viewer share of Apple TV+ subs, confirming that Star "
-        f"City's reactivation cohort is dominated by franchise-triggered returners. "
-        f"The same-day timing with the FAM S5 finale on 5/29/26 concentrated the "
-        f"franchise pull — Apple TV+'s carousel and email marketing tied the two "
-        f"events explicitly, and dormant subs who noticed the FAM finale event "
-        f"stayed to (or came back to) sample Star City. "
+        f"Of Star City's {cc21:,} reactivated Apple TV+ subscribers in the first 21 "
+        f"days post-launch, ~{mid21:,} (~75%) had previously watched For All Mankind. "
+        f"At 28 days: ~{mid28:,} of {cc28:,} reactivations. This is dramatically "
+        f"higher than the ~11-17% general FAM-viewer share of Apple TV+ subs, "
+        f"confirming that Star City's reactivation cohort is dominated by "
+        f"franchise-triggered returners. The same-day timing with the FAM S5 finale "
+        f"on 5/29/26 concentrated the franchise pull — Apple TV+'s carousel and "
+        f"email marketing tied the two events explicitly, and dormant subs who "
+        f"noticed the FAM finale event stayed to (or came back to) sample Star City. "
         f"\n\n"
-        f"Strategic implication: the ~15K FAM-carryover reactivations represent a "
-        f"HIGH-VALUE cohort — they are dual-franchise loyalists with demonstrated "
-        f"Apple TV+ engagement history, likely deeper Season-2 retention than the "
-        f"average Star City reactivation. Worth tracking as a lifetime-value cohort. "
-        f"Confirm with Crosswalk panel intersection when available."
+        f"Strategic implication: the ~{mid21:,} FAM-carryover reactivations "
+        f"represent a HIGH-VALUE cohort — they are dual-franchise loyalists with "
+        f"demonstrated Apple TV+ engagement history, likely deeper Season-2 "
+        f"retention than the average Star City reactivation. Worth tracking as a "
+        f"lifetime-value cohort. Confirm with Crosswalk panel intersection when "
+        f"available."
     )
     ws.cell(row=r, column=1, value=txt).alignment = WRAP
     ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=6)
-    ws.row_dimensions[r].height = 220
+    ws.row_dimensions[r].height = 200
 
     # Column widths
-    for i, w in enumerate([18, 22, 18, 18, 18, 14], start=1):
+    for i, w in enumerate([18, 22, 16, 30, 14, 14], start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
 
@@ -340,7 +338,7 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
 
     ws["A1"] = "Q2: Share of Star City viewers overlapping with other Apple TV+ shows"
     ws["A1"].font = H1
-    ws.merge_cells("A1:H1")
+    ws.merge_cells("A1:F1")
 
     ws["A2"] = ("MODELED per-title overlap — of the ~940K US Apple TV+ subscribers who "
                 "watched Star City in its first 21 days, what share had also watched each "
@@ -350,7 +348,7 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
                 "audience. Values represent CUMULATIVE lifetime engagement (any season, "
                 "any episode) as of Star City's launch, not co-viewing in the same window.")
     ws["A2"].alignment = WRAP
-    ws.merge_cells("A2:H2")
+    ws.merge_cells("A2:F2")
     ws.row_dimensions[2].height = 85
 
     # Star City reference
@@ -376,17 +374,17 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
     r += 2
     ws.cell(row=r, column=1, value="Per-title overlap with Star City viewers").font = H2
     r += 1
-    hdrs = ["Rank", "Show", "Overlap %\n(MID)", "Range\n(LOW-HIGH)",
+    hdrs = ["Rank", "Show", "Overlap %",
             "21-day overlap count", "28-day overlap count", "Rationale / Research Anchor"]
     for c, h in enumerate(hdrs, start=1):
         cell = ws.cell(row=r, column=c, value=h)
         cell.font = BOLD
         cell.fill = GREY
         cell.alignment = CTR
-    ws.row_dimensions[r].height = 42
+    ws.row_dimensions[r].height = 32
     r += 1
 
-    # Order comps by MID overlap descending
+    # Order comps by overlap descending
     def _key(rec):
         return -OVERLAP_MID.get(rec["show"], 0.0)
     comps_sorted = sorted(comps, key=_key)
@@ -397,8 +395,6 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
     for rec in comps_sorted:
         show = rec["show"]
         mid = OVERLAP_MID.get(show, 0.0)
-        lo = max(0.0, mid - 0.08)
-        hi = min(1.0, mid + 0.08)
         rationale = RATIONALE.get(show, "")
 
         ws.cell(row=r, column=1, value=rank).alignment = CTR
@@ -406,19 +402,18 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
         c_mid = ws.cell(row=r, column=3, value=mid)
         c_mid.number_format = '0%'
         c_mid.alignment = CTR
-        # Highlight the FAM row + Ted Lasso row
+        # Highlight the FAM row
         if show == "For All Mankind":
             c_mid.fill = YELLOW
             c_mid.font = BOLD
-        ws.cell(row=r, column=4, value=f"{lo*100:.0f}%–{hi*100:.0f}%").alignment = CTR
-        c21 = ws.cell(row=r, column=5, value=int(round(aa21 * mid)))
+        c21 = ws.cell(row=r, column=4, value=int(round(aa21 * mid)))
         c21.number_format = '#,##0'
-        c28 = ws.cell(row=r, column=6, value=int(round(aa28 * mid)))
+        c28 = ws.cell(row=r, column=5, value=int(round(aa28 * mid)))
         c28.number_format = '#,##0'
         if show == "For All Mankind":
             c21.fill = YELLOW; c21.font = BOLD
             c28.fill = YELLOW; c28.font = BOLD
-        ws.cell(row=r, column=7, value=rationale).alignment = WRAP
+        ws.cell(row=r, column=6, value=rationale).alignment = WRAP
         ws.row_dimensions[r].height = 60
         rank += 1
         r += 1
@@ -431,7 +426,7 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
         "Star City's audience is highly Apple TV+-native. Modeled distribution of "
         "prior Apple TV+ engagement DEPTH among Star City viewers:"
     )).alignment = WRAP
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=7)
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=6)
     ws.row_dimensions[r].height = 32
     r += 1
     depth_rows = [
@@ -448,7 +443,7 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
                "because Star City reach heavily under-indexes on non-Apple-TV+ "
                "audience acquisition."),
     ]
-    hdrs = ["Depth bucket", "Modeled share of Star City viewers", "21-day count",
+    hdrs = ["Depth bucket", "Share of Star City viewers", "21-day count",
             "28-day count", "Rationale"]
     for c, h in enumerate(hdrs, start=1):
         cell = ws.cell(row=r, column=c, value=h)
@@ -462,7 +457,7 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
         c = ws.cell(row=r, column=3, value=int(round(aa21 * share))); c.number_format = '#,##0'
         c = ws.cell(row=r, column=4, value=int(round(aa28 * share))); c.number_format = '#,##0'
         ws.cell(row=r, column=5, value=note).alignment = WRAP
-        ws.merge_cells(start_row=r, start_column=5, end_row=r, end_column=7)
+        ws.merge_cells(start_row=r, start_column=5, end_row=r, end_column=6)
         ws.row_dimensions[r].height = 44
         r += 1
 
@@ -495,11 +490,11 @@ def _add_q2_appletv_overlap(wb: Workbook, sc: dict, comps: list[dict]) -> None:
         f"Validate specific overlaps with Crosswalk panel intersection queries."
     )
     ws.cell(row=r, column=1, value=takeaway).alignment = WRAP
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=7)
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=6)
     ws.row_dimensions[r].height = 300
 
     # Column widths
-    for i, w in enumerate([6, 30, 10, 12, 14, 14, 60], start=1):
+    for i, w in enumerate([6, 30, 12, 16, 16, 62], start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
 
