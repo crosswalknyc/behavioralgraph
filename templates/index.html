@@ -23376,7 +23376,11 @@
             }
             #trendsIQView .tiq-trend.tiq-trend-rising  { background: rgba(34,197,94,0.16);  color: #86efac; border: 1px solid rgba(34,197,94,0.32); }
             #trendsIQView .tiq-trend.tiq-trend-falling { background: rgba(239,68,68,0.16);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.32); }
-            #trendsIQView .tiq-trend.tiq-trend-stable  { background: rgba(148,163,184,0.14); color: #cbd5e1; border: 1px solid rgba(148,163,184,0.28); }
+            /* Neutral / stable / no-change - blue, distinct from
+               rising (green) or falling (red) so a 0% pill never
+               reads as directional. */
+            #trendsIQView .tiq-trend.tiq-trend-stable,
+            #trendsIQView .tiq-trend.tiq-trend-neutral { background: rgba(59,130,246,0.14); color: #93c5fd; border: 1px solid rgba(59,130,246,0.32); }
             #trendsIQView .tiq-trend.tiq-trend-new     { background: rgba(196,245,66,0.18); color: #c4f542; border: 1px solid rgba(196,245,66,0.42); }
             #trendsIQView .tiq-social-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
             #trendsIQView .tiq-social-tab { padding: 0.35rem 0.75rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; font-size: 0.78rem; cursor: pointer; color: var(--text-secondary); user-select: none; }
@@ -41490,16 +41494,26 @@
             if (!t) return '';
             var baseline = p.trend_baseline_day || '';
             var pct = p.mentions_change_pct;
-            var pctLabel = '';
-            if (typeof pct === 'number' && isFinite(pct)) {
-                var sign = pct > 0 ? '+' : '';
-                pctLabel = sign + Math.round(pct * 100) + '%';
-            }
+
+            // Compute the rounded whole-number percent. Anything that
+            // rounds to 0 is treated as "no change" regardless of
+            // what the backend classified `trend` as - because the
+            // backend also fires `rising`/`falling` on rank movement
+            // alone (>=3 rank delta), which produces the confusing
+            // green "+0%" or red "-0%" pill we're fixing.
+            var hasPct = (typeof pct === 'number' && isFinite(pct));
+            var roundedPct = hasPct ? Math.round(pct * 100) : null;
+            var pctIsZero = hasPct && roundedPct === 0;
+            var pctLabel = hasPct
+                ? ((roundedPct > 0 ? '+' : '') + roundedPct + '%')
+                : '';
+
             var rankDelta = p.rank_delta;
             var rankLabel = '';
             if (typeof rankDelta === 'number' && rankDelta !== 0) {
                 rankLabel = (rankDelta > 0 ? 'up ' : 'down ') + Math.abs(rankDelta) + ' ranks';
             }
+
             var tooltip;
             if (t === 'new') {
                 tooltip = 'Wasn\u0027t in yesterday\u0027s top list.';
@@ -41509,12 +41523,29 @@
                 if (rankLabel) parts.push(rankLabel);
                 tooltip = 'vs ' + baseline + (parts.length ? ': ' + parts.join(', ') : '');
             }
-            var label;
-            if (t === 'rising')      label = '\u25B2 ' + (pctLabel || 'up');       // ▲
-            else if (t === 'falling')label = '\u25BC ' + (pctLabel || 'down');    // ▼
-            else if (t === 'stable') label = '\u2014';                             // em dash
-            else                     label = 'NEW';
-            return '<span class="tiq-trend tiq-trend-' + t +
+
+            var cls, label;
+            if (t === 'new') {
+                cls = 'new';
+                label = 'NEW';
+            } else if (pctIsZero || t === 'stable') {
+                // Neutral blue for anything that reads as no meaningful
+                // change - either the backend called it stable, or the
+                // percent rounds to zero even though rank shifted a bit.
+                cls = 'neutral';
+                label = 'stable';
+            } else if (t === 'rising') {
+                cls = 'rising';
+                label = '\u25B2 ' + (pctLabel || 'up');       // ▲
+            } else if (t === 'falling') {
+                cls = 'falling';
+                label = '\u25BC ' + (pctLabel || 'down');    // ▼
+            } else {
+                cls = 'neutral';
+                label = 'stable';
+            }
+
+            return '<span class="tiq-trend tiq-trend-' + cls +
                    '" title="' + _tiqEsc(tooltip) + '">' + label + '</span>';
         }
 
