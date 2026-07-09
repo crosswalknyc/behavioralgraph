@@ -543,11 +543,36 @@ _ANALYST_SYSTEM_PROMPT = (
     "    shows, brands, teams, franchises, and personas are always 'the "
     "    audience' / 'these fans' / 'they'. Real people (talent, athlete, "
     "    musician) may be named — but their AUDIENCE is still 'they'.\n"
-    "  * SIGNAL DISCIPLINE. Do not overclaim from freak-index outliers. A "
-    "    brand at <8% reach and index >400 is almost always a low-N "
-    "    artifact — omit or note as 'micro-signal'. Lead with brands that "
-    "    have real reach (>=15% pen) AND meaningful over-index (>=130). "
-    "    Only include a >=500 idx brand if it also has >=15% reach.\n"
+    "  * REACH vs INDEX — the single most important analytical distinction:\n"
+    "      REACH (% of the audience that engages) governs SCALE — how many\n"
+    "      people you can actually reach through this brand or channel.\n"
+    "      INDEX (engagement rate vs Gen Pop, 100 = parity) governs\n"
+    "      DIFFERENTIATION — how uniquely this audience over-consumes vs.\n"
+    "      the average American.\n"
+    "      Every brand row sits on a 2x2 of these two dimensions. The\n"
+    "      analyst's job is to READ THE PAIR, never one alone:\n"
+    "        - MASS + LIFT (reach >=20% AND index >=130): actionable sweet\n"
+    "          spot. Media buys land here. Lead every narrative here.\n"
+    "        - SCALE (reach >=20% AND index 90-130): table stakes; the\n"
+    "          audience uses this like everyone else. Not a differentiator.\n"
+    "        - SIGNATURE (reach 8-20% AND index >=150): persona colour and\n"
+    "          storytelling ONLY. These brands CANNOT deliver scale — a 8%\n"
+    "          reach brand cannot reach 92% of the audience regardless of\n"
+    "          how sharp the index. NEVER LEAD A NARRATIVE with a SIGNATURE\n"
+    "          brand. Never claim it 'anchors' a category. Never imply it\n"
+    "          drives the buy.\n"
+    "        - NOISE (reach <8% OR reach <15% at index >400): probably\n"
+    "          low-N panel artifact. Omit entirely.\n"
+    "      Correct phrasing template: 'Mass-brand shopping is anchored by\n"
+    "      Nike (37%), Amazon (72%), and Levi (27%), with SIGNATURE\n"
+    "      affinities toward Urban Stems (index 245) and Killstar (208).'\n"
+    "      Incorrect (and banned): 'Shoppers of Urban Stems (7.9%) and\n"
+    "      Killstar (9.9%) drive this audience's commerce' — 91% of them do\n"
+    "      NOT shop those brands.\n"
+    "  * SIGNAL DISCIPLINE. Do not overclaim from freak-index outliers. A\n"
+    "    brand at <8% reach and index >400 is almost always a low-N\n"
+    "    artifact — omit or note as 'micro-signal'. Only include a\n"
+    "    >=500 idx brand if it also has >=15% reach.\n"
     "  * MINIMUM CATEGORY BAR. Only nominate a category as worth its own "
     "    deep-dive slide if its top brand has >=15% reach AND at least "
     "    two brands have >=10% reach. Everything below that bar goes into "
@@ -739,11 +764,11 @@ _ANALYST_JSON_SPEC = (
     '  ],\n'
     '  "commerce_persona": {\n'
     '     "headline": "5-9 word shopping-personality label (no period). Examples: \'Amazon-first Instacart-heavy value shoppers.\', \'DTC-forward luxury-adjacent early adopters.\', \'Big-box + Target home-focused.\'",\n'
-    '     "body":     "90-130 word commerce portrait synthesizing MPB / RETAIL / COSMETICS / APPAREL / PERSONAL CARE signals into a coherent shopping personality. Name 5-7 specific brands in-line with reach % (e.g. \'Nike (37%) + Adidas (24%) core.\'). What retail archetype are they."\n'
+    '     "body":     "90-130 word commerce portrait synthesizing MPB + RETAIL + COSMETICS + APPAREL + PERSONAL CARE. STRICT: lead with the 3-4 highest-REACH brands (mass shopping backbone — pct >=20%), then add SIGNATURE affinities in a second sentence starting with \'with signature affinities toward\'. Format brands as: BRAND (37% reach) for mass, BRAND (idx 245) for signature. NEVER lead with a <20% reach brand. Example: \'Anchored by Nike (37%), Amazon (72%), and Levi (27%), with signature affinities toward Ray-Ban (idx 135) and Under Armour (idx 135).\'"\n'
     '  },\n'
     '  "cultural_interests": {\n'
     '     "headline": "5-9 word cultural-interest label (no period). Examples: \'Live-music + festival regulars.\', \'Gaming-native prestige-TV watchers.\', \'Sports-first spectators, esports-curious.\'",\n'
-    '     "body":     "90-130 word integrated view of how they spend cultural time — pulls from MUSIC / GAMES / FESTIVALS / TICKETING / SPORTS TEAM / STREAMING VIDEO / STREAMING MUSIC signals. Name 5-7 specific properties in-line with reach %. Weight the narrative to whatever the data actually says."\n'
+    '     "body":     "90-130 word integrated view of cultural time — pulls MUSIC / GAMES / FESTIVALS / TICKETING / SPORTS TEAM / STREAMING signals. STRICT: same mass-then-signature ordering as commerce_persona. Lead with the highest-reach cultural surface (e.g. \'TikTok (70%) and Spotify (52%)\'), then \'with signature interests in\' for the high-index-low-reach picks."\n'
     '  },\n'
     '  "exec_summary": {\n'
     '     "who_headline":     "2-4 word label (e.g. \'The audience.\')",\n'
@@ -1530,69 +1555,138 @@ def _slide_one_insight(prs: Presentation, p: dict):
 
 
 def _slide_persona_category(prs: Presentation, p: dict, cat: str, items: list):
-    """KD multi-sub-section pattern: split the category's top brands into
-    3-4 conceptual sub-columns (KD uses e.g. 'DIGITAL BANKING & PAY',
-    'BANKING', 'INVESTMENTS', 'INTEREST SIGNAL' — grouped by role) and
-    render each as a vertical list of ``Brand\\nPEN% (IDX)`` entries.
+    """Category deep-dive slide, grouped by SIGNAL CLASS instead of index
+    quartile.
 
-    We can't infer semantic sub-groups reliably, so we do a two-tier split:
-    top 12 brands by index, chunked into either 3 or 4 columns depending on
-    count. Falls back to a single ranked column if few brands. WHY IT
-    MATTERS narrative anchors the story."""
+    Prior versions sorted the category's brands by index desc and called
+    the top four quartiles STRONGEST / STRONG / NOTABLE / EMERGING. That
+    labeling let a 3.6%-reach brand at 263 index become 'STRONGEST
+    SIGNAL' for Apparel, which is analytically false — 96% of the
+    audience does not shop it. The fix: group by the 2x2 of reach x
+    index that actually matters for a media buy:
+
+        MASS + LIFT   (reach >=20% AND index >=130) — actionable
+        SCALE         (reach >=20% AND index 90-130) — table stakes
+        SIGNATURE     (reach 8-20% AND index >=150) — persona-only
+        EMERGING      (reach 10-20% AND index 110-150) — moderate
+
+    A short header caption teaches the framework so the reader can
+    interpret a MARNI at 3.6% for what it is (character detail) rather
+    than what it isn't (a channel plan)."""
     slide = _blank_slide(prs)
     _section_eyebrow(slide, 0.52, p["name"], _pretty_cat(cat).upper())
 
     headline, sub = _persona_category_headline(cat)
     full_title = f"{headline} {sub}".strip()
-    _text(slide, 0.62, 0.82, 12.0, 1.10, full_title,
-          size=28, bold=True, color=C_CREAM, line_spacing=1.05)
+    _text(slide, 0.62, 0.82, 12.0, 1.00, full_title,
+          size=26, bold=True, color=C_CREAM, line_spacing=1.05)
 
-    top = [it for it in items[:16] if _num(it.get("pct", 0)) > 0]
-    if not top:
+    all_items = [it for it in (items or [])
+                 if _num(it.get("pct", 0)) > 0 and _num(it.get("index", 0)) > 0]
+    if not all_items:
         _text(slide, 0.62, 3.5, 11.5, 0.6,
               "No branded signals observed in this category.",
               size=12, color=C_MUTED)
         _footer(slide, 8, p["name"])
         return
 
-    why = _why_it_matters_for_category(cat, p, top[:3])
-    _text(slide, 0.62, 2.00, 12.0, 0.36,
+    # Classify every brand and bucket into the four useful columns.
+    buckets: dict[str, list[dict]] = {
+        _SIGCLASS_MASS_LIFT: [],
+        _SIGCLASS_SCALE:     [],
+        _SIGCLASS_SIGNATURE: [],
+        _SIGCLASS_EMERGING:  [],
+    }
+    for it in all_items:
+        cls = _signal_class(it.get("pct"), it.get("index"))
+        if cls in buckets:
+            buckets[cls].append(it)
+    # In-bucket ordering: mass-lift by signal_score (reach with lift kicker),
+    # scale by reach, signature/emerging by index (that IS their story).
+    buckets[_SIGCLASS_MASS_LIFT].sort(
+        key=lambda it: -_signal_score(it.get("pct"), it.get("index")))
+    buckets[_SIGCLASS_SCALE].sort(
+        key=lambda it: -_num(it.get("pct", 0)))
+    buckets[_SIGCLASS_SIGNATURE].sort(
+        key=lambda it: -_num(it.get("index", 0)))
+    buckets[_SIGCLASS_EMERGING].sort(
+        key=lambda it: -_num(it.get("index", 0)))
+
+    # Only ship columns that have brands. Prefer the actionable ones first.
+    col_order = [_SIGCLASS_MASS_LIFT, _SIGCLASS_SCALE,
+                 _SIGCLASS_SIGNATURE, _SIGCLASS_EMERGING]
+    active_cols = [(cls, buckets[cls][:5]) for cls in col_order
+                   if buckets[cls]]
+    if not active_cols:
+        # Fall back: everything is under 5% reach and under 110 idx — just
+        # rank by index and label as "NOTED SIGNALS".
+        fallback = sorted(all_items,
+                          key=lambda it: -_num(it.get("index", 0)))[:12]
+        active_cols = [("NOTED", fallback)]
+
+    # WHY-IT-MATTERS caption grounded in the mass-lift column if present.
+    anchor_items = (buckets[_SIGCLASS_MASS_LIFT]
+                     or buckets[_SIGCLASS_SCALE]
+                     or buckets[_SIGCLASS_SIGNATURE]
+                     or all_items)
+    why = _why_it_matters_for_category(cat, p, anchor_items[:3])
+    _text(slide, 0.62, 1.90, 12.0, 0.60,
           f"WHY IT MATTERS  /  {why}",
           size=10, color=C_MUTED, letter_spacing=0.04, line_spacing=1.4)
 
-    # Layout: 4 sub-sections across if we have >=8, else 3, else 2, else 1.
-    n = len(top)
-    n_cols = 4 if n >= 12 else (3 if n >= 6 else (2 if n >= 3 else 1))
-    per_col = min(6, (n + n_cols - 1) // n_cols)
+    # Small framework legend so the reader learns to read reach x index.
+    legend_y = 2.55
+    _text(slide, 0.62, legend_y, 12.0, 0.24,
+          "READ IT  /  reach = how many. index = how uniquely. "
+          "MASS+LIFT drives the buy; SIGNATURE colours the persona.",
+          size=9, color=C_MUTED2, letter_spacing=0.04)
 
+    n_cols = len(active_cols)
     col_w = (SLIDE_W_IN - 1.24 - 0.30 * (n_cols - 1)) / n_cols
     col_x = [0.62 + i * (col_w + 0.30) for i in range(n_cols)]
-    hdr_labels = _sub_section_headers(cat, n_cols)
 
-    top_y = 2.80
+    top_y = 2.95
     row_h = 0.72
 
-    for c in range(n_cols):
+    class_header_color = {
+        _SIGCLASS_MASS_LIFT: C_LIME,
+        _SIGCLASS_SCALE:     C_LAVENDER,
+        _SIGCLASS_SIGNATURE: C_MAGENTA,
+        _SIGCLASS_EMERGING:  C_LAVENDER,
+        "NOTED":             C_LAVENDER,
+    }
+    class_sub_caption = {
+        _SIGCLASS_MASS_LIFT: "big reach + real lift  —  drives the buy",
+        _SIGCLASS_SCALE:     "big reach at parity  —  table stakes",
+        _SIGCLASS_SIGNATURE: "small reach, sharp index  —  persona colour",
+        _SIGCLASS_EMERGING:  "moderate reach + moderate lift  —  test",
+        "NOTED":             "ranked signals in this category",
+    }
+
+    for c, (cls, brands) in enumerate(active_cols):
         x = col_x[c]
-        _text(slide, x, top_y, col_w, 0.30, hdr_labels[c],
-              size=10, bold=True, color=C_LAVENDER, letter_spacing=0.10)
-        _hairline(slide, x, top_y + 0.30, col_w - 0.10, C_STROKE)
-        start = c * per_col
-        for r, it in enumerate(top[start:start + per_col]):
-            y = top_y + 0.42 + r * row_h
+        hdr = _SIGCLASS_LABEL.get(cls, cls)
+        _text(slide, x, top_y, col_w, 0.30, hdr,
+              size=10, bold=True,
+              color=class_header_color.get(cls, C_LAVENDER),
+              letter_spacing=0.10)
+        _text(slide, x, top_y + 0.28, col_w, 0.22,
+              class_sub_caption.get(cls, ""),
+              size=8, color=C_MUTED2, letter_spacing=0.02)
+        _hairline(slide, x, top_y + 0.56, col_w - 0.10, C_STROKE)
+        for r, it in enumerate(brands):
+            y = top_y + 0.68 + r * row_h
             brand_name = (it.get("name") or "").strip()
             pct = _num(it.get("pct", 0))
             idx = int(_num(it.get("index", 0)))
-            # Brand name line
             _text(slide, x, y, col_w - 0.10, 0.34, brand_name,
                   size=12.5, bold=True, color=C_CREAM)
-            # KD-style "PEN% (IDX)" line
-            pct_str = f"{pct:.1f}%"
+            pct_str = f"{pct:.1f}% reach"
             idx_str = f"({idx})" if idx else ""
             idx_color = (C_MAGENTA if idx >= 150 else
                          (C_LIME if idx >= 110 else C_MUTED))
             _text(slide, x, y + 0.34, col_w - 1.0, 0.30, pct_str,
-                  size=11, color=C_CREAM)
+                  size=10.5, color=C_MUTED)
             _text(slide, x + col_w - 1.0, y + 0.34, 0.90, 0.30, idx_str,
                   size=11, bold=True, color=idx_color, align=PP_ALIGN.RIGHT)
 
@@ -1681,6 +1775,14 @@ def _emit_case_study_slide(prs, p: dict, cs: dict, *, case_num: int):
 
 
 def _slide_media_and_social(prs: Presentation, p: dict):
+    """Where the audience spends screen time.
+
+    Prior version passed items[:5] which meant HIDIVE at 2.8% reach + 363
+    index was shown at giant font as the top streaming pick — analytically
+    misleading because a 2.8% surface cannot deliver a media buy. Now we
+    prioritise MASS + LIFT (real reach) picks and only fall back to
+    SIGNATURE if no mass surface exists.
+    """
     slide = _blank_slide(prs)
     _section_eyebrow(slide, 0.62, p["name"], "SOCIAL & PLATFORM")
     _title_block(slide, 1.0, "Where the audience", "spends its screen time.")
@@ -1693,16 +1795,24 @@ def _slide_media_and_social(prs: Presentation, p: dict):
         "STREAMING VIDEO", "STREAMING_VIDEO", "MEDIA",
     ])
 
-    # Section labels sit at y=2.85 (below the two-line 44pt title which
-    # occupies y≈1.00 → 2.55 visually), so no glyph collision. Stat lists
-    # start at y=3.30.
+    # Rank both lists by SIGNAL SCORE (reach with a lift kicker) so the
+    # displayed order matches what actually matters for a media plan.
+    social_ranked = sorted(
+        social_items or [],
+        key=lambda it: -_signal_score(it.get("pct", 0), it.get("index", 0)),
+    )
+    media_ranked = sorted(
+        media_items or [],
+        key=lambda it: -_signal_score(it.get("pct", 0), it.get("index", 0)),
+    )
+
     _text(slide, 0.62, 2.85, 5.5, 0.30, "SOCIAL",
           size=11, bold=True, color=C_LAVENDER, letter_spacing=0.06)
-    _draw_stat_list(slide, 0.62, 3.30, 5.5, social_items[:5])
+    _draw_stat_list(slide, 0.62, 3.30, 5.5, social_ranked[:5])
 
     _text(slide, 7.0, 2.85, 5.5, 0.30, "STREAMING / MEDIA",
           size=11, bold=True, color=C_LAVENDER, letter_spacing=0.06)
-    _draw_stat_list(slide, 7.0, 3.30, 5.5, media_items[:5])
+    _draw_stat_list(slide, 7.0, 3.30, 5.5, media_ranked[:5])
 
     _footer(slide, 0, p["name"])
 
@@ -1910,7 +2020,43 @@ def _slide_stat_splash(prs: Presentation, p: dict, cat: str, items: list):
     _text(slide, 0.60, 0.82, 12.0, 1.10, f"{headline} {sub}".strip(),
           size=28, bold=True, color=C_CREAM, line_spacing=1.05)
 
-    top = [it for it in items[:2] if _num(it.get("pct", 0)) > 0]
+    # Pick two brands worthy of giant-stat treatment. Prioritise
+    # MASS+LIFT (big reach + real over-index), then SCALE (big reach),
+    # then SIGNATURE (small reach + sharp index). Falling back on
+    # index-desc alone would put a 3.6%-reach freak-index brand in a
+    # 56pt tile — misleading at a glance.
+    all_ok = [it for it in (items or []) if _num(it.get("pct", 0)) > 0]
+    prioritised: dict[str, list[dict]] = {c: [] for c in
+        (_SIGCLASS_MASS_LIFT, _SIGCLASS_SCALE, _SIGCLASS_SIGNATURE,
+         _SIGCLASS_EMERGING)}
+    for it in all_ok:
+        cls = _signal_class(it.get("pct"), it.get("index"))
+        if cls in prioritised:
+            prioritised[cls].append(it)
+    prioritised[_SIGCLASS_MASS_LIFT].sort(
+        key=lambda it: -_signal_score(it.get("pct"), it.get("index")))
+    prioritised[_SIGCLASS_SCALE].sort(
+        key=lambda it: -_num(it.get("pct", 0)))
+    prioritised[_SIGCLASS_SIGNATURE].sort(
+        key=lambda it: -_num(it.get("index", 0)))
+    prioritised[_SIGCLASS_EMERGING].sort(
+        key=lambda it: -_num(it.get("index", 0)))
+    top: list[dict] = []
+    for cls in (_SIGCLASS_MASS_LIFT, _SIGCLASS_SCALE,
+                _SIGCLASS_EMERGING, _SIGCLASS_SIGNATURE):
+        for it in prioritised[cls]:
+            if it not in top:
+                top.append(it)
+            if len(top) >= 2:
+                break
+        if len(top) >= 2:
+            break
+    if len(top) < 2:  # backfill from raw list if we don't have two hits
+        for it in all_ok:
+            if it not in top:
+                top.append(it)
+            if len(top) >= 2:
+                break
     if not top:
         _text(slide, 0.62, 3.5, 11.5, 0.6,
               "No branded signals observed in this category.",
@@ -2419,20 +2565,23 @@ def _slide_signature_affinities(prs: Presentation, p: dict):
 
     slide = _blank_slide(prs)
     _section_eyebrow(slide, 0.62, p["name"], "SIGNATURE AFFINITIES")
-    _text(slide, 0.62, 0.82, 12.0, 1.10, "The brands that define them.",
+    _text(slide, 0.62, 0.82, 12.0, 1.10, "The brands that colour them.",
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
-    _text(slide, 0.62, 2.10, 12.0, 0.36,
-          "The strongest over-index signals across the file — real reach "
-          "brands that actually characterize this audience.",
-          size=11, color=C_MUTED, line_spacing=1.4)
+    _text(slide, 0.62, 2.05, 12.0, 0.60,
+          "Signature affinities are the sharpest over-indexes across the "
+          "file — the brands that give this audience its personality. "
+          "They are NOT the mass-reach backbone (that lives on the "
+          "category deep-dives). Use these for partner selection and "
+          "cultural signalling, not for sizing the media buy.",
+          size=10.5, color=C_MUTED, line_spacing=1.4)
 
     # Two-column layout, up to 5 rows each
-    left_col  = picks[:6]
-    right_col = picks[6:12]
+    left_col  = picks[:5]
+    right_col = picks[5:10]
     col_w = 5.85
     col_x = [0.62, 6.90]
-    row_h = 0.68
-    top_y = 2.90
+    row_h = 0.66
+    top_y = 3.15
 
     for col_idx, col_rows in enumerate([left_col, right_col]):
         cx = col_x[col_idx]
@@ -2858,37 +3007,91 @@ def _slide_differ_from_genpop(prs: Presentation, p: dict):
 
 def _slide_commerce_persona(prs: Presentation, p: dict):
     """Cross-category shopping-personality narrative. Synthesizes MPB +
-    RETAIL + COSMETICS + APPAREL + PERSONAL CARE into one prose portrait."""
+    RETAIL + COSMETICS + APPAREL + PERSONAL CARE into one prose portrait.
+
+    STRICT reach-vs-index ordering: the narrative must LEAD with the
+    highest-REACH brands (the mass-shopping backbone) and only mention
+    high-index-low-reach picks in a second clause as SIGNATURE affinities.
+    Never let a <20% reach brand anchor the story — that is analytically
+    false because most of the audience does not shop that brand.
+    """
     cp = _brief_get(p, "commerce_persona", default={}) or {}
     hd = _purge_pronouns(str(cp.get("headline") or "").strip(), p["name"])
     body = _purge_pronouns(str(cp.get("body") or "").strip(), p["name"])
 
-    # Fallback: build a data-driven narrative from top MPB brands
-    if not (hd and body):
-        mpb = _first_available(p, ["MPB", "MOST PURCHASED BRANDS", "MOST_PURCHASED_BRANDS"])
-        # Only ship if we have a real commerce signal to describe
-        if not mpb or len(mpb) < 4:
-            return
-        top_named = [(it.get("name") or "").strip() for it in mpb[:6]
-                     if _num(it.get("pct", 0)) >= 10.0]
-        top_named = [n for n in top_named if n][:6]
-        if len(top_named) < 4:
-            return
-        top_reach = _num(mpb[0].get("pct", 0))
-        top_brand = (mpb[0].get("name") or "").strip()
-        if not hd:
-            hd = f"An {top_brand}-first commerce personality."
-        if not body:
+    # Collect commerce-side brands across MPB + RETAIL + APPAREL/FOOTWEAR
+    # + COSMETICS + PERSONAL CARE so mass/signature split has enough surface.
+    commerce_cats = ["MPB", "MOST PURCHASED BRANDS", "MOST_PURCHASED_BRANDS",
+                     "RETAIL", "APPAREL/FOOTWEAR", "APPAREL_FOOTWEAR",
+                     "APPAREL", "COSMETICS", "PERSONAL CARE",
+                     "PERSONAL_CARE"]
+    commerce_items: list[dict] = []
+    seen_names: set[str] = set()
+    for cat in commerce_cats:
+        for it in (_first_available(p, [cat]) or []):
+            nm = (it.get("name") or "").strip()
+            key = nm.upper()
+            if not nm or key in seen_names:
+                continue
+            seen_names.add(key)
+            commerce_items.append(it)
+    if len(commerce_items) < 4 and not (hd and body):
+        return
+    mass, sig = _split_by_reach(commerce_items, reach_threshold=20.0)
+    mass_labels = [f"{(it.get('name') or '').strip()} "
+                    f"({_num(it.get('pct',0)):.0f}%)"
+                    for it in mass[:4]]
+    sig_labels = [f"{(it.get('name') or '').strip()} "
+                   f"(idx {int(round(_num(it.get('index',0))))})"
+                   for it in sig[:3]]
+
+    # If the LLM body leads with signature brands, repair it by prepending
+    # a mass-brand anchor sentence. Catches the "Urban Stems (7.9%)" defect.
+    if body and mass_labels:
+        body = _repair_leading_signature(body, mass, sig)
+
+    if not hd:
+        if mass:
+            top_reach = _num(mass[0].get("pct", 0))
+            top_brand = (mass[0].get("name") or "").strip()
+            hd = f"Mass-brand shoppers with signature over-indexes."
+        else:
+            hd = "Signature-brand shoppers, not mass buyers."
+    if not body:
+        if mass_labels and sig_labels:
             body = (
-                f"The top-buying shape is anchored by {top_brand} ({top_reach:.0f}% reach) "
-                f"and rounded out by {', '.join(top_named[1:5])}. "
-                "That combination reads as a mainstream mass-value shopper "
-                "with a tilt toward mass athleisure and personal-care staples "
-                "purchased through the standard Amazon / Target / Walmart "
-                "digital rails. Not a luxury-DTC audience; not a pure "
-                "premium-brand chaser. Pricing and channel selection should "
-                "assume value-tier promiscuity, not brand loyalty."
+                f"Mass-brand commerce is anchored by "
+                f"{', '.join(mass_labels[:3])}"
+                + (f" and {mass_labels[3]}" if len(mass_labels) >= 4 else "")
+                + ". That is the shopping backbone — how the buy will "
+                "actually land. Layered on top are signature affinities "
+                f"toward {', '.join(sig_labels)} — sharp over-indexes vs. "
+                "Gen Pop that give the audience its personality without "
+                "carrying the media weight. For the plan, size the buy "
+                "against the mass brands; use the signatures for partner "
+                "selection, co-branded activations, and cultural signalling."
             )
+        elif mass_labels:
+            body = (
+                f"Mass-brand commerce is anchored by "
+                f"{', '.join(mass_labels[:4])}. That is the shopping "
+                "backbone — table-stakes brands the audience uses like "
+                "the rest of America. Without a distinctive over-index "
+                "layer, this reads as a mass-market shopper: value-tier "
+                "promiscuity, no dominant category loyalty, standard "
+                "big-box + Amazon digital rails."
+            )
+        elif sig_labels:
+            body = (
+                f"No single mass-brand anchor emerges above 20% reach — "
+                f"the commerce fingerprint is defined by signature "
+                f"affinities toward {', '.join(sig_labels)}. Read this as "
+                "a distributed shopper with sharp niche taste, not a "
+                "big-box loyalist. Partner selection matters more than "
+                "media weight here."
+            )
+        else:
+            return
 
     if not hd or not body:
         return
@@ -2934,32 +3137,65 @@ def _slide_cultural_interests(prs: Presentation, p: dict):
     if not (hd and body) and len(cat_hits) < 2:
         return
 
-    if not hd or not body:
-        # Collect top-3 cultural signals
-        chips: list[str] = []
-        for cat in cultural_cats:
-            items = _first_available(p, [cat])
-            if items:
-                top = items[0]
-                nm = (top.get("name") or "").strip()
-                pct = _num(top.get("pct", 0))
-                if nm and pct >= 5.0:
-                    chips.append(f"{nm} ({pct:.0f}%)")
-                    if len(chips) >= 5:
-                        break
-        if not chips:
-            return
-        if not hd:
-            hd = "Where they spend cultural time."
-        if not body:
+    # Collect cultural-side brands with dedupe so mass/signature split
+    # sees the full cross-category surface.
+    cultural_items: list[dict] = []
+    seen_names: set[str] = set()
+    for cat in cultural_cats:
+        for it in (_first_available(p, [cat]) or []):
+            nm = (it.get("name") or "").strip()
+            key = nm.upper()
+            if not nm or key in seen_names:
+                continue
+            seen_names.add(key)
+            cultural_items.append(it)
+    # Cultural surfaces skew smaller (Spotify 40% is 'big' here) so relax
+    # the mass threshold from 20% to 15%.
+    mass, sig = _split_by_reach(cultural_items, reach_threshold=15.0)
+    mass_labels = [f"{(it.get('name') or '').strip()} "
+                    f"({_num(it.get('pct',0)):.0f}%)"
+                    for it in mass[:4]]
+    sig_labels = [f"{(it.get('name') or '').strip()} "
+                   f"(idx {int(round(_num(it.get('index',0))))})"
+                   for it in sig[:3]]
+
+    if body and (mass or sig):
+        body = _repair_leading_signature(body, mass, sig,
+                                         reach_threshold=15.0)
+
+    if not hd:
+        hd = "Where they spend cultural time."
+    if not body:
+        if mass_labels and sig_labels:
             body = (
-                f"Their cultural time concentrates in {', '.join(chips[:3])}"
-                + (f" with support from {', '.join(chips[3:])}" if len(chips) > 3 else "")
-                + ". That mix tells a marketer which sponsor properties "
-                "will earn attention here and which will read as "
-                "off-audience. The concentration is directional, not "
-                "diffuse — activation should follow it."
+                f"Cultural time concentrates in {', '.join(mass_labels[:3])}"
+                + (f" and {mass_labels[3]}" if len(mass_labels) >= 4 else "")
+                + ". Those are the surfaces where the audience actually "
+                "spends time and where sponsor properties will earn "
+                f"attention. Beyond that scale layer, signature interests "
+                f"in {', '.join(sig_labels)} give the audience its "
+                "distinctive cultural fingerprint — sharp over-indexes "
+                "vs. Gen Pop that make for authentic cultural partners "
+                "without carrying the reach numbers themselves."
             )
+        elif mass_labels:
+            body = (
+                f"Cultural time concentrates in {', '.join(mass_labels[:4])}. "
+                "Those are the surfaces where sponsor properties will earn "
+                "attention. The distribution is mass-shaped rather than "
+                "signature-shaped — activation should ride the reach here, "
+                "not chase niche indexes."
+            )
+        elif sig_labels:
+            body = (
+                f"No dominant mass cultural surface anchors the audience — "
+                f"cultural interest is defined by signature affinities: "
+                f"{', '.join(sig_labels)}. This is a distributed cultural "
+                "consumer with sharp niche taste; sponsor selection matters "
+                "more than sheer reach when picking properties."
+            )
+        else:
+            return
 
     if not hd or not body:
         return
@@ -3627,6 +3863,169 @@ def _top_over_index_brand(p: dict, *,
     tier3.sort(key=lambda it: (-_num(it.get("index", 0)),
                                 -_num(it.get("pct", 0))))
     return tier3[0]
+
+
+# =============================================================================
+#  Signal class framework — reach vs index nuance
+# =============================================================================
+#
+# Every brand behavioral row sits somewhere on a 2x2 of REACH (% of the
+# audience that engages) x INDEX (engagement rate vs Gen Pop, 100 =
+# parity). The two dimensions carry different analytical weight:
+#
+#   * REACH governs SCALE — how many people you can actually reach.
+#     A brand at 3% reach + 300 index is a persona characteristic; it
+#     cannot deliver a media buy at scale, no matter how sharp the index.
+#   * INDEX governs DIFFERENTIATION — how uniquely THIS audience over-
+#     consumes the brand vs. the average American. A brand at 60% reach
+#     + 105 index is table-stakes, not a signature.
+#
+# The five classes below encode the useful cells of that 2x2. Every
+# narrative fallback in this module respects them: SIGNATURE brands
+# never lead a sentence; MASS+LIFT brands always do.
+# =============================================================================
+
+_SIGCLASS_MASS_LIFT = "MASS_LIFT"      # reach >=20 and index >=130 — actionable
+_SIGCLASS_SCALE     = "SCALE"          # reach >=20 and 90 <= index < 130 — table stakes
+_SIGCLASS_UNDER     = "UNDER"          # reach >=20 and index < 90 — under-indexes
+_SIGCLASS_SIGNATURE = "SIGNATURE"      # reach 8-20 and index >=150 — persona-only
+_SIGCLASS_EMERGING  = "EMERGING"       # reach 10-20 and index 110-150 — moderate lift
+_SIGCLASS_NOISE     = "NOISE"          # low reach + not high index, OR freak index
+
+_SIGCLASS_LABEL = {
+    _SIGCLASS_MASS_LIFT: "MASS + LIFT",
+    _SIGCLASS_SCALE:     "SCALE",
+    _SIGCLASS_UNDER:     "UNDER-INDEX",
+    _SIGCLASS_SIGNATURE: "SIGNATURE",
+    _SIGCLASS_EMERGING:  "EMERGING",
+    _SIGCLASS_NOISE:     "NOISE",
+}
+
+# What each class means in analyst terms — used in captions + prompt.
+_SIGCLASS_MEANING = {
+    _SIGCLASS_MASS_LIFT: "Big reach and clear over-index — the actionable sweet spot for a partner buy.",
+    _SIGCLASS_SCALE:     "Big reach but at Gen-Pop parity — table-stakes for the media buy, not a differentiator.",
+    _SIGCLASS_SIGNATURE: "Small reach but sharp over-index — persona colour, not a media buy at scale.",
+    _SIGCLASS_EMERGING:  "Moderate reach with meaningful lift — worth a test but not a headline signal.",
+    _SIGCLASS_UNDER:     "Reached but under-indexed — de-prioritise vs. the audience's over-index picks.",
+    _SIGCLASS_NOISE:     "Too little reach or a freak index — probably panel artifact, omit.",
+}
+
+
+def _signal_class(pct, index) -> str:
+    """Classify a (reach, index) pair. Reach in percent (0-100), index
+    with 100 = parity."""
+    p = _num(pct)
+    i = _num(index)
+    if p <= 0 or i <= 0:
+        return _SIGCLASS_NOISE
+    if p >= 20:
+        if i >= 130:
+            return _SIGCLASS_MASS_LIFT
+        if i >= 90:
+            return _SIGCLASS_SCALE
+        return _SIGCLASS_UNDER
+    if p >= 10:
+        if i >= 150:
+            return _SIGCLASS_SIGNATURE
+        if i >= 110:
+            return _SIGCLASS_EMERGING
+        return _SIGCLASS_NOISE
+    if 5 <= p < 10 and i >= 200:
+        return _SIGCLASS_SIGNATURE  # borderline signature
+    return _SIGCLASS_NOISE
+
+
+def _signal_score(pct, index) -> float:
+    """Weighted score for ranking brands by MARKETING IMPACT — how much
+    audience you can actually reach times how differentiated that reach
+    is. Reach dominates; the sqrt(index) term tempers freak-index bias
+    so a 3%-reach-at-800-index brand can't jump above a 25%-at-140.
+    """
+    p = _num(pct)
+    i = min(_num(index), 300.0)
+    if p <= 0 or i <= 0:
+        return 0.0
+    return p * ((i / 100.0) ** 0.5)
+
+
+_REACH_PATTERN = re.compile(r"([A-Z][A-Za-z0-9&'\-\.\+\/ ]{1,40})\s*\(\s*([0-9]{1,2}(?:\.[0-9])?)\s*%\s*(?:reach)?\s*\)")
+
+
+def _extract_narrated_reaches(body: str) -> list[tuple[str, float]]:
+    """Return the (brand, pct) mentions in narrative order — used to
+    detect when the LLM led a sentence with sub-mass brands."""
+    if not body:
+        return []
+    out: list[tuple[str, float]] = []
+    for m in _REACH_PATTERN.finditer(body):
+        nm = (m.group(1) or "").strip().strip(",.:;")
+        try:
+            pct = float(m.group(2))
+        except (TypeError, ValueError):
+            continue
+        # Skip generic "audience" / "them" tokens that pattern-matched.
+        if len(nm) < 2 or nm.lower() in {"the audience", "and", "with"}:
+            continue
+        out.append((nm, pct))
+    return out
+
+
+def _repair_leading_signature(body: str, mass: list, sig: list,
+                                reach_threshold: float = 20.0) -> str:
+    """If the LLM body opens by naming brands under the mass threshold,
+    prepend a mass-anchor sentence so the narrative reads correctly.
+
+    This is defence-in-depth: the system prompt teaches the framework
+    but a smaller model can still slip. Rather than override the LLM
+    body entirely, we prepend a mass anchor and let the LLM's persona
+    read as the SECOND half of the story — exactly its rightful role.
+    """
+    if not body or not mass:
+        return body
+    hits = _extract_narrated_reaches(body)
+    if not hits:
+        return body
+    first_three = hits[:3]
+    # If any of the first three named brands is above threshold, the LLM
+    # got the ordering right — leave it alone.
+    if any(pct >= reach_threshold for _, pct in first_three):
+        return body
+    # Otherwise, all three lead brands are sub-mass. Prepend an anchor.
+    top = mass[:3]
+    anchor_bits = [
+        f"{(it.get('name') or '').strip()} "
+        f"({_num(it.get('pct',0)):.0f}%)"
+        for it in top
+    ]
+    if not anchor_bits:
+        return body
+    anchor = ("Mass-brand shopping is anchored by "
+               + (", ".join(anchor_bits[:-1]) + ", and " + anchor_bits[-1]
+                  if len(anchor_bits) > 1 else anchor_bits[0])
+               + ". ")
+    return anchor + body
+
+
+def _split_by_reach(items: list, reach_threshold: float = 20.0
+                     ) -> tuple[list, list]:
+    """Return (mass_brands, signature_brands): mass = reach >= threshold,
+    signature = below. Each list is sorted appropriately for its role
+    (mass by reach desc, signature by signal_score desc)."""
+    mass, sig = [], []
+    for it in items or []:
+        p = _num(it.get("pct", 0))
+        i = _num(it.get("index", 0))
+        if p <= 0:
+            continue
+        if p >= reach_threshold:
+            mass.append(it)
+        elif p >= 5 and i >= 130:
+            sig.append(it)
+    mass.sort(key=lambda it: -_num(it.get("pct", 0)))
+    sig.sort(key=lambda it: -_signal_score(it.get("pct", 0),
+                                             it.get("index", 0)))
+    return mass, sig
 
 
 def _top_owned_reach(p: dict) -> float:
@@ -4340,18 +4739,29 @@ def _why_it_matters_for_category(cat: str, p: dict, top: list) -> str:
     pct  = _num(lead.get("pct", 0))
     cat_pretty = _pretty_cat(cat)
     arch = p.get("_archetype") or _ARCHETYPE_GENERIC
+    lead_class = _signal_class(pct, idx)
 
     # Extreme-index low-reach guard — never lead with a freak-index brand
     if idx >= 400 and pct < 8:
-        # Skip the outlier and describe the category as a spread instead
         return (f"The audience spreads across mainstream "
                 f"{cat_pretty.lower()} choices with meaningful over-index; "
                 "scale is present, no single brand dominates the signal.")
 
-    if idx >= 200:
-        base = (f"{name} anchors this category at a {idx} index — an unusually "
-                f"tight signal for {cat_pretty.lower()}. Any activation here "
-                "reaches an audience that already opts in.")
+    if lead_class == _SIGCLASS_MASS_LIFT:
+        # Real MASS + LIFT — the sweet spot. Frame it as actionable scale.
+        base = (f"{name} anchors this category with {pct:.1f}% reach at a "
+                f"{idx} index — real scale AND real over-index. This is the "
+                f"actionable pick for a {cat_pretty.lower()} partnership.")
+    elif lead_class == _SIGCLASS_SCALE:
+        base = (f"{name} reaches {pct:.1f}% of the audience — real scale, but "
+                f"at a {idx} index it reads as table stakes rather than "
+                f"differentiation. Sizing follows scale, not signature.")
+    elif lead_class in (_SIGCLASS_SIGNATURE, _SIGCLASS_EMERGING):
+        # Signature-tier lead: caveat that this is persona colour, not scale.
+        base = (f"The category is signature-tier: {name} over-indexes at {idx} "
+                f"but only reaches {pct:.1f}% of the audience. Read this as "
+                f"persona colour for {cat_pretty.lower()} — sharp taste, "
+                "not a channel that will scale a buy on its own.")
     elif idx >= 130:
         base = (f"{name} leads with {pct:.1f}% penetration ({idx} index) — a "
                 f"reliable {cat_pretty.lower()} beachhead.")
@@ -4360,13 +4770,23 @@ def _why_it_matters_for_category(cat: str, p: dict, top: list) -> str:
                 f"{cat_pretty.lower()} choices; scale is present, "
                 "differentiation is soft.")
 
-    # Add an archetype-specific tag for MOVIE / TV
-    if arch == _ARCHETYPE_MOVIE:
-        base += (f" For the release-marketing plan, {name} is a natural "
-                 "co-marketing / partner brand.")
-    elif arch == _ARCHETYPE_TV_SHOW:
-        base += (f" For launch or renewal marketing, {name} is a high-fit "
-                 "sponsor and audience-lookalike seed.")
+    # Archetype-specific tag — but only if the lead is scaled enough to
+    # actually stand up as a partner brand. Signature/emerging leads get a
+    # SIGNATURE-appropriate tag: partner selection, not media weight.
+    if lead_class in (_SIGCLASS_MASS_LIFT, _SIGCLASS_SCALE):
+        if arch == _ARCHETYPE_MOVIE:
+            base += (f" For the release-marketing plan, {name} is a natural "
+                     "co-marketing / partner brand.")
+        elif arch == _ARCHETYPE_TV_SHOW:
+            base += (f" For launch or renewal marketing, {name} is a high-fit "
+                     "sponsor and audience-lookalike seed.")
+    else:
+        if arch == _ARCHETYPE_MOVIE:
+            base += (f" Best used as a signature partner or cultural signal "
+                     "in the release marketing, not as a scale channel.")
+        elif arch == _ARCHETYPE_TV_SHOW:
+            base += (f" Best used as a taste-maker partner, not as a scale "
+                     "sponsor.")
     return base
 
 
@@ -4617,17 +5037,25 @@ def _pick_takeaways(p: dict) -> list[tuple[str, str, str]]:
                       f"{names}. Sponsorship and on-site activation are "
                       "high-fit for this audience."))
 
-    # 04 — Where attention lives
+    # 04 — Where attention lives. Rank media surfaces by SIGNAL SCORE
+    # (reach with a lift kicker), not by index alone — a 2.8%-reach
+    # freak-index streamer is not a "highest-fit media surface" no matter
+    # how sharp the index reads.
     media = _first_available(p, ["STREAMING/PLATFORM", "STREAMING VIDEO",
                                  "MEDIA", "SOCIAL MEDIA"])
     if media:
-        top3 = media[:3]
+        ranked = sorted(media,
+                        key=lambda it: -_signal_score(it.get("pct", 0),
+                                                        it.get("index", 0)))
+        top3 = ranked[:3]
         names = ", ".join(
-            f"{it['name']} ({int(_num(it.get('index',0)))})" for it in top3
+            f"{it['name']} ({_num(it.get('pct',0)):.0f}%, "
+            f"{int(_num(it.get('index',0)))} idx)" for it in top3
         )
         picks.append(("04", "Where attention lives.",
-                      f"Highest-fit media surfaces: {names}. Prioritize "
-                      "these over generic linear or broad social buys."))
+                      f"Highest-fit media surfaces balancing reach and "
+                      f"over-index: {names}. Prioritize these over generic "
+                      "linear or broad social buys."))
 
     # 05 — Commerce / financial (if present)
     fin = _first_available(p, ["BANKING", "DIGITAL BANKING", "INVESTMENTS",
