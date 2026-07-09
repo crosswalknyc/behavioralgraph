@@ -773,6 +773,80 @@ def _fetch_trending_searches(state: Optional[str], lookback_days: int) -> list[d
 #     avoid false hits like "federal express" -> finance.
 # ============================================================================
 _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
+    # Sports gets its own bucket and its own card (2026-07-09). Live
+    # in front of `entertainment` in the priority list below so game /
+    # team / league / athlete searches don't get absorbed by the "TV
+    # + music + celebs" bucket.
+    'sports': [
+        # leagues / governing bodies
+        'nfl', 'nba', 'mlb', 'nhl', 'mls', 'wnba', 'ncaa', 'ufc', 'wwe',
+        'aew', 'pga', 'lpga', 'atp', 'wta', 'fifa', 'uefa', 'concacaf',
+        'formula 1', 'formula one', ' f1 ', 'nascar', 'indycar', 'motogp',
+        'espn', 'fox sports', 'sportscenter',
+        # tournaments / trophies / megaevents
+        'super bowl', 'super bowl lviii', 'super bowl lix', 'super bowl lx',
+        'world series', 'nba finals', 'stanley cup', 'stanley cup final',
+        'world cup', 'copa america', 'euro cup', 'euros final',
+        'olympics', 'summer olympics', 'winter olympics', 'paralympics',
+        'march madness', 'final four', 'sweet 16', 'college football playoff',
+        'champions league', 'premier league', 'la liga', 'serie a',
+        'bundesliga', 'ligue 1', 'europa league', 'concacaf champions',
+        'wimbledon', 'us open', 'australian open', 'french open',
+        'roland garros', 'grand slam', 'masters tournament', 'ryder cup',
+        'the masters',
+        # match / roster / game vocabulary
+        ' vs ', 'vs.', 'defeat', 'beats', 'scores', 'goal', 'match',
+        ' fc', 'united fc', 'city fc', 'championship', 'playoff',
+        'playoffs', 'draft', 'rookie', 'halftime', 'overtime',
+        'starting lineup', 'signed a contract', 'traded to', 'traded from',
+        'head coach', 'assistant coach', 'general manager',
+        'injury report', 'game score', 'game recap', 'game 7',
+        'series clinched', 'walk-off', 'walk off',
+        # marquee athletes across sports (unambiguous)
+        'lebron', 'lebron james', 'stephen curry', 'kevin durant',
+        'giannis', 'nikola jokic', 'luka doncic', 'joel embiid',
+        'jayson tatum', 'anthony edwards', 'victor wembanyama',
+        'caitlin clark', 'angel reese', 'aja wilson',
+        'aaron judge', 'shohei ohtani', 'ohtani', 'mookie betts',
+        'juan soto', 'kyle schwarber', 'freddie freeman', 'bryce harper',
+        'ronald acuna', 'jose altuve', 'mike trout',
+        'patrick mahomes', 'josh allen', 'joe burrow', 'lamar jackson',
+        'jalen hurts', 'travis kelce', 'saquon barkley',
+        'connor mcdavid', 'auston matthews', 'nathan mackinnon',
+        'messi', 'ronaldo', 'mbappe', 'haaland', 'erling haaland',
+        'jude bellingham', 'vinicius', 'kevin de bruyne', 'harry kane',
+        'djokovic', 'nadal', 'federer', 'alcaraz', 'sinner',
+        'sabalenka', 'gauff', 'swiatek', 'coco gauff',
+        'tiger woods', 'rory mcilroy', 'scottie scheffler',
+        'verstappen', 'lewis hamilton', 'lando norris', 'charles leclerc',
+        'conor mcgregor', 'jon jones', 'islam makhachev',
+        # unambiguous major-sport team names (single-word teams like
+        # "Chiefs" or "Patriots" are omitted because they hit non-sport
+        # meanings too often; "Giants", "Rangers", "Tigers" omitted for
+        # the same reason - too many non-sport hits).
+        'warriors', 'lakers', 'celtics', 'clippers', 'knicks',
+        'bulls', 'bucks', '76ers', 'sixers', 'mavericks', 'nuggets',
+        'thunder', 'pelicans', 'grizzlies', 'timberwolves',
+        'yankees', 'dodgers', 'red sox', 'astros', 'phillies',
+        'padres', 'blue jays', 'brewers', 'diamondbacks', 'cardinals',
+        'mets', 'braves', 'cubs', 'marlins', 'guardians',
+        'nationals', 'orioles', 'rays', 'athletics', 'pirates',
+        'twins', 'royals', 'reds', 'rockies', 'mariners',
+        '49ers', 'seahawks', 'steelers', 'packers', 'ravens',
+        'raiders', 'bengals', 'buccaneers', 'commanders', 'jaguars',
+        'cardinals nfl', 'texans', 'lions', 'vikings', 'saints',
+        'canadiens', 'canucks', 'oilers', 'penguins', 'flyers',
+        'avalanche', 'lightning', 'panthers nhl', 'golden knights',
+        # WNBA / NWSL context terms
+        'fever', 'sparks', 'aces', 'liberty', 'storm', 'lynx',
+        'sky wnba', 'mystics', 'sun wnba', 'wings',
+        # soccer clubs
+        'real madrid', 'barcelona', 'liverpool', 'chelsea', 'arsenal',
+        'manchester united', 'manchester city', 'man united', 'man city',
+        'tottenham', 'psg', 'bayern munich', 'juventus', 'ac milan',
+        'inter milan', 'dortmund', 'atletico madrid', 'roma', 'napoli',
+        'inter miami',
+    ],
     'entertainment': [
         # streaming platforms + shows. "max" and "hbo" alone false-hit
         # "iphone 18 pro max", "hbo documentary" etc. - require the
@@ -788,44 +862,11 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         # music
         'concert', 'tour', 'album', 'song', 'billboard', 'lyrics',
         'spotify', 'apple music',
-        # sports (culturally entertainment)
-        'fifa', 'world cup', 'super bowl', 'stanley cup', 'olympics',
-        'world series', 'nba finals', 'wnba', 'ncaa', 'march madness',
-        'nfl', 'nba', 'mlb', 'nhl', 'mls', 'ufc', 'boxing', 'wwe',
-        'espn', 'fox sports', 'sportscenter',
-        ' vs ', 'vs.', 'defeat', 'beats', 'scores', 'goal', 'match',
-        ' fc', 'united fc', 'city fc', 'championship', 'playoff',
-        'draft', 'rookie',
-        # celebs / people categories often searched
+        # non-sports celebs / creators often searched
         'taylor swift', 'beyonce', 'kardashian', 'kanye', 'drake',
-        'travis kelce', 'lebron', 'messi', 'ronaldo',
-        # unambiguous major-sport team names (single-word teams like
-        # "Chiefs" or "Patriots" are omitted because they hit non-sport
-        # meanings too often; "Giants", "Rangers", "Tigers" omitted for
-        # the same reason - too many non-sport hits).
-        'warriors', 'lakers', 'celtics', 'clippers', 'knicks',
-        'bulls', 'bucks', '76ers', 'sixers', 'mavericks', 'nuggets',
-        'yankees', 'dodgers', 'red sox', 'astros', 'phillies',
-        'padres', 'blue jays', 'brewers', 'diamondbacks', 'cardinals',
-        'mets', 'braves', 'cubs', 'marlins', 'guardians',
-        'nationals', 'orioles', 'rays', 'athletics', 'pirates',
-        '49ers', 'seahawks', 'steelers', 'packers', 'ravens',
-        'raiders', 'bengals', 'buccaneers',
-        'canadiens', 'canucks', 'oilers', 'penguins', 'flyers',
-        # tennis / golf / global-sport surnames that trend regularly
-        'djokovic', 'nadal', 'federer', 'alcaraz', 'sinner',
-        'sabalenka', 'gauff', 'swiatek',
-        'tiger woods', 'rory mcilroy', 'scottie scheffler',
-        # F1
-        'formula 1', 'formula one', ' f1 ', 'verstappen', 'hamilton',
-        # tennis / motorsport / soccer meta terms
-        'wimbledon', 'us open', 'australian open', 'french open',
-        'grand slam', 'masters tournament', 'ryder cup',
-        'champions league', 'premier league', 'la liga', 'serie a',
-        'bundesliga',
-        # league-generic phrases that scan as roster / game news
-        'starting lineup', 'signed a contract', 'traded to', 'traded from',
-        'head coach', 'assistant coach', 'general manager',
+        'zendaya', 'timothee chalamet', 'ariana grande', 'sabrina carpenter',
+        'olivia rodrigo', 'billie eilish', 'harry styles', 'bad bunny',
+        'chappell roan', 'megan thee stallion',
     ],
     'retail': [
         # retailers
@@ -1031,20 +1072,24 @@ _SHORT_KEYWORD_TOKENS = {
 
 # Priority order for single-category assignment. A term that matches
 # multiple category keyword lists is placed in the first matching
-# category from this list. Rationale: sports and celebrity terms very
+# category from this list. Rationale: sports and celebrity terms
 # often bleed into political or financial headlines via their related
 # text (e.g. Gianni Infantino's related stories mention "President
 # Trump has been a 'great leader'"; the Mets trade news mentions
-# "Bigger Sell-Off Coming?"). Entertainment gets highest priority so
-# those bleeds get correctly classified as sports/entertainment.
+# "Bigger Sell-Off Coming?"). Sports and entertainment therefore get
+# the highest priority so those bleeds get correctly classified.
 #
 # `conservative` and `progressive` sit BEFORE `politics` so partisan
 # searches (Trump / MAGA / AOC / roe / etc.) peel off into their
 # lean-specific buckets first, leaving `politics` as the neutral /
 # institutional / centrist catch-all (Congress procedure, foreign
-# policy, ballots, etc.).
+# policy, ballots, etc.). The DISPLAY order on the dashboard has
+# `politics` before conservative/progressive but the categorization
+# priority is separate from that: we want partisan-diagnostic terms
+# labeled correctly first, then everything else falls to neutral
+# politics.
 _CATEGORY_PRIORITY = (
-    'entertainment', 'retail',
+    'sports', 'entertainment', 'retail',
     'conservative', 'progressive', 'politics',
     'finance',
 )
@@ -1107,11 +1152,12 @@ def _bucket_searches_by_category(rows: list[dict], per_bucket: int = 30
     Finance.
     """
     buckets: dict[str, list[dict]] = {
+        'sports':        [],
         'entertainment': [],
         'retail':        [],
+        'politics':      [],
         'conservative':  [],
         'progressive':   [],
-        'politics':      [],
         'finance':       [],
         'overall':       [],
     }
@@ -2442,7 +2488,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # Overall (all rows, scrollable) + Entertainment / Retail / Politics /
     # Finance (top 20 each). Category buckets are computed from the same
     # underlying list so counts add up predictably.
-    searches_by_category = _bucket_searches_by_category(trending_searches, per_bucket=30)
+    searches_by_category = _bucket_searches_by_category(trending_searches, per_bucket=100)
 
     now = datetime.now(timezone.utc)
     payload = {
@@ -2468,11 +2514,12 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         },
         'counts': {
             'searches':      len(trending_searches),
+            'sports':        len(searches_by_category.get('sports')        or []),
             'entertainment': len(searches_by_category.get('entertainment') or []),
             'retail':        len(searches_by_category.get('retail')        or []),
+            'politics':      len(searches_by_category.get('politics')      or []),
             'conservative':  len(searches_by_category.get('conservative')  or []),
             'progressive':   len(searches_by_category.get('progressive')   or []),
-            'politics':      len(searches_by_category.get('politics')      or []),
             'finance':       len(searches_by_category.get('finance')       or []),
             'headlines':     len(headlines),
             'sources':       len(articles_by_source),

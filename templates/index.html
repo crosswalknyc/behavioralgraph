@@ -23232,13 +23232,22 @@
                auto-fill so any card count wraps naturally at any
                viewport width (7 cards fit at 1680px+, wraps to 4/3/2
                below that). */
-            #trendsIQView .tiq-searches-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; align-items: start; }
-            @media (min-width: 1680px) { #trendsIQView .tiq-searches-grid { grid-template-columns: repeat(7, minmax(200px, 1fr)); } }
+            /* 3-per-row grid (2026-07-09). At narrow viewports the
+               grid collapses to 2, then 1 column via the media
+               queries below so cards never squish below a readable
+               width. */
+            #trendsIQView .tiq-searches-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+            @media (max-width: 1200px) { #trendsIQView .tiq-searches-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+            @media (max-width: 780px)  { #trendsIQView .tiq-searches-grid { grid-template-columns: 1fr; } }
             #trendsIQView .tiq-search-cat-card { min-width: 0; }
             #trendsIQView .tiq-search-cat-card h4 { font-size: 0.9rem; }
             #trendsIQView .tiq-search-cat-card .tiq-row-title { font-size: 0.82rem; }
             #trendsIQView .tiq-search-cat-scroll { }
-            #trendsIQView .tiq-search-scroll { max-height: 640px; overflow-y: auto; padding-right: 0.25rem; margin-right: -0.25rem; scrollbar-width: thin; scrollbar-color: rgba(124,58,237,0.4) transparent; }
+            /* Card body scroll cap. Height is picked so ~top 5 rows
+               show without scrolling; anything beyond scrolls inside
+               the card, keeping every card's outer height locked so
+               the 3-per-row grid never gets ragged. */
+            #trendsIQView .tiq-search-scroll { max-height: 520px; overflow-y: auto; padding-right: 0.25rem; margin-right: -0.25rem; scrollbar-width: thin; scrollbar-color: rgba(124,58,237,0.4) transparent; }
             #trendsIQView .tiq-search-scroll::-webkit-scrollbar { width: 6px; }
             #trendsIQView .tiq-search-scroll::-webkit-scrollbar-track { background: transparent; }
             #trendsIQView .tiq-search-scroll::-webkit-scrollbar-thumb { background-color: rgba(124,58,237,0.4); border-radius: 3px; }
@@ -40607,7 +40616,7 @@
         // Google Trends, GDELT, major news RSS feeds, Reddit, YouTube,
         // and retailer bestseller pages. Every tab renders its own card
         // grid.
-        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'movers', activeSocial: 'reddit', activeRetailer: 'amazon', headlinesView: 'top', inFlight: null };
+        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'searches', activeSocial: 'reddit', activeRetailer: 'amazon', headlinesView: 'top', inFlight: null };
 
         function _trendsIQHideAllOtherViews() {
             var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
@@ -40764,11 +40773,13 @@
             var watchCount = (window.__trendsIQ.watchList || []).length;
             // "By news source" is nested inside Headlines as a pill
             // sub-tab, so it no longer has its own top-level tab.
+            // "Trending" (search categories) leads the strip because
+            // it's the most-used view.
             var headlineCount = (counts.headlines || 0) + (counts.sources || 0);
             var tabs = [
+                { key: 'searches',  label: 'Trending',         count: counts.searches  || 0, icon: '🔎' },
                 { key: 'movers',    label: 'Movers',           count: counts.movers    || 0, icon: '🚀' },
                 { key: 'headlines', label: 'Headlines',        count: headlineCount,         icon: '📰' },
-                { key: 'searches',  label: 'Trending searches',count: counts.searches  || 0, icon: '🔎' },
                 { key: 'people',    label: 'Trending people',  count: counts.people    || 0, icon: '👤' },
                 { key: 'social',    label: 'Social',           count: 0,                     icon: '💬' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺' },
@@ -40809,7 +40820,7 @@
                 window.__trendsIQ.activeTab = 'headlines';
                 window.__trendsIQ.headlinesView = 'sources';
             }
-            setTrendsIQTab(window.__trendsIQ.activeTab || 'movers');
+            setTrendsIQTab(window.__trendsIQ.activeTab || 'searches');
 
             if (!window.__trendsIQ.watchReady) {
                 tiqLoadWatchlist().then(function() {
@@ -41168,26 +41179,27 @@
                    '</div></div>';
         }
 
-        // Renders one card in the searches row. `scrollable=true` gives
-        // the Overall card a fixed height and vertical scroll so it can
-        // hold the full top 300 without pushing everything else down.
+        // Renders one card in the searches row. Every card is
+        // scrollable and shares the same tiq-search-scroll cap so the
+        // 3-per-row grid stays aligned no matter how much content
+        // each category has. The visible portion is the top ~5 rows;
+        // the user scrolls inside the card to see the rest (up to
+        // maxItems, default 100).
         function _tiqRenderSearchCard(title, subtitle, rows, opts) {
             opts = opts || {};
-            var scrollable = !!opts.scrollable;
-            var emptyMsg   = opts.emptyMsg || 'No trending searches in this category right now.';
+            var emptyMsg = opts.emptyMsg || 'No trending searches in this category right now.';
             var body;
             if (!rows || !rows.length) {
                 body = '<div class="tiq-card-sub" style="opacity:0.7;padding:16px 4px;">' + _tiqEsc(emptyMsg) + '</div>';
             } else {
-                var maxItems = opts.maxItems || rows.length;
-                body = rows.slice(0, maxItems).map(function(r, i) {
-                    return _tiqRenderSearchRow(r, i + 1);
-                }).join('');
-                if (scrollable) {
-                    body = '<div class="tiq-search-scroll">' + body + '</div>';
-                }
+                var maxItems = opts.maxItems || 100;
+                body = '<div class="tiq-search-scroll">' +
+                       rows.slice(0, maxItems).map(function(r, i) {
+                           return _tiqRenderSearchRow(r, i + 1);
+                       }).join('') +
+                       '</div>';
             }
-            return '<div class="tiq-card tiq-search-cat-card' + (scrollable ? ' tiq-search-cat-scroll' : '') + '">' +
+            return '<div class="tiq-card tiq-search-cat-card tiq-search-cat-scroll">' +
                    '<h4>' + title + '</h4>' +
                    '<div class="tiq-card-sub">' + _tiqEsc(subtitle) + '</div>' +
                    body +
@@ -41197,23 +41209,20 @@
         // Payload shape:
         //   compute_view.cards.trending_searches                = flat list (up to 300)
         //   compute_view.cards.trending_searches_by_category    = {
-        //     entertainment, retail,
-        //     conservative, progressive, politics,
+        //     sports, entertainment, retail,
+        //     politics, conservative, progressive,
         //     finance,
         //     overall  <- uncategorized rows only (catch-all)
         //   }
-        // The renderer accepts either the flat list (legacy) or the
-        // structured `{ all, by_category }` object we build in
-        // renderTrendsIQData below. When `by_category.overall` is
-        // present we use it for the Overall card so we don't duplicate
-        // rows that already appear in a specific bucket.
+        // Every card is scrollable to its top ~100 items; the top 5
+        // are visible without scrolling to keep the 3-per-row grid
+        // dense but scannable.
         //
-        // Conservative + Progressive are lean-tagged partisan cuts:
-        // Trump / MAGA / border / 2A / election-integrity signals go
-        // to Conservative; Biden / AOC / climate / reproductive-rights
-        // / labor signals go to Progressive. Neutral institutional
-        // stories (Congress procedure, foreign policy, ballot counting)
-        // stay in Politics.
+        // Card display order (2026-07-09):
+        //   Overall, Entertainment, Sports, Retail,
+        //   Politics, Conservative, Progressive, Finance
+        // Politics leads the three political cards; Conservative /
+        // Progressive follow as lean-tagged cuts.
         function renderTIQSearches(payload) {
             var overall, byCat, allPool;
             if (Array.isArray(payload)) {
@@ -41224,9 +41233,6 @@
                 payload = payload || {};
                 allPool = payload.all || [];
                 byCat = payload.by_category || {};
-                // Prefer the uncategorized-only overall bucket. Fall
-                // back to the flat pool if the backend hasn't populated
-                // it (older payloads / edge cases).
                 overall = (byCat.overall && byCat.overall.length)
                           ? byCat.overall
                           : allPool;
@@ -41240,37 +41246,35 @@
                 _tiqRenderSearchCard('\uD83D\uDD0E Overall',
                                        overallSub,
                                        overall,
-                                       { scrollable: true, maxItems: 300 }) +
+                                       { maxItems: 300 }) +
                 _tiqRenderSearchCard('\uD83C\uDFAC Entertainment',
-                                       'Movies, TV, music, sports, and celebs.',
+                                       'Movies, TV, music, and celebs.',
                                        byCat.entertainment,
-                                       { maxItems: 20,
-                                         emptyMsg: 'No entertainment searches in this window.' }) +
+                                       { emptyMsg: 'No entertainment searches in this window.' }) +
+                _tiqRenderSearchCard('\uD83C\uDFC8 Sports',
+                                       'Leagues, teams, games, and athletes.',
+                                       byCat.sports,
+                                       { emptyMsg: 'No sports searches in this window.' }) +
                 _tiqRenderSearchCard('\uD83D\uDECD Retail',
                                        'Brands, products, and shopping intent.',
                                        byCat.retail,
-                                       { maxItems: 20,
-                                         emptyMsg: 'No retail searches in this window.' }) +
-                _tiqRenderSearchCard('\uD83D\uDD34 Conservative',
-                                       'Right-lean political searches: MAGA, border, 2A, election integrity.',
-                                       byCat.conservative,
-                                       { maxItems: 20,
-                                         emptyMsg: 'No conservative-tagged searches in this window.' }) +
-                _tiqRenderSearchCard('\uD83D\uDD35 Progressive',
-                                       'Left-lean political searches: climate, reproductive rights, labor, racial justice.',
-                                       byCat.progressive,
-                                       { maxItems: 20,
-                                         emptyMsg: 'No progressive-tagged searches in this window.' }) +
+                                       { emptyMsg: 'No retail searches in this window.' }) +
                 _tiqRenderSearchCard('\uD83C\uDFDB Politics',
                                        'Neutral institutional stories: Congress, foreign policy, ballots.',
                                        byCat.politics,
-                                       { maxItems: 20,
-                                         emptyMsg: 'No neutral political searches in this window.' }) +
+                                       { emptyMsg: 'No neutral political searches in this window.' }) +
+                _tiqRenderSearchCard('\uD83D\uDD34 Conservative',
+                                       'Right-lean: MAGA, border, 2A, election integrity.',
+                                       byCat.conservative,
+                                       { emptyMsg: 'No conservative-tagged searches in this window.' }) +
+                _tiqRenderSearchCard('\uD83D\uDD35 Progressive',
+                                       'Left-lean: climate, reproductive rights, labor, racial justice.',
+                                       byCat.progressive,
+                                       { emptyMsg: 'No progressive-tagged searches in this window.' }) +
                 _tiqRenderSearchCard('\uD83D\uDCB0 Finance / Wall St',
                                        'Markets, macro, and bellwether tickers.',
                                        byCat.finance,
-                                       { maxItems: 20,
-                                         emptyMsg: 'No finance searches in this window.' }) +
+                                       { emptyMsg: 'No finance searches in this window.' }) +
                 '</div>';
             return html;
         }
@@ -41695,7 +41699,7 @@
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
-            setTrendsIQTab(window.__trendsIQ.activeTab || 'movers');
+            setTrendsIQTab(window.__trendsIQ.activeTab || 'searches');
         }
 
         // ---------- Historical arc drilldown ----------
