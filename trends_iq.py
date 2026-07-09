@@ -2545,10 +2545,28 @@ def _fetch_social_trending(state: Optional[str], lookback_days: int,
     """
     result = {slug: {'label': label, 'items': [], 'available': avail}
               for slug, label, avail in SOCIAL_PLATFORMS}
-    try:
-        result['reddit']['items']  = _fetch_reddit_popular(state, lookback_days)
-    except Exception as e:
-        logger.debug("trends_iq reddit failed: %s", e)
+
+    # Reddit: prefer the daily Hetzner snapshot (residential egress
+    # succeeds where Render's datacenter egress is blocked by Reddit).
+    # Fall back to the live Atom RSS fetch only if the snapshot is
+    # missing or empty - keeps local dev usable before the first cron
+    # run has landed a snapshot.
+    reddit_snap = _read_snapshot('reddit')
+    reddit_items = _snapshot_items_for_geo(reddit_snap, state, keywords=keywords) if reddit_snap else []
+    if not reddit_items:
+        try:
+            reddit_items = _fetch_reddit_popular(state, lookback_days)
+        except Exception as e:
+            logger.debug("trends_iq reddit live fallback failed: %s", e)
+            reddit_items = []
+    result['reddit'] = {
+        'label':      'Reddit',
+        'items':      reddit_items[:20],
+        'available':  bool(reddit_items),
+        'fetched_at': (reddit_snap or {}).get('fetched_at'),
+    }
+    if reddit_snap and reddit_snap.get('error') and not reddit_items:
+        result['reddit']['note'] = f"latest snapshot: {reddit_snap['error']}"
 
     for slug, label, _static_avail in SOCIAL_PLATFORMS:
         if slug == 'reddit':
