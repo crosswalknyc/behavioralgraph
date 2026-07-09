@@ -530,111 +530,231 @@ def _archetype_label(arch: str) -> str:
 
 
 _ANALYST_SYSTEM_PROMPT = (
-    "You are a Principal at a top-tier strategy consultancy (McKinsey "
-    "Marketing & Sales practice, Bain Customer Strategy, BCG Consumer "
-    "Insights) writing a boardroom-ready audience-profile deck for the "
-    "CMO of a company whose GTM depends on reaching this audience. You "
-    "are given a JSON of behavioral panel data for a subject and its US "
-    "Gen Pop baseline. Your job is to answer three questions and nothing "
-    "else:\n"
-    "   1. WHO is this audience — what mindset, life stage, and cultural "
-    "      posture defines them, not just their demographics.\n"
-    "   2. WHY they matter — what economic behavior + attention posture "
-    "      makes them worth chasing right now.\n"
-    "   3. SO WHAT — where the CMO should spend, what channels to buy, "
-    "      what partnerships to pursue, and where the whitespace is (a\n"
-    "      category the audience over-indexes on but current marketing\n"
-    "      isn't leveraging).\n\n"
-    "You return STRUCTURED JSON (no prose wrapper) with the exact keys "
-    "the deck builder requires.\n\n"
-    "Analytical standards (non-negotiable):\n"
-    "  * PYRAMID PRINCIPLE. Every narrative starts with the answer (the "
-    "    'so what'), then supports it with 1-2 numeric proofs. Never lead "
-    "    with a data dump.\n"
-    "  * McKINSEY MECE. Your takeaways must be mutually exclusive and "
-    "    collectively exhaustive across: WHO / WHERE they live / WHAT they "
-    "    buy / HOW they consume media / WHERE the whitespace is / SO WHAT "
-    "    the marketer should do next.\n"
-    "  * NEVER descriptive. Every sentence must have a hypothesis or "
-    "    implication. 'They watch TikTok' is banned. 'TikTok — not "
-    "    Instagram — is the audience's primary discovery surface (70% "
-    "    reach, 140 index), which means the buy should re-weight from IG "
-    "    reels to TikTok Spark Ads' is what you write instead.\n"
-    "  * KILL DESCRIPTIVE ADJECTIVES. Ban: 'passionate', 'vibrant', "
-    "    'engaged', 'unique', 'niche', 'distinct'. Replace with an "
-    "    observable behavior + a number.\n"
-    "  * PRONOUNS. Never use gendered pronouns for the subject. Films, "
-    "    shows, brands, teams, franchises, and personas are always 'the "
-    "    audience' / 'these fans' / 'they'. Real people (talent, athlete, "
-    "    musician) may be named — but their AUDIENCE is still 'they'.\n"
-    "  * REACH vs INDEX — the single most important analytical distinction:\n"
-    "      REACH (% of the audience that engages) governs SCALE — how many\n"
-    "      people you can actually reach through this brand or channel.\n"
-    "      INDEX (engagement rate vs Gen Pop, 100 = parity) governs\n"
-    "      DIFFERENTIATION — how uniquely this audience over-consumes vs.\n"
-    "      the average American.\n"
-    "      Every brand row sits on a 2x2 of these two dimensions. The\n"
-    "      analyst's job is to READ THE PAIR, never one alone:\n"
-    "        - MASS + LIFT (reach >=20% AND index 130-500): actionable\n"
-    "          sweet spot. Media buys land here. Lead every narrative here.\n"
-    "        - SCALE (reach >=20% AND index 90-130): table stakes; the\n"
-    "          audience uses this like everyone else. Not a differentiator.\n"
-    "        - SIGNATURE (reach >=12% AND <20% AND index 150-400):\n"
-    "          persona color and storytelling ONLY. These brands CANNOT\n"
-    "          deliver scale — a 15% reach brand cannot reach 85% of the\n"
-    "          audience regardless of how sharp the index. NEVER LEAD A\n"
-    "          NARRATIVE with a SIGNATURE brand. Never claim it 'anchors'\n"
-    "          a category. Never imply it drives the buy.\n"
-    "        - NOISE (reach <12% at ANY index, OR any brand with index\n"
-    "          >500, OR any brand with index >400 at reach <15%): low-N\n"
-    "          or subject-adjacent panel artifact. NEVER mention.\n"
-    "          Concrete banned examples the user has flagged:\n"
-    "            - Killstar 9.9% at idx 576 — reach <12% AND idx >500. Omit.\n"
-    "            - Urban Stems 7.9% at idx 399 — reach <12%. Omit.\n"
-    "            - Marni 3.6% at idx 263 — reach <12%. Omit.\n"
-    "          'Less than 1 in 10 of the audience does this' is too thin\n"
-    "          to earn a mention in a persona narrative no matter how\n"
-    "          sharp the index looks.\n"
-    "      Correct phrasing template: 'Mass-brand shopping is anchored by\n"
-    "      Nike (37%), Amazon (72%), and Levi (27%), with SIGNATURE\n"
-    "      affinities toward Gymshark (15% reach, index 205) and Cotopaxi\n"
-    "      (14% reach, index 174).'\n"
-    "      Incorrect (and banned): 'Shoppers of Urban Stems (7.9%) and\n"
-    "      Killstar (9.9%) drive this audience's commerce' — 91% of them\n"
-    "      do NOT shop those brands.\n"
-    "  * SIGNAL DISCIPLINE. Do not overclaim from freak-index outliers. A\n"
-    "    brand at <12% reach is NEVER a signature — it is noise. A brand\n"
-    "    at idx >500 is NEVER a real over-index — it is subject-adjacent\n"
-    "    panel skew. Omit both entirely.\n"
-    "  * GEOGRAPHY RULE. Same reach-vs-index nuance applies to DMAs but\n"
-    "    the STORY layer is different. New York, Los Angeles, Chicago,\n"
-    "    Dallas, and Atlanta will ALWAYS be the top-5 DMAs by raw reach\n"
-    "    for ANY US audience because they have the most people. That\n"
-    "    ranking alone is not an insight — it is population trivia.\n"
-    "    The meaningful analytical layer is: does this audience OVER-\n"
-    "    INDEX vs. Gen Pop in specific DMAs? A market at 2% raw reach\n"
-    "    but 285 idx means the audience is 2.85x more concentrated\n"
-    "    there than a random American would be — THAT is a partner-\n"
-    "    market test opportunity. Whenever you write about geography\n"
-    "    (where_body, takeaways, final_insight), lead with the top-2\n"
-    "    reach DMAs as media-buy ANCHORS, then explicitly call out the\n"
-    "    sharpest OVER-INDEX DMAs (min 1.5%% reach AND idx >=115 AND\n"
-    "    idx <=400) as the meaningful concentration finding. If no DMA\n"
-    "    clears the over-index bar, say so plainly ('national footprint\n"
-    "    is flat') — do not fake a partner market.\n"
-    "  * MINIMUM CATEGORY BAR. Only nominate a category as worth its own "
-    "    deep-dive slide if its top brand has >=15% reach AND at least "
-    "    two brands have >=10% reach. Everything below that bar goes into "
-    "    'signature_affinities' — a single roll-up page.\n"
-    "  * GROUND EVERY CLAIM in a specific number from the data (reach %, "
-    "    index, DMA share, projected M).\n"
-    "  * NO CLICHÉS. Ban: 'taste graph', 'not a moment a habit', 'the "
-    "    fandom IS the buying behavior', 'shows up', 'lives at the "
+    "You are a Principal at a top-tier strategy consultancy (McKinsey\n"
+    "Marketing & Sales, Bain Customer Strategy, BCG Consumer Insights)\n"
+    "writing a boardroom-ready audience-profile deck. The reader is the\n"
+    "CMO (or a green-light decision-maker) whose GTM depends on\n"
+    "reaching this audience. You are given a JSON of behavioral panel\n"
+    "data for a subject and its US Gen Pop baseline. You return\n"
+    "STRUCTURED JSON with the exact keys the deck builder requires.\n"
+    "\n"
+    "=============================================================\n"
+    "HOW TO THINK ABOUT THE WORK  (Crosswalk House Style, 2026-07)\n"
+    "=============================================================\n"
+    "An audience profile is not a data dump with a cover page. IT IS\n"
+    "AN ARGUMENT. The reader needs three things fast: WHO this audience\n"
+    "is, WHERE to reach them, and WHAT TO DO about it. Do the hard\n"
+    "thinking so the reader does not have to. Find the one or two\n"
+    "things that make THIS audience different, lead with them, and let\n"
+    "supporting detail earn its place behind them. A profile succeeds\n"
+    "when a busy executive can read the first three slides, know the\n"
+    "story, and act.\n"
+    "\n"
+    "THE FOUR QUESTIONS EVERY PROFILE ANSWERS\n"
+    "  1. WHO       — who they are, in numbers sharp enough to picture\n"
+    "                  a real person.\n"
+    "  2. WHERE     — where they live and spend attention, ranked so\n"
+    "                  priority markets and platforms are obvious.\n"
+    "  3. HOW       — how they behave, distilled into the affinities\n"
+    "                  and partners that actually matter.\n"
+    "  4. SO WHAT   — what the client should DO, tied line by line to\n"
+    "                  the evidence.\n"
+    "\n"
+    "START WITH THE ARGUMENT. Before anything else, decide the ONE\n"
+    "sentence you want the reader to repeat afterward — that is the\n"
+    "deck's 'argument' key. Every slide serves it. If the deck does\n"
+    "not drive to one memorable claim, it has no argument yet.\n"
+    "\n"
+    "=============================================================\n"
+    "THE PRINCIPLES  (apply to every section, every string you write)\n"
+    "=============================================================\n"
+    "  * LEAD WITH THE MESSAGE, NOT THE METHOD. Open every slide with\n"
+    "    the FINDING stated as a sentence a human would say out loud,\n"
+    "    then show the data that proves it. Title the slide with the\n"
+    "    takeaway ('Younger, higher-earning, and reachable on TikTok'),\n"
+    "    NEVER the category ('Age and Income'). The reader must never\n"
+    "    reverse-engineer your point from a chart.\n"
+    "\n"
+    "  * ONE DATA POINT, ONE HOME. Each figure earns a single place —\n"
+    "    the section where it does the most work — and is referenced\n"
+    "    from there. When the same age or income number appears in 3\n"
+    "    formats the reader learns nothing new on pages 2 and 3 and\n"
+    "    starts skimming. Say it once, powerfully, then move on.\n"
+    "\n"
+    "  * EVERY BOX CARRIES A NUMBER AND A DECISION. A takeaway that\n"
+    "    could be pasted into any audience deck is not finished.\n"
+    "    Attach the figure that proves it AND the action it implies.\n"
+    "    'Lead with TikTok' is a slogan. 'Lead with TikTok (70%\n"
+    "    reach, index 140) for the trailer drop' is a recommendation.\n"
+    "    Pair evidence and action in the same breath.\n"
+    "\n"
+    "  * INDEX vs REACH — HARD RULE, NOT PREFERENCE.\n"
+    "      INDEX (over- or under-representation vs Gen Pop, 100 =\n"
+    "      parity) tells you WHO IS DISTINCTIVE — persona colour and\n"
+    "      partner picks. REACH (raw share) tells you HOW MANY —\n"
+    "      the size of the buy.\n"
+    "      RANK persona and partner picks on INDEX.\n"
+    "      SIZE the media plan on REACH.\n"
+    "      Compare EVERY category, EVERY market, EVERY demographic\n"
+    "      against US Gen Pop. Read the index BEFORE the rank. A\n"
+    "      category that sits at the top on raw size but under-indexes\n"
+    "      Gen Pop is TABLE STAKES or a SOFT SPOT, not a headline. For\n"
+    "      every ranked list, show Gen Pop share and index alongside\n"
+    "      the raw number. A smaller-volume segment that over-indexes\n"
+    "      sharply is often the real find.\n"
+    "\n"
+    "  * SIGNATURE IS NOT THE BUY. The sharpest over-indexes give the\n"
+    "    audience its PERSONALITY and make the best partnership and\n"
+    "    cultural-signalling picks. Mass-reach brands are what you use\n"
+    "    to SIZE and PLACE the media. Keep the two logics visually and\n"
+    "    narratively separate.\n"
+    "    Signal classes (never violate):\n"
+    "      - MASS + LIFT   (reach >=20% AND index 130-500): actionable\n"
+    "                       sweet spot. LEADS the media narrative.\n"
+    "      - SCALE          (reach >=20% AND index 90-130): table\n"
+    "                       stakes. Everyone does this.\n"
+    "      - SIGNATURE      (reach >=12% AND <20% AND index 150-400):\n"
+    "                       persona colour only. NEVER leads a\n"
+    "                       narrative. NEVER claim it 'anchors' or\n"
+    "                       'drives' the buy — a 15% reach brand cannot\n"
+    "                       reach 85% of the audience regardless of\n"
+    "                       how sharp its index looks.\n"
+    "      - NOISE          (reach <12% at ANY index, OR any index\n"
+    "                       >500, OR any index >400 at reach <15%):\n"
+    "                       low-N or subject-adjacent panel artifact.\n"
+    "                       NEVER mention.\n"
+    "    Banned real examples: Killstar (9.9%/576), Urban Stems\n"
+    "    (7.9%/399), Marni (3.6%/263) — all NOISE.\n"
+    "    Correct: 'Anchored by Nike (37%), Amazon (72%), and Levi\n"
+    "    (27%), with signature affinities toward Gymshark (15% reach,\n"
+    "    index 205) and Cotopaxi (14% reach, index 174).'\n"
+    "    Banned: 'Shoppers of Urban Stems (7.9%) and Killstar (9.9%)\n"
+    "    drive this commerce' — 91%% of them do NOT shop those brands.\n"
+    "\n"
+    "  * GEOGRAPHY RULE. NY, LA, Chicago, Dallas, Atlanta will ALWAYS\n"
+    "    be top-5 by raw reach for ANY US audience because they have\n"
+    "    the most people. That ranking is population trivia, not\n"
+    "    insight. The meaningful layer is OVER-INDEX (min 1.5%% reach\n"
+    "    AND idx 115-400). Lead with top-2 reach DMAs as media-buy\n"
+    "    ANCHORS, then explicitly call out sharpest over-index DMAs\n"
+    "    as the concentration finding. Also flag notable UNDER-INDEX\n"
+    "    DMAs — a big-population market that under-indexes is a real\n"
+    "    media-planning signal worth naming. If no DMA clears the\n"
+    "    over-index bar, say so plainly ('national footprint is flat')\n"
+    "    — do NOT fake a partner market.\n"
+    "\n"
+    "  * LEAD WITH WHAT ONLY OBSERVED BEHAVIOR CAN SEE. The strongest,\n"
+    "    least replicable findings come from the nature of the data:\n"
+    "    behavior actually observed, deterministic, and current, not\n"
+    "    modeled or surveyed. When a finding is only visible because\n"
+    "    you can see real actions at the individual level over time,\n"
+    "    THAT is the finding a competitor cannot produce. Surface it,\n"
+    "    lead with it, and put it in the 'observed_behavior_lead' key.\n"
+    "    Never let it sit in a methodology footnote.\n"
+    "\n"
+    "  * TRUST THE NUMBERS BEFORE YOU DESIGN THE SLIDE. Same figure\n"
+    "    reads identically everywhere; every index equals audience\n"
+    "    share divided by baseline share. One contradiction between\n"
+    "    two slides costs the reader's trust in the whole document.\n"
+    "\n"
+    "=============================================================\n"
+    "THE 'HOW THEY BEHAVE' BLOCK — CONNECT THE DOTS\n"
+    "=============================================================\n"
+    "Signature affinities are NOT a list of six unrelated facts. Read\n"
+    "them TOGETHER and name the identity they add up to. 'A cluster of\n"
+    "pop-punk bands and a mid-table football club' is 'a specific\n"
+    "millennial alt-culture nostalgia', not six data points. The\n"
+    "'cultural_thesis' key is where you connect the dots into ONE\n"
+    "cultural interpretation — that is the reading the client is\n"
+    "actually paying for.\n"
+    "\n"
+    "Collapse per-category detail (apparel, QSR, travel, cosmetics,\n"
+    "etc.) into a single 'partner_shortlist' that names the actionable\n"
+    "partner per category with its reach and index. Granular per-cat\n"
+    "quadrants are appendix material — the main body should be one\n"
+    "shortlist page, not six.\n"
+    "\n"
+    "=============================================================\n"
+    "THE 'SO WHAT' BLOCK — NAME THE TRADEOFFS\n"
+    "=============================================================\n"
+    "Every media-plan line cites the reach AND index that justify it.\n"
+    "Every recommendation names what it TRADES OFF and what would\n"
+    "CHANGE it. 'Shift budget from Connected TV to TikTok if the\n"
+    "trailer over-performs on shares' is a decision the client can\n"
+    "actually run against. A rec with no assumption + no trigger is\n"
+    "a slogan. Use the 'tradeoff' and 'trigger' keys on every\n"
+    "media_plan row.\n"
+    "\n"
+    "=============================================================\n"
+    "FRAMING TO ADVANTAGE THE SUBJECT\n"
+    "=============================================================\n"
+    "A profile is rarely neutral. It usually exists to help the reader\n"
+    "make a case for a talent, brand, title, or product. Positioning\n"
+    "means choosing — from among everything true — the true things\n"
+    "that put the subject in the strongest DEFENSIBLE light. The\n"
+    "numbers stay exactly as they are; what you control is emphasis\n"
+    "and framing.\n"
+    "  * LEAD FROM STRENGTH. Lead with genuine strengths the reader\n"
+    "    actually values.\n"
+    "  * CHOOSE THE FRAME. Same over-index reads differently vs Gen\n"
+    "    Pop than vs a peer set. Pick the comparison that is both\n"
+    "    fair and favourable, and state which one you used.\n"
+    "  * HANDLE WEAKNESS WITH POISE. Do not hide soft spots; do not\n"
+    "    lead with them. Place context or mitigating read alongside a\n"
+    "    weaker number so it informs without undercutting the case.\n"
+    "The line to hold: every claim remains true and traceable. This\n"
+    "is the discipline of selection and sequence, not invention.\n"
+    "\n"
+    "=============================================================\n"
+    "WRITING DISCIPLINE\n"
+    "=============================================================\n"
+    "  * PYRAMID PRINCIPLE. Every narrative starts with the answer\n"
+    "    (the 'so what'), then supports it with 1-2 numeric proofs.\n"
+    "    Never lead with a data dump.\n"
+    "  * NEVER descriptive. Every sentence must have a hypothesis or\n"
+    "    implication. 'They watch TikTok' is banned. 'TikTok, not\n"
+    "    Instagram, is the primary discovery surface (70%% reach,\n"
+    "    140 index), which means re-weight the buy from IG reels to\n"
+    "    TikTok Spark Ads' is what you write instead.\n"
+    "  * KILL DESCRIPTIVE ADJECTIVES. Ban: passionate, vibrant,\n"
+    "    engaged, unique, niche, distinct, colourful. Replace with\n"
+    "    an observable behavior + a number.\n"
+    "  * PRONOUNS. Never use gendered pronouns for the subject. Films,\n"
+    "    shows, brands, teams, franchises are always 'the audience' /\n"
+    "    'they'. Real people (talent, athlete, musician) may be named\n"
+    "    but their AUDIENCE is still 'they'.\n"
+    "  * NO CLICHES. Ban: 'taste graph', 'not a moment a habit', 'the\n"
+    "    fandom IS the buying behavior', 'shows up', 'lives at the\n"
     "    intersection of', 'meet them where they are'.\n"
-    "  * NO MARKDOWN. Every string is clean plain text: no *, no #, no "
-    "    pipes, no bullet chars, no line breaks inside sentences.\n"
-    "  * WORD BUDGETS ARE HARD. If a key says 35-45 words, that means "
-    "    counted words, not a suggestion. Overrunning wrecks the layout.\n"
+    "  * NO MARKDOWN. Plain text only: no *, no #, no pipes, no bullet\n"
+    "    chars, no line breaks inside sentences.\n"
+    "  * AMERICAN SPELLING throughout. Color (not colour), signaling\n"
+    "    (not signalling), prioritize (not prioritise).\n"
+    "  * WORD BUDGETS ARE HARD. 35-45 words means 35-45 counted words.\n"
+    "    Overrunning wrecks the layout.\n"
+    "\n"
+    "=============================================================\n"
+    "THE QUALITY BAR — CHECK BEFORE YOU SHIP\n"
+    "=============================================================\n"
+    "  1. Argument test.        One clear argument, single memorable\n"
+    "                            claim, tied to the reader's decision.\n"
+    "  2. Proprietary test.     At least one finding only observed,\n"
+    "                            deterministic, current behavior could\n"
+    "                            produce.\n"
+    "  3. Three-slide test.     Reader can act on the first 3 slides.\n"
+    "  4. New-learning test.    Every slide teaches something new.\n"
+    "  5. Evidence test.        Every rec names the figure that proves\n"
+    "                            it AND the action it implies.\n"
+    "  6. Index test.           Every ranked list has Gen Pop + index.\n"
+    "                            No high-raw + sub-100-index item is\n"
+    "                            presented as a strength.\n"
+    "  7. Consistency test.     Same number reads identically\n"
+    "                            everywhere; every index = share /\n"
+    "                            baseline.\n"
+    "  8. Signature-vs-scale.   Signature and mass-reach kept visually\n"
+    "                            and logically separate.\n"
+    "  9. Editing test.         Cut anything that does not make the\n"
+    "                            message sharper.\n"
 )
 
 
@@ -785,6 +905,8 @@ def _brief_facts(profile: dict) -> dict:
 _ANALYST_JSON_SPEC = (
     "Return JSON with EXACTLY these keys (no extras, no missing):\n"
     "{\n"
+    '  "argument": "THE SINGLE MEMORABLE CLAIM the whole deck exists to prove — the one sentence you want the reader to repeat to someone else afterward (15-25 words). Ties the WHO + WHERE + SO WHAT together into ONE takeaway a busy exec can act on. Not a slogan. Not a description. A CLAIM with a decision embedded. Example: \'A younger, higher-earning multicultural core reachable most efficiently on TikTok and podcast host-reads — buy there before the release window closes.\' No period at the start; ends with period.",\n'
+    '  "observed_behavior_lead": "The ONE proprietary finding that only observed, deterministic, current panel behavior could produce — the thing a competitor working from surveys, panels, or estimates cannot replicate (25-40 words). Frame it as a behavior + a number + why it matters. Example: \'We can see 3 in 5 of this audience purchased through DoorDash and Amazon in the trailing 90 days at index 148 — that is deterministic transaction behavior no survey would surface, and it means CPG activation should route through delivery apps, not shelf.\' Do NOT summarize demographics — that is not proprietary. The proprietary edge is BEHAVIOR seen over time.",\n'
     '  "cover_tagline": "One sentence that tells the CMO who this audience IS in life-stage / mindset / cultural-posture terms (35-45 words). Do NOT lean on a single freak-index brand. Do NOT use adjectives like passionate / vibrant / engaged.",\n'
     '  "identity_headline": "4-6 word portrait of WHO they are — life stage + posture, not just demos. Examples: \'Prime-age urban trend-formers.\', \'Suburban parents with disposable income.\', \'Downtown creatives, digitally-native.\' No pronouns.",\n'
     '  "identity_why": "One sentence (35-50 words) on why this composition matters commercially — what the age/income/geography shape UNLOCKS for the marketer.",\n'
@@ -836,13 +958,18 @@ _ANALYST_JSON_SPEC = (
     '     { "brand": "BRAND", "category": "CATEGORY", "pct": 0.0, "index": 0, "note": "6-12 word analyst tag explaining why this signal matters" },\n'
     '     ... STRICT: pick 8-10 brands that BEST characterize this audience under signal-class discipline. HARD gates: pct >=12% AND index between 130 and 400 (inclusive). NEVER include a brand with reach <12% OR index >400 — those are NOISE. NEVER include a mass-reach brand (pct >=20%) — those belong on the category deep-dives and commerce_persona, NOT here. NEVER include the SUBJECT itself. Diverse categories preferred.\n'
     '  ],\n'
+    '  "cultural_thesis": "CONNECT THE DOTS across the signature affinities into ONE cultural interpretation (30-50 words). Do NOT list six unrelated facts — read the affinities TOGETHER and name the identity they add up to. Example (for a Green Day comedy audience): \'A cluster of pop-punk bands, thrift-forward apparel, and a mid-table football club adds up to a specific millennial alt-culture nostalgia — the audience is not chasing prestige, it is re-purchasing the aesthetic that defined its adolescence.\' Do NOT re-cite the brands (they appear in the tiles below). This is the interpretation layer.",\n'
+    '  "partner_shortlist": [\n'
+    '     { "category": "CATEGORY_NAME (e.g. APPAREL, QSR, TRAVEL, GAMING, CPG, RETAIL)", "partner": "BRAND", "pct": 0.0, "index": 0, "action": "8-15 word actionable partnership move (e.g. \'sponsor a limited co-drop timed to release\', \'trailer takeover on their podcast\', \'shelf co-marketing in top-5 DMAs\')" },\n'
+    '     ... EXACTLY 5-7 rows. ONE actionable partner per category, collapsed from the per-category work. Pick the partner with the best REACH + INDEX combo — favor MASS+LIFT (pct >=20% AND idx 130-500) first, then SIGNATURE (12-20% pct AND idx 150-400). Never pick a NOISE brand. Categories must be diverse (no two apparel picks).\n'
+    '  ],\n'
     '  "category_why": {\n'
     '     "CATEGORY_NAME_UPPERCASE": "One sentence (30-45 words) on why this category concentrates for this audience AND what a marketer should DO about it — brand ambassador fit, sponsor whitespace, or shelf-placement play.",\n'
     '     ...  (ONLY include categories where top brand has >=15% reach and >=2 brands >=10% reach. Skip low-reach categories entirely — they roll up into signature_affinities.)\n'
     '  },\n'
     '  "media_plan": [\n'
-    '     { "channel": "TikTok", "pct": 25, "rationale": "12-20 word reason grounded in the data (reach % + index)." },\n'
-    '     ... (4-6 channels. pcts must sum to 100. Channels must be paid-media channels the CMO can actually buy: TikTok, Instagram Reels, YouTube Pre-roll, Connected TV / Hulu, Snap, Discord Sponsorships, Reddit Promoted, Podcast Host-Reads, Programmatic Display, Meta Feed, Spotify Audio, Twitch, X, LinkedIn, Search / Google Ads, OOH. Weight allocation to the surfaces the audience actually over-indexes on.)\n'
+    '     { "channel": "TikTok", "pct": 25, "rationale": "12-20 word reason grounded in the data (reach % + index).", "tradeoff": "8-14 word statement of what this allocation GIVES UP (e.g. \'gives up broadcast-scale awareness in the 55+ tier\', \'trades linear-TV reach for social share velocity\')", "trigger": "8-14 word decision rule that would shift the allocation (e.g. \'shift 5pts to CTV if CPMs spike above $28\', \'double down if trailer shares >2x benchmark in wk1\')" },\n'
+    '     ... (4-6 channels. pcts must sum to 100. Channels must be paid-media channels the CMO can actually buy: TikTok, Instagram Reels, YouTube Pre-roll, Connected TV / Hulu, Snap, Discord Sponsorships, Reddit Promoted, Podcast Host-Reads, Programmatic Display, Meta Feed, Spotify Audio, Twitch, X, LinkedIn, Search / Google Ads, OOH. Weight allocation to the surfaces the audience actually over-indexes on. EVERY row REQUIRES tradeoff + trigger — a rec with no assumption and no trigger is a slogan.)\n'
     '  ],\n'
     '  "whitespace_headline": "5-9 word headline naming the SPECIFIC unmet-need or unactivated surface (e.g. \'Gaming sponsorships are untapped.\', \'The Discord audience is under-bought.\'). No period.",\n'
     '  "whitespace_body":     "A 60-90 word analyst paragraph explaining WHY that surface is whitespace for this audience (cite the reach/index) and WHAT the CMO should test first. Prescriptive, not descriptive.",\n'
@@ -2116,26 +2243,40 @@ def _slide_geography(prs: Presentation, p: dict):
               "media buy weights should follow raw reach.",
               size=11, color=C_MUTED2, line_spacing=1.4)
 
-    # Bottom-line takeaway (tight — must fit in 2 lines at 10.5pt)
-    y_take = row_top + 5 * row_h + 0.20
+    # Bottom-line takeaway (tight — must fit in 3-4 lines at 10pt).
+    # 2026-07-09 (round 4): user guide asks us to also flag notable
+    # UNDER-INDEXING markets — a big-population DMA that under-indexes
+    # is a real media-planning signal (dial back general-awareness spend
+    # there) not just noise. Fold that into the takeaway when it exists.
+    # Layout budget: y_take = 6.00, h = 0.75, ends at 6.75 (source line).
+    y_take = row_top + 5 * row_h + 0.10
+    under_dmas = _under_index_dmas_in_top_reach(p, top_n_reach=10,
+                                                 idx_ceiling=90.0)
     if idx_dmas:
         lead_idx = idx_dmas[0]
         take_txt = (
             f"THE TAKEAWAY  /  {lead_idx[0]} over-indexes at "
-            f"{int(lead_idx[2])} — the audience is ~{int(lead_idx[2]) - 100}% "
-            f"more concentrated there than the average U.S. market. Natural "
-            f"partner-DMA test alongside the reach buys in "
-            f"{reach_dmas[0][0]} and {reach_dmas[1][0] if len(reach_dmas) > 1 else 'other majors'}."
+            f"{int(lead_idx[2])} (~{int(lead_idx[2]) - 100}% more "
+            f"concentrated than the average U.S. market) — natural "
+            f"partner-market test alongside the {reach_dmas[0][0]} / "
+            f"{reach_dmas[1][0] if len(reach_dmas) > 1 else 'reach-major'} buys."
         )
     else:
         take_txt = (
-            f"THE TAKEAWAY  /  National footprint is flat vs. U.S. baseline. "
-            f"Weight the buy to raw reach — {reach_dmas[0][0]}"
-            f"{', ' + reach_dmas[1][0] if len(reach_dmas) > 1 else ''} "
-            f"and other top-5 DMAs — no partner-market lift signal."
+            f"THE TAKEAWAY  /  National footprint is flat — weight the "
+            f"buy to raw reach ({reach_dmas[0][0]}"
+            f"{', ' + reach_dmas[1][0] if len(reach_dmas) > 1 else ''}) "
+            f"and skip a partner-market layer."
         )
-    _text(slide, 0.62, y_take, 12.0, 0.55, take_txt,
-          size=10.5, color=C_CREAM, line_spacing=1.35)
+    if under_dmas:
+        u_name, _, u_idx = under_dmas[0]
+        take_txt += (
+            f"  Watch-out: {u_name} under-indexes at {int(u_idx)} "
+            f"despite its size — dial back awareness spend there."
+        )
+    take_size = 9.5 if under_dmas else 10.5
+    _text(slide, 0.62, y_take, 12.0, 0.75, take_txt,
+          size=take_size, color=C_CREAM, line_spacing=1.30)
 
     _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
           size=8.5, color=C_MUTED2, letter_spacing=0.02)
@@ -2479,16 +2620,31 @@ def _slide_exec_summary(prs: Presentation, p: dict):
     _section_eyebrow(slide, 0.52, subj, "EXECUTIVE SUMMARY")
     _text(slide, 0.62, 0.82, 12.0, 1.10, "The story in one page.",
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
-    _text(slide, 0.62, 2.10, 12.0, 0.36,
-          "Three answers a CMO needs before green-lighting spend.",
-          size=12, color=C_MUTED, line_spacing=1.4)
+
+    # 2026-07-09 (round 4): user guide — a deck without a single memorable
+    # claim is a report, not an argument. Surface the LLM's 'argument' key
+    # as the deck's headline claim RIGHT under the title, so any reader who
+    # sees only this slide gets THE sentence they should repeat.
+    argument = _purge_pronouns(str(_brief_get(p, "argument") or "").strip(),
+                                subj)
+    if argument and len(argument.split()) >= 8:
+        _text(slide, 0.62, 2.02, 12.0, 0.60,
+              "THE ARGUMENT",
+              size=9, bold=True, color=C_MAGENTA, letter_spacing=0.14)
+        _text(slide, 0.62, 2.25, 12.0, 0.55, argument,
+              size=13.5, bold=True, color=C_CREAM, line_spacing=1.30)
+        y0 = 2.95
+    else:
+        _text(slide, 0.62, 2.10, 12.0, 0.36,
+              "Three answers a CMO needs before green-lighting spend.",
+              size=12, color=C_MUTED, line_spacing=1.4)
+        y0 = 2.80
 
     # Three column panels. Total usable width = 12.0, gutter = 0.20 → 3.87 each.
     col_w = 3.87
     gutter = 0.20
     x0 = 0.62
-    y0 = 2.80
-    panel_h = 3.75
+    panel_h = 6.55 - y0
     panels = [
         ("01", "WHO", who_h, who_b, C_LAVENDER),
         ("02", "WHERE", where_h, where_b, C_LIME),
@@ -2634,8 +2790,13 @@ def _slide_media_plan(prs: Presentation, p: dict):
     plan = _brief_get(p, "media_plan", default=[]) or []
     if not isinstance(plan, list):
         return
-    # Normalize + sanity-check
-    rows: list[tuple[str, int, str]] = []
+    # Normalize + sanity-check. 2026-07-09 (round 4): tradeoff + trigger
+    # per row become mandatory-if-present so a rec is not just a slogan
+    # ("Lead with TikTok") but a decision ("Lead with TikTok — gives up
+    # 55+ reach — shift if CTV CPMs drop below X"). Missing tradeoff/
+    # trigger fields fall back to a generic per-channel line so the deck
+    # still ships if the LLM was sparse.
+    rows: list[tuple[str, int, str, str, str]] = []
     for row in plan[:6]:
         if not isinstance(row, dict):
             continue
@@ -2643,14 +2804,19 @@ def _slide_media_plan(prs: Presentation, p: dict):
         pct = int(_num(row.get("pct", 0)))
         rationale = _purge_pronouns(str(row.get("rationale") or "").strip(),
                                      p["name"])
+        tradeoff = _purge_pronouns(str(row.get("tradeoff") or "").strip(),
+                                     p["name"])
+        trigger = _purge_pronouns(str(row.get("trigger") or "").strip(),
+                                     p["name"])
         if ch and pct > 0 and rationale:
-            rows.append((ch, pct, rationale))
+            rows.append((ch, pct, rationale, tradeoff, trigger))
     if len(rows) < 3:
         return
     # Normalize % to sum to 100 if the LLM was close but not exact
     total = sum(r[1] for r in rows)
     if 90 <= total <= 110 and total != 100:
-        rows = [(c, round(p_ * 100 / total), r) for (c, p_, r) in rows]
+        rows = [(c, round(p_ * 100 / total), r, t, g)
+                for (c, p_, r, t, g) in rows]
 
     slide = _blank_slide(prs)
     _section_eyebrow(slide, 0.52, p["name"], "RECOMMENDED MEDIA PLAN")
@@ -2681,10 +2847,10 @@ def _slide_media_plan(prs: Presentation, p: dict):
     y_end   = 6.65
     n_rows  = max(1, len(rows))
     row_gap = 0.05
-    row_h   = min(0.72, (y_end - y_start - row_gap * (n_rows - 1)) / n_rows)
-    row_h   = max(row_h, 0.42)  # readability floor
+    row_h   = min(0.86, (y_end - y_start - row_gap * (n_rows - 1)) / n_rows)
+    row_h   = max(row_h, 0.50)  # readability floor
     y = y_start
-    for i, (channel, pct, rationale) in enumerate(rows):
+    for i, (channel, pct, rationale, tradeoff, trigger) in enumerate(rows):
         _text(slide, 0.62, y, 3.20, row_h, channel,
               size=15, bold=True, color=C_CREAM,
               anchor=MSO_ANCHOR.MIDDLE)
@@ -2693,9 +2859,29 @@ def _slide_media_plan(prs: Presentation, p: dict):
         _text(slide, 3.90, y, 1.20, row_h, f"{pct}%",
               size=22, bold=True, color=pct_color,
               align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
-        _text(slide, 5.30, y, 7.30, row_h, rationale,
-              size=10.5, color=C_MUTED, line_spacing=1.35,
-              anchor=MSO_ANCHOR.MIDDLE)
+        # Rationale takes upper 60% of the row, tradeoff+trigger sit
+        # underneath in a smaller muted strip. If neither tradeoff nor
+        # trigger is present, rationale expands to full row.
+        has_decision = bool(tradeoff or trigger)
+        if has_decision:
+            r_h = row_h * 0.58
+            _text(slide, 5.30, y, 7.30, r_h, rationale,
+                  size=10.5, color=C_CREAM, line_spacing=1.30,
+                  anchor=MSO_ANCHOR.TOP)
+            parts = []
+            if tradeoff:
+                parts.append(f"Trade-off: {tradeoff}")
+            if trigger:
+                parts.append(f"Trigger: {trigger}")
+            decision_txt = "   ·   ".join(parts)
+            _text(slide, 5.30, y + r_h, 7.30, row_h - r_h - 0.02,
+                  decision_txt,
+                  size=8.5, color=C_LAVENDER, line_spacing=1.30,
+                  anchor=MSO_ANCHOR.TOP)
+        else:
+            _text(slide, 5.30, y, 7.30, row_h, rationale,
+                  size=10.5, color=C_MUTED, line_spacing=1.35,
+                  anchor=MSO_ANCHOR.MIDDLE)
         if i < len(rows) - 1:
             _hairline(slide, 0.62, y + row_h, 12.0, C_STROKE)
         y += row_h + row_gap
@@ -2799,13 +2985,40 @@ def _slide_signature_affinities(prs: Presentation, p: dict):
     _section_eyebrow(slide, 0.52, p["name"], "SIGNATURE AFFINITIES")
     _text(slide, 0.62, 0.82, 12.0, 1.10, "The brands that color them.",
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
-    _text(slide, 0.62, 2.05, 12.0, 0.60,
+    _text(slide, 0.62, 2.05, 12.0, 0.55,
           "Signature affinities are the sharpest over-indexes across the "
           "file — the brands that give this audience its personality. "
-          "They are NOT the mass-reach backbone (that lives on the "
-          "category deep-dives). Use these for partner selection and "
-          "cultural signaling, not for sizing the media buy.",
-          size=10.5, color=C_MUTED, line_spacing=1.4)
+          "They are NOT the mass-reach backbone. Use for partner "
+          "selection and cultural signaling, not for sizing the buy.",
+          size=10.0, color=C_MUTED, line_spacing=1.35)
+
+    # 2026-07-09 (round 4): user guide — 'connect the dots' into one
+    # cultural thesis. Six unrelated brands is not analysis; a single
+    # interpretation of what they add up to IS analysis. Prefer the LLM's
+    # 'cultural_thesis' key; fall back to a data-derived summary that
+    # names the category clusters and reminds the reader these are
+    # persona picks, not scale.
+    thesis = _brief_get(p, "cultural_thesis", default="")
+    thesis = _purge_pronouns(str(thesis or "").strip(), p["name"])
+    if not thesis or len(thesis.split()) < 8:
+        cat_counts: dict[str, int] = {}
+        for r in picks[:8]:
+            key = _pretty_cat(r.get("cat") or "").strip() or "OTHER"
+            cat_counts[key] = cat_counts.get(key, 0) + 1
+        top_cats = sorted(cat_counts.items(), key=lambda kv: -kv[1])[:3]
+        cat_phrase = ", ".join(c[0].lower() for c in top_cats if c[0])
+        thesis = (
+            f"THE THESIS  /  The signature picks cluster in "
+            f"{cat_phrase} — a specific taste profile, not a broad "
+            f"consumer footprint. Each brand under-scales (12-20% reach) "
+            f"but over-indexes 150-400 vs. Gen Pop, meaning they are "
+            f"partner and cultural-signal picks — not scaled media buys."
+        )
+    else:
+        if not thesis.upper().startswith("THE THESIS"):
+            thesis = "THE THESIS  /  " + thesis
+    _text(slide, 0.62, 2.62, 12.0, 0.50, thesis,
+          size=10.0, color=C_LAVENDER, line_spacing=1.35)
 
     # Two-column layout. Cap at 4 rows per column (was 5) so the last
     # row's subtitle at y+0.32 + 0.28 = y+0.60 lands well above the
@@ -2815,7 +3028,7 @@ def _slide_signature_affinities(prs: Presentation, p: dict):
     col_w = 5.85
     col_x = [0.62, 6.90]
     row_h = 0.78
-    top_y = 3.15
+    top_y = 3.30
 
     for col_idx, col_rows in enumerate([left_col, right_col]):
         cx = col_x[col_idx]
@@ -3124,6 +3337,74 @@ def _slide_life_stage(prs: Presentation, p: dict):
     _footer(slide, 0, p["name"])
 
 
+def _consequence_for_delta(dim: str, bucket: str, index: int) -> str:
+    """Data-derived 'so what' for a demographic delta when the LLM did
+    not supply a note. 2026-07-09 (round 4): user guide says every delta
+    row must carry a media / partner implication, never a filler line.
+
+    Rule-based fallback keyed on (dimension, bucket, direction). Not
+    exhaustive — falls back to a generic direction-of-shift phrase when
+    a bucket doesn't have a hand-tuned entry. The LLM path (which does
+    hand-tune per subject) still takes precedence when note is present.
+    """
+    d = (dim or "").lower().strip()
+    b = (bucket or "").lower().strip()
+    over = index >= 100
+    if d in {"age"}:
+        if over and any(k in b for k in ["18-24", "18 to 24", "under 25"]):
+            return "TikTok / Snap / Twitch weight; short-form video first."
+        if over and any(k in b for k in ["25-34", "25 to 34"]):
+            return "Reddit + podcast + IG Reels sweet spot."
+        if over and any(k in b for k in ["35-44", "35 to 44"]):
+            return "YouTube pre-roll + Meta feed + CTV land here."
+        if over and any(k in b for k in ["45-54", "45 to 54"]):
+            return "Meta + CTV + streaming ad-tier; linear TV still viable."
+        if over and any(k in b for k in ["55", "65", "boomer"]):
+            return "Linear TV + Search hold; direct-mail viable."
+        return "Age skew shifts daypart and platform mix accordingly."
+    if d in {"income", "hh income", "household income"}:
+        if over and any(k in b for k in ["150", "200", "$100"]):
+            return "Premium partner categories; DTC-friendly creative."
+        if over and any(k in b for k in ["25", "less than", "under $"]):
+            return "Value framing; DoorDash / Walmart co-marketing."
+        if over:
+            return "Premium tier signals — align creative up-market."
+        return "Softer discretionary spend — value cues in creative."
+    if d in {"ethnicity", "race"}:
+        if over and "asian" in b:
+            return "Coastal-urban DMA weight; multicultural creative."
+        if over and "hispanic" in b:
+            return "Bilingual creative option; Univision / soccer weight."
+        if over and ("black" in b or "african" in b):
+            return "Culture-first creative; BET / streaming Black audiences."
+        if over and "white" in b:
+            return "Broad reach anchor — dial creative up-market or generational."
+        return "Multicultural shape drives creative mix."
+    if d in {"education"}:
+        if over and any(k in b for k in ["college", "grad", "bachelor", "post"]):
+            return "Long-form + podcast host-reads shine here."
+        return "Adjust reading level + channel intellect accordingly."
+    if d in {"parental status", "parental", "parent"}:
+        if over and any(k in b for k in ["yes", "parent"]):
+            return "Family daypart; back-to-school + holiday windows."
+        return "Non-parent lean — nights + weekend focus."
+    if d in {"relationship", "marital"}:
+        if over and "married" in b:
+            return "Household-unit messaging; family bundles."
+        if over and "single" in b:
+            return "Individual-purchase framing; nightlife adjacencies."
+        return "Adjust household framing per relationship shape."
+    if d in {"gender"}:
+        if over and "female" in b:
+            return "Female-skew creative + endorser lineup; beauty / wellness lift."
+        if over and "male" in b:
+            return "Male-skew creative + sports / gaming adjacencies."
+        return "Balance creative gender cues accordingly."
+    return ("Over-indexes vs Gen Pop — weight partners here."
+            if over else
+            "Under-indexes vs Gen Pop — do not lead awareness spend here.")
+
+
 def _slide_differ_from_genpop(prs: Presentation, p: dict):
     """The 6-8 sharpest deltas across ALL demo dimensions. Named by
     dimension so the CMO can see: 'ah, they differ most on ethnicity
@@ -3141,6 +3422,11 @@ def _slide_differ_from_genpop(prs: Presentation, p: dict):
             idx = int(_num(row.get("index", 0)))
             note = _purge_pronouns(str(row.get("note") or "").strip(), p["name"])
             if dim and bkt and idx > 0:
+                if not note or len(note.split()) < 4:
+                    # Filler / empty — replace with a data-derived
+                    # consequence so no delta row ships without a
+                    # media/partner implication (user guide 2026-07-09).
+                    note = _consequence_for_delta(dim, bkt, idx)
                 picks.append({"dim": dim, "bucket": bkt, "aud_pct": aud,
                                "gp_pct": gpv, "index": idx, "note": note})
 
@@ -3172,7 +3458,8 @@ def _slide_differ_from_genpop(prs: Presentation, p: dict):
             if key in seen_keys:
                 continue
             picks.append({"dim": dim.title(), "bucket": bucket, "aud_pct": aud,
-                           "gp_pct": gpv, "index": idx, "note": ""})
+                           "gp_pct": gpv, "index": idx,
+                           "note": _consequence_for_delta(dim, bucket, idx)})
             seen_keys.add(key)
 
     if len(picks) < 3:
@@ -4670,10 +4957,21 @@ def _pick_persona_category_slides(p: dict, max_slides: int = 2) -> list[tuple[st
 
 
 def _generate_tagline(p: dict) -> str:
-    """One-line tagline for the cover, driven by the analyst brief when
-    available, otherwise by the strongest durable audience signal (with
-    the low-reach / freak-index filter applied so we don't lead with a
-    5%-reach brand at 800 idx)."""
+    """Tagline for the cover.
+
+    Priority (2026-07-09 round 4, user guide 'lead with what only observed
+    behavior can see'):
+      1. If the LLM returned an ``observed_behavior_lead`` — use it. This
+         is the deterministic-behavior finding a competitor working from
+         surveys or panels cannot replicate. It is the proprietary edge
+         and the guide says the deck must lead with it.
+      2. Otherwise, the LLM's ``cover_tagline`` (life-stage / mindset).
+      3. Otherwise, a data-derived line from the strongest durable
+         over-index brand.
+    """
+    observed = _brief_get(p, "observed_behavior_lead")
+    if observed and len(str(observed).split()) >= 12:
+        return _purge_pronouns(str(observed), p["name"])
     brief_t = _brief_get(p, "cover_tagline")
     if brief_t:
         return _purge_pronouns(brief_t, p["name"])
@@ -5189,6 +5487,29 @@ def _top_dmas_by_index(p: dict, n: int = 8,
         keep.append((name, pct, idx))
     keep.sort(key=lambda r: (-r[2], -r[1]))
     return keep[:n]
+
+
+def _under_index_dmas_in_top_reach(p: dict, top_n_reach: int = 10,
+                                    idx_ceiling: float = 90.0,
+                                    ) -> list[tuple[str, float, float]]:
+    """Return big-population DMAs that materially under-index — the
+    2026-07-09 addition per user guide: 'a big-population DMA that
+    under-indexes is a real media-planning signal worth flagging.'
+
+    Method: pull the top-N DMAs by raw reach, keep only those with
+    index <= ``idx_ceiling`` (default 90 = at least 10% below Gen Pop
+    parity), sort by index ascending so the worst under-indexer leads.
+    Empty list if none qualify.
+
+    The point: a market that is big BUT under-consuming your subject is
+    where general-awareness spend leaks — dial it back rather than
+    padding it, and redirect the dollars to over-index DMAs or the
+    scaled digital surfaces."""
+    top_reach = _top_dmas_ranked(p, n=top_n_reach)
+    under = [(n, pct, idx) for (n, pct, idx) in top_reach
+             if idx and idx <= idx_ceiling]
+    under.sort(key=lambda r: r[2])  # worst under-index first
+    return under
 
 
 def _why_it_matters_for_category(cat: str, p: dict, top: list) -> str:
