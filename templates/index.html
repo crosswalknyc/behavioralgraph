@@ -41610,20 +41610,33 @@
                 var body;
                 if (!s.available) {
                     body = '<div class="tiq-placeholder">' +
-                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + ' trending is on the roadmap</div>' +
-                           '<div>We are wiring up a feed for this platform. Reddit and YouTube are live today.</div>' +
+                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + ' trending is warming up</div>' +
+                           '<div>Latest scrape came back empty. Check back after tomorrow\u0027s refresh.</div>' +
                            '</div>';
                 } else if (!(s.items || []).length) {
                     body = '<div class="tiq-empty">No trending items right now.</div>';
                 } else {
+                    // Card header + subtitle. Instagram is a hashtag
+                    // list (top-hashtags.com) rather than a per-post
+                    // feed - IG's Explore requires a mobile-context
+                    // session we can't mint from Hetzner. Every other
+                    // platform is a per-item feed.
+                    var cardTitle = (s.label || k) + ' - trending now';
+                    var cardSub = '';
+                    if (k === 'instagram') {
+                        cardTitle = 'Instagram - popular hashtags';
+                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Top hashtags by post volume. Click any tag to open its Instagram feed.</div>';
+                    }
                     body = '<div class="tiq-cards-grid" style="grid-template-columns: 1fr;">' +
-                           '<div class="tiq-card"><h4>' + _tiqEsc(s.label || k) + ' - trending now</h4><div class="tiq-headline-list">' +
+                           '<div class="tiq-card"><h4>' + _tiqEsc(cardTitle) + '</h4>' + cardSub +
+                           '<div class="tiq-headline-list">' +
                            s.items.map(function(it, i) {
                                var img = '<div class="tiq-headline-image" style="' + _tiqImgStyle(it.image) + '"></div>';
                                var meta = '';
                                if (typeof it.score === 'number') meta += '<span class="tiq-badge">' + _tiqNum(it.score) + ' upvotes</span>';
                                if (typeof it.comments === 'number') meta += '<span>' + _tiqNum(it.comments) + ' comments</span>';
                                if (it.subreddit) meta += '<span>r/' + _tiqEsc(it.subreddit) + '</span>';
+                               if (it.posts_display) meta += '<span class="tiq-badge">' + _tiqEsc(it.posts_display) + ' posts</span>';
                                var socialKey = it.title || it.topic || it.hashtag || '';
                                return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                                       '<div class="tiq-row-body">' +
