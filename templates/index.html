@@ -23260,14 +23260,10 @@
             #trendsIQView .tiq-mover-scroll::-webkit-scrollbar { width: 6px; }
             #trendsIQView .tiq-mover-scroll::-webkit-scrollbar-track { background: transparent; }
             #trendsIQView .tiq-mover-scroll::-webkit-scrollbar-thumb { background-color: rgba(124,58,237,0.4); border-radius: 3px; }
-            /* Movers platform-mix bar: shows where each trend's buzz
-               is being driven (search / media / social) with a compact
-               3-color segmented bar + primary-channel label. */
-            #trendsIQView .tiq-mix { display: inline-flex; align-items: center; gap: 6px; font-size: 0.7rem; margin-top: 4px; }
-            #trendsIQView .tiq-mix-bar { display: inline-flex; width: 96px; height: 8px; border-radius: 4px; overflow: hidden; background: rgba(255,255,255,0.06); flex-shrink: 0; cursor: help; }
-            #trendsIQView .tiq-mix-search { background: #60a5fa; }        /* blue = google search */
-            #trendsIQView .tiq-mix-media  { background: #f59e0b; }        /* amber = news media */
-            #trendsIQView .tiq-mix-social { background: #ec4899; }        /* pink = social */
+            /* Movers platform-mix label: shows where each trend's buzz
+               is being driven (search / media / social) as a short text
+               tag. The primary channel is color-coded for scannability. */
+            #trendsIQView .tiq-mix { display: inline-flex; align-items: center; font-size: 0.7rem; margin-top: 4px; cursor: help; }
             #trendsIQView .tiq-mix-label { color: var(--text-secondary); opacity: 0.9; }
             #trendsIQView .tiq-mix-label b { color: var(--text-primary); font-weight: 600; }
             #trendsIQView .tiq-mix-label.tiq-mix-search-primary b { color: #93c5fd; }
@@ -40878,30 +40874,21 @@
 
         function _tiqRenderPlatformMix(mix) {
             if (!mix || !mix.primary) return '';
+            // Keep the same computed percentages under the hood for the
+            // hover tooltip - just don't render the visual bar. The tag
+            // now reads "driven by <primary channel>" with the primary
+            // channel color-coded (blue=search, amber=media, pink=social).
             var sPct = Math.round((mix.search || 0) * 100);
             var mPct = Math.round((mix.media  || 0) * 100);
             var soPct = Math.round((mix.social || 0) * 100);
-            // Guard against rounding drift so the bar always fills to 100.
-            var sum = sPct + mPct + soPct;
-            if (sum > 0 && sum !== 100) {
-                if (mix.primary === 'search') sPct += (100 - sum);
-                else if (mix.primary === 'media') mPct += (100 - sum);
-                else soPct += (100 - sum);
-            }
             var socList = (mix.social_platforms || []).join(', ') || 'none';
             var tooltip = 'Search ' + sPct + '% (' + (mix.search_raw || 0) + ' vol) ' +
                           '\u00b7 Media ' + mPct + '% (' + (mix.media_raw || 0) + ' articles) ' +
                           '\u00b7 Social ' + soPct + '% (' + (mix.social_raw || 0) + ' platforms: ' + socList + ')';
-            var bar = '<span class="tiq-mix-bar" title="' + _tiqEsc(tooltip) + '">';
-            if (sPct  > 0) bar += '<span class="tiq-mix-search" style="width:' + sPct  + '%"></span>';
-            if (mPct  > 0) bar += '<span class="tiq-mix-media"  style="width:' + mPct  + '%"></span>';
-            if (soPct > 0) bar += '<span class="tiq-mix-social" style="width:' + soPct + '%"></span>';
-            bar += '</span>';
-            var primaryPct = mix.primary === 'search' ? sPct : (mix.primary === 'media' ? mPct : soPct);
             var primaryLabel = mix.primary === 'search' ? 'search' : (mix.primary === 'media' ? 'media' : 'social');
             var label = '<span class="tiq-mix-label tiq-mix-' + mix.primary + '-primary">' +
-                        'driven by <b>' + primaryLabel + '</b> \u00b7 ' + primaryPct + '%</span>';
-            return '<div class="tiq-mix">' + bar + label + '</div>';
+                        'driven by <b>' + primaryLabel + '</b></span>';
+            return '<div class="tiq-mix" title="' + _tiqEsc(tooltip) + '">' + label + '</div>';
         }
 
         function _renderMoverRow(row) {
@@ -40980,7 +40967,7 @@
             }
             var header = '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
                          'Directional velocity across trending searches. ' + span +
-                         ' The mix bar under each trend shows where its buzz is driven: ' +
+                         ' Each trend is tagged with where its buzz is driven: ' +
                          '<span style="color:#93c5fd;">search</span> \u00b7 ' +
                          '<span style="color:#fcd34d;">media</span> \u00b7 ' +
                          '<span style="color:#f9a8d4;">social</span>.' +
