@@ -108327,6 +108327,29 @@
         //  designer lives at migration/profile_iq_deck_builder.py.
         // =====================================================================
 
+        function _profileIqResolveImageUrl(profileName) {
+            // Look up the admin-managed image URL from the preloaded
+            // profileImageCache (populated by preloadAllProfileImages at
+            // startup). Belt-and-suspenders — the backend also resolves by
+            // name, but passing the URL explicitly avoids one server-side
+            // cache lookup and covers any casing/suffix mismatches.
+            if (!profileName || typeof profileImageCache === 'undefined') return '';
+            const raw = String(profileName).toLowerCase().trim();
+            // Try exact match, then strip common cohort/date suffixes
+            const candidates = [
+                raw,
+                raw.replace(/\s+-\s+(avid|casual)\s+fan(\s+\d{4})?$/i, '').trim(),
+                raw.replace(/\s+\d{4}$/, '').trim(),
+                raw.replace(/\s+-\s+total\s+universe$/i, '').trim(),
+            ];
+            for (const k of candidates) {
+                if (!k) continue;
+                const v = profileImageCache[k];
+                if (v && v !== 'none' && v !== 'pending') return v;
+            }
+            return '';
+        }
+
         function _profileIqBuildPayloadFromTab(tab) {
             // A tab is { id, name, dateRange, data (parsed) }. We snapshot the
             // parsed dashboard shape (demographics + demographicsIndex +
@@ -108335,8 +108358,10 @@
             // backend deck builder's payload normalizer already understands.
             if (!tab || !tab.data) return null;
             const d = tab.data;
+            const name = tab.name || d.name || 'Audience';
             return {
-                name: tab.name || d.name || 'Audience',
+                name: name,
+                imageUrl: _profileIqResolveImageUrl(name),
                 brandCategory: d.brandCategory || '',
                 sampleSize: d.sampleSize || 0,
                 projectedUS: d.projectedUS || 0,
@@ -108355,10 +108380,12 @@
             const parsed = (typeof currentDashboardData !== 'undefined' && currentDashboardData) || null;
             const meta = (typeof currentProfileData !== 'undefined' && currentProfileData) || null;
             if (!parsed && !meta) return null;
+            const name = (meta && meta.name) ||
+                         (typeof selectedDashProfile === 'string' && selectedDashProfile) ||
+                         'Audience';
             return {
-                name: (meta && meta.name) ||
-                      (typeof selectedDashProfile === 'string' && selectedDashProfile) ||
-                      'Audience',
+                name: name,
+                imageUrl: _profileIqResolveImageUrl(name),
                 brandCategory: (parsed && parsed.brandCategory) || (meta && meta.brandCategory) || '',
                 sampleSize: (parsed && parsed.sampleSize) || (meta && meta.sampleSize) || 0,
                 projectedUS: (parsed && parsed.projectedUS) || (meta && meta.projectedUS) || 0,
@@ -108386,7 +108413,10 @@
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ data: data }),
+                    body: JSON.stringify({
+                        data: data,
+                        image_url: (data && data.imageUrl) || '',
+                    }),
                 });
                 if (!resp.ok) {
                     let err = 'HTTP ' + resp.status;
@@ -108435,7 +108465,14 @@
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        profiles: payloads.map(p => ({ data: p })),
+                        // Pass image_url both inside data AND at the entry
+                        // top-level so the backend picks it up whichever key
+                        // it reads first (endpoint checks entry.image_url,
+                        // falls back to name-based resolution).
+                        profiles: payloads.map(p => ({
+                            data: p,
+                            image_url: p.imageUrl || '',
+                        })),
                     }),
                 });
                 if (!resp.ok) {
