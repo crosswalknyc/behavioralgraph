@@ -1991,6 +1991,142 @@ def _annotate_movers_with_platform_mix(movers: dict,
 
 
 # ============================================================================
+# Cross-platform "cultural moment" detector
+# ============================================================================
+# An item is a "true cultural moment" when the same name/topic is trending
+# on 3+ distinct platforms in the same window. We aggregate normalized
+# entity names across searches / wikipedia / people / social and mutate
+# matching rows in-place with a `cross_platform: True` flag + the source
+# list, which the frontend renders as a 🔥 badge.
+_CROSS_PLATFORM_MIN_SOURCES = 3
+
+_CP_STOPWORDS = {
+    'the', 'a', 'an', 'and', 'of', 'in', 'on', 'to', 'for', 'at', 'is',
+    'trending', 'today', 'now', 'news', 'latest', 'best',
+}
+
+
+def _cp_normalize(text: str) -> str:
+    """Case-fold, strip punctuation, drop common stopwords, collapse
+    whitespace. Two strings hash to the same key iff they refer to the
+    same underlying entity."""
+    if not text:
+        return ''
+    # Lowercase, remove leading # (hashtag), strip everything non-alnum.
+    s = text.lower().lstrip('#').strip()
+    s = re.sub(r'[^\w\s]+', ' ', s)
+    tokens = [t for t in s.split() if t and t not in _CP_STOPWORDS]
+    return ' '.join(tokens)
+
+
+def _annotate_cross_platform_moments(
+    trending_people:      list[dict],
+    wikipedia_trending:   list[dict],
+    trending_searches:    list[dict],
+    social_trending:      dict,
+) -> tuple[list[dict], list[dict], list[dict], dict]:
+    """Flag items that appear on >=3 platforms with `cross_platform=True`.
+
+    Mutates each list/dict in-place and returns them for chainability.
+    Idempotent: re-running clears + recomputes the flags.
+    """
+    # Build a map: normalized_key -> set of source platform slugs.
+    source_map: dict[str, set[str]] = {}
+
+    def _add(source: str, text: str) -> None:
+        key = _cp_normalize(text)
+        if not key or len(key) < 3:
+            return
+        source_map.setdefault(key, set()).add(source)
+
+    for p in trending_people or []:
+        _add('people', p.get('name') or '')
+
+    for w in wikipedia_trending or []:
+        _add('wikipedia', w.get('title') or '')
+
+    for s in trending_searches or []:
+        _add('searches', s.get('term') or s.get('query') or '')
+
+    for platform_slug, panel in (social_trending or {}).items():
+        for it in (panel or {}).get('items') or []:
+            # Reddit/YouTube use `title`; X uses `topic`; Instagram uses
+            # `title` = "#tag"; TikTok uses `topic` = "#tag".
+            _add(platform_slug, it.get('title') or it.get('topic') or it.get('hashtag') or '')
+
+    # Now mutate each list to stamp the flag + source list on matching
+    # items. We reset first so this stays idempotent across cache hits.
+    def _stamp(rows: list, source: str, text_field: str) -> None:
+        for row in rows or []:
+            key = _cp_normalize(row.get(text_field) or '')
+            sources = source_map.get(key) or set()
+            if len(sources) >= _CROSS_PLATFORM_MIN_SOURCES:
+                row['cross_platform']         = True
+                row['cross_platform_sources'] = sorted(sources)
+                row['cross_platform_count']   = len(sources)
+            else:
+                # Explicitly clear stale flags from an earlier cache
+                # payload so consumers don't have to guard for None.
+                for k in ('cross_platform', 'cross_platform_sources',
+                          'cross_platform_count'):
+                    row.pop(k, None)
+
+    _stamp(trending_people,    'people',    'name')
+    _stamp(wikipedia_trending, 'wikipedia', 'title')
+    _stamp(trending_searches,  'searches',  'term')
+    for platform_slug, panel in (social_trending or {}).items():
+        items = (panel or {}).get('items') or []
+        for row in items:
+            # Social rows can use either `title` or `topic` for the entity
+            # name; try both.
+            key = _cp_normalize(row.get('title') or row.get('topic') or row.get('hashtag') or '')
+            sources = source_map.get(key) or set()
+            if len(sources) >= _CROSS_PLATFORM_MIN_SOURCES:
+                row['cross_platform']         = True
+                row['cross_platform_sources'] = sorted(sources)
+                row['cross_platform_count']   = len(sources)
+            else:
+                for k in ('cross_platform', 'cross_platform_sources',
+                          'cross_platform_count'):
+                    row.pop(k, None)
+
+    return trending_people, wikipedia_trending, trending_searches, social_trending
+
+
+def _annotate_with_why(
+    trending_people:    list[dict],
+    wikipedia_trending: list[dict],
+    trending_searches:  list[dict],
+) -> None:
+    """Stamp a 1-line "why is this trending" context on any row whose
+    normalized name matches an entry in today's why_trending snapshot.
+
+    The snapshot is produced daily by scripts/trends_scrapers/why_trending.py.
+    Missing snapshot / missing key -> no `why` field on the row (frontend
+    just doesn't render the context line).
+
+    Idempotent - safe to call twice.
+    """
+    snap = _read_snapshot('why_trending') or {}
+    items = snap.get('items') or {}
+    if not items:
+        return
+
+    def _stamp(rows: list, text_field: str) -> None:
+        for row in rows or []:
+            key = _cp_normalize(row.get(text_field) or '')
+            why = items.get(key)
+            if why:
+                row['why'] = why
+            else:
+                row.pop('why', None)
+
+    _stamp(trending_people,    'name')
+    _stamp(wikipedia_trending, 'title')
+    _stamp(trending_searches,  'term')
+
+
+# ============================================================================
 # Card 2 + 3: Trending headlines and articles by source
 # ============================================================================
 def _parse_rss(body: str, source: str, domain: str, limit: int = 15) -> list[dict]:
@@ -3131,6 +3267,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                                                     keywords=geo_kws),
         'products_by_retailer':lambda: _fetch_trending_products(keywords=geo_kws),
         'movers':              lambda: compute_search_movers(state),
+        'wikipedia_trending':  lambda: _read_snapshot('wikipedia_trending'),
     }
 
     results: dict = {}
@@ -3151,6 +3288,11 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     products           = results.get('products_by_retailer') or []
     movers             = results.get('movers') or {'available': False,
                                                      'note': 'warming up'}
+    # Wikipedia trending is a straight snapshot read (built daily by
+    # scripts/trends_scrapers/wikipedia_trending.py). Missing snapshot
+    # -> empty list; the frontend handles the empty-state.
+    wiki_snap          = results.get('wikipedia_trending') or {}
+    wikipedia_trending = list(wiki_snap.get('national') or [])[:30]
 
     trending_people = _fetch_trending_people(
         headlines,
@@ -3171,6 +3313,22 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # UI can show where each trend's interest is being driven from.
     movers = _annotate_movers_with_platform_mix(
         movers, trending_searches, social_trending)
+
+    # Stamp `cross_platform=True` on any name/topic trending on 3+
+    # platforms in this window (searches + wikipedia + people + each
+    # social platform). This lights up the 🔥 "cultural moment" badge
+    # in the UI. Must run AFTER trending_people is fully assembled and
+    # AFTER wikipedia_trending is unpacked, otherwise items get missed.
+    _annotate_cross_platform_moments(
+        trending_people, wikipedia_trending, trending_searches, social_trending)
+
+    # Stamp `why` (one-line context) on any row whose normalized name
+    # matches an entry in the daily why_trending snapshot. Best-effort:
+    # if the snapshot is missing (Claude was skipped, cron hasn't run
+    # yet, etc.) every row just goes without a `why` field and the UI
+    # renders normally.
+    _annotate_with_why(
+        trending_people, wikipedia_trending, trending_searches)
 
     # Split the trending search pool into the 5-card layout the UI renders:
     # Overall (all rows, scrollable) + Entertainment / Retail / Politics /
@@ -3195,6 +3353,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'trending_headlines':             headlines,
             'articles_by_source':             articles_by_source,
             'trending_people':                trending_people,
+            'wikipedia_trending':             wikipedia_trending,
             'social_trending':                social_trending,
             'streaming_trending':             streaming_trending,
             'products_by_retailer':           products,

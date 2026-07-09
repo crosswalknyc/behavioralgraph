@@ -37,7 +37,8 @@ from datetime import datetime, timezone
 
 SCRAPERS = [
     # (source_key, module_path, label, kind)
-    ('google_wide', 'scripts.trends_scrapers.google_trends_wide', 'Google Trends (wide)', 'search'),
+    ('google_wide',        'scripts.trends_scrapers.google_trends_wide', 'Google Trends (wide)', 'search'),
+    ('wikipedia_trending', 'scripts.trends_scrapers.wikipedia_trending', 'Wikipedia',            'search'),
     ('x',         'scripts.trends_scrapers.x_twitter',  'X',         'social'),
     ('tiktok',    'scripts.trends_scrapers.tiktok',     'TikTok',    'social'),
     ('youtube',   'scripts.trends_scrapers.youtube',    'YouTube',   'social'),
@@ -163,6 +164,21 @@ def main(argv: list[str] | None = None) -> int:
             except Exception as e:
                 logging.exception("run_all: %s crashed", src)
                 results.append({'source': src, 'error': str(e), 'national': []})
+
+    # Run why_trending AFTER the parallel batch finishes so it can read
+    # everyone else's fresh snapshots (Wikipedia, GDELT-people, Google
+    # Trends). Also runs on an --only whitelist, and can be skipped.
+    if (not only or 'why_trending' in only) and 'why_trending' not in skip:
+        try:
+            results.append(_run_one(
+                'why_trending',
+                'scripts.trends_scrapers.why_trending',
+                'Why is this trending?',
+                'meta',
+            ))
+        except Exception as e:
+            logging.exception("run_all: why_trending post-step crashed")
+            results.append({'source': 'why_trending', 'error': str(e), 'national': []})
 
     _write_index(results)
 

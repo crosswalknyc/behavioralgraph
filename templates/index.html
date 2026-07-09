@@ -23382,6 +23382,12 @@
             #trendsIQView .tiq-trend.tiq-trend-stable,
             #trendsIQView .tiq-trend.tiq-trend-neutral { background: rgba(59,130,246,0.14); color: #93c5fd; border: 1px solid rgba(59,130,246,0.32); }
             #trendsIQView .tiq-trend.tiq-trend-new     { background: rgba(196,245,66,0.18); color: #c4f542; border: 1px solid rgba(196,245,66,0.42); }
+            /* Cross-platform "cultural moment" badge - flame gradient
+               that reads as distinct from the up/down/stable pills. */
+            #trendsIQView .tiq-trend.tiq-trend-cross {
+                background: linear-gradient(135deg, rgba(251,146,60,0.20) 0%, rgba(239,68,68,0.20) 100%);
+                color: #fdba74; border: 1px solid rgba(251,146,60,0.42);
+            }
             #trendsIQView .tiq-social-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
             #trendsIQView .tiq-social-tab { padding: 0.35rem 0.75rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; font-size: 0.78rem; cursor: pointer; color: var(--text-secondary); user-select: none; }
             #trendsIQView .tiq-social-tab.active { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: #fff; border-color: transparent; }
@@ -40927,7 +40933,8 @@
                     all:         cards.trending_searches             || [],
                     by_category: cards.trending_searches_by_category || {},
                 })) +
-                _renderTIQPanel('people',    renderTIQPeople(cards.trending_people || [])) +
+                _renderTIQPanel('people',    renderTIQWikipedia(cards.wikipedia_trending || []) +
+                                              renderTIQPeople(cards.trending_people || [])) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
@@ -41284,7 +41291,9 @@
             return '<div class="tiq-row"><div class="tiq-rank">' + rank + '</div>' +
                    '<div class="tiq-row-body">' +
                    '<div class="tiq-row-title">' + _tiqEsc(r.term) +
+                   _tiqCrossPlatformBadge(r) +
                    _tiqActions('search', 'google', r.term, r.term, 'National') + '</div>' +
+                   _tiqWhyLine(r) +
                    (badges ? '<div class="tiq-row-meta">' + badges + '</div>' : '') +
                    chips +
                    newsHtml +
@@ -41489,6 +41498,31 @@
         // Returns '' when there's no baseline to compare against, so
         // freshly-collected data doesn't stamp misleading "stable"
         // arrows on people we've never seen before.
+        // Small italic context line rendered under trending rows when
+        // the backend has an entry for this row in the daily why_trending
+        // snapshot (Claude-authored, refreshed once per day). Rendered
+        // subtly so it doesn't compete with the rank + delta numbers.
+        function _tiqWhyLine(row) {
+            if (!row || !row.why) return '';
+            return '<div class="tiq-row-why" style="' +
+                   'font-size:12px;opacity:0.75;margin-top:3px;font-style:italic;' +
+                   'color:#c9d3e0;">\u201C' + _tiqEsc(row.why) + '\u201D</div>';
+        }
+
+        // "Cultural moment" pill for any row the backend marked with
+        // `cross_platform: true` (name/topic trending on 3+ distinct
+        // platforms in the same window). Tooltip lists which
+        // platforms triggered the flag so the badge is self-explaining.
+        function _tiqCrossPlatformBadge(row) {
+            if (!row || !row.cross_platform) return '';
+            var sources = (row.cross_platform_sources || []).slice();
+            var count   = row.cross_platform_count || sources.length || 0;
+            var tip = 'Trending on ' + count + ' platforms' +
+                      (sources.length ? ': ' + sources.join(', ') : '');
+            return ' <span class="tiq-trend tiq-trend-cross" title="' +
+                   _tiqEsc(tip) + '">\uD83D\uDD25 cultural moment</span>';
+        }
+
         function _tiqRenderPersonTrend(p) {
             var t = p.trend;
             if (!t) return '';
@@ -41549,6 +41583,57 @@
                    '" title="' + _tiqEsc(tooltip) + '">' + label + '</span>';
         }
 
+        // Trending on Wikipedia - top-viewed articles with WoW pageview
+        // delta. Backed by scripts/trends_scrapers/wikipedia_trending.py
+        // and Wikimedia's public REST API (no auth). Surfaces "what is
+        // everyone suddenly researching" across all topic areas - people,
+        // films, events, places - which is a wider net than the People
+        // card that lives just below it.
+        function renderTIQWikipedia(rows) {
+            if (!rows || !rows.length) return '';
+            var html = '<div class="tiq-card" style="margin-bottom:16px;">' +
+                       '<h4>🌐 Trending on Wikipedia</h4>' +
+                       '<div class="tiq-card-sub">Articles gaining the most pageviews vs yesterday. ' +
+                       'Real-time signal of what people are suddenly researching.</div>' +
+                       '<div class="tiq-headline-list" style="max-height:560px;overflow-y:auto;">';
+            rows.slice(0, 30).forEach(function(r, i) {
+                var deltaLabel = '';
+                var deltaCls   = 'tiq-trend-rising';
+                if (r.is_new) {
+                    deltaLabel = 'NEW';
+                    deltaCls   = 'tiq-trend-new';
+                } else if (typeof r.delta_pct === 'number' && isFinite(r.delta_pct)) {
+                    var pct = Math.round(r.delta_pct * 100);
+                    if (pct === 0) {
+                        deltaLabel = 'stable';
+                        deltaCls   = 'tiq-trend-neutral';
+                    } else if (pct > 0) {
+                        deltaLabel = '\u25B2 +' + pct + '%';
+                        deltaCls   = 'tiq-trend-rising';
+                    } else {
+                        deltaLabel = '\u25BC ' + pct + '%';
+                        deltaCls   = 'tiq-trend-falling';
+                    }
+                }
+                var views = typeof r.views_today === 'number' ? _tiqNum(r.views_today) + ' views' : '';
+                var prior = (r.views_prior && !r.is_new) ? ' (was ' + _tiqNum(r.views_prior) + ')' : '';
+                var wikiKey = r.title || '';
+                html += '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
+                        '<div class="tiq-row-body">' +
+                        '<div class="tiq-row-title">' +
+                        '<a href="' + _tiqEsc(r.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(r.title) + '</a>' +
+                        (deltaLabel ? ' <span class="tiq-trend ' + deltaCls + '">' + deltaLabel + '</span>' : '') +
+                        _tiqCrossPlatformBadge(r) +
+                        _tiqActions('wikipedia', 'wikipedia', wikiKey, wikiKey, 'National') +
+                        '</div>' +
+                        _tiqWhyLine(r) +
+                        (views ? '<div class="tiq-row-meta">' + views + prior + '</div>' : '') +
+                        '</div></div>';
+            });
+            html += '</div></div>';
+            return html;
+        }
+
         function renderTIQPeople(rows) {
             if (!rows.length) return '<div class="tiq-empty">No trending people surfaced for this filter yet.</div>';
             var mode = window.__trendsIQ.peopleSort || 'mentions';
@@ -41579,15 +41664,18 @@
                 var mentionsProj  = Number(p.mentions_projected  != null ? p.mentions_projected  : (Number(p.mentions)  || 0) * 329990000) || 0;
                 var pageviewsProj = Number(p.pageviews_projected != null ? p.pageviews_projected : (Number(p.pageviews) || 0) * 329990000) || 0;
                 var trendPill = _tiqRenderPersonTrend(p);
+                var crossPill = _tiqCrossPlatformBadge(p);
                 html += '<div class="tiq-person-card">' +
                         '<div class="tiq-person-name">' +
                           '<span>' + _tiqEsc(p.name) + '</span>' +
                           trendPill +
+                          crossPill +
                           _tiqActions('person', 'gdelt', p.name, p.name, 'National') +
                         '</div>' +
                         '<div class="tiq-person-mentions">' + _tiqNum(mentionsProj) + ' mentions' +
                         (pageviewsProj ? ' &middot; ' + _tiqNum(pageviewsProj) + ' pageviews' : '') +
                         '</div>' +
+                        _tiqWhyLine(p) +
                         (context ? '<div class="tiq-person-context">' + context + '</div>' : '') +
                         '</div>';
             });
@@ -41641,6 +41729,7 @@
                                return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                                       '<div class="tiq-row-body">' +
                                       '<div class="tiq-row-title"><a href="' + _tiqEsc(it.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>' +
+                                      _tiqCrossPlatformBadge(it) +
                                       _tiqActions('social', k, socialKey, socialKey, 'National') + '</div>' +
                                       (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
                                       '</div></div>';
@@ -41953,7 +42042,8 @@
                     all:         cards.trending_searches             || [],
                     by_category: cards.trending_searches_by_category || {},
                 })) +
-                _renderTIQPanel('people',    renderTIQPeople(cards.trending_people || [])) +
+                _renderTIQPanel('people',    renderTIQWikipedia(cards.wikipedia_trending || []) +
+                                              renderTIQPeople(cards.trending_people || [])) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
