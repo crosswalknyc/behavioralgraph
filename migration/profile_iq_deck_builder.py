@@ -1412,7 +1412,18 @@ def _get_analyst_brief(profile: dict, archetype: str) -> dict:
                   "using fallback templated narrative")
             return {}
         from openai import OpenAI
-        client = OpenAI(api_key=api_key, timeout=90.0)
+        # 2026-07-09 (round 7) — Bad Gateway triage: prior config
+        # `timeout=90.0` (no max_retries override) was compounding with
+        # OpenAI SDK's default max_retries=2, so a hung LLM call took
+        # ~180s wall-clock. That blocked the single gunicorn worker,
+        # /healthz timed out, Render killed the instance, users saw
+        # 502s across the whole dashboard. New config: 55s per attempt,
+        # ZERO retries — if the model doesn't answer in 55s the data-
+        # driven fallback ships (which is now rich enough to stand on
+        # its own after round-6 palette work). Total wall-clock is
+        # bounded at ~60s + slide render, well under Render's 100s
+        # gateway timeout.
+        client = OpenAI(api_key=api_key, timeout=55.0, max_retries=0)
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             temperature=0.4,
