@@ -93,23 +93,48 @@ US_POPULATION = 329_900_000
 # profile still produces a clean 12-slide deck, and a rich profile
 # produces the full 22+ slide ethnographic portrait.
 
+# 2026-07-09 (round 5) — CULLED per user feedback ("stats repeated, not
+# enough persona"). Prior default emitted 22 slides restating the same
+# age/gender/DMA/brand data across 4-8 slides. New shape mirrors the
+# House Style Guide's 12-14 slide target:
+#
+#   FRONT MATTER    cover + exec_summary
+#   PERSONA         persona_narrative  (NEW: full-page prose portrait)
+#                   portrait           (4-quadrant, enriched)
+#   WHO THEY ARE    demographic_deep_dive  (the ONE demo shape slide)
+#                   differ_from_genpop     (deltas)
+#   WHERE           geography
+#   HOW THEY BEHAVE signature_affinities   (with cultural thesis)
+#                   commerce_persona
+#                   category_deep_dives    (max 3 category slides)
+#                   media_and_social       (attention backbone)
+#                   day_in_life            (optional narrative)
+#   SO WHAT         media_plan
+#                   whitespace
+#   BACK MATTER     takeaways + final + methodology + about
+#
+# CULLED (each was a repeat of data already on another slide):
+#   - scale            (age/income repeats demo_deep_dive)
+#   - identity         (4 demographic tiles repeat demo_deep_dive)
+#   - life_stage       (one paragraph repeats portrait.life_stage)
+#   - index_story      (top over-index tiles repeat differ_from_genpop)
+#   - cultural_interests (repeats signature_affinities + day_in_life)
+#
+# Every retained slide has a distinct ANALYTICAL JOB and is the one home
+# for its data (guide: "ONE DATA POINT, ONE HOME").
 _DEFAULT_SECTIONS = (
     "cover",
     "exec_summary",
+    "persona_narrative",
     "portrait",
-    "scale",
-    "identity",
     "demographic_deep_dive",
-    "life_stage",
     "differ_from_genpop",
-    "index_story",
-    "day_in_life",
     "geography",
-    "commerce_persona",
     "signature_affinities",
+    "commerce_persona",
     "category_deep_dives",
-    "cultural_interests",
     "media_and_social",
+    "day_in_life",
     "media_plan",
     "whitespace",
     "takeaways",
@@ -119,11 +144,10 @@ _DEFAULT_SECTIONS = (
 )
 
 # Mandatory core — the LLM cannot remove these under any circumstance.
-# Every real deck must open with cover/exec/portrait, do identity work,
-# close with takeaways/final/methodology/about.
 _ALWAYS_SECTIONS = (
-    "cover", "exec_summary", "portrait",
-    "scale", "identity", "demographic_deep_dive", "differ_from_genpop",
+    "cover", "exec_summary",
+    "persona_narrative", "portrait",
+    "demographic_deep_dive", "differ_from_genpop",
     "takeaways", "final", "methodology", "about",
 )
 
@@ -211,7 +235,10 @@ def build_deck(
     section_builders = {
         "cover":                 lambda: _slide_cover(prs, profile),
         "exec_summary":          lambda: _slide_exec_summary(prs, profile),
+        "persona_narrative":     lambda: _slide_persona_narrative(prs, profile),
         "portrait":              lambda: _slide_portrait(prs, profile),
+        # LEGACY builders — kept in dispatch so an LLM that requests a
+        # culled section still gets served, but NOT in _DEFAULT_SECTIONS.
         "scale":                 lambda: _slide_scale(prs, profile),
         "identity":              lambda: _slide_demographics(prs, profile),
         "demographic_deep_dive": lambda: _slide_demographic_deep_dive(prs, profile),
@@ -581,6 +608,44 @@ _ANALYST_SYSTEM_PROMPT = (
     "    formats the reader learns nothing new on pages 2 and 3 and\n"
     "    starts skimming. Say it once, powerfully, then move on.\n"
     "\n"
+    "    CONCRETE OWNERSHIP for THIS deck (do NOT violate):\n"
+    "      - Age / gender / income / ethnicity / education numbers\n"
+    "        BELONG TO the 'differ_from_genpop' slide (rendered as a\n"
+    "        table of the sharpest deltas). May be REFERENCED once in\n"
+    "        'exec_summary.who_body' and once in 'persona_narrative.body'\n"
+    "        as a life-stage grounding — never restated elsewhere with\n"
+    "        the same numbers. Do NOT re-cite the same delta in\n"
+    "        'takeaways', 'final_body', 'portrait.differentiator_body',\n"
+    "        'life_stage.body'. Pick ONE home.\n"
+    "      - DMA reach / index numbers BELONG TO the 'geography' slide.\n"
+    "        May be REFERENCED once in 'exec_summary.where_body'. Not\n"
+    "        again elsewhere.\n"
+    "      - Social platform reach (TikTok %, Instagram %, YouTube %)\n"
+    "        BELONGS TO 'media_and_social'. May be REFERENCED once in\n"
+    "        'day_in_life' (as behavior, not stat) and once in\n"
+    "        'media_plan[].rationale'. Not in 'exec_summary', not in\n"
+    "        'takeaways', not in 'portrait'.\n"
+    "      - Signature-brand reach + index BELONGS TO\n"
+    "        'signature_affinities' + 'partner_shortlist'. If the same\n"
+    "        brand appears in 'commerce_persona' or 'day_in_life',\n"
+    "        mention it BY NAME only — do not restate its reach % or\n"
+    "        index.\n"
+    "      - Sample size / projected US audience BELONGS TO the source\n"
+    "        line + methodology slide only. Never inline in a narrative.\n"
+    "      - Whitespace opportunity BELONGS TO 'whitespace_headline' +\n"
+    "        'whitespace_body'. Do not preview or restate in exec\n"
+    "        summary or takeaways.\n"
+    "\n"
+    "    TAKEAWAYS RULE: the 'takeaways' array must NOT restate numbers\n"
+    "    that already appear elsewhere in the deck. Each takeaway names\n"
+    "    an ACTION or a SYNTHESIS the earlier data supports — not a\n"
+    "    number the reader already saw. Frame every takeaway as an\n"
+    "    imperative decision.\n"
+    "\n"
+    "    FINAL LINE RULE: 'final_body' must be pure synthesis prose — NO\n"
+    "    brands, NO %s, NO indexes. If you name a number in the final\n"
+    "    line, delete it.\n"
+    "\n"
     "  * EVERY BOX CARRIES A NUMBER AND A DECISION. A takeaway that\n"
     "    could be pasted into any audience deck is not finished.\n"
     "    Attach the figure that proves it AND the action it implies.\n"
@@ -907,6 +972,11 @@ _ANALYST_JSON_SPEC = (
     "{\n"
     '  "argument": "THE SINGLE MEMORABLE CLAIM the whole deck exists to prove — the one sentence you want the reader to repeat to someone else afterward (15-25 words). Ties the WHO + WHERE + SO WHAT together into ONE takeaway a busy exec can act on. Not a slogan. Not a description. A CLAIM with a decision embedded. Example: \'A younger, higher-earning multicultural core reachable most efficiently on TikTok and podcast host-reads — buy there before the release window closes.\' No period at the start; ends with period.",\n'
     '  "observed_behavior_lead": "The ONE proprietary finding that only observed, deterministic, current panel behavior could produce — the thing a competitor working from surveys, panels, or estimates cannot replicate (25-40 words). Frame it as a behavior + a number + why it matters. Example: \'We can see 3 in 5 of this audience purchased through DoorDash and Amazon in the trailing 90 days at index 148 — that is deterministic transaction behavior no survey would surface, and it means CPG activation should route through delivery apps, not shelf.\' Do NOT summarize demographics — that is not proprietary. The proprietary edge is BEHAVIOR seen over time.",\n'
+    '  "persona_narrative": {\n'
+    '     "persona_name":   "A 2-4 word composite name that captures the audience archetype. Not a real person. Should read as a fresh archetype label, not a demographic. Examples: \'The Pop-Punk Nostalgist\', \'The Culture-First Urbanite\', \'The Suburban Comedy Fan\', \'The Streaming-First Millennial\'.",\n'
+    '     "one_liner":      "A single sentence (12-18 words) that captures who this composite person IS. Life stage + posture + tell-tale behavior. Example: \'28, works in creative services, lives in Brooklyn or Silverlake, spends weekends at Barrys and A24 screenings.\'",\n'
+    '     "body":           "A 120-180 word PROSE PORTRAIT of ONE composite person rooted in the audience data. NOT a stat dump. Written like a Bain / McKinsey ethnographic sketch — reads as a real human you can picture. Include: (1) life stage (age, likely job, housing situation), (2) a Tuesday-morning behavior, (3) a Saturday-night behavior, (4) 2-3 SPECIFIC brands they engage with (from the data, only brands with reach >=15%), (5) a media habit that reveals their posture (a subreddit they read, a podcast they listen to, a show they watched last), (6) one anti-persona note (what they are NOT — e.g. \'not shopping at big-box, not watching linear cable\'). Ground every claim in the data but write it as narrative, not bullet points. Every specific brand cited must appear elsewhere in the file. This is the ONE slide where the reader should feel they know the audience as a person, not as a spreadsheet."\n'
+    '  },\n'
     '  "cover_tagline": "One sentence that tells the CMO who this audience IS in life-stage / mindset / cultural-posture terms (35-45 words). Do NOT lean on a single freak-index brand. Do NOT use adjectives like passionate / vibrant / engaged.",\n'
     '  "identity_headline": "4-6 word portrait of WHO they are — life stage + posture, not just demos. Examples: \'Prime-age urban trend-formers.\', \'Suburban parents with disposable income.\', \'Downtown creatives, digitally-native.\' No pronouns.",\n'
     '  "identity_why": "One sentence (35-50 words) on why this composition matters commercially — what the age/income/geography shape UNLOCKS for the marketer.",\n'
@@ -974,9 +1044,9 @@ _ANALYST_JSON_SPEC = (
     '  "whitespace_headline": "5-9 word headline naming the SPECIFIC unmet-need or unactivated surface (e.g. \'Gaming sponsorships are untapped.\', \'The Discord audience is under-bought.\'). No period.",\n'
     '  "whitespace_body":     "A 60-90 word analyst paragraph explaining WHY that surface is whitespace for this audience (cite the reach/index) and WHAT the CMO should test first. Prescriptive, not descriptive.",\n'
     '  "takeaways": [\n'
-    '     { "title": "3-5 word punchy title. Actions, not descriptions.",\n'
-    '       "body": "2 sentences (25-40 words) that ground the action in a specific number from the data." },\n'
-    '     ... EXACTLY 6 entries, MECE across: (1) WHO — the demographic core, (2) WHERE — geo concentration, (3) WHAT — dominant category / commercial signal, (4) HOW — primary media surface, (5) WHITESPACE — the untapped surface, (6) ACTIVATION — the next test to run.\n'
+    '     { "title": "3-5 word punchy title. IMPERATIVE ACTIONS, not descriptions.",\n'
+    '       "body": "2 sentences (25-40 words) that name the ACTION + the tradeoff. NEVER restate a demographic number, DMA share, platform reach %, or brand reach % that has already appeared elsewhere in the deck — the reader has seen those. This slide names decisions, not facts." },\n'
+    '     ... EXACTLY 4 entries (was 6; cut for anti-repetition per user 2026-07-09). Each takeaway must be a FRESH angle the reader has not already been told to do — synthesize across data, do not re-cite it. Four dimensions: (1) THE PARTNER TO PICK FIRST — one endemic partner, one action; (2) THE MEDIA SHIFT — one channel to overweight, one to underweight, why; (3) THE WHITESPACE TEST — one under-bought surface to try first, one week; (4) THE CREATIVE CUE — one tone / posture / cultural cue the audience data unlocks that generic creative would miss. If any takeaway restates a percentage or index already shown on another slide, you have failed this section — rewrite it as an action.\n'
     '  ],\n'
     '  "final_line_a": "Final-insight display line 1 (max 8 words, no period). The one sentence you want the CMO to remember.",\n'
     '  "final_line_b": "Final-insight display line 2 (max 8 words, ends with period). The implication or action.",\n'
@@ -2511,14 +2581,20 @@ def _slide_mpb_table(prs: Presentation, p: dict):
 
 
 def _slide_takeaways(prs: Presentation, p: dict):
-    """'Six things to know.' — 6 numbered summary cards in a 3x2 grid.
+    """'Four things to do.' — 4 imperative decision cards in a 2x2 grid.
 
-    Prefers the LLM analyst brief's takeaways (better editorial voice,
-    grounded in the data). Falls back to _pick_takeaways()."""
+    2026-07-09 (round 5) — reduced from 6 tiles to 4 per user feedback
+    that takeaways were restating numbers already elsewhere in the deck.
+    New spec (see JSON): each takeaway is an ACTION or SYNTHESIS the
+    reader hasn't already been told to do — never a re-cited number.
+    Tiles are larger (5.94" x 2.55") to give each imperative real weight.
+
+    Prefers the LLM analyst brief's takeaways. Falls back to
+    _pick_takeaways() when the brief is empty."""
     brief_tk = _brief_get(p, "takeaways")
-    if (isinstance(brief_tk, list) and len(brief_tk) >= 4):
+    if (isinstance(brief_tk, list) and len(brief_tk) >= 3):
         picks: list[tuple[str, str, str]] = []
-        for i, tk in enumerate(brief_tk[:6]):
+        for i, tk in enumerate(brief_tk[:4]):
             if not isinstance(tk, dict):
                 continue
             title = _purge_pronouns(str(tk.get("title") or ""), p["name"])
@@ -2526,37 +2602,38 @@ def _slide_takeaways(prs: Presentation, p: dict):
             if not title or not body:
                 continue
             picks.append((f"{i+1:02d}", title, body))
-        # Renumber for any skipped entries
         picks = [(f"{i+1:02d}", t, b) for i, (_, t, b) in enumerate(picks)]
     else:
-        picks = _pick_takeaways(p)
+        picks = _pick_takeaways(p)[:4]
 
     if not picks:
         return
     slide = _blank_slide(prs)
-    _section_eyebrow(slide, 0.52, p["name"], "KEY TAKEAWAYS")
-    _text(slide, 0.62, 0.82, 12.0, 1.10, "Six things to know.",
-          size=28, bold=True, color=C_CREAM, line_spacing=1.05)
-    _text(slide, 0.62, 2.00, 12.0, 0.36,
-          "If you remember nothing else from this brief, remember these.",
+    _section_eyebrow(slide, 0.52, p["name"], "WHAT TO DO")
+    _text(slide, 0.62, 0.82, 12.0, 1.10, "Four moves.",
+          size=32, bold=True, color=C_CREAM, line_spacing=1.05)
+    _text(slide, 0.62, 2.05, 12.0, 0.36,
+          "Actions the data supports — not a restatement of it.",
           size=12, color=C_MUTED, line_spacing=1.4)
 
-    tile_w = 4.05
+    # 2x2 grid of larger tiles
+    tile_w = 6.00
     tile_h = 2.10
-    tile_gap = 0.10
-    top_y = 2.75
-    for i, (num, title, body) in enumerate(picks[:6]):
-        col = i % 3
-        row = i // 3
-        x = 0.62 + col * (tile_w + tile_gap)
-        y = top_y + row * (tile_h + 0.12)
+    tile_gap_x = 0.20
+    tile_gap_y = 0.20
+    top_y = 2.85
+    for i, (num, title, body) in enumerate(picks[:4]):
+        col = i % 2
+        row = i // 2
+        x = 0.62 + col * (tile_w + tile_gap_x)
+        y = top_y + row * (tile_h + tile_gap_y)
         _rect(slide, x, y, tile_w, tile_h, RGBColor(0x14, 0x1F, 0x22))
-        _text(slide, x + 0.28, y + 0.20, 0.9, 0.60, num,
-              size=26, bold=True, color=C_MAGENTA, line_spacing=1.0)
-        _text(slide, x + 0.28, y + 0.72, tile_w - 0.50, 0.55, title,
-              size=13, bold=True, color=C_CREAM, line_spacing=1.15)
-        _text(slide, x + 0.28, y + 1.20, tile_w - 0.50, tile_h - 1.30, body,
-              size=9.5, color=C_MUTED, line_spacing=1.4)
+        _text(slide, x + 0.32, y + 0.22, 1.0, 0.60, num,
+              size=28, bold=True, color=C_MAGENTA, line_spacing=1.0)
+        _text(slide, x + 0.32, y + 0.80, tile_w - 0.60, 0.55, title,
+              size=15, bold=True, color=C_CREAM, line_spacing=1.15)
+        _text(slide, x + 0.32, y + 1.35, tile_w - 0.60, tile_h - 1.45, body,
+              size=10.5, color=C_MUTED, line_spacing=1.45)
 
     _footer(slide, 0, p["name"])
 
@@ -3071,6 +3148,111 @@ def _slide_signature_affinities(prs: Presentation, p: dict):
 # =============================================================================
 
 
+def _slide_persona_narrative(prs: Presentation, p: dict):
+    """Full-page composite persona portrait — the 'meet them' slide.
+
+    2026-07-09 (round 5) — user feedback: the deck did not give enough
+    of a persona. The 4-quadrant portrait is too shallow; a real deck
+    needs ONE slide where the reader FEELS the audience as a person, not
+    a spreadsheet. This is that slide.
+
+    Layout: subject image on right 5.5" strip, left 7.5" carries the
+    persona name (display font), a one-line captured (headline), and a
+    120-180 word prose portrait grounded in the data.
+
+    Fallback (no LLM): synthesizes a name + one-liner + body from the
+    strongest demographic + top-3 behavioral signals, so this slide
+    always ships even on thin briefs.
+    """
+    pn = _brief_get(p, "persona_narrative", default={}) or {}
+    subject = p["name"]
+
+    persona_name = _purge_pronouns(str(pn.get("persona_name") or "").strip(),
+                                     subject)
+    one_liner    = _purge_pronouns(str(pn.get("one_liner") or "").strip(),
+                                     subject)
+    body         = _purge_pronouns(str(pn.get("body") or "").strip(),
+                                     subject)
+
+    # Data-driven fallback (composite from panel data)
+    if not persona_name or not body or len(body.split()) < 80:
+        age = (p.get("demographics") or {}).get("age") or {}
+        top_age = max(age.items(), key=lambda kv: _num(kv[1]),
+                       default=("adult", 0))
+        inc = (p.get("demographics") or {}).get("income") or {}
+        hh_75plus = sum(_num(v) for k, v in inc.items()
+                         if any(t in k for t in ("$75", "$100", "$150", "$200")))
+        top_brands = sorted(
+            _all_behavioral_items(p),
+            key=lambda it: -(_num(it.get("pct", 0)) *
+                              max(1.0, _num(it.get("index", 0)) / 100.0)),
+        )[:6]
+        top_brand_phrase = ", ".join(
+            (it.get("name") or "").strip()
+            for it in top_brands[:3] if (it.get("name") or "").strip()
+        ) or "the top brands on file"
+
+        if not persona_name:
+            persona_name = f"The {top_age[0]} Culture-First Fan"
+        if not one_liner:
+            one_liner = (
+                f"Prime-earning {top_age[0]}, digitally-native, spends "
+                f"cultural time on {top_brand_phrase}."
+            )
+        if not body or len(body.split()) < 80:
+            body = (
+                f"Picture the {top_age[0]} core of this audience: the "
+                f"life stage skews here, {int(_num(top_age[1]))}% of the "
+                f"file, and about {int(hh_75plus)}% earn $75K+. That "
+                f"combination unlocks premium discretionary spend. On a "
+                f"Tuesday morning the day starts on a phone — scrolling, "
+                f"queuing music, checking a subreddit — not with a "
+                f"newspaper. Saturday nights lean toward live experience "
+                f"or a streamer, not linear cable. The brands they "
+                f"engage with — {top_brand_phrase} — reveal a taste "
+                f"pattern that reads culture-first: they will pay to be "
+                f"early on a category that reflects identity, and they "
+                f"will skip categories that feel generic. What they are "
+                f"NOT: not weekly big-box shoppers, not appointment-TV "
+                f"watchers, not late-adopter on the surfaces most brands "
+                f"still over-buy."
+            )
+
+    slide = _blank_slide(prs)
+    # Right-column full-height hero image (subject portrait).
+    _place_side_image(slide, p.get("_image_bytes"), x=8.20, y=0.0,
+                      w=SLIDE_W_IN - 8.20, h=SLIDE_H_IN,
+                      darken=0.35, subject_name=subject)
+    _rect(slide, 0, 0, 8.40, SLIDE_H_IN, C_DARK)
+
+    _section_eyebrow(slide, 0.52, subject, "MEET THE AUDIENCE")
+
+    # Persona name — display font, auto-shrink for long labels
+    name_pt = _fit_display_size(persona_name, box_w_in=7.65, base_pt=42,
+                                  min_pt=26, bold=True)
+    name_line_h = name_pt / 72.0 * 1.05
+    _text(slide, 0.62, 0.85, 7.65, name_line_h + 0.18,
+          persona_name, size=name_pt, bold=True, color=C_CREAM,
+          line_spacing=1.02)
+
+    # One-liner in accent color, sits just below the display name
+    y_one = 0.85 + name_line_h + 0.20
+    _text(slide, 0.62, y_one, 7.65, 0.65, one_liner,
+          size=13.5, color=C_LAVENDER, line_spacing=1.30)
+
+    # Prose body — the persona narrative itself. Positioned below the
+    # one-liner with generous top padding so the eye lands on it as the
+    # primary read.
+    y_body = y_one + 0.75
+    body_h = 6.75 - y_body - 0.20
+    _text(slide, 0.62, y_body, 7.65, body_h, body,
+          size=12.5, color=C_CREAM, line_spacing=1.55)
+
+    _text(slide, 0.62, 6.75, 8.0, 0.30, _source_line(p),
+          size=8.5, color=C_MUTED2, letter_spacing=0.02)
+    _footer(slide, 0, subject)
+
+
 def _slide_portrait(prs: Presentation, p: dict):
     """4-quadrant ethnographic portrait: LIFE STAGE / MINDSET / CULTURAL
     POSTURE / DIFFERENTIATOR. Each quadrant is a mini-narrative panel."""
@@ -3240,7 +3422,17 @@ def _slide_demographic_deep_dive(prs: Presentation, p: dict):
         for bucket, val in entries:
             v = _num(val)
             width = 2.60 * (v / max_pct if max_pct > 0 else 0)
-            idx = int(_num(d_idx.get(bucket, 0)))
+            # 2026-07-09 (round 5) — Recompute index from aud/gp for
+            # consistency with the deltas slide. Prior code trusted
+            # d_idx which sometimes disagreed with aud/gp*100 (user
+            # caught Age 25-34 rendered here as 170 while the deltas
+            # slide showed 113 for the same bucket). Guide rule #7
+            # (consistency): every index = share / baseline * 100.
+            gp_v = _num(d_gp.get(bucket, 0))
+            if gp_v > 0:
+                idx = int(round(v / gp_v * 100))
+            else:
+                idx = int(_num(d_idx.get(bucket, 0)))
             # Label
             _text(slide, x, by, 2.10, row_h,
                   _short_bucket_label(str(bucket)),
@@ -3409,58 +3601,87 @@ def _slide_differ_from_genpop(prs: Presentation, p: dict):
     """The 6-8 sharpest deltas across ALL demo dimensions. Named by
     dimension so the CMO can see: 'ah, they differ most on ethnicity
     and age, not on income.'"""
-    brief_rows = _brief_get(p, "differ_from_genpop", default=[]) or []
-    picks: list[dict] = []
-    if isinstance(brief_rows, list):
-        for row in brief_rows[:8]:
-            if not isinstance(row, dict):
-                continue
-            dim = str(row.get("dimension") or "").strip()
-            bkt = str(row.get("bucket")    or "").strip()
-            aud = _num(row.get("aud_pct", 0))
-            gpv = _num(row.get("gp_pct",  0))
-            idx = int(_num(row.get("index", 0)))
-            note = _purge_pronouns(str(row.get("note") or "").strip(), p["name"])
-            if dim and bkt and idx > 0:
-                if not note or len(note.split()) < 4:
-                    # Filler / empty — replace with a data-derived
-                    # consequence so no delta row ships without a
-                    # media/partner implication (user guide 2026-07-09).
-                    note = _consequence_for_delta(dim, bkt, idx)
-                picks.append({"dim": dim, "bucket": bkt, "aud_pct": aud,
-                               "gp_pct": gpv, "index": idx, "note": note})
+    # 2026-07-09 (round 5) — REWRITTEN to fix the consistency bug the
+    # user caught: prior version trusted the LLM's aud_pct / gp_pct /
+    # index verbatim, so slide 6 would show Age 25-34 at index 170 while
+    # slide 8 showed it at index 113 (LLM math didn't reconcile). And
+    # the LLM often missed the SHARPEST delta entirely (e.g. Age 35-44
+    # at index 198 was buried on slide 9 but omitted from slide 8).
+    #
+    # New algorithm (server-side, authoritative):
+    #   1) Rank EVERY (dim, bucket) pair from panel data by absolute
+    #      deviation from index 100 — this catches the biggest deltas
+    #      whether or not the LLM nominated them.
+    #   2) Skip buckets whose panel share < 3% (too small to matter for
+    #      strategy) or whose index sits in the 90-110 parity band.
+    #   3) De-dupe by dimension (never two buckets of the same dim in
+    #      the top-8) so the deltas span multiple demographic axes.
+    #   4) The LLM's job on this slide is only to provide the "note"
+    #      column (the SO WHAT consequence) — everything else is
+    #      computed. If the LLM provided a note for a matching bucket,
+    #      use it; otherwise fall back to _consequence_for_delta.
+    #   5) Every index is recomputed as aud/gp*100 from the same aud/gp
+    #      shown on the row — no arithmetic contradictions possible.
+    idxs = p.get("demographics_index") or {}
+    demos = p.get("demographics") or {}
+    gp = p.get("demographics_gen_pop") or {}
 
-    # Fallback: compute the sharpest deltas from demographics_index across
-    # every dimension.
-    if len(picks) < 5:
-        idxs = p.get("demographics_index") or {}
-        demos = p.get("demographics") or {}
-        gp   = p.get("demographics_gen_pop") or {}
-        scored = []
-        for dim, dim_idx_map in idxs.items():
-            if not isinstance(dim_idx_map, dict):
+    # Build a lookup of LLM-supplied notes keyed by (dim, bucket).
+    llm_notes: dict[tuple[str, str], str] = {}
+    for row in (_brief_get(p, "differ_from_genpop", default=[]) or [])[:12]:
+        if not isinstance(row, dict):
+            continue
+        d = str(row.get("dimension") or "").lower().strip()
+        b = str(row.get("bucket") or "").lower().strip()
+        n = _purge_pronouns(str(row.get("note") or "").strip(), p["name"])
+        if d and b and n and len(n.split()) >= 4:
+            llm_notes[(d, b)] = n
+
+    dim_labels = {"age": "Age", "gender": "Gender", "ethnicity": "Ethnicity",
+                   "income": "Income", "education": "Education",
+                   "parental_status": "Parental Status",
+                   "relationship": "Relationship",
+                   "sexual_orientation": "Orientation"}
+
+    scored: list[tuple[float, str, str, float, float, int]] = []
+    for dim, dim_idx_map in idxs.items():
+        if not isinstance(dim_idx_map, dict):
+            continue
+        for bucket, _stored_idx in dim_idx_map.items():
+            aud = _num((demos.get(dim) or {}).get(bucket, 0))
+            gpv = _num((gp.get(dim) or {}).get(bucket, 0))
+            if aud < 3.0:
+                continue  # too small to matter strategically
+            if gpv <= 0:
                 continue
-            for bucket, idx_val in dim_idx_map.items():
-                idx = int(_num(idx_val))
-                if idx <= 0:
-                    continue
-                if 90 <= idx <= 110:
-                    continue  # not sharp enough
-                aud = _num((demos.get(dim) or {}).get(bucket, 0))
-                gpv = _num((gp.get(dim) or {}).get(bucket, 0))
-                scored.append((abs(idx - 100), dim, bucket, aud, gpv, idx))
-        scored.sort(key=lambda t: -t[0])
-        seen_keys = {(r["dim"].lower(), r["bucket"].lower()) for r in picks}
-        for _, dim, bucket, aud, gpv, idx in scored:
-            if len(picks) >= 7:
-                break
-            key = (dim.lower(), bucket.lower())
-            if key in seen_keys:
-                continue
-            picks.append({"dim": dim.title(), "bucket": bucket, "aud_pct": aud,
-                           "gp_pct": gpv, "index": idx,
-                           "note": _consequence_for_delta(dim, bucket, idx)})
-            seen_keys.add(key)
+            # AUTHORITATIVE: recompute from shares. This is the ONLY
+            # index this slide will show — no LLM math, no drift.
+            idx = int(round(aud / gpv * 100))
+            if 90 <= idx <= 110:
+                continue  # not sharp
+            scored.append((abs(idx - 100), dim, str(bucket), aud, gpv, idx))
+
+    # Rank by absolute deviation, then dedupe by dimension so the top-8
+    # deltas span the demo shape rather than showing 4 age buckets.
+    scored.sort(key=lambda t: -t[0])
+    picks: list[dict] = []
+    dims_used: dict[str, int] = {}
+    for _, dim, bucket, aud, gpv, idx in scored:
+        if dims_used.get(dim, 0) >= 2:
+            continue  # cap two rows per dimension
+        note = (llm_notes.get((dim.lower(), bucket.lower()))
+                or _consequence_for_delta(dim, bucket, idx))
+        picks.append({
+            "dim": dim_labels.get(dim.lower(), dim.title()),
+            "bucket": bucket,
+            "aud_pct": aud,
+            "gp_pct": gpv,
+            "index": idx,
+            "note": note,
+        })
+        dims_used[dim] = dims_used.get(dim, 0) + 1
+        if len(picks) >= 7:
+            break
 
     if len(picks) < 3:
         return
