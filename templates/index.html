@@ -41727,24 +41727,22 @@
                     }
                     var weekLabel = s.week_us ? ' Week of ' + _tiqEsc(s.week_us) + '.' : '';
                     var subtitle = 'Top titles on ' + _tiqEsc(s.label || k) + '.' + weekLabel;
+                    // Row meta is intentionally suppressed for streaming
+                    // cards. The `weeks_in_top10` pill was removed because
+                    // non-Netflix platforms are derived from our own snapshot
+                    // archive (started 2026-07-07) - so every title reads as
+                    // "wk 1" until we accumulate more history. Rather than
+                    // show something we can't back consistently across
+                    // Netflix, Disney+, Hulu, Max, Prime, and ESPN+, we show
+                    // nothing. Bring the pill back once every platform has
+                    // >=8 weeks of tracked history and the values differ.
                     var renderCol = function(label, rows) {
                         var lis = (rows || []).map(function(it, i) {
-                            var meta = '';
-                            if (typeof it.weeks_in_top10 === 'number' && it.weeks_in_top10 > 0) {
-                                var wkLabel = it.weeks_in_top10 === 1 ? 'wk 1' : ('wk ' + it.weeks_in_top10);
-                                meta += '<span class="tiq-badge">' + wkLabel + '</span>';
-                            }
-                            if (it.collection && it.collection !== 'Home' &&
-                                it.collection !== 'browse_disney' &&
-                                it.collection !== 'browse_espn') {
-                                meta += '<span>' + _tiqEsc(it.collection) + '</span>';
-                            }
                             var streamKey = it.title;
                             return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
                                    '<div class="tiq-row-body">' +
                                    '<div class="tiq-row-title">' + _tiqEsc(it.title) +
                                    _tiqActions('streaming', k, streamKey, streamKey, 'National') + '</div>' +
-                                   (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
                                    '</div></div>';
                         }).join('');
                         return '<div class="tiq-card"><h4>' + _tiqEsc(label) + '</h4>' +
