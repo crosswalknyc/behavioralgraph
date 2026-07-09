@@ -1006,6 +1006,36 @@ def _text(
     return tb
 
 
+# Empirical per-point char widths for the FONT_MAIN family (Aptos / Calibri
+# fall in the 0.55-0.62 em range for average sentence text at bold). Used
+# by _fit_display_size to pick a font that keeps a headline on one line.
+_CHAR_W_PER_PT_BOLD    = 0.0072
+_CHAR_W_PER_PT_REGULAR = 0.0060
+
+
+def _fit_display_size(text: str, box_w_in: float, base_pt: float,
+                       min_pt: float = 24.0, bold: bool = True,
+                       safety: float = 0.94) -> float:
+    """Return the largest font size <= base_pt whose rendered width for
+    ``text`` fits inside ``box_w_in``. Prevents long subject names from
+    wrapping to a second visual line and colliding with a stacked line
+    below (fixes cover / final-insight / one-insight two-line displays).
+
+    ``safety`` is a multiplier (0.94 = 6% slack) so we don't sit right on
+    the edge — punctuation and emoji-adjacent glyphs vary by font.
+    """
+    if not text:
+        return base_pt
+    n = len(str(text))
+    per_pt = _CHAR_W_PER_PT_BOLD if bold else _CHAR_W_PER_PT_REGULAR
+    max_w  = box_w_in * safety
+    for pt in (base_pt, base_pt * 0.90, base_pt * 0.80,
+               base_pt * 0.70, base_pt * 0.60, min_pt):
+        if n * pt * per_pt <= max_w:
+            return max(min_pt, pt)
+    return min_pt
+
+
 def _rect(slide, left, top, width, height, color: RGBColor, *,
           radius: Optional[float] = None, line=None):
     shape = slide.shapes.add_shape(
@@ -1055,15 +1085,23 @@ def _section_eyebrow(slide, top: float, subject_label: str, section: str):
 
 
 def _title_block(slide, top: float, headline_a: str, headline_b: str = ""):
-    """Two-line big-display title. Tightened 2026-07-08 so the boxes do NOT
-    overlap: at 44pt with line-spacing 1.05 the actual glyph height is
-    ~0.65"; a 0.80" box leaves 0.15" bottom padding and the second line is
-    placed 0.90" below the first (0.10" gap between visual glyph tops)."""
-    _text(slide, 0.62, top, 11.5, 0.80, headline_a,
-          size=44, bold=True, color=C_CREAM, line_spacing=1.05)
+    """Two-line big-display title. Font auto-shrinks so long headlines
+    from the analyst brief never wrap and collide with the second line.
+    Line 2 is placed dynamically based on the actual font used."""
+    pt = 44
+    if headline_a:
+        pt = min(pt, _fit_display_size(headline_a, 11.5, base_pt=44,
+                                        min_pt=24, bold=True))
     if headline_b:
-        _text(slide, 0.62, top + 0.90, 11.5, 0.80, headline_b,
-              size=44, bold=True, color=C_CREAM, line_spacing=1.05)
+        pt = min(pt, _fit_display_size(headline_b, 11.5, base_pt=44,
+                                        min_pt=24, bold=True))
+    line_h = pt / 72.0 * 1.05
+    box_h = line_h + 0.10
+    _text(slide, 0.62, top, 11.5, box_h, headline_a,
+          size=pt, bold=True, color=C_CREAM, line_spacing=1.05)
+    if headline_b:
+        _text(slide, 0.62, top + line_h + 0.12, 11.5, box_h, headline_b,
+              size=pt, bold=True, color=C_CREAM, line_spacing=1.05)
 
 
 # =============================================================================
@@ -1254,11 +1292,21 @@ def _slide_cover(prs: Presentation, p: dict):
           size=10, color=C_MUTED, letter_spacing=0.06)
 
     subject = p["name"]
-    # LISA-style two-line title: "The {Subject}\naudience."
-    _text(slide, 0.58, 3.08, 8.60, 1.10, f"The {subject}",
-          size=54, bold=True, color=C_CREAM, line_spacing=1.02)
-    _text(slide, 0.58, 3.95, 8.60, 1.10, "audience.",
-          size=54, bold=True, color=C_CREAM, line_spacing=1.02)
+    # LISA-style two-line title: "The {Subject}\naudience." Auto-shrink
+    # font when the subject is long enough to wrap at 54pt (would collide
+    # with the "audience." line at y=3.95). Both lines use the same size
+    # so the layout reads as one display block.
+    line1 = f"The {subject}"
+    title_pt = _fit_display_size(line1, box_w_in=8.60, base_pt=54,
+                                  min_pt=28, bold=True)
+    # Line height in inches at line_spacing 1.02.
+    line_h = title_pt / 72.0 * 1.02
+    y1 = 3.08
+    y2 = y1 + line_h + 0.10  # 0.10" leading between lines
+    _text(slide, 0.58, y1, 8.60, line_h + 0.05, line1,
+          size=title_pt, bold=True, color=C_CREAM, line_spacing=1.02)
+    _text(slide, 0.58, y2, 8.60, line_h + 0.05, "audience.",
+          size=title_pt, bold=True, color=C_CREAM, line_spacing=1.02)
 
     tagline = _generate_tagline(p)
     _text(slide, 0.62, 5.02, 5.4, 1.60, tagline,
@@ -1456,16 +1504,26 @@ def _slide_one_insight(prs: Presentation, p: dict):
                      "surface below is a media-buy priority, not just a data "
                      "point.")
 
-    _text(slide, 0.62, 1.6, 12.0, 1.4, headline_a,
-          size=44, bold=True, color=C_CREAM, line_spacing=1.05)
-    _text(slide, 0.62, 2.5, 12.0, 1.4, headline_b,
-          size=44, bold=True, color=C_LAVENDER, line_spacing=1.05)
+    # Two-line big display: auto-shrink to keep each line on one visual
+    # row (LLM headlines can be 8 words and exceed 12" at 44pt). Line
+    # offset is computed from the actual font so wraps never collide.
+    pt1 = _fit_display_size(headline_a, 12.0, base_pt=44, min_pt=26, bold=True)
+    pt2 = _fit_display_size(headline_b, 12.0, base_pt=44, min_pt=26, bold=True)
+    hd_pt = min(pt1, pt2)
+    line_h = hd_pt / 72.0 * 1.05
+    y_a = 1.60
+    y_b = y_a + line_h + 0.15
+    _text(slide, 0.62, y_a, 12.0, line_h + 0.10, headline_a,
+          size=hd_pt, bold=True, color=C_CREAM, line_spacing=1.05)
+    _text(slide, 0.62, y_b, 12.0, line_h + 0.10, headline_b,
+          size=hd_pt, bold=True, color=C_LAVENDER, line_spacing=1.05)
 
-    _hairline(slide, 0.62, 4.05, 12.10, C_STROKE)
+    hair_y = max(4.05, y_b + line_h + 0.30)
+    _hairline(slide, 0.62, hair_y, 12.10, C_STROKE)
 
-    # Widened + slightly reduced font so body always fits (previously 9.5"
-    # box at 14pt was truncating the last sentence).
-    _text(slide, 0.62, 4.35, 12.10, 2.55, body,
+    body_y = hair_y + 0.30
+    body_h = min(2.55, 6.70 - body_y)
+    _text(slide, 0.62, body_y, 12.10, body_h, body,
           size=13, color=C_MUTED, line_spacing=1.50)
 
     _footer(slide, 0, p["name"])
@@ -1577,13 +1635,20 @@ def _emit_case_study_slide(prs, p: dict, cs: dict, *, case_num: int):
           f"THE {p['name'].upper()} AUDIENCE  /  {brand.upper()}",
           size=9.5, color=C_MUTED, letter_spacing=0.06)
 
-    # Two-line editorial headline — slightly smaller than before (36pt vs
-    # 40pt) so 4-word headlines don't wrap and eat body space.
+    # Two-line editorial headline — auto-shrink so LLM headlines from
+    # the analyst brief never wrap and collide with the second line.
     headline_a, headline_b = cs["headline_a"], cs["headline_b"]
-    _text(slide, 0.62, 1.60, 5.8, 1.10, headline_a,
-          size=36, bold=True, color=C_CREAM, line_spacing=1.02)
-    _text(slide, 0.62, 2.55, 5.8, 1.10, headline_b,
-          size=36, bold=True, color=C_LAVENDER, line_spacing=1.02)
+    pt = min(
+        _fit_display_size(headline_a, 5.80, base_pt=36, min_pt=20, bold=True),
+        _fit_display_size(headline_b, 5.80, base_pt=36, min_pt=20, bold=True),
+    )
+    line_h = pt / 72.0 * 1.02
+    y_a = 1.60
+    y_b = y_a + line_h + 0.15
+    _text(slide, 0.62, y_a, 5.80, line_h + 0.10, headline_a,
+          size=pt, bold=True, color=C_CREAM, line_spacing=1.02)
+    _text(slide, 0.62, y_b, 5.80, line_h + 0.10, headline_b,
+          size=pt, bold=True, color=C_LAVENDER, line_spacing=1.02)
 
     # Analyst narrative paragraph — widened (5.85") + taller (2.80") + 10.5pt
     # so the 75-110 word analyst copy from the brief never clips mid-sentence.
@@ -1687,18 +1752,28 @@ def _slide_final_insight(prs: Presentation, p: dict):
           size=10.5, color=C_LIME, letter_spacing=0.10)
 
     line1, line2 = _final_headline(p)
-    # Slightly smaller display font (was 54pt) so long final-line strings
-    # from the analyst brief never wrap into 3 lines and eat body space.
-    _text(slide, 0.62, 2.00, 8.6, 1.35, line1,
-          size=44, bold=True, color=C_CREAM, line_spacing=1.02)
-    _text(slide, 0.62, 3.25, 8.6, 1.35, line2,
-          size=44, bold=True, color=C_LAVENDER, line_spacing=1.02)
+    # Auto-shrink to the largest size that keeps BOTH lines on 1 visual
+    # line each — takes the min so both headlines match. Line offset is
+    # then computed from the actual size, not a hardcoded 1.25 that
+    # collided when strings wrapped.
+    pt1 = _fit_display_size(line1, 8.6, base_pt=44, min_pt=24, bold=True)
+    pt2 = _fit_display_size(line2, 8.6, base_pt=44, min_pt=24, bold=True)
+    hd_pt = min(pt1, pt2)
+    line_h = hd_pt / 72.0 * 1.02
+    y_a = 2.00
+    y_b = y_a + line_h + 0.14
+    _text(slide, 0.62, y_a, 8.6, line_h + 0.10, line1,
+          size=hd_pt, bold=True, color=C_CREAM, line_spacing=1.02)
+    _text(slide, 0.62, y_b, 8.6, line_h + 0.10, line2,
+          size=hd_pt, bold=True, color=C_LAVENDER, line_spacing=1.02)
 
     top  = _top_over_index_brand(p, min_pct=10.0, max_index=300.0)
     body = _final_body(p, top)
-    # Wider (8.4"), taller (2.30"), slightly smaller type (12pt) so the
-    # 55-75 word analyst body always fits without clipping mid-sentence.
-    _text(slide, 0.62, 4.85, 8.40, 2.30, body,
+    # Body starts below the headline block. y_b + 2 * line_h + a safety
+    # gap of 0.30" so body never overlaps line 2 even at max font.
+    body_y = y_b + line_h + 0.35
+    body_h = min(2.30, 6.70 - body_y)
+    _text(slide, 0.62, body_y, 8.40, body_h, body,
           size=12, color=C_CREAM, line_spacing=1.50)
 
     _footer(slide, 0, p["name"])
@@ -2201,14 +2276,19 @@ def _slide_whitespace(prs: Presentation, p: dict):
     _text(slide, 0.62, 0.82, 12.0, 0.32, "WHERE THE MONEY ISN'T YET",
           size=10.5, bold=True, color=C_LIME, letter_spacing=0.12)
 
-    _text(slide, 0.62, 1.40, 12.0, 1.20, hd,
-          size=44, bold=True, color=C_CREAM, line_spacing=1.05)
+    hd_pt = _fit_display_size(hd, 12.0, base_pt=44, min_pt=26, bold=True)
+    hd_line_h = hd_pt / 72.0 * 1.05
+    _text(slide, 0.62, 1.40, 12.0, hd_line_h + 0.30, hd,
+          size=hd_pt, bold=True, color=C_CREAM, line_spacing=1.05)
 
-    # Body sits in a highlighted panel so it reads as the analytical claim
-    _rect(slide, 0.62, 3.20, 12.0, 3.20, RGBColor(0x14, 0x1F, 0x22))
-    _text(slide, 0.90, 3.40, 11.5, 0.32, "THE OPPORTUNITY",
+    # Body panel positioned dynamically so it never rides up under the
+    # headline when the LLM returns a long two-line hd.
+    panel_top = max(3.20, 1.40 + hd_line_h + 0.40)
+    panel_h   = min(3.20, 6.55 - panel_top)
+    _rect(slide, 0.62, panel_top, 12.0, panel_h, RGBColor(0x14, 0x1F, 0x22))
+    _text(slide, 0.90, panel_top + 0.20, 11.5, 0.32, "THE OPPORTUNITY",
           size=10, bold=True, color=C_MAGENTA, letter_spacing=0.10)
-    _text(slide, 0.90, 3.80, 11.5, 2.40, body,
+    _text(slide, 0.90, panel_top + 0.60, 11.5, panel_h - 0.75, body,
           size=15, color=C_CREAM, line_spacing=1.55)
 
     _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
