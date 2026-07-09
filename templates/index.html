@@ -41317,21 +41317,29 @@
         // Payload shape:
         //   compute_view.cards.trending_searches                = flat list (up to 300)
         //   compute_view.cards.trending_searches_by_category    = {
-        //     sports, entertainment, tech, retail,
-        //     politics, conservative, progressive,
-        //     finance,
+        //     sports, entertainment, gaming, tech,
+        //     weather, crime, health, food,
+        //     travel, auto, fashion, home, business, retail,
+        //     politics, conservative, progressive, finance,
         //     overall  <- uncategorized rows only (catch-all)
         //   }
         // Every card is scrollable to its top ~100 items; the top 5
         // are visible without scrolling to keep the 3-per-row grid
-        // dense but scannable.
+        // dense but scannable. Cards in the same row stretch to the
+        // tallest sibling so shorter cards end at the same y.
         //
-        // Card display order (2026-07-09):
-        //   Overall, Entertainment, Sports,
-        //   Tech, Retail, Politics,
-        //   Conservative, Progressive, Finance
-        // 9 cards = clean 3x3 grid. Politics leads the three political
-        // cards; Conservative / Progressive follow as lean-tagged cuts.
+        // Card display order (2026-07-09), grouped by theme cluster:
+        //   Row 1 (Popular Culture):  Overall, Entertainment, Sports
+        //   Row 2 (Digital/Money):    Gaming, Tech, Business
+        //   Row 3 (Real World):       Weather, Crime, Politics
+        //   Row 4 (Political Cluster):Conservative, Progressive, Finance
+        //   Row 5 (Life/Body):        Health, Food, Travel
+        //   Row 6 (Home + Wheels):    Fashion, Auto, Home
+        //   Row 7 (Catch-all):        Retail
+        // 19 cards. Politics leads the political cluster; Conservative
+        // + Progressive follow as lean-tagged cuts. Retail sits last
+        // as the generic shopping catch-all after every vertical
+        // consumer category has had a shot at the term.
         function renderTIQSearches(payload) {
             var overall, byCat, allPool;
             if (Array.isArray(payload)) {
@@ -41352,6 +41360,7 @@
             var overallSub = 'Top ' + Math.min(overall.length, 300) +
                              ' uncategorized queries. Scroll to see the full pool.';
             var html = '<div class="tiq-searches-grid">' +
+                // Row 1: Popular culture
                 _tiqRenderSearchCard('\uD83D\uDD0E Overall',
                                        overallSub,
                                        overall,
@@ -41364,18 +41373,33 @@
                                        'Leagues, teams, games, and athletes.',
                                        byCat.sports,
                                        { emptyMsg: 'No sports searches in this window.' }) +
+                // Row 2: Digital / money
+                _tiqRenderSearchCard('\uD83C\uDFAE Gaming',
+                                       'Video games, esports, streamers, launches.',
+                                       byCat.gaming,
+                                       { emptyMsg: 'No gaming searches in this window.' }) +
                 _tiqRenderSearchCard('\uD83D\uDCBB Tech',
                                        'AI, big-tech launches, product news, outages.',
                                        byCat.tech,
                                        { emptyMsg: 'No tech searches in this window.' }) +
-                _tiqRenderSearchCard('\uD83D\uDECD Retail',
-                                       'Brands, products, and shopping intent.',
-                                       byCat.retail,
-                                       { emptyMsg: 'No retail searches in this window.' }) +
+                _tiqRenderSearchCard('\uD83D\uDCBC Business',
+                                       'IPOs, funding rounds, layoffs, exec moves.',
+                                       byCat.business,
+                                       { emptyMsg: 'No business searches in this window.' }) +
+                // Row 3: Real-world events
+                _tiqRenderSearchCard('\uD83C\uDF29\uFE0F Weather',
+                                       'Storms, wildfires, earthquakes, extreme weather.',
+                                       byCat.weather,
+                                       { emptyMsg: 'No weather / disaster searches in this window.' }) +
+                _tiqRenderSearchCard('\uD83D\uDD0D Crime',
+                                       'Trials, investigations, missing persons, cases.',
+                                       byCat.crime,
+                                       { emptyMsg: 'No crime searches in this window.' }) +
                 _tiqRenderSearchCard('\uD83C\uDFDB Politics',
                                        'Neutral institutional stories: Congress, foreign policy, ballots.',
                                        byCat.politics,
                                        { emptyMsg: 'No neutral political searches in this window.' }) +
+                // Row 4: Political cluster
                 _tiqRenderSearchCard('\uD83D\uDD34 Conservative',
                                        'Right-lean: MAGA, border, 2A, election integrity.',
                                        byCat.conservative,
@@ -41388,6 +41412,37 @@
                                        'Markets, macro, and bellwether tickers.',
                                        byCat.finance,
                                        { emptyMsg: 'No finance searches in this window.' }) +
+                // Row 5: Life / body
+                _tiqRenderSearchCard('\uD83D\uDC9A Health & Wellness',
+                                       'GLP-1s, workouts, mental health, wellness fads.',
+                                       byCat.health,
+                                       { emptyMsg: 'No health searches in this window.' }) +
+                _tiqRenderSearchCard('\uD83C\uDF74 Food & Recipes',
+                                       'Restaurants, viral recipes, chef news, recalls.',
+                                       byCat.food,
+                                       { emptyMsg: 'No food searches in this window.' }) +
+                _tiqRenderSearchCard('\u2708\uFE0F Travel',
+                                       'Airlines, hotels, cities, cruises, parks.',
+                                       byCat.travel,
+                                       { emptyMsg: 'No travel searches in this window.' }) +
+                // Row 6: Home + wheels + threads
+                _tiqRenderSearchCard('\uD83D\uDC57 Fashion & Beauty',
+                                       'Runway, red carpet, viral looks, beauty brands.',
+                                       byCat.fashion,
+                                       { emptyMsg: 'No fashion / beauty searches in this window.' }) +
+                _tiqRenderSearchCard('\uD83D\uDE97 Auto & EVs',
+                                       'Car launches, EV news, recalls, racing.',
+                                       byCat.auto,
+                                       { emptyMsg: 'No auto searches in this window.' }) +
+                _tiqRenderSearchCard('\uD83C\uDFE0 Home & Real Estate',
+                                       'Housing market, HGTV, home reno, decor trends.',
+                                       byCat.home,
+                                       { emptyMsg: 'No home / real estate searches in this window.' }) +
+                // Row 7: Catch-all shopping
+                _tiqRenderSearchCard('\uD83D\uDECD Retail',
+                                       'Brands, products, and shopping intent.',
+                                       byCat.retail,
+                                       { emptyMsg: 'No retail searches in this window.' }) +
                 '</div>';
             return html;
         }
