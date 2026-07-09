@@ -36,6 +36,9 @@ Dependencies (pinned in bg-webapp/requirements.txt):
 from __future__ import annotations
 
 import io
+import json
+import math
+import os
 import re
 import urllib.parse
 import urllib.request
@@ -98,6 +101,15 @@ def build_deck(
     # reuse it (LISA embeds the same subject photo 12+ times across the
     # deck for continuity).
     profile["_image_bytes"] = _fetch_image_bytes(profile.get("image_url") or "")
+    # Detect subject archetype (MOVIE / TV_SHOW / MUSICIAN / ACTOR / ...)
+    # so downstream narrative can frame the deck in the right way (a film
+    # deck talks about trailer placement + release windowing; a talent
+    # deck talks about endorsement fit; etc.).
+    profile["_archetype"] = _detect_archetype(profile)
+    # Fetch a consulting-analyst brief from GPT-4o-mini. Returns {} on any
+    # failure — every slide builder that consults the brief has a smarter
+    # templated fallback, so the deck always builds even without an API key.
+    profile["_brief"] = _get_analyst_brief(profile, profile["_archetype"])
 
     prs = _new_presentation()
 
@@ -132,6 +144,11 @@ def build_deck(
     _slide_methodology(prs, profile)        # sample / measurement / benchmark
     _slide_about(prs, profile)              # Crosswalk capabilities
 
+    # Overwrite every footer's page number with the true slide index. This
+    # is why slide builders can pass ``0`` / ``99`` placeholders — the real
+    # numbers are written once the full slide order is known.
+    _renumber_pages(prs)
+
     buf = io.BytesIO()
     prs.save(buf)
     return buf.getvalue()
@@ -155,9 +172,12 @@ def build_combined_deck(profiles: Iterable[dict]) -> bytes:
     if not normalized:
         raise ValueError("build_combined_deck requires at least one profile")
     # Pre-fetch every profile image once so cover collage + per-profile
-    # spotlights reuse the same bytes.
+    # spotlights reuse the same bytes. Also compute per-profile archetype +
+    # analyst brief so the spotlight slides read in the right voice.
     for pr in normalized:
         pr["_image_bytes"] = _fetch_image_bytes(pr.get("image_url") or "")
+        pr["_archetype"]   = _detect_archetype(pr)
+        pr["_brief"]       = _get_analyst_brief(pr, pr["_archetype"])
 
     prs = _new_presentation()
 
@@ -170,6 +190,8 @@ def build_combined_deck(profiles: Iterable[dict]) -> bytes:
     _slide_combined_category_winners(prs, normalized)
     _slide_combined_brand_overlap(prs, normalized)
     _slide_combined_final_insight(prs, normalized)
+
+    _renumber_pages(prs)
 
     buf = io.BytesIO()
     prs.save(buf)
@@ -273,6 +295,485 @@ def _num(x, default: float = 0.0) -> float:
         return float(x)
     except (TypeError, ValueError):
         return default
+
+
+# =============================================================================
+#  Subject archetype detection + LLM analyst brief
+# =============================================================================
+#
+# The brief is what turns this from a template deck into a real audience
+# analysis. Given the profile payload + a detected subject archetype
+# (MOVIE / TV_SHOW / MUSICIAN / ACTOR / ATHLETE / TEAM / BRAND / FRANCHISE /
+# PERSONA / GENERIC), we call OpenAI with a consulting-analyst system prompt
+# that returns structured JSON describing who these fans are, how they live,
+# what makes them different from Gen Pop, where the whitespace opportunity
+# is, and archetype-specific activation ideas (e.g. for a MOVIE — trailer
+# placement, festival beats, ticket-buying cues, streamer partner fit).
+#
+# Every slide that used to hardcode narrative copy now consults the brief
+# first and falls back to smarter templated copy if the LLM is unavailable
+# (no OPENAI_API_KEY set, network error, etc.).
+
+
+_ARCHETYPE_MOVIE     = "MOVIE"
+_ARCHETYPE_TV_SHOW   = "TV_SHOW"
+_ARCHETYPE_MUSICIAN  = "MUSICIAN"
+_ARCHETYPE_ACTOR     = "ACTOR"
+_ARCHETYPE_ATHLETE   = "ATHLETE"
+_ARCHETYPE_TEAM      = "TEAM"
+_ARCHETYPE_BRAND     = "BRAND"
+_ARCHETYPE_FRANCHISE = "FRANCHISE"
+_ARCHETYPE_PERSONA   = "PERSONA"
+_ARCHETYPE_GENERIC   = "GENERIC"
+
+_ARCHETYPE_LABELS = {
+    _ARCHETYPE_MOVIE:     "Film",
+    _ARCHETYPE_TV_SHOW:   "TV Series",
+    _ARCHETYPE_MUSICIAN:  "Musician / Band",
+    _ARCHETYPE_ACTOR:     "Talent",
+    _ARCHETYPE_ATHLETE:   "Athlete",
+    _ARCHETYPE_TEAM:      "Sports Team",
+    _ARCHETYPE_BRAND:     "Brand",
+    _ARCHETYPE_FRANCHISE: "Franchise / IP",
+    _ARCHETYPE_PERSONA:   "Persona / Concept Audience",
+    _ARCHETYPE_GENERIC:   "Audience",
+}
+
+# Category-name keywords that map to a subject archetype. First match wins.
+# Ordered from most specific to most generic — 'audience' is checked LAST
+# because many category strings end with 'audience' generically.
+_ARCHETYPE_KEYWORDS: list[tuple[str, str]] = [
+    (_ARCHETYPE_MOVIE,     "movie"),
+    (_ARCHETYPE_MOVIE,     "film"),
+    (_ARCHETYPE_MOVIE,     "theatrical"),
+    (_ARCHETYPE_MOVIE,     "feature"),
+    (_ARCHETYPE_TV_SHOW,   "adult animation"),
+    (_ARCHETYPE_TV_SHOW,   "tv series"),
+    (_ARCHETYPE_TV_SHOW,   "streaming original"),
+    (_ARCHETYPE_TV_SHOW,   "series"),
+    (_ARCHETYPE_TV_SHOW,   "tv show"),
+    (_ARCHETYPE_TV_SHOW,   "sitcom"),
+    (_ARCHETYPE_MUSICIAN,  "musician"),
+    (_ARCHETYPE_MUSICIAN,  "band"),
+    (_ARCHETYPE_MUSICIAN,  "artist"),
+    (_ARCHETYPE_MUSICIAN,  "rapper"),
+    (_ARCHETYPE_MUSICIAN,  "dj"),
+    (_ARCHETYPE_MUSICIAN,  "music"),
+    (_ARCHETYPE_ACTOR,     "actor"),
+    (_ARCHETYPE_ACTOR,     "actress"),
+    (_ARCHETYPE_ACTOR,     "comedian"),
+    (_ARCHETYPE_ACTOR,     "host"),
+    (_ARCHETYPE_ACTOR,     "talent"),
+    (_ARCHETYPE_ACTOR,     "creator"),
+    (_ARCHETYPE_ACTOR,     "influencer"),
+    (_ARCHETYPE_ATHLETE,   "athlete"),
+    (_ARCHETYPE_ATHLETE,   "player"),
+    (_ARCHETYPE_TEAM,      "team"),
+    (_ARCHETYPE_TEAM,      "league"),
+    (_ARCHETYPE_TEAM,      "franchise team"),
+    (_ARCHETYPE_FRANCHISE, "franchise"),
+    (_ARCHETYPE_FRANCHISE, "cinematic universe"),
+    (_ARCHETYPE_FRANCHISE, "ip"),
+    (_ARCHETYPE_PERSONA,   "persona"),
+    (_ARCHETYPE_BRAND,     "brand"),
+    (_ARCHETYPE_BRAND,     "cpg"),
+    (_ARCHETYPE_BRAND,     "product"),
+    (_ARCHETYPE_BRAND,     "retailer"),
+    (_ARCHETYPE_BRAND,     "restaurant"),
+    (_ARCHETYPE_BRAND,     "app"),
+    (_ARCHETYPE_PERSONA,   "audience"),
+]
+
+
+def _detect_archetype(profile: dict) -> str:
+    """Best-effort classification of the subject archetype.
+
+    Uses ``brand_category`` first (that is the input dropdown), then name
+    patterns. Everything is a soft heuristic; the LLM brief is asked to
+    correct course if the detected archetype is wrong."""
+    cat  = str((profile or {}).get("brand_category") or "").lower()
+    name = str((profile or {}).get("name") or "").lower()
+    hay = f"{cat} || {name}"
+    for arch, kw in _ARCHETYPE_KEYWORDS:
+        if kw in hay:
+            return arch
+    # Name-pattern fallbacks: title contains 'comedy', 'story', 'chronicles',
+    # 'the movie' → likely a film.
+    if any(t in name for t in ("comedy", "the movie", "chronicles",
+                                "story", "trilogy", "saga")):
+        return _ARCHETYPE_MOVIE
+    return _ARCHETYPE_GENERIC
+
+
+def _archetype_label(arch: str) -> str:
+    return _ARCHETYPE_LABELS.get(arch, "Audience")
+
+
+_ANALYST_SYSTEM_PROMPT = (
+    "You are a senior insights analyst at a top-tier consulting firm "
+    "(think the McKinsey Marketing & Sales practice) writing a boardroom-"
+    "ready audience-profile deck. You are given a JSON of behavioral panel "
+    "data for a subject and its US Gen Pop baseline. Your job is to "
+    "synthesize who this audience actually IS — how they live, what they "
+    "buy, where they spend attention — and articulate what makes them "
+    "different from the US Gen Pop. You return STRUCTURED JSON (no prose "
+    "wrapper) with the exact keys the deck builder requires.\n\n"
+    "Rules:\n"
+    "  * Never use gendered pronouns for the subject. If the subject is a "
+    "    film, show, brand, team, franchise, or persona, say 'the audience' / "
+    "    'these fans' / 'they'. Only when the subject is explicitly a real "
+    "    person (talent, athlete, musician) may you refer to the subject by "
+    "    name — and even then, always refer to their AUDIENCE using 'they' / "
+    "    'the audience'.\n"
+    "  * Do not overclaim from freak-index outliers. A brand at 5% reach "
+    "    and index 800 is likely a low-N panel artifact — treat with "
+    "    caution or omit. Prefer signals with real reach (>=10% penetration) "
+    "    AND meaningful over-index (>=130). Only reach for a >=500 idx "
+    "    brand if it also has >=15% reach.\n"
+    "  * Ground every claim in a number from the data.\n"
+    "  * Be specific and unexpected. Avoid clichés: no 'taste graph', "
+    "    'not a moment a habit', 'the fandom is the buying behavior'.\n"
+    "  * Return every string as clean plain text (no markdown, no bullets, "
+    "    no pipe characters, no line breaks inside sentences).\n"
+    "  * Keep body-copy strings short and boardroom-ready (35-55 words "
+    "    unless a specific key allows longer).\n"
+)
+
+
+def _archetype_brief_prompt(archetype: str, subject: str) -> str:
+    """Archetype-specific instructions layered onto the base system prompt.
+
+    The pattern: state what the subject IS, then define what 'the audience'
+    means for that subject type, then say what the marketing frame should
+    be. Each archetype produces qualitatively different analysis."""
+    if archetype == _ARCHETYPE_MOVIE:
+        return (
+            f"The subject '{subject}' is a FILM. The 'audience' is US adults "
+            "with a digital touchpoint to this film in the trailing 12 "
+            "months. Frame every narrative around HOW TO MARKET THIS FILM: "
+            "trailer placement channels, PR + festival beats, streamer / "
+            "theatrical partner fit, ticket-buying signals, and the "
+            "whitespace where the audience over-indexes but the film's "
+            "current marketing is not showing up. Recommend concrete "
+            "media-plan moves. Refer to the film by title; refer to "
+            "viewers/fans as 'the audience' or 'they'."
+        )
+    if archetype == _ARCHETYPE_TV_SHOW:
+        return (
+            f"The subject '{subject}' is a TV SERIES / STREAMING SHOW. "
+            "Frame around HOW TO MARKET THIS SHOW: launch beats, streamer "
+            "platform strategy, social + creator activation, cross-title "
+            "lookalike vehicles (other shows the audience already watches "
+            "at high index), and the whitespace categories worth activating "
+            "in. Refer to the show by title; refer to viewers as 'the "
+            "audience' or 'they'."
+        )
+    if archetype == _ARCHETYPE_MUSICIAN:
+        return (
+            f"The subject '{subject}' is a MUSIC ARTIST / BAND. Frame "
+            "around tour DMAs, streaming platform mix, merch drops, brand "
+            "partnership fit (sponsors that already index high with this "
+            "fanbase), sync opportunities, and PR moments. Use the artist's "
+            "name where relevant; refer to fans as 'the fanbase' / 'they'."
+        )
+    if archetype == _ARCHETYPE_ACTOR:
+        return (
+            f"The subject '{subject}' is a TALENT (actor / comedian / host / "
+            "creator). Frame around endorsement fit, brand ambassadorships "
+            "the audience already over-indexes on, lookalike streaming "
+            "vehicles, red-carpet / PR moments. Use the talent's name; "
+            "refer to fans as 'the audience' / 'they'."
+        )
+    if archetype == _ARCHETYPE_ATHLETE:
+        return (
+            f"The subject '{subject}' is an ATHLETE. Frame around "
+            "endorsement fit (apparel/footwear, auto, QSR, financial "
+            "services that over-index with the fanbase), hometown / "
+            "team-market DMAs, and sponsor category whitespace. Refer to "
+            "fans as 'the fanbase' / 'they'."
+        )
+    if archetype == _ARCHETYPE_TEAM:
+        return (
+            f"The subject '{subject}' is a SPORTS TEAM. Frame around "
+            "ticket-buying, home DMA vs national reach, sponsor category "
+            "fit, merch behavior, and cross-league fandom overlap. Refer "
+            "to fans as 'the fanbase' / 'they'."
+        )
+    if archetype == _ARCHETYPE_BRAND:
+        return (
+            f"The subject '{subject}' is a BRAND / PRODUCT. Frame around "
+            "growth: adjacent audiences the brand isn't reaching, cross-buy "
+            "with peer categories, retail / DTC channel signal, sponsor / "
+            "partner fit. Refer to customers as 'the audience' / 'they'."
+        )
+    if archetype == _ARCHETYPE_FRANCHISE:
+        return (
+            f"The subject '{subject}' is a FRANCHISE / IP. Frame around "
+            "line extension, licensing, cross-media activation, and the "
+            "shared-fandom whitespace across the audience's other affinities."
+        )
+    return (
+        f"The subject '{subject}' is a defined audience segment. Frame "
+        "around who they are, how they behave differently from Gen Pop, "
+        "and where the whitespace is to reach them at scale."
+    )
+
+
+def _brief_facts(profile: dict) -> dict:
+    """Compact facts JSON fed to the LLM. Keeps token count low and forces
+    the model to reason from the data we actually captured (not hallucinate)."""
+    def _top_n(cat_name: str, n: int = 10) -> list[dict]:
+        beh = (profile.get("behavioral") or {})
+        for k, v in beh.items():
+            if str(k).strip().upper() == cat_name.upper():
+                items = list(v or [])
+                items.sort(key=lambda it: (-_num(it.get("index", 0)),
+                                            -_num(it.get("pct", 0))))
+                return [{
+                    "brand": (it.get("name") or "").strip(),
+                    "pct":   round(_num(it.get("pct", 0)), 1),
+                    "index": int(_num(it.get("index", 0))),
+                } for it in items[:n]]
+        return []
+
+    # Flatten every behavioral item so the analyst can see the whole surface
+    flat: list[dict] = []
+    for cat, items in (profile.get("behavioral") or {}).items():
+        for it in (items or []):
+            it2 = dict(it)
+            it2["_cat"] = cat
+            flat.append(it2)
+    flat = [it for it in flat if _num(it.get("index", 0)) > 0
+                              and _num(it.get("pct", 0)) > 0]
+    flat.sort(key=lambda it: -_num(it.get("index", 0)))
+    strongest = [{
+        "brand":    (it.get("name") or "").strip(),
+        "category": (it.get("_cat") or "").strip(),
+        "pct":      round(_num(it.get("pct", 0)), 1),
+        "index":    int(_num(it.get("index", 0))),
+    } for it in flat[:30]]
+
+    demos = profile.get("demographics") or {}
+    demo_summary = {}
+    for dim in ("gender", "age", "ethnicity", "income", "education"):
+        d = demos.get(dim) or {}
+        if d:
+            demo_summary[dim] = {
+                str(k): round(_num(v), 1) for k, v in d.items() if _num(v) > 0
+            }
+
+    # Available category names (helpful for the model to know coverage)
+    cats_present = sorted({k for k, v in (profile.get("behavioral") or {}).items()
+                            if v})
+
+    return {
+        "subject":            profile.get("name") or "",
+        "brand_category":     profile.get("brand_category") or "",
+        "sample_size":        profile.get("sample_size") or 0,
+        "projected_us":       profile.get("projected_us") or 0,
+        "date_range":         profile.get("date_range") or "",
+        "demographics":       demo_summary,
+        "top_dmas":           _top_dmas_ranked(profile, n=8),
+        "categories_covered": cats_present,
+        "strongest_signals":  strongest,
+        "top_mpb":            (_top_n("MPB", 15)
+                                or _top_n("MOST PURCHASED BRANDS", 15)),
+        "top_social":         _top_n("SOCIAL MEDIA", 8),
+        "top_streaming":      (_top_n("STREAMING/PLATFORM", 8)
+                                or _top_n("STREAMING VIDEO", 8)),
+    }
+
+
+_ANALYST_JSON_SPEC = (
+    "Return JSON with EXACTLY these keys:\n"
+    "{\n"
+    '  "cover_tagline":     "1-sentence cover-slide tagline (35-45 words). Do NOT lean on a single freak-index brand; describe the audience shape.",\n'
+    '  "one_insight_a":     "Big display line 1 for a mid-brief statement (max 8 words, no period).",\n'
+    '  "one_insight_b":     "Big display line 2 (max 8 words, ends with a period).",\n'
+    '  "one_insight_body":  "1-paragraph elaboration (45-60 words).",\n'
+    '  "identity_headline": "4-6 word summary of who this audience is (e.g. \'Prime-age, urban, multicultural.\').",\n'
+    '  "identity_why":      "1-sentence WHY IT MATTERS narrative (35-50 words).",\n'
+    '  "final_line_a":      "Final-insight display line 1 (max 9 words, no period).",\n'
+    '  "final_line_b":      "Final-insight display line 2 (max 9 words, ends with a period).",\n'
+    '  "final_body":        "Final-insight body (55-75 words). Synthesize the audience arc; do NOT just repeat one brand.",\n'
+    '  "data_confirms_a":   "Narrative bridge line 1 (5-8 words, no period).",\n'
+    '  "data_confirms_b":   "Narrative bridge line 2 (5-8 words, ends with a period).",\n'
+    '  "data_confirms_body":"Body paragraph (40-55 words).",\n'
+    '  "category_why": {\n'
+    '     "CATEGORY_NAME_UPPERCASE": "1-sentence why this category matters for this audience (30-45 words).",\n'
+    '     ...  (one entry for every category present in categories_covered with at least 3 items)\n'
+    '  },\n'
+    '  "case_studies": [\n'
+    '     { "brand": "BRAND NAME EXACTLY AS IN strongest_signals",\n'
+    '       "headline_a": "editorial line 1 (max 4 words)",\n'
+    '       "headline_b": "editorial line 2 (max 5 words, ends with period)",\n'
+    '       "narrative": "3-4 sentence analyst narrative (75-110 words) explaining what this signal means for the marketer" },\n'
+    '     ...  (exactly 3 entries picked from strongest_signals. Prefer brands with pct>=10 AND index between 130-350. Diverse categories.)\n'
+    '  ],\n'
+    '  "takeaways": [\n'
+    '     { "title": "3-5 word punchy title",\n'
+    '       "body": "2-3 sentence supporting narrative (30-45 words) that grounds in specific numbers from the data" },\n'
+    '     ... (exactly 6 entries covering: demography, geography, category concentration, media/attention, commerce, and the marketing whitespace / activation recommendation)\n'
+    '  ],\n'
+    '  "whitespace":        "1-paragraph analyst call-out (55-75 words): where the audience over-indexes but current marketing is NOT leveraging that surface.",\n'
+    '  "marketing_actions": ["3 concrete, archetype-appropriate marketing actions, each 12-20 words"]\n'
+    "}\n"
+)
+
+
+def _get_analyst_brief(profile: dict, archetype: str) -> dict:
+    """Call OpenAI for a structured consulting-analyst brief. Returns {} on
+    any failure (missing key, network error, malformed JSON). Callers MUST
+    handle the empty case by falling back to templated copy."""
+    subject = str(profile.get("name") or "the audience")
+    facts   = _brief_facts(profile)
+    prompt_tail = _archetype_brief_prompt(archetype, subject)
+
+    user_prompt = (
+        f"SUBJECT: {subject}\n"
+        f"ARCHETYPE: {archetype} ({_archetype_label(archetype)})\n"
+        f"BRAND CATEGORY INPUT: {profile.get('brand_category') or 'unknown'}\n\n"
+        f"ARCHETYPE INSTRUCTIONS:\n{prompt_tail}\n\n"
+        f"DATA (panel behavioral profile):\n"
+        f"{json.dumps(facts, ensure_ascii=False)}\n\n"
+        + _ANALYST_JSON_SPEC
+    )
+
+    try:
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            print("[profile_iq_deck_builder] no OPENAI_API_KEY — "
+                  "using fallback templated narrative")
+            return {}
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, timeout=90.0)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.4,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _ANALYST_SYSTEM_PROMPT},
+                {"role": "user",   "content": user_prompt},
+            ],
+        )
+        content = (resp.choices[0].message.content or "{}")
+        parsed = json.loads(content)
+        if not isinstance(parsed, dict):
+            return {}
+        return parsed
+    except Exception as exc:  # pragma: no cover — logged, not raised
+        print(f"[profile_iq_deck_builder] analyst brief LLM call failed: {exc}")
+        return {}
+
+
+def _brief_get(profile: dict, *keys, default=""):
+    """Safe getter for nested brief keys. Returns ``default`` if any hop is
+    missing or the final value is empty (empty string / [] / {})."""
+    v = (profile or {}).get("_brief") or {}
+    for k in keys:
+        if not isinstance(v, dict):
+            return default
+        v = v.get(k)
+        if v is None:
+            return default
+    return v if v not in ("", None, [], {}) else default
+
+
+# Belt-and-suspenders: strip gendered pronouns from any LLM or template
+# output. The LLM is told not to use them but occasionally does; older
+# templates in this module used them too. Ordered longest-match-first.
+_PRONOUN_REPLACEMENTS: list[tuple[str, str]] = [
+    (r"\bwho she reaches\b",      "who the audience reaches"),
+    (r"\bwhat she signals\b",     "how the audience signals"),
+    (r"\bwhere she watches\b",    "where the audience watches"),
+    (r"\bwhere she buys\b",       "where the audience buys"),
+    (r"\bhow she eats\b",         "how the audience eats"),
+    (r"\bhow she travels\b",      "how the audience travels"),
+    (r"\bhow she dresses\b",      "how the audience dresses"),
+    (r"\bwhat she drives\b",      "what the audience drives"),
+    (r"\bwhen she'?s out\b",      "when the audience is out"),
+    (r"\bwho she\b",              "who the audience"),
+    (r"\bwhere she\b",            "where the audience"),
+    (r"\bhow she\b",              "how the audience"),
+    (r"\bwhen she\b",             "when the audience"),
+    (r"\bshe watches\b",          "the audience watches"),
+    (r"\bshe dresses\b",          "the audience dresses"),
+    (r"\bshe travels\b",          "the audience travels"),
+    (r"\bshe drives\b",           "the audience drives"),
+    (r"\bshe eats\b",             "the audience eats"),
+    (r"\bshe reaches\b",          "the audience reaches"),
+    (r"\bshe buys\b",             "the audience buys"),
+    (r"\bshe'?s\b",               "the audience is"),
+    (r"\bshe'?d\b",               "the audience would"),
+    (r"\bshe'?ll\b",              "the audience will"),
+    (r"\bshe\b",                  "the audience"),
+    (r"\bwho he\b",               "who the audience"),
+    (r"\bwhere he\b",             "where the audience"),
+    (r"\bhow he\b",               "how the audience"),
+    (r"\bhe'?s\b",                "the audience is"),
+    (r"\bhe\b",                   "the audience"),
+    (r"\bher\b",                  "their"),
+    (r"\bhis\b",                  "their"),
+]
+
+
+def _purge_pronouns(text: str, subject: str = "") -> str:
+    """Strip gendered pronouns from any string. Safe to call on empty input.
+    Applied to every LLM-returned narrative string before it hits a slide."""
+    if not text:
+        return text
+    out = str(text)
+    for pat, sub in _PRONOUN_REPLACEMENTS:
+        out = re.sub(pat, sub, out, flags=re.IGNORECASE)
+    # Collapse accidental double replacements (e.g. "the audience the audience")
+    out = re.sub(r"\bthe audience the audience\b", "the audience", out,
+                 flags=re.IGNORECASE)
+    return out
+
+
+# =============================================================================
+#  Post-hoc page numbering
+# =============================================================================
+
+
+def _renumber_pages(prs) -> None:
+    """Walk the finished deck and rewrite the trailing page-number text box
+    to the true 1-based slide index. Every slide builder adds a numbered
+    footer via ``_footer(slide, page_num, subject)``; the page_num arg the
+    builder passes is a placeholder — this pass overwrites it with reality
+    so we do not have to thread a counter through the build order."""
+    total = len(prs.slides)
+    for i, slide in enumerate(prs.slides, start=1):
+        best = None
+        best_x = -1.0
+        for sh in slide.shapes:
+            if not sh.has_text_frame:
+                continue
+            if sh.left is None or sh.top is None:
+                continue
+            top_in  = Emu(sh.top).inches
+            left_in = Emu(sh.left).inches
+            width_in = Emu(sh.width).inches if sh.width is not None else 0
+            # Page number box is the rightmost small text box at y≈7.10,
+            # width ~0.9". Ignore full-width footer strings.
+            if 6.9 <= top_in <= 7.3 and left_in >= 11.5 and width_in <= 1.5:
+                if left_in > best_x:
+                    best = sh
+                    best_x = left_in
+        if best is None:
+            continue
+        tf = best.text_frame
+        if not tf.paragraphs or not tf.paragraphs[0].runs:
+            # Rare edge — reset text via the frame directly, losing font
+            # attrs. Should not happen for our _footer output.
+            best.text_frame.text = f"{i} / {total}"
+            continue
+        # Rewrite the first run to preserve font/color/size/spacing
+        tf.paragraphs[0].runs[0].text = f"{i} / {total}"
+        # Wipe any additional runs so the rewrite isn't concatenated onto
+        # placeholder text.
+        for extra in tf.paragraphs[0].runs[1:]:
+            extra.text = ""
 
 
 # =============================================================================
@@ -393,10 +894,14 @@ def _section_eyebrow(slide, top: float, subject_label: str, section: str):
 
 
 def _title_block(slide, top: float, headline_a: str, headline_b: str = ""):
-    _text(slide, 0.62, top, 11.5, 1.10, headline_a,
+    """Two-line big-display title. Tightened 2026-07-08 so the boxes do NOT
+    overlap: at 44pt with line-spacing 1.05 the actual glyph height is
+    ~0.65"; a 0.80" box leaves 0.15" bottom padding and the second line is
+    placed 0.90" below the first (0.10" gap between visual glyph tops)."""
+    _text(slide, 0.62, top, 11.5, 0.80, headline_a,
           size=44, bold=True, color=C_CREAM, line_spacing=1.05)
     if headline_b:
-        _text(slide, 0.62, top + 0.85, 11.5, 1.10, headline_b,
+        _text(slide, 0.62, top + 0.90, 11.5, 0.80, headline_b,
               size=44, bold=True, color=C_CREAM, line_spacing=1.05)
 
 
@@ -650,51 +1155,52 @@ def _slide_overview(prs: Presentation, p: dict):
 
 
 def _slide_scale(prs: Presentation, p: dict):
-    """KD 'By the numbers' slide: 4 giant stat callouts on top, big display
-    title at bottom. Stats pull from the strongest demographic + audience
-    scale signals so the slide is meaningful even for MPB-only profiles."""
+    """'By the numbers' slide — display title ABOVE the stat row (was
+    previously below, which read backwards). 4 dynamic stat callouts pull
+    the strongest demographic + audience-scale signals so the slide is
+    meaningful even for MPB-only profiles."""
     slide = _blank_slide(prs)
     _section_eyebrow(slide, 0.52, p["name"], "BY THE NUMBERS")
 
-    proj = p["projected_us"] or 0
+    # Big display title AT THE TOP so the slide reads top-down
+    _text(slide, 0.62, 0.85, 12.0, 1.15, "By the numbers.",
+          size=44, bold=True, color=C_CREAM, line_spacing=1.02)
+
+    proj   = p["projected_us"] or 0
     sample = p["sample_size"] or 0
-    subhead = (
-        f"A real-time view of {p['name']}'s fanbase — "
-        f"{_fmt_int(sample) if sample else 'panel'} panelists, "
-        f"projected to a U.S. digital audience."
-    )
-    _text(slide, 0.62, 0.90, 12.0, 0.55, subhead,
+    arch = p.get("_archetype") or _ARCHETYPE_GENERIC
+    if arch == _ARCHETYPE_MOVIE:
+        subhead = (f"US adults with a digital touchpoint to {p['name']} in "
+                    f"the trailing 12 months — {_fmt_int(sample) or 'panel'} "
+                    "panelists, projected to a U.S. digital audience.")
+    else:
+        subhead = (f"A real-time view of the {p['name']} audience — "
+                    f"{_fmt_int(sample) or 'panel'} panelists, projected to a "
+                    "U.S. digital audience.")
+    _text(slide, 0.62, 2.00, 12.0, 0.60, subhead,
           size=12.5, color=C_MUTED, line_spacing=1.4)
 
-    stat_top = 1.85
-    stat_h = 3.10
-    # Build the 4 by-the-numbers slots dynamically.
+    stat_top = 2.85
     stats = _by_the_numbers_stats(p)
     n = max(1, len(stats))
     slot_w = (SLIDE_W_IN - 1.24 - 0.12 * (n - 1)) / n
     x = 0.62
     for i, (value, label, note, tone) in enumerate(stats):
-        color = C_LAVENDER if tone == "lavender" else (
-            C_MAGENTA if tone == "magenta" else C_CREAM)
-        # Giant stat number
+        color = (C_LAVENDER if tone == "lavender"
+                 else C_MAGENTA if tone == "magenta"
+                 else C_CREAM)
         _text(slide, x, stat_top, slot_w, 1.20, value,
-              size=64, bold=True, color=color, line_spacing=1.0)
-        # Small label (letter-spaced caps)
-        _text(slide, x, stat_top + 1.25, slot_w, 0.30, label.upper(),
+              size=60, bold=True, color=color, line_spacing=1.0)
+        _text(slide, x, stat_top + 1.30, slot_w, 0.30, label.upper(),
               size=10, bold=True, color=C_LAVENDER, letter_spacing=0.10)
-        # Narrative note
-        _text(slide, x, stat_top + 1.60, slot_w, 1.40, note,
+        _text(slide, x, stat_top + 1.65, slot_w, 1.90, note,
               size=10.5, color=C_MUTED, line_spacing=1.45)
         x += slot_w + 0.12
 
-    # Large display title bottom-left, LISA/KD "By the numbers." style
-    _text(slide, 0.62, 5.60, 12.0, 1.2, "By the numbers.",
-          size=52, bold=True, color=C_CREAM, line_spacing=1.02)
-    _text(slide, 0.62, 6.75, 12.0, 0.30,
-          _source_line(p),
+    _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
           size=8.5, color=C_MUTED2, letter_spacing=0.02)
 
-    _footer(slide, 3, p["name"])
+    _footer(slide, 0, p["name"])
 
 
 def _slide_demographics(prs: Presentation, p: dict):
@@ -748,25 +1254,44 @@ def _slide_one_insight(prs: Presentation, p: dict):
     slide = _blank_slide(prs)
     _section_eyebrow(slide, 0.62, p["name"], "ONE INSIGHT")
 
-    # Compose a two-line headline from the biggest over-index and share
-    top = _top_over_index_brand(p)
-    if top:
-        cat = (top.get("_cat") or "").title()
-        brand = top.get("name", "")
-        idx = int(_num(top.get("index", 0)))
-        pct = _num(top.get("pct", 0))
-        headline_a = f"{p['name']} doesn't just reach fans."
-        headline_b = f"They define {cat.lower() or 'category'} taste."
-        body = (
-            f"{pct:.0f}% of this audience engages with {brand}, a {idx}-index "
-            f"vs. the national average, and the strongest single-brand signal in the file. "
-            f"The fandom and the buying behavior are the same audience."
-        )
+    brief_a    = _brief_get(p, "one_insight_a")
+    brief_b    = _brief_get(p, "one_insight_b")
+    brief_body = _brief_get(p, "one_insight_body")
+
+    if brief_a and brief_b:
+        headline_a = _purge_pronouns(brief_a, p["name"])
+        headline_b = _purge_pronouns(brief_b, p["name"])
+        body       = _purge_pronouns(brief_body or "", p["name"])
     else:
-        headline_a = f"{p['name']} is a taste signal,"
-        headline_b = "not just an audience."
-        body = ("This audience over-indexes across multiple categories, "
-                "meaning any brand aligned with them captures a habit, not a moment.")
+        # Fallback path — filter noise brands so we don't headline a 5% /
+        # 800-idx artifact.
+        top = _top_over_index_brand(p, min_pct=10.0, max_index=300.0)
+        subj = p["name"]
+        arch = p.get("_archetype") or _ARCHETYPE_GENERIC
+        if top:
+            cat   = _pretty_cat(top.get("_cat", ""))
+            brand = top.get("name", "")
+            idx   = int(_num(top.get("index", 0)))
+            pct   = _num(top.get("pct", 0))
+            headline_a = f"The {subj} audience shows up"
+            headline_b = f"where the buying already happens."
+            body = (
+                f"{pct:.0f}% of this audience engages with {brand} — a "
+                f"{idx}-index vs. the U.S. baseline and the strongest durable "
+                f"{cat.lower() or 'brand'} signal in the file. That is a real "
+                "spend signature, not a passing affinity."
+            )
+        else:
+            headline_a = f"The {subj} audience"
+            headline_b = "concentrates habit."
+            body = ("The audience over-indexes across multiple durable "
+                    "categories — meaning any partner brand aligned here "
+                    "captures repeat behavior, not a single moment.")
+        # Movie/TV-specific closing sentence tacked onto the fallback body
+        if arch in (_ARCHETYPE_MOVIE, _ARCHETYPE_TV_SHOW):
+            body += (" For the release plan, that means every over-indexed "
+                     "surface below is a media-buy priority, not just a data "
+                     "point.")
 
     _text(slide, 0.62, 1.6, 12.0, 1.4, headline_a,
           size=44, bold=True, color=C_CREAM, line_spacing=1.05)
@@ -775,10 +1300,12 @@ def _slide_one_insight(prs: Presentation, p: dict):
 
     _hairline(slide, 0.62, 4.05, 12.10, C_STROKE)
 
-    _text(slide, 0.62, 4.35, 9.5, 2.5, body,
-          size=14, color=C_MUTED, line_spacing=1.55)
+    # Widened + slightly reduced font so body always fits (previously 9.5"
+    # box at 14pt was truncating the last sentence).
+    _text(slide, 0.62, 4.35, 12.10, 2.55, body,
+          size=13, color=C_MUTED, line_spacing=1.50)
 
-    _footer(slide, 5, p["name"])
+    _footer(slide, 0, p["name"])
 
 
 def _slide_persona_category(prs: Presentation, p: dict, cat: str, items: list):
@@ -887,35 +1414,42 @@ def _emit_case_study_slide(prs, p: dict, cs: dict, *, case_num: int):
           f"THE {p['name'].upper()} AUDIENCE  /  {brand.upper()}",
           size=9.5, color=C_MUTED, letter_spacing=0.06)
 
-    # Two-line editorial headline
+    # Two-line editorial headline — slightly smaller than before (36pt vs
+    # 40pt) so 4-word headlines don't wrap and eat body space.
     headline_a, headline_b = cs["headline_a"], cs["headline_b"]
-    _text(slide, 0.62, 1.70, 5.6, 1.30, headline_a,
-          size=40, bold=True, color=C_CREAM, line_spacing=1.02)
-    _text(slide, 0.62, 2.80, 5.6, 1.30, headline_b,
-          size=40, bold=True, color=C_LAVENDER, line_spacing=1.02)
+    _text(slide, 0.62, 1.60, 5.8, 1.10, headline_a,
+          size=36, bold=True, color=C_CREAM, line_spacing=1.02)
+    _text(slide, 0.62, 2.55, 5.8, 1.10, headline_b,
+          size=36, bold=True, color=C_LAVENDER, line_spacing=1.02)
 
-    # Deal narrative paragraph
-    _text(slide, 0.62, 4.20, 5.6, 2.30, cs["narrative"],
-          size=11, color=C_CREAM, line_spacing=1.5)
+    # Analyst narrative paragraph — widened (5.85") + taller (2.80") + 10.5pt
+    # so the 75-110 word analyst copy from the brief never clips mid-sentence.
+    _text(slide, 0.62, 3.80, 5.85, 2.85, cs["narrative"],
+          size=10.5, color=C_CREAM, line_spacing=1.45)
 
-    # Right side: 3 giant stat callouts
+    # Right side: 3 giant stat callouts. Layout was rebalanced 2026-07-08 —
+    # the previous callout occupied ~2.00" of vertical space but the y_inc
+    # was only 1.65, so callouts stacked (INDEX label collided with the
+    # next value; last callout's sub collided with the source line at
+    # y=6.75). New geometry: value 44pt (0.95" tall) + label offset 1.00
+    # + sub offset 1.32 + sub 0.35 → callout is 1.67" tall, y_inc 1.62,
+    # 3rd callout sub ends at y ≈ 6.24 → clean 0.51" gap to source.
     x = 6.60
-    y = 1.70
+    y = 1.65
     for stat_num, (label, value, sub) in enumerate(cs["stats"][:3]):
-        _text(slide, x, y, 6.2, 1.20, value,
-              size=52, bold=True, color=C_MAGENTA, line_spacing=1.0)
-        _text(slide, x, y + 1.20, 6.2, 0.30,
-              label.upper(),
+        _text(slide, x, y, 6.2, 0.95, value,
+              size=44, bold=True, color=C_MAGENTA, line_spacing=1.0)
+        _text(slide, x, y + 1.00, 6.2, 0.28, label.upper(),
               size=10, bold=True, color=C_CREAM, letter_spacing=0.08)
-        _text(slide, x, y + 1.52, 6.2, 0.50, sub,
-              size=10.5, color=C_MUTED, line_spacing=1.4)
+        _text(slide, x, y + 1.32, 6.2, 0.35, sub,
+              size=10.5, color=C_MUTED, line_spacing=1.3)
         if stat_num < 2:
-            _hairline(slide, x, y + 2.10, 5.8, C_STROKE)
-        y += 1.65
+            _hairline(slide, x, y + 1.72, 5.8, C_STROKE)
+        y += 1.62
 
     _text(slide, 0.62, 6.75, 8.0, 0.30, _source_line(p),
           size=8.5, color=C_MUTED2, letter_spacing=0.02)
-    _footer(slide, 99, p["name"])
+    _footer(slide, 0, p["name"])
 
 
 def _slide_media_and_social(prs: Presentation, p: dict):
@@ -931,17 +1465,18 @@ def _slide_media_and_social(prs: Presentation, p: dict):
         "STREAMING VIDEO", "STREAMING_VIDEO", "MEDIA",
     ])
 
-    # Left column: social
-    _text(slide, 0.62, 2.4, 5.5, 0.30, "SOCIAL",
+    # Section labels sit at y=2.85 (below the two-line 44pt title which
+    # occupies y≈1.00 → 2.55 visually), so no glyph collision. Stat lists
+    # start at y=3.30.
+    _text(slide, 0.62, 2.85, 5.5, 0.30, "SOCIAL",
           size=11, bold=True, color=C_LAVENDER, letter_spacing=0.06)
-    _draw_stat_list(slide, 0.62, 2.85, 5.5, social_items[:5])
+    _draw_stat_list(slide, 0.62, 3.30, 5.5, social_items[:5])
 
-    # Right column: streaming
-    _text(slide, 7.0, 2.4, 5.5, 0.30, "STREAMING / MEDIA",
+    _text(slide, 7.0, 2.85, 5.5, 0.30, "STREAMING / MEDIA",
           size=11, bold=True, color=C_LAVENDER, letter_spacing=0.06)
-    _draw_stat_list(slide, 7.0, 2.85, 5.5, media_items[:5])
+    _draw_stat_list(slide, 7.0, 3.30, 5.5, media_items[:5])
 
-    _footer(slide, 8, p["name"])
+    _footer(slide, 0, p["name"])
 
 
 def _draw_stat_list(slide, x, y, w, items):
@@ -970,40 +1505,40 @@ def _draw_stat_list(slide, x, y, w, items):
 
 
 def _slide_final_insight(prs: Presentation, p: dict):
-    """KD/LISA final-insight closer: full-bleed dark hero image (darkened),
-    tiny 'THE FINAL INSIGHT' eyebrow, massive display headline, muted
-    narrative paragraph. Two-line display for editorial rhythm."""
+    """Final-insight closer: full-bleed darkened image, tiny 'THE FINAL
+    INSIGHT' eyebrow, two-line display headline, longer analyst-body
+    paragraph. Body box is intentionally wider + taller than the LISA
+    reference so multi-sentence closers do not clip."""
     slide = _blank_slide(prs, bg=C_DARK)
-    # Full-bleed darkened image (LISA slide 19 pattern)
     img_bytes = p.get("_image_bytes")
     if img_bytes:
         try:
             _place_prepared_image(slide, img_bytes, x=0, y=0,
-                                  w=SLIDE_W_IN, h=SLIDE_H_IN, darken=0.38)
+                                  w=SLIDE_W_IN, h=SLIDE_H_IN, darken=0.35)
         except Exception:
             _rect(slide, 0, 0, SLIDE_W_IN, SLIDE_H_IN, C_DARK)
     # Extra dark scrim on the left half so headline reads clean
-    _rect(slide, 0, 0, 9.0, SLIDE_H_IN, RGBColor(0x08, 0x0F, 0x11))
-
-    subject = p["name"]
-    top = _top_over_index_brand(p)
+    _rect(slide, 0, 0, 9.2, SLIDE_H_IN, RGBColor(0x08, 0x0F, 0x11))
 
     _text(slide, 0.62, 0.62, 8.0, 0.30, "THE FINAL INSIGHT",
           size=10.5, color=C_LIME, letter_spacing=0.10)
 
-    # KD's closer format is a single sentence broken into two/three big display
-    # lines. We synthesize from the strongest signal.
     line1, line2 = _final_headline(p)
-    _text(slide, 0.62, 2.20, 8.6, 1.60, line1,
-          size=54, bold=True, color=C_CREAM, line_spacing=1.02)
-    _text(slide, 0.62, 3.55, 8.6, 1.60, line2,
-          size=54, bold=True, color=C_LAVENDER, line_spacing=1.02)
+    # Slightly smaller display font (was 54pt) so long final-line strings
+    # from the analyst brief never wrap into 3 lines and eat body space.
+    _text(slide, 0.62, 2.00, 8.6, 1.35, line1,
+          size=44, bold=True, color=C_CREAM, line_spacing=1.02)
+    _text(slide, 0.62, 3.25, 8.6, 1.35, line2,
+          size=44, bold=True, color=C_LAVENDER, line_spacing=1.02)
 
+    top  = _top_over_index_brand(p, min_pct=10.0, max_index=300.0)
     body = _final_body(p, top)
-    _text(slide, 0.62, 5.30, 7.4, 1.60, body,
-          size=13, color=C_CREAM, line_spacing=1.5)
+    # Wider (8.4"), taller (2.30"), slightly smaller type (12pt) so the
+    # 55-75 word analyst body always fits without clipping mid-sentence.
+    _text(slide, 0.62, 4.85, 8.40, 2.30, body,
+          size=12, color=C_CREAM, line_spacing=1.50)
 
-    _footer(slide, 99, p["name"])
+    _footer(slide, 0, p["name"])
 
 
 # =============================================================================
@@ -1022,8 +1557,16 @@ def _slide_index_story(prs: Presentation, p: dict):
           "Where the audience over-indexes most.",
           size=28, bold=True, color=C_CREAM, line_spacing=1.05)
 
-    why = ("KD-style over-indexing across key demographic attributes — every "
-           "callout is a targetable resonance signal.")
+    arch = p.get("_archetype") or _ARCHETYPE_GENERIC
+    if arch == _ARCHETYPE_MOVIE:
+        why = ("Each callout below is a targetable audience concentration — "
+               "prioritize these in the release-marketing media plan.")
+    elif arch == _ARCHETYPE_TV_SHOW:
+        why = ("Each callout below is a targetable audience concentration — "
+               "prioritize these in launch and renewal marketing.")
+    else:
+        why = ("Each callout below is a targetable audience concentration — "
+               "the demographic shape most differentiated from Gen Pop.")
     _text(slide, 0.62, 1.98, 12.0, 0.36,
           f"WHY IT MATTERS  /  {why}",
           size=10, color=C_MUTED, letter_spacing=0.04)
@@ -1118,9 +1661,11 @@ def _slide_geography(prs: Presentation, p: dict):
 
 
 def _slide_stat_splash(prs: Presentation, p: dict, cat: str, items: list):
-    """LISA slide 10 pattern (KD sub-section stack): two large brand stat
-    tiles per category showing giant reach% and giant idx. Used to break
-    up the persona-category slide rhythm."""
+    """Two large brand stat tiles per category (giant reach% and giant idx).
+    Layout was rebalanced 2026-07-08 to fix a WHY IT MATTERS / stat-tile
+    overlap where the INDEX label at y0+3.55 (=6.15) and projection line at
+    y0+3.85 (=6.45) collided with the WHY IT MATTERS eyebrow/body at
+    y=6.15/6.42. Tiles now end at 5.95; WHY IT MATTERS sits at 6.10/6.35."""
     slide = _blank_slide(prs)
     _section_eyebrow(slide, 0.52, p["name"], _pretty_cat(cat).upper())
     headline, sub = _persona_category_headline(cat)
@@ -1132,58 +1677,68 @@ def _slide_stat_splash(prs: Presentation, p: dict, cat: str, items: list):
         _text(slide, 0.62, 3.5, 11.5, 0.6,
               "No branded signals observed in this category.",
               size=12, color=C_MUTED)
-        _footer(slide, 8, p["name"])
+        _footer(slide, 0, p["name"])
         return
 
     tile_w = 5.60
     tile_gap = 0.40
-    y0 = 2.60
+    y0 = 2.15   # was 2.60 — pull up so tile ends higher
     x0 = 0.62
+    # Vertical rhythm within a tile (all offsets are added to y0):
+    OFF_NAME      = 0.00
+    OFF_PCT       = 0.40
+    OFF_REACH_LBL = 1.55
+    OFF_HAIRLINE  = 1.85
+    OFF_IDX       = 1.95
+    OFF_IDX_LBL   = 3.05
+    OFF_PROJ      = 3.35   # tile ends at y0 + 3.62 ≈ 5.77
     for i, it in enumerate(top[:2]):
         x = x0 + i * (tile_w + tile_gap)
-        pct = _num(it.get("pct", 0))
-        idx = int(_num(it.get("index", 0)))
-        proj = _num(it.get("projection", 0))
-        name = (it.get("name") or "").strip()
+        pct    = _num(it.get("pct", 0))
+        idx    = int(_num(it.get("index", 0)))
+        proj   = _num(it.get("projection", 0))
+        name   = (it.get("name") or "").strip()
         gp_pct = _num(it.get("genPopPct", 0))
 
-        _text(slide, x, y0, tile_w, 0.36, name.upper(),
+        _text(slide, x, y0 + OFF_NAME, tile_w, 0.36, name.upper(),
               size=11, bold=True, color=C_LAVENDER, letter_spacing=0.08)
-        # Giant reach %
-        _text(slide, x, y0 + 0.45, tile_w, 1.30, f"{pct:.1f}%",
-              size=64, bold=True, color=C_CREAM, line_spacing=1.0)
-        _text(slide, x, y0 + 1.75, tile_w, 0.28, "REACH",
+        # Giant reach % — 56pt (was 64pt) so 3-digit values fit + tile is shorter
+        _text(slide, x, y0 + OFF_PCT, tile_w, 1.15, f"{pct:.1f}%",
+              size=56, bold=True, color=C_CREAM, line_spacing=1.0)
+        _text(slide, x, y0 + OFF_REACH_LBL, tile_w, 0.28, "REACH",
               size=9.5, color=C_MUTED, letter_spacing=0.10)
-        _hairline(slide, x, y0 + 2.05, tile_w - 0.10, C_STROKE)
-        # Giant index
+        _hairline(slide, x, y0 + OFF_HAIRLINE, tile_w - 0.10, C_STROKE)
+        # Giant index — 60pt (was 76pt) so tile compresses vertically
         idx_color = (C_MAGENTA if idx >= 150 else
                      (C_LIME if idx >= 110 else C_LAVENDER))
-        _text(slide, x, y0 + 2.20, tile_w, 1.30,
+        _text(slide, x, y0 + OFF_IDX, tile_w, 1.10,
               f"{idx}" if idx else "—",
-              size=76, bold=True, color=idx_color, line_spacing=1.0)
-        _text(slide, x, y0 + 3.55, tile_w, 0.28,
+              size=60, bold=True, color=idx_color, line_spacing=1.0)
+        _text(slide, x, y0 + OFF_IDX_LBL, tile_w, 0.28,
               f"INDEX vs GEN POP  ·  {gp_pct:.1f}% BASELINE",
               size=9.5, color=C_MUTED, letter_spacing=0.08)
         if proj:
-            _text(slide, x, y0 + 3.85, tile_w, 0.28,
+            _text(slide, x, y0 + OFF_PROJ, tile_w, 0.28,
                   f"= {_fmt_int(proj)} U.S. adults",
                   size=10, color=C_MUTED)
 
-    _text(slide, 0.62, 6.15, 12.0, 0.26, "WHY IT MATTERS",
+    # WHY IT MATTERS moved to y=6.05 / body at 6.30 — comfortably below
+    # the (now compressed) stat tiles that end at y ≈ 5.77.
+    _text(slide, 0.62, 6.05, 12.0, 0.26, "WHY IT MATTERS",
           size=9.5, bold=True, color=C_LIME, letter_spacing=0.10)
-    _text(slide, 0.62, 6.42, 12.0, 0.55,
+    _text(slide, 0.62, 6.32, 12.0, 0.72,
           _why_it_matters_for_category(cat, p, top),
           size=11, color=C_MUTED, line_spacing=1.4)
 
-    _footer(slide, 8, p["name"])
+    _footer(slide, 0, p["name"])
 
 
 def _slide_data_confirms(prs: Presentation, p: dict):
-    """LISA slide 9 pattern — a narrative bridge slide.
+    """Narrative bridge slide: two-line display + analyst body paragraph.
 
-    Big two-line editorial statement + one-paragraph body that reframes
-    the strongest signal in plain English. Uses lavender for the second
-    line (LISA's contrast trick)."""
+    Prefers the LLM brief; falls back to a durable-signal-driven template
+    with the noise-brand filter applied so we don't lead with a freak
+    5%-reach / 800-idx artifact."""
     slide = _blank_slide(prs, bg=C_DARK)
     img = p.get("_image_bytes")
     if img:
@@ -1194,31 +1749,40 @@ def _slide_data_confirms(prs: Presentation, p: dict):
         except Exception:
             pass
 
-    top = _top_over_index_brand(p)
-    if top:
-        cat = _pretty_cat(top.get("_cat", "")).lower()
-        line1 = "The data confirms"
-        line2 = "the connection."
-        body = (
-            f"{p['name']}'s audience over-indexes on {top['name']} at "
-            f"{int(_num(top['index']))} — {cat or 'a durable category'}'s "
-            f"strongest single signal in the file. The fandom and the buying "
-            f"behavior are the same audience."
-        )
+    brief_a    = _brief_get(p, "data_confirms_a")
+    brief_b    = _brief_get(p, "data_confirms_b")
+    brief_body = _brief_get(p, "data_confirms_body")
+
+    if brief_a and brief_b:
+        line1 = _purge_pronouns(brief_a, p["name"])
+        line2 = _purge_pronouns(brief_b, p["name"])
+        body  = _purge_pronouns(brief_body or "", p["name"])
     else:
-        line1 = "One dataset,"
-        line2 = "one audience."
-        body = ("This audience concentrates habits across multiple categories, "
-                "which is a signal in itself. Any brand aligned here captures "
-                "a habit, not a moment.")
+        top = _top_over_index_brand(p, min_pct=10.0, max_index=300.0)
+        if top:
+            cat = _pretty_cat(top.get("_cat", "")).lower()
+            line1 = "The data reads"
+            line2 = "as durable habit."
+            body = (
+                f"The {p['name']} audience over-indexes on {top['name']} at "
+                f"{int(_num(top['index']))} in {cat or 'a durable category'} "
+                "— a repeated-purchase signature, not a passing affinity. "
+                "Any partner brand should read this as an addressable overlap."
+            )
+        else:
+            line1 = "One dataset,"
+            line2 = "one audience."
+            body = ("The audience concentrates habits across multiple "
+                    "categories, which is a signal in itself. Any partner "
+                    "brand aligned here captures durable behavior.")
 
     _text(slide, 0.62, 2.50, 8.0, 1.60, line1,
-          size=58, bold=True, color=C_CREAM, line_spacing=1.02)
-    _text(slide, 0.62, 3.95, 8.0, 1.60, line2,
-          size=58, bold=True, color=C_LAVENDER, line_spacing=1.02)
-    _text(slide, 0.62, 5.70, 7.0, 1.30, body,
-          size=13, color=C_MUTED, line_spacing=1.45)
-    _footer(slide, 99, p["name"])
+          size=54, bold=True, color=C_CREAM, line_spacing=1.02)
+    _text(slide, 0.62, 3.90, 8.0, 1.60, line2,
+          size=54, bold=True, color=C_LAVENDER, line_spacing=1.02)
+    _text(slide, 0.62, 5.60, 7.20, 1.40, body,
+          size=12.5, color=C_MUTED, line_spacing=1.45)
+    _footer(slide, 0, p["name"])
 
 
 def _slide_mpb_table(prs: Presentation, p: dict):
@@ -1288,9 +1852,26 @@ def _slide_mpb_table(prs: Presentation, p: dict):
 
 
 def _slide_takeaways(prs: Presentation, p: dict):
-    """KD slide 22 pattern: 'Six things to know.' — 6 numbered summary
-    cards in a 3x2 grid, each with a big number, headline, and fact bullets."""
-    picks = _pick_takeaways(p)
+    """'Six things to know.' — 6 numbered summary cards in a 3x2 grid.
+
+    Prefers the LLM analyst brief's takeaways (better editorial voice,
+    grounded in the data). Falls back to _pick_takeaways()."""
+    brief_tk = _brief_get(p, "takeaways")
+    if (isinstance(brief_tk, list) and len(brief_tk) >= 4):
+        picks: list[tuple[str, str, str]] = []
+        for i, tk in enumerate(brief_tk[:6]):
+            if not isinstance(tk, dict):
+                continue
+            title = _purge_pronouns(str(tk.get("title") or ""), p["name"])
+            body  = _purge_pronouns(str(tk.get("body")  or ""), p["name"])
+            if not title or not body:
+                continue
+            picks.append((f"{i+1:02d}", title, body))
+        # Renumber for any skipped entries
+        picks = [(f"{i+1:02d}", t, b) for i, (_, t, b) in enumerate(picks)]
+    else:
+        picks = _pick_takeaways(p)
+
     if not picks:
         return
     slide = _blank_slide(prs)
@@ -1318,7 +1899,7 @@ def _slide_takeaways(prs: Presentation, p: dict):
         _text(slide, x + 0.28, y + 1.20, tile_w - 0.50, tile_h - 1.30, body,
               size=9.5, color=C_MUTED, line_spacing=1.4)
 
-    _footer(slide, 99, p["name"])
+    _footer(slide, 0, p["name"])
 
 
 def _slide_methodology(prs: Presentation, p: dict):
@@ -1922,14 +2503,46 @@ def _all_behavioral_items(p: dict) -> list[dict]:
     return out
 
 
-def _top_over_index_brand(p: dict) -> Optional[dict]:
-    items = [it for it in _all_behavioral_items(p)
-             if _num(it.get("index", 0)) > 0 and _num(it.get("pct", 0)) >= 1.0]
-    if not items:
+def _top_over_index_brand(p: dict, *,
+                          min_pct: float = 8.0,
+                          max_index: float = 350.0,
+                          min_index: float = 130.0) -> Optional[dict]:
+    """Strongest over-indexing brand with real reach.
+
+    ``max_index`` caps the search to weed out low-N artifacts (a 5%-reach
+    brand at 800 idx is almost always panel noise, not audience signal —
+    see 'THE FANTOM WALLET' defect the user flagged). Falls back to a
+    looser filter, then to the raw top, so this never returns None as long
+    as any behavioral item exists.
+
+    Callers can pass ``min_pct=1.0`` etc. if they specifically want the
+    old lax behaviour (still used by combined-deck spotlight)."""
+    all_items = _all_behavioral_items(p)
+    # Tier 1: strict — real reach + meaningful (but not freak) over-index
+    tier1 = [it for it in all_items
+             if _num(it.get("pct", 0)) >= min_pct
+             and min_index <= _num(it.get("index", 0)) <= max_index]
+    if tier1:
+        tier1.sort(key=lambda it: (-_num(it.get("index", 0)),
+                                    -_num(it.get("pct", 0))))
+        return tier1[0]
+    # Tier 2: allow higher-index outliers ONLY when they still have some reach
+    tier2 = [it for it in all_items
+             if _num(it.get("pct", 0)) >= max(min_pct * 0.6, 5.0)
+             and _num(it.get("index", 0)) >= min_index]
+    if tier2:
+        tier2.sort(key=lambda it: (-_num(it.get("index", 0)),
+                                    -_num(it.get("pct", 0))))
+        return tier2[0]
+    # Tier 3: whatever we have
+    tier3 = [it for it in all_items
+             if _num(it.get("index", 0)) > 0
+             and _num(it.get("pct", 0)) > 0]
+    if not tier3:
         return None
-    items.sort(key=lambda it: (-_num(it.get("index", 0)),
-                               -_num(it.get("pct", 0))))
-    return items[0]
+    tier3.sort(key=lambda it: (-_num(it.get("index", 0)),
+                                -_num(it.get("pct", 0))))
+    return tier3[0]
 
 
 def _top_owned_reach(p: dict) -> float:
@@ -1954,58 +2567,71 @@ def _first_available(p: dict, cat_names: list[str]) -> list[dict]:
 def _pick_overview_chapters(p: dict) -> list[tuple[str, str, str]]:
     """Choose the four chapter cards to render on the OVERVIEW slide, based
     on which behavioral categories actually have data."""
-    beh = p.get("behavioral") or {}
+    subj = p["name"]
     chapters = [
-        ("01", "Who she reaches",
-         f"Demographic composition of {p['name']}'s audience vs. Gen Pop."),
-        ("02", "What she signals",
-         "The category over-indexers, where this audience concentrates."),
+        ("01", "Who they are",
+         f"Demographic composition of the {subj} audience vs. U.S. Gen Pop."),
+        ("02", "How they signal",
+         "The category over-indexers — where this audience concentrates."),
     ]
-    # Add category-specific chapters when relevant categories have data
-    has_beauty  = _first_available(p, ["COSMETICS", "BEAUTY", "PERSONAL CARE", "PERSONAL_CARE"])
-    has_lux     = _first_available(p, ["LUXURY FASHION", "LUXURY_FASHION",
-                                       "APPAREL/FOOTWEAR", "APPAREL_FOOTWEAR", "MPB"])
-    has_media   = _first_available(p, ["STREAMING/PLATFORM", "STREAMING_PLATFORM",
+    has_beauty = _first_available(p, ["COSMETICS", "BEAUTY", "PERSONAL CARE",
+                                       "PERSONAL_CARE"])
+    has_lux    = _first_available(p, ["LUXURY FASHION", "LUXURY_FASHION",
+                                       "APPAREL/FOOTWEAR", "APPAREL_FOOTWEAR",
+                                       "MPB"])
+    has_media  = _first_available(p, ["STREAMING/PLATFORM", "STREAMING_PLATFORM",
                                        "STREAMING VIDEO", "MEDIA", "SOCIAL MEDIA"])
     if has_beauty:
-        chapters.append(("03", "Beauty & prestige",
-                         "Cosmetics, skincare, fragrance: the audience's shopping habits."))
+        chapters.append((f"{len(chapters)+1:02d}",
+                         "Beauty & prestige",
+                         "Cosmetics, skincare, and fragrance — where the audience actually shops."))
     if has_lux and len(chapters) < 4:
-        chapters.append(("03" if len(chapters) == 2 else "04",
+        chapters.append((f"{len(chapters)+1:02d}",
                          "Fashion & apparel",
                          "Luxury and everyday apparel where this audience actually spends."))
     if has_media and len(chapters) < 4:
         chapters.append((f"{len(chapters)+1:02d}",
-                         "Where she watches",
-                         "Streaming, social, and platform behavior."))
-    # Pad to 4 if we still don't have enough
+                         "Where attention lives",
+                         "Streaming, social, and platform surfaces to reach the audience."))
     filler = [
-        ("Reach quality", "Beyond raw scale: engagement intensity by category."),
-        ("Activation ready", "The strongest, most-actionable partnership signals."),
+        ("Reach quality",     "Beyond raw scale — engagement intensity by category."),
+        ("Whitespace & activation", "The strongest, most-actionable partnership signals."),
     ]
     while len(chapters) < 4 and filler:
-        n = f"{len(chapters)+1:02d}"
         t, s = filler.pop(0)
-        chapters.append((n, t, s))
+        chapters.append((f"{len(chapters)+1:02d}", t, s))
     return chapters[:4]
 
 
 PERSONA_CATEGORY_HEADLINES: dict[str, tuple[str, str]] = {
-    "COSMETICS": ("Beauty retail", "dominates."),
-    "PERSONAL CARE": ("A personal-care audience,", "already spending."),
-    "APPAREL/FOOTWEAR": ("A clear lens on", "how she dresses."),
-    "MPB": ("Where she actually shops.", "Most-purchased brands."),
-    "MOST_PURCHASED_BRANDS": ("Where she actually shops.", "Most-purchased brands."),
-    "LUXURY FASHION": ("A clear lens on luxury.", ""),
-    "QSR": ("How she eats,", "when she's out."),
-    "RETAIL": ("Where she buys,", "beyond luxury."),
-    "TRAVEL": ("How she travels.", "And where."),
-    "BANKING": ("Where the money lives.", ""),
-    "AUTOMOBILE": ("What she drives.", ""),
-    "TALENT/ACTOR": ("The talent overlap.", ""),
-    "SOCIAL MEDIA": ("Social platform-native.", "Content curious."),
-    "STREAMING/PLATFORM": ("How she watches,", "when she chooses."),
-    "STREAMING VIDEO": ("How she watches,", "when she chooses."),
+    "COSMETICS":              ("Beauty retail",              "dominates."),
+    "PERSONAL CARE":          ("A personal-care audience,",  "already spending."),
+    "APPAREL/FOOTWEAR":       ("A clear lens on",            "how the audience dresses."),
+    "MPB":                    ("Most-purchased brands.",     "Where the audience actually shops."),
+    "MOST_PURCHASED_BRANDS":  ("Most-purchased brands.",     "Where the audience actually shops."),
+    "LUXURY FASHION":         ("A clear lens on luxury.",    ""),
+    "QSR":                    ("How the audience eats,",     "when they're out."),
+    "RETAIL":                 ("Where the audience buys,",   "beyond luxury."),
+    "TRAVEL":                 ("How the audience travels.",  "And where."),
+    "BANKING":                ("Where the money lives.",     ""),
+    "AUTOMOBILE":             ("What the audience drives.",  ""),
+    "TALENT/ACTOR":           ("The talent overlap.",        ""),
+    "SOCIAL MEDIA":           ("Social platform-native.",    "Content curious."),
+    "STREAMING/PLATFORM":     ("How the audience watches,",  "when they choose."),
+    "STREAMING VIDEO":        ("How the audience watches,",  "when they choose."),
+    "GAMES":                  ("The gaming signal.",         "Where fandom converts to session time."),
+    "GAMING":                 ("The gaming signal.",         "Where fandom converts to session time."),
+    "TICKETING PLATFORMS":    ("Live-event buyers.",         ""),
+    "FESTIVALS":              ("Festival culture.",          ""),
+    "MUSIC":                  ("Music discovery habits.",    ""),
+    "ARTIST":                 ("The artist overlap.",        ""),
+    "ARTISTS":                ("The artist overlap.",        ""),
+    "CULTURE":                ("Cultural affinity map.",     ""),
+    "INSURANCE":              ("Insurance signal.",          ""),
+    "PHARMACY":               ("Where the audience refills.",""),
+    "TECHNOLOGY DEVICE":      ("The device stack.",          ""),
+    "APP/PLATFORM":           ("The app stack.",             "Where the audience opens the phone."),
+    "SEARCH ENGINE/AI":       ("Search and AI, blended.",    ""),
 }
 
 
@@ -2101,19 +2727,35 @@ def _pick_persona_category_slides(p: dict, max_slides: int = 2) -> list[tuple[st
 
 
 def _generate_tagline(p: dict) -> str:
-    """One-line tagline for the cover, driven by strongest audience signal."""
-    top = _top_over_index_brand(p)
-    if top:
-        cat = (top.get("_cat") or "").lower()
-        return (
-            f"An audience that over-indexes on {top['name']} at {int(_num(top['index']))} "
-            f"vs. the U.S. baseline. The strongest {cat or 'behavioral'} signal in the file, "
-            f"and a durable lens on how they engage."
-        )
+    """One-line tagline for the cover, driven by the analyst brief when
+    available, otherwise by the strongest durable audience signal (with
+    the low-reach / freak-index filter applied so we don't lead with a
+    5%-reach brand at 800 idx)."""
+    brief_t = _brief_get(p, "cover_tagline")
+    if brief_t:
+        return _purge_pronouns(brief_t, p["name"])
+    top = _top_over_index_brand(p, min_pct=10.0, max_index=300.0)
     proj = _fmt_int_compact(p["projected_us"] or 0)
+    proj_phrase = (f"{proj} U.S. digital adults" if proj
+                    else "the U.S. digital audience")
+    arch = p.get("_archetype") or _ARCHETYPE_GENERIC
+    if arch == _ARCHETYPE_MOVIE:
+        arch_phrase = f"US adults with a digital touchpoint to {p['name']}"
+    elif arch == _ARCHETYPE_TV_SHOW:
+        arch_phrase = f"US adults engaged with {p['name']}"
+    else:
+        arch_phrase = f"the {p['name']} audience"
+    if top:
+        cat = _pretty_cat(top.get("_cat") or "").lower()
+        return (
+            f"A behavioral read on {arch_phrase} — {proj_phrase} — with "
+            f"durable brand affinities like {top['name']} "
+            f"({int(_num(top['index']))} index in {cat}) telling a real story "
+            "about how this audience buys, watches, and shows up."
+        )
     return (
-        f"A behavioral profile of the {p['name']} audience. "
-        f"{proj or 'A'} U.S. digital adults, drawn from Crosswalk's zero-party panel."
+        f"A behavioral profile of {arch_phrase}. {proj_phrase}, drawn from "
+        "Crosswalk's zero-party panel."
     )
 
 
@@ -2331,7 +2973,14 @@ def _by_the_numbers_stats(p: dict) -> list[tuple[str, str, str, str]]:
 
 
 def _identity_headline(p: dict) -> str:
-    """One-line demographic summary for the IDENTITY slide."""
+    """Sentence-case shorthand of who this audience is.
+
+    Prefers the analyst brief. Falls back to a heuristic that respects the
+    Gen Pop split — 54% male at index 113 is now correctly named 'Male-
+    leaning.' rather than 'Balanced-gender.'."""
+    brief_h = _brief_get(p, "identity_headline")
+    if brief_h:
+        return _purge_pronouns(brief_h, p["name"])
     gender = (p.get("demographics") or {}).get("gender", {}) or {}
     fem = _num(gender.get("Female", 0))
     mal = _num(gender.get("Male", 0))
@@ -2340,21 +2989,22 @@ def _identity_headline(p: dict) -> str:
         parts.append("Female.")
     elif mal >= 60:
         parts.append("Male.")
-    else:
+    elif fem >= 54:
+        parts.append("Female-leaning.")
+    elif mal >= 54:
+        parts.append("Male-leaning.")
+    elif fem or mal:
         parts.append("Balanced-gender.")
-    # Age slant
     age = (p.get("demographics") or {}).get("age", {}) or {}
     prime = sum(_num(v) for k, v in age.items()
                 if str(k).strip().replace("–", "-") in ("18-24", "25-34", "35-44"))
     if prime >= 50:
         parts.append("Prime-age.")
-    # Ethnicity slant (any strong over-index other than White)
-    for k in ("Black", "Black or African American", "Hispanic", "Hispanic or Latino",
-              "Asian"):
+    for k in ("Black", "Black or African American", "Hispanic",
+              "Hispanic or Latino", "Asian"):
         if _lookup_idx(p, "ethnicity", k) >= 140:
             parts.append("Multicultural.")
             break
-    # Income slant
     inc = (p.get("demographics") or {}).get("income", {}) or {}
     high = sum(_num(v) for k, v in inc.items()
                if any(t in str(k) for t in ("$75", "$100", "$150", "$200", "$250")))
@@ -2392,46 +3042,83 @@ def _identity_stat_rows(p: dict) -> list[tuple[str, str, float]]:
 
 
 def _identity_why_it_matters(p: dict) -> str:
+    brief_w = _brief_get(p, "identity_why")
+    if brief_w:
+        return _purge_pronouns(brief_w, p["name"])
     subj = p["name"]
     idx_hits = [(k, _lookup_idx(p, "ethnicity", k))
-                for k in ("Black or African American", "Hispanic or Latino", "Asian")
+                for k in ("Black or African American",
+                          "Hispanic or Latino", "Asian")
                 if _lookup_idx(p, "ethnicity", k) >= 130]
     if idx_hits:
         top = max(idx_hits, key=lambda t: t[1])
-        return (f"{subj}'s audience is anchored by strong over-representation "
-                f"in {top[0]} ({int(top[1])} index) — a clear cultural anchor "
-                "that shapes brand fit, media plan, and creative direction.")
-    return (f"{subj}'s audience shape is an ideal fit for talent ventures, "
-            "brand partnerships, and media alignment.")
+        return (f"The {subj} audience is anchored by strong over-representation "
+                f"in {top[0]} ({int(top[1])} index) — a cultural anchor that "
+                "shapes brand fit, media plan, and creative direction.")
+    return (f"The {subj} audience shape is an ideal fit for brand "
+            "partnerships, media alignment, and category activation.")
 
 
 def _final_headline(p: dict) -> tuple[str, str]:
-    """Two-line editorial closer for the FINAL INSIGHT slide."""
+    """Two-line editorial closer for the FINAL INSIGHT slide.
+
+    Prefers the analyst brief. Fallback avoids the 'reads it as taste'
+    cliché the user flagged."""
+    brief_a = _brief_get(p, "final_line_a")
+    brief_b = _brief_get(p, "final_line_b")
+    if brief_a and brief_b:
+        return (_purge_pronouns(brief_a, p["name"]),
+                _purge_pronouns(brief_b, p["name"]))
     subj = p["name"]
+    arch = p.get("_archetype") or _ARCHETYPE_GENERIC
     peak = _peak_index(p)
+    if arch == _ARCHETYPE_MOVIE:
+        return (f"Where {subj} lives online,",
+                "the audience is already waiting.")
+    if arch == _ARCHETYPE_TV_SHOW:
+        return (f"The {subj} audience already lives",
+                "inside the right media surfaces.")
     if peak >= 300:
-        return (f"When {subj} shows up,", "the audience reads it as taste.")
-    if peak >= 150:
-        return (f"{subj} isn't just an audience —",
-                "it's a taste graph.")
-    return (f"{subj} is a signal,", "not just a fanbase.")
+        return (f"This is not a generic fanbase.",
+                "It concentrates habit and spend.")
+    return (f"The {subj} audience is a signal,",
+            "not just a headcount.")
 
 
 def _final_body(p: dict, top) -> str:
+    brief_body = _brief_get(p, "final_body")
+    if brief_body:
+        return _purge_pronouns(brief_body, p["name"])
     subj = p["name"]
+    arch = p.get("_archetype") or _ARCHETYPE_GENERIC
     n_over = sum(1 for it in _all_behavioral_items(p)
                  if _num(it.get("index", 0)) >= 150)
-    lines = [
-        f"Across {n_over}+ behavioral signals, {subj}'s audience over-indexes "
-        "150+ vs. the U.S. digital baseline. Not coincidence — a taste graph."
-    ]
-    if top:
+    parts: list[str] = []
+    parts.append(
+        f"Across {n_over}+ behavioral signals, the {subj} audience over-indexes "
+        "150+ vs. the U.S. digital baseline — a concentration of habit that "
+        "reads as durable purchase intent, not passing attention."
+    )
+    if top and _num(top.get("pct", 0)) >= 8.0:
         cat = _pretty_cat(top.get("_cat", ""))
-        lines.append(
-            f"The strongest single read is {top['name']} at "
-            f"{int(_num(top['index']))} in {cat}. Any partner brand should "
-            "read this as durable, addressable audience overlap.")
-    return "  ".join(lines)
+        parts.append(
+            f"The strongest single durable read is {top['name']} at "
+            f"{int(_num(top['index']))} in {cat} — a ready-made "
+            "co-signer for any marketer trying to reach this school of fish."
+        )
+    if arch == _ARCHETYPE_MOVIE:
+        parts.append(
+            "For a theatrical or streaming release, prioritize media surfaces "
+            "where the audience already indexes 130+ and lean into "
+            "co-marketing with the highest-fit brand partners identified above."
+        )
+    elif arch == _ARCHETYPE_TV_SHOW:
+        parts.append(
+            "For launch or renewal marketing, weight social + streaming "
+            "surfaces the audience already prefers, and pursue partner-brand "
+            "co-marketing where the index is durable."
+        )
+    return "  ".join(parts)
 
 
 def _top_demo_index_callouts(p: dict, n: int = 4) -> list[tuple[float, str, str]]:
@@ -2501,127 +3188,235 @@ def _top_dmas_ranked(p: dict, n: int = 10) -> list[tuple[str, float, float]]:
 
 
 def _why_it_matters_for_category(cat: str, p: dict, top: list) -> str:
-    """One-liner narrative for the category slide's WHY IT MATTERS strip."""
+    """One-liner narrative for a category slide's WHY IT MATTERS strip.
+
+    Prefers the LLM analyst brief (which delivers per-category tailored
+    'why it matters' one-liners). Falls back to an archetype-aware
+    templated line."""
+    # Try the brief first — analyst may have written a specific line
+    cat_map = _brief_get(p, "category_why", default={}) or {}
+    if isinstance(cat_map, dict):
+        cat_key = cat.upper().strip()
+        # Try exact key, then pretty variants
+        for k in (cat_key, cat.upper(),
+                  _pretty_cat(cat).upper(),
+                  cat_key.replace("_", " "),
+                  cat_key.replace("/", " / ")):
+            v = cat_map.get(k)
+            if v and isinstance(v, str):
+                return _purge_pronouns(v, p["name"])
+
     if not top:
         return "No standout brand signal yet in this category."
     lead = top[0]
     name = lead.get("name", "").strip()
-    idx = int(_num(lead.get("index", 0)))
-    pct = _num(lead.get("pct", 0))
+    idx  = int(_num(lead.get("index", 0)))
+    pct  = _num(lead.get("pct", 0))
     cat_pretty = _pretty_cat(cat)
+    arch = p.get("_archetype") or _ARCHETYPE_GENERIC
+
+    # Extreme-index low-reach guard — never lead with a freak-index brand
+    if idx >= 400 and pct < 8:
+        # Skip the outlier and describe the category as a spread instead
+        return (f"The audience spreads across mainstream "
+                f"{cat_pretty.lower()} choices with meaningful over-index; "
+                "scale is present, no single brand dominates the signal.")
+
     if idx >= 200:
-        return (f"{name} anchors this category at a {idx} index — an unusually "
+        base = (f"{name} anchors this category at a {idx} index — an unusually "
                 f"tight signal for {cat_pretty.lower()}. Any activation here "
                 "reaches an audience that already opts in.")
-    if idx >= 130:
-        return (f"{name} leads with {pct:.1f}% penetration ({idx} index) — a "
+    elif idx >= 130:
+        base = (f"{name} leads with {pct:.1f}% penetration ({idx} index) — a "
                 f"reliable {cat_pretty.lower()} beachhead.")
-    return (f"{p['name']}'s audience distributes across mainstream "
-            f"{cat_pretty.lower()} choices; scale is present, differentiation is soft.")
+    else:
+        return (f"The audience distributes across mainstream "
+                f"{cat_pretty.lower()} choices; scale is present, "
+                "differentiation is soft.")
+
+    # Add an archetype-specific tag for MOVIE / TV
+    if arch == _ARCHETYPE_MOVIE:
+        base += (f" For the release-marketing plan, {name} is a natural "
+                 "co-marketing / partner brand.")
+    elif arch == _ARCHETYPE_TV_SHOW:
+        base += (f" For launch or renewal marketing, {name} is a high-fit "
+                 "sponsor and audience-lookalike seed.")
+    return base
 
 
 def _sub_section_headers(cat: str, n_cols: int) -> list[str]:
-    """Return sub-section header labels for the multi-column persona-category
-    slide. Some categories have well-known conceptual splits (KD banking
-    slide split into 'DIGITAL BANKING & PAY', 'BANKING', 'INVESTMENTS',
-    'INTEREST SIGNAL'). For unknown cats we render generic tier labels."""
+    """Sub-section header labels for the multi-column persona slide.
+
+    Previous version had hardcoded conceptual labels (e.g. Travel →
+    AIRLINES/HOTELS/OTA/EXPERIENCES) that the row assignments did NOT
+    respect — a hotel brand ended up under 'AIRLINES', a lingerie brand
+    under 'STREETWEAR', etc. Since we do not have a real sub-category
+    signal in the raw payload, we now always use tier labels driven by
+    index-rank order. This is honest and never misleading.
+
+    Categories like MPB where the split IS just rank-based keep their
+    'TOP 5 / 6-10 / ...' style labels since those describe reality."""
     cat_key = cat.upper().replace("_", " ").replace("/", " / ")
-    known = {
-        "BANKING": ["DIGITAL BANKING & PAY", "BANKING", "INVESTMENTS",
-                    "INTEREST SIGNAL"],
-        "STREAMING": ["STREAMING / VIDEO", "SOCIAL", "SEARCH & AI",
-                      "SPORTS-MEDIA NOTABLES"],
-        "SOCIAL MEDIA": ["SOCIAL PLATFORMS", "MESSAGING", "VIDEO NATIVE",
-                         "EMERGING"],
-        "QSR": ["THE LEADERS", "CHICKEN / SPECIALTY", "DELIVERY APPS",
-                "FAST CASUAL"],
-        "RETAIL": ["MASS RETAIL", "SPORTS SPECIALTY", "SNEAKER RESALE",
-                   "PREMIUM"],
-        "APPAREL / FOOTWEAR": ["FOOTWEAR", "APPAREL", "PREMIUM & LUXURY",
-                               "STREETWEAR"],
-        "MPB": ["TOP 5", "6-10", "11-15", "16-20"],
-        "MOST PURCHASED BRANDS": ["TOP 5", "6-10", "11-15", "16-20"],
-        "TRAVEL": ["AIRLINES", "HOTELS", "OTA / BOOKING", "EXPERIENCES"],
-        "AUTOMOBILE": ["MAINSTREAM", "PREMIUM", "TRUCK / UTILITY", "EV"],
-        "TALENT / ACTOR": ["A-LIST", "RISING", "COMEDY", "DRAMA"],
-    }
-    labels = known.get(cat_key)
-    if labels:
-        return labels[:n_cols]
-    return [f"TIER {i+1:02d}" for i in range(n_cols)]
+    if cat_key in ("MPB", "MOST PURCHASED BRANDS"):
+        return ["TOP 5", "6-10", "11-15", "16-20"][:n_cols]
+    # Tier labels — the columns are populated top-of-index first, so tier
+    # names reflect actual ranking order and don't fabricate a taxonomy.
+    tiers = ["STRONGEST SIGNAL", "STRONG SIGNAL",
+             "NOTABLE SIGNAL", "EMERGING SIGNAL"]
+    return tiers[:n_cols]
 
 
 def _pick_case_studies(p: dict, n: int = 3) -> list[dict]:
     """Pick top ``n`` distinct brand case studies — each becomes one slide.
 
-    Selection prioritises brand recognizability (skip weird SKU-ish names)
-    and spread across categories so we don't do 3 case studies all from the
-    same category. Each returned dict has the shape the slide builder needs."""
+    Priority order:
+      1. If the LLM analyst brief provided case studies, honor its picks
+         (matched back to the real data so stats stay accurate).
+      2. Otherwise, filter noise: require pct >= 8% AND index >= 130 AND
+         (if idx > 350 then also pct >= 15%). Rank by pct * log(index/100+1)
+         which favors real reach over freak-index outliers. This is the
+         fix for the 'FANTOM WALLET at 849 with 5.7% reach' defect the
+         user flagged.
+      3. Spread across categories so we don't do 3 case studies from the
+         same category."""
+    brief_cs = _brief_get(p, "case_studies")
+    if brief_cs and isinstance(brief_cs, list):
+        all_items = _all_behavioral_items(p)
+        # Lookup by upper-cased brand name
+        item_lut = {(it.get("name") or "").strip().upper(): it
+                     for it in all_items}
+        picked: list[dict] = []
+        for bcs in brief_cs:
+            if not isinstance(bcs, dict):
+                continue
+            brand_key = (bcs.get("brand") or "").strip().upper()
+            if not brand_key:
+                continue
+            it = item_lut.get(brand_key)
+            if not it:
+                # Partial-match fallback (brand names sometimes drift)
+                for k, v in item_lut.items():
+                    if brand_key in k or (len(k) >= 4 and k in brand_key):
+                        it = v
+                        break
+            if not it:
+                continue
+            picked.append(_case_study_from_item(
+                p, it,
+                headline_a=_purge_pronouns(str(bcs.get("headline_a") or ""),
+                                           p["name"]),
+                headline_b=_purge_pronouns(str(bcs.get("headline_b") or ""),
+                                           p["name"]),
+                narrative=_purge_pronouns(str(bcs.get("narrative") or ""),
+                                          p["name"]),
+            ))
+            if len(picked) >= n:
+                break
+        if picked:
+            return picked
+
+    # ── Deterministic fallback path ─────────────────────────────────────
     all_items = _all_behavioral_items(p)
-    all_items = [it for it in all_items
-                 if _num(it.get("index", 0)) >= 130
-                 and _num(it.get("pct", 0)) >= 5.0
-                 and len((it.get("name") or "").strip()) >= 2]
-    # Sort by index desc, then pct desc
-    all_items.sort(key=lambda it: (-_num(it.get("index", 0)),
-                                   -_num(it.get("pct", 0))))
-    picked: list[dict] = []
-    seen_cats: set[str] = set()
+    scored: list[tuple[float, dict]] = []
     for it in all_items:
-        if len(picked) >= n:
-            break
-        cat = (it.get("_cat") or "").upper()
-        if cat in seen_cats and len(picked) >= 1:
-            continue
-        brand = (it.get("name") or "").strip()
         pct = _num(it.get("pct", 0))
-        idx = int(_num(it.get("index", 0)))
-        gp = _num(it.get("genPopPct", 0))
-        proj = _num(it.get("projection", 0))
-        if not gp and idx:
-            gp = round(pct / (idx / 100), 1) if idx else 0
-
-        # Compose a KD-style deal narrative — generic since we don't know
-        # if the brand has a real partnership. Frames as taste evidence.
-        narrative = (
-            f"{p['name']}'s audience over-indexes {idx}x vs the national "
-            f"baseline on {brand}: {pct:.1f}% engage in-window, versus "
-            f"{gp:.1f}% of the general population. That gap isn't statistical "
-            "noise — it's the audience's taste graph made visible.\n\n"
-            f"For a brand looking to activate the {p['name']} fanbase, "
-            f"{brand} is the ready-made co-sign — the endorsement they read "
-            "as authentic, not as an ad."
-        )
-
-        # 3 stat callouts
-        stats = [
-            (f"{brand.upper()} INDEX", f"{idx}",
-             f"vs Gen Pop"),
-            ("% PENETRATION", f"{pct:.1f}%",
-             (f"vs {gp:.1f}% Gen. Pop." if gp else "of the audience")),
-            ("AUDIENCE REACH", (_fmt_int_compact(proj) or "—"),
-             "U.S. digital adults engaged"),
-        ]
-        # Editorial headline
-        if idx >= 250:
-            ha, hb = f"All-in on", f"{brand}."
-        elif idx >= 180:
-            ha, hb = f"Wired to buy", f"{brand}."
-        elif idx >= 140:
-            ha, hb = f"They come pre-sold", f"on {brand}."
-        else:
-            ha, hb = f"Meaningful lift", f"for {brand}."
-
-        picked.append({
-            "name": brand, "category": cat,
-            "pct": pct, "index": idx, "gen_pop_pct": gp,
-            "projection": proj,
-            "narrative": narrative,
-            "headline_a": ha, "headline_b": hb,
-            "stats": stats,
-        })
+        idx = _num(it.get("index", 0))
+        if pct < 8.0 or idx < 130:
+            continue
+        # Freak-index low-reach filter (Rule #16 in the pipeline rules —
+        # panel-reality calibration): a 5%-reach brand at 800 idx is much
+        # more likely a low-N panel artifact than a real audience signal.
+        if idx >= 350 and pct < 15:
+            continue
+        if len((it.get("name") or "").strip()) < 2:
+            continue
+        # Score weights reach linearly + log(index) so we don't pick 3
+        # tiny freak-index brands over 3 meaningful mid-index brands.
+        score = pct * math.log((idx / 100.0) + 1.0)
+        scored.append((score, it))
+    scored.sort(key=lambda t: -t[0])
+    picked_items: list[dict] = []
+    seen_cats: set[str] = set()
+    for _, it in scored:
+        cat = (it.get("_cat") or "").upper()
+        if cat in seen_cats and len(picked_items) >= 1:
+            continue
+        picked_items.append(it)
         seen_cats.add(cat)
-    return picked
+        if len(picked_items) >= n:
+            break
+    return [_case_study_from_item(p, it) for it in picked_items]
+
+
+def _case_study_from_item(p: dict, it: dict, *,
+                          headline_a: str = "",
+                          headline_b: str = "",
+                          narrative: str = "") -> dict:
+    """Build the case-study payload the slide renderer expects from a raw
+    behavioral item. If any editorial string is missing, a smart archetype-
+    aware fallback fills it in — but the LLM brief's copy always wins when
+    provided."""
+    brand = (it.get("name") or "").strip()
+    pct   = _num(it.get("pct", 0))
+    idx   = int(_num(it.get("index", 0)))
+    gp    = _num(it.get("genPopPct", 0))
+    proj  = _num(it.get("projection", 0))
+    cat   = (it.get("_cat") or "")
+    if not gp and idx:
+        gp = round(pct / (idx / 100), 1) if idx else 0
+
+    if not headline_a or not headline_b:
+        if idx >= 250:
+            headline_a, headline_b = "All-in on", f"{brand}."
+        elif idx >= 180:
+            headline_a, headline_b = "Wired to buy", f"{brand}."
+        elif idx >= 140:
+            headline_a, headline_b = "Pre-sold on", f"{brand}."
+        else:
+            headline_a, headline_b = "Meaningful lift for", f"{brand}."
+
+    if not narrative:
+        subj = p["name"]
+        arch = p.get("_archetype") or _ARCHETYPE_GENERIC
+        base = (
+            f"The {subj} audience over-indexes {idx} on {brand} — "
+            f"{pct:.1f}% engage in-window vs. {gp:.1f}% of the U.S. general "
+            "population. That gap is a durable purchase signal, not a "
+            "one-off spike."
+        )
+        if arch == _ARCHETYPE_MOVIE:
+            tail = (f"For the release marketing plan, {brand} is a natural "
+                    "co-marketing partner and a lookalike-audience seed "
+                    "worth activating against.")
+        elif arch == _ARCHETYPE_TV_SHOW:
+            tail = (f"For launch and renewal marketing, {brand} is a high-"
+                    "fit sponsor and a lookalike-seed audience worth "
+                    "activating against.")
+        elif arch in (_ARCHETYPE_MUSICIAN, _ARCHETYPE_ACTOR,
+                       _ARCHETYPE_ATHLETE, _ARCHETYPE_TEAM):
+            tail = (f"For endorsement or partnership planning, {brand} is a "
+                    "high-fit brand — the affinity is already there without "
+                    "a paid buy.")
+        else:
+            tail = (f"For any partner brand aligned with the audience, "
+                    f"{brand} is a ready-made co-signer.")
+        narrative = base + "\n\n" + tail
+
+    stats = [
+        (f"{brand.upper()} INDEX", f"{idx}", "vs Gen Pop"),
+        ("% PENETRATION",          f"{pct:.1f}%",
+         (f"vs {gp:.1f}% Gen. Pop." if gp else "of the audience")),
+        ("AUDIENCE REACH",         (_fmt_int_compact(proj) or "—"),
+         "U.S. digital adults engaged"),
+    ]
+    return {
+        "name": brand, "category": cat,
+        "pct": pct, "index": idx, "gen_pop_pct": gp,
+        "projection": proj,
+        "narrative": narrative,
+        "headline_a": headline_a, "headline_b": headline_b,
+        "stats": stats,
+    }
 
 
 def _mpb_top_brands(p: dict, n: int = 20) -> list[dict]:
@@ -2642,88 +3437,97 @@ def _mpb_top_brands(p: dict, n: int = 20) -> list[dict]:
 
 def _pick_takeaways(p: dict) -> list[tuple[str, str, str]]:
     """Return up to 6 (number, title, body) tuples for the KEY TAKEAWAYS
-    slide, built dynamically from the strongest signals in the payload."""
-    subj = p["name"]
-    proj = p["projected_us"] or 0
-    sample = p["sample_size"] or 0
-    demos = p.get("demographics") or {}
-    top_brand = _top_over_index_brand(p)
+    slide, built dynamically from the strongest signals.
+
+    Bodies are always readable sentences (not bullet lists) so they render
+    cleanly in a 3.55"-wide tile without pipe-character artifacts."""
+    subj      = p["name"]
+    proj      = p["projected_us"] or 0
+    demos     = p.get("demographics") or {}
+    top_brand = _top_over_index_brand(p, min_pct=10.0, max_index=300.0)
     picks: list[tuple[str, str, str]] = []
 
-    # 01: Scale + demography quick-hit
+    # 01 — Who they are
     facts = []
     if proj:
-        facts.append(f"{_fmt_int_compact(proj)} US digital fans")
+        facts.append(f"{_fmt_int_compact(proj)} U.S. digital fans")
     gender = demos.get("gender", {})
     for k in ("Male", "Female"):
-        if _num(gender.get(k, 0)) >= 55:
-            facts.append(f"{_num(gender[k]):.1f}% {k.lower()}")
+        v = _num(gender.get(k, 0))
+        if v >= 54:
+            facts.append(f"{v:.0f}% {k.lower()}-leaning")
+            break
     prime = sum(_num(v) for k, v in demos.get("age", {}).items()
                 if str(k).replace("–", "-") in ("18-24", "25-34", "35-44"))
     if prime:
-        facts.append(f"{prime:.1f}% 18-44")
-    for k in ("Black", "Black or African American", "Hispanic", "Hispanic or Latino"):
+        facts.append(f"{prime:.0f}% aged 18-44")
+    for k in ("Black or African American", "Hispanic or Latino", "Asian"):
         idx = _lookup_idx(p, "ethnicity", k)
         if idx >= 130:
-            facts.append(f"{_num(demos.get('ethnicity', {}).get(k, 0)):.1f}% {k} ({int(idx)})")
+            facts.append(f"{k} index {int(idx)}")
             break
-    picks.append(("01", "Ideal demography.",
-                  "Unprecedented reach & resonance.\n\nFacts:\n- "
-                  + "\n- ".join(facts[:5])))
+    body_01 = "Scale meets resonance. " + "; ".join(facts[:4]) + "."
+    picks.append(("01", "Who they are.", body_01))
 
-    # 02: Geography (only if we have location data)
+    # 02 — Where they live
     dmas = _top_dmas_ranked(p, n=3)
     if dmas:
-        dma_lines = [f"{name}: {pct:.1f}% ({int(idx)})" if idx
-                     else f"{name}: {pct:.1f}%"
-                     for name, pct, idx in dmas]
-        picks.append(("02", "Big-market reach.",
-                      "Over-indexes across major US metros:\n- "
-                      + "\n- ".join(dma_lines)))
+        dma_line = ", ".join(f"{name} ({pct:.1f}%)" for name, pct, _ in dmas)
+        picks.append(("02", "Where they live.",
+                      f"Concentrated in major digital markets: {dma_line}. "
+                      "Prioritize these DMAs for high-density media buys."))
 
-    # 03: Live events (ticketing / festival category if present)
+    # 03 — Live events (only if that data exists)
     live = _first_available(p, ["TICKETING PLATFORM", "TICKETING PLATFORMS",
                                 "FESTIVAL", "FESTIVALS", "LIVE EVENTS",
                                 "EVENTS"])
     if live:
         top3 = live[:3]
+        names = ", ".join(
+            f"{it['name']} ({int(_num(it.get('index',0)))})" for it in top3
+        )
         picks.append(("03", "They show up.",
-                      f"Live event and ticketing behavior tracks "
-                      f"~{int(_num(top3[0].get('index', 0)) / 100)}x national baseline.\n\n"
-                      + "\n- ".join([""] + [f"{it['name']}: {_num(it.get('pct',0)):.1f}% ({int(_num(it.get('index',0)))})"
-                                            for it in top3])))
+                      f"Live-event and ticketing behavior far exceeds Gen Pop: "
+                      f"{names}. Sponsorship and on-site activation are "
+                      "high-fit for this audience."))
 
-    # 04: Media & digital
+    # 04 — Where attention lives
     media = _first_available(p, ["STREAMING/PLATFORM", "STREAMING VIDEO",
                                  "MEDIA", "SOCIAL MEDIA"])
     if media:
         top3 = media[:3]
-        picks.append(("04", "Media-native.",
-                      "Where the audience actually spends screen time:\n- "
-                      + "\n- ".join([f"{it['name']}: {_num(it.get('pct',0)):.1f}%"
-                                     f" ({int(_num(it.get('index',0)))})"
-                                     for it in top3])))
+        names = ", ".join(
+            f"{it['name']} ({int(_num(it.get('index',0)))})" for it in top3
+        )
+        picks.append(("04", "Where attention lives.",
+                      f"Highest-fit media surfaces: {names}. Prioritize "
+                      "these over generic linear or broad social buys."))
 
-    # 05: Financial (if present)
+    # 05 — Commerce / financial (if present)
     fin = _first_available(p, ["BANKING", "DIGITAL BANKING", "INVESTMENTS",
                                "CREDIT PROVIDER"])
     if fin:
         top3 = fin[:3]
-        picks.append(("05", "Financial footprint.",
-                      "Money stack the audience actually uses:\n- "
-                      + "\n- ".join([f"{it['name']}: {_num(it.get('pct',0)):.1f}%"
-                                     f" ({int(_num(it.get('index',0)))})"
-                                     for it in top3])))
+        names = ", ".join(
+            f"{it['name']} ({int(_num(it.get('index',0)))})" for it in top3
+        )
+        picks.append(("05", "How they transact.",
+                      f"Financial-services signature: {names}. "
+                      "Category-fit for co-marketing and sponsor plays."))
 
-    # 06: Top brand as the proof point
-    if top_brand:
-        picks.append(("06", "The proof is repeatable.",
-                      f"The strongest single signal in the file is "
-                      f"{top_brand['name']} at {int(_num(top_brand['index']))} "
-                      f"index. That's the taste anchor any brand partnership "
-                      f"should key off of.\n\n{subj} delivers."))
+    # 06 — Whitespace / proof point
+    ws = _brief_get(p, "whitespace")
+    if ws:
+        picks.append(("06", "The whitespace.",
+                      _purge_pronouns(str(ws), subj)))
+    elif top_brand:
+        picks.append(("06", "The taste anchor.",
+                      f"{top_brand['name']} indexes at "
+                      f"{int(_num(top_brand['index']))} — the strongest "
+                      "durable brand signal in the file. Any partnership "
+                      "activation should key off this affinity."))
 
-    # Renumber 01..N in order actually produced
+    # Renumber 01..N in produced order
     picks = [(f"{i+1:02d}", t, b) for i, (_, t, b) in enumerate(picks)][:6]
     return picks
 
