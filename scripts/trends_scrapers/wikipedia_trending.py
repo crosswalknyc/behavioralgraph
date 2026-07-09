@@ -160,22 +160,34 @@ def _wiki_url(article_slug: str) -> str:
 
 
 def fetch() -> dict[str, Any]:
-    """Pull yesterday + day-before-yesterday, compute delta, rank."""
-    # Wikimedia backfills the previous day's data reliably by ~2h UTC,
-    # but today's day isn't ready until end-of-day. Anchor on yesterday
-    # so we always have a complete day to compare.
-    today_anchor = date.today() - timedelta(days=1)
-    prior        = today_anchor - timedelta(days=1)
+    """Pull yesterday + day-before-yesterday, compute delta, rank.
 
-    today_map = _fetch_day(today_anchor)
-    prior_map = _fetch_day(prior)
+    Wikimedia typically closes a day by ~04:00 UTC of the following
+    day. Because scrapers run on Hetzner (UTC) at times that can land
+    inside that window, we walk backwards up to 3 days looking for
+    the first day that returns data, then compare against the day
+    before THAT so we still get a proper WoW delta.
+    """
+    # Try today-1, today-2, today-3 in order. First one with data wins.
+    today_anchor: Optional[date] = None
+    today_map:    dict[str, dict] = {}
+    for offset in range(1, 4):
+        candidate = date.today() - timedelta(days=offset)
+        m = _fetch_day(candidate)
+        if m:
+            today_anchor = candidate
+            today_map    = m
+            break
 
-    if not today_map:
+    if today_anchor is None or not today_map:
         return {
             'national':     [],
             'available':    False,
-            'error':        f'no data for {today_anchor.isoformat()}',
+            'error':        'no data for last 3 days (Wikimedia aggregation lag)',
         }
+
+    prior     = today_anchor - timedelta(days=1)
+    prior_map = _fetch_day(prior)
 
     rows: list[dict] = []
     for title, meta in today_map.items():

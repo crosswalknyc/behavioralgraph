@@ -48,6 +48,7 @@ import logging
 import os
 import re
 import sys
+from datetime import date, timedelta
 from typing import Any, Optional
 
 import boto3
@@ -57,8 +58,12 @@ logger = logging.getLogger(__name__)
 
 # Mirror trends_iq.py so we're guaranteed to read the same S3 keys the
 # app reads. If either file moves, they move together.
-_S3_BUCKET  = 'dashboard-inputs'
-_S3_PREFIX  = 'trends_iq_snapshots/latest/'
+_S3_BUCKET      = 'dashboard-inputs'
+_S3_PREFIX      = 'trends_iq_snapshots/latest/'
+# Some sources (gdelt, gdelt-people) don't have a latest/ mirror -
+# they're only written to the dated history path. Look back this many
+# days for those.
+_HISTORY_LOOKBACK_DAYS = 4
 
 # Cap how many items we ask Claude to explain per day. 30 is enough to
 # cover every top-of-panel row that a user actually looks at. More than
@@ -66,8 +71,11 @@ _S3_PREFIX  = 'trends_iq_snapshots/latest/'
 _MAX_ITEMS_PER_SOURCE = 8
 _TOTAL_ITEM_CAP       = 30
 
-# Cheap fast model - single-sentence explanations don't need Opus.
-_CLAUDE_MODEL = os.environ.get('WHY_TRENDING_MODEL') or 'claude-3-5-haiku-latest'
+# Single-sentence explanations don't need Opus. Match the model naming
+# convention the rest of the workspace uses (claude_client.py defaults
+# to claude-sonnet-4-5); haiku-4-5 is the cheap fast tier from the
+# same family. Overridable via WHY_TRENDING_MODEL env var.
+_CLAUDE_MODEL = os.environ.get('WHY_TRENDING_MODEL') or 'claude-haiku-4-5'
 _MAX_TOKENS   = 1500
 
 
@@ -91,13 +99,29 @@ def _s3():
 
 
 def _read_snapshot(source: str) -> Optional[dict]:
-    """Return the S3 snapshot for `source` or None on any failure."""
+    """Return the S3 snapshot for `source` or None on any failure.
+
+    First tries the `latest/` prefix (fresh daily-cron output). If that
+    misses, walks backwards through the dated history path up to
+    _HISTORY_LOOKBACK_DAYS - covers sources like `gdelt-people` and
+    `gdelt` that are only written to the dated path.
+    """
     try:
         obj = _s3().get_object(Bucket=_S3_BUCKET, Key=f'{_S3_PREFIX}{source}.json')
         return json.loads(obj['Body'].read().decode('utf-8'))
-    except Exception as e:
-        logger.info("why_trending: skip %s (%s)", source, e)
-        return None
+    except Exception:
+        pass
+    for offset in range(0, _HISTORY_LOOKBACK_DAYS):
+        d = date.today() - timedelta(days=offset)
+        key = f'trends_iq_snapshots/{d.isoformat()}/{source}.json'
+        try:
+            obj = _s3().get_object(Bucket=_S3_BUCKET, Key=key)
+            return json.loads(obj['Body'].read().decode('utf-8'))
+        except Exception:
+            continue
+    logger.info("why_trending: skip %s (no snapshot in latest/ or last %d days)",
+                 source, _HISTORY_LOOKBACK_DAYS)
+    return None
 
 
 def _collect_items() -> list[dict]:
