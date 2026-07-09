@@ -40607,7 +40607,7 @@
         // Google Trends, GDELT, major news RSS feeds, Reddit, YouTube,
         // and retailer bestseller pages. Every tab renders its own card
         // grid.
-        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'movers', activeSocial: 'reddit', activeRetailer: 'amazon', inFlight: null };
+        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'movers', activeSocial: 'reddit', activeRetailer: 'amazon', headlinesView: 'top', inFlight: null };
 
         function _trendsIQHideAllOtherViews() {
             var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
@@ -40762,10 +40762,12 @@
             }
 
             var watchCount = (window.__trendsIQ.watchList || []).length;
+            // "By news source" is nested inside Headlines as a pill
+            // sub-tab, so it no longer has its own top-level tab.
+            var headlineCount = (counts.headlines || 0) + (counts.sources || 0);
             var tabs = [
                 { key: 'movers',    label: 'Movers',           count: counts.movers    || 0, icon: '🚀' },
-                { key: 'headlines', label: 'Headlines',        count: counts.headlines || 0, icon: '📰' },
-                { key: 'sources',   label: 'By news source',   count: counts.sources   || 0, icon: '🏛️' },
+                { key: 'headlines', label: 'Headlines',        count: headlineCount,         icon: '📰' },
                 { key: 'searches',  label: 'Trending searches',count: counts.searches  || 0, icon: '🔎' },
                 { key: 'people',    label: 'Trending people',  count: counts.people    || 0, icon: '👤' },
                 { key: 'social',    label: 'Social',           count: 0,                     icon: '💬' },
@@ -40787,8 +40789,8 @@
             var panels = document.getElementById('trendsIQPanels');
             panels.innerHTML =
                 _renderTIQPanel('movers',    renderTIQMovers(cards.movers || {available:false})) +
-                _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [])) +
-                _renderTIQPanel('sources',   renderTIQArticlesBySource(cards.articles_by_source || [])) +
+                _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [],
+                                                                 cards.articles_by_source || [])) +
                 _renderTIQPanel('searches',  renderTIQSearches({
                     all:         cards.trending_searches             || [],
                     by_category: cards.trending_searches_by_category || {},
@@ -40799,6 +40801,14 @@
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
 
+            // If the user had previously landed on the removed "sources"
+            // tab (URL hash / stale state), remap to Headlines so no
+            // ghost tab-active-state points at a panel that no longer
+            // exists.
+            if (window.__trendsIQ.activeTab === 'sources') {
+                window.__trendsIQ.activeTab = 'headlines';
+                window.__trendsIQ.headlinesView = 'sources';
+            }
             setTrendsIQTab(window.__trendsIQ.activeTab || 'movers');
 
             if (!window.__trendsIQ.watchReady) {
@@ -40968,7 +40978,11 @@
             return header + grid;
         }
 
-        function renderTIQHeadlines(rows) {
+        // Headlines panel: hosts BOTH the aggregated "Top trending"
+        // list AND the per-outlet "By news source" breakdown behind
+        // pill sub-tabs. Consolidating avoids having two near-identical
+        // top-level tabs that fragment the news view.
+        function _renderTIQHeadlinesTop(rows) {
             if (!rows.length) return '<div class="tiq-empty">No trending headlines available for this filter yet.</div>';
             var html = '<div class="tiq-card"><h4>📰 Top trending headlines</h4>' +
                        '<div class="tiq-card-sub">Aggregated across major news outlets.</div>' +
@@ -40989,7 +41003,7 @@
             return '<div class="tiq-cards-grid" style="grid-template-columns: 1fr;">' + html + '</div>';
         }
 
-        function renderTIQArticlesBySource(sources) {
+        function _renderTIQHeadlinesBySource(sources) {
             if (!sources.length) return '<div class="tiq-empty">No article feeds returned data for this filter.</div>';
             var html = '<div class="tiq-cards-grid">';
             sources.forEach(function(src) {
@@ -41015,6 +41029,49 @@
             html += '</div>';
             return html;
         }
+
+        function renderTIQHeadlines(rows, sources) {
+            rows    = rows    || [];
+            sources = sources || [];
+            var view = window.__trendsIQ.headlinesView || 'top';
+            // If the user landed on "sources" but no source data came
+            // back, fall back to the top view so they don't see an
+            // empty panel by default.
+            if (view === 'sources' && !sources.length && rows.length) {
+                view = 'top';
+                window.__trendsIQ.headlinesView = 'top';
+            }
+            var tabs = [
+                { key: 'top',     label: '📰 Top trending',   count: rows.length    },
+                { key: 'sources', label: '🏛️ By news source', count: sources.length },
+            ];
+            var tabsHtml = tabs.map(function(t) {
+                var active = (t.key === view) ? ' active' : '';
+                var unavail = t.count ? '' : ' unavailable';
+                var label = t.label + (t.count ? (' <span class="tiq-tab-count" style="margin-left:6px;">' + t.count + '</span>') : '');
+                return '<div class="tiq-social-tab' + active + unavail +
+                       '" onclick="setTrendsIQHeadlinesView(\'' + t.key + '\')">' + label + '</div>';
+            }).join('');
+            var body = (view === 'sources')
+                     ? _renderTIQHeadlinesBySource(sources)
+                     : _renderTIQHeadlinesTop(rows);
+            return '<div class="tiq-social-tabs">' + tabsHtml + '</div>' + body;
+        }
+
+        window.setTrendsIQHeadlinesView = function(key) {
+            if (key !== 'top' && key !== 'sources') return;
+            window.__trendsIQ.headlinesView = key;
+            // Repaint the Headlines panel in place; leaves the outer
+            // Trends tab selection intact.
+            var data = window.__trendsIQ.lastData;
+            if (!data || !data.cards) return;
+            var panel = document.querySelector('#trendsIQPanels .tiq-panel[data-tiq-panel="headlines"]');
+            if (panel) {
+                panel.innerHTML = renderTIQHeadlines(
+                    data.cards.trending_headlines || [],
+                    data.cards.articles_by_source || []);
+            }
+        };
 
         // Format a search volume as "50K+", "1M+", etc. Google's UI
         // rounds down to the nearest tier ceiling; we mirror that so
@@ -41627,8 +41684,8 @@
             if (!panels) return;
             panels.innerHTML =
                 _renderTIQPanel('movers',    renderTIQMovers(cards.movers || {available:false})) +
-                _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [])) +
-                _renderTIQPanel('sources',   renderTIQArticlesBySource(cards.articles_by_source || [])) +
+                _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [],
+                                                                 cards.articles_by_source || [])) +
                 _renderTIQPanel('searches',  renderTIQSearches({
                     all:         cards.trending_searches             || [],
                     by_category: cards.trending_searches_by_category || {},
