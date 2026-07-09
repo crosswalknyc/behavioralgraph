@@ -2162,6 +2162,217 @@ def _fetch_social_trending(state: Optional[str], lookback_days: int,
 # ============================================================================
 # Card 5b: Trending on streaming (Netflix, Disney+, Hulu, Max, Prime, ESPN+)
 # ============================================================================
+# Every platform's items are split into Film + TV and stamped with a
+# `weeks_in_top10` count so all six platforms get the same treatment
+# Netflix has always had (which comes from Netflix's own weekly TSV).
+# For the non-Netflix platforms:
+#   - Film/TV: infer from category_display when the scraper set it, and
+#     from URL / collection heuristics when it didn't (Disney+, ESPN+).
+#   - Weeks-on-chart: count distinct ISO-weeks the title appeared in the
+#     dated snapshot history at `trends_iq_snapshots/{YYYY-MM-DD}/
+#     {slug}.json`. Snapshots are retained indefinitely (no S3 lifecycle
+#     policy on that prefix) so this window grows every day.
+#
+# Retention: `write_snapshot(also_dated=True)` (the default) writes
+# BOTH `latest/{source}.json` AND `{YYYY-MM-DD}/{source}.json`. No purge
+# job runs against the dated prefix, so day-N history is fully preserved
+# for retrospective analysis, movers, and this weeks-on-chart tally.
+
+# URL / collection substrings that pin an item to Film vs TV when the
+# scraper didn't set category_display. The lists are intentionally short;
+# ambiguous items fall through to "other" and end up in TV (the safer
+# default because most streaming platforms are TV-heavy).
+_FILM_URL_HINTS = (
+    '/movie', '/movies', '/film', '/films',
+    '/detail/',                              # Prime Video's per-movie deep-link
+    '/gp/video/detail',
+    '/browse/entity-',                       # Disney+ specials/features
+)
+_TV_URL_HINTS = (
+    '/series', '/tv-series', '/show', '/shows',
+    '/season', '/seasons', '/episode',
+)
+_FILM_TITLE_HINTS = (
+    ' movie', ' the movie', ' feature',
+)
+_TV_TITLE_HINTS = (
+    ' season ', ' episode ', ' series', ' show', ' presents',
+    ': a docuseries', 'docuseries',
+)
+
+
+def _classify_film_or_tv(item: dict) -> str:
+    """Return 'Film', 'TV', or '' when we can't tell.
+
+    Priority:
+      1. Explicit `category_display` from the scraper (Netflix, Hulu,
+         Prime Video, Max all set this reliably).
+      2. URL substring hints.
+      3. Title substring hints.
+      4. Fall through to '' (frontend will bucket into TV as the
+         default catch-all).
+    """
+    cd = (item.get('category_display') or '').strip().lower()
+    if cd in ('film', 'films', 'movie', 'movies'):
+        return 'Film'
+    if cd in ('tv', 'series', 'show', 'shows'):
+        return 'TV'
+    # `category` field (Netflix) sometimes has raw string like "Films".
+    cat = (item.get('category') or '').strip().lower()
+    if cat in ('films', 'film', 'movies', 'movie'):
+        return 'Film'
+    if cat in ('tv', 'shows', 'series'):
+        return 'TV'
+    url = (item.get('url') or '').lower()
+    # `/browse/entity-` (Disney+ / ESPN+) is used for BOTH films and
+    # shows, so we only take it as a Film signal when title/collection
+    # hints don't say otherwise. ESPN+ specifically is 100% sports
+    # programming - its entity URLs are all studio/live shows and
+    # should never be classified as Film.
+    coll = (item.get('collection') or '').lower()
+    if 'espn' in coll or 'sportscenter' in url or 'espnplus' in url:
+        return 'TV'
+    for hint in _FILM_URL_HINTS:
+        if hint in url:
+            if hint == '/browse/entity-' and any(h in url for h in _TV_URL_HINTS):
+                continue
+            return 'Film'
+    for hint in _TV_URL_HINTS:
+        if hint in url:
+            return 'TV'
+    title = ' ' + (item.get('title') or '').lower() + ' '
+    for hint in _TV_TITLE_HINTS:
+        if hint in title:
+            return 'TV'
+    for hint in _FILM_TITLE_HINTS:
+        if hint in title:
+            return 'Film'
+    return ''
+
+
+def _split_streaming_items(items: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Bucket items into (films, tv). Unclassified items default to TV
+    since most streaming catalogs are TV-heavy and users expect the TV
+    tab to be the fuller list."""
+    films: list[dict] = []
+    tv:    list[dict] = []
+    for it in items:
+        bucket = _classify_film_or_tv(it)
+        # Copy so we don't mutate the caller's items (they're often
+        # shared references coming out of the snapshot cache).
+        row = dict(it)
+        if bucket == 'Film':
+            row['category_display'] = 'Film'
+            films.append(row)
+        else:
+            row['category_display'] = 'TV'
+            tv.append(row)
+    # Preserve rank ordering within each bucket.
+    for i, r in enumerate(films, 1):
+        r['bucket_rank'] = i
+    for i, r in enumerate(tv, 1):
+        r['bucket_rank'] = i
+    return films, tv
+
+
+# Lookback window for the weeks-on-chart tally. 12 weeks matches Netflix's
+# "Top 10 - weeks in top 10" limit and is small enough that the S3 scan
+# stays fast (`get_object` per date, at most 84 calls, in parallel).
+_STREAMING_HISTORY_WEEKS = 12
+_STREAMING_HISTORY_TTL_S = 15 * 60  # in-process cache
+
+# Cache: {slug: (fetched_at_epoch, {title_norm: set[(iso_year, iso_week)]})}
+_STREAMING_WEEKS_CACHE: dict[str, tuple[float, dict[str, set[tuple[int, int]]]]] = {}
+
+
+def _title_norm(t: str) -> str:
+    """Case-insensitive, whitespace/punct-collapsed title key so
+    'The Fox Hollow Murders' and 'the fox hollow murders' resolve to
+    the same slot when comparing across snapshots."""
+    t = (t or '').strip().lower()
+    return re.sub(r'[^a-z0-9]+', '', t)
+
+
+def _iso_week_key(d) -> tuple[int, int]:
+    y, w, _ = d.isocalendar()
+    return (y, w)
+
+
+def _load_streaming_history_weeks(slug: str) -> dict[str, set[tuple[int, int]]]:
+    """For `slug`, scan the past `_STREAMING_HISTORY_WEEKS` weeks of
+    dated snapshots and return `{title_norm: {(iso_year, iso_week), ...}}`.
+
+    We fetch snapshots in parallel because each is a single S3
+    get_object. Even 12 weeks x 7 days = 84 keys completes in <2s.
+
+    Returned sets are what the annotator unions with today's ISO week
+    to produce the final `weeks_in_top10` count. Storing sets (not
+    counts) is what lets a title that appeared on Sat + Sun of last
+    week and Mon of this week read `wk 2` instead of `wk 1`.
+    """
+    now = time.time()
+    cached = _STREAMING_WEEKS_CACHE.get(slug)
+    if cached and (now - cached[0]) < _STREAMING_HISTORY_TTL_S:
+        return cached[1]
+
+    s3 = _s3_client()
+    if s3 is None:
+        _STREAMING_WEEKS_CACHE[slug] = (now, {})
+        return {}
+
+    today = datetime.now(timezone.utc).date()
+    dates = [today - timedelta(days=i) for i in range(1, _STREAMING_HISTORY_WEEKS * 7 + 1)]
+
+    weeks_by_title: dict[str, set[tuple[int, int]]] = {}
+
+    def _fetch_one(d):
+        key = f'trends_iq_snapshots/{d.isoformat()}/{slug}.json'
+        try:
+            resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=key)
+            data = json.loads(resp['Body'].read().decode('utf-8'))
+            return d, (data.get('national') or [])
+        except Exception:
+            return d, []
+
+    from concurrent.futures import ThreadPoolExecutor
+    try:
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for d, items in ex.map(_fetch_one, dates):
+                wkey = _iso_week_key(d)
+                for it in items:
+                    tn = _title_norm(it.get('title') or '')
+                    if not tn:
+                        continue
+                    weeks_by_title.setdefault(tn, set()).add(wkey)
+    except Exception as e:
+        logger.info("_load_streaming_history_weeks(%s) failed: %s", slug, e)
+
+    _STREAMING_WEEKS_CACHE[slug] = (now, weeks_by_title)
+    return weeks_by_title
+
+
+def _annotate_streaming_weeks(slug: str, items: list[dict]) -> None:
+    """Stamp each item with `weeks_in_top10` (in place).
+
+    For Netflix we KEEP the value the TSV shipped (their tally goes back
+    much further than our snapshot history). For everything else we
+    union the historical ISO-weeks the title appeared in with THIS
+    week, so a title that appeared 3 days last week and 1 day this week
+    reads `wk 2`.
+    """
+    if not items:
+        return
+    if slug == 'netflix':
+        return  # TSV-provided value is authoritative.
+    history = _load_streaming_history_weeks(slug)
+    today_key = _iso_week_key(datetime.now(timezone.utc).date())
+    for it in items:
+        tn = _title_norm(it.get('title') or '')
+        past = history.get(tn, set())
+        combined = past | {today_key}
+        it['weeks_in_top10'] = min(len(combined), _STREAMING_HISTORY_WEEKS + 1)
+
+
 def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
                                 keywords: Optional[list[str]] = None) -> dict:
     """Fan out to every streaming platform's daily snapshot.
@@ -2170,13 +2381,20 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
     are Playwright + donated-cookie scrapers - they'll return
     `available=False` until Jenna donates cookies for that domain.
 
+    Every returned platform payload includes:
+      - `items`: the full ranked list (backward compat)
+      - `films`: films-only slice, re-ranked from 1
+      - `tv`:    TV-only slice, re-ranked from 1
+      - each item stamped with `weeks_in_top10` from S3 history
+      - `week_us`: the ISO date the current snapshot's rankings
+        represent (Netflix ships it as their week label; for the others
+        we derive from `fetched_at`).
+
     Geographic filtering is minimal here: rankings are inherently
-    national (Netflix per-country data is US; the others are all
-    US-Netflix / US-Disney+ etc.). We still honor `keywords` for the
-    reordering pass so state / DMA selections nudge locally-flavored
-    titles up (e.g. "Yellowstone" for MT, "The Wire" for MD).
+    national. `keywords` still nudges region-flavored titles up.
     """
-    result = {slug: {'label': label, 'items': [], 'available': avail}
+    result = {slug: {'label': label, 'items': [], 'films': [], 'tv': [],
+                       'available': avail}
               for slug, label, avail in STREAMING_PLATFORMS}
 
     for slug, label, _static_avail in STREAMING_PLATFORMS:
@@ -2184,24 +2402,57 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
         if not snap:
             continue
         items = _snapshot_items_for_geo(snap, state, keywords=keywords)
+        items = items[:25]
+        _annotate_streaming_weeks(slug, items)
         snap_available = snap.get('available')
         if snap_available is None:
             snap_available = bool(items)
+
+        films, tv = _split_streaming_items(items)
+
+        # Netflix's own scraper already writes us_films/us_tv from the
+        # official TSV. Prefer those (they preserve category ordering
+        # from Netflix's own weekly ranking); otherwise use our split.
+        if slug == 'netflix':
+            netflix_films = snap.get('us_films') or []
+            netflix_tv    = snap.get('us_tv')    or []
+            if netflix_films or netflix_tv:
+                films = netflix_films[:20]
+                tv    = netflix_tv[:20]
+
         payload = {
             'label':      label,
             'items':      items[:20],
+            'films':      films[:20],
+            'tv':         tv[:20],
             'available':  bool(snap_available),
             'fetched_at': snap.get('fetched_at'),
         }
-        # Netflix ships extra metadata (week, per-category breakouts)
-        # the frontend uses for the "week of..." subtitle.
+
+        # Every platform gets a `week_us` label so the frontend can
+        # show "Week of YYYY-MM-DD" consistently. Netflix uses its own
+        # weekly release date; others fall back to the fetched_at day.
+        if snap.get('week_us'):
+            payload['week_us'] = snap['week_us']
+        elif snap.get('fetched_at'):
+            try:
+                dt = datetime.fromisoformat(snap['fetched_at'].replace('Z', '+00:00'))
+                # Anchor to the most recent Sunday to align with Netflix's
+                # weekly cadence.
+                sunday = dt.date() - timedelta(days=(dt.weekday() + 1) % 7)
+                payload['week_us'] = sunday.isoformat()
+            except Exception:
+                pass
+
+        # Preserve Netflix's global lists for the "US vs global" panel
+        # the frontend might grow into.
         if slug == 'netflix':
-            for extra in ('week_us', 'week_global',
-                           'us_films', 'us_tv',
+            for extra in ('week_global',
                            'global_films_en', 'global_tv_en',
                            'global_films_nonen', 'global_tv_nonen'):
                 if extra in snap:
                     payload[extra] = snap[extra]
+
         if snap.get('error'):
             payload['note'] = f"latest snapshot: {snap['error']}"
         result[slug] = payload
