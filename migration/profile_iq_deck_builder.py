@@ -85,40 +85,91 @@ US_POPULATION = 329_900_000
 
 
 # Canonical section IDs the LLM can request in its `sections` array.
-# Every ID maps to exactly one slide builder in _SECTION_BUILDERS below.
-_ALWAYS_SECTIONS  = ("cover", "exec_summary", "identity",
-                      "takeaways", "final", "methodology", "about")
+# Every ID maps to exactly one slide builder in the dispatch table below.
+#
+# The list is deliberately LONG. Individual slide builders self-skip when
+# the profile lacks the data to make the slide meaningful — so a thin
+# profile still produces a clean 12-slide deck, and a rich profile
+# produces the full 22+ slide ethnographic portrait.
+
 _DEFAULT_SECTIONS = (
-    "cover", "exec_summary", "scale", "identity", "index_story",
-    "day_in_life", "geography", "signature_affinities",
-    "category_deep_dives", "media_and_social", "media_plan",
-    "whitespace", "takeaways", "final", "methodology", "about",
+    "cover",
+    "exec_summary",
+    "portrait",
+    "scale",
+    "identity",
+    "demographic_deep_dive",
+    "life_stage",
+    "differ_from_genpop",
+    "index_story",
+    "day_in_life",
+    "geography",
+    "commerce_persona",
+    "signature_affinities",
+    "category_deep_dives",
+    "cultural_interests",
+    "media_and_social",
+    "media_plan",
+    "whitespace",
+    "takeaways",
+    "final",
+    "methodology",
+    "about",
+)
+
+# Mandatory core — the LLM cannot remove these under any circumstance.
+# Every real deck must open with cover/exec/portrait, do identity work,
+# close with takeaways/final/methodology/about.
+_ALWAYS_SECTIONS = (
+    "cover", "exec_summary", "portrait",
+    "scale", "identity", "demographic_deep_dive", "differ_from_genpop",
+    "takeaways", "final", "methodology", "about",
 )
 
 
 def _resolve_sections(profile: dict) -> list[str]:
     """Return the ordered list of section IDs to build for this profile.
 
-    Preference order:
-      1. LLM analyst brief's `sections` field (its own recommendation
-         based on the data density and story shape).
-      2. Deterministic fallback (`_DEFAULT_SECTIONS`) otherwise.
+    Design (revised 2026-07-09): the LLM does NOT dictate the deck
+    structure. Instead the deck ALWAYS starts from the rich default
+    list, and the LLM's `sections` field is treated as advisory — used
+    only to reorder the optional (non-always) slides. This prevents a
+    sparse LLM response from collapsing the deck to 7 slides.
 
-    Always guarantees the mandatory sections (cover / exec_summary /
-    identity / takeaways / final / methodology / about) are present.
+    Every slide builder is responsible for self-skipping when the data
+    doesn't support it, so we ship the full default list without fear
+    of empty pages.
     """
+    default = list(_DEFAULT_SECTIONS)
     brief_sections = _brief_get(profile, "sections", default=None)
+
     if isinstance(brief_sections, list) and brief_sections:
-        picked = [str(s).strip().lower() for s in brief_sections if str(s or "").strip()]
-    else:
-        picked = list(_DEFAULT_SECTIONS)
+        brief_order = [str(s).strip().lower() for s in brief_sections
+                        if str(s or "").strip()]
+        # Optional (non-always) slides the LLM explicitly nominated —
+        # reorder these to appear in the LLM's preferred order, but keep
+        # every other default slide in place.
+        optional_from_brief = [s for s in brief_order
+                                if s in default and s not in _ALWAYS_SECTIONS]
+        # Slot the LLM's optional picks in the order it gave, then append
+        # any remaining default optionals it didn't mention.
+        seen = set(optional_from_brief) | set(_ALWAYS_SECTIONS)
+        remaining_optionals = [s for s in default if s not in seen]
+        # Rebuild sequence: walk the default and, whenever we hit an
+        # optional slot, take from the brief's ordering first.
+        result: list[str] = []
+        opt_iter = iter(optional_from_brief + remaining_optionals)
+        for s in default:
+            if s in _ALWAYS_SECTIONS:
+                result.append(s)
+            else:
+                try:
+                    result.append(next(opt_iter))
+                except StopIteration:
+                    pass
+        return result
 
-    for req in _ALWAYS_SECTIONS:
-        if req not in picked:
-            picked.append(req)
-
-    valid = {s for s in _DEFAULT_SECTIONS}
-    return [s for s in picked if s in valid]
+    return default
 
 
 def build_deck(
@@ -157,22 +208,28 @@ def build_deck(
                 _slide_stat_splash(prs, profile, cat, items)
 
     section_builders = {
-        "cover":               lambda: _slide_cover(prs, profile),
-        "exec_summary":        lambda: _slide_exec_summary(prs, profile),
-        "scale":               lambda: _slide_scale(prs, profile),
-        "identity":            lambda: _slide_demographics(prs, profile),
-        "index_story":         lambda: _slide_index_story(prs, profile),
-        "day_in_life":         lambda: _slide_day_in_life(prs, profile),
-        "geography":           lambda: _slide_geography(prs, profile),
-        "signature_affinities":lambda: _slide_signature_affinities(prs, profile),
-        "category_deep_dives": _emit_category_deep_dives,
-        "media_and_social":    lambda: _slide_media_and_social(prs, profile),
-        "media_plan":          lambda: _slide_media_plan(prs, profile),
-        "whitespace":          lambda: _slide_whitespace(prs, profile),
-        "takeaways":           lambda: _slide_takeaways(prs, profile),
-        "final":               lambda: _slide_final_insight(prs, profile),
-        "methodology":         lambda: _slide_methodology(prs, profile),
-        "about":               lambda: _slide_about(prs, profile),
+        "cover":                 lambda: _slide_cover(prs, profile),
+        "exec_summary":          lambda: _slide_exec_summary(prs, profile),
+        "portrait":              lambda: _slide_portrait(prs, profile),
+        "scale":                 lambda: _slide_scale(prs, profile),
+        "identity":              lambda: _slide_demographics(prs, profile),
+        "demographic_deep_dive": lambda: _slide_demographic_deep_dive(prs, profile),
+        "life_stage":            lambda: _slide_life_stage(prs, profile),
+        "differ_from_genpop":    lambda: _slide_differ_from_genpop(prs, profile),
+        "index_story":           lambda: _slide_index_story(prs, profile),
+        "day_in_life":           lambda: _slide_day_in_life(prs, profile),
+        "geography":             lambda: _slide_geography(prs, profile),
+        "commerce_persona":      lambda: _slide_commerce_persona(prs, profile),
+        "signature_affinities":  lambda: _slide_signature_affinities(prs, profile),
+        "category_deep_dives":   _emit_category_deep_dives,
+        "cultural_interests":    lambda: _slide_cultural_interests(prs, profile),
+        "media_and_social":      lambda: _slide_media_and_social(prs, profile),
+        "media_plan":            lambda: _slide_media_plan(prs, profile),
+        "whitespace":            lambda: _slide_whitespace(prs, profile),
+        "takeaways":             lambda: _slide_takeaways(prs, profile),
+        "final":                 lambda: _slide_final_insight(prs, profile),
+        "methodology":           lambda: _slide_methodology(prs, profile),
+        "about":                 lambda: _slide_about(prs, profile),
     }
 
     for section_id in _resolve_sections(profile):
@@ -657,6 +714,37 @@ _ANALYST_JSON_SPEC = (
     '  "cover_tagline": "One sentence that tells the CMO who this audience IS in life-stage / mindset / cultural-posture terms (35-45 words). Do NOT lean on a single freak-index brand. Do NOT use adjectives like passionate / vibrant / engaged.",\n'
     '  "identity_headline": "4-6 word portrait of WHO they are — life stage + posture, not just demos. Examples: \'Prime-age urban trend-formers.\', \'Suburban parents with disposable income.\', \'Downtown creatives, digitally-native.\' No pronouns.",\n'
     '  "identity_why": "One sentence (35-50 words) on why this composition matters commercially — what the age/income/geography shape UNLOCKS for the marketer.",\n'
+    '  "portrait": {\n'
+    '     "life_stage_headline":     "3-6 word life-stage label. Examples: \'Millennial/Gen-Z urban renters.\', \'Suburban Gen-X parents.\', \'Empty-nester boomers.\'",\n'
+    '     "life_stage_body":         "3-4 sentences (55-80 words) painting their life stage — how they spend their days, what their household looks like, career phase, income tier. Ground in the age/income/parental data.",\n'
+    '     "mindset_headline":        "3-6 word psychographic label. Examples: \'Culture-first early adopters.\', \'Value-conscious pragmatists.\', \'Status-signalling professionals.\'",\n'
+    '     "mindset_body":            "3-4 sentences (55-80 words) on their mindset / worldview / consumption posture. Infer from the shape of their brand and category signals. Concrete, not abstract.",\n'
+    '     "cultural_posture_headline":"3-6 word cultural label. Examples: \'Terminally-online scroll-natives.\', \'Live-events + festival regulars.\', \'Prestige-media watchers.\'",\n'
+    '     "cultural_posture_body":   "3-4 sentences (55-80 words) on how they consume culture — what platforms, what content, what social postures. Cite 2-3 specific brands or platforms with reach %.",\n'
+    '     "differentiator_headline": "3-6 word label for their sharpest edge vs Gen Pop. Examples: \'Under-35 and multicultural.\', \'Higher income + urban core.\', \'Streaming-first, cable-cord-cut.\'",\n'
+    '     "differentiator_body":     "3-4 sentences (55-80 words) on the ONE dimension where they differ most from Gen Pop, cited with the index number, and what that means commercially."\n'
+    '  },\n'
+    '  "life_stage": {\n'
+    '     "headline": "5-9 word household/life-stage narrative (no period).",\n'
+    '     "body":     "80-110 word paragraph on household composition — parental status, relationship, education, income tier context — grounded in the numbers from the data. Focus on what this composition IMPLIES for daypart, channel selection, and message tone."\n'
+    '  },\n'
+    '  "differ_from_genpop": [\n'
+    '     { "dimension": "Age|Ethnicity|Income|Education|Gender|Parental Status|Relationship",\n'
+    '       "bucket":    "specific bucket label (e.g. \'18-24\', \'Asian\', \'$150K+\')",\n'
+    '       "aud_pct":   0.0,\n'
+    '       "gp_pct":    0.0,\n'
+    '       "index":     0,\n'
+    '       "note":      "8-15 word analyst tag on why this delta matters (e.g. \'The Asian over-index anchors coastal urban reach.\')" },\n'
+    '     ... EXACTLY 6-8 entries. Pick the SHARPEST deltas from ALL demo dimensions in the data (not just age). Diverse dimensions. Sort by absolute index deviation from 100.\n'
+    '  ],\n'
+    '  "commerce_persona": {\n'
+    '     "headline": "5-9 word shopping-personality label (no period). Examples: \'Amazon-first Instacart-heavy value shoppers.\', \'DTC-forward luxury-adjacent early adopters.\', \'Big-box + Target home-focused.\'",\n'
+    '     "body":     "90-130 word commerce portrait synthesizing MPB / RETAIL / COSMETICS / APPAREL / PERSONAL CARE signals into a coherent shopping personality. Name 5-7 specific brands in-line with reach % (e.g. \'Nike (37%) + Adidas (24%) core.\'). What retail archetype are they."\n'
+    '  },\n'
+    '  "cultural_interests": {\n'
+    '     "headline": "5-9 word cultural-interest label (no period). Examples: \'Live-music + festival regulars.\', \'Gaming-native prestige-TV watchers.\', \'Sports-first spectators, esports-curious.\'",\n'
+    '     "body":     "90-130 word integrated view of how they spend cultural time — pulls from MUSIC / GAMES / FESTIVALS / TICKETING / SPORTS TEAM / STREAMING VIDEO / STREAMING MUSIC signals. Name 5-7 specific properties in-line with reach %. Weight the narrative to whatever the data actually says."\n'
+    '  },\n'
     '  "exec_summary": {\n'
     '     "who_headline":     "2-4 word label (e.g. \'The audience.\')",\n'
     '     "who_body":         "2-3 tight sentences (35-50 words) describing WHO they are grounded in the sharpest demographic index (age/ethnicity/income). Lead with the answer, then the number.",\n'
@@ -2291,6 +2379,527 @@ def _slide_signature_affinities(prs: Presentation, p: dict):
                   align=PP_ALIGN.RIGHT)
             if i < len(col_rows) - 1:
                 _hairline(slide, cx, y + row_h - 0.03, col_w - 0.10, C_STROKE)
+
+    _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
+          size=8.5, color=C_MUTED2, letter_spacing=0.02)
+    _footer(slide, 0, p["name"])
+
+
+# =============================================================================
+#  Ethnographic portrait slides
+# =============================================================================
+#  These are the "who they actually are" slides — the depth the marketer
+#  needs beyond the exec summary. Every builder self-skips gracefully
+#  when the data + brief can't support it, so the deck stays clean on
+#  thin profiles and gets rich on data-dense ones.
+# =============================================================================
+
+
+def _slide_portrait(prs: Presentation, p: dict):
+    """4-quadrant ethnographic portrait: LIFE STAGE / MINDSET / CULTURAL
+    POSTURE / DIFFERENTIATOR. Each quadrant is a mini-narrative panel."""
+    pt = _brief_get(p, "portrait", default={}) or {}
+    quadrants: list[tuple[str, str, str, RGBColor]] = []
+
+    def _q(kicker: str, hd_key: str, body_key: str,
+           fb_hd: str, fb_body: str, accent: RGBColor) -> None:
+        hd = _purge_pronouns(str(pt.get(hd_key) or "").strip(), p["name"]) or fb_hd
+        bd = _purge_pronouns(str(pt.get(body_key) or "").strip(), p["name"]) or fb_body
+        quadrants.append((kicker, hd, bd, accent))
+
+    # Data-driven fallbacks (each quadrant reads real numbers if the LLM
+    # didn't return a brief — the deck must still be substantive).
+    age = (p.get("demographics") or {}).get("age") or {}
+    inc = (p.get("demographics") or {}).get("income") or {}
+    eth = (p.get("demographics") or {}).get("ethnicity") or {}
+    top_age = max(age.items(), key=lambda kv: _num(kv[1]), default=("", 0))
+    hh_income_75plus = sum(_num(v) for k, v in inc.items()
+                            if any(t in k for t in ("$75", "$100", "$150", "$200")))
+
+    _q("LIFE STAGE", "life_stage_headline", "life_stage_body",
+       f"Prime-earning {top_age[0]}." if top_age[0] else "Prime-earning audience.",
+       (f"The core sits in {top_age[0]} ({_num(top_age[1]):.0f}% of the file). "
+        f"About {hh_income_75plus:.0f}% earn $75K+, which sets the ceiling on "
+        "premium-partner viability and the willingness to pay for direct-to-"
+        "consumer subscription products."),
+       C_LAVENDER)
+
+    top_platform = ""
+    top_platform_pct = 0.0
+    for cat_names in [("SOCIAL MEDIA",), ("STREAMING/PLATFORM", "STREAMING VIDEO")]:
+        items = _first_available(p, list(cat_names))
+        if items:
+            top_platform = (items[0].get("name") or "").strip()
+            top_platform_pct = _num(items[0].get("pct", 0))
+            break
+    _q("MINDSET", "mindset_headline", "mindset_body",
+       "Platform-native. Digitally-fluent.",
+       (f"Their consumption posture is digital-first — {top_platform or 'their top platform'}"
+        f" reaches {top_platform_pct:.0f}% of the audience vs. Gen Pop far below. "
+        "That is a cohort that finds culture through algorithmic feed, "
+        "not appointment TV or linear broadcast."),
+       C_LIME)
+
+    top_signals = sorted(
+        _all_behavioral_items(p),
+        key=lambda it: -(_num(it.get("pct", 0)) * max(1.0, _num(it.get("index", 0)) / 100.0)),
+    )[:4]
+    top_sig_names = ", ".join(
+        f"{(it.get('name') or '').strip()} ({_num(it.get('pct', 0)):.0f}%)"
+        for it in top_signals[:3] if (it.get("name") or "").strip()
+    )
+    _q("CULTURAL POSTURE", "cultural_posture_headline", "cultural_posture_body",
+       "Culture-first early adopters.",
+       (f"The brands and platforms that concentrate here — {top_sig_names or 'their top affinities'} — "
+        "describe an audience that spends culture time on newer, "
+        "creator-native surfaces. Traditional-media placements will "
+        "under-perform this cohort at any given CPM."),
+       C_MAGENTA)
+
+    peak_idx = 0
+    peak_bucket = ""
+    peak_dim = ""
+    for dim in ("age", "ethnicity", "income", "education"):
+        idx_map = ((p.get("demographics_index") or {}).get(dim)) or {}
+        for bucket, val in idx_map.items():
+            if _num(val) > peak_idx:
+                peak_idx = _num(val)
+                peak_bucket = str(bucket)
+                peak_dim = dim
+    _q("DIFFERENTIATOR", "differentiator_headline", "differentiator_body",
+       f"Sharpest edge: {peak_bucket}." if peak_bucket else "Sharpest edge vs Gen Pop.",
+       (f"On {peak_dim}, the {peak_bucket} bucket over-indexes at {int(peak_idx)} — "
+        f"{peak_idx/100:.1f}x Gen Pop. That single delta is the reason "
+        "endemic-partner categories that skew to this bucket will "
+        "outperform any broad-reach media buy on this file."),
+       C_BLUE)
+
+    slide = _blank_slide(prs)
+    _section_eyebrow(slide, 0.62, p["name"], "PORTRAIT")
+    _text(slide, 0.62, 0.82, 12.0, 1.10, "Who they actually are.",
+          size=32, bold=True, color=C_CREAM, line_spacing=1.05)
+    _text(slide, 0.62, 2.05, 12.0, 0.36,
+          "Four dimensions of the audience portrait, grounded in the panel.",
+          size=11, color=C_MUTED, line_spacing=1.4)
+
+    # 2x2 grid of narrative panels
+    cell_w = 5.95
+    cell_h = 2.10
+    x0, y0 = 0.62, 2.65
+    gutter = 0.20
+    for i, (kicker, hd, bd, accent) in enumerate(quadrants[:4]):
+        col = i % 2
+        row = i // 2
+        x = x0 + col * (cell_w + gutter)
+        y = y0 + row * (cell_h + 0.18)
+        _rect(slide, x, y, cell_w, cell_h, RGBColor(0x14, 0x1F, 0x22))
+        _text(slide, x + 0.28, y + 0.18, cell_w - 0.50, 0.28, kicker,
+              size=9.5, bold=True, color=accent, letter_spacing=0.14)
+        _text(slide, x + 0.28, y + 0.50, cell_w - 0.50, 0.44, hd,
+              size=16, bold=True, color=C_CREAM, line_spacing=1.08)
+        _text(slide, x + 0.28, y + 1.02, cell_w - 0.50, cell_h - 1.12, bd,
+              size=10.5, color=C_MUTED, line_spacing=1.42)
+
+    _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
+          size=8.5, color=C_MUTED2, letter_spacing=0.02)
+    _footer(slide, 0, p["name"])
+
+
+def _slide_demographic_deep_dive(prs: Presentation, p: dict):
+    """All demographic dimensions on one page with proportional mini-bars.
+    No LLM needed — pure data visualization of the full demo shape."""
+    demos = p.get("demographics") or {}
+    gp    = p.get("demographics_gen_pop") or {}
+    idxs  = p.get("demographics_index") or {}
+
+    dims: list[tuple[str, dict, dict, dict]] = []
+    for key, label in [
+        ("age",       "AGE"),
+        ("gender",    "GENDER"),
+        ("ethnicity", "ETHNICITY"),
+        ("income",    "INCOME"),
+        ("education", "EDUCATION"),
+    ]:
+        d = demos.get(key) or {}
+        if len(d) >= 2:
+            dims.append((label, d, gp.get(key) or {}, idxs.get(key) or {}))
+    if len(dims) < 3:
+        return  # thin demo — skip; other slides cover it
+
+    slide = _blank_slide(prs)
+    _section_eyebrow(slide, 0.62, p["name"], "DEMOGRAPHIC DEEP-DIVE")
+    _text(slide, 0.62, 0.82, 12.0, 1.10, "The full demographic shape.",
+          size=32, bold=True, color=C_CREAM, line_spacing=1.05)
+    _text(slide, 0.62, 2.05, 12.0, 0.36,
+          "Every dimension side-by-side with Gen Pop. Bar length = share "
+          "of audience; the value on the right is the index vs U.S.",
+          size=11, color=C_MUTED, line_spacing=1.4)
+
+    # Layout: up to 5 dimensions, 2 columns
+    show = dims[:6]
+    col_w = 5.95
+    x_cols = [0.62, 6.90]
+    y_slots = [2.85, 4.55, 6.25]
+    # We only have ~3.85 vertical inches for content between title area
+    # and source line — so cap at 4 dimensions in a 2x2 grid.
+    positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
+    for i, (label, d, d_gp, d_idx) in enumerate(show[:4]):
+        col, row = positions[i][1], positions[i][0]
+        x = x_cols[col]
+        y = 2.85 + row * 1.95
+
+        _text(slide, x, y, col_w, 0.28, label,
+              size=10.5, bold=True, color=C_LAVENDER, letter_spacing=0.10)
+        _hairline(slide, x, y + 0.32, col_w - 0.10, C_STROKE)
+
+        # Sort buckets by canonical order if age/income, else by pct desc
+        entries = sorted(d.items(), key=lambda kv: -_num(kv[1]))[:6]
+        if label in ("AGE", "INCOME", "EDUCATION"):
+            # Keep original data order (assumed ordinal) if provided
+            entries = list(d.items())[:6]
+
+        max_pct = max((_num(v) for _, v in entries), default=1.0)
+        row_h = min(0.24, 1.45 / max(1, len(entries)))
+        by = y + 0.42
+        for bucket, val in entries:
+            v = _num(val)
+            width = 2.60 * (v / max_pct if max_pct > 0 else 0)
+            idx = int(_num(d_idx.get(bucket, 0)))
+            # Label
+            _text(slide, x, by, 2.10, row_h,
+                  _short_bucket_label(str(bucket)),
+                  size=8.5, color=C_CREAM, anchor=MSO_ANCHOR.MIDDLE)
+            # Bar
+            _rect(slide, x + 2.15, by + 0.04, max(0.03, width),
+                  row_h - 0.10,
+                  C_MAGENTA if idx >= 130 else (C_LAVENDER if idx >= 100 else C_STROKE))
+            # Pct value
+            _text(slide, x + 4.85, by, 0.60, row_h, f"{v:.0f}%",
+                  size=8.5, color=C_CREAM, align=PP_ALIGN.RIGHT,
+                  anchor=MSO_ANCHOR.MIDDLE)
+            # Index
+            idx_color = (C_MAGENTA if idx >= 130 else
+                          (C_LIME if idx >= 110 else
+                           (C_MUTED if idx >= 90 else C_STROKE)))
+            _text(slide, x + 5.45, by, 0.45, row_h, f"{idx}" if idx else "—",
+                  size=8.5, bold=True, color=idx_color, align=PP_ALIGN.RIGHT,
+                  anchor=MSO_ANCHOR.MIDDLE)
+            by += row_h + 0.02
+
+    _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
+          size=8.5, color=C_MUTED2, letter_spacing=0.02)
+    _footer(slide, 0, p["name"])
+
+
+def _slide_life_stage(prs: Presentation, p: dict):
+    """Household + life-stage narrative. Ships when parental / relationship
+    / education / income has real richness OR the LLM returned a life_stage
+    block."""
+    ls = _brief_get(p, "life_stage", default={}) or {}
+    hd = _purge_pronouns(str(ls.get("headline") or "").strip(), p["name"])
+    body = _purge_pronouns(str(ls.get("body") or "").strip(), p["name"])
+
+    demos = p.get("demographics") or {}
+    has_hh_data = any(len(demos.get(k) or {}) >= 2
+                       for k in ("parental_status", "relationship", "education"))
+
+    if not (hd and body) and not has_hh_data:
+        return  # nothing meaningful to say
+
+    if not hd or not body:
+        # Data-driven fallback narrative
+        top_parental = max(((demos.get("parental_status") or {}).items()),
+                            key=lambda kv: _num(kv[1]),
+                            default=("", 0))
+        top_rel = max(((demos.get("relationship") or {}).items()),
+                       key=lambda kv: _num(kv[1]),
+                       default=("", 0))
+        top_edu = max(((demos.get("education") or {}).items()),
+                       key=lambda kv: _num(kv[1]),
+                       default=("", 0))
+        parts = []
+        if top_parental[0]:
+            parts.append(
+                f"{_num(top_parental[1]):.0f}% describe their household as "
+                f"{str(top_parental[0]).lower()}"
+            )
+        if top_rel[0]:
+            parts.append(
+                f"{_num(top_rel[1]):.0f}% report they are {str(top_rel[0]).lower()}"
+            )
+        if top_edu[0]:
+            parts.append(
+                f"{_num(top_edu[1]):.0f}% have {str(top_edu[0]).lower()}"
+            )
+        if not hd:
+            hd = "The household context that drives the buy."
+        if not body:
+            body = (
+                ". ".join(parts).capitalize() +
+                ". This is the household shape a marketer plans against — "
+                "who is in the buying decision, what daypart they open the "
+                "phone, and what the messaging tone should be."
+            ) if parts else ""
+
+    if not hd or not body:
+        return
+
+    slide = _blank_slide(prs)
+    _section_eyebrow(slide, 0.62, p["name"], "LIFE STAGE & HOUSEHOLD")
+    _text(slide, 0.62, 0.82, 12.0, 1.10, hd,
+          size=32, bold=True, color=C_CREAM, line_spacing=1.05)
+
+    # Big narrative body panel
+    _rect(slide, 0.62, 2.30, 12.0, 4.20, RGBColor(0x14, 0x1F, 0x22))
+    _text(slide, 0.90, 2.50, 11.5, 0.30, "HOUSEHOLD PORTRAIT",
+          size=10, bold=True, color=C_LIME, letter_spacing=0.12)
+    _text(slide, 0.90, 2.90, 11.5, 3.40, body,
+          size=14, color=C_CREAM, line_spacing=1.55)
+
+    _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
+          size=8.5, color=C_MUTED2, letter_spacing=0.02)
+    _footer(slide, 0, p["name"])
+
+
+def _slide_differ_from_genpop(prs: Presentation, p: dict):
+    """The 6-8 sharpest deltas across ALL demo dimensions. Named by
+    dimension so the CMO can see: 'ah, they differ most on ethnicity
+    and age, not on income.'"""
+    brief_rows = _brief_get(p, "differ_from_genpop", default=[]) or []
+    picks: list[dict] = []
+    if isinstance(brief_rows, list):
+        for row in brief_rows[:8]:
+            if not isinstance(row, dict):
+                continue
+            dim = str(row.get("dimension") or "").strip()
+            bkt = str(row.get("bucket")    or "").strip()
+            aud = _num(row.get("aud_pct", 0))
+            gpv = _num(row.get("gp_pct",  0))
+            idx = int(_num(row.get("index", 0)))
+            note = _purge_pronouns(str(row.get("note") or "").strip(), p["name"])
+            if dim and bkt and idx > 0:
+                picks.append({"dim": dim, "bucket": bkt, "aud_pct": aud,
+                               "gp_pct": gpv, "index": idx, "note": note})
+
+    # Fallback: compute the sharpest deltas from demographics_index across
+    # every dimension.
+    if len(picks) < 5:
+        idxs = p.get("demographics_index") or {}
+        demos = p.get("demographics") or {}
+        gp   = p.get("demographics_gen_pop") or {}
+        scored = []
+        for dim, dim_idx_map in idxs.items():
+            if not isinstance(dim_idx_map, dict):
+                continue
+            for bucket, idx_val in dim_idx_map.items():
+                idx = int(_num(idx_val))
+                if idx <= 0:
+                    continue
+                if 90 <= idx <= 110:
+                    continue  # not sharp enough
+                aud = _num((demos.get(dim) or {}).get(bucket, 0))
+                gpv = _num((gp.get(dim) or {}).get(bucket, 0))
+                scored.append((abs(idx - 100), dim, bucket, aud, gpv, idx))
+        scored.sort(key=lambda t: -t[0])
+        seen_keys = {(r["dim"].lower(), r["bucket"].lower()) for r in picks}
+        for _, dim, bucket, aud, gpv, idx in scored:
+            if len(picks) >= 7:
+                break
+            key = (dim.lower(), bucket.lower())
+            if key in seen_keys:
+                continue
+            picks.append({"dim": dim.title(), "bucket": bucket, "aud_pct": aud,
+                           "gp_pct": gpv, "index": idx, "note": ""})
+            seen_keys.add(key)
+
+    if len(picks) < 3:
+        return
+
+    slide = _blank_slide(prs)
+    _section_eyebrow(slide, 0.62, p["name"], "HOW THEY DIFFER FROM GEN POP")
+    _text(slide, 0.62, 0.82, 12.0, 1.10, "The sharpest deltas.",
+          size=32, bold=True, color=C_CREAM, line_spacing=1.05)
+    _text(slide, 0.62, 2.05, 12.0, 0.36,
+          "Bucket-level differences vs. the U.S. adult baseline, ranked "
+          "by absolute deviation. The 'index' is 100 = parity.",
+          size=11, color=C_MUTED, line_spacing=1.4)
+
+    # Column headers
+    hdr_y = 2.90
+    _text(slide, 0.62, hdr_y, 1.80, 0.28, "DIMENSION",
+          size=9, bold=True, color=C_LAVENDER, letter_spacing=0.08)
+    _text(slide, 2.55, hdr_y, 3.20, 0.28, "BUCKET",
+          size=9, bold=True, color=C_LAVENDER, letter_spacing=0.08)
+    _text(slide, 5.90, hdr_y, 1.10, 0.28, "AUD %",
+          size=9, bold=True, color=C_LAVENDER, letter_spacing=0.08,
+          align=PP_ALIGN.RIGHT)
+    _text(slide, 7.10, hdr_y, 1.10, 0.28, "GEN POP %",
+          size=9, bold=True, color=C_LAVENDER, letter_spacing=0.08,
+          align=PP_ALIGN.RIGHT)
+    _text(slide, 8.30, hdr_y, 0.90, 0.28, "INDEX",
+          size=9, bold=True, color=C_LAVENDER, letter_spacing=0.08,
+          align=PP_ALIGN.RIGHT)
+    _text(slide, 9.35, hdr_y, 3.30, 0.28, "SO WHAT",
+          size=9, bold=True, color=C_LAVENDER, letter_spacing=0.08)
+    _hairline(slide, 0.62, hdr_y + 0.32, 12.0, C_STROKE)
+
+    row_h = min(0.44, 3.15 / max(1, len(picks)))
+    y = hdr_y + 0.44
+    for i, r in enumerate(picks[:7]):
+        _text(slide, 0.62, y, 1.80, row_h, r["dim"],
+              size=11, bold=True, color=C_CREAM, anchor=MSO_ANCHOR.MIDDLE)
+        _text(slide, 2.55, y, 3.20, row_h, r["bucket"],
+              size=11, color=C_CREAM, anchor=MSO_ANCHOR.MIDDLE)
+        _text(slide, 5.90, y, 1.10, row_h,
+              f"{r['aud_pct']:.1f}%" if r["aud_pct"] else "—",
+              size=11, color=C_CREAM, align=PP_ALIGN.RIGHT,
+              anchor=MSO_ANCHOR.MIDDLE)
+        _text(slide, 7.10, y, 1.10, row_h,
+              f"{r['gp_pct']:.1f}%" if r["gp_pct"] else "—",
+              size=11, color=C_MUTED, align=PP_ALIGN.RIGHT,
+              anchor=MSO_ANCHOR.MIDDLE)
+        idx_color = (C_MAGENTA if r["index"] >= 150 else
+                      (C_LIME if r["index"] >= 110 else
+                       (C_LAVENDER if r["index"] < 80 else C_MUTED)))
+        _text(slide, 8.30, y, 0.90, row_h, f"{r['index']}",
+              size=13, bold=True, color=idx_color,
+              align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
+        _text(slide, 9.35, y, 3.30, row_h, r["note"] or "",
+              size=9.5, color=C_MUTED, anchor=MSO_ANCHOR.MIDDLE,
+              line_spacing=1.30)
+        if i < len(picks) - 1:
+            _hairline(slide, 0.62, y + row_h, 12.0, C_STROKE)
+        y += row_h + 0.02
+
+    _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
+          size=8.5, color=C_MUTED2, letter_spacing=0.02)
+    _footer(slide, 0, p["name"])
+
+
+def _slide_commerce_persona(prs: Presentation, p: dict):
+    """Cross-category shopping-personality narrative. Synthesizes MPB +
+    RETAIL + COSMETICS + APPAREL + PERSONAL CARE into one prose portrait."""
+    cp = _brief_get(p, "commerce_persona", default={}) or {}
+    hd = _purge_pronouns(str(cp.get("headline") or "").strip(), p["name"])
+    body = _purge_pronouns(str(cp.get("body") or "").strip(), p["name"])
+
+    # Fallback: build a data-driven narrative from top MPB brands
+    if not (hd and body):
+        mpb = _first_available(p, ["MPB", "MOST PURCHASED BRANDS", "MOST_PURCHASED_BRANDS"])
+        # Only ship if we have a real commerce signal to describe
+        if not mpb or len(mpb) < 4:
+            return
+        top_named = [(it.get("name") or "").strip() for it in mpb[:6]
+                     if _num(it.get("pct", 0)) >= 10.0]
+        top_named = [n for n in top_named if n][:6]
+        if len(top_named) < 4:
+            return
+        top_reach = _num(mpb[0].get("pct", 0))
+        top_brand = (mpb[0].get("name") or "").strip()
+        if not hd:
+            hd = f"An {top_brand}-first commerce personality."
+        if not body:
+            body = (
+                f"The top-buying shape is anchored by {top_brand} ({top_reach:.0f}% reach) "
+                f"and rounded out by {', '.join(top_named[1:5])}. "
+                "That combination reads as a mainstream mass-value shopper "
+                "with a tilt toward mass athleisure and personal-care staples "
+                "purchased through the standard Amazon / Target / Walmart "
+                "digital rails. Not a luxury-DTC audience; not a pure "
+                "premium-brand chaser. Pricing and channel selection should "
+                "assume value-tier promiscuity, not brand loyalty."
+            )
+
+    if not hd or not body:
+        return
+
+    slide = _blank_slide(prs)
+    _section_eyebrow(slide, 0.62, p["name"], "COMMERCE PERSONA")
+    _text(slide, 0.62, 0.82, 12.0, 1.10, "How they shop.",
+          size=32, bold=True, color=C_CREAM, line_spacing=1.05)
+    _text(slide, 0.62, 2.05, 12.0, 0.36,
+          "Cross-category shopping personality, synthesized across MPB, "
+          "apparel, personal care, and retail signals.",
+          size=11, color=C_MUTED, line_spacing=1.4)
+
+    # Panel with headline + body
+    _rect(slide, 0.62, 2.80, 12.0, 3.70, RGBColor(0x14, 0x1F, 0x22))
+    _text(slide, 0.90, 3.00, 11.5, 0.30, "THE SHOPPING PERSONALITY",
+          size=10, bold=True, color=C_LIME, letter_spacing=0.12)
+    _text(slide, 0.90, 3.40, 11.5, 0.80, hd,
+          size=22, bold=True, color=C_CREAM, line_spacing=1.10)
+    _text(slide, 0.90, 4.35, 11.5, 2.05, body,
+          size=13, color=C_CREAM, line_spacing=1.55)
+
+    _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
+          size=8.5, color=C_MUTED2, letter_spacing=0.02)
+    _footer(slide, 0, p["name"])
+
+
+def _slide_cultural_interests(prs: Presentation, p: dict):
+    """Integrated cultural-time narrative pulling from MUSIC / GAMES /
+    FESTIVALS / TICKETING / SPORTS TEAM / STREAMING signals."""
+    ci = _brief_get(p, "cultural_interests", default={}) or {}
+    hd = _purge_pronouns(str(ci.get("headline") or "").strip(), p["name"])
+    body = _purge_pronouns(str(ci.get("body") or "").strip(), p["name"])
+
+    # Fallback: check whether the profile has enough cultural-time
+    # categories to justify the slide.
+    beh = p.get("behavioral") or {}
+    cultural_cats = ["MUSIC", "GAMES", "GAMING", "FESTIVALS",
+                      "TICKETING PLATFORMS", "SPORTS TEAM",
+                      "STREAMING VIDEO", "STREAMING/PLATFORM"]
+    cat_hits = [c for c in cultural_cats
+                if any(c.upper() == k.upper() and v for k, v in beh.items())]
+    if not (hd and body) and len(cat_hits) < 2:
+        return
+
+    if not hd or not body:
+        # Collect top-3 cultural signals
+        chips: list[str] = []
+        for cat in cultural_cats:
+            items = _first_available(p, [cat])
+            if items:
+                top = items[0]
+                nm = (top.get("name") or "").strip()
+                pct = _num(top.get("pct", 0))
+                if nm and pct >= 5.0:
+                    chips.append(f"{nm} ({pct:.0f}%)")
+                    if len(chips) >= 5:
+                        break
+        if not chips:
+            return
+        if not hd:
+            hd = "Where they spend cultural time."
+        if not body:
+            body = (
+                f"Their cultural time concentrates in {', '.join(chips[:3])}"
+                + (f" with support from {', '.join(chips[3:])}" if len(chips) > 3 else "")
+                + ". That mix tells a marketer which sponsor properties "
+                "will earn attention here and which will read as "
+                "off-audience. The concentration is directional, not "
+                "diffuse — activation should follow it."
+            )
+
+    if not hd or not body:
+        return
+
+    slide = _blank_slide(prs)
+    _section_eyebrow(slide, 0.62, p["name"], "CULTURAL INTERESTS")
+    _text(slide, 0.62, 0.82, 12.0, 1.10, "How they spend cultural time.",
+          size=32, bold=True, color=C_CREAM, line_spacing=1.05)
+    _text(slide, 0.62, 2.05, 12.0, 0.36,
+          "Music, games, sports, festivals, streaming — the integrated "
+          "cultural-time portrait for this audience.",
+          size=11, color=C_MUTED, line_spacing=1.4)
+
+    _rect(slide, 0.62, 2.80, 12.0, 3.70, RGBColor(0x14, 0x1F, 0x22))
+    _text(slide, 0.90, 3.00, 11.5, 0.30, "THE CULTURAL PROFILE",
+          size=10, bold=True, color=C_MAGENTA, letter_spacing=0.12)
+    _text(slide, 0.90, 3.40, 11.5, 0.80, hd,
+          size=22, bold=True, color=C_CREAM, line_spacing=1.10)
+    _text(slide, 0.90, 4.35, 11.5, 2.05, body,
+          size=13, color=C_CREAM, line_spacing=1.55)
 
     _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
           size=8.5, color=C_MUTED2, letter_spacing=0.02)
