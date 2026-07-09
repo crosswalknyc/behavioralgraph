@@ -39,6 +39,7 @@ SCRAPERS = [
     # (source_key, module_path, label, kind)
     ('google_wide',        'scripts.trends_scrapers.google_trends_wide', 'Google Trends (wide)', 'search'),
     ('wikipedia_trending', 'scripts.trends_scrapers.wikipedia_trending', 'Wikipedia',            'search'),
+    ('music_charts',       'scripts.trends_scrapers.music_charts',       'Music',                'music'),
     ('x',         'scripts.trends_scrapers.x_twitter',  'X',         'social'),
     ('tiktok',    'scripts.trends_scrapers.tiktok',     'TikTok',    'social'),
     ('youtube',   'scripts.trends_scrapers.youtube',    'YouTube',   'social'),

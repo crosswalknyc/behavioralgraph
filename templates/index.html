@@ -40908,6 +40908,7 @@
                 { key: 'movers',    label: 'Movers',           count: counts.movers    || 0, icon: '🚀' },
                 { key: 'headlines', label: 'Headlines',        count: headlineCount,         icon: '📰' },
                 { key: 'people',    label: 'Trending people',  count: counts.people    || 0, icon: '👤' },
+                { key: 'music',     label: 'Music',            count: counts.music     || 0, icon: '🎵' },
                 { key: 'social',    label: 'Social',           count: 0,                     icon: '💬' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺' },
                 { key: 'products',  label: 'Products',         count: counts.retailers || 0, icon: '🛍️' },
@@ -40935,6 +40936,7 @@
                 })) +
                 _renderTIQPanel('people',    renderTIQWikipedia(cards.wikipedia_trending || []) +
                                               renderTIQPeople(cards.trending_people || [])) +
+                _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
@@ -41683,6 +41685,65 @@
             return html;
         }
 
+        // Music trending tab. Renders one card per source (Shazam, Apple,
+        // TikTok Sounds). Each card scrolls to its full list; the top ~5
+        // are visible without scrolling. Payload shape:
+        //   music_trending = {
+        //     shazam: {label, sub, items: [{rank, title, artist, url, image?}], available},
+        //     apple:  {...},
+        //     tiktok: {..., available: false during Coming Soon window}
+        //   }
+        function renderTIQMusic(sources) {
+            var keys = ['shazam', 'apple', 'tiktok'];
+            var present = keys.filter(function(k) { return sources[k]; });
+            if (!present.length) {
+                return '<div class="tiq-empty">Music charts are warming up. Snapshot lands after the daily scraper run.</div>';
+            }
+            var header = '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
+                         'Three views of what people are listening to right now: ' +
+                         '<span style="color:#93c5fd;">Shazam</span> is what people are IDing (discovery), ' +
+                         '<span style="color:#fcd34d;">Apple Music</span> is what they\'re streaming (mainstream), ' +
+                         '<span style="color:#f9a8d4;">TikTok Sounds</span> is what\'s about to hit (leading indicator).' +
+                         '</div>';
+            var cards = present.map(function(k) {
+                var s = sources[k] || {};
+                var items = s.items || [];
+                var body;
+                if (!s.available || !items.length) {
+                    body = '<div class="tiq-placeholder">' +
+                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
+                           '<div>' + _tiqEsc(s.sub || 'Warming up.') + '</div>' +
+                           '</div>';
+                } else {
+                    body = '<div class="tiq-card-sub">' + _tiqEsc(s.sub || '') + '</div>' +
+                           '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                           items.map(function(it, i) {
+                               var img = it.image
+                                   ? '<div class="tiq-headline-image" style="background-image:url(\'' + _tiqEsc(it.image) + '\');"></div>'
+                                   : '';
+                               var titleLine = it.url
+                                   ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
+                                   : _tiqEsc(it.title);
+                               var musicKey = it.title + ' - ' + (it.artist || '');
+                               return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                                      '<div class="tiq-row-body">' +
+                                      '<div class="tiq-row-title">' + titleLine +
+                                      _tiqCrossPlatformBadge(it) +
+                                      _tiqActions('music', k, musicKey, musicKey, 'National') +
+                                      '</div>' +
+                                      (it.artist ? '<div class="tiq-row-meta">' + _tiqEsc(it.artist) + '</div>' : '') +
+                                      '</div></div>';
+                           }).join('') +
+                           '</div>';
+                }
+                return '<div class="tiq-card">' +
+                       '<h4>' + _tiqEsc(s.label || k) + '</h4>' +
+                       body +
+                       '</div>';
+            }).join('');
+            return header + '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' + cards + '</div>';
+        }
+
         function renderTIQSocial(social) {
             var keys = Object.keys(social);
             if (!keys.length) return '<div class="tiq-empty">Social trending is warming up.</div>';
@@ -42044,6 +42105,7 @@
                 })) +
                 _renderTIQPanel('people',    renderTIQWikipedia(cards.wikipedia_trending || []) +
                                               renderTIQPeople(cards.trending_people || [])) +
+                _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +

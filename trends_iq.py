@@ -3268,6 +3268,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         'products_by_retailer':lambda: _fetch_trending_products(keywords=geo_kws),
         'movers':              lambda: compute_search_movers(state),
         'wikipedia_trending':  lambda: _read_snapshot('wikipedia_trending'),
+        'music_charts':        lambda: _read_snapshot('music_charts'),
     }
 
     results: dict = {}
@@ -3293,6 +3294,13 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # -> empty list; the frontend handles the empty-state.
     wiki_snap          = results.get('wikipedia_trending') or {}
     wikipedia_trending = list(wiki_snap.get('national') or [])[:30]
+
+    # Music charts (Shazam + Apple Music + TikTok Sounds). The scraper
+    # returns {sources: {shazam:{items:...}, apple:{...}, tiktok:{...}}}.
+    # We pass the whole sources dict through so the frontend can render
+    # one card per source. TikTok is stubbed pending Playwright build.
+    music_snap    = results.get('music_charts') or {}
+    music_charts  = music_snap.get('sources') or {}
 
     trending_people = _fetch_trending_people(
         headlines,
@@ -3354,6 +3362,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'articles_by_source':             articles_by_source,
             'trending_people':                trending_people,
             'wikipedia_trending':             wikipedia_trending,
+            'music_trending':                 music_charts,
             'social_trending':                social_trending,
             'streaming_trending':             streaming_trending,
             'products_by_retailer':           products,
@@ -3385,6 +3394,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'retailers':     len(products),
             'streaming':     sum(1 for p in streaming_trending.values()
                                     if (p or {}).get('available')),
+            'music':         sum(len(((music_charts.get(k) or {}).get('items') or []))
+                                  for k in ('shazam', 'apple', 'tiktok')),
             'movers':    (len(movers.get('breakout') or []) +
                            len(movers.get('rising')   or []) +
                            len(movers.get('falling')  or []) +
