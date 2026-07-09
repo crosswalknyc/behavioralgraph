@@ -140,16 +140,121 @@ def _iter_recent_days(days: int) -> list[str]:
 # Google Trends historical
 # ────────────────────────────────────────────────────────────────────────────
 def _google_geo_key(geo: str) -> str:
-    """The Google Trends snapshot bucket uses one file per geo. Currently
-    the writers store everything under `US`; higher-fidelity per-state /
-    per-DMA rollouts still key to `US`. Preserve any explicit geo the
-    caller passed in case that changes."""
-    return geo or 'US'
+    """The Google Trends snapshot bucket uses one file per Google geo
+    code (`US`, `US-CA`, `US-NY`, ...). The frontend passes
+    dashboard-friendly labels like `National`, `State:California`,
+    `DMA:New York` - map those to Google's ISO scheme here.
+
+    Anything already in Google-shape (`US`, `US-CA`, ...) passes
+    through unchanged."""
+    g = (geo or '').strip()
+    if not g or g.lower() == 'national':
+        return 'US'
+    # Already Google-shape (US or US-XX)
+    if re.fullmatch(r'US(?:-[A-Z]{2})?', g):
+        return g
+    # Dashboard labels: try to unwrap "State:California" -> "US-CA" via
+    # the same mapping external_signals uses. Import lazily to keep
+    # trends_history importable even when external_signals is missing.
+    try:
+        from external_signals import US_STATE_TO_ISO, normalize_state  # type: ignore
+        if g.startswith('State:'):
+            name = normalize_state(g.split(':', 1)[1].strip())
+            iso = US_STATE_TO_ISO.get(name)
+            if iso:
+                return iso
+        # Bare state name
+        name = normalize_state(g)
+        iso = US_STATE_TO_ISO.get(name)
+        if iso:
+            return iso
+    except Exception:
+        pass
+    # DMA labels don't have their own snapshot bucket yet (writer keys
+    # to state code). Fall back to national so the arc still renders.
+    return 'US'
+
+
+def _find_row_for_search_term(rows: list, clicked_slug: str) -> Optional[tuple[int, dict]]:
+    """Return `(rank, row)` for the best matching snapshot row given a
+    user-clicked search term slug. Match rules, strongest first:
+
+      1. Exact slug equality.
+      2. Bidirectional substring containment of the clicked slug within
+         a row's `term` slug OR any of its `trend_keywords` slugs.
+         Google Trends re-phrases trending topics day-to-day - one day
+         a story is "the odyssey", the next "the odyssey review", the
+         next "christopher nolan the odyssey backlash". Exact matching
+         breaks the historical arc on those. Substring matching in
+         either direction reconnects them as one trend cluster.
+      3. Fallback: significant-token overlap (both terms share >=1
+         non-stopword token of length >= 4) - handles cases where the
+         phrasing shifts too far for substring to catch.
+
+    Returns None if nothing matches. `rank` is 1-based row position.
+    """
+    if not isinstance(rows, list) or not clicked_slug:
+        return None
+
+    # Pass 1: exact slug match on term (fastest, highest-confidence)
+    for i, r in enumerate(rows):
+        if not isinstance(r, dict):
+            continue
+        if _slug(r.get('term', '')) == clicked_slug:
+            return i + 1, r
+
+    # Pass 2: substring match on term or trend_keywords.
+    # Prefer LONGEST candidate slug (best cluster fit) among matches.
+    substring_hits: list[tuple[int, int, dict]] = []
+    for i, r in enumerate(rows):
+        if not isinstance(r, dict):
+            continue
+        candidate_slugs = [_slug(r.get('term', ''))]
+        for kw in (r.get('trend_keywords') or [])[:12]:
+            s = _slug(kw)
+            if s and s not in candidate_slugs:
+                candidate_slugs.append(s)
+        for cand in candidate_slugs:
+            if not cand or cand == clicked_slug:
+                continue
+            # 4-char guard prevents "the" / "war" / "usa" false hits
+            if len(clicked_slug) >= 4 and clicked_slug in cand:
+                substring_hits.append((len(cand), i + 1, r))
+                break
+            if len(cand) >= 4 and cand in clicked_slug:
+                substring_hits.append((len(cand), i + 1, r))
+                break
+    if substring_hits:
+        substring_hits.sort(key=lambda t: -t[0])
+        _, rank, row = substring_hits[0]
+        return rank, row
+
+    # Pass 3: significant-token overlap fallback.
+    _STOP = {'the', 'and', 'for', 'with', 'from', 'that', 'this',
+             'vs', 'per', 'are', 'was', 'has', 'his', 'her', 'you'}
+    clicked_toks = {t for t in re.split(r'[^a-z0-9]+', clicked_slug)
+                     if len(t) >= 4 and t not in _STOP}
+    if not clicked_toks:
+        return None
+    for i, r in enumerate(rows):
+        if not isinstance(r, dict):
+            continue
+        term_slug = _slug(r.get('term', ''))
+        row_toks = {t for t in re.split(r'[^a-z0-9]+', term_slug)
+                     if len(t) >= 4 and t not in _STOP}
+        overlap = clicked_toks & row_toks
+        if overlap and (len(overlap) / max(1, min(len(clicked_toks), len(row_toks)))) >= 0.5:
+            return i + 1, r
+    return None
 
 
 def history_for_search(term: str, *, geo: str = 'US',
                         days: int = DEFAULT_DAYS) -> dict:
-    """Reconstruct a Google Trends search term's rank/score arc."""
+    """Reconstruct a Google Trends search term's rank / volume / growth
+    arc. Uses `_find_row_for_search_term` for fuzzy day matching so a
+    trend that's re-phrased day-to-day still forms one coherent arc.
+    Each day's `matched_term` records which variant matched so the UI
+    can surface the day-specific phrasing if useful."""
     slug = _slug(term)
     if not slug:
         return _empty_arc('search', 'google', term, geo)
@@ -158,27 +263,22 @@ def history_for_search(term: str, *, geo: str = 'US',
     arc_days: list[dict] = []
     for day_iso in day_list:
         rows = _fetch_day(f"{_TRENDS_RSS_PREFIX}{geo_key}/", day_iso)
-        row_map = {}
-        if isinstance(rows, list):
-            for r in rows:
-                if isinstance(r, dict):
-                    row_map[_slug(r.get('term', ''))] = r
-        hit = row_map.get(slug)
-        if hit:
-            # Some snapshots include a `rank` field, others just imply it
-            # from position. We accept either.
-            rank = hit.get('rank')
-            if rank is None:
-                for i, r in enumerate(rows or []):
-                    if _slug((r or {}).get('term', '')) == slug:
-                        rank = i + 1
-                        break
+        # Snapshots are stored as either a bare list OR a dict payload.
+        # Normalize to a list of row dicts.
+        if isinstance(rows, dict):
+            rows = rows.get('national') or rows.get('rows') or []
+        hit = _find_row_for_search_term(rows or [], slug)
+        if hit is not None:
+            rank, row = hit
             arc_days.append({
-                'date':    day_iso,
-                'rank':    int(rank) if rank is not None else None,
-                'score':   hit.get('score'),
-                'present': True,
-                'related': (hit.get('related') or [])[:5],
+                'date':          day_iso,
+                'rank':          int(rank),
+                'score':         row.get('score'),
+                'volume':        int(row.get('volume') or 0),
+                'growth_pct':    int(row.get('volume_growth_pct') or 0),
+                'matched_term':  (row.get('term') or '').strip(),
+                'present':       True,
+                'related':       (row.get('related') or [])[:5],
             })
         else:
             arc_days.append({'date': day_iso, 'rank': None, 'score': None, 'present': False})
@@ -238,10 +338,50 @@ def _item_key_from_scraper_row(source: str, row: dict) -> str:
     return ''
 
 
+def _find_row_for_scraper_key(source: str, rows: list, clicked_slug: str
+                              ) -> Optional[tuple[int, dict]]:
+    """Same fuzzy-match strategy as `_find_row_for_search_term`, applied
+    to scraper rows keyed by `name`/`title`/`topic`/`hashtag`. Handles
+    day-to-day title drift: Netflix's "Voicemails for Isabelle" one day
+    becomes "Voicemails for Isabelle: Season 1" the next; Reddit
+    threads gain edits; TikTok hashtags gain suffixes."""
+    if not isinstance(rows, list) or not clicked_slug:
+        return None
+
+    for i, r in enumerate(rows):
+        if not isinstance(r, dict):
+            continue
+        if _slug(_item_key_from_scraper_row(source, r)) == clicked_slug:
+            rank = int(r.get('rank') or (i + 1))
+            return rank, r
+
+    substring_hits: list[tuple[int, int, dict]] = []
+    for i, r in enumerate(rows):
+        if not isinstance(r, dict):
+            continue
+        cand = _slug(_item_key_from_scraper_row(source, r))
+        if not cand or cand == clicked_slug:
+            continue
+        if len(clicked_slug) >= 4 and clicked_slug in cand:
+            substring_hits.append((len(cand), int(r.get('rank') or (i + 1)), r))
+        elif len(cand) >= 4 and cand in clicked_slug:
+            substring_hits.append((len(cand), int(r.get('rank') or (i + 1)), r))
+    if substring_hits:
+        substring_hits.sort(key=lambda t: -t[0])
+        _, rank, row = substring_hits[0]
+        return rank, row
+    return None
+
+
 def history_for_scraper(source: str, key: str, *,
                         days: int = DEFAULT_DAYS,
                         geo: str = 'National') -> dict:
-    """Reconstruct a retailer/social item's rank arc from dated snapshots."""
+    """Reconstruct a retailer/social item's rank arc from dated snapshots.
+
+    Fuzzy day-matching handles title drift across days (see
+    `_find_row_for_scraper_key`). `matched_key` on each day records
+    which variant matched.
+    """
     slug = _slug(key)
     if not slug:
         return _empty_arc(_SCRAPER_KIND_MAP.get(source, 'unknown'), source, key, geo)
@@ -253,24 +393,18 @@ def history_for_scraper(source: str, key: str, *,
         rows: list = []
         if isinstance(payload, dict):
             rows = payload.get('national') or []
-        rank = None
-        row_hit = None
-        for i, r in enumerate(rows):
-            if not isinstance(r, dict):
-                continue
-            if _slug(_item_key_from_scraper_row(source, r)) == slug:
-                rank = int(r.get('rank') or (i + 1))
-                row_hit = r
-                break
-        if row_hit is not None:
+        hit = _find_row_for_scraper_key(source, rows, slug)
+        if hit is not None:
+            rank, row_hit = hit
             arc_days.append({
-                'date':    day_iso,
-                'rank':    rank,
-                'score':   None,
-                'present': True,
-                'price':   row_hit.get('price'),
-                'url':     row_hit.get('url'),
-                'image':   row_hit.get('image'),
+                'date':        day_iso,
+                'rank':        rank,
+                'score':       None,
+                'matched_key': _item_key_from_scraper_row(source, row_hit),
+                'present':     True,
+                'price':       row_hit.get('price'),
+                'url':         row_hit.get('url'),
+                'image':       row_hit.get('image'),
             })
         else:
             arc_days.append({'date': day_iso, 'rank': None, 'score': None, 'present': False})
