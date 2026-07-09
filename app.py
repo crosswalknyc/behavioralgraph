@@ -36271,7 +36271,16 @@ def _resolve_profile_image_url_from_name(profile_name: str) -> str:
 @app.route('/api/profile-iq/export-deck', methods=['POST'])
 @requires_auth
 def export_profile_iq_deck():
-    """Build a LISA-style Profile IQ analysis deck (.pptx) for one subject."""
+    """Build a LISA-style Profile IQ analysis deck (.pptx) for one subject.
+
+    2026-07-09 (round 7) — Bad Gateway triage: wraps build_deck in a
+    hard 85s wall-clock guard using a background thread. If the deck
+    hasn't finished in 85s (safely under Render's 100s gateway timeout),
+    return a clean 504 to the client rather than letting the worker
+    hang and kill /healthz. The OpenAI call inside build_deck is
+    already bounded at 55s + 0 retries; this is the belt-and-suspenders
+    guard for pptx save, image fetch, or any other slow path.
+    """
     try:
         from migration.profile_iq_deck_builder import build_deck, suggested_filename
     except ImportError as exc:
@@ -36290,21 +36299,56 @@ def export_profile_iq_deck():
             return jsonify({'success': False,
                             'error': 'data payload required'}), 400
 
-        # Prefer explicit image_url from the caller, fall back to the admin
-        # cache using the profile name so the cover always tries to include
-        # the same photo the dashboard shows in its header.
         image_url = (payload.get('image_url') or '').strip()
         if not image_url:
             image_url = _resolve_profile_image_url_from_name(
                 (data.get('name') or '').strip()
             )
 
-        pptx_bytes = build_deck(
-            data,
-            image_url=image_url or None,
-            category=(payload.get('category') or data.get('brandCategory')
-                      or data.get('brand_category') or None),
-        )
+        _category = (payload.get('category') or data.get('brandCategory')
+                     or data.get('brand_category') or None)
+
+        # Run build_deck on a background thread with a hard wall-clock
+        # deadline. If the deadline blows past, the request returns 504
+        # (the daemon thread keeps going and eventually exits — no
+        # zombie process). Safer than letting the request hang the
+        # worker for 150s+ and taking down /healthz.
+        import threading
+        result: dict = {}
+
+        def _run():
+            try:
+                result['bytes'] = build_deck(
+                    data, image_url=(image_url or None), category=_category,
+                )
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                result['error'] = e
+
+        t = threading.Thread(target=_run, name="profile-deck-build",
+                              daemon=True)
+        t.start()
+        t.join(timeout=85.0)
+        if t.is_alive():
+            # Still running — abandon it and return early. Thread is
+            # daemon so it will not prevent worker shutdown.
+            print("[export_profile_iq_deck] build_deck exceeded 85s "
+                  "wall-clock; returning 504 to unblock the worker")
+            return jsonify({
+                'success': False,
+                'error': ('Deck build exceeded the 85-second time budget. '
+                           'This usually means the LLM analyst call is slow '
+                           'or the profile has an unusually large behavioral '
+                           'surface. Try again in a moment.'),
+            }), 504
+        if 'error' in result:
+            raise result['error']
+        pptx_bytes = result.get('bytes')
+        if not pptx_bytes:
+            return jsonify({'success': False,
+                            'error': 'Deck builder returned no bytes.'}), 500
+
         fname = suggested_filename(data, ext='pptx')
         from flask import send_file
         return send_file(
