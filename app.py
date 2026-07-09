@@ -32363,7 +32363,40 @@ def submit_svod_acquisition():
             content_cadence = 'Binge'
         if content_cadence and content_cadence not in ('Weekly', 'Binge'):
             content_cadence = ''
-        
+
+        # ── Analyst overrides (optional, per-title research anchors) ────────
+        # All three fields are OPTIONAL. If an analyst omits them the pipeline
+        # falls back to its GPT-4o dynamic reasoning + tier/genre/cadence
+        # priors exactly as it did before this route learned to accept
+        # overrides. When provided they short-circuit the reasoning steps
+        # that were flagged as "behavioral cloning / pinned-constant
+        # artifact" bugs (Star City, PCJ, Chicago Fire vets) and produce
+        # deterministic, defensible output matched to the analyst's row-by-
+        # row research (Antenna reach anchors, platform-tier conv bands,
+        # long-running-vs-new new_share benchmarks, etc.).
+        def _coerce_opt_float(raw, lo, hi, label):
+            if raw is None or raw == '' or (isinstance(raw, str) and not raw.strip()):
+                return None
+            try:
+                v = float(raw)
+            except (TypeError, ValueError):
+                raise ValueError(f'{label} must be a number')
+            if v < lo or v > hi:
+                raise ValueError(f'{label} must be between {lo} and {hi}')
+            return v
+
+        try:
+            reach_us_override = _coerce_opt_float(
+                data.get('reach_us_override'), 1_000, 500_000_000, 'reach_us_override')
+            if reach_us_override is not None:
+                reach_us_override = int(reach_us_override)
+            conversion_pct_override = _coerce_opt_float(
+                data.get('conversion_pct'), 0.01, 15.0, 'conversion_pct')
+            new_share_override = _coerce_opt_float(
+                data.get('new_share'), 0.0, 1.0, 'new_share')
+        except ValueError as ve:
+            return jsonify({'error': str(ve)}), 400
+
         username = session.get('username', 'unknown')
         if not has_credits_for(username, CREDITS_SVOD):
             _, credits_left = check_user_credits(username)
@@ -32402,7 +32435,11 @@ def submit_svod_acquisition():
                 'content_cadence': content_cadence if content_cadence else '',
                 'track_episodes': track_episodes,
                 'tracking_mode': tracking_mode,
-                'episode_dates': raw_episode_dates
+                'episode_dates': raw_episode_dates,
+                # Analyst overrides — None if unset (pipeline uses defaults)
+                'reach_us_override':      reach_us_override,
+                'conversion_pct':         conversion_pct_override,
+                'new_share':              new_share_override,
             }
         }
         
@@ -32640,6 +32677,31 @@ def run_svod_acquisition(job_id):
             # category until the user explicitly releases them, at which
             # point the existing release UI sets svod_metadata.
         }
+
+        # ── Analyst-supplied overrides (optional) ───────────────────────
+        # These bypass the pipeline's GPT-4o dynamic reasoning for the
+        # three metrics that have historically produced clustered /
+        # pinned-constant artifacts (reach, conversion, new-vs-reactivated
+        # split). They match the CLI-script override contract used in
+        # scripts/pull_*.py (Star City, PCJ, Chicago Fire vets). Any of
+        # the three left blank falls back to the pipeline's own reasoning.
+        _reach_override = params.get('reach_us_override')
+        if _reach_override is not None:
+            synth_config['reach_us_override'] = int(_reach_override)
+        _conv_override = params.get('conversion_pct')
+        if _conv_override is not None:
+            synth_config['conversion_pct'] = float(_conv_override)
+        _new_share = params.get('new_share')
+        if _new_share is not None:
+            # SVOD_Churn_Attribution accepts `reactivation_pct_override`
+            # (= 1 - new_share) — do the flip here so the analyst-facing
+            # form field matches the CLI script contract ("new_share")
+            # and the row-by-row research docs.
+            synth_config['reactivation_pct_override'] = max(0.0, min(1.0, 1.0 - float(_new_share)))
+        if _reach_override is not None or _conv_override is not None or _new_share is not None:
+            print(f"[Subscriber IQ] Analyst overrides applied — "
+                  f"reach_us={_reach_override!r}  conv_pct={_conv_override!r}  "
+                  f"new_share={_new_share!r}")
 
         update_job_status(job_id, progress=30,
                           message='Deriving panel from tier × genre × cadence priors...')

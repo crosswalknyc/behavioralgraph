@@ -6551,7 +6551,13 @@ def _build_synthetic_panel(config: dict) -> dict:
     final_panel_post_divisor = max(1, int(reach_us / panel_to_us))
     total_panel = final_panel_post_divisor * 10
 
-    # Pre-existing share: research first, then config override, then prior.
+    # Pre-existing share: analyst config override wins, then Claude research,
+    # then prior. Order matters — analysts have flagged pipeline outputs as
+    # "behavioral cloning / pinned-constant artifacts" when Claude's number
+    # comes from a rate lookup table rather than title-specific evidence,
+    # so any override the analyst has set from per-title research MUST
+    # take precedence. (Reach follows the same policy at line ~6544; this
+    # block was previously inverted and has been aligned.)
     #
     # CLAMP: even for beloved returning seasons, prior-season holdover should
     # be at most ~65%. Beyond that the math breaks (zero "clean sample"
@@ -6561,7 +6567,10 @@ def _build_synthetic_panel(config: dict) -> dict:
     # watched the PRIOR SEASON", which is always < 1 because every hit
     # gains new viewers via buzz/word-of-mouth. Apple's own disclosure
     # ("most-watched series ever") only makes sense if S2 expanded vs. S1.
-    if research and research.get('pre_existing_pct') is not None:
+    if config.get('pre_existing_pct') is not None:
+        pre_existing_pct = float(config['pre_existing_pct'])
+        print(f"   ✏️   pre_existing_pct overridden by config: {pre_existing_pct*100:.1f}%")
+    elif research and research.get('pre_existing_pct') is not None:
         try:
             _raw_pe = float(research['pre_existing_pct'])
             pre_existing_pct = max(0.0, min(0.65, _raw_pe))
@@ -6572,26 +6581,27 @@ def _build_synthetic_panel(config: dict) -> dict:
             else:
                 print(f"   🎯 pre_existing_pct from research: {pre_existing_pct*100:.1f}%")
         except (TypeError, ValueError):
-            pre_existing_pct = float(config.get('pre_existing_pct', 0.30 if not is_new else 0.0))
-    elif config.get('pre_existing_pct') is not None:
-        pre_existing_pct = float(config['pre_existing_pct'])
+            pre_existing_pct = 0.0 if is_new else 0.30
     else:
         pre_existing_pct = 0.0 if is_new else 0.30
     pre_existing_panel = int(total_panel * pre_existing_pct)
     clean_sample_panel = total_panel - pre_existing_panel
 
-    # Conversion rate: research first, then config override, then tier prior
+    # Conversion rate: analyst config override wins, then Claude research,
+    # then tier prior. Same policy as reach/pre_existing above — the
+    # analyst's per-title research anchor supersedes GPT/Claude reasoning.
     conversion_source = 'priors'
-    if research and research.get('conversion_pct') is not None:
+    if config.get('conversion_pct') is not None:
+        conversion_pct = float(config['conversion_pct'])
+        conversion_source = 'override'
+        print(f"   ✏️   conversion_pct overridden by config: {conversion_pct:.2f}%")
+    elif research and research.get('conversion_pct') is not None:
         try:
             conversion_pct = float(research['conversion_pct'])
             conversion_source = 'claude_external_research'
             print(f"   🎯 conversion_pct from research: {conversion_pct:.2f}%")
         except (TypeError, ValueError):
             conversion_pct = _SYNTHETIC_TIER_CONVERSION_PCT.get(tier, 1.2)
-    elif config.get('conversion_pct') is not None:
-        conversion_pct = float(config['conversion_pct'])
-        conversion_source = 'override'
     else:
         conversion_pct = _SYNTHETIC_TIER_CONVERSION_PCT.get(tier, 1.2)
     new_signups_panel = max(1, int(clean_sample_panel * conversion_pct / 100.0))
