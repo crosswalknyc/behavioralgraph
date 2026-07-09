@@ -1357,6 +1357,142 @@ def compute_search_movers(state: Optional[str]) -> dict:
 
 
 # ============================================================================
+# Movers platform-mix annotation
+# ============================================================================
+# Attributes each mover row's buzz across three channels so the UI can
+# show WHERE the interest is being driven from:
+#
+#   search  - Google Trends search volume (trendspy `volume` field)
+#   media   - Real news-article pickup (trendspy `news_articles` count,
+#              or `related` news-titles count as fallback)
+#   social  - How many social platforms (Reddit, X, TikTok, YouTube,
+#              Instagram) have the term in their top items
+#
+# Each channel gets a 0-1 "intensity" score (saturating ceilings picked
+# so a top-tier trend maxes each out): 50K searches, 3 news articles,
+# 3 social platforms. Intensities are normalized to fractions summing
+# to 1 (or all-zero when no signal is present).
+# ============================================================================
+_MIX_SEARCH_CEILING  = 50_000  # volume that maxes the search intensity
+_MIX_MEDIA_CEILING   = 3       # news_articles count that maxes media
+_MIX_SOCIAL_CEILING  = 3       # # of social platforms that max social
+
+
+def _term_in_social_platform_items(term: str, items: list) -> bool:
+    """True when `term` appears (case-insensitive substring) in any of
+    a social platform's top items. Only checks the first 15 items per
+    platform - past that a match reads as coincidental rather than
+    "this is what's trending on the platform"."""
+    if not term or not items:
+        return False
+    t = term.strip().lower()
+    if len(t) < 3:  # avoid noise like "vs" / "us" matching everywhere
+        return False
+    for it in items[:15]:
+        if not isinstance(it, dict):
+            continue
+        for k in ('title', 'topic', 'hashtag', 'name', 'text', 'term'):
+            v = it.get(k)
+            if v and t in str(v).lower():
+                return True
+    return False
+
+
+def _compute_platform_mix_for_term(term: str, rich_row: dict,
+                                     social_trending: dict) -> dict:
+    """Attribute a single trend's buzz across search / media / social.
+
+    `rich_row` is the trending-search row from today's snapshot (or the
+    mover row itself as a fallback) so we can read `volume` and
+    `news_articles`. `social_trending` is the full social-platforms
+    dict from the payload (reddit / x / tiktok / youtube / instagram).
+
+    Returns a dict with normalized fractions + raw counts for the
+    hover tooltip:
+
+        {
+          'search': 0.65, 'media': 0.25, 'social': 0.10,
+          'search_raw': 200000, 'media_raw': 3, 'social_raw': 1,
+          'social_platforms': ['reddit'],
+          'primary': 'search',
+        }
+    """
+    volume = int(rich_row.get('volume') or rich_row.get('score') or 0)
+    news_articles = rich_row.get('news_articles') or []
+    news_count = len(news_articles)
+    if news_count == 0:
+        # RSS-only day: fall back to related news titles count
+        news_count = min(len(rich_row.get('related') or []), _MIX_MEDIA_CEILING)
+
+    social_hits: list[str] = []
+    for slug, block in (social_trending or {}).items():
+        if not isinstance(block, dict) or not block.get('available'):
+            continue
+        if _term_in_social_platform_items(term, block.get('items') or []):
+            social_hits.append(slug)
+
+    search_i = min(volume / float(_MIX_SEARCH_CEILING), 1.0) if volume > 0 else 0.0
+    media_i  = min(news_count / float(_MIX_MEDIA_CEILING), 1.0)
+    social_i = min(len(social_hits) / float(_MIX_SOCIAL_CEILING), 1.0)
+
+    total = search_i + media_i + social_i
+    if total <= 0:
+        return {
+            'search':           0.0,
+            'media':            0.0,
+            'social':           0.0,
+            'search_raw':       volume,
+            'media_raw':        news_count,
+            'social_raw':       len(social_hits),
+            'social_platforms': social_hits,
+            'primary':          None,
+        }
+    mix = {
+        'search':           round(search_i / total, 3),
+        'media':            round(media_i  / total, 3),
+        'social':           round(social_i / total, 3),
+        'search_raw':       volume,
+        'media_raw':        news_count,
+        'social_raw':       len(social_hits),
+        'social_platforms': social_hits,
+    }
+    channels = sorted(
+        [('search', mix['search']), ('media', mix['media']), ('social', mix['social'])],
+        key=lambda p: -p[1],
+    )
+    mix['primary'] = channels[0][0] if channels[0][1] > 0 else None
+    return mix
+
+
+def _annotate_movers_with_platform_mix(movers: dict,
+                                         trending_searches: list,
+                                         social_trending: dict) -> dict:
+    """Attach `platform_mix` to every mover row so the frontend can
+    render the mini stacked bar next to each trend.
+
+    Reads rich fields from `trending_searches` when possible (movers
+    aggregation drops volume / news_articles for aggregation
+    performance). Falls back to whatever's on the mover row itself.
+    Idempotent - safe to call twice.
+    """
+    if not movers or not movers.get('available'):
+        return movers
+    search_lookup: dict[str, dict] = {}
+    for s in trending_searches or []:
+        key = (s.get('term') or '').strip().lower()
+        if key and key not in search_lookup:
+            search_lookup[key] = s
+    for bucket in ('breakout', 'rising', 'falling', 'sustained'):
+        for row in movers.get(bucket) or []:
+            term = (row.get('term') or '').strip()
+            key = term.lower()
+            rich = search_lookup.get(key) or row
+            row['platform_mix'] = _compute_platform_mix_for_term(
+                term, rich, social_trending)
+    return movers
+
+
+# ============================================================================
 # Card 2 + 3: Trending headlines and articles by source
 # ============================================================================
 def _parse_rss(body: str, source: str, domain: str, limit: int = 15) -> list[dict]:
@@ -2256,6 +2392,11 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         articles_by_source=articles_by_source,
         social_trending=social_trending,
     )
+
+    # Attach a search/media/social buzz-mix to every Movers row so the
+    # UI can show where each trend's interest is being driven from.
+    movers = _annotate_movers_with_platform_mix(
+        movers, trending_searches, social_trending)
 
     # Split the trending search pool into the 5-card layout the UI renders:
     # Overall (all rows, scrollable) + Entertainment / Retail / Politics /
