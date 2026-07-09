@@ -35,14 +35,22 @@ from __future__ import annotations
 
 import html as _html
 import logging
+import random
 import sys
 import time
 import xml.etree.ElementTree as ET
 from typing import Any
 
-from ._base import http_get
+import requests
 
 logger = logging.getLogger(__name__)
+
+
+# Reddit's RSS endpoint is quirky: plain `requests` (with a Firefox UA)
+# returns 200s reliably, but the shared `http_get` helper via curl_cffi
+# with Chrome TLS impersonation gets 429'd - the ja3 fingerprint plus
+# the requests-from-datacenter pattern trips their WAF. Rolling our
+# own small GET here bypasses curl_cffi for this scraper only.
 
 
 # Curated set of the 15 largest-market states with an active `/r/<slug>`
@@ -84,15 +92,41 @@ _ACCEPT_XML = 'application/atom+xml, application/xml, text/xml'
 def _fetch_sub(sub: str, limit: int = 20, *, retries: int = 2,
                 timeout: int = 15) -> list[dict]:
     """Pull up to `limit` entries from /r/<sub>/.rss. Returns [] on any
-    failure so a single dead subreddit doesn't kill the run."""
+    failure so a single dead subreddit doesn't kill the run.
+
+    Uses plain `requests` (not `_base.http_get`) because Reddit's WAF
+    429s curl_cffi's Chrome TLS impersonation on this endpoint. Plain
+    Python `requests` with a Firefox UA gets 200s consistently.
+    """
     url = f'https://www.reddit.com/r/{sub}/.rss?limit={limit}'
-    r = http_get(url,
-                  headers={'User-Agent': _BROWSER_UA, 'Accept': _ACCEPT_XML},
-                  retries=retries, timeout=timeout)
-    if r is None or not getattr(r, 'ok', False):
-        logger.info("reddit rss %s: http %s", sub, getattr(r, 'status_code', None))
+    body = ''
+    status = None
+    for attempt in range(retries):
+        try:
+            r = requests.get(url,
+                              headers={'User-Agent': _BROWSER_UA,
+                                       'Accept':     _ACCEPT_XML},
+                              timeout=timeout)
+            status = r.status_code
+            if status == 200:
+                body = r.text or ''
+                break
+            if status in (429,) or status >= 500:
+                sleep_s = 4 * (attempt + 1) + random.random()
+                logger.info("reddit rss %s: http %d (attempt %d/%d, sleeping %.1fs)",
+                             sub, status, attempt + 1, retries, sleep_s)
+                time.sleep(sleep_s)
+                continue
+            logger.info("reddit rss %s: http %d (no retry)", sub, status)
+            return []
+        except Exception as e:
+            sleep_s = 4 * (attempt + 1) + random.random()
+            logger.info("reddit rss %s: %s (attempt %d/%d, sleeping %.1fs)",
+                         sub, e, attempt + 1, retries, sleep_s)
+            time.sleep(sleep_s)
+    if not body:
+        logger.info("reddit rss %s: no body (last status=%s)", sub, status)
         return []
-    body = getattr(r, 'text', '') or ''
     try:
         root = ET.fromstring(body)
     except ET.ParseError as e:
