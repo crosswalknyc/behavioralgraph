@@ -602,6 +602,91 @@ _ANALYST_SYSTEM_PROMPT = (
     "    NEVER the category ('Age and Income'). The reader must never\n"
     "    reverse-engineer your point from a chart.\n"
     "\n"
+    "\n"
+    "=============================================================\n"
+    "PERSONA_NARRATIVE — the flagship slide. Invest here.\n"
+    "=============================================================\n"
+    "This slide is the ONE place the reader should feel they know the\n"
+    "audience as a HUMAN, not a spreadsheet. Every other slide is data\n"
+    "with implications; this slide is prose with data underneath.\n"
+    "\n"
+    "STRICT REQUIREMENTS for persona_narrative.body (120-180 words):\n"
+    "\n"
+    "  1. LIFE STAGE (opening sentence). Age, likely job or life role,\n"
+    "     housing/geography posture. Grounded in the sharpest_deltas\n"
+    "     payload. Example: 'Picture the 25-44 core: they are not\n"
+    "     chasing prestige TV, they are re-buying the aesthetic that\n"
+    "     defined their adolescence.'\n"
+    "\n"
+    "  2. A TUESDAY-MORNING BEHAVIOR (sentence 2-3). What is on their\n"
+    "     phone before coffee, what is on the commute, what is at their\n"
+    "     desk. Must name at least ONE specific brand from the\n"
+    "     persona_ready_brands payload. Example: 'A Tuesday morning\n"
+    "     starts on TikTok before coffee; the commute is a Spotify\n"
+    "     queue or an r/comedy thread; lunch is a DoorDash Dominos\n"
+    "     ordered from the app at their desk.'\n"
+    "\n"
+    "  3. A SATURDAY-NIGHT BEHAVIOR (sentence 4-5). What are they doing\n"
+    "     with weekend attention. Must name at least ONE more specific\n"
+    "     brand from persona_ready_brands. Example: 'Saturday nights\n"
+    "     lean gaming (Fortnite, Call of Duty) or a comedy special on\n"
+    "     Netflix, sometimes a live show through Ticketmaster.'\n"
+    "\n"
+    "  4. A GEOGRAPHIC + INCOME GROUNDING (sentence 5-6). Cite ONE DMA\n"
+    "     from top_dmas_by_index (NOT by reach — NY/LA are population\n"
+    "     trivia) AND ONE income bucket delta from sharpest_deltas.\n"
+    "     Example: 'They over-index sharply on Salt Lake City and the\n"
+    "     $25-49K income tier, meaning this audience skews suburban and\n"
+    "     mid-market, not coastal-urban.'\n"
+    "\n"
+    "  5. AN ANTI-PERSONA NOTE (sentence 6-7). Start with 'What they are\n"
+    "     NOT:'. Name 2-3 brands or behaviors the data DOES NOT support\n"
+    "     — pick from mass-market surfaces the audience under-indexes\n"
+    "     on. Example: 'What they are NOT: not shopping DTC premium, not\n"
+    "     TikTok creators, not paying for Peacock.'\n"
+    "\n"
+    "  6. A TONE / CULTURAL CUE (closing sentence). ONE sentence naming\n"
+    "     the register or aesthetic that will land with them. Example:\n"
+    "     'The tone that moves them: irreverent, unpolished,\n"
+    "     self-deprecating, adjacent to pop-punk and skate culture.'\n"
+    "\n"
+    "BANNED IN persona_narrative.body:\n"
+    "  * Any brand not in persona_ready_brands. If a brand you want to\n"
+    "    cite is not in that list, its reach is too low or its index is\n"
+    "    too extreme to anchor a persona — pick a different brand.\n"
+    "  * Any brand with the phrase 'and other digital-first brands' or\n"
+    "    similar vague fillers. Name specific brands only.\n"
+    "  * Generic filler like 'passionate about', 'highly engaged',\n"
+    "    'digitally-savvy consumers', 'value and convenience'. These\n"
+    "    could describe any audience — cut them.\n"
+    "  * Restating a full demographic table (that lives on the deltas\n"
+    "    slide). One age bucket + one income bucket is enough grounding.\n"
+    "  * Gendered pronouns for the subject if the subject is not a real\n"
+    "    person. Use 'the audience' / 'they' — never 'she' / 'he'.\n"
+    "\n"
+    "GOOD EXAMPLE (Green Day comedy audience, 120-180 words):\n"
+    "  'Picture the 25-44 core: they are not chasing prestige TV, they\n"
+    "  are re-buying the aesthetic that defined their adolescence. A\n"
+    "  Tuesday morning starts on TikTok before coffee, moves to an\n"
+    "  r/comedy thread on the commute; lunch is a DoorDash Dominos or\n"
+    "  Wingstop ordered through the app at the desk. Saturday nights\n"
+    "  lean gaming (Fortnite, Call of Duty) or a comedy special on\n"
+    "  Netflix, sometimes a live show through Ticketmaster. They\n"
+    "  over-index sharply on the Salt Lake City DMA and the $25-49K\n"
+    "  income tier, meaning this audience skews suburban and\n"
+    "  mid-market, not coastal-urban. What they are NOT: not shopping\n"
+    "  DTC premium, not on TikTok as creators, not paying for Peacock.\n"
+    "  The tone that moves them: irreverent, unpolished,\n"
+    "  self-deprecating, adjacent to pop-punk and skate culture.'\n"
+    "\n"
+    "BAD EXAMPLE (do not produce this):\n"
+    "  'This audience is a passionate, digitally-savvy group of\n"
+    "  millennial and Gen-Z comedy fans who value entertainment and\n"
+    "  cultural relevance. They actively engage with content across\n"
+    "  multiple platforms and are highly influential within their\n"
+    "  social circles.'  <- generic, could describe any audience, zero\n"
+    "  specific brands, no Tuesday/Saturday cue, no anti-persona.\n"
+    "\n"
     "  * ONE DATA POINT, ONE HOME. Each figure earns a single place —\n"
     "    the section where it does the most work — and is referenced\n"
     "    from there. When the same age or income number appears in 3\n"
@@ -949,21 +1034,120 @@ def _brief_facts(profile: dict) -> dict:
     cats_present = sorted({k for k, v in (profile.get("behavioral") or {}).items()
                             if v})
 
+    # 2026-07-09 (round 6): give the LLM the SAME pre-computed context
+    # the deck builder uses server-side — so its persona narrative,
+    # commerce persona, and deltas are all grounded in the same numbers
+    # the slides will show. Prior version made the LLM re-derive
+    # everything from raw signals, which is where the shallow-persona
+    # and stat-repetition problems came from.
+
+    # Server-computed sharpest demo deltas (index = aud/gp*100, ranked
+    # by absolute deviation, capped 2 per dimension). This is the exact
+    # payload the deltas slide will render, so the LLM's persona should
+    # LEAN on these numbers rather than invent its own.
+    gp = profile.get("demographics_gen_pop") or {}
+    sharpest_deltas: list[dict] = []
+    _dim_used: dict[str, int] = {}
+    _scored: list[tuple[float, str, str, float, float, int]] = []
+    for dim in ("age", "gender", "ethnicity", "income", "education",
+                 "parental_status", "relationship"):
+        for bucket, aud_val in (demos.get(dim) or {}).items():
+            aud = _num(aud_val)
+            gp_val = _num((gp.get(dim) or {}).get(bucket, 0))
+            if aud < 3.0 or gp_val <= 0:
+                continue
+            idx = int(round(aud / gp_val * 100))
+            if 90 <= idx <= 110:
+                continue
+            _scored.append((abs(idx - 100), dim, str(bucket), aud, gp_val, idx))
+    _scored.sort(key=lambda t: -t[0])
+    for _, dim, bucket, aud, gp_val, idx in _scored:
+        if _dim_used.get(dim, 0) >= 2:
+            continue
+        sharpest_deltas.append({
+            "dimension": dim, "bucket": bucket,
+            "aud_pct": round(aud, 1), "gp_pct": round(gp_val, 1),
+            "index": idx,
+        })
+        _dim_used[dim] = _dim_used.get(dim, 0) + 1
+        if len(sharpest_deltas) >= 8:
+            break
+
+    # Persona-eligible brands: the ONLY brands the LLM is allowed to
+    # name in persona_narrative.body. Gated at reach >=15% AND
+    # index >=100 (so it's real reach, not a freak-index niche). The
+    # LLM should pick 2-3 from this list for the ethnographic anchors.
+    persona_ready = []
+    for it in sorted(flat, key=lambda it: (-_num(it.get("pct", 0)),
+                                             -_num(it.get("index", 0)))):
+        if _num(it.get("pct", 0)) < 15.0:
+            continue
+        if _num(it.get("index", 0)) < 100:
+            continue
+        if _num(it.get("index", 0)) > 400:
+            continue  # freak-index — not a persona anchor
+        persona_ready.append({
+            "brand":    (it.get("name") or "").strip(),
+            "category": (it.get("_cat") or "").strip(),
+            "pct":      round(_num(it.get("pct", 0)), 1),
+            "index":    int(_num(it.get("index", 0))),
+        })
+        if len(persona_ready) >= 15:
+            break
+
+    # DMAs by over-index (for persona geography grounding). Same filter
+    # as the geography slide: >=1.5% reach floor, <=400 index ceiling.
+    # Exclude only the TOP-3 by reach (NY/LA/Chicago are population
+    # trivia — anything below the top-3 is fair game as an
+    # over-indexing find even if it also happens to have some scale).
+    # NOTE: _top_dmas_ranked returns list[(name, pct, index)] tuples.
+    _dmas_by_reach_tuples = _top_dmas_ranked(profile, n=5)
+    dmas_by_reach = [{"name": n, "pct": round(p, 1), "index": int(i)}
+                      for (n, p, i) in _dmas_by_reach_tuples]
+    reach_top_names = {(n or "").strip().lower()
+                        for n, _, _ in _dmas_by_reach_tuples[:3]}
+    dmas_by_index = []
+    for d in sorted((profile.get("locations") or []),
+                     key=lambda d: -_num(d.get("index", 0))):
+        name = (d.get("name") or "").strip()
+        if not name or _num(d.get("pct", 0)) < 1.5:
+            continue
+        if _num(d.get("index", 0)) > 400:
+            continue
+        if name.lower() in reach_top_names:
+            continue
+        dmas_by_index.append({
+            "name": name,
+            "pct":  round(_num(d.get("pct", 0)), 1),
+            "index": int(_num(d.get("index", 0))),
+        })
+        if len(dmas_by_index) >= 5:
+            break
+
     return {
-        "subject":            profile.get("name") or "",
-        "brand_category":     profile.get("brand_category") or "",
-        "sample_size":        profile.get("sample_size") or 0,
-        "projected_us":       profile.get("projected_us") or 0,
-        "date_range":         profile.get("date_range") or "",
-        "demographics":       demo_summary,
-        "top_dmas":           _top_dmas_ranked(profile, n=8),
-        "categories_covered": cats_present,
-        "strongest_signals":  strongest,
-        "top_mpb":            (_top_n("MPB", 15)
-                                or _top_n("MOST PURCHASED BRANDS", 15)),
-        "top_social":         _top_n("SOCIAL MEDIA", 8),
-        "top_streaming":      (_top_n("STREAMING/PLATFORM", 8)
-                                or _top_n("STREAMING VIDEO", 8)),
+        "subject":              profile.get("name") or "",
+        "brand_category":       profile.get("brand_category") or "",
+        "sample_size":          profile.get("sample_size") or 0,
+        "projected_us":         profile.get("projected_us") or 0,
+        "date_range":           profile.get("date_range") or "",
+        "demographics":         demo_summary,
+        # NEW: server-computed sharpest deltas (idx = aud/gp*100). Use
+        # these EXACTLY in persona_narrative + differ_from_genpop.
+        "sharpest_deltas":      sharpest_deltas,
+        "top_dmas_by_reach":    dmas_by_reach,
+        # NEW: DMAs where the audience DISPROPORTIONATELY concentrates.
+        "top_dmas_by_index":    dmas_by_index,
+        # Kept for backwards compat with older prompt guidance.
+        "top_dmas":             dmas_by_reach,
+        "categories_covered":   cats_present,
+        "strongest_signals":    strongest,
+        # NEW: the ONLY brand shortlist eligible for persona_narrative.body.
+        "persona_ready_brands": persona_ready,
+        "top_mpb":              (_top_n("MPB", 15)
+                                  or _top_n("MOST PURCHASED BRANDS", 15)),
+        "top_social":           _top_n("SOCIAL MEDIA", 8),
+        "top_streaming":        (_top_n("STREAMING/PLATFORM", 8)
+                                  or _top_n("STREAMING VIDEO", 8)),
     }
 
 
@@ -1051,8 +1235,9 @@ _ANALYST_JSON_SPEC = (
     '  "final_line_a": "Final-insight display line 1 (max 8 words, no period). The one sentence you want the CMO to remember.",\n'
     '  "final_line_b": "Final-insight display line 2 (max 8 words, ends with period). The implication or action.",\n'
     '  "final_body":   "55-75 word closer. Synthesize the audience arc across who / where / what / so-what. Do NOT re-list brands.",\n'
-    '  "sections": ["cover", "exec_summary", "scale", "identity", "index_story", "day_in_life", "geography", "signature_affinities", "category_deep_dives", "media_and_social", "media_plan", "whitespace", "takeaways", "final", "methodology", "about"]\n'
-    '     // Ordered list of the sections you recommend for THIS profile. Include only what you can back with data. If DMAs are thin, drop "geography". If category_why is empty, drop "category_deep_dives". If no social/streaming data, drop "media_and_social". "cover", "exec_summary", "identity", "takeaways", "final", "methodology", "about" are always included.\n'
+    '  "sections": ["cover", "exec_summary", "persona_narrative", "portrait", "demographic_deep_dive", "differ_from_genpop", "geography", "signature_affinities", "commerce_persona", "category_deep_dives", "media_and_social", "day_in_life", "media_plan", "whitespace", "takeaways", "final", "methodology", "about"]\n'
+    '     // Ordered list of sections you recommend for THIS profile. Include only what you can back with data. If DMAs are thin, drop "geography". If category_why is empty, drop "category_deep_dives". If no social/streaming data, drop "media_and_social". If persona-ready brands < 3, still ship "persona_narrative" (the builder has a data-driven fallback).\n'
+    '     // "cover", "exec_summary", "persona_narrative", "portrait", "demographic_deep_dive", "differ_from_genpop", "takeaways", "final", "methodology", "about" are ALWAYS included regardless. Do NOT list "scale", "identity", "life_stage", "index_story", or "cultural_interests" — those slides have been culled from the deck as redundant restatements of demographic_deep_dive / portrait / signature_affinities. Naming them will not add them.\n'
     "}\n"
 )
 
@@ -3174,8 +3359,31 @@ def _slide_persona_narrative(prs: Presentation, p: dict):
     body         = _purge_pronouns(str(pn.get("body") or "").strip(),
                                      subject)
 
-    # Data-driven fallback (composite from panel data)
-    if not persona_name or not body or len(body.split()) < 80:
+    # 2026-07-09 (round 6) — Quality gate on the LLM body. Even if the
+    # model returns a body of the right length, it may be generic slop
+    # ("digitally-savvy audience who values entertainment") that fails
+    # the persona test. Rebuild _brief_facts on the same profile to get
+    # persona_ready_brands, then check the body against the six
+    # required elements. If any fail — DISCARD the LLM body and fall
+    # through to the data-driven template. Do NOT try to surgically
+    # patch: regex surgery on prose leaves ungrammatical output.
+    if body:
+        persona_ready = _brief_facts(p).get("persona_ready_brands") or []
+        ok, fails = _persona_narrative_is_grounded(body, persona_ready)
+        if not ok:
+            _log(f"[persona_narrative] LLM body rejected — "
+                 f"failures: {fails} — falling back to data-driven template")
+            body = ""
+            # Also drop the one-liner if it was generated from the same
+            # weak brief — the fallback will regenerate a matching one
+            if not one_liner or "digitally" in one_liner.lower():
+                one_liner = ""
+            if not persona_name or persona_name.lower() in (
+                "the audience", "the fans", "the consumers"
+            ):
+                persona_name = ""
+
+    if not persona_name or not body or len(body.split()) < 100:
         age = (p.get("demographics") or {}).get("age") or {}
         top_age = max(age.items(), key=lambda kv: _num(kv[1]),
                        default=("adult", 0))
@@ -4863,6 +5071,92 @@ def _body_cites_banned_brand(body: str,
         if idx is not None and idx > max_allowed_idx:
             offending.append((brand, pct, idx))
     return (len(offending) > 0, offending)
+
+
+def _persona_narrative_is_grounded(
+    body: str,
+    persona_ready_brands: list[dict],
+) -> tuple[bool, list[str]]:
+    """Inspect the LLM's persona_narrative.body against the six
+    non-negotiable elements taught in the system prompt.
+
+    Returns (is_ok, failures) where failures is a list of missing
+    elements. Callers should fall back to the data-driven template when
+    ANY failure is present — one weak element sinks the whole slide.
+
+    Elements checked (mirrors PERSONA_NARRATIVE teaching block):
+      1. Word count 100-220 (allows slight over/under for good prose)
+      2. Names >= 2 brands from persona_ready_brands list
+      3. Has a morning behavior cue
+      4. Has an evening/weekend behavior cue
+      5. Contains an anti-persona 'NOT' note
+      6. Not generic slop (no more than 1 filler phrase)
+
+    Added 2026-07-09 (round 6) after user flagged that LLM was
+    producing persona-thin briefs; JSON schema alone doesn't force the
+    model to write richly.
+    """
+    failures: list[str] = []
+    if not body or not isinstance(body, str):
+        return False, ["empty body"]
+
+    words = body.split()
+    n = len(words)
+    if n < 100:
+        failures.append(f"too short ({n} words; need >= 100)")
+    if n > 220:
+        failures.append(f"too long ({n} words; cut to <= 220)")
+
+    body_lower = body.lower()
+
+    # Named brand check — must cite >= 2 brands from persona_ready
+    if persona_ready_brands:
+        cited = 0
+        for b in persona_ready_brands:
+            nm = (b.get("brand") or "").strip()
+            if not nm:
+                continue
+            # Case-insensitive substring match — most brands are unique
+            # enough tokens that false positives are rare
+            if nm.lower() in body_lower:
+                cited += 1
+        if cited < 2:
+            failures.append(
+                f"names only {cited} persona-ready brands (need >= 2)"
+            )
+
+    # Morning cue — Tuesday morning / commute / workday / coffee
+    morning_cues = ("tuesday", "morning", "wakes", "commute", "workday",
+                     "breakfast", "before coffee", "before work",
+                     "at their desk", "9-to-5", "9 to 5")
+    if not any(c in body_lower for c in morning_cues):
+        failures.append("no morning/workday behavioral cue")
+
+    # Evening/weekend cue
+    evening_cues = ("saturday", "sunday", "weekend", "evening",
+                     "friday night", "saturday night", "sunday night",
+                     "after work", "unwind", "decompress")
+    if not any(c in body_lower for c in evening_cues):
+        failures.append("no evening/weekend behavioral cue")
+
+    # Anti-persona note — must contain 'not' as an exclusion
+    if not re.search(r"\bnot\s+\w", body, flags=re.IGNORECASE):
+        failures.append("no anti-persona 'not' note")
+
+    # Generic-slop filter — too many filler phrases means the LLM
+    # produced marketing-copy fluff, not a persona
+    slop_phrases = (
+        "digitally-savvy", "digitally savvy", "highly engaged",
+        "passionate about", "value and convenience", "brand-conscious",
+        "influencers within their circles", "wealth of interests",
+        "vibrant and diverse", "modern consumers who value",
+        "actively engage with content", "consistently seek out",
+    )
+    slop_hits = sum(1 for s in slop_phrases if s in body_lower)
+    if slop_hits >= 2:
+        failures.append(f"contains {slop_hits} generic filler phrases")
+
+    return (len(failures) == 0), failures
 
 
 def _extract_narrated_reaches(body: str) -> list[tuple[str, float]]:
