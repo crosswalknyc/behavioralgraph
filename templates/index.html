@@ -17026,6 +17026,324 @@
             if (t) document.body.setAttribute('data-theme', t);
         })();
     </script>
+
+    <!-- ============================================================
+         APP BOOT LOADING OVERLAY
+         Shows on initial login / hard refresh while the dashboard
+         async-loads Gen Pop baseline, jobs, and the profile tree.
+         Auto-dismisses when all critical fetches complete, or after a
+         30s safety timeout so a slow/failed request never leaves the
+         user staring at the overlay. Rendered inline (not in an
+         external CSS/JS file) so it paints on the very first tick.
+         ============================================================ -->
+    <style>
+        .app-boot-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 2147483000;
+            background: radial-gradient(1200px 800px at 50% 40%, #172846 0%, #0a1220 60%, #05080f 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 380ms ease, visibility 380ms ease;
+            opacity: 1;
+        }
+        body[data-theme="light"] .app-boot-overlay {
+            background: radial-gradient(1200px 800px at 50% 40%, #e8f1fb 0%, #d5e4f3 60%, #c3d6ea 100%);
+        }
+        .app-boot-overlay.app-boot-hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .app-boot-card {
+            width: min(440px, calc(100vw - 32px));
+            padding: 2rem 2rem 1.5rem;
+            background: rgba(12, 22, 40, 0.72);
+            border: 1px solid rgba(102, 217, 239, 0.22);
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(102, 217, 239, 0.08) inset;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            color: #e6f1ff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        body[data-theme="light"] .app-boot-card {
+            background: rgba(255, 255, 255, 0.88);
+            border-color: rgba(30, 64, 175, 0.22);
+            color: #0a1929;
+            box-shadow: 0 20px 60px rgba(30, 64, 175, 0.18), 0 0 0 1px rgba(30, 64, 175, 0.06) inset;
+        }
+        .app-boot-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            margin-bottom: 1.25rem;
+        }
+        .app-boot-brand-mark {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #5a9ad9 0%, #66d9ef 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #05080f;
+            font-weight: 800;
+        }
+        .app-boot-brand-name {
+            font-size: 0.78rem;
+            letter-spacing: 0.22em;
+            font-weight: 700;
+            color: #66d9ef;
+            text-transform: uppercase;
+        }
+        body[data-theme="light"] .app-boot-brand-name { color: #1e40af; }
+        .app-boot-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0 0 0.35rem;
+            letter-spacing: 0.005em;
+        }
+        .app-boot-sub {
+            font-size: 0.86rem;
+            color: rgba(230, 241, 255, 0.72);
+            min-height: 1.2em;
+            margin-bottom: 1.15rem;
+        }
+        body[data-theme="light"] .app-boot-sub { color: rgba(10, 25, 41, 0.68); }
+        .app-boot-progress {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.15rem;
+        }
+        .app-boot-progress-track {
+            flex: 1 1 auto;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+            position: relative;
+        }
+        body[data-theme="light"] .app-boot-progress-track { background: rgba(10, 25, 41, 0.10); }
+        .app-boot-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #5a9ad9 0%, #66d9ef 60%, #a5f3fc 100%);
+            border-radius: 999px;
+            transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+            box-shadow: 0 0 12px rgba(102, 217, 239, 0.45);
+        }
+        .app-boot-progress-pct {
+            font-size: 0.75rem;
+            font-variant-numeric: tabular-nums;
+            color: rgba(230, 241, 255, 0.75);
+            min-width: 34px;
+            text-align: right;
+        }
+        body[data-theme="light"] .app-boot-progress-pct { color: rgba(10, 25, 41, 0.70); }
+        .app-boot-steps {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+        .app-boot-steps li {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            font-size: 0.83rem;
+            color: rgba(230, 241, 255, 0.55);
+            transition: color 200ms ease;
+        }
+        body[data-theme="light"] .app-boot-steps li { color: rgba(10, 25, 41, 0.50); }
+        .app-boot-steps li.step-active { color: #e6f1ff; }
+        body[data-theme="light"] .app-boot-steps li.step-active { color: #0a1929; }
+        .app-boot-steps li.step-done { color: rgba(230, 241, 255, 0.85); }
+        body[data-theme="light"] .app-boot-steps li.step-done { color: rgba(10, 25, 41, 0.75); }
+        .app-boot-step-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(230, 241, 255, 0.28);
+            font-size: 10px;
+            line-height: 1;
+            color: transparent;
+            transition: all 200ms ease;
+            flex-shrink: 0;
+        }
+        body[data-theme="light"] .app-boot-step-icon { border-color: rgba(10, 25, 41, 0.28); }
+        .app-boot-steps li.step-active .app-boot-step-icon {
+            border-color: #66d9ef;
+            border-top-color: transparent;
+            animation: appBootSpin 0.8s linear infinite;
+        }
+        .app-boot-steps li.step-done .app-boot-step-icon {
+            border-color: #66d9ef;
+            background: #66d9ef;
+            color: #05080f;
+        }
+        body[data-theme="light"] .app-boot-steps li.step-done .app-boot-step-icon {
+            border-color: #1e40af;
+            background: #1e40af;
+            color: #ffffff;
+        }
+        .app-boot-steps li.step-done .app-boot-step-icon::before { content: "\2713"; font-weight: 800; }
+        .app-boot-steps li.step-fail .app-boot-step-icon {
+            border-color: #f87171;
+            background: transparent;
+            color: #f87171;
+            animation: none;
+        }
+        .app-boot-steps li.step-fail .app-boot-step-icon::before { content: "\00d7"; font-weight: 800; }
+        .app-boot-steps li.step-fail { color: #f87171; }
+        @keyframes appBootSpin { to { transform: rotate(360deg); } }
+    </style>
+    {% if username %}
+    <div id="appBootOverlay" class="app-boot-overlay" role="status" aria-live="polite" aria-label="Loading dashboard">
+        <div class="app-boot-card">
+            <div class="app-boot-brand">
+                <div class="app-boot-brand-mark">C</div>
+                <div class="app-boot-brand-name">Crosswalk</div>
+            </div>
+            <div class="app-boot-title" id="appBootTitle">Loading your dashboard</div>
+            <div class="app-boot-sub" id="appBootSub">Waking up the server&hellip;</div>
+            <div class="app-boot-progress">
+                <div class="app-boot-progress-track">
+                    <div class="app-boot-progress-fill" id="appBootProgressFill"></div>
+                </div>
+                <div class="app-boot-progress-pct" id="appBootProgressPct">0%</div>
+            </div>
+            <ul class="app-boot-steps" id="appBootSteps">
+                <li data-boot-step="features"><span class="app-boot-step-icon"></span><span>Feature access</span></li>
+                <li data-boot-step="genpop"><span class="app-boot-step-icon"></span><span>Gen Pop baseline</span></li>
+                <li data-boot-step="jobs"><span class="app-boot-step-icon"></span><span>Recent activity</span></li>
+                <li data-boot-step="profiles"><span class="app-boot-step-icon"></span><span>Your profiles</span></li>
+            </ul>
+        </div>
+    </div>
+    <script>
+        /* App boot orchestrator. Tracks the 4 critical initial fetches
+           and fades the overlay once all resolve (success OR failure).
+           Safety timeout at 30s so a hung fetch never traps the user.
+           Every setStep/completeStep is a no-op if the overlay isn't
+           on the page (e.g. anonymous / non-logged-in template render). */
+        (function() {
+            var STEPS = ['features', 'genpop', 'jobs', 'profiles'];
+            var STEP_COPY = {
+                features: 'Checking your feature access\u2026',
+                genpop:   'Loading Gen Pop baseline (this is the slow one)\u2026',
+                jobs:     'Fetching recent activity\u2026',
+                profiles: 'Building your profile list\u2026'
+            };
+            var state = { done: {}, failed: {}, started: false, finished: false };
+            var overlay = document.getElementById('appBootOverlay');
+            var titleEl = document.getElementById('appBootTitle');
+            var subEl   = document.getElementById('appBootSub');
+            var fillEl  = document.getElementById('appBootProgressFill');
+            var pctEl   = document.getElementById('appBootProgressPct');
+            var stepsEl = document.getElementById('appBootSteps');
+            var safetyTimer = null;
+
+            function pct() {
+                var n = 0;
+                STEPS.forEach(function(k) { if (state.done[k] || state.failed[k]) n += 1; });
+                return Math.round((n / STEPS.length) * 100);
+            }
+            function paintProgress() {
+                var p = pct();
+                if (fillEl) fillEl.style.width = p + '%';
+                if (pctEl) pctEl.textContent = p + '%';
+            }
+            function paintStepClass(step, cls) {
+                if (!stepsEl) return;
+                var li = stepsEl.querySelector('li[data-boot-step="' + step + '"]');
+                if (!li) return;
+                li.classList.remove('step-active', 'step-done', 'step-fail');
+                if (cls) li.classList.add(cls);
+            }
+            function allSettled() {
+                for (var i = 0; i < STEPS.length; i++) {
+                    var k = STEPS[i];
+                    if (!state.done[k] && !state.failed[k]) return false;
+                }
+                return true;
+            }
+            function maybeFinish() {
+                if (state.finished) return;
+                if (!allSettled()) return;
+                state.finished = true;
+                if (subEl) subEl.textContent = 'Ready.';
+                paintProgress();
+                setTimeout(function() {
+                    if (overlay) overlay.classList.add('app-boot-hidden');
+                    if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
+                    setTimeout(function() {
+                        if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                    }, 500);
+                }, 260);
+            }
+
+            window._boot = {
+                start: function() {
+                    if (!overlay || state.started) return;
+                    state.started = true;
+                    paintProgress();
+                    safetyTimer = setTimeout(function() {
+                        STEPS.forEach(function(k) {
+                            if (!state.done[k] && !state.failed[k]) state.failed[k] = true;
+                        });
+                        paintProgress();
+                        if (overlay) overlay.classList.add('app-boot-hidden');
+                        setTimeout(function() {
+                            if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                        }, 500);
+                    }, 30000);
+                },
+                setStep: function(step) {
+                    if (!overlay || state.finished) return;
+                    if (state.done[step] || state.failed[step]) return;
+                    if (titleEl) titleEl.textContent = 'Loading your dashboard';
+                    if (subEl && STEP_COPY[step]) subEl.textContent = STEP_COPY[step];
+                    paintStepClass(step, 'step-active');
+                },
+                completeStep: function(step) {
+                    if (!overlay || state.finished) return;
+                    if (state.done[step]) return;
+                    state.done[step] = true;
+                    delete state.failed[step];
+                    paintStepClass(step, 'step-done');
+                    paintProgress();
+                    maybeFinish();
+                },
+                failStep: function(step) {
+                    if (!overlay || state.finished) return;
+                    if (state.done[step] || state.failed[step]) return;
+                    state.failed[step] = true;
+                    paintStepClass(step, 'step-fail');
+                    paintProgress();
+                    maybeFinish();
+                },
+                done: function() {
+                    if (!overlay || state.finished) return;
+                    STEPS.forEach(function(k) {
+                        if (!state.done[k] && !state.failed[k]) state.done[k] = true;
+                    });
+                    STEPS.forEach(function(k) { paintStepClass(k, 'step-done'); });
+                    paintProgress();
+                    maybeFinish();
+                }
+            };
+        })();
+    </script>
+
     <!-- DEV ENVIRONMENT BANNER - Shown on dev site (hostname or server flag) -->
     <div id="devEnvBanner" style="display:none; position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(90deg, #e94560, #ff6b6b); color: white; text-align: center; padding: 8px 16px; font-size: 13px; font-weight: 600; z-index: 999999; box-shadow: 0 2px 10px rgba(233, 69, 96, 0.4);">
         🚧 DEVELOPMENT ENVIRONMENT - Changes here won't affect the live site. <a href="https://behavioralgraph.onrender.com" style="color: white; text-decoration: underline; margin-left: 8px;">Go to Live Site →</a>
@@ -34459,6 +34777,7 @@
         
         // Load live features from server and apply visibility
         async function loadAndApplyLiveFeatures() {
+            if (window._boot) window._boot.setStep('features');
             try {
                 // Cache-bust so we always get fresh flags after admin saves
                 const response = await fetch('/api/admin/live-features?t=' + Date.now(), { credentials: 'same-origin' });
@@ -34471,8 +34790,10 @@
                         window.hiddenProducts = { ...(window.hiddenProducts || {}), ...data.hidden_products };
                     }
                 }
+                if (window._boot) window._boot.completeStep('features');
             } catch (error) {
                 console.log('Could not load live features, using defaults');
+                if (window._boot) window._boot.failStep('features');
             }
             
             // Apply visibility to Analysis Tools
@@ -34617,6 +34938,7 @@
         // Load Gen Pop file and parse it the same way as any profile; use that for Gen Pop % everywhere (locations, behavioral, demographics).
         // Loads the Gen Pop file with the most recent year in the filename (e.g. Gen Pop 2026).
         async function loadGenPopBaseline() {
+            if (window._boot) window._boot.setStep('genpop');
             try {
                 let genPopKey = null;
                 const cached = typeof getSessionJobsCache === 'function' ? getSessionJobsCache() : null;
@@ -34632,6 +34954,7 @@
                 }
                 if (!genPopKey) {
                     console.warn('⚠️ No Gen Pop file found (no job with "gen pop" in name)');
+                    if (window._boot) window._boot.completeStep('genpop');
                     return;
                 }
                 console.log('📊 Loading Gen Pop from: ' + genPopKey);
@@ -34650,12 +34973,20 @@
                 } else {
                     console.warn('⚠️ Could not load Gen Pop file');
                 }
+                if (window._boot) window._boot.completeStep('genpop');
             } catch (error) {
                 console.error('❌ Error loading Gen Pop baseline:', error);
+                if (window._boot) window._boot.failStep('genpop');
             }
         }
 
         document.addEventListener('DOMContentLoaded', async function() {
+            // Kick off the boot loading overlay so users see progress while
+            // Gen Pop, jobs, and the profile tree fetch. The overlay is a
+            // no-op if the current template render didn't inject it
+            // (anonymous / non-authenticated pages).
+            if (window._boot) window._boot.start();
+
             // Apply live feature visibility immediately (View Numbers stays hidden until API says on)
             if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
 
@@ -34681,6 +35012,9 @@
             loadJobs();
             // If user only has Fin IQ, show Fin IQ landing; otherwise apply selected product view so dashboard/content shows
             if (window.defaultViewHedgeFundIQ) {
+                // HFIQ path doesn't hit loadDashboardProfiles, so complete
+                // that boot step manually so the overlay can dismiss.
+                if (window._boot) window._boot.completeStep('profiles');
                 showHedgeFundIQ();
             } else {
                 loadDashboardProfiles();
@@ -89201,6 +89535,7 @@
 
         async function loadDashboardProfiles() {
             const container = document.getElementById('dashProfileTree');
+            if (window._boot) window._boot.setStep('profiles');
             
             try {
                 // Use session cache if available (skip fetch for rest of session)
@@ -89208,6 +89543,7 @@
                 if (cached && cached.jobs.length > 0) {
                     renderDashboardProfileTree(cached.jobs);
                     if (openProfileTabs.length === 0) restoreSavedTabs();
+                    if (window._boot) window._boot.completeStep('profiles');
                     return;
                 }
                 // First load: refresh from S3 so new profiles show up, then cache for session (cache-bust so browser doesn't serve stale list)
@@ -89222,6 +89558,7 @@
                 if (!response.ok) {
                     console.error('Failed to load profiles:', response.status);
                     if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Failed to load profiles</div>';
+                    if (window._boot) window._boot.failStep('profiles');
                     return;
                 }
                 
@@ -89248,6 +89585,7 @@
                 setSessionJobsCache(data);
                 const profiles = data.jobs || [];
                 renderDashboardProfileTree(profiles);
+                if (window._boot) window._boot.completeStep('profiles');
                 
                 // If Gen Pop is currently selected, re-load it from the resolved key so we show the correct file (avoids stale cache)
                 const curKey = (selectedDashProfile || '').toLowerCase();
@@ -89280,6 +89618,7 @@
             } catch (error) {
                 console.error('Failed to load profiles:', error);
                 if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Error loading profiles</div>';
+                if (window._boot) window._boot.failStep('profiles');
             }
         }
 
@@ -109411,6 +109750,7 @@
             if (showLoading && container) {
                 container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;"><span class="spinner"></span> Loading results...</div>';
             }
+            if (window._boot) window._boot.setStep('jobs');
             
             try {
                 // Use session cache if available (skip fetch for rest of session)
@@ -109452,6 +109792,7 @@
                     }
                     jobsDisplayLimit = 50;
                     renderJobs(allJobs);
+                    if (window._boot) window._boot.completeStep('jobs');
                     return;
                 }
                 
@@ -109534,11 +109875,13 @@
                 // Reset display limit when loading fresh data
                 jobsDisplayLimit = 50;
                 renderJobs(allJobs);
+                if (window._boot) window._boot.completeStep('jobs');
             } catch (error) { 
                 console.error('Failed to load jobs:', error);
                 if (container) {
                     container.innerHTML = '<div style="padding: 1rem; color: var(--accent-red); font-size: 0.8rem;">Failed to load</div>';
                 }
+                if (window._boot) window._boot.failStep('jobs');
             }
         }
         
