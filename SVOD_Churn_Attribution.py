@@ -2687,6 +2687,131 @@ def _viewers_from_minutes_bracket(viewing_minutes_us, minutes_per_episode, episo
     return {'lower': lower, 'point': point, 'upper': upper}
 
 
+# ── Platform-exclusive cohort detection ─────────────────────────────────
+# When an analyst titles a pull "Chicago Fire - Peacock Only" or "Chicago
+# Fire - NBC.com Exclusive" or "The Boys — Prime Video Only" they mean:
+# "restrict this analysis to viewers who used ONLY that platform for the
+# show, and NOT any other platform where the same title is available".
+# This is the disjoint-cohort interpretation. Semantically it means:
+#
+#   reach  → SMALLER than the platform total (subtract cross-platform overlap)
+#   funnel → SAME funnel dynamics (Peacock signups are Peacock signups)
+#   split  → OFTEN different new/reactivated skew per platform archetype
+#            (e.g. NBC.com-only cord-shavers skew NEW; Peacock-only loyalists
+#             skew REACTIVATED for a long-running franchise)
+#
+# The pipeline can't invent the cross-platform overlap for a specific show
+# without external data, so we don't AUTO-ADJUST numbers — instead we (a)
+# flag the config with is_platform_exclusive_cohort=True, (b) augment the
+# analyst context_note so the Claude reach/pre_existing/conversion research
+# call is aware and scopes its citations to the exclusive segment, and (c)
+# emit a header row in the output CSV documenting the interpretation so
+# downstream dashboards + reviewers know these numbers are for the
+# EXCLUSIVE cohort, not the platform total.
+
+# Regex requiring: an explicit separator ("-", "—", "–", ":", "|", "(",
+# "/") — NOT start-of-string — then platform token(s), then Only /
+# Exclusive at word boundary, then end-of-string OR punctuation/
+# whitespace terminator. Requiring an explicit separator rules out false
+# positives like "The Only One", "An Exclusive Interview", or "Only
+# Murders in the Building" where "Only"/"Exclusive" appears mid-title
+# without a platform-tag structure. Real analyst platform-exclusive tags
+# always follow the "<Show Name> - <Platform> Only" pattern with a
+# separator, so this restriction gains precision without losing recall.
+import re as _re
+
+_EXCLUSIVE_COHORT_RE = _re.compile(
+    r"""
+    [-—–:|/(]                    # required separator char (no start-of-string)
+    \s*
+    (?P<platform>[^-—–:|/()]+?)   # platform tokens (multi-word ok)
+    \s+
+    (?P<pattern>only|exclusive|exclusively)   # exclusive marker
+    (?:$|[\s.,!?)])              # end-of-string OR punct/whitespace terminator
+    """,
+    _re.IGNORECASE | _re.VERBOSE,
+)
+
+
+def _detect_platform_exclusive_cohort(show_terms, project_name=None, platform_name=None):
+    """Detect whether a pull is targeting a platform-EXCLUSIVE audience
+    segment (viewers who used ONE platform and not the other cross-listed
+    platform for the same title).
+
+    Returns a dict describing the detection, or None if not detected:
+        {
+            'matched_field':   'show_terms' | 'project_name',
+            'matched_text':    '<the actual matched string>',
+            'matched_pattern': '<Only | Exclusive | Exclusively>',
+            'inferred_platform': '<platform name from title (multi-word ok)>',
+        }
+
+    Detection is intentionally conservative — the exclusive marker MUST be
+    preceded by a separator (dash, em-dash, colon, pipe, paren, slash) so
+    titles like "The Only Murders in the Building" or "The Only One" do
+    NOT trigger. Multi-word platform names ("Prime Video", "Apple TV+")
+    are extracted correctly.
+    """
+    haystacks = []
+    if isinstance(show_terms, (list, tuple)):
+        for t in show_terms:
+            if t:
+                haystacks.append(('show_terms', str(t)))
+    elif show_terms:
+        haystacks.append(('show_terms', str(show_terms)))
+    if project_name:
+        haystacks.append(('project_name', str(project_name)))
+
+    for field, text in haystacks:
+        # Underscores in project names (Chicago_Fire_-_Peacock_Only) get
+        # normalized to spaces so the separator regex works on both
+        # human-readable titles and machine-readable project names.
+        normalized = text.replace('_', ' ')
+        m = _EXCLUSIVE_COHORT_RE.search(normalized)
+        if m:
+            platform_tokens = m.group('platform').strip(" -—–:|/().,")
+            pattern         = m.group('pattern').lower()
+            return {
+                'matched_field':     field,
+                'matched_text':      text,
+                'matched_pattern':   pattern.capitalize(),
+                'inferred_platform': platform_tokens or (platform_name or None),
+            }
+    return None
+
+
+def _build_exclusive_cohort_note(detection, platform_name):
+    """Compose the additional context_note text that flags a platform-
+    exclusive cohort to the Claude research prompt. Prepended to any
+    existing analyst context_note so the exclusive-cohort framing is
+    the FIRST thing Claude sees."""
+    plat = detection.get('inferred_platform') or platform_name or 'the specified platform'
+    pat  = detection.get('matched_pattern') or 'Only'
+    return (
+        f"### PLATFORM-EXCLUSIVE COHORT (detected from title '{pat}') ###\n"
+        f"This pull targets the {plat.upper()}-EXCLUSIVE audience segment: "
+        f"viewers who watched this title on {plat} and NOT on any other "
+        f"platform where it may be available. Your reach/pre_existing/"
+        f"conversion estimates MUST be for this disjoint cohort, NOT the "
+        f"full {plat} audience. Cross-platform viewers (people who watched "
+        f"on {plat} AND another platform) should be SUBTRACTED from your "
+        f"reach estimate.\n"
+        f"\n"
+        f"Typical adjustments for exclusive cohorts:\n"
+        f"  - reach: subtract 15-25% of the platform total for the "
+        f"    cross-platform overlap (varies by title — cite Antenna / "
+        f"    Comscore cross-viewing tables if available).\n"
+        f"  - new_share: platform-exclusive viewers often have a DIFFERENT "
+        f"    new-vs-reactivated skew vs. the platform total (e.g. free-"
+        f"    tier / cord-shaver exclusives on NBC.com skew NEW; paid-SVOD "
+        f"    loyalists on Peacock skew REACTIVATED for long-running "
+        f"    franchises). Research this directly.\n"
+        f"  - conversion_pct: same funnel dynamics as the platform total; "
+        f"    do not adjust unless you find title-specific evidence.\n"
+        f"###\n"
+    )
+
+
 def _research_engagement_metrics(*, show_name, platform_name, genre, content_cadence,
                                  episode_count, is_movie, runtime_minutes=None,
                                  release_date=None):
@@ -5166,6 +5291,24 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
             "Episodes tracked were watched after the original air date due to availability of data.",
             "", "", "", "", "", "",
         ))
+    # Emit a header row when the pull was detected as a platform-EXCLUSIVE
+    # cohort (title contains "Only" / "Exclusive"). Signals to dashboard
+    # reviewers + downstream consumers that these numbers are for the
+    # disjoint segment, not the full-platform audience. See
+    # _detect_platform_exclusive_cohort() for the detection rules.
+    if p.get('is_platform_exclusive_cohort'):
+        _det = p.get('_exclusive_cohort_detection') or {}
+        _plat = _det.get('inferred_platform') or p.get('platform_name') or 'the platform'
+        _pat  = _det.get('matched_pattern') or 'Only'
+        rows.append((
+            "Cohort Scope Note", "", "",
+            (f"Platform-EXCLUSIVE cohort (detected from '{_pat}' in title). "
+             f"Numbers reflect viewers who used {_plat} for this title and NOT "
+             f"any other platform where it may be available. Cross-platform "
+             f"viewers are excluded — this is a DISJOINT segment, not the full "
+             f"{_plat} audience for the title."),
+            "", "", "", "", "", "",
+        ))
     rows.extend([
         ("Exclusion Window (days)", "", p['exclusion_days'], "", "", "", "", "", "", ""),
         ("Attribution Window (days)", "", p['attribution_window'], "", "", "", "", "", "", ""),
@@ -7354,6 +7497,38 @@ def run_synthetic_attribution(config: dict) -> dict:
     if _raw_cadence.lower() in ('all at once', 'all-at-once', 'all_at_once'):
         config['content_cadence'] = 'Binge'
 
+    # ── Platform-exclusive cohort detection ─────────────────────────────
+    # Titles like "Chicago Fire - Peacock Only" or "The Boys - Prime Video
+    # Exclusive" imply the analysis targets viewers who watched ONLY that
+    # platform (not cross-platform overlap). If detected, we flag config
+    # so downstream consumers see it AND prepend an exclusive-cohort
+    # framing to context_note so the Claude research prompt scopes its
+    # citations to the disjoint segment (see line ~6042 where context_note
+    # gets embedded in the research user-prompt). We do NOT auto-adjust
+    # numbers — that stays under analyst control via the reach_us_override
+    # + new_share fields — but the Claude research call now produces
+    # exclusive-cohort-appropriate defaults for pulls that don't override.
+    _exclusive_detection = _detect_platform_exclusive_cohort(
+        show_terms=config.get('show_search_terms'),
+        project_name=config.get('project_name'),
+        platform_name=config.get('platform_name'),
+    )
+    if _exclusive_detection is not None:
+        config['is_platform_exclusive_cohort'] = True
+        config['_exclusive_cohort_detection']  = _exclusive_detection
+        _existing_note = (config.get('context_note') or '').strip()
+        _cohort_note = _build_exclusive_cohort_note(
+            _exclusive_detection, config.get('platform_name'))
+        config['context_note'] = (
+            _cohort_note + "\n" + _existing_note if _existing_note else _cohort_note
+        )
+        print(f"🎯 Platform-EXCLUSIVE cohort detected — title matched "
+              f"'{_exclusive_detection['matched_pattern']}' pattern in "
+              f"{_exclusive_detection['matched_field']}. "
+              f"Inferred platform: {_exclusive_detection['inferred_platform']!r}. "
+              f"Claude research prompt will scope citations to the disjoint "
+              f"exclusive segment; a note row will be added to the output CSV.")
+
     print("\n" + "=" * 70)
     print("  SVOD SYNTHETIC ATTRIBUTION PIPELINE")
     print("=" * 70)
@@ -7364,6 +7539,9 @@ def run_synthetic_attribution(config: dict) -> dict:
     print(f"  Genre:          {config.get('genre')}")
     print(f"  Cadence:        {config.get('content_cadence')}")
     print(f"  New show:       {config.get('is_new_show')}")
+    if config.get('is_platform_exclusive_cohort'):
+        print(f"  Cohort scope:   PLATFORM-EXCLUSIVE "
+              f"(disjoint from cross-platform viewers)")
     print("=" * 70 + "\n")
 
     panel = _build_synthetic_panel(config)
