@@ -1057,6 +1057,75 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         'nvidia', 'tesla stock', 'apple stock', 'microsoft stock',
         'meta stock', 'amazon stock', 'palantir', 'amd stock',
     ],
+    # Tech / AI / big-tech news. Priority-ordered ABOVE retail so
+    # searches like "iphone 18 pro max" (product news, not a shopping
+    # cart) go to tech instead of retail. Retail keeps the physical /
+    # consumer-goods brands (Costco, Target, Ulta, sneakers, etc.).
+    # Retail's own iphone/airpods/ipad/xbox entries are kept as a
+    # secondary catch for actual purchase-intent phrasing, but the
+    # tech-priority ordering means those hits land here whenever the
+    # search is about the product itself rather than shopping for it.
+    'tech': [
+        # AI companies / labs
+        'openai', 'chatgpt', 'gpt-4', 'gpt-5', 'gpt5', 'gpt 4', 'gpt 5',
+        'sora openai', 'sora video', 'sora ai',
+        'anthropic', 'claude ai', 'claude 4', 'claude 5',
+        'google gemini', 'gemini ai', 'gemini pro', 'gemini 3',
+        'perplexity ai', 'perplexity', 'grok ai', 'grok 3', 'grok 4',
+        'xai', 'x.ai', 'mistral ai', 'deepseek', 'llama 3',
+        'nvidia earnings', 'nvidia gtc', 'nvidia keynote',
+        'jensen huang', 'sam altman', 'demis hassabis', 'dario amodei',
+        # AI + generic
+        'ai chatbot', 'generative ai', 'ai model', 'ai models',
+        'large language model', 'llm', 'ai agents', 'agentic ai',
+        'ai code', 'ai coding', 'copilot', 'github copilot',
+        'ai video generator', 'ai image generator', 'text to video',
+        'text to image', 'deepfake', 'ai regulation', 'ai executive order',
+        # Big Tech companies (product / policy / earnings context; not
+        # stock-ticker context - that stays in finance with " stock").
+        'apple event', 'wwdc', 'apple wwdc', 'apple vision pro',
+        'vision pro headset', 'apple intelligence', 'apple silicon',
+        'iphone 17', 'iphone 18', 'iphone 19', 'iphone launch',
+        'iphone event', 'macbook pro', 'macbook air', 'm4 chip',
+        'm5 chip', 'ipad pro', 'apple watch series',
+        'google i/o', 'google io', 'google pixel', 'pixel 10', 'pixel 11',
+        'pixel launch', 'pixel event', 'android release', 'android update',
+        'chromecast', 'chromebook',
+        'microsoft build', 'microsoft ignite', 'microsoft surface',
+        'windows 11', 'windows 12', 'copilot pc', 'copilot plus pc',
+        'meta connect', 'meta quest', 'quest 3', 'quest 4',
+        'ray-ban meta', 'orion glasses', 'llama model',
+        'amazon web services', 'aws re:invent', 'aws outage',
+        'alexa plus', 'ring camera',
+        # Tesla / EV tech (Tesla the product/tech, not the stock)
+        'tesla robotaxi', 'tesla cybertruck', 'tesla model', 'tesla fsd',
+        'tesla autopilot', 'tesla ai day', 'optimus robot',
+        'elon musk', 'starlink', 'spacex launch', 'spacex starship',
+        'neuralink', 'boring company',
+        # Other AI-adjacent / robotics
+        'humanoid robot', 'figure ai', '1x robot', 'boston dynamics',
+        'waymo', 'cruise robotaxi',
+        # Cybersecurity / outages (huge trending drivers)
+        'data breach', 'ransomware attack', 'cyberattack',
+        'crowdstrike outage', 'aws outage', 'cloudflare outage',
+        'okta breach', 'zero-day exploit', 'zero day exploit',
+        # Consumer electronics events
+        'ces 2026', 'ces 2027', 'ces las vegas',
+        # Streaming tech / codecs / other geek staples
+        'vision pro', 'apple silicon', 'arm chip', 'tsmc',
+        # Gaming hardware / launches (gaming *hardware* is tech, gaming
+        # *content* stays in entertainment)
+        'ps5 pro', 'ps6', 'xbox series', 'xbox next gen',
+        'nintendo switch 2', 'switch 2', 'steam deck', 'rog ally',
+        # Social media as platform news (product launches / policy /
+        # bans - not "who tweeted what")
+        'threads app', 'bluesky app', 'x platform outage',
+        'tiktok ban', 'tiktok divest', 'tiktok algorithm',
+        'instagram algorithm', 'youtube algorithm',
+        # Web3 / crypto tech (protocols vs finance-side prices)
+        'ethereum upgrade', 'ethereum layer 2', 'crypto exchange hack',
+        'nft', 'defi protocol',
+    ],
 }
 # Short tokens matched by word boundary to prevent false positives like
 # "gop" matching "gopro", "btc" matching "batch", "gdp" matching
@@ -1067,6 +1136,12 @@ _SHORT_KEYWORD_TOKENS = {
     # partisan short tokens
     'maga', 'mtg', 'blm', 'crt', 'dei', '2a',
     'rfk jr', 'ccw',
+    # tech short tokens - word-boundary matching prevents "llm"
+    # hitting "still murky", "nft" hitting "shift", etc. Skip bare
+    # "ai" (too broad - hits the 2001 film, "A.I. Artificial
+    # Intelligence", etc.); the compound forms in tech keywords
+    # like "ai chatbot", "generative ai" catch legit AI searches.
+    'llm', 'nft', 'gpt',
 }
 
 
@@ -1089,7 +1164,12 @@ _SHORT_KEYWORD_TOKENS = {
 # labeled correctly first, then everything else falls to neutral
 # politics.
 _CATEGORY_PRIORITY = (
-    'sports', 'entertainment', 'retail',
+    'sports', 'entertainment',
+    # `tech` sits BEFORE `retail` so "iphone 18 pro max", "vision pro",
+    # "ps5 pro" land in tech (product/company news) rather than retail
+    # (shopping intent). Retail still catches "iphone deals",
+    # "airpods sale", "black friday" via its own broader vocabulary.
+    'tech', 'retail',
     'conservative', 'progressive', 'politics',
     'finance',
 )
@@ -1154,6 +1234,7 @@ def _bucket_searches_by_category(rows: list[dict], per_bucket: int = 30
     buckets: dict[str, list[dict]] = {
         'sports':        [],
         'entertainment': [],
+        'tech':          [],
         'retail':        [],
         'politics':      [],
         'conservative':  [],
@@ -2774,6 +2855,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'searches':      len(trending_searches),
             'sports':        len(searches_by_category.get('sports')        or []),
             'entertainment': len(searches_by_category.get('entertainment') or []),
+            'tech':          len(searches_by_category.get('tech')          or []),
             'retail':        len(searches_by_category.get('retail')        or []),
             'politics':      len(searches_by_category.get('politics')      or []),
             'conservative':  len(searches_by_category.get('conservative')  or []),

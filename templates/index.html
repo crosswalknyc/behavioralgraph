@@ -23316,18 +23316,29 @@
                grid collapses to 2, then 1 column via the media
                queries below so cards never squish below a readable
                width. */
-            #trendsIQView .tiq-searches-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+            /* 3-per-row search grid. `align-items: stretch` (the grid
+               default) means every card in the same row grows to the
+               height of the tallest sibling, so a short Retail card
+               ends at the same y as a rich Politics card - the
+               difference just becomes empty scroll space at the
+               bottom of the shorter card. */
+            #trendsIQView .tiq-searches-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
             @media (max-width: 1200px) { #trendsIQView .tiq-searches-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
             @media (max-width: 780px)  { #trendsIQView .tiq-searches-grid { grid-template-columns: 1fr; } }
-            #trendsIQView .tiq-search-cat-card { min-width: 0; }
+            /* Each card is a flex column so the body can flex-grow to
+               fill whatever height the tallest sibling in the same
+               row imposes. Without this, a card with 3 items sits at
+               its natural 3-row height even when the row is 700px. */
+            #trendsIQView .tiq-search-cat-card { min-width: 0; display: flex; flex-direction: column; }
             #trendsIQView .tiq-search-cat-card h4 { font-size: 0.9rem; }
             #trendsIQView .tiq-search-cat-card .tiq-row-title { font-size: 0.82rem; }
             #trendsIQView .tiq-search-cat-scroll { }
-            /* Card body scroll cap. Height is picked so ~top 5 rows
-               show without scrolling; anything beyond scrolls inside
-               the card, keeping every card's outer height locked so
-               the 3-per-row grid never gets ragged. */
-            #trendsIQView .tiq-search-scroll { max-height: 520px; overflow-y: auto; padding-right: 0.25rem; margin-right: -0.25rem; scrollbar-width: thin; scrollbar-color: rgba(124,58,237,0.4) transparent; }
+            /* Card body scroll cap. `flex: 1` lets the scroll region
+               fill whatever remaining height the row imposes; the
+               max-height cap keeps things sane on huge windows.
+               Top ~5 rows are visible without scrolling; anything
+               beyond scrolls inside the card. */
+            #trendsIQView .tiq-search-scroll { flex: 1 1 auto; max-height: 520px; overflow-y: auto; padding-right: 0.25rem; margin-right: -0.25rem; scrollbar-width: thin; scrollbar-color: rgba(124,58,237,0.4) transparent; }
             #trendsIQView .tiq-search-scroll::-webkit-scrollbar { width: 6px; }
             #trendsIQView .tiq-search-scroll::-webkit-scrollbar-track { background: transparent; }
             #trendsIQView .tiq-search-scroll::-webkit-scrollbar-thumb { background-color: rgba(124,58,237,0.4); border-radius: 3px; }
@@ -35282,9 +35293,25 @@
                 }
                 function applyProductAccessPayload(d) {
                     if (!d || !d.success) return;
+                    // 2026-07-09: previously omitted sfConversion,
+                    // flywheelConversion, brandPartnershipIQ, journeyIQ,
+                    // impactIQ, and talentFitIQ — so after an admin
+                    // toggled those grants the dropdown stayed stale
+                    // until a full page reload. Now every module that
+                    // has a backend gate re-syncs live.
+                    var analysisModules = d.analysis_iq_modules || [];
+                    function hasAnalysisModule(k) {
+                        return Array.isArray(analysisModules) && analysisModules.indexOf(k) !== -1;
+                    }
                     var pairs = [
-                        ['profileIQ', !!d.has_profile_iq_access],
+                        ['profileIQ', d.has_profile_iq_access !== false],
                         ['subscriberIQ', !!d.has_subscriber_iq_access],
+                        ['sfConversion', !!d.has_sf_conversion_access || hasAnalysisModule('sf_lf_conversion')],
+                        ['flywheelConversion', !!d.has_flywheel_conversion_access || hasAnalysisModule('flywheel_conversion')],
+                        ['brandPartnershipIQ', !!d.has_brand_partnership_iq_access || hasAnalysisModule('brand_partnership_iq')],
+                        ['journeyIQ', !!d.has_journey_iq_access || hasAnalysisModule('journey_iq')],
+                        ['impactIQ', d.has_impact_iq_access !== false],
+                        ['talentFitIQ', !!d.has_talent_fit_access],
                         ['llmoIQ', !!d.has_llmo_iq_access],
                         ['cultureRankerIQ', !!d.has_rankers_iq_access],
                         ['contentRankerIQ', !!d.has_rankers_iq_access],
@@ -41290,7 +41317,7 @@
         // Payload shape:
         //   compute_view.cards.trending_searches                = flat list (up to 300)
         //   compute_view.cards.trending_searches_by_category    = {
-        //     sports, entertainment, retail,
+        //     sports, entertainment, tech, retail,
         //     politics, conservative, progressive,
         //     finance,
         //     overall  <- uncategorized rows only (catch-all)
@@ -41300,10 +41327,11 @@
         // dense but scannable.
         //
         // Card display order (2026-07-09):
-        //   Overall, Entertainment, Sports, Retail,
-        //   Politics, Conservative, Progressive, Finance
-        // Politics leads the three political cards; Conservative /
-        // Progressive follow as lean-tagged cuts.
+        //   Overall, Entertainment, Sports,
+        //   Tech, Retail, Politics,
+        //   Conservative, Progressive, Finance
+        // 9 cards = clean 3x3 grid. Politics leads the three political
+        // cards; Conservative / Progressive follow as lean-tagged cuts.
         function renderTIQSearches(payload) {
             var overall, byCat, allPool;
             if (Array.isArray(payload)) {
@@ -41336,6 +41364,10 @@
                                        'Leagues, teams, games, and athletes.',
                                        byCat.sports,
                                        { emptyMsg: 'No sports searches in this window.' }) +
+                _tiqRenderSearchCard('\uD83D\uDCBB Tech',
+                                       'AI, big-tech launches, product news, outages.',
+                                       byCat.tech,
+                                       { emptyMsg: 'No tech searches in this window.' }) +
                 _tiqRenderSearchCard('\uD83D\uDECD Retail',
                                        'Brands, products, and shopping intent.',
                                        byCat.retail,
