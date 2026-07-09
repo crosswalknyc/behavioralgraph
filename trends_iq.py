@@ -836,7 +836,7 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         'raiders', 'bengals', 'buccaneers', 'commanders', 'jaguars',
         'cardinals nfl', 'texans', 'lions', 'vikings', 'saints',
         'canadiens', 'canucks', 'oilers', 'penguins', 'flyers',
-        'avalanche', 'lightning', 'panthers nhl', 'golden knights',
+        'avalanche', 'tampa bay lightning', 'panthers nhl', 'golden knights',
         # WNBA / NWSL context terms
         'fever', 'sparks', 'aces', 'liberty', 'storm', 'lynx',
         'sky wnba', 'mystics', 'sun wnba', 'wings',
@@ -1057,6 +1057,42 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         'nvidia', 'tesla stock', 'apple stock', 'microsoft stock',
         'meta stock', 'amazon stock', 'palantir', 'amd stock',
     ],
+    # Gaming (video-game content). Sits after entertainment/sports so
+    # broadly popular events still peel off first, but before tech so
+    # a Fortnite / Elden Ring / GTA search doesn't get pulled into the
+    # tech card. Gaming *hardware* (PS5 Pro, Xbox next-gen, Switch 2)
+    # lives in tech; gaming *content* lives here.
+    'gaming': [
+        # marquee live-service / franchise titles
+        'fortnite', 'roblox', 'minecraft', 'call of duty', 'cod',
+        'warzone', 'apex legends', 'valorant', 'league of legends',
+        'lol worlds', 'league worlds', 'counter-strike', 'cs2',
+        'dota 2', 'overwatch', 'overwatch 2', 'destiny 2',
+        'genshin impact', 'wuthering waves', 'honkai star rail',
+        'zenless zone zero', 'palworld',
+        # single-player / new releases
+        'elden ring', 'baldurs gate 3', "baldur's gate 3",
+        'gta 6', 'gta vi', 'grand theft auto 6', 'grand theft auto vi',
+        'red dead 3', 'red dead redemption 3', 'zelda tears of the kingdom',
+        'zelda tears', 'the legend of zelda tears',
+        'silksong', 'hollow knight silksong',
+        'starfield', 'diablo 4', 'diablo iv', 'assassins creed shadows',
+        "assassin's creed shadows", 'monster hunter wilds',
+        'stellar blade', 'final fantasy 7 rebirth', 'ff7 rebirth',
+        # esports / streaming
+        'twitch streamer', 'twitch clip', 'twitch ban', 'kick streamer',
+        'esports championship', 'the international dota',
+        'evo tournament', 'evo championship',
+        # major creators / personalities (unambiguous gaming names)
+        'kai cenat', 'mrbeast gaming', 'shroud', 'ninja fortnite',
+        'pokimane', 'dr disrespect',
+        # storefronts / launchers
+        'steam sale', 'steam summer sale', 'epic games store free',
+        'xbox game pass', 'game pass', 'ps plus games',
+        'nintendo direct', 'ps state of play', 'summer game fest',
+        # community drama
+        'game of the year 2025', 'game of the year 2026', 'goty',
+    ],
     # Tech / AI / big-tech news. Priority-ordered ABOVE retail so
     # searches like "iphone 18 pro max" (product news, not a shopping
     # cart) go to tech instead of retail. Retail keeps the physical /
@@ -1126,6 +1162,275 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         'ethereum upgrade', 'ethereum layer 2', 'crypto exchange hack',
         'nft', 'defi protocol',
     ],
+    # Weather + natural disasters. High priority so "hurricane milton"
+    # / "wildfires" / "earthquake magnitude" peel off before politics
+    # (disaster politics coverage) or crime (disaster looting).
+    'weather': [
+        'hurricane', 'tropical storm', 'typhoon', 'cyclone',
+        'category 4 hurricane', 'category 5 hurricane', 'landfall',
+        'storm surge', 'evacuation order', 'evacuation zone',
+        'flood warning', 'flash flood', 'flooding',
+        'wildfire', 'wildfires', 'brush fire', 'fire evacuation',
+        'palisades fire', 'eaton fire', 'california wildfire',
+        'earthquake', 'magnitude earthquake', 'aftershock',
+        'tsunami warning', 'tsunami advisory', 'volcano eruption',
+        'volcanic eruption', 'volcanic ash',
+        'heatwave', 'heat wave', 'heat dome', 'excessive heat',
+        'polar vortex', 'winter storm', 'blizzard', 'snowstorm',
+        'nor-easter', "nor'easter", 'ice storm',
+        'tornado warning', 'tornado watch', 'ef4 tornado', 'ef5 tornado',
+        'derecho', 'atmospheric river',
+        'lightning strike', 'lightning strikes', 'lightning bolt',
+        'noaa', 'nws', 'national weather service',
+        # newsy specifics (2025-2026)
+        'hurricane milton', 'hurricane helene', 'hurricane erin',
+        'hurricane melissa',
+    ],
+    # Crime / true-crime. Before politics so a Karen-Read-style trial
+    # or a Diddy-style federal case peels off crime instead of getting
+    # counted as political news.
+    'crime': [
+        # trial vocabulary
+        'trial', 'murder trial', 'murder charges', 'jury verdict',
+        'guilty verdict', 'not guilty verdict', 'sentencing hearing',
+        'plea deal', 'plea agreement', 'grand jury indictment',
+        'federal indictment', 'racketeering', 'rico charges',
+        'search warrant', 'fbi raid',
+        # trafficking / abuse
+        'sex trafficking', 'human trafficking', 'child trafficking',
+        'kidnapping', 'kidnapped',
+        # true-crime blockbusters (2024-2026)
+        'karen read', 'diddy trial', 'sean combs', 'p diddy trial',
+        'ghislaine maxwell', 'jeffrey epstein', 'epstein list',
+        'epstein files', 'idaho murders', 'bryan kohberger',
+        'chad daybell', 'lori vallow', 'susan smith', 'ryan wesley routh',
+        'gilgo beach killer', 'delphi murders',
+        # missing / disappearance
+        'missing person', 'missing woman', 'missing hiker', 'amber alert',
+        'gone missing',
+        # shootings / attacks
+        'mass shooting', 'active shooter', 'school shooting',
+        'shooting suspect', 'gunman opens fire',
+        # attempts on public figures (high traffic driver)
+        'assassination attempt', 'assassinated', 'suspect arrested',
+    ],
+    # Health & wellness. GLP-1s / Ozempic drove massive 2024-2026
+    # trend traffic; mental health, workouts, and wellness fads
+    # complete the cluster.
+    'health': [
+        # weight-loss / GLP-1 wave
+        'ozempic', 'wegovy', 'mounjaro', 'zepbound', 'saxenda',
+        'glp-1', 'glp 1', 'compounded semaglutide', 'compounded tirzepatide',
+        'weight loss drug', 'weight loss shot', 'weight loss injection',
+        # workouts / fitness fads
+        'peloton', 'orange theory', 'orangetheory', 'crossfit',
+        'hyrox', 'run club', 'zone 2 training', 'zone two training',
+        'cold plunge', 'sauna', 'red light therapy',
+        # mental health
+        'mental health day', 'burnout symptoms', 'anxiety symptoms',
+        'depression symptoms', 'therapy trend',
+        'ssri', 'antidepressant', 'ketamine therapy',
+        'psilocybin therapy',
+        # diet / nutrition fads
+        'protein powder', 'creatine benefits', 'electrolyte drink',
+        'liquid iv', 'lmnt', 'element',
+        'seed oils', 'raw milk', 'carnivore diet', 'keto diet',
+        'intermittent fasting',
+        # supplement / wellness brand universe
+        'ag1', 'athletic greens', 'huberman', 'andrew huberman',
+        'attia', 'peter attia', 'bryan johnson', "don't die",
+        # medical news
+        'rsv vaccine', 'measles outbreak', 'bird flu', 'h5n1',
+        'covid variant', 'norovirus outbreak', 'mpox',
+        # institutions
+        'cdc guidelines', 'fda approval', 'fda advisory',
+        'rfk hhs', 'rfk secretary',
+    ],
+    # Food & recipes. Restaurant news + viral recipes + celebrity
+    # chef beats. Priority above retail so a "chick-fil-a menu"
+    # search doesn't get absorbed into shopping.
+    'food': [
+        # QSR / chain drops
+        'chick-fil-a', 'chick fil a', 'chipotle', 'panera',
+        'shake shack', 'in-n-out', 'in n out', 'popeyes',
+        'kfc', 'wendys', "wendy's", 'burger king', 'mcdonalds',
+        "mcdonald's", 'taco bell', 'raising canes', "raising cane's",
+        'jimmy johns', 'sweetgreen', 'crumbl cookie', 'crumbl',
+        'starbucks menu', 'dutch bros', 'dunkin',
+        # fine dining / restaurant news
+        'michelin star', 'michelin guide', 'bib gourmand',
+        'best new restaurant', 'james beard award',
+        'restaurant closes', 'restaurant closing', 'restaurant reopens',
+        # viral recipes / trends
+        'viral recipe', 'tiktok recipe', 'recipe tiktok',
+        'butter board', 'girl dinner', 'cottage cheese',
+        'grimace shake', 'grimace milkshake',
+        # celebrity chefs
+        'gordon ramsay', 'guy fieri', 'anthony bourdain',
+        'jose andres', 'jos\u00e9 andr\u00e9s', 'ina garten',
+        # groceries / food news. Note: 'gas prices' intentionally NOT
+        # here - it's an auto/inflation term. Search "egg prices" for
+        # the grocery-inflation angle.
+        'grocery prices', 'food prices', 'egg prices',
+        'listeria recall', 'salmonella recall', 'e coli outbreak',
+        'food recall',
+    ],
+    # Travel. Airlines + destinations + hotel drama + cruise news.
+    # Priority above retail so travel intent is separated from
+    # generic shopping.
+    'travel': [
+        # airlines / airports
+        'southwest airlines', 'united airlines', 'american airlines',
+        'delta air lines', 'delta airlines', 'jetblue', 'spirit airlines',
+        'alaska airlines', 'frontier airlines', 'boeing 737 max',
+        'boeing 787', 'airbus a350',
+        'faa ground stop', 'flight cancellations', 'flight delays',
+        'flight diverted', 'flight emergency landing',
+        'tsa precheck', 'global entry', 'clear tsa',
+        # hotels / stays
+        'four seasons', 'ritz carlton', 'marriott', 'hilton hotel',
+        'airbnb ban', 'airbnb regulation',
+        'hyatt', 'aman resort', 'bulgari hotel',
+        # cruises
+        'royal caribbean', 'carnival cruise', 'norwegian cruise',
+        'disney cruise', 'icon of the seas', 'star of the seas',
+        'cruise passenger', 'cruise ship',
+        # destinations / tourism
+        'iceland tourism', 'santorini crowds', 'venice tax',
+        'barcelona tourism', 'bali tourism',
+        'top destinations 2026', 'best places to visit',
+        'travel advisory', 'state department warning',
+        'passport wait time', 'passport processing',
+        # theme parks
+        'universal epic universe', 'epic universe orlando',
+        'disney world', 'disneyland', 'walt disney world',
+        'universal studios',
+    ],
+    # Auto / EVs. Tesla news splits: robotaxi + FSD + Optimus + Elon
+    # live in tech; Tesla stock lives in finance; general car launches
+    # / recalls / non-Tesla EV news live here.
+    'auto': [
+        # legacy OEMs
+        'ford f-150', 'ford f150', 'ford bronco', 'ford maverick',
+        'ford mustang', 'ford ranger', 'chevrolet silverado',
+        'chevy silverado', 'chevy tahoe', 'gmc yukon', 'gmc hummer',
+        'toyota camry', 'toyota tacoma', 'toyota tundra',
+        'toyota 4runner', 'toyota land cruiser', 'toyota supra',
+        'honda civic', 'honda accord', 'honda crv', 'honda cr-v',
+        'nissan altima', 'nissan rogue', 'nissan pathfinder',
+        'jeep wrangler', 'jeep grand cherokee', 'ram 1500', 'ram trx',
+        'dodge charger', 'dodge challenger',
+        # luxury / performance
+        'porsche 911', 'porsche taycan', 'bmw m3', 'bmw m5',
+        'audi rs6', 'mercedes eqs', 'lucid air',
+        'rivian r1s', 'rivian r1t',
+        # EVs (non-Tesla)
+        'ev tax credit', 'ev rebate', 'ev charger', 'ev range',
+        'ev battery fire', 'byd auto', 'byd ev', 'nio ev',
+        'xpeng', 'polestar 3', 'polestar 4', 'kia ev6', 'kia ev9',
+        'hyundai ioniq', 'ford lightning', 'ford f-150 lightning',
+        'chevy bolt', 'chevy blazer ev',
+        # recalls / news
+        'car recall', 'vehicle recall', 'airbag recall',
+        'takata airbag', 'nhtsa investigation',
+        # racing (separate from sports team names)
+        'formula 1 race', 'monaco grand prix', 'daytona 500',
+        'indianapolis 500', 'indy 500', 'le mans',
+        # gas / EV crossover
+        'gas prices', 'gas prices today', 'aaa gas prices',
+    ],
+    # Fashion & beauty. Priority above retail so a "sephora sale" or
+    # "rare beauty launch" search lands here (brand + product news)
+    # instead of the generic shopping bucket.
+    'fashion': [
+        # events
+        'met gala', 'met gala 2026', 'met gala theme',
+        'oscars red carpet', 'grammys red carpet', 'golden globes red carpet',
+        'red carpet look', 'red carpet dress',
+        'paris fashion week', 'milan fashion week', 'new york fashion week',
+        'london fashion week', 'nyfw', 'lfw', 'mfw', 'pfw',
+        # luxury houses
+        'chanel', 'louis vuitton', 'gucci', 'prada', 'hermes',
+        'her\u00e8mes', 'balenciaga', 'saint laurent', 'ysl',
+        'dior', 'givenchy', 'valentino', 'burberry', 'fendi',
+        'versace', 'bottega veneta', 'the row', 'jacquemus',
+        # streetwear / new-wave
+        'supreme drop', 'supreme x', 'off-white', 'off white',
+        'aime leon dore', 'aim\u00e9 leon dore', 'kith', 'ssense',
+        # sneakers
+        'jordan 1', 'jordan 4', 'jordan 11', 'nike dunk',
+        'yeezy', 'new balance 990', 'new balance 550',
+        'nike vomero', 'onitsuka tiger', 'salomon xt-6',
+        'hoka clifton', 'asics gel',
+        # beauty brands
+        'rare beauty', 'fenty beauty', 'kylie cosmetics', 'r.e.m beauty',
+        'rhode skin', "hailey bieber's rhode", 'summer fridays',
+        'drunk elephant', 'skinceuticals', 'la mer', 'la roche posay',
+        'la roche-posay', 'sol de janeiro',
+        # beauty concepts
+        'lip gloss viral', 'clean girl aesthetic', 'strawberry makeup',
+        'tomato girl', 'coquette aesthetic',
+    ],
+    # Home & real estate. Housing market + HGTV shows + home reno
+    # trends. Priority above retail so "home depot deals" style
+    # searches route here (home category context) rather than
+    # generic retail.
+    'home': [
+        # housing market
+        'mortgage rates', '30 year mortgage', 'housing market',
+        'zillow', 'redfin', 'realtor.com', 'realtor com',
+        'home prices', 'housing crash', 'housing bubble',
+        'rent prices', 'rent hike',
+        # HGTV / home reno personalities
+        'joanna gaines', 'chip gaines', 'fixer upper',
+        'property brothers', 'jonathan scott', 'drew scott',
+        'christina hall', 'flip or flop', 'love it or list it',
+        'martha stewart',
+        # home reno / DIY
+        'home renovation', 'home reno', 'kitchen remodel',
+        'bathroom remodel', 'diy home', 'ikea hack',
+        'home depot', 'lowes', "lowe's", 'ace hardware',
+        'wayfair', 'west elm', 'crate and barrel', 'pottery barn',
+        # aesthetics
+        'cottagecore', 'modern farmhouse', 'coastal grandma',
+        'coastal grandmother', 'dark academia decor',
+        'quiet luxury home',
+        # notable real estate
+        'celebrity mansion', 'celebrity home', 'zillow gone wild',
+    ],
+    # Business & startups. Layoffs, IPOs, funding rounds, exec moves,
+    # unicorn news. Distinct from finance (which is stocks + macro +
+    # crypto prices) - this is corporate / operational business news.
+    'business': [
+        # unicorns / startups
+        'startup funding', 'series a', 'series b', 'series c',
+        'unicorn startup', 'yc demo day', 'y combinator',
+        'stripe valuation', 'databricks valuation', 'canva valuation',
+        # IPO wave
+        'ipo filing', 'ipo debut', 'ipo priced', 'ipo dropped',
+        'direct listing', 'spac merger', 'reverse merger',
+        # famous private company news
+        'openai valuation', 'anthropic funding', 'anthropic valuation',
+        'perplexity funding', 'databricks earnings',
+        'stripe ipo', 'databricks ipo',
+        # layoffs / RIFs
+        'layoffs', 'mass layoffs', 'tech layoffs', 'layoff round',
+        'workforce reduction', 'reduction in force',
+        'severance package', 'severance offer',
+        # exec moves
+        'ceo resigns', 'ceo fired', 'ceo steps down', 'new ceo',
+        'cfo resigns', 'cfo fired', 'cto resigns',
+        'shareholder lawsuit', 'shareholder revolt',
+        # antitrust / regulation
+        'ftc lawsuit', 'ftc investigation', 'doj antitrust',
+        'antitrust ruling', 'antitrust case',
+        # famous execs (business context, not stock price)
+        'satya nadella', 'sundar pichai', 'tim cook', 'andy jassy',
+        'mark zuckerberg', 'evan spiegel', 'brian chesky',
+        'shou zi chew',
+        # brand strategy news
+        'rebrand', 'brand refresh', 'logo redesign',
+    ],
 }
 # Short tokens matched by word boundary to prevent false positives like
 # "gop" matching "gopro", "btc" matching "batch", "gdp" matching
@@ -1164,12 +1469,28 @@ _SHORT_KEYWORD_TOKENS = {
 # labeled correctly first, then everything else falls to neutral
 # politics.
 _CATEGORY_PRIORITY = (
-    'sports', 'entertainment',
+    # High-signal, unambiguous first. Sports/entertainment/gaming are
+    # top-of-funnel content categories, then weather + crime (real-
+    # world events with strong keywords), then vertical consumer
+    # categories, finally the political + finance cluster.
+    'sports', 'entertainment', 'gaming',
     # `tech` sits BEFORE `retail` so "iphone 18 pro max", "vision pro",
     # "ps5 pro" land in tech (product/company news) rather than retail
     # (shopping intent). Retail still catches "iphone deals",
     # "airpods sale", "black friday" via its own broader vocabulary.
-    'tech', 'retail',
+    'tech',
+    # Real-world events: weather + crime beat every other bucket for
+    # storm names / trial names / disaster locations that could
+    # otherwise leak into politics or entertainment.
+    'weather', 'crime',
+    # Vertical consumer categories all run BEFORE `retail` so a
+    # "chick-fil-a menu" / "ozempic cost" / "southwest airlines"
+    # search lands in its specific bucket, not the generic retail
+    # catch-all. Retail then absorbs true shopping-intent searches.
+    'health', 'food', 'travel', 'auto', 'fashion', 'home', 'business',
+    'retail',
+    # Political cluster: partisan buckets first, neutral politics
+    # third, so Trump / MAGA / AOC peel off cleanly.
     'conservative', 'progressive', 'politics',
     'finance',
 )
@@ -1234,7 +1555,17 @@ def _bucket_searches_by_category(rows: list[dict], per_bucket: int = 30
     buckets: dict[str, list[dict]] = {
         'sports':        [],
         'entertainment': [],
+        'gaming':        [],
         'tech':          [],
+        'weather':       [],
+        'crime':         [],
+        'health':        [],
+        'food':          [],
+        'travel':        [],
+        'auto':          [],
+        'fashion':       [],
+        'home':          [],
+        'business':      [],
         'retail':        [],
         'politics':      [],
         'conservative':  [],
@@ -2855,7 +3186,17 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'searches':      len(trending_searches),
             'sports':        len(searches_by_category.get('sports')        or []),
             'entertainment': len(searches_by_category.get('entertainment') or []),
+            'gaming':        len(searches_by_category.get('gaming')        or []),
             'tech':          len(searches_by_category.get('tech')          or []),
+            'weather':       len(searches_by_category.get('weather')       or []),
+            'crime':         len(searches_by_category.get('crime')         or []),
+            'health':        len(searches_by_category.get('health')        or []),
+            'food':          len(searches_by_category.get('food')          or []),
+            'travel':        len(searches_by_category.get('travel')        or []),
+            'auto':          len(searches_by_category.get('auto')          or []),
+            'fashion':       len(searches_by_category.get('fashion')       or []),
+            'home':          len(searches_by_category.get('home')          or []),
+            'business':      len(searches_by_category.get('business')      or []),
             'retail':        len(searches_by_category.get('retail')        or []),
             'politics':      len(searches_by_category.get('politics')      or []),
             'conservative':  len(searches_by_category.get('conservative')  or []),
