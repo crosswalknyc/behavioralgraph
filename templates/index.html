@@ -23240,6 +23240,19 @@
             #trendsIQView .tiq-mover-scroll::-webkit-scrollbar { width: 6px; }
             #trendsIQView .tiq-mover-scroll::-webkit-scrollbar-track { background: transparent; }
             #trendsIQView .tiq-mover-scroll::-webkit-scrollbar-thumb { background-color: rgba(124,58,237,0.4); border-radius: 3px; }
+            /* Movers platform-mix bar: shows where each trend's buzz
+               is being driven (search / media / social) with a compact
+               3-color segmented bar + primary-channel label. */
+            #trendsIQView .tiq-mix { display: inline-flex; align-items: center; gap: 6px; font-size: 0.7rem; margin-top: 4px; }
+            #trendsIQView .tiq-mix-bar { display: inline-flex; width: 96px; height: 8px; border-radius: 4px; overflow: hidden; background: rgba(255,255,255,0.06); flex-shrink: 0; cursor: help; }
+            #trendsIQView .tiq-mix-search { background: #60a5fa; }        /* blue = google search */
+            #trendsIQView .tiq-mix-media  { background: #f59e0b; }        /* amber = news media */
+            #trendsIQView .tiq-mix-social { background: #ec4899; }        /* pink = social */
+            #trendsIQView .tiq-mix-label { color: var(--text-secondary); opacity: 0.9; }
+            #trendsIQView .tiq-mix-label b { color: var(--text-primary); font-weight: 600; }
+            #trendsIQView .tiq-mix-label.tiq-mix-search-primary b { color: #93c5fd; }
+            #trendsIQView .tiq-mix-label.tiq-mix-media-primary b  { color: #fcd34d; }
+            #trendsIQView .tiq-mix-label.tiq-mix-social-primary b { color: #f9a8d4; }
             #trendsIQView .tiq-person-card { background: rgba(124, 58, 237, 0.06); border: 1px solid rgba(124, 58, 237, 0.18); border-radius: 8px; padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 0.3rem; }
             #trendsIQView .tiq-person-name { font-weight: 600; font-size: 0.9rem; }
             #trendsIQView .tiq-person-mentions { font-size: 0.72rem; color: var(--text-secondary); }
@@ -40799,11 +40812,40 @@
             return '<span class="tiq-mover-badge flat">FLAT</span>';
         }
 
+        function _tiqRenderPlatformMix(mix) {
+            if (!mix || !mix.primary) return '';
+            var sPct = Math.round((mix.search || 0) * 100);
+            var mPct = Math.round((mix.media  || 0) * 100);
+            var soPct = Math.round((mix.social || 0) * 100);
+            // Guard against rounding drift so the bar always fills to 100.
+            var sum = sPct + mPct + soPct;
+            if (sum > 0 && sum !== 100) {
+                if (mix.primary === 'search') sPct += (100 - sum);
+                else if (mix.primary === 'media') mPct += (100 - sum);
+                else soPct += (100 - sum);
+            }
+            var socList = (mix.social_platforms || []).join(', ') || 'none';
+            var tooltip = 'Search ' + sPct + '% (' + (mix.search_raw || 0) + ' vol) ' +
+                          '\u00b7 Media ' + mPct + '% (' + (mix.media_raw || 0) + ' articles) ' +
+                          '\u00b7 Social ' + soPct + '% (' + (mix.social_raw || 0) + ' platforms: ' + socList + ')';
+            var bar = '<span class="tiq-mix-bar" title="' + _tiqEsc(tooltip) + '">';
+            if (sPct  > 0) bar += '<span class="tiq-mix-search" style="width:' + sPct  + '%"></span>';
+            if (mPct  > 0) bar += '<span class="tiq-mix-media"  style="width:' + mPct  + '%"></span>';
+            if (soPct > 0) bar += '<span class="tiq-mix-social" style="width:' + soPct + '%"></span>';
+            bar += '</span>';
+            var primaryPct = mix.primary === 'search' ? sPct : (mix.primary === 'media' ? mPct : soPct);
+            var primaryLabel = mix.primary === 'search' ? 'search' : (mix.primary === 'media' ? 'media' : 'social');
+            var label = '<span class="tiq-mix-label tiq-mix-' + mix.primary + '-primary">' +
+                        'driven by <b>' + primaryLabel + '</b> \u00b7 ' + primaryPct + '%</span>';
+            return '<div class="tiq-mix">' + bar + label + '</div>';
+        }
+
         function _renderMoverRow(row) {
             var rankNow  = row.rank_today ? ('#' + row.rank_today) : '';
             var rankPrev = row.rank_prev  ? ('was #' + row.rank_prev) : '';
             var ratio    = row.score_ratio ? (row.score_ratio + 'x score') : '';
             var relatedHtml = (row.related || []).slice(0, 1).map(function(x){ return _tiqEsc(x); }).join('');
+            var mixHtml = _tiqRenderPlatformMix(row.platform_mix);
             return '<div class="tiq-row">' +
                    '<div class="tiq-rank">' + (rankNow || '&mdash;') + '</div>' +
                    '<div class="tiq-row-body">' +
@@ -40815,6 +40857,7 @@
                        (ratio    ? '<span class="tiq-badge">' + ratio    + '</span>' : '') +
                        (relatedHtml ? '<span style="opacity:0.75;">' + relatedHtml + '</span>' : '') +
                      '</div>' +
+                     mixHtml +
                    '</div>' +
                    '</div>';
         }
@@ -40873,6 +40916,10 @@
             }
             var header = '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
                          'Directional velocity across trending searches. ' + span +
+                         ' The mix bar under each trend shows where its buzz is driven: ' +
+                         '<span style="color:#93c5fd;">search</span> \u00b7 ' +
+                         '<span style="color:#fcd34d;">media</span> \u00b7 ' +
+                         '<span style="color:#f9a8d4;">social</span>.' +
                          '</div>';
             // Choose a responsive grid template based on how many buckets
             // have data so 2 populated buckets don't look forlorn stretched
