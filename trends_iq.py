@@ -1183,44 +1183,84 @@ def _movers_aggregate_window(geo: str, day_offsets: Iterable[int],
                                 today: datetime) -> tuple[list[dict], Optional[str], Optional[str]]:
     """Merge snapshots across a window of days into a single ranked list.
 
-    Prefers the wide multi-geo daily pool when present (much larger term
-    set -> real day-over-day overlap); falls back to the narrow single-geo
-    snapshot for backward compatibility.
+    UNIONS both sources per day:
+      - The narrow per-geo trendspy snapshot (~300-400 US terms with
+        volume/news_articles/trend_keywords) - the source of truth.
+      - The wide multi-geo RSS pool (~50-80 US terms), included so
+        state-level RSS trends that never appear in trendspy's US
+        list still show up.
 
-    Terms are deduped case-insensitively. Score = MAX seen in the window.
-    Rank = position in the score-desc sorted output. Returns the merged
-    rows plus the earliest and latest snapshot dates that contributed.
+    On collision (same term in both sources), keep the RICHER copy
+    (has a volume field) so downstream code sees trendspy fields even
+    when the wide-pool row is the higher-scored one. Absent that
+    signal, keep the copy with the higher score.
+
+    Rich fields (volume, news_articles, trend_keywords,
+    volume_growth_pct, started_ts) are preserved through the merge so
+    platform_mix computation and history matching can use them.
+
+    Rank = position in the score-desc sorted output. Returns the
+    merged rows plus the earliest and latest snapshot dates that
+    contributed.
     """
+    def _copy_row(r: dict, term: str, score: int) -> dict:
+        return {
+            'term':               term,
+            'score':              score,
+            'related':            list(r.get('related') or [])[:5],
+            'volume':             r.get('volume'),
+            'volume_growth_pct':  r.get('volume_growth_pct'),
+            'started_ts':         r.get('started_ts'),
+            'news_articles':      list(r.get('news_articles')  or [])[:6],
+            'trend_keywords':     list(r.get('trend_keywords') or [])[:8],
+        }
+
+    def _is_rich(r: dict) -> bool:
+        return (r.get('volume') is not None) or bool(r.get('news_articles'))
+
     by_term: dict[str, dict] = {}
-    days_used: list[str] = []
+    days_used: set[str] = set()
     use_wide = (geo == 'US')  # wide pool is US-national only
     for off in day_offsets:
         d_iso = (today - timedelta(days=off)).date().isoformat()
-        rows: Optional[list[dict]] = None
+        pools: list[list[dict]] = []
+        narrow = _trends_snap_get(geo, d_iso)
+        if narrow:
+            pools.append(narrow)
         if use_wide:
-            rows = _wide_pool_get(d_iso)
-        if rows is None:
-            rows = _trends_snap_get(geo, d_iso)
-        if not rows:
+            wide = _wide_pool_get(d_iso)
+            if wide:
+                pools.append(wide)
+        if not pools:
             continue
-        days_used.append(d_iso)
-        for r in rows:
-            term = (r.get('term') or '').strip()
-            if not term:
-                continue
-            key = term.lower()
-            score = int(r.get('score') or 0)
-            existing = by_term.get(key)
-            if existing is None or score > int(existing.get('score') or 0):
-                by_term[key] = {
-                    'term':    term,
-                    'score':   score,
-                    'related': list(r.get('related') or [])[:5],
-                }
+        days_used.add(d_iso)
+        for rows in pools:
+            for r in rows:
+                term = (r.get('term') or '').strip()
+                if not term:
+                    continue
+                key = term.lower()
+                score = int(r.get('score') or 0)
+                existing = by_term.get(key)
+                if existing is None:
+                    by_term[key] = _copy_row(r, term, score)
+                    continue
+                this_rich = _is_rich(r)
+                existing_rich = _is_rich(existing)
+                # Prefer the rich version regardless of score so
+                # trendspy fields aren't overwritten by a wide-pool
+                # RSS row that happens to have a higher score int.
+                if this_rich and not existing_rich:
+                    by_term[key] = _copy_row(r, term, score)
+                elif not this_rich and existing_rich:
+                    continue
+                elif score > int(existing.get('score') or 0):
+                    by_term[key] = _copy_row(r, term, score)
     if not by_term:
         return [], None, None
     merged = sorted(by_term.values(), key=lambda r: -int(r.get('score') or 0))
-    return merged, min(days_used), max(days_used)
+    days_sorted = sorted(days_used)
+    return merged, days_sorted[0], days_sorted[-1]
 
 
 def _movers_annotate(row: dict, today_rank: Optional[int],
