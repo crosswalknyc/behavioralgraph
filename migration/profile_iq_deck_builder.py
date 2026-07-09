@@ -610,7 +610,20 @@ _ANALYST_SYSTEM_PROMPT = (
     "audience as a HUMAN, not a spreadsheet. Every other slide is data\n"
     "with implications; this slide is prose with data underneath.\n"
     "\n"
-    "STRICT REQUIREMENTS for persona_narrative.body (120-180 words):\n"
+    "STRICT REQUIREMENTS for persona_narrative.body (140-200 words):\n"
+    "\n"
+    "  0. USE THE FULL PALETTE. The persona MUST draw signals from at\n"
+    "     least THREE of the four story types available in\n"
+    "     persona_ready_brands: ENTERTAINMENT (music, games, sports\n"
+    "     teams, festivals, talent, media, podcasts, colleges),\n"
+    "     LIFESTYLE (apparel, fitness, travel, personal care),\n"
+    "     CONSUMPTION (QSR, MPB, retail, CPG), PLATFORM (social,\n"
+    "     streaming). ALWAYS include at least one ENTERTAINMENT signal —\n"
+    "     that is where audience IDENTITY lives, and a persona built\n"
+    "     only on QSR + streaming is a media plan, not a person.\n"
+    "     ALSO weave in the `interests` payload (hobbies/passions like\n"
+    "     running, hiking, cooking, gardening, DIY) when present — those\n"
+    "     signals often unlock the sharpest cultural picture.\n"
     "\n"
     "  1. LIFE STAGE (opening sentence). Age, likely job or life role,\n"
     "     housing/geography posture. Grounded in the sharpest_deltas\n"
@@ -620,35 +633,55 @@ _ANALYST_SYSTEM_PROMPT = (
     "\n"
     "  2. A TUESDAY-MORNING BEHAVIOR (sentence 2-3). What is on their\n"
     "     phone before coffee, what is on the commute, what is at their\n"
-    "     desk. Must name at least ONE specific brand from the\n"
-    "     persona_ready_brands payload. Example: 'A Tuesday morning\n"
-    "     starts on TikTok before coffee; the commute is a Spotify\n"
-    "     queue or an r/comedy thread; lunch is a DoorDash Dominos\n"
-    "     ordered from the app at their desk.'\n"
+    "     desk. Must name at least ONE specific brand from\n"
+    "     persona_ready_brands (typically a PLATFORM or CONSUMPTION\n"
+    "     pick). Example: 'A Tuesday morning starts on TikTok before\n"
+    "     coffee; the commute is a Spotify queue or an r/comedy thread;\n"
+    "     lunch is a DoorDash Dominos ordered from the app at their\n"
+    "     desk.'\n"
     "\n"
-    "  3. A SATURDAY-NIGHT BEHAVIOR (sentence 4-5). What are they doing\n"
-    "     with weekend attention. Must name at least ONE more specific\n"
-    "     brand from persona_ready_brands. Example: 'Saturday nights\n"
-    "     lean gaming (Fortnite, Call of Duty) or a comedy special on\n"
-    "     Netflix, sometimes a live show through Ticketmaster.'\n"
+    "  3. A CULTURAL / IDENTITY BEAT (sentence 3-4). Name at least ONE\n"
+    "     ENTERTAINMENT signal — a music act they follow, a sports team\n"
+    "     they cheer for, a festival they attend, a game they play, a\n"
+    "     college affinity, a media brand they read. This is where the\n"
+    "     audience STOPS being demographics and becomes a PERSON.\n"
+    "     Example: 'A Louder Than Life regular, follows Tottenham Hotspur\n"
+    "     when the Premier League runs on weekends, and can quote three\n"
+    "     Fall Out Boy albums.' Or: 'A Fortnite regular on the weekend\n"
+    "     couch, subscribes to Entertainment Weekly, has an AC Milan\n"
+    "     jersey in the closet.' Or (for interests-only data): 'Runs a\n"
+    "     3-mile loop Saturday mornings, spends Sundays gardening or on\n"
+    "     the DIY project the house needs.'\n"
     "\n"
-    "  4. A GEOGRAPHIC + INCOME GROUNDING (sentence 5-6). Cite ONE DMA\n"
+    "  4. A SATURDAY-NIGHT / WEEKEND BEHAVIOR (sentence 4-5). What are\n"
+    "     they doing with weekend attention. Must name at least ONE more\n"
+    "     specific brand from persona_ready_brands (typically an\n"
+    "     ENTERTAINMENT or LIFESTYLE pick). Example: 'Saturday nights\n"
+    "     lean a Fortnite session or a comedy special on Netflix,\n"
+    "     sometimes a Ticketmaster ticket for a live show at Louder Than\n"
+    "     Life.'\n"
+    "\n"
+    "  5. A GEOGRAPHIC + INCOME GROUNDING (sentence 5-6). Cite ONE DMA\n"
     "     from top_dmas_by_index (NOT by reach — NY/LA are population\n"
     "     trivia) AND ONE income bucket delta from sharpest_deltas.\n"
     "     Example: 'They over-index sharply on Salt Lake City and the\n"
     "     $25-49K income tier, meaning this audience skews suburban and\n"
     "     mid-market, not coastal-urban.'\n"
     "\n"
-    "  5. AN ANTI-PERSONA NOTE (sentence 6-7). Start with 'What they are\n"
+    "  6. AN ANTI-PERSONA NOTE (sentence 6-7). Start with 'What they are\n"
     "     NOT:'. Name 2-3 brands or behaviors the data DOES NOT support\n"
     "     — pick from mass-market surfaces the audience under-indexes\n"
     "     on. Example: 'What they are NOT: not shopping DTC premium, not\n"
     "     TikTok creators, not paying for Peacock.'\n"
     "\n"
-    "  6. A TONE / CULTURAL CUE (closing sentence). ONE sentence naming\n"
-    "     the register or aesthetic that will land with them. Example:\n"
-    "     'The tone that moves them: irreverent, unpolished,\n"
-    "     self-deprecating, adjacent to pop-punk and skate culture.'\n"
+    "  7. A TONE / CULTURAL CUE (closing sentence). ONE sentence naming\n"
+    "     the register or aesthetic that will land with them. Should\n"
+    "     RHYME with the entertainment/cultural signals you named in\n"
+    "     step 3 (a Louder-Than-Life audience implies a pop-punk/skate\n"
+    "     tone; a Serie A + Serie-A-college-university audience implies\n"
+    "     a European-cosmopolitan tone). Example: 'The tone that moves\n"
+    "     them: irreverent, unpolished, self-deprecating, adjacent to\n"
+    "     pop-punk and skate culture.'\n"
     "\n"
     "BANNED IN persona_narrative.body:\n"
     "  * Any brand not in persona_ready_brands. If a brand you want to\n"
@@ -1074,26 +1107,124 @@ def _brief_facts(profile: dict) -> dict:
             break
 
     # Persona-eligible brands: the ONLY brands the LLM is allowed to
-    # name in persona_narrative.body. Gated at reach >=15% AND
-    # index >=100 (so it's real reach, not a freak-index niche). The
-    # LLM should pick 2-3 from this list for the ethnographic anchors.
+    # name in persona_narrative.body. Gated at reach >=12% AND
+    # 100 <= index <= 400. CATEGORY-DIVERSE: instead of top-15 globally
+    # (which biased toward mass platforms and missed the story-telling
+    # categories), take top-3 per category across the full behavioral
+    # surface. Bucketed into a "story type" so the LLM can weave
+    # ENTERTAINMENT + LIFESTYLE + CONSUMPTION + PLATFORM signals into
+    # one persona rather than a stack of QSR brands.
+    # (Round-6 fix, 2026-07-09: user flagged that persona wasn't drawing
+    # on interests, music, games, sports, festival, college data etc.)
+
+    STORY_TAG_MAP = {
+        # ENTERTAINMENT — what they consume for culture / passion
+        "MUSIC": "entertainment", "MUSICIAN": "entertainment",
+        "GAMES": "entertainment", "GAMING": "entertainment",
+        "SPORTS TEAM": "entertainment", "SPORTS": "entertainment",
+        "NBA": "entertainment", "NFL": "entertainment",
+        "MLB": "entertainment", "NHL": "entertainment",
+        "SOCCER": "entertainment", "EPL": "entertainment",
+        "MLS": "entertainment", "CFB": "entertainment",
+        "FESTIVAL": "entertainment", "FESTIVALS": "entertainment",
+        "EVENTS": "entertainment", "TICKETING": "entertainment",
+        "TALENT": "entertainment", "ACTOR": "entertainment",
+        "MEDIA": "entertainment", "PODCAST": "entertainment",
+        "BOOKS": "entertainment", "FRANCHISE": "entertainment",
+        "COLLEGE UNIVERSITY": "entertainment",
+        "MOVIE THEATER": "entertainment",
+        # LIFESTYLE — how they live / present themselves
+        "APPAREL": "lifestyle", "APPAREL_FOOTWEAR": "lifestyle",
+        "APPAREL & FOOTWEAR": "lifestyle",
+        "WORKOUT FACILITY": "lifestyle", "FITNESS": "lifestyle",
+        "TRAVEL": "lifestyle", "PERSONAL CARE": "lifestyle",
+        "COSMETICS": "lifestyle", "AUTOMOBILE": "lifestyle",
+        # CONSUMPTION — what they buy day-to-day
+        "QSR": "consumption", "MPB": "consumption",
+        "MOST PURCHASED BRANDS": "consumption",
+        "RETAIL": "consumption", "CPG": "consumption",
+        "GROCERY": "consumption",
+        # PLATFORM — where their attention lives
+        "SOCIAL MEDIA": "platform", "SOCIAL_MEDIA": "platform",
+        "STREAMING/PLATFORM": "platform",
+        "STREAMING VIDEO": "platform",
+        "STREAMING/MUSIC": "platform",
+        "STREAMING MUSIC": "platform",
+        "APP PLATFORM USAGE": "platform",
+        "SEARCH ENGINE": "platform", "SEARCH ENGINE/AI": "platform",
+    }
+    def _story_tag(cat: str) -> str:
+        key = str(cat or "").strip().upper()
+        return STORY_TAG_MAP.get(key, "other")
+
     persona_ready = []
-    for it in sorted(flat, key=lambda it: (-_num(it.get("pct", 0)),
-                                             -_num(it.get("index", 0)))):
-        if _num(it.get("pct", 0)) < 15.0:
-            continue
-        if _num(it.get("index", 0)) < 100:
-            continue
-        if _num(it.get("index", 0)) > 400:
-            continue  # freak-index — not a persona anchor
-        persona_ready.append({
-            "brand":    (it.get("name") or "").strip(),
-            "category": (it.get("_cat") or "").strip(),
-            "pct":      round(_num(it.get("pct", 0)), 1),
-            "index":    int(_num(it.get("index", 0))),
-        })
-        if len(persona_ready) >= 15:
-            break
+    seen_brands = set()
+    for cat, items in (profile.get("behavioral") or {}).items():
+        cat_picks = []
+        for it in sorted((items or []),
+                          key=lambda it: (-_num(it.get("pct", 0)),
+                                           -_num(it.get("index", 0)))):
+            name = (it.get("name") or "").strip()
+            if not name or name.lower() in seen_brands:
+                continue
+            pct = _num(it.get("pct", 0))
+            idx = _num(it.get("index", 0))
+            if pct < 12.0 or idx < 100 or idx > 400:
+                continue
+            cat_picks.append({
+                "brand":    name,
+                "category": str(cat).strip(),
+                "story":    _story_tag(cat),
+                "pct":      round(pct, 1),
+                "index":    int(idx),
+            })
+            seen_brands.add(name.lower())
+            if len(cat_picks) >= 3:
+                break
+        persona_ready.extend(cat_picks)
+    # Sort output by story type so the LLM sees ENTERTAINMENT signals
+    # first (that is where identity lives), then LIFESTYLE, then
+    # CONSUMPTION, then PLATFORM.
+    _story_order = {"entertainment": 0, "lifestyle": 1,
+                     "consumption": 2, "platform": 3, "other": 4}
+    persona_ready.sort(key=lambda b: (_story_order.get(b["story"], 9),
+                                        -b["pct"]))
+    persona_ready = persona_ready[:24]  # cap to keep prompt tokens sane
+
+    # Interests / passions block: profile.interests may contain
+    # hobbies (running, hiking, cooking, DIY, etc.) as {name: pct}
+    # or [{name, pct, index}, ...]. Never fed to the LLM before —
+    # huge missed signal for persona grounding.
+    interests_block: list[dict] = []
+    _raw_interests = profile.get("interests") or {}
+    if isinstance(_raw_interests, dict):
+        _int_iter = [{"name": k, "pct": _num(v)}
+                       for k, v in _raw_interests.items()
+                       if _num(v) >= 8.0]
+    elif isinstance(_raw_interests, list):
+        _int_iter = [{"name":  (it.get("name") or "").strip(),
+                       "pct":   _num(it.get("pct", 0)),
+                       "index": int(_num(it.get("index", 0)))}
+                      for it in _raw_interests
+                      if isinstance(it, dict)
+                      and _num(it.get("pct", 0)) >= 8.0]
+    else:
+        _int_iter = []
+    _int_iter.sort(key=lambda it: -it.get("pct", 0))
+    interests_block = _int_iter[:12]
+
+    # Cultural signals block: entertainment-tagged brands only, so the
+    # LLM has an explicit list of the music/games/sports/festival/talent
+    # picks it can name to give the audience personality.
+    cultural_signals = [b for b in persona_ready
+                         if b["story"] == "entertainment"][:12]
+
+    # Compact category coverage summary — tells the LLM which story
+    # types are richly represented vs thin, so it can lean where the
+    # data is deepest.
+    story_counts: dict[str, int] = {}
+    for b in persona_ready:
+        story_counts[b["story"]] = story_counts.get(b["story"], 0) + 1
 
     # DMAs by over-index (for persona geography grounding). Same filter
     # as the geography slide: >=1.5% reach floor, <=400 index ceiling.
@@ -1131,18 +1262,32 @@ def _brief_facts(profile: dict) -> dict:
         "projected_us":         profile.get("projected_us") or 0,
         "date_range":           profile.get("date_range") or "",
         "demographics":         demo_summary,
-        # NEW: server-computed sharpest deltas (idx = aud/gp*100). Use
+        # Server-computed sharpest deltas (idx = aud/gp*100). Use
         # these EXACTLY in persona_narrative + differ_from_genpop.
         "sharpest_deltas":      sharpest_deltas,
         "top_dmas_by_reach":    dmas_by_reach,
-        # NEW: DMAs where the audience DISPROPORTIONATELY concentrates.
+        # DMAs where the audience DISPROPORTIONATELY concentrates.
         "top_dmas_by_index":    dmas_by_index,
         # Kept for backwards compat with older prompt guidance.
         "top_dmas":             dmas_by_reach,
         "categories_covered":   cats_present,
         "strongest_signals":    strongest,
-        # NEW: the ONLY brand shortlist eligible for persona_narrative.body.
+        # CATEGORY-DIVERSE persona palette. Grouped by story type:
+        # entertainment (music/games/sports/festival/talent/media),
+        # lifestyle (apparel/fitness/travel), consumption (QSR/MPB/CPG),
+        # platform (social/streaming). LLM MUST weave brands from >=3
+        # story types into persona_narrative.body — see prompt.
         "persona_ready_brands": persona_ready,
+        # Explicit entertainment-only subset — the music/games/sports/
+        # festival/talent picks that GIVE the audience its personality.
+        # LLM should lean on these heavily in persona_narrative.body.
+        "cultural_signals":     cultural_signals,
+        # Hobbies / passions from the interests dict. Previously
+        # never fed to the LLM. Fixes 2026-07-09 (round 6).
+        "interests":            interests_block,
+        # Category coverage summary so the LLM knows which story
+        # types are richly represented in this profile.
+        "story_coverage":       story_counts,
         "top_mpb":              (_top_n("MPB", 15)
                                   or _top_n("MOST PURCHASED BRANDS", 15)),
         "top_social":           _top_n("SOCIAL MEDIA", 8),
@@ -1159,7 +1304,7 @@ _ANALYST_JSON_SPEC = (
     '  "persona_narrative": {\n'
     '     "persona_name":   "A 2-4 word composite name that captures the audience archetype. Not a real person. Should read as a fresh archetype label, not a demographic. Examples: \'The Pop-Punk Nostalgist\', \'The Culture-First Urbanite\', \'The Suburban Comedy Fan\', \'The Streaming-First Millennial\'.",\n'
     '     "one_liner":      "A single sentence (12-18 words) that captures who this composite person IS. Life stage + posture + tell-tale behavior. Example: \'28, works in creative services, lives in Brooklyn or Silverlake, spends weekends at Barrys and A24 screenings.\'",\n'
-    '     "body":           "A 120-180 word PROSE PORTRAIT of ONE composite person rooted in the audience data. NOT a stat dump. Written like a Bain / McKinsey ethnographic sketch — reads as a real human you can picture. Include: (1) life stage (age, likely job, housing situation), (2) a Tuesday-morning behavior, (3) a Saturday-night behavior, (4) 2-3 SPECIFIC brands they engage with (from the data, only brands with reach >=15%), (5) a media habit that reveals their posture (a subreddit they read, a podcast they listen to, a show they watched last), (6) one anti-persona note (what they are NOT — e.g. \'not shopping at big-box, not watching linear cable\'). Ground every claim in the data but write it as narrative, not bullet points. Every specific brand cited must appear elsewhere in the file. This is the ONE slide where the reader should feel they know the audience as a person, not as a spreadsheet."\n'
+    '     "body":           "A 140-200 word PROSE PORTRAIT of ONE composite person rooted in the audience data. NOT a stat dump. Written like a Bain / McKinsey ethnographic sketch — reads as a real human you can picture. See the PERSONA_NARRATIVE section of the system prompt for the seven required elements — life stage, Tuesday-morning behavior, CULTURAL/IDENTITY beat (music / games / sports team / festival / talent / college / interest — this is where the audience becomes a PERSON), Saturday-night behavior, geographic + income grounding, anti-persona note, tone cue. MUST draw from >=3 of the four story types in persona_ready_brands (entertainment / lifestyle / consumption / platform) AND always include >=1 ENTERTAINMENT signal — a persona built only on QSR + streaming is a media plan, not a person. Also weave the `interests` payload (hobbies / passions) when present. Every brand cited must appear in persona_ready_brands OR cultural_signals OR interests — you are not free to invent brands."\n'
     '  },\n'
     '  "cover_tagline": "One sentence that tells the CMO who this audience IS in life-stage / mindset / cultural-posture terms (35-45 words). Do NOT lean on a single freak-index brand. Do NOT use adjectives like passionate / vibrant / engaged.",\n'
     '  "identity_headline": "4-6 word portrait of WHO they are — life stage + posture, not just demos. Examples: \'Prime-age urban trend-formers.\', \'Suburban parents with disposable income.\', \'Downtown creatives, digitally-native.\' No pronouns.",\n'
@@ -3383,47 +3528,163 @@ def _slide_persona_narrative(prs: Presentation, p: dict):
             ):
                 persona_name = ""
 
-    if not persona_name or not body or len(body.split()) < 100:
+    if not persona_name or not body or len(body.split()) < 120:
+        # Pull the same rich palette the LLM should have used, so the
+        # fallback body ALSO draws from entertainment / lifestyle /
+        # consumption / platform + interests — not just top-reach.
+        _facts = _brief_facts(p)
+        palette = _facts.get("persona_ready_brands") or []
+        interests = _facts.get("interests") or []
+        top_dmas_idx = _facts.get("top_dmas_by_index") or []
+        sharpest = _facts.get("sharpest_deltas") or []
+
+        # Bucket palette by story type
+        by_story: dict[str, list[dict]] = {}
+        for b in palette:
+            by_story.setdefault(b.get("story", "other"), []).append(b)
+
+        def _pick_names(story: str, k: int = 2) -> list[str]:
+            return [b["brand"] for b in by_story.get(story, [])[:k]]
+
+        ent_names   = _pick_names("entertainment", 3)
+        life_names  = _pick_names("lifestyle", 2)
+        cons_names  = _pick_names("consumption", 2)
+        plat_names  = _pick_names("platform", 2)
+        interest_names = [i.get("name") for i in interests[:3] if i.get("name")]
+
         age = (p.get("demographics") or {}).get("age") or {}
         top_age = max(age.items(), key=lambda kv: _num(kv[1]),
                        default=("adult", 0))
         inc = (p.get("demographics") or {}).get("income") or {}
         hh_75plus = sum(_num(v) for k, v in inc.items()
                          if any(t in k for t in ("$75", "$100", "$150", "$200")))
-        top_brands = sorted(
-            _all_behavioral_items(p),
-            key=lambda it: -(_num(it.get("pct", 0)) *
-                              max(1.0, _num(it.get("index", 0)) / 100.0)),
-        )[:6]
-        top_brand_phrase = ", ".join(
-            (it.get("name") or "").strip()
-            for it in top_brands[:3] if (it.get("name") or "").strip()
-        ) or "the top brands on file"
+
+        # Grab the sharpest income delta for the geo+income beat.
+        # Clean up long dashboard bucket labels for prose readability.
+        def _clean_income_label(bucket: str) -> str:
+            b = str(bucket or "").strip()
+            b_low = b.lower()
+            if "less than $25" in b_low or "under $25" in b_low:
+                return "sub-$25K"
+            if "$25,000 - $49" in b or "$25K - $49K" in b:
+                return "$25-49K"
+            if "$50,000 - $74" in b or "$50K - $74K" in b:
+                return "$50-74K"
+            if "$75,000 - $99" in b or "$75K - $99K" in b:
+                return "$75-99K"
+            if "$100,000 - $149" in b or "$100K - $149K" in b:
+                return "$100-149K"
+            if "$150,000 - $249" in b or "$150K - $249K" in b:
+                return "$150-249K"
+            if "$250,000" in b or "$250K" in b:
+                return "$250K+"
+            return b  # unknown format — pass through
+        income_beat = ""
+        for d in sharpest:
+            if d.get("dimension") == "income" and d.get("index", 100) > 110:
+                income_beat = f"the {_clean_income_label(d['bucket'])} income tier"
+                break
+        top_dma_by_idx = (top_dmas_idx[0]["name"]
+                          if top_dmas_idx else "")
 
         if not persona_name:
-            persona_name = f"The {top_age[0]} Culture-First Fan"
+            # Anchor the archetype label to the sharpest ENTERTAINMENT
+            # signal available — that is where identity lives.
+            if ent_names:
+                persona_name = f"The {ent_names[0]} Regular"
+            elif interest_names:
+                persona_name = f"The {interest_names[0].title()} Enthusiast"
+            else:
+                persona_name = f"The {top_age[0]} Culture-First Fan"
+
         if not one_liner:
-            one_liner = (
-                f"Prime-earning {top_age[0]}, digitally-native, spends "
-                f"cultural time on {top_brand_phrase}."
+            grounding_bits = []
+            if top_age[0]:
+                grounding_bits.append(f"{top_age[0]} core")
+            if ent_names:
+                grounding_bits.append(f"follows {ent_names[0]}")
+            if plat_names:
+                grounding_bits.append(f"lives on {plat_names[0]}")
+            one_liner = ", ".join(grounding_bits[:3]) or (
+                "A digitally-native audience anchored in the persona palette."
             )
-        if not body or len(body.split()) < 80:
+            if one_liner and not one_liner.endswith("."):
+                one_liner += "."
+
+        if not body or len(body.split()) < 120:
+            # Compose a 140-190 word narrative that hits all seven beats
+            morning_brand = (plat_names[0] if plat_names
+                              else (cons_names[0] if cons_names
+                                    else (ent_names[0] if ent_names else "their phone")))
+            morning_food = (cons_names[0] if cons_names else "a delivery-app lunch")
+            weekend_ent = (ent_names[1] if len(ent_names) > 1
+                            else (ent_names[0] if ent_names else "a streamer"))
+            weekend_ent2 = (ent_names[2] if len(ent_names) > 2 else "")
+
+            # Cultural identity beat — the "who are they REALLY" sentence
+            id_bits = []
+            if ent_names:
+                id_bits.append(
+                    f"a {ent_names[0]} regular"
+                    if len(ent_names) == 1
+                    else f"a {ent_names[0]} regular who also follows {ent_names[1]}"
+                )
+            if interest_names:
+                id_bits.append(f"leans into {interest_names[0].lower()}")
+            if life_names:
+                id_bits.append(f"reaches for {life_names[0]} in the closet")
+            identity_beat = ("They are " + ", ".join(id_bits) + "."
+                             ) if id_bits else ""
+
+            # Weekend beat
+            weekend_bit = (
+                f"Saturday nights lean {weekend_ent}"
+                + (f" or {weekend_ent2}" if weekend_ent2 else "")
+                + (f", sometimes a live show" if ent_names else "")
+                + "."
+            )
+
+            # Geo + income beat
+            geo_bits = []
+            if top_dma_by_idx:
+                geo_bits.append(f"the {top_dma_by_idx} DMA")
+            if income_beat:
+                geo_bits.append(income_beat)
+            geo_beat = (
+                "They over-index on " + " and ".join(geo_bits)
+                + ", meaning this audience is more concentrated there "
+                  "than the national baseline."
+            ) if geo_bits else ""
+
+            # Grammar helper — pick "a" vs "an" based on the first
+            # sound of the following word (best-effort, catches most).
+            def _article(word: str) -> str:
+                w = (word or "").strip()
+                if not w:
+                    return "a"
+                first = w[0].lower()
+                # Vowel-sound heuristic — good enough for the brand
+                # names we're likely to lead with.
+                if first in "aeiou":
+                    return "an"
+                return "a"
+
             body = (
-                f"Picture the {top_age[0]} core of this audience: the "
-                f"life stage skews here, {int(_num(top_age[1]))}% of the "
-                f"file, and about {int(hh_75plus)}% earn $75K+. That "
-                f"combination unlocks premium discretionary spend. On a "
-                f"Tuesday morning the day starts on a phone — scrolling, "
-                f"queuing music, checking a subreddit — not with a "
-                f"newspaper. Saturday nights lean toward live experience "
-                f"or a streamer, not linear cable. The brands they "
-                f"engage with — {top_brand_phrase} — reveal a taste "
-                f"pattern that reads culture-first: they will pay to be "
-                f"early on a category that reflects identity, and they "
-                f"will skip categories that feel generic. What they are "
-                f"NOT: not weekly big-box shoppers, not appointment-TV "
-                f"watchers, not late-adopter on the surfaces most brands "
-                f"still over-buy."
+                f"Picture the {top_age[0]} core: about "
+                f"{int(_num(top_age[1]))}% of the file, and roughly "
+                f"{int(hh_75plus)}% earn $75K+. A Tuesday morning "
+                f"starts on {morning_brand} before coffee; lunch is "
+                f"{_article(morning_food)} {morning_food} order tapped "
+                f"through the app at the desk. "
+                + (identity_beat + " " if identity_beat else "")
+                + weekend_bit + " "
+                + (geo_beat + " " if geo_beat else "")
+                + "What they are NOT: not late-adopter linear-TV "
+                  "watchers, not big-box weekly-basket shoppers, not "
+                  "the audience prestige-media pre-roll is aimed at. "
+                  "The tone that moves them: specific, culture-native, "
+                  "and grounded in the taste patterns already visible "
+                  "in their signal — generic register will fall flat."
             )
 
     slide = _blank_slide(prs)
@@ -5085,16 +5346,24 @@ def _persona_narrative_is_grounded(
     ANY failure is present — one weak element sinks the whole slide.
 
     Elements checked (mirrors PERSONA_NARRATIVE teaching block):
-      1. Word count 100-220 (allows slight over/under for good prose)
-      2. Names >= 2 brands from persona_ready_brands list
-      3. Has a morning behavior cue
-      4. Has an evening/weekend behavior cue
-      5. Contains an anti-persona 'NOT' note
-      6. Not generic slop (no more than 1 filler phrase)
+      1. Word count 120-240 (allows slight over/under for good prose)
+      2. Names >= 3 brands from persona_ready_brands list
+      3. Brands span >= 3 story types (entertainment / lifestyle /
+         consumption / platform) — else it is a media plan, not a
+         person
+      4. Includes >= 1 ENTERTAINMENT signal (music / games / sports /
+         festival / talent / etc.) — else the audience never STOPS
+         being demographics and never becomes a person
+      5. Has a morning behavior cue
+      6. Has an evening/weekend behavior cue
+      7. Contains an anti-persona 'NOT' note
+      8. Not generic slop (no more than 1 filler phrase)
 
     Added 2026-07-09 (round 6) after user flagged that LLM was
     producing persona-thin briefs; JSON schema alone doesn't force the
-    model to write richly.
+    model to write richly. Updated to require category diversity so
+    the persona actually pulls from interests / music / games / sports
+    etc. — not just top-reach QSR + social.
     """
     failures: list[str] = []
     if not body or not isinstance(body, str):
@@ -5102,27 +5371,41 @@ def _persona_narrative_is_grounded(
 
     words = body.split()
     n = len(words)
-    if n < 100:
-        failures.append(f"too short ({n} words; need >= 100)")
-    if n > 220:
-        failures.append(f"too long ({n} words; cut to <= 220)")
+    if n < 120:
+        failures.append(f"too short ({n} words; need >= 120)")
+    if n > 240:
+        failures.append(f"too long ({n} words; cut to <= 240)")
 
     body_lower = body.lower()
 
-    # Named brand check — must cite >= 2 brands from persona_ready
+    # Named brand check — must cite >= 3 brands from persona_ready AND
+    # those brands must span >= 3 story types AND include at least one
+    # ENTERTAINMENT signal (music / games / sports team / festival /
+    # talent / media / college — the identity-giving categories).
     if persona_ready_brands:
-        cited = 0
+        cited_brands: list[dict] = []
         for b in persona_ready_brands:
             nm = (b.get("brand") or "").strip()
             if not nm:
                 continue
-            # Case-insensitive substring match — most brands are unique
-            # enough tokens that false positives are rare
             if nm.lower() in body_lower:
-                cited += 1
-        if cited < 2:
+                cited_brands.append(b)
+        if len(cited_brands) < 3:
             failures.append(
-                f"names only {cited} persona-ready brands (need >= 2)"
+                f"names only {len(cited_brands)} persona-ready brands "
+                f"(need >= 3)"
+            )
+        stories_cited = {b.get("story", "other") for b in cited_brands}
+        if len(stories_cited) < 3:
+            failures.append(
+                f"cited brands span only {len(stories_cited)} story types "
+                f"({sorted(stories_cited)}); need >=3 of "
+                f"[entertainment, lifestyle, consumption, platform]"
+            )
+        if "entertainment" not in stories_cited:
+            failures.append(
+                "no ENTERTAINMENT signal cited — persona has no cultural "
+                "identity beat (music / games / sports / festival / etc.)"
             )
 
     # Morning cue — Tuesday morning / commute / workday / coffee
