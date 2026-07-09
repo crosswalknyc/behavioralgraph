@@ -4182,6 +4182,8 @@ def create_user():
             'has_sentiment_iq_access': req_data.get('has_sentiment_iq_access', cd.get('has_sentiment_iq_access', False) if cd else False),
             'has_journey_iq_access': req_data.get('has_journey_iq_access', cd.get('has_journey_iq_access', False) if cd else False),
             'allowed_journey_iq_runs': req_data.get('allowed_journey_iq_runs', cd.get('allowed_journey_iq_runs', ['*']) if cd else ['*']),
+            'has_intent_iq_access': req_data.get('has_intent_iq_access', cd.get('has_intent_iq_access', True) if cd else True),
+            'allowed_intent_iq_runs': req_data.get('allowed_intent_iq_runs', cd.get('allowed_intent_iq_runs', ['*']) if cd else ['*']),
             'has_workspace_access': req_data.get('has_workspace_access', cd.get('has_workspace_access', True) if cd else True),
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
@@ -4349,6 +4351,17 @@ def update_user(username):
                 user['allowed_journey_iq_runs'] = list(raw)
             else:
                 user['allowed_journey_iq_runs'] = ['*']
+        if 'has_intent_iq_access' in req_data:
+            user['has_intent_iq_access'] = bool(req_data['has_intent_iq_access'])
+        if 'allowed_intent_iq_runs' in req_data:
+            # Per-user gate for Intent IQ titles. ['*'] = all titles visible,
+            # explicit list of title_slug strings = only those. Missing or
+            # non-list = default-open ['*'] for back-compat.
+            raw = req_data['allowed_intent_iq_runs']
+            if isinstance(raw, list):
+                user['allowed_intent_iq_runs'] = list(raw)
+            else:
+                user['allowed_intent_iq_runs'] = ['*']
         if 'has_workspace_access' in req_data:
             user['has_workspace_access'] = bool(req_data['has_workspace_access'])
         if 'has_share_of_time_access' in req_data:
@@ -7801,6 +7814,7 @@ def compute_product_access_flags(user, role):
             'has_share_of_time_run_access': True,
             'has_blue_iq_access': True,
             'has_intent_iq_access': True,
+            'allowed_intent_iq_runs': ['*'],
             'has_impact_iq_access': True,
             'impact_iq_journeys': ['*'],
             'has_helm_iq_access': True,
@@ -7838,6 +7852,7 @@ def compute_product_access_flags(user, role):
         'has_share_of_time_run_access': has_sot_run,
         'has_blue_iq_access': bool(u.get('has_blue_iq_access', False)),
         'has_intent_iq_access': bool(u.get('has_intent_iq_access', True)),
+        'allowed_intent_iq_runs': list(u.get('allowed_intent_iq_runs', ['*']) or ['*']),
         'has_impact_iq_access': bool(u.get('has_impact_iq_access', True)),
         'impact_iq_journeys': list(u.get('impact_iq_journeys', ['*']) or ['*']),
         'has_helm_iq_access': role == 'super_admin',
@@ -15079,8 +15094,39 @@ def api_trends_iq_watchlist_remove():
 # normalized JSON live in s3://dashboard-inputs/intent/<slug>/. See
 # bg-webapp/intent_iq.py for the query layer and migration/intent_clickhouse_schema.sql
 # for the DDL. See scripts/ingest_intent_campaign.py for the ingestion CLI.
-def _require_intent_iq():
-    """Return (False, error_response) if Intent IQ isn't available."""
+def _user_intent_iq_title_access(user):
+    """Resolve a user's Intent IQ per-title access policy.
+
+    Mirrors _user_jiq_run_access(). Returns ``(is_admin, allow_all,
+    allowed_slugs)``:
+      * ``is_admin`` — admin / super_admin / cloaked sessions see everything.
+      * ``allow_all`` — non-admin with default-open policy
+        (``allowed_intent_iq_runs`` missing, not a list, or contains ``'*'``).
+        Preserves back-compat for users created before per-title gating.
+      * ``allowed_slugs`` — ``set[str]`` of title_slug values the user may
+        open when ``allow_all`` is False. Empty set = explicitly revoked.
+    """
+    role = (user or {}).get('role')
+    is_admin = role in ('admin', 'super_admin') or bool(session.get('cloaked_from'))
+    if is_admin:
+        return True, True, set()
+    raw = (user or {}).get('allowed_intent_iq_runs')
+    if raw is None:
+        return False, True, set()
+    if isinstance(raw, list):
+        if '*' in raw:
+            return False, True, set()
+        return False, False, set(raw)
+    return False, True, set()
+
+
+def _require_intent_iq(title_slug=None):
+    """Return (False, error_response) if Intent IQ isn't available.
+
+    When ``title_slug`` is passed, ALSO enforces the per-user allow-list.
+    A user gated to only ``['goat']`` requesting ``/api/intent/other/...``
+    will get 403 with the module-loaded, feature-flag-on paths still passing.
+    """
     user = get_current_user()
     if not user:
         return False, (jsonify({'success': False, 'error': 'Not authenticated'}), 401)
@@ -15090,6 +15136,11 @@ def _require_intent_iq():
         return False, (jsonify({'success': False, 'error': 'Intent IQ access not enabled'}), 403)
     if _intent_iq is None:
         return False, (jsonify({'success': False, 'error': 'Intent IQ module not loaded'}), 500)
+    if title_slug:
+        is_admin, allow_all, allowed = _user_intent_iq_title_access(user)
+        if not (is_admin or allow_all) and title_slug not in allowed:
+            return False, (jsonify({'success': False,
+                                    'error': f'Intent IQ title "{title_slug}" not in your allow-list'}), 403)
     return True, None
 
 
@@ -15100,6 +15151,31 @@ def api_intent_titles():
     if not ok:
         return err
     try:
+        result = _intent_iq.list_titles()
+        user = get_current_user()
+        is_admin, allow_all, allowed = _user_intent_iq_title_access(user)
+        if not (is_admin or allow_all):
+            titles = result.get('titles', []) or []
+            result['titles'] = [t for t in titles
+                                if (t or {}).get('title_slug') in allowed]
+        return jsonify(result)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/intent/titles/admin', methods=['GET'])
+@requires_admin
+def api_intent_titles_admin():
+    """Ungated title list for the admin user-edit modal.
+
+    The user-facing /api/intent/titles filters by the caller's own
+    allow-list; when an admin is editing a *different* user's Intent IQ
+    permissions they need to see the full catalog to build the picker.
+    """
+    if _intent_iq is None:
+        return jsonify({'success': False, 'error': 'Intent IQ module not loaded'}), 500
+    try:
         return jsonify(_intent_iq.list_titles())
     except Exception as e:
         traceback.print_exc()
@@ -15109,7 +15185,7 @@ def api_intent_titles():
 @app.route('/api/intent/<title_slug>/overview', methods=['GET'])
 @requires_auth
 def api_intent_overview(title_slug):
-    ok, err = _require_intent_iq()
+    ok, err = _require_intent_iq(title_slug)
     if not ok:
         return err
     try:
@@ -15122,7 +15198,7 @@ def api_intent_overview(title_slug):
 @app.route('/api/intent/<title_slug>/assets', methods=['GET'])
 @requires_auth
 def api_intent_assets(title_slug):
-    ok, err = _require_intent_iq()
+    ok, err = _require_intent_iq(title_slug)
     if not ok:
         return err
     try:
@@ -15143,7 +15219,7 @@ def api_intent_assets(title_slug):
 @app.route('/api/intent/<title_slug>/asset/<int:asset_id>/timeseries', methods=['GET'])
 @requires_auth
 def api_intent_asset_timeseries(title_slug, asset_id):
-    ok, err = _require_intent_iq()
+    ok, err = _require_intent_iq(title_slug)
     if not ok:
         return err
     try:
@@ -15157,7 +15233,7 @@ def api_intent_asset_timeseries(title_slug, asset_id):
 @app.route('/api/intent/<title_slug>/audiences', methods=['GET'])
 @requires_auth
 def api_intent_audiences(title_slug):
-    ok, err = _require_intent_iq()
+    ok, err = _require_intent_iq(title_slug)
     if not ok:
         return err
     try:
@@ -15171,7 +15247,7 @@ def api_intent_audiences(title_slug):
 @app.route('/api/intent/<title_slug>/cohorts', methods=['GET'])
 @requires_auth
 def api_intent_cohorts(title_slug=None):
-    ok, err = _require_intent_iq()
+    ok, err = _require_intent_iq(title_slug)
     if not ok:
         return err
     try:
@@ -15184,7 +15260,7 @@ def api_intent_cohorts(title_slug=None):
 @app.route('/api/intent/<title_slug>/questions/<qid>', methods=['GET'])
 @requires_auth
 def api_intent_question(title_slug, qid):
-    ok, err = _require_intent_iq()
+    ok, err = _require_intent_iq(title_slug)
     if not ok:
         return err
     try:
@@ -15197,7 +15273,7 @@ def api_intent_question(title_slug, qid):
 @app.route('/api/intent/<title_slug>/in_flight', methods=['GET'])
 @requires_auth
 def api_intent_in_flight(title_slug):
-    ok, err = _require_intent_iq()
+    ok, err = _require_intent_iq(title_slug)
     if not ok:
         return err
     try:

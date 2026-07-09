@@ -2417,6 +2417,9 @@
                                         <input type="checkbox" id="cdJourneyIQ"> Digital Journey IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdIntentIQ" checked> Intent IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdBlueIQ"> Blue IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
@@ -3330,6 +3333,35 @@
                                     <p style="color:var(--text-secondary);font-size:0.75rem;margin:0;padding:0.5rem;">Loading journeys…</p>
                                 </div>
                                 <div id="journeyIqRunsCount" style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.4rem;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Intent IQ Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasIntentIQAccess" onchange="syncIntentIqRunAccessVisibility()">
+                                <span style="font-weight: 600;">🎬 INTENT IQ</span>
+                            </label>
+                        </div>
+                        <div class="dashboard-access-content" id="intentIqRunAccessContent" style="display:none;">
+                            <div style="padding:0.85rem 1rem;background:var(--bg-dark);border-radius:8px;margin-top:0.5rem;">
+                                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;flex-wrap:wrap;">
+                                    <label class="checkbox-group" style="margin:0;">
+                                        <input type="checkbox" id="allIntentIqRuns" checked onchange="toggleAllIntentIqRuns()">
+                                        <span>ALL INTENT IQ TITLES</span>
+                                    </label>
+                                    <button type="button" class="btn btn-small btn-secondary" onclick="restoreIntentIqRunDefaults()">Restore Defaults</button>
+                                    <small style="color:var(--text-secondary);font-size:0.68rem;">Pick which titles (movies) this user can open. Uncheck "ALL" to gate.</small>
+                                </div>
+                                <div style="margin-bottom:0.5rem;">
+                                    <input type="text" id="intentIqRunsSearchInput" placeholder="Search titles (name, distributor)..." oninput="filterIntentIqRunsList()" style="width:100%;padding:0.35rem 0.6rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;">
+                                </div>
+                                <div id="intentIqRunsCheckboxes" style="margin-top:0.5rem;max-height:280px;overflow-y:auto;border:1px solid var(--border-color);border-radius:6px;padding:0.5rem;background:var(--bg-input);">
+                                    <p style="color:var(--text-secondary);font-size:0.75rem;margin:0;padding:0.5rem;">Loading titles…</p>
+                                </div>
+                                <div id="intentIqRunsCount" style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.4rem;"></div>
                             </div>
                         </div>
                     </div>
@@ -4931,6 +4963,8 @@
                     if (cdBp) cdBp.checked = !!d.has_brand_partnership_iq_access;
                     var cdJiq = document.getElementById('cdJourneyIQ');
                     if (cdJiq) cdJiq.checked = !!d.has_journey_iq_access;
+                    var cdIntent = document.getElementById('cdIntentIQ');
+                    if (cdIntent) cdIntent.checked = d.has_intent_iq_access !== false;
                     var cdBiq = document.getElementById('cdBlueIQ');
                     if (cdBiq) cdBiq.checked = !!d.has_blue_iq_access;
                     var cdIiq = document.getElementById('cdImpactIQNew');
@@ -4996,6 +5030,7 @@
                 has_ticket_sales_tracker_access: document.getElementById('cdTicketTracker').checked,
                 has_brand_partnership_iq_access: !!(document.getElementById('cdBrandPartnership') && document.getElementById('cdBrandPartnership').checked),
                 has_journey_iq_access: !!(document.getElementById('cdJourneyIQ') && document.getElementById('cdJourneyIQ').checked),
+                has_intent_iq_access: !!(document.getElementById('cdIntentIQ') && document.getElementById('cdIntentIQ').checked),
                 has_blue_iq_access: !!(document.getElementById('cdBlueIQ') && document.getElementById('cdBlueIQ').checked),
                 has_impact_iq_access: !!(document.getElementById('cdImpactIQNew') && document.getElementById('cdImpactIQNew').checked),
                 credits: parseInt(document.getElementById('cdDefaultCredits').value) || 5,
@@ -9214,6 +9249,10 @@
             // Per-user Journey IQ run gating: list of S3 keys, ['*']/missing = all
             populateJourneyIqRunsCheckboxes(user.allowed_journey_iq_runs);
             syncJourneyIqRunAccessVisibility();
+            var intentIqAccess = document.getElementById('hasIntentIQAccess');
+            if (intentIqAccess) intentIqAccess.checked = user.has_intent_iq_access !== false; // Default true (opt-out)
+            populateIntentIqRunsCheckboxes(user.allowed_intent_iq_runs);
+            syncIntentIqRunAccessVisibility();
             document.getElementById('hasTicketSalesIQAccess').checked = user.has_ticket_sales_iq_access !== false; // Default true
             document.getElementById('hasHedgeFundIQAccess').checked = user.has_hedge_fund_iq_access === true; // Default false
             document.getElementById('getsHedgeFundIQEmails').checked = user.gets_hedge_fund_iq_emails === true; // Default false
@@ -11585,6 +11624,136 @@
             return Array.from(_jiqRunSelected);
         }
 
+        // ──────────────────────────────────────────────────────────────────
+        // Intent IQ — per-user title gating (in user edit modal)
+        // ──────────────────────────────────────────────────────────────────
+        // Mirrors the Journey IQ pattern. _intentRunSelected = Set<slug> of
+        // titles explicitly checked. _intentRunIsAll = true means "['*']"
+        // (default-open — user sees every title).
+        let _intentRunSelected = new Set();
+        let _intentRunIsAll    = true;
+
+        async function loadIntentIqTitlesForAdmin(force = false) {
+            if (window._intentAdminTitles && !force) return window._intentAdminTitles;
+            try {
+                const resp = await fetch('/api/intent/titles/admin', { credentials: 'same-origin' });
+                const data = await resp.json();
+                window._intentAdminTitles = (data.titles || []);
+            } catch (e) {
+                window._intentAdminTitles = [];
+            }
+            return window._intentAdminTitles;
+        }
+
+        function syncIntentIqRunAccessVisibility() {
+            const cb = document.getElementById('hasIntentIQAccess');
+            const block = document.getElementById('intentIqRunAccessContent');
+            if (!cb || !block) return;
+            block.style.display = cb.checked ? 'block' : 'none';
+        }
+
+        function toggleAllIntentIqRuns() {
+            const allCb = document.getElementById('allIntentIqRuns');
+            if (!allCb) return;
+            _intentRunIsAll = !!allCb.checked;
+            if (_intentRunIsAll) {
+                _intentRunSelected = new Set();
+            } else {
+                // Pre-populate with everything visible so unchecking ALL
+                // doesn't instantly revoke access; admin then unchecks the
+                // ones they want gated.
+                const titles = window._intentAdminTitles || [];
+                _intentRunSelected = new Set(titles.map(t => t.title_slug).filter(Boolean));
+            }
+            _renderIntentIqRunsList();
+        }
+
+        function restoreIntentIqRunDefaults() {
+            _intentRunIsAll = true;
+            _intentRunSelected = new Set();
+            const allCb = document.getElementById('allIntentIqRuns');
+            if (allCb) allCb.checked = true;
+            _renderIntentIqRunsList();
+        }
+
+        function filterIntentIqRunsList() { _renderIntentIqRunsList(); }
+
+        function _renderIntentIqRunsList() {
+            const container = document.getElementById('intentIqRunsCheckboxes');
+            const countEl   = document.getElementById('intentIqRunsCount');
+            if (!container) return;
+
+            const titles = window._intentAdminTitles || [];
+            if (titles.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.75rem;margin:0;padding:0.5rem;">No Intent IQ titles found.</p>';
+                if (countEl) countEl.textContent = '';
+                return;
+            }
+
+            const search = ((document.getElementById('intentIqRunsSearchInput') || {}).value || '').trim().toLowerCase();
+            const filtered = !search ? titles : titles.filter(t => {
+                const hay = `${t.display_name || ''} ${t.distributor || ''} ${t.genre || ''} ${t.title_slug || ''}`.toLowerCase();
+                return hay.includes(search);
+            });
+
+            const showDisabled = _intentRunIsAll;
+            container.innerHTML = filtered.map(t => {
+                const slug     = t.title_slug || '';
+                const label    = t.display_name || t.title_slug || '(unnamed)';
+                const subLabel = [t.distributor, t.opening_date].filter(Boolean).join(' · ');
+                const checked  = _intentRunIsAll || _intentRunSelected.has(slug);
+                const safeSlug = (slug || '').replace(/'/g, "\\'");
+                return `
+                    <label class="checkbox-group" style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;padding:0.25rem 0.4rem;border-bottom:1px solid var(--border-color);">
+                        <input type="checkbox" class="intent-run-checkbox" value="${slug}" ${checked ? 'checked' : ''} ${showDisabled ? 'disabled' : ''} onchange="onIntentIqRunCheckboxChange('${safeSlug}', this.checked)">
+                        <span style="flex:1;min-width:0;">
+                            <span style="font-weight:600;">${label}</span>
+                            ${subLabel ? `<span style="color:var(--text-secondary);font-size:0.7rem;margin-left:0.4rem;">${subLabel}</span>` : ''}
+                        </span>
+                    </label>
+                `;
+            }).join('');
+
+            if (countEl) {
+                if (_intentRunIsAll) {
+                    countEl.textContent = `${titles.length} titles available — all granted (default).`;
+                } else {
+                    countEl.textContent = `${_intentRunSelected.size} of ${titles.length} titles granted.`;
+                }
+            }
+        }
+
+        function onIntentIqRunCheckboxChange(slug, checked) {
+            if (!slug) return;
+            if (checked) _intentRunSelected.add(slug);
+            else         _intentRunSelected.delete(slug);
+            const countEl = document.getElementById('intentIqRunsCount');
+            const total   = (window._intentAdminTitles || []).length;
+            if (countEl) countEl.textContent = `${_intentRunSelected.size} of ${total} titles granted.`;
+        }
+
+        async function populateIntentIqRunsCheckboxes(allowed) {
+            // `allowed` = user.allowed_intent_iq_runs:
+            //   undefined / null / ['*'] / []  →  default-open (ALL)
+            //   array of slugs                  →  explicit allow-list
+            await loadIntentIqTitlesForAdmin();
+            if (!Array.isArray(allowed) || allowed.length === 0 || allowed.includes('*')) {
+                _intentRunIsAll = true;
+                _intentRunSelected = new Set();
+            } else {
+                _intentRunIsAll = false;
+                _intentRunSelected = new Set(allowed);
+            }
+            const allCb = document.getElementById('allIntentIqRuns');
+            if (allCb) allCb.checked = _intentRunIsAll;
+            _renderIntentIqRunsList();
+        }
+
+        function getIntentIqRunsAllowedPayload() {
+            if (_intentRunIsAll) return ['*'];
+            return Array.from(_intentRunSelected);
+        }
+
         // Populate Behavioral Category Checkboxes in user modal (always show ALL options; default selection from quick select when adding new user)
         function populateBehavioralCategoryCheckboxes(selected = ['*'], useQuickSelect = false) {
             const container = document.getElementById('behavioralCategoryCheckboxes');
@@ -11675,6 +11844,8 @@
                 has_brand_partnership_iq_access: !!(document.getElementById('hasBrandPartnershipIQAccess') && document.getElementById('hasBrandPartnershipIQAccess').checked),
                 has_journey_iq_access: !!(document.getElementById('hasJourneyIQAccess') && document.getElementById('hasJourneyIQAccess').checked),
                 allowed_journey_iq_runs: getJourneyIqRunsAllowedPayload(),
+                has_intent_iq_access: !!(document.getElementById('hasIntentIQAccess') && document.getElementById('hasIntentIQAccess').checked),
+                allowed_intent_iq_runs: getIntentIqRunsAllowedPayload(),
                 has_ticket_sales_iq_access: document.getElementById('hasTicketSalesIQAccess').checked,
                 has_hedge_fund_iq_access: document.getElementById('hasHedgeFundIQAccess').checked,
                 gets_hedge_fund_iq_emails: document.getElementById('getsHedgeFundIQEmails').checked,
