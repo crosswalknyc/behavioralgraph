@@ -40,6 +40,7 @@ import json
 import math
 import os
 import re
+import sys
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -361,6 +362,29 @@ def _normalize_payload(
         "locations": list(locations),
         "interests": dict(interests),
     }
+
+    # Strip the SUBJECT itself from behavioral rows before slides ever see
+    # them. Green Day appearing at 100% reach in a 'Nimrods A Green Day
+    # Comedy' audience is tautological — every audience member exhibits
+    # Green Day engagement because that IS how the audience is defined.
+    # Featuring it in signature affinities, category deep-dives, or 'anchor
+    # brand' captions is analytically wrong. The subject is the frame, not
+    # a finding. Added 2026-07-09 after user flagged the Green-Day-in-
+    # SIGNATURE-AFFINITIES leak.
+    subject_name = payload["name"]
+    for cat, items in payload["behavioral"].items():
+        kept = []
+        dropped = []
+        for it in items:
+            brand = (it.get("name") or "").strip()
+            if _is_subject_brand(brand, subject_name):
+                dropped.append(brand)
+                continue
+            kept.append(it)
+        payload["behavioral"][cat] = kept
+        if dropped:
+            _log(f"[_normalize_payload] stripped subject-matching brands "
+                  f"from {cat}: {dropped}")
 
     # Sort behavioral items by index desc (over-indexers first) so slides pick
     # the "story" brands, not just the biggest-reach ones. Tie-break on pct.
@@ -778,7 +802,11 @@ _ANALYST_JSON_SPEC = (
     '     "so_what_headline": "2-4 word label (e.g. \'So what.\')",\n'
     '     "so_what_body":     "2-3 tight sentences (35-50 words) with the marketer action. Name a channel, a partner category, and a whitespace. Be prescriptive."\n'
     '  },\n'
-    '  "day_in_life": "A 110-150 word portrait of a day in this audience\'s life, stitched from actual behavioral signals in the data. Cite 4-6 specific brands or platforms with reach % in-line (e.g. \'Morning starts on TikTok (70%) not Instagram (64%).\'). Read as a McKinsey \'consumer archetype\' vignette, not a diary entry.",\n'
+    '  "day_in_life": {\n'
+    '     "morning":   "35-55 word morning slice — waking up, commute, first-touch platforms. Name 2-3 brands with reach %. E.g. \'Wakes to a TikTok (70%) scroll before coffee; commute is a Spotify (52%) queue or a Reddit (38%) thread on r/movies. Breakfast is grab-and-go from Amazon Fresh or the corner deli.\'",\n'
+    '     "midday":    "35-55 word mid-day slice — work rhythm, lunch, shopping. Name 2-3 brands with reach %. E.g. \'Slack + Zoom (implied) fill the workday; lunch is a DoorDash (45%) or a Chipotle grab. Amazon (72%) refills happen mid-day between meetings.\'",\n'
+    '     "evening":   "35-55 word evening slice — decompression, entertainment, socialising. Name 2-3 brands with reach %. E.g. \'Evening is Netflix (78%) or a Twitch (18%) stream, with Instagram (72%) DMs running in parallel. Weekend nights add a Ticketmaster (14%) purchase for an actual live show.\'"\n'
+    '  },\n'
     '  "signature_affinities": [\n'
     '     { "brand": "BRAND", "category": "CATEGORY", "pct": 0.0, "index": 0, "note": "6-12 word analyst tag explaining why this signal matters" },\n'
     '     ... (pick 8-12 brands from strongest_signals that BEST characterize this audience. Prefer meaningful reach (>=10%) AND meaningful over-index (>=130). Diverse categories. Skip freak-index micro-signals.)\n'
@@ -1354,7 +1382,7 @@ def _slide_overview(prs: Presentation, p: dict):
                       w=SLIDE_W_IN - 8.05, h=SLIDE_H_IN,
                       darken=0.90, subject_name=p["name"])
 
-    _section_eyebrow(slide, 0.62, p["name"], "OVERVIEW")
+    _section_eyebrow(slide, 0.52, p["name"], "OVERVIEW")
     _text(slide, 0.62, 0.82, 8.0, 1.10, "What's inside.",
           size=30, bold=True, color=C_CREAM, line_spacing=1.05)
 
@@ -1449,7 +1477,7 @@ def _slide_demographics(prs: Presentation, p: dict):
     # Left-side dark overlay to keep stat text readable regardless of image
     _rect(slide, 0, 0, 6.30, SLIDE_H_IN, C_DARK)
 
-    _section_eyebrow(slide, 0.62, p["name"], "IDENTITY")
+    _section_eyebrow(slide, 0.52, p["name"], "IDENTITY")
     _text(slide, 0.60, 0.82, 6.0, 1.10, _identity_headline(p),
           size=28, bold=True, color=C_CREAM, line_spacing=1.05)
 
@@ -1488,7 +1516,7 @@ def _slide_demographics(prs: Presentation, p: dict):
 
 def _slide_one_insight(prs: Presentation, p: dict):
     slide = _blank_slide(prs)
-    _section_eyebrow(slide, 0.62, p["name"], "ONE INSIGHT")
+    _section_eyebrow(slide, 0.52, p["name"], "ONE INSIGHT")
 
     brief_a    = _brief_get(p, "one_insight_a")
     brief_b    = _brief_get(p, "one_insight_b")
@@ -1784,7 +1812,7 @@ def _slide_media_and_social(prs: Presentation, p: dict):
     SIGNATURE if no mass surface exists.
     """
     slide = _blank_slide(prs)
-    _section_eyebrow(slide, 0.62, p["name"], "SOCIAL & PLATFORM")
+    _section_eyebrow(slide, 0.52, p["name"], "SOCIAL & PLATFORM")
     _title_block(slide, 1.0, "Where the audience", "spends its screen time.")
 
     social_items = _first_available(p, [
@@ -1818,6 +1846,13 @@ def _slide_media_and_social(prs: Presentation, p: dict):
 
 
 def _draw_stat_list(slide, x, y, w, items):
+    """Ranked stat rows: brand name + reach on the left, giant idx number
+    on the right with 'idx' caption below it. Idx-number box was h=0.6
+    starting at ry+0.05 which visually extends to ry+0.44 for 28pt glyphs;
+    'idx' caption at ry+0.55 sits comfortably below the glyph baseline
+    but the two BOUNDING BOXES used to overlap by 0.10" (defect on
+    slide 18). Number box shrunk to h=0.44 to eliminate the bbox overlap
+    without changing the visual layout."""
     if not items:
         _text(slide, x, y, w, 0.4, "No data in this category.",
               size=11, color=C_MUTED)
@@ -1833,10 +1868,10 @@ def _draw_stat_list(slide, x, y, w, items):
         _text(slide, x, ry + 0.34, 3.4, 0.24,
               f"{pct:.1f}% reach", size=9, color=C_MUTED)
         idx_color = C_MAGENTA if idx >= 120 else (C_LIME if idx >= 100 else C_LAVENDER)
-        _text(slide, x + 3.6, ry + 0.05, 1.6, 0.6, f"{idx}",
+        _text(slide, x + 3.6, ry + 0.05, 1.6, 0.44, f"{idx}",
               size=28, bold=True, color=idx_color, align=PP_ALIGN.RIGHT,
               line_spacing=1.0)
-        _text(slide, x + 3.6, ry + 0.55, 1.6, 0.20, "idx",
+        _text(slide, x + 3.6, ry + 0.52, 1.6, 0.20, "idx",
               size=9, color=C_MUTED, align=PP_ALIGN.RIGHT, letter_spacing=0.05)
         if i < len(items) - 1:
             _hairline(slide, x, ry + row_h - 0.05, w - 0.1, C_STROKE)
@@ -2342,7 +2377,7 @@ def _slide_exec_summary(prs: Presentation, p: dict):
     )
 
     slide = _blank_slide(prs)
-    _section_eyebrow(slide, 0.62, subj, "EXECUTIVE SUMMARY")
+    _section_eyebrow(slide, 0.52, subj, "EXECUTIVE SUMMARY")
     _text(slide, 0.62, 0.82, 12.0, 1.10, "The story in one page.",
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
     _text(slide, 0.62, 2.10, 12.0, 0.36,
@@ -2381,30 +2416,80 @@ def _slide_day_in_life(prs: Presentation, p: dict):
     """A day-in-the-life narrative portrait, stitched from real signals.
 
     Only ships when the analyst brief returns a day_in_life narrative
-    (needs LLM to be worth the page)."""
-    narrative = _purge_pronouns(_brief_get(p, "day_in_life") or "", p["name"])
-    if not narrative or len(narrative.split()) < 40:
-        return  # skip — no real story to tell
+    (needs LLM to be worth the page).
+
+    Layout rewritten 2026-07-09: prior version dumped one 110-150 word
+    paragraph into a single 3.80" tall text box — visually a wall of text
+    that fought to be skimmed. Now renders as three time-of-day cards
+    (MORNING / MID-DAY / EVENING) so a CMO can read the rhythm at a
+    glance. Backward-compatible with the old string shape — auto-splits
+    a single paragraph into three roughly-equal chunks."""
+    raw = _brief_get(p, "day_in_life")
+    if not raw:
+        return
+    subj = p["name"]
+
+    morning = midday = evening = ""
+    if isinstance(raw, dict):
+        morning = _purge_pronouns(str(raw.get("morning") or "").strip(), subj)
+        midday  = _purge_pronouns(str(raw.get("midday")
+                                       or raw.get("afternoon")
+                                       or "").strip(), subj)
+        evening = _purge_pronouns(str(raw.get("evening")
+                                       or raw.get("night") or "").strip(), subj)
+    elif isinstance(raw, str):
+        text = _purge_pronouns(raw.strip(), subj)
+        # Auto-split legacy single-paragraph shape into thirds by sentence.
+        sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+        if len(sents) >= 3:
+            third = max(1, len(sents) // 3)
+            morning = " ".join(sents[:third])
+            midday  = " ".join(sents[third:2*third])
+            evening = " ".join(sents[2*third:])
+        elif len(sents) >= 1:
+            morning = text
+
+    # Need at least one substantive panel to bother shipping the slide.
+    panels_with_text = sum(1 for t in (morning, midday, evening) if t)
+    if panels_with_text < 1 or sum(len(t.split()) for t in
+                                    (morning, midday, evening)) < 40:
+        return
 
     slide = _blank_slide(prs)
+    # Side image (right 5" strip) with darken so left-column cards stay clean
     _place_side_image(slide, p.get("_image_bytes"),
                       x=8.20, y=0, w=SLIDE_W_IN - 8.20, h=SLIDE_H_IN,
-                      darken=0.35, subject_name=p["name"])
+                      darken=0.35, subject_name=subj)
     _rect(slide, 0, 0, 8.40, SLIDE_H_IN, C_DARK)
 
-    _section_eyebrow(slide, 0.62, p["name"], "DAY IN THE LIFE")
+    _section_eyebrow(slide, 0.52, subj, "DAY IN THE LIFE")
     _text(slide, 0.62, 0.82, 7.70, 1.10, "How they live it.",
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
     _text(slide, 0.62, 2.05, 7.70, 0.36,
-          "The audience portrait, stitched from panel-observed behavior.",
+          "The audience's rhythm, stitched from panel-observed behavior.",
           size=12, color=C_MUTED, line_spacing=1.4)
 
-    _text(slide, 0.62, 2.85, 7.70, 3.80, narrative,
-          size=13, color=C_CREAM, line_spacing=1.55)
+    # Three vertical time-of-day cards on the left ~7.70" column
+    panels = [
+        ("MORNING", morning, C_LIME),
+        ("MID-DAY", midday, C_LAVENDER),
+        ("EVENING", evening, C_MAGENTA),
+    ]
+    panel_y  = 2.85
+    panel_h  = 1.20
+    panel_gap = 0.10
+    for i, (lbl, txt, accent) in enumerate(panels):
+        py = panel_y + i * (panel_h + panel_gap)
+        _rect(slide, 0.62, py, 7.70, panel_h, RGBColor(0x14, 0x1F, 0x22))
+        _text(slide, 0.85, py + 0.13, 1.60, 0.28, lbl,
+              size=10, bold=True, color=accent, letter_spacing=0.14)
+        _text(slide, 0.85, py + 0.42, 7.25, panel_h - 0.48,
+              txt or "(not observed)",
+              size=11, color=C_CREAM, line_spacing=1.42)
 
     _text(slide, 0.62, 6.75, 8.0, 0.30, _source_line(p),
           size=8.5, color=C_MUTED2, letter_spacing=0.02)
-    _footer(slide, 0, p["name"])
+    _footer(slide, 0, subj)
 
 
 def _slide_whitespace(prs: Presentation, p: dict):
@@ -2418,7 +2503,7 @@ def _slide_whitespace(prs: Presentation, p: dict):
         return  # LLM didn't call it out — skip rather than fake it
 
     slide = _blank_slide(prs)
-    _section_eyebrow(slide, 0.62, p["name"], "WHITESPACE")
+    _section_eyebrow(slide, 0.52, p["name"], "WHITESPACE")
     _text(slide, 0.62, 0.82, 12.0, 0.32, "WHERE THE MONEY ISN'T YET",
           size=10.5, bold=True, color=C_LIME, letter_spacing=0.12)
 
@@ -2469,7 +2554,7 @@ def _slide_media_plan(prs: Presentation, p: dict):
         rows = [(c, round(p_ * 100 / total), r) for (c, p_, r) in rows]
 
     slide = _blank_slide(prs)
-    _section_eyebrow(slide, 0.62, p["name"], "RECOMMENDED MEDIA PLAN")
+    _section_eyebrow(slide, 0.52, p["name"], "RECOMMENDED MEDIA PLAN")
     _text(slide, 0.62, 0.82, 12.0, 1.10, "Where to spend, and why.",
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
     _text(slide, 0.62, 2.10, 12.0, 0.36,
@@ -2488,8 +2573,18 @@ def _slide_media_plan(prs: Presentation, p: dict):
           size=9, bold=True, color=C_LAVENDER, letter_spacing=0.08)
     _hairline(slide, 0.62, hdr_y + 0.32, 12.0, C_STROKE)
 
-    row_h = min(0.68, 3.20 / max(1, len(rows)))
-    y = hdr_y + 0.50
+    # Fit all rows between the header (y=3.55) and the source line
+    # (y=6.75) with a 0.10" gap. Solve for row_h so the last row's
+    # bottom edge lands at 6.65 exactly. Prevents the 5th row of a
+    # 5-row media plan from overflowing the source line (slide 19
+    # defect the user flagged 2026-07-09).
+    y_start = hdr_y + 0.50
+    y_end   = 6.65
+    n_rows  = max(1, len(rows))
+    row_gap = 0.05
+    row_h   = min(0.72, (y_end - y_start - row_gap * (n_rows - 1)) / n_rows)
+    row_h   = max(row_h, 0.42)  # readability floor
+    y = y_start
     for i, (channel, pct, rationale) in enumerate(rows):
         _text(slide, 0.62, y, 3.20, row_h, channel,
               size=15, bold=True, color=C_CREAM,
@@ -2504,7 +2599,7 @@ def _slide_media_plan(prs: Presentation, p: dict):
               anchor=MSO_ANCHOR.MIDDLE)
         if i < len(rows) - 1:
             _hairline(slide, 0.62, y + row_h, 12.0, C_STROKE)
-        y += row_h + 0.05
+        y += row_h + row_gap
 
     _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
           size=8.5, color=C_MUTED2, letter_spacing=0.02)
@@ -2513,12 +2608,38 @@ def _slide_media_plan(prs: Presentation, p: dict):
 
 def _slide_signature_affinities(prs: Presentation, p: dict):
     """Compact roll-up of the audience's signature brand affinities across
-    ALL categories. Kills the need for one wasted slide per low-reach
-    category (Marni-at-3.6% problem)."""
+    ALL categories.
+
+    STRICT class-gated picks:
+      * Reject SUBJECT itself (Green Day, Nimrods leak fix — 2026-07-09)
+      * Reject MASS+LIFT / SCALE (those live on category deep-dives)
+      * Reject NOISE (low reach + weak idx)
+      * Reject freak-index (idx > 400) — panel low-N artifact
+      * Only SIGNATURE (10-20% reach + >=150 idx) and EMERGING (10-20% +
+        110-150 idx) belong here — the classes that actually define
+        the audience's persona colour without pretending to scale.
+    """
+    subject = str(p.get("name") or "").strip()
+
+    def _accept(brand: str, pct: float, idx: float,
+                 cat: str = "") -> bool:
+        # 1) never surface the subject itself as its own signature affinity
+        if _is_subject_brand(brand, subject):
+            return False
+        # 2) signal-class discipline — SIGNATURE + EMERGING only
+        cls = _signal_class(pct, idx)
+        if cls not in (_SIGCLASS_SIGNATURE, _SIGCLASS_EMERGING):
+            return False
+        # 3) freak-index guard for anything the classifier let through
+        if idx > 400:
+            return False
+        return True
+
     brief_rows = _brief_get(p, "signature_affinities", default=[]) or []
     picks: list[dict] = []
+    rejected_llm: list[str] = []
     if isinstance(brief_rows, list):
-        for row in brief_rows[:12]:
+        for row in brief_rows[:24]:
             if not isinstance(row, dict):
                 continue
             brand = str(row.get("brand") or "").strip()
@@ -2527,29 +2648,37 @@ def _slide_signature_affinities(prs: Presentation, p: dict):
             idx   = int(_num(row.get("index", 0)))
             note  = _purge_pronouns(str(row.get("note") or "").strip(),
                                      p["name"])
-            if brand and pct > 0 and idx > 0:
-                picks.append({"brand": brand, "cat": cat, "pct": pct,
-                               "index": idx, "note": note})
+            if not (brand and pct > 0 and idx > 0):
+                continue
+            if not _accept(brand, pct, idx, cat):
+                rejected_llm.append(
+                    f"{brand} pct={pct:.1f} idx={idx} "
+                    f"class={_signal_class(pct, idx)}")
+                continue
+            picks.append({"brand": brand, "cat": cat, "pct": pct,
+                           "index": idx, "note": note})
 
-    # Fallback: pick from data ourselves when the brief is empty
-    if len(picks) < 6:
+    # Backfill from data — same class discipline. Score = reach x sqrt(idx)
+    # so higher-reach signature brands rank first.
+    if len(picks) < 8:
         all_items = _all_behavioral_items(p)
-        # Score: reach × log(index over 100). Reach floor 10%, index floor 130.
         scored = []
         for it in all_items:
             pct = _num(it.get("pct", 0))
             idx = int(_num(it.get("index", 0)))
-            if pct < 10.0 or idx < 130 or idx > 400:
+            brand = (it.get("name") or "").strip()
+            if not brand:
                 continue
-            score = pct * math.log(max(1.0, idx / 100.0) + 1)
-            scored.append((score, it))
+            if not _accept(brand, pct, idx, it.get("_cat") or ""):
+                continue
+            scored.append((_signal_score(pct, idx), it))
         scored.sort(key=lambda t: -t[0])
         seen_brands = {r["brand"].upper() for r in picks}
         for _, it in scored:
             if len(picks) >= 10:
                 break
             brand = (it.get("name") or "").strip()
-            if not brand or brand.upper() in seen_brands:
+            if brand.upper() in seen_brands:
                 continue
             picks.append({
                 "brand": brand,
@@ -2560,11 +2689,15 @@ def _slide_signature_affinities(prs: Presentation, p: dict):
             })
             seen_brands.add(brand.upper())
 
+    if rejected_llm:
+        _log(f"[signature_affinities] rejected {len(rejected_llm)} LLM picks "
+              f"(subject/class/freak-index): "
+              f"{'; '.join(rejected_llm[:6])}")
     if len(picks) < 4:
         return
 
     slide = _blank_slide(prs)
-    _section_eyebrow(slide, 0.62, p["name"], "SIGNATURE AFFINITIES")
+    _section_eyebrow(slide, 0.52, p["name"], "SIGNATURE AFFINITIES")
     _text(slide, 0.62, 0.82, 12.0, 1.10, "The brands that colour them.",
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
     _text(slide, 0.62, 2.05, 12.0, 0.60,
@@ -2575,12 +2708,14 @@ def _slide_signature_affinities(prs: Presentation, p: dict):
           "cultural signalling, not for sizing the media buy.",
           size=10.5, color=C_MUTED, line_spacing=1.4)
 
-    # Two-column layout, up to 5 rows each
-    left_col  = picks[:5]
-    right_col = picks[5:10]
+    # Two-column layout. Cap at 4 rows per column (was 5) so the last
+    # row's subtitle at y+0.32 + 0.28 = y+0.60 lands well above the
+    # source line at 6.75. Prior 5-row layout ended at y=6.79, overlap.
+    left_col  = picks[:4]
+    right_col = picks[4:8]
     col_w = 5.85
     col_x = [0.62, 6.90]
-    row_h = 0.66
+    row_h = 0.78
     top_y = 3.15
 
     for col_idx, col_rows in enumerate([left_col, right_col]):
@@ -2704,7 +2839,7 @@ def _slide_portrait(prs: Presentation, p: dict):
        C_BLUE)
 
     slide = _blank_slide(prs)
-    _section_eyebrow(slide, 0.62, p["name"], "PORTRAIT")
+    _section_eyebrow(slide, 0.52, p["name"], "PORTRAIT")
     _text(slide, 0.62, 0.82, 12.0, 1.10, "Who they actually are.",
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
     _text(slide, 0.62, 2.05, 12.0, 0.36,
@@ -2756,7 +2891,7 @@ def _slide_demographic_deep_dive(prs: Presentation, p: dict):
         return  # thin demo — skip; other slides cover it
 
     slide = _blank_slide(prs)
-    _section_eyebrow(slide, 0.62, p["name"], "DEMOGRAPHIC DEEP-DIVE")
+    _section_eyebrow(slide, 0.52, p["name"], "DEMOGRAPHIC DEEP-DIVE")
     _text(slide, 0.62, 0.82, 12.0, 1.10, "The full demographic shape.",
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
     _text(slide, 0.62, 2.05, 12.0, 0.36,
@@ -2874,7 +3009,7 @@ def _slide_life_stage(prs: Presentation, p: dict):
         return
 
     slide = _blank_slide(prs)
-    _section_eyebrow(slide, 0.62, p["name"], "LIFE STAGE & HOUSEHOLD")
+    _section_eyebrow(slide, 0.52, p["name"], "LIFE STAGE & HOUSEHOLD")
     _text(slide, 0.62, 0.82, 12.0, 1.10, hd,
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
 
@@ -2945,7 +3080,7 @@ def _slide_differ_from_genpop(prs: Presentation, p: dict):
         return
 
     slide = _blank_slide(prs)
-    _section_eyebrow(slide, 0.62, p["name"], "HOW THEY DIFFER FROM GEN POP")
+    _section_eyebrow(slide, 0.52, p["name"], "HOW THEY DIFFER FROM GEN POP")
     _text(slide, 0.62, 0.82, 12.0, 1.10, "The sharpest deltas.",
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
     _text(slide, 0.62, 2.05, 12.0, 0.36,
@@ -3018,6 +3153,14 @@ def _slide_commerce_persona(prs: Presentation, p: dict):
     cp = _brief_get(p, "commerce_persona", default={}) or {}
     hd = _purge_pronouns(str(cp.get("headline") or "").strip(), p["name"])
     body = _purge_pronouns(str(cp.get("body") or "").strip(), p["name"])
+
+    # Quality gate: if the LLM body has no data grounding (no brand+% or
+    # brand+idx mentions), drop it so the fallback fires. Prevents the
+    # "value and convenience" generic-slop leak the user flagged.
+    if body and not _body_has_data_grounding(body, min_mentions=2):
+        _log(f"[commerce_persona] LLM body has no data grounding, using "
+              f"fallback: {body[:120]!r}")
+        body = ""
 
     # Collect commerce-side brands across MPB + RETAIL + APPAREL/FOOTWEAR
     # + COSMETICS + PERSONAL CARE so mass/signature split has enough surface.
@@ -3097,7 +3240,7 @@ def _slide_commerce_persona(prs: Presentation, p: dict):
         return
 
     slide = _blank_slide(prs)
-    _section_eyebrow(slide, 0.62, p["name"], "COMMERCE PERSONA")
+    _section_eyebrow(slide, 0.52, p["name"], "COMMERCE PERSONA")
     _text(slide, 0.62, 0.82, 12.0, 1.10, "How they shop.",
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
     _text(slide, 0.62, 2.05, 12.0, 0.36,
@@ -3125,6 +3268,12 @@ def _slide_cultural_interests(prs: Presentation, p: dict):
     ci = _brief_get(p, "cultural_interests", default={}) or {}
     hd = _purge_pronouns(str(ci.get("headline") or "").strip(), p["name"])
     body = _purge_pronouns(str(ci.get("body") or "").strip(), p["name"])
+
+    # Quality gate: kill generic LLM bodies with no brand names / numbers.
+    if body and not _body_has_data_grounding(body, min_mentions=2):
+        _log(f"[cultural_interests] LLM body has no data grounding, using "
+              f"fallback: {body[:120]!r}")
+        body = ""
 
     # Fallback: check whether the profile has enough cultural-time
     # categories to justify the slide.
@@ -3201,7 +3350,7 @@ def _slide_cultural_interests(prs: Presentation, p: dict):
         return
 
     slide = _blank_slide(prs)
-    _section_eyebrow(slide, 0.62, p["name"], "CULTURAL INTERESTS")
+    _section_eyebrow(slide, 0.52, p["name"], "CULTURAL INTERESTS")
     _text(slide, 0.62, 0.82, 12.0, 1.10, "How they spend cultural time.",
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
     _text(slide, 0.62, 2.05, 12.0, 0.36,
@@ -3914,11 +4063,21 @@ _SIGCLASS_MEANING = {
 
 def _signal_class(pct, index) -> str:
     """Classify a (reach, index) pair. Reach in percent (0-100), index
-    with 100 = parity."""
+    with 100 = parity.
+
+    Freak-index guard (added 2026-07-09 after Weezer at 46.5% reach +
+    737 idx classified as MASS+LIFT for a Green Day audience — an index
+    that extreme almost always signals subject-adjacent panel skew or a
+    computation artifact, not a real actionable signal). Any brand with
+    index > 500 is downgraded: mass-reach brands become SCALE (still
+    real reach, but stop calling them 'over-index'), everything else
+    becomes NOISE."""
     p = _num(pct)
     i = _num(index)
     if p <= 0 or i <= 0:
         return _SIGCLASS_NOISE
+    if i > 500:
+        return _SIGCLASS_SCALE if p >= 20 else _SIGCLASS_NOISE
     if p >= 20:
         if i >= 130:
             return _SIGCLASS_MASS_LIFT
@@ -3932,7 +4091,7 @@ def _signal_class(pct, index) -> str:
             return _SIGCLASS_EMERGING
         return _SIGCLASS_NOISE
     if 5 <= p < 10 and i >= 200:
-        return _SIGCLASS_SIGNATURE  # borderline signature
+        return _SIGCLASS_SIGNATURE
     return _SIGCLASS_NOISE
 
 
@@ -3949,7 +4108,90 @@ def _signal_score(pct, index) -> float:
     return p * ((i / 100.0) ** 0.5)
 
 
+def _log(msg: str) -> None:
+    """Lightweight logger — writes to stderr with a module tag so debug
+    output shows up in Render / local logs but never surfaces on-slide."""
+    try:
+        print(f"[profile_iq_deck_builder] {msg}", file=sys.stderr, flush=True)
+    except Exception:
+        pass
+
+
+# Aggressive tokeniser used by _is_subject_brand — strips punctuation,
+# common determiners, and film/tv-boilerplate words so 'The Nimrods: A
+# Green Day Comedy' tokenises to {NIMRODS, GREEN, DAY, COMEDY} which
+# matches the brand 'Green Day' at 100% overlap.
+_SUBJECT_STOPWORDS = {
+    "THE", "A", "AN", "AND", "&", "OF", "IN", "ON", "AT", "FOR", "TO",
+    "OR", "MOVIE", "FILM", "SHOW", "SEASON", "EPISODE", "SERIES", "PART",
+    "VOLUME", "VOL", "MR", "MS", "MRS", "DR",
+}
+
+
+def _subject_tokens(subject: str) -> set[str]:
+    if not subject:
+        return set()
+    cleaned = re.sub(r"[^A-Za-z0-9 ]+", " ", subject).upper()
+    return {t for t in cleaned.split()
+            if t and t not in _SUBJECT_STOPWORDS and len(t) >= 2}
+
+
+def _is_subject_brand(brand: str, subject: str) -> bool:
+    """True if ``brand`` is materially the subject (or a fragment of it).
+
+    Catches the Green Day / Nimrods leak: the subject 'The Nimrods A Green
+    DAY Comedy' has tokens {NIMRODS, GREEN, DAY, COMEDY}. The brand
+    'Green Day' tokenises to {GREEN, DAY} which is a full subset — subject
+    match. 'Weezer' has no token overlap — not the subject.
+
+    Guard rules:
+      * Exact string match (case + punctuation insensitive) always fires
+      * >=2 subject-token overlap fires
+      * Single-token brand that IS a subject token fires (Nimrods == Nimrods)
+    """
+    if not brand or not subject:
+        return False
+    b = re.sub(r"[^A-Za-z0-9 ]+", " ", brand).upper().strip()
+    s = re.sub(r"[^A-Za-z0-9 ]+", " ", subject).upper().strip()
+    if not b or not s:
+        return False
+    if b == s or b in s or s in b:
+        return True
+    subj_toks = _subject_tokens(subject)
+    brand_toks = {t for t in b.split()
+                  if t and t not in _SUBJECT_STOPWORDS and len(t) >= 2}
+    if not brand_toks or not subj_toks:
+        return False
+    # Full subset match — every brand token is a subject token (Green Day
+    # inside Nimrods A Green Day Comedy)
+    if brand_toks.issubset(subj_toks):
+        return True
+    # Single-token brand that IS a subject token
+    if len(brand_toks) == 1 and next(iter(brand_toks)) in subj_toks:
+        return True
+    return False
+
+
 _REACH_PATTERN = re.compile(r"([A-Z][A-Za-z0-9&'\-\.\+\/ ]{1,40})\s*\(\s*([0-9]{1,2}(?:\.[0-9])?)\s*%\s*(?:reach)?\s*\)")
+
+
+def _body_has_data_grounding(body: str, min_mentions: int = 2) -> bool:
+    """True if the narrative body mentions at least ``min_mentions``
+    specific brand or bucket references with numeric context (pct or idx).
+
+    This is the quality gate that catches generic LLM outputs like 'The
+    audience exhibits strong preferences for brands that offer value and
+    convenience' — zero brand names, zero numbers, useless for a CMO.
+    Anything with fewer than 2 grounded references falls back to the
+    data-driven template."""
+    if not body:
+        return False
+    reach_hits = _REACH_PATTERN.findall(body)
+    idx_hits   = re.findall(r"\b(?:idx|index)\s*[:=]?\s*[0-9]{2,4}\b",
+                             body, flags=re.IGNORECASE)
+    paren_idx  = re.findall(r"\(\s*idx\s*[0-9]{2,4}\s*\)",
+                             body, flags=re.IGNORECASE)
+    return (len(reach_hits) + len(idx_hits) + len(paren_idx)) >= min_mentions
 
 
 def _extract_narrated_reaches(body: str) -> list[tuple[str, float]]:
@@ -4650,19 +4892,27 @@ def _top_demo_index_callouts(p: dict, n: int = 4) -> list[tuple[float, str, str]
     """Rank demographic buckets by index vs Gen Pop, return top ``n`` for
     the KD 'Where the audience over-indexes most' slide.
 
+    Rules (added 2026-07-09 after the 'LESS THAN $25,000' + '$25-49K'
+    both showing as top over-indexes for the Nimrods comedy audience —
+    two income buckets crowding out ethnicity + education):
+      * ONE bucket per dimension max — dedupe so we don't blast two
+        income buckets as headline stats
+      * Skip fringe buckets (share < 5%)
+      * Skip weak over-indexes (idx < 120)
+      * Skip label-noise buckets (empty string, 'Prefer not to say', etc.)
+
     Each row: (index_value, big_label, sub_context)."""
-    picks: list[tuple[float, str, str]] = []
-    for dim, dim_lbl in [
-        ("ethnicity", "ETHNICITY"),
-        ("age", "AGE"),
-        ("gender", "GENDER"),
-        ("income", "INCOME"),
-        ("education", "EDUCATION"),
-    ]:
+    NOISE_LABELS = {"", "PREFER NOT TO SAY", "UNKNOWN", "OTHER",
+                    "NON-BINARY", "TRANS MALE", "TRANS FEMALE"}
+    per_dim_best: dict[str, tuple[float, str, str]] = {}
+    for dim in ["ethnicity", "age", "income", "education", "gender"]:
         d = (p.get("demographics") or {}).get(dim, {}) or {}
         for k, share in d.items():
             share_n = _num(share)
-            if share_n < 5:  # skip fringe buckets
+            if share_n < 5:
+                continue
+            k_upper = str(k).upper().strip()
+            if k_upper in NOISE_LABELS:
                 continue
             idx = _lookup_idx(p, dim, k)
             if idx < 120:
@@ -4676,7 +4926,11 @@ def _top_demo_index_callouts(p: dict, n: int = 4) -> list[tuple[float, str, str]
                 gp = _APPROX_GENPOP_GENDER.get(k, 0.0)
             sub = (f"{share_n:.1f}% of the audience"
                    + (f" vs {gp:.1f}% of Gen Pop" if gp else ""))
-            picks.append((idx, f"{k.upper()}", sub))
+            candidate = (idx, k_upper, sub)
+            # Keep the highest-index bucket in this dimension
+            if dim not in per_dim_best or candidate[0] > per_dim_best[dim][0]:
+                per_dim_best[dim] = candidate
+    picks = list(per_dim_best.values())
     picks.sort(key=lambda t: -t[0])
     return picks[:n]
 
