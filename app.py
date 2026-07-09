@@ -8287,9 +8287,12 @@ def check_cache():
 @requires_auth
 def download_cached(s3_key):
     """Download a cached file from S3."""
+    ok, err = _require_profile_run_access(s3_key)
+    if not ok:
+        return err
     if not s3_client:
         return jsonify({'error': 'S3 not configured'}), 500
-    
+
     try:
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
         csv_content = response['Body'].read()
@@ -13252,7 +13255,13 @@ def _preferred_gen_pop_key(s3_key):
 def get_csv_data(s3_key):
     """Get CSV data as JSON for dashboard display."""
     print(f"📥 get_csv_data called for: {s3_key}")
-    
+
+    # Enforce per-file Profile IQ access. Gen Pop files are always
+    # allowed, admin/super_admin bypass, cloaked admin bypass, otherwise
+    # allowed_runs / allowed_categories must grant.
+    ok, err = _require_profile_run_access(s3_key)
+    if not ok:
+        return err
     if not s3_client:
         print("❌ S3 client not configured")
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
@@ -13356,6 +13365,9 @@ def get_csv_data(s3_key):
 @requires_auth
 def get_profile_run_metadata(s3_key):
     """Get run parameters from a profile CSV (brand, dates, sample size, demographics) for rerun-with-different-dates."""
+    ok, err = _require_profile_run_access(s3_key)
+    if not ok:
+        return err
     if not s3_client:
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
     try:
@@ -14844,17 +14856,169 @@ def normalize_demographics_gen_pop_to_nps(parsed):
 
 
 # ============================================================================
+# UNIFIED MODULE-ACCESS GATES  (added 2026-07-09)
+# ----------------------------------------------------------------------------
+# Every module read/list/data route MUST call one of the helpers below
+# before touching S3 or the DB. The pattern:
+#     ok, err = _require_module_access('has_sf_conversion_access')
+#     if not ok: return err
+#
+# For Profile IQ per-file access:
+#     ok, err = _require_profile_run_access(s3_key)
+#     if not ok: return err
+#
+# History of why this exists:
+#   Pre-2026-07-09 audit found ~16 routes that were "@requires_auth" only
+#   — any authenticated user could read Subscriber IQ, SF Conversion,
+#   Flywheel, ROAS, Brand Partnership, and every Profile IQ CSV via direct
+#   API calls, even when the admin panel showed those modules as locked.
+#   The frontend hid the tabs but the data was one curl away. Grants only
+#   worked cosmetically. This unified gate closes every one of those.
+# ============================================================================
+def _require_module_access(*flag_names, module_label: str = None):
+    """Gate a route on one or more `has_*_access` flags.
+
+    Order of checks:
+      1. Session must be authenticated (401 otherwise).
+      2. Admin / super_admin bypass (always granted).
+      3. Cloaked admin session bypass (impersonating another user still
+         gets full access — matches Analysis IQ cloak behavior).
+      4. If ANY of the passed flag names resolves truthy on the user's
+         computed access dict, grant. Multi-flag support is used when a
+         module has both a top-level flag and an Analysis IQ submodule
+         alias (e.g. SF Conversion = has_sf_conversion_access OR
+         sf_lf_conversion in analysis_iq_modules).
+
+    Returns (True, None) on success, (False, (jsonify_err, code)) on fail.
+    """
+    user = get_current_user()
+    if not user:
+        return False, (jsonify({
+            'success': False,
+            'error': 'Not authenticated',
+        }), 401)
+    role = _normalize_role(user.get('role', 'user'))
+    if role in ('admin', 'super_admin'):
+        return True, None
+    if session.get('cloaked_from'):
+        return True, None
+    access = apply_cloak_product_access_overrides(
+        compute_product_access_flags(user, role))
+    for flag in flag_names:
+        # Support both 'has_foo_access' boolean flags and
+        # 'analysis_iq_modules::submodule_key' compound checks
+        if '::' in flag:
+            parent, sub = flag.split('::', 1)
+            values = access.get(parent) or []
+            if isinstance(values, list) and sub in values:
+                return True, None
+        else:
+            if access.get(flag):
+                return True, None
+    label = module_label or (
+        flag_names[0].replace('has_', '').replace('_access', '')
+                     .replace('_', ' ').title() if flag_names else 'Module'
+    )
+    return False, (jsonify({
+        'success': False,
+        'error': f'{label} access not enabled for this user',
+    }), 403)
+
+
+def _user_can_access_profile_run(user, s3_key: str) -> bool:
+    """True if `user` can access the given Profile IQ S3 key.
+
+    Mirrors the same allowed_runs + allowed_categories logic used to tag
+    the `accessible` flag in /api/jobs so the UI and backend agree. Gen
+    Pop files are always accessible for authenticated users because the
+    dashboard's default cohort view needs them.
+
+    Access sources (any grants):
+      * role in (admin, super_admin), or cloaked
+      * user.allowed_runs is None / contains '*'
+      * s3_key is in user.allowed_runs
+      * user.allowed_categories is None / contains '*'
+      * the profile's category (from s3_cache jobs metadata) is in
+        user.allowed_categories
+      * key contains 'gen_pop' (Gen Pop is universal)
+    """
+    if not user:
+        return False
+    role = user.get('role', 'user')
+    if role in ('admin', 'super_admin'):
+        return True
+    if session.get('cloaked_from'):
+        return True
+    key_lower = (s3_key or '').lower()
+    if 'gen_pop' in key_lower:
+        return True
+    allowed_runs = user.get('allowed_runs')
+    if allowed_runs is None or (isinstance(allowed_runs, list)
+                                 and '*' in allowed_runs):
+        return True
+    if isinstance(allowed_runs, list) and s3_key in allowed_runs:
+        return True
+    allowed_categories = user.get('allowed_categories')
+    if allowed_categories is None or (
+            isinstance(allowed_categories, list)
+            and '*' in allowed_categories):
+        return True
+    allowed_cats = {(c or '').upper()
+                    for c in (allowed_categories or [])
+                    if c}
+    if allowed_cats:
+        try:
+            for job in (s3_cache.get('jobs') or []):
+                jk = job.get('s3_key') or job.get('key')
+                if jk == s3_key:
+                    cat = (job.get('category') or '').upper()
+                    if cat and cat in allowed_cats:
+                        return True
+                    break
+        except Exception:
+            pass
+    return False
+
+
+def _require_profile_run_access(s3_key: str):
+    """Gate a Profile IQ read route on per-file `allowed_runs` +
+    `allowed_categories`. Also enforces the umbrella `has_profile_iq_access`
+    flag when a user has it explicitly turned off (default is on)."""
+    user = get_current_user()
+    if not user:
+        return False, (jsonify({
+            'success': False,
+            'error': 'Not authenticated',
+        }), 401)
+    role = _normalize_role(user.get('role', 'user'))
+    if role in ('admin', 'super_admin') or session.get('cloaked_from'):
+        return True, None
+    # Explicit umbrella deny (has_profile_iq_access default is True, so
+    # this only fires when admin has flipped it off for that user).
+    if user.get('has_profile_iq_access') is False:
+        return False, (jsonify({
+            'success': False,
+            'error': 'Profile IQ access not enabled for this user',
+        }), 403)
+    if not _user_can_access_profile_run(user, s3_key):
+        return False, (jsonify({
+            'success': False,
+            'error': ('Profile access not granted for this file. '
+                       'Ask an admin to add it to your Run Access list.'),
+            's3_key': s3_key,
+        }), 403)
+    return True, None
+
+
+# ============================================================================
 # BLUE IQ — Political tracker
 # ============================================================================
 def _require_blue_iq():
     """Return (False, error_response) if Blue IQ isn't available for this user."""
-    user = get_current_user()
-    if not user:
-        return False, (jsonify({'success': False, 'error': 'Not authenticated'}), 401)
-    role = _normalize_role(user.get('role', 'user'))
-    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
-    if not acc.get('has_blue_iq_access'):
-        return False, (jsonify({'success': False, 'error': 'Blue IQ access not enabled'}), 403)
+    ok, err = _require_module_access('has_blue_iq_access',
+                                       module_label='Blue IQ')
+    if not ok:
+        return ok, err
     if _blue_iq is None:
         return False, (jsonify({'success': False, 'error': 'Blue IQ module not loaded'}), 500)
     return True, None
@@ -15289,6 +15453,12 @@ def api_intent_in_flight(title_slug):
 @requires_auth
 def list_subscriber_iq_files():
     """List all subscriber IQ CSV files from S3."""
+    ok, err = _require_module_access(
+        'has_subscriber_iq_access',
+        'analysis_iq_modules::svod',
+        module_label='Subscriber IQ')
+    if not ok:
+        return err
     if not s3_client:
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
     
@@ -15347,7 +15517,12 @@ def list_subscriber_iq_files():
 def get_subscriber_iq_data(s3_key):
     """Get subscriber IQ CSV data as JSON."""
     print(f"📥 get_subscriber_iq_data called for: {s3_key}")
-    
+    ok, err = _require_module_access(
+        'has_subscriber_iq_access',
+        'analysis_iq_modules::svod',
+        module_label='Subscriber IQ')
+    if not ok:
+        return err
     if not s3_client:
         print("❌ S3 client not configured")
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
@@ -19730,9 +19905,16 @@ def get_profile_data(filename):
     """Get profile data from S3 dashboard-inputs bucket and return as JSON."""
     try:
         print(f"📊 Loading profile: {filename}")
-        
+
         if not filename.endswith('.csv'):
             filename = f"{filename}.csv"
+
+        # Same per-file access enforcement as /api/get-csv-data. The two
+        # routes serve overlapping (but distinct) surfaces and both need
+        # to gate on allowed_runs.
+        ok, err = _require_profile_run_access(filename)
+        if not ok:
+            return err
         
         try:
             obj = s3_client.get_object(Bucket='dashboard-inputs', Key=filename)
@@ -27017,6 +27199,11 @@ def get_team_members():
 
 # ============================================================================
 # COLLABORATION API ENDPOINTS
+# ----------------------------------------------------------------------------
+# All /api/collab/* routes require has_workspace_access. Default is True
+# for new users so existing installs keep working; admins can flip it off
+# per-user to hide the workspace surface entirely (previously the tab was
+# hidden in the frontend but every collab route was one curl away).
 # ============================================================================
 
 COLLAB_S3_KEY = 'system/collaboration/'
@@ -27025,6 +27212,10 @@ COLLAB_S3_KEY = 'system/collaboration/'
 @requires_auth
 def share_profile():
     """Share a profile with workspace or team."""
+    ok, err = _require_module_access('has_workspace_access',
+                                       module_label='Workspace')
+    if not ok:
+        return err
     user = get_current_user()
     if not user:
         return jsonify({'success': False, 'error': 'Not logged in'})
@@ -27067,6 +27258,10 @@ def share_profile():
 @requires_auth
 def get_shared_profiles():
     """Get shared profiles for user's company."""
+    ok, err = _require_module_access('has_workspace_access',
+                                       module_label='Workspace')
+    if not ok:
+        return err
     user = get_current_user()
     if not user:
         return jsonify({'success': False, 'error': 'Not logged in'})
@@ -27101,6 +27296,10 @@ def get_shared_profiles():
 @requires_auth
 def send_notification():
     """Send a notification to team members."""
+    ok, err = _require_module_access('has_workspace_access',
+                                       module_label='Workspace')
+    if not ok:
+        return err
     user = get_current_user()
     if not user:
         return jsonify({'success': False, 'error': 'Not logged in'})
@@ -27136,6 +27335,10 @@ def send_notification():
 @requires_auth
 def get_notifications():
     """Get notifications for current user."""
+    ok, err = _require_module_access('has_workspace_access',
+                                       module_label='Workspace')
+    if not ok:
+        return err
     user = get_current_user()
     if not user:
         return jsonify({'success': False, 'error': 'Not logged in'})
@@ -27170,6 +27373,10 @@ def get_notifications():
 @requires_auth
 def get_workspaces():
     """Get workspaces for user's company."""
+    ok, err = _require_module_access('has_workspace_access',
+                                       module_label='Workspace')
+    if not ok:
+        return err
     user = get_current_user()
     if not user:
         return jsonify({'success': False, 'error': 'Not logged in'})
@@ -27202,15 +27409,19 @@ def get_workspaces():
 @requires_auth
 def create_workspace():
     """Create a new workspace."""
+    ok, err = _require_module_access('has_workspace_access',
+                                       module_label='Workspace')
+    if not ok:
+        return err
     user = get_current_user()
     if not user:
         return jsonify({'success': False, 'error': 'Not logged in'})
-    
+
     try:
         data = request.get_json()
         username = session.get('username')
         company = user.get('company', '')
-        
+
         workspace = {
             'id': f"ws_{int(datetime.now().timestamp())}",
             'name': data.get('name', 'New Workspace'),
@@ -27240,6 +27451,10 @@ def create_workspace():
 @requires_auth
 def get_team_assignments():
     """Get custom team assignments for user's company."""
+    ok, err = _require_module_access('has_workspace_access',
+                                       module_label='Workspace')
+    if not ok:
+        return err
     user = get_current_user()
     if not user:
         return jsonify({'success': False, 'error': 'Not logged in'})
@@ -27300,6 +27515,10 @@ def save_team_assignments():
 @requires_auth
 def get_comments():
     """Get comments for user's workspaces."""
+    ok, err = _require_module_access('has_workspace_access',
+                                       module_label='Workspace')
+    if not ok:
+        return err
     user = get_current_user()
     if not user:
         return jsonify({'success': False, 'error': 'Not logged in'})
@@ -27333,6 +27552,10 @@ def get_comments():
 @requires_auth
 def post_comment():
     """Post a new comment."""
+    ok, err = _require_module_access('has_workspace_access',
+                                       module_label='Workspace')
+    if not ok:
+        return err
     user = get_current_user()
     if not user:
         return jsonify({'success': False, 'error': 'Not logged in'})
@@ -27401,10 +27624,17 @@ def user_can_run_analysis_module(user, module_key):
     # Conversion is gated and lets admins grant individual modules
     # one-by-one (e.g. just Brand Partnership Valuation) without
     # turning on the entire Analysis IQ surface.
+    #
+    # 2026-07-09: Added sf_lf_conversion -> has_sf_conversion_access.
+    # Pre-fix, users who had has_sf_conversion_access=True but
+    # has_analysis_iq_access=False (e.g. ahusein) could see the SF
+    # Conversion UI tab but got 403 on submit because this map was
+    # missing the SF entry. The dropdown and submit gate now agree.
     _MODULE_TOP_LEVEL_FLAG = {
         'flywheel_conversion':  'has_flywheel_conversion_access',
         'brand_partnership_iq': 'has_brand_partnership_iq_access',
         'journey_iq':           'has_journey_iq_access',
+        'sf_lf_conversion':     'has_sf_conversion_access',
     }
     top_flag = _MODULE_TOP_LEVEL_FLAG.get(module_key)
     if top_flag and user.get(top_flag):
@@ -30930,6 +31160,12 @@ def run_sf_lf_conversion(job_id):
 @requires_auth
 def list_sf_lf_conversion_results():
     """List all SF-LF Conversion results from S3 bucket."""
+    ok, err = _require_module_access(
+        'has_sf_conversion_access',
+        'analysis_iq_modules::sf_lf_conversion',
+        module_label='SF Conversion')
+    if not ok:
+        return err
     try:
         if not s3_client:
             return jsonify({'success': False, 'error': 'S3 not available'}), 500
@@ -30962,6 +31198,12 @@ def list_sf_lf_conversion_results():
 @requires_auth
 def download_sf_lf_conversion(s3_key):
     """Download a released SF-LF Conversion CSV from S3."""
+    ok, err = _require_module_access(
+        'has_sf_conversion_access',
+        'analysis_iq_modules::sf_lf_conversion',
+        module_label='SF Conversion')
+    if not ok:
+        return err
     try:
         if not s3_client:
             return jsonify({'error': 'S3 not configured'}), 500
@@ -30981,6 +31223,12 @@ def download_sf_lf_conversion(s3_key):
 @requires_auth
 def get_sf_lf_conversion_data(s3_key):
     """Get SF-LF Conversion CSV data as JSON for dashboard rendering."""
+    ok, err = _require_module_access(
+        'has_sf_conversion_access',
+        'analysis_iq_modules::sf_lf_conversion',
+        module_label='SF Conversion')
+    if not ok:
+        return err
     try:
         if not s3_client:
             return jsonify({'error': 'S3 not configured'}), 500
@@ -31196,6 +31444,12 @@ Be balanced. Identify real structural failures AND genuine strategic value. Thin
 @requires_auth
 def sf_lf_performance_analysis():
     """Analyze SF-LF conversion URLs for click farms and marketing effectiveness using GPT-4."""
+    ok, err = _require_module_access(
+        'has_sf_conversion_access',
+        'analysis_iq_modules::sf_lf_conversion',
+        module_label='SF Conversion')
+    if not ok:
+        return err
     try:
         data = request.json
         urls = data.get('urls', [])
@@ -32226,6 +32480,12 @@ def _save_flywheel_results(job_id, results, job):
 @requires_auth
 def list_flywheel_results():
     """List all flywheel conversion results from S3."""
+    ok, err = _require_module_access(
+        'has_flywheel_conversion_access',
+        'analysis_iq_modules::flywheel_conversion',
+        module_label='Flywheel Conversion')
+    if not ok:
+        return err
     try:
         if not s3_client:
             return jsonify({'success': False, 'error': 'S3 not available'}), 500
@@ -32257,6 +32517,12 @@ def list_flywheel_results():
 @requires_auth
 def get_flywheel_data(s3_key):
     """Get flywheel conversion data from S3."""
+    ok, err = _require_module_access(
+        'has_flywheel_conversion_access',
+        'analysis_iq_modules::flywheel_conversion',
+        module_label='Flywheel Conversion')
+    if not ok:
+        return err
     try:
         if not s3_client:
             return jsonify({'success': False, 'error': 'S3 not available'}), 500
@@ -34020,6 +34286,10 @@ def _run_roas_iq(job_id):
 @requires_auth
 def submit_roas_iq():
     """Submit a ROAS IQ analysis job."""
+    ok, err = _require_module_access('has_roas_iq_access',
+                                       module_label='ROAS IQ')
+    if not ok:
+        return err
     try:
         username = session.get('username')
         data = request.get_json() or {}
@@ -34073,6 +34343,10 @@ def submit_roas_iq():
 @requires_auth
 def get_roas_iq_result(s3_key):
     """Return a ROAS IQ result JSON from S3."""
+    ok, err = _require_module_access('has_roas_iq_access',
+                                       module_label='ROAS IQ')
+    if not ok:
+        return err
     try:
         full_key = s3_key if s3_key.startswith(ROAS_IQ_S3_PREFIX) else ROAS_IQ_S3_PREFIX + s3_key
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=full_key)
@@ -34086,6 +34360,10 @@ def get_roas_iq_result(s3_key):
 @requires_auth
 def list_roas_iq():
     """List released (non-purgatory) ROAS IQ result files."""
+    ok, err = _require_module_access('has_roas_iq_access',
+                                       module_label='ROAS IQ')
+    if not ok:
+        return err
     try:
         paginator = s3_client.get_paginator('list_objects_v2')
         files = []
@@ -34229,6 +34507,10 @@ def _run_ecommerce_iq(job_id):
 @requires_auth
 def submit_ecommerce_iq():
     """Submit an E-Commerce IQ analysis job."""
+    ok, err = _require_module_access('has_ecommerce_iq_access',
+                                       module_label='E-Commerce IQ')
+    if not ok:
+        return err
     try:
         username = session.get('username')
         data = request.get_json() or {}
@@ -34274,6 +34556,10 @@ def submit_ecommerce_iq():
 @requires_auth
 def get_ecommerce_iq_result(s3_key):
     """Return an E-Commerce IQ result JSON from S3."""
+    ok, err = _require_module_access('has_ecommerce_iq_access',
+                                       module_label='E-Commerce IQ')
+    if not ok:
+        return err
     try:
         full_key = s3_key if s3_key.startswith(ECOMMERCE_IQ_S3_PREFIX) else ECOMMERCE_IQ_S3_PREFIX + s3_key
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=full_key)
@@ -34287,6 +34573,10 @@ def get_ecommerce_iq_result(s3_key):
 @requires_auth
 def list_ecommerce_iq():
     """List released (non-purgatory) E-Commerce IQ result files."""
+    ok, err = _require_module_access('has_ecommerce_iq_access',
+                                       module_label='E-Commerce IQ')
+    if not ok:
+        return err
     try:
         paginator = s3_client.get_paginator('list_objects_v2')
         files = []
@@ -35797,6 +36087,12 @@ def get_brand_partnership_iq_result(s3_key):
     title alongside the result, matching the Ticket Sales / Profile IQ
     pattern.
     """
+    ok, err = _require_module_access(
+        'has_brand_partnership_iq_access',
+        'analysis_iq_modules::brand_partnership_iq',
+        module_label='Brand Partnership IQ')
+    if not ok:
+        return err
     try:
         full_key = s3_key if s3_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX) \
                    else BRAND_PARTNERSHIP_IQ_S3_PREFIX + s3_key
@@ -35822,6 +36118,12 @@ def list_brand_partnership_iq():
     merging admin-managed metadata (display_name, category, image_url)
     from system/brand_partnership_iq_metadata.json so the user dashboard
     can render thumbnails + category groupings to match Profile IQ."""
+    ok, err = _require_module_access(
+        'has_brand_partnership_iq_access',
+        'analysis_iq_modules::brand_partnership_iq',
+        module_label='Brand Partnership IQ')
+    if not ok:
+        return err
     try:
         bpiq_metadata = load_bpiq_metadata()
         paginator = s3_client.get_paginator('list_objects_v2')
@@ -37154,6 +37456,14 @@ def iq_rankers_leaderboard():
     if not cron_ok and 'username' not in (session or {}):
         return jsonify({'error': 'Authentication required',
                         'redirect': '/login'}), 401
+    # Cron / external callers with CRON_SECRET bypass the module gate
+    # (used by the periodic cache-warmer + embedded external dashboards).
+    # Session users must have has_rankers_iq_access.
+    if not cron_ok:
+        ok, err = _require_module_access('has_rankers_iq_access',
+                                           module_label='IQ Rankers')
+        if not ok:
+            return err
     if _iq_rankers is None:
         return jsonify({'success': False, 'error': 'IQ Rankers unavailable'}), 500
     try:
