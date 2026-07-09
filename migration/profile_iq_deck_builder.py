@@ -84,6 +84,43 @@ US_POPULATION = 329_900_000
 # =============================================================================
 
 
+# Canonical section IDs the LLM can request in its `sections` array.
+# Every ID maps to exactly one slide builder in _SECTION_BUILDERS below.
+_ALWAYS_SECTIONS  = ("cover", "exec_summary", "identity",
+                      "takeaways", "final", "methodology", "about")
+_DEFAULT_SECTIONS = (
+    "cover", "exec_summary", "scale", "identity", "index_story",
+    "day_in_life", "geography", "signature_affinities",
+    "category_deep_dives", "media_and_social", "media_plan",
+    "whitespace", "takeaways", "final", "methodology", "about",
+)
+
+
+def _resolve_sections(profile: dict) -> list[str]:
+    """Return the ordered list of section IDs to build for this profile.
+
+    Preference order:
+      1. LLM analyst brief's `sections` field (its own recommendation
+         based on the data density and story shape).
+      2. Deterministic fallback (`_DEFAULT_SECTIONS`) otherwise.
+
+    Always guarantees the mandatory sections (cover / exec_summary /
+    identity / takeaways / final / methodology / about) are present.
+    """
+    brief_sections = _brief_get(profile, "sections", default=None)
+    if isinstance(brief_sections, list) and brief_sections:
+        picked = [str(s).strip().lower() for s in brief_sections if str(s or "").strip()]
+    else:
+        picked = list(_DEFAULT_SECTIONS)
+
+    for req in _ALWAYS_SECTIONS:
+        if req not in picked:
+            picked.append(req)
+
+    valid = {s for s in _DEFAULT_SECTIONS}
+    return [s for s in picked if s in valid]
+
+
 def build_deck(
     data: dict,
     *,
@@ -92,61 +129,63 @@ def build_deck(
 ) -> bytes:
     """Build a single-profile Profile IQ deck and return the .pptx bytes.
 
-    Target slide count is 15-17, matching LISA's editorial density. The
-    profile image (fetched once here) is passed into every slide that
-    supports imagery so we don't hit S3 seven times per build."""
+    Deck structure is STORY-DRIVEN, not templated. The LLM analyst brief
+    nominates the sections to include (a category deep-dive is only added
+    if that category clears the reach bar; day-in-the-life ships only if
+    the LLM returned a real narrative; whitespace ships only if the LLM
+    called one out). Every deck has a mandatory core (cover / exec /
+    identity / takeaways / final / methodology / about) but the rest of
+    the structure adapts to what the data actually supports.
+    """
     profile = _normalize_payload(data, image_url=image_url, category=category)
-    # Fetch the profile hero image ONCE and stash on the payload — cover,
-    # overview, persona-category, case-study, and final-insight slides all
-    # reuse it (LISA embeds the same subject photo 12+ times across the
-    # deck for continuity).
     profile["_image_bytes"] = _fetch_image_bytes(profile.get("image_url") or "")
-    # Detect subject archetype (MOVIE / TV_SHOW / MUSICIAN / ACTOR / ...)
-    # so downstream narrative can frame the deck in the right way (a film
-    # deck talks about trailer placement + release windowing; a talent
-    # deck talks about endorsement fit; etc.).
     profile["_archetype"] = _detect_archetype(profile)
-    # Fetch a consulting-analyst brief from GPT-4o-mini. Returns {} on any
-    # failure — every slide builder that consults the brief has a smarter
-    # templated fallback, so the deck always builds even without an API key.
     profile["_brief"] = _get_analyst_brief(profile, profile["_archetype"])
 
     prs = _new_presentation()
 
-    # ── OPENING ARC ─────────────────────────────────────────────────────
-    _slide_cover(prs, profile)              # slide 1
-    _slide_overview(prs, profile)           # slide 2 — "What's inside."
-    _slide_scale(prs, profile)              # slide 3 — "By the numbers."
-    _slide_demographics(prs, profile)       # slide 4 — IDENTITY stat cards
-    _slide_index_story(prs, profile)        # slide 5 — over-index callouts
-    _slide_geography(prs, profile)          # slide 6 — top DMAs (if data)
-    _slide_one_insight(prs, profile)        # slide 7 — mid-brief narrative
+    # Category deep-dives are the only variable-count section — pick them
+    # once, cap at 3 (was 6), and only after the reach gate has fired.
+    persona_slides = _pick_persona_category_slides(profile, max_slides=3)
 
-    # ── CATEGORY DEEP-DIVES (4-6 slides depending on data density) ──────
-    persona_slides = _pick_persona_category_slides(profile, max_slides=6)
-    for i, (cat, items) in enumerate(persona_slides):
-        # Alternate layout so the deck has editorial rhythm: even index =
-        # KD multi-sub-section list, odd index = LISA-style big stat splash.
-        if i % 2 == 0:
-            _slide_persona_category(prs, profile, cat, items)
-        else:
-            _slide_stat_splash(prs, profile, cat, items)
+    def _emit_category_deep_dives():
+        for i, (cat, items) in enumerate(persona_slides):
+            # Alternate layout for editorial rhythm.
+            if i % 2 == 0:
+                _slide_persona_category(prs, profile, cat, items)
+            else:
+                _slide_stat_splash(prs, profile, cat, items)
 
-    # ── PROOF ARC ───────────────────────────────────────────────────────
-    _slide_case_study(prs, profile)         # 1-3 KD-style case-study slides
-    _slide_data_confirms(prs, profile)      # narrative bridge
-    _slide_media_and_social(prs, profile)   # media / social spotlight
-    _slide_mpb_table(prs, profile)          # top 20 MPB brands (if data)
+    section_builders = {
+        "cover":               lambda: _slide_cover(prs, profile),
+        "exec_summary":        lambda: _slide_exec_summary(prs, profile),
+        "scale":               lambda: _slide_scale(prs, profile),
+        "identity":            lambda: _slide_demographics(prs, profile),
+        "index_story":         lambda: _slide_index_story(prs, profile),
+        "day_in_life":         lambda: _slide_day_in_life(prs, profile),
+        "geography":           lambda: _slide_geography(prs, profile),
+        "signature_affinities":lambda: _slide_signature_affinities(prs, profile),
+        "category_deep_dives": _emit_category_deep_dives,
+        "media_and_social":    lambda: _slide_media_and_social(prs, profile),
+        "media_plan":          lambda: _slide_media_plan(prs, profile),
+        "whitespace":          lambda: _slide_whitespace(prs, profile),
+        "takeaways":           lambda: _slide_takeaways(prs, profile),
+        "final":               lambda: _slide_final_insight(prs, profile),
+        "methodology":         lambda: _slide_methodology(prs, profile),
+        "about":               lambda: _slide_about(prs, profile),
+    }
 
-    # ── CLOSING ARC ─────────────────────────────────────────────────────
-    _slide_takeaways(prs, profile)          # KD "Six things to know."
-    _slide_final_insight(prs, profile)      # full-bleed image closer
-    _slide_methodology(prs, profile)        # sample / measurement / benchmark
-    _slide_about(prs, profile)              # Crosswalk capabilities
+    for section_id in _resolve_sections(profile):
+        builder = section_builders.get(section_id)
+        if builder is None:
+            continue
+        try:
+            builder()
+        except Exception as exc:  # pragma: no cover — logged, not raised
+            print(f"[profile_iq_deck_builder] section '{section_id}' failed: "
+                  f"{exc}; skipping")
 
-    # Overwrite every footer's page number with the true slide index. This
-    # is why slide builders can pass ``0`` / ``99`` placeholders — the real
-    # numbers are written once the full slide order is known.
+    # Post-hoc: rewrite every footer with the true slide index.
     _renumber_pages(prs)
 
     buf = io.BytesIO()
@@ -410,33 +449,61 @@ def _archetype_label(arch: str) -> str:
 
 
 _ANALYST_SYSTEM_PROMPT = (
-    "You are a senior insights analyst at a top-tier consulting firm "
-    "(think the McKinsey Marketing & Sales practice) writing a boardroom-"
-    "ready audience-profile deck. You are given a JSON of behavioral panel "
-    "data for a subject and its US Gen Pop baseline. Your job is to "
-    "synthesize who this audience actually IS — how they live, what they "
-    "buy, where they spend attention — and articulate what makes them "
-    "different from the US Gen Pop. You return STRUCTURED JSON (no prose "
-    "wrapper) with the exact keys the deck builder requires.\n\n"
-    "Rules:\n"
-    "  * Never use gendered pronouns for the subject. If the subject is a "
-    "    film, show, brand, team, franchise, or persona, say 'the audience' / "
-    "    'these fans' / 'they'. Only when the subject is explicitly a real "
-    "    person (talent, athlete, musician) may you refer to the subject by "
-    "    name — and even then, always refer to their AUDIENCE using 'they' / "
-    "    'the audience'.\n"
-    "  * Do not overclaim from freak-index outliers. A brand at 5% reach "
-    "    and index 800 is likely a low-N panel artifact — treat with "
-    "    caution or omit. Prefer signals with real reach (>=10% penetration) "
-    "    AND meaningful over-index (>=130). Only reach for a >=500 idx "
-    "    brand if it also has >=15% reach.\n"
-    "  * Ground every claim in a number from the data.\n"
-    "  * Be specific and unexpected. Avoid clichés: no 'taste graph', "
-    "    'not a moment a habit', 'the fandom is the buying behavior'.\n"
-    "  * Return every string as clean plain text (no markdown, no bullets, "
-    "    no pipe characters, no line breaks inside sentences).\n"
-    "  * Keep body-copy strings short and boardroom-ready (35-55 words "
-    "    unless a specific key allows longer).\n"
+    "You are a Principal at a top-tier strategy consultancy (McKinsey "
+    "Marketing & Sales practice, Bain Customer Strategy, BCG Consumer "
+    "Insights) writing a boardroom-ready audience-profile deck for the "
+    "CMO of a company whose GTM depends on reaching this audience. You "
+    "are given a JSON of behavioral panel data for a subject and its US "
+    "Gen Pop baseline. Your job is to answer three questions and nothing "
+    "else:\n"
+    "   1. WHO is this audience — what mindset, life stage, and cultural "
+    "      posture defines them, not just their demographics.\n"
+    "   2. WHY they matter — what economic behavior + attention posture "
+    "      makes them worth chasing right now.\n"
+    "   3. SO WHAT — where the CMO should spend, what channels to buy, "
+    "      what partnerships to pursue, and where the whitespace is (a\n"
+    "      category the audience over-indexes on but current marketing\n"
+    "      isn't leveraging).\n\n"
+    "You return STRUCTURED JSON (no prose wrapper) with the exact keys "
+    "the deck builder requires.\n\n"
+    "Analytical standards (non-negotiable):\n"
+    "  * PYRAMID PRINCIPLE. Every narrative starts with the answer (the "
+    "    'so what'), then supports it with 1-2 numeric proofs. Never lead "
+    "    with a data dump.\n"
+    "  * McKINSEY MECE. Your takeaways must be mutually exclusive and "
+    "    collectively exhaustive across: WHO / WHERE they live / WHAT they "
+    "    buy / HOW they consume media / WHERE the whitespace is / SO WHAT "
+    "    the marketer should do next.\n"
+    "  * NEVER descriptive. Every sentence must have a hypothesis or "
+    "    implication. 'They watch TikTok' is banned. 'TikTok — not "
+    "    Instagram — is the audience's primary discovery surface (70% "
+    "    reach, 140 index), which means the buy should re-weight from IG "
+    "    reels to TikTok Spark Ads' is what you write instead.\n"
+    "  * KILL DESCRIPTIVE ADJECTIVES. Ban: 'passionate', 'vibrant', "
+    "    'engaged', 'unique', 'niche', 'distinct'. Replace with an "
+    "    observable behavior + a number.\n"
+    "  * PRONOUNS. Never use gendered pronouns for the subject. Films, "
+    "    shows, brands, teams, franchises, and personas are always 'the "
+    "    audience' / 'these fans' / 'they'. Real people (talent, athlete, "
+    "    musician) may be named — but their AUDIENCE is still 'they'.\n"
+    "  * SIGNAL DISCIPLINE. Do not overclaim from freak-index outliers. A "
+    "    brand at <8% reach and index >400 is almost always a low-N "
+    "    artifact — omit or note as 'micro-signal'. Lead with brands that "
+    "    have real reach (>=15% pen) AND meaningful over-index (>=130). "
+    "    Only include a >=500 idx brand if it also has >=15% reach.\n"
+    "  * MINIMUM CATEGORY BAR. Only nominate a category as worth its own "
+    "    deep-dive slide if its top brand has >=15% reach AND at least "
+    "    two brands have >=10% reach. Everything below that bar goes into "
+    "    'signature_affinities' — a single roll-up page.\n"
+    "  * GROUND EVERY CLAIM in a specific number from the data (reach %, "
+    "    index, DMA share, projected M).\n"
+    "  * NO CLICHÉS. Ban: 'taste graph', 'not a moment a habit', 'the "
+    "    fandom IS the buying behavior', 'shows up', 'lives at the "
+    "    intersection of', 'meet them where they are'.\n"
+    "  * NO MARKDOWN. Every string is clean plain text: no *, no #, no "
+    "    pipes, no bullet chars, no line breaks inside sentences.\n"
+    "  * WORD BUDGETS ARE HARD. If a key says 35-45 words, that means "
+    "    counted words, not a suggestion. Overrunning wrecks the layout.\n"
 )
 
 
@@ -585,38 +652,44 @@ def _brief_facts(profile: dict) -> dict:
 
 
 _ANALYST_JSON_SPEC = (
-    "Return JSON with EXACTLY these keys:\n"
+    "Return JSON with EXACTLY these keys (no extras, no missing):\n"
     "{\n"
-    '  "cover_tagline":     "1-sentence cover-slide tagline (35-45 words). Do NOT lean on a single freak-index brand; describe the audience shape.",\n'
-    '  "one_insight_a":     "Big display line 1 for a mid-brief statement (max 8 words, no period).",\n'
-    '  "one_insight_b":     "Big display line 2 (max 8 words, ends with a period).",\n'
-    '  "one_insight_body":  "1-paragraph elaboration (45-60 words).",\n'
-    '  "identity_headline": "4-6 word summary of who this audience is (e.g. \'Prime-age, urban, multicultural.\').",\n'
-    '  "identity_why":      "1-sentence WHY IT MATTERS narrative (35-50 words).",\n'
-    '  "final_line_a":      "Final-insight display line 1 (max 9 words, no period).",\n'
-    '  "final_line_b":      "Final-insight display line 2 (max 9 words, ends with a period).",\n'
-    '  "final_body":        "Final-insight body (55-75 words). Synthesize the audience arc; do NOT just repeat one brand.",\n'
-    '  "data_confirms_a":   "Narrative bridge line 1 (5-8 words, no period).",\n'
-    '  "data_confirms_b":   "Narrative bridge line 2 (5-8 words, ends with a period).",\n'
-    '  "data_confirms_body":"Body paragraph (40-55 words).",\n'
-    '  "category_why": {\n'
-    '     "CATEGORY_NAME_UPPERCASE": "1-sentence why this category matters for this audience (30-45 words).",\n'
-    '     ...  (one entry for every category present in categories_covered with at least 3 items)\n'
+    '  "cover_tagline": "One sentence that tells the CMO who this audience IS in life-stage / mindset / cultural-posture terms (35-45 words). Do NOT lean on a single freak-index brand. Do NOT use adjectives like passionate / vibrant / engaged.",\n'
+    '  "identity_headline": "4-6 word portrait of WHO they are — life stage + posture, not just demos. Examples: \'Prime-age urban trend-formers.\', \'Suburban parents with disposable income.\', \'Downtown creatives, digitally-native.\' No pronouns.",\n'
+    '  "identity_why": "One sentence (35-50 words) on why this composition matters commercially — what the age/income/geography shape UNLOCKS for the marketer.",\n'
+    '  "exec_summary": {\n'
+    '     "who_headline":     "2-4 word label (e.g. \'The audience.\')",\n'
+    '     "who_body":         "2-3 tight sentences (35-50 words) describing WHO they are grounded in the sharpest demographic index (age/ethnicity/income). Lead with the answer, then the number.",\n'
+    '     "where_headline":   "2-4 word label (e.g. \'Where they live.\')",\n'
+    '     "where_body":       "2-3 tight sentences (35-50 words) describing WHERE they concentrate — DMA + platform. Name the top 2 DMAs and top 1-2 social/streaming surfaces with reach %.",\n'
+    '     "so_what_headline": "2-4 word label (e.g. \'So what.\')",\n'
+    '     "so_what_body":     "2-3 tight sentences (35-50 words) with the marketer action. Name a channel, a partner category, and a whitespace. Be prescriptive."\n'
     '  },\n'
-    '  "case_studies": [\n'
-    '     { "brand": "BRAND NAME EXACTLY AS IN strongest_signals",\n'
-    '       "headline_a": "editorial line 1 (max 4 words)",\n'
-    '       "headline_b": "editorial line 2 (max 5 words, ends with period)",\n'
-    '       "narrative": "3-4 sentence analyst narrative (75-110 words) explaining what this signal means for the marketer" },\n'
-    '     ...  (exactly 3 entries picked from strongest_signals. Prefer brands with pct>=10 AND index between 130-350. Diverse categories.)\n'
+    '  "day_in_life": "A 110-150 word portrait of a day in this audience\'s life, stitched from actual behavioral signals in the data. Cite 4-6 specific brands or platforms with reach % in-line (e.g. \'Morning starts on TikTok (70%) not Instagram (64%).\'). Read as a McKinsey \'consumer archetype\' vignette, not a diary entry.",\n'
+    '  "signature_affinities": [\n'
+    '     { "brand": "BRAND", "category": "CATEGORY", "pct": 0.0, "index": 0, "note": "6-12 word analyst tag explaining why this signal matters" },\n'
+    '     ... (pick 8-12 brands from strongest_signals that BEST characterize this audience. Prefer meaningful reach (>=10%) AND meaningful over-index (>=130). Diverse categories. Skip freak-index micro-signals.)\n'
     '  ],\n'
+    '  "category_why": {\n'
+    '     "CATEGORY_NAME_UPPERCASE": "One sentence (30-45 words) on why this category concentrates for this audience AND what a marketer should DO about it — brand ambassador fit, sponsor whitespace, or shelf-placement play.",\n'
+    '     ...  (ONLY include categories where top brand has >=15% reach and >=2 brands >=10% reach. Skip low-reach categories entirely — they roll up into signature_affinities.)\n'
+    '  },\n'
+    '  "media_plan": [\n'
+    '     { "channel": "TikTok", "pct": 25, "rationale": "12-20 word reason grounded in the data (reach % + index)." },\n'
+    '     ... (4-6 channels. pcts must sum to 100. Channels must be paid-media channels the CMO can actually buy: TikTok, Instagram Reels, YouTube Pre-roll, Connected TV / Hulu, Snap, Discord Sponsorships, Reddit Promoted, Podcast Host-Reads, Programmatic Display, Meta Feed, Spotify Audio, Twitch, X, LinkedIn, Search / Google Ads, OOH. Weight allocation to the surfaces the audience actually over-indexes on.)\n'
+    '  ],\n'
+    '  "whitespace_headline": "5-9 word headline naming the SPECIFIC unmet-need or unactivated surface (e.g. \'Gaming sponsorships are untapped.\', \'The Discord audience is under-bought.\'). No period.",\n'
+    '  "whitespace_body":     "A 60-90 word analyst paragraph explaining WHY that surface is whitespace for this audience (cite the reach/index) and WHAT the CMO should test first. Prescriptive, not descriptive.",\n'
     '  "takeaways": [\n'
-    '     { "title": "3-5 word punchy title",\n'
-    '       "body": "2-3 sentence supporting narrative (30-45 words) that grounds in specific numbers from the data" },\n'
-    '     ... (exactly 6 entries covering: demography, geography, category concentration, media/attention, commerce, and the marketing whitespace / activation recommendation)\n'
+    '     { "title": "3-5 word punchy title. Actions, not descriptions.",\n'
+    '       "body": "2 sentences (25-40 words) that ground the action in a specific number from the data." },\n'
+    '     ... EXACTLY 6 entries, MECE across: (1) WHO — the demographic core, (2) WHERE — geo concentration, (3) WHAT — dominant category / commercial signal, (4) HOW — primary media surface, (5) WHITESPACE — the untapped surface, (6) ACTIVATION — the next test to run.\n'
     '  ],\n'
-    '  "whitespace":        "1-paragraph analyst call-out (55-75 words): where the audience over-indexes but current marketing is NOT leveraging that surface.",\n'
-    '  "marketing_actions": ["3 concrete, archetype-appropriate marketing actions, each 12-20 words"]\n'
+    '  "final_line_a": "Final-insight display line 1 (max 8 words, no period). The one sentence you want the CMO to remember.",\n'
+    '  "final_line_b": "Final-insight display line 2 (max 8 words, ends with period). The implication or action.",\n'
+    '  "final_body":   "55-75 word closer. Synthesize the audience arc across who / where / what / so-what. Do NOT re-list brands.",\n'
+    '  "sections": ["cover", "exec_summary", "scale", "identity", "index_story", "day_in_life", "geography", "signature_affinities", "category_deep_dives", "media_and_social", "media_plan", "whitespace", "takeaways", "final", "methodology", "about"]\n'
+    '     // Ordered list of the sections you recommend for THIS profile. Include only what you can back with data. If DMAs are thin, drop "geography". If category_why is empty, drop "category_deep_dives". If no social/streaming data, drop "media_and_social". "cover", "exec_summary", "identity", "takeaways", "final", "methodology", "about" are always included.\n'
     "}\n"
 )
 
@@ -1224,30 +1297,32 @@ def _slide_demographics(prs: Presentation, p: dict):
     # so the slide is meaningful even for MPB-only or partial-demo profiles.
     stats = _identity_stat_rows(p)
 
+    # Row layout: 4 stats at y=2.30 / 3.28 / 4.26 / 5.24, each 0.98" tall
+    # (was 1.10 which pushed the 4th idx line into WHY IT MATTERS at y=6.15).
+    # Last idx line now ends at 5.24 + 0.44 + 0.30 = 5.98; WHY IT MATTERS
+    # eyebrow at 6.20 → 0.22" clean gap.
     row_top = 2.30
-    row_h = 1.10
+    row_h = 0.98
     for i, (pct_str, label, idx_val) in enumerate(stats[:4]):
         y = row_top + i * row_h
-        # Giant % (LISA uses lavender for over-index rows, cream otherwise)
         color = C_LAVENDER if idx_val >= 130 else C_CREAM
         _text(slide, 0.62, y, 2.30, 0.72, pct_str,
-              size=32, bold=True, color=color, line_spacing=1.0)
+              size=30, bold=True, color=color, line_spacing=1.0)
         _text(slide, 2.97, y + 0.06, 3.30, 0.36, label,
               size=12.5, bold=True, color=color, letter_spacing=0.04)
         if idx_val:
-            _text(slide, 2.97, y + 0.44, 3.30, 0.30,
+            _text(slide, 2.97, y + 0.44, 3.30, 0.28,
                   f"idx  {int(idx_val)}",
                   size=10, color=C_MUTED, letter_spacing=0.05)
         if i < len(stats[:4]) - 1:
             _hairline(slide, 0.62, y + row_h - 0.05, 5.90, C_STROKE)
 
-    # WHY IT MATTERS (LISA lime accent)
-    _text(slide, 0.62, 6.15, 5.90, 0.26, "WHY IT MATTERS",
+    _text(slide, 0.62, 6.20, 5.90, 0.26, "WHY IT MATTERS",
           size=9.5, bold=True, color=C_LIME, letter_spacing=0.10)
-    _text(slide, 0.62, 6.42, 5.90, 0.55, _identity_why_it_matters(p),
+    _text(slide, 0.62, 6.47, 5.90, 0.55, _identity_why_it_matters(p),
           size=11, color=C_MUTED, line_spacing=1.4)
 
-    _footer(slide, 4, p["name"])
+    _footer(slide, 0, p["name"])
 
 
 def _slide_one_insight(prs: Presentation, p: dict):
@@ -1899,6 +1974,326 @@ def _slide_takeaways(prs: Presentation, p: dict):
         _text(slide, x + 0.28, y + 1.20, tile_w - 0.50, tile_h - 1.30, body,
               size=9.5, color=C_MUTED, line_spacing=1.4)
 
+    _footer(slide, 0, p["name"])
+
+
+# =============================================================================
+#  McKinsey-shaped narrative slides
+# =============================================================================
+#  These are the story-first slides that replace the old data-dump pattern.
+#  Every one of them prefers the LLM analyst brief and falls back to a
+#  smart data-driven template when the brief is empty.
+# =============================================================================
+
+
+def _slide_exec_summary(prs: Presentation, p: dict):
+    """3-panel Executive Summary: WHO / WHERE / SO WHAT.
+
+    This is the second slide of every deck. If the CMO reads nothing else,
+    they get the whole story here — pyramid-principle answer first, one
+    number to support, then the implication."""
+    es = _brief_get(p, "exec_summary", default={}) or {}
+
+    def _panel(header_key: str, body_key: str, fallback_header: str,
+               fallback_body: str) -> tuple[str, str]:
+        h = _purge_pronouns(str(es.get(header_key) or "").strip(),
+                            p["name"]) or fallback_header
+        b = _purge_pronouns(str(es.get(body_key) or "").strip(),
+                            p["name"]) or fallback_body
+        return h, b
+
+    subj = p["name"]
+    proj = _fmt_int_compact(p.get("projected_us") or 0)
+    top_dma = ""
+    if p.get("locations"):
+        first = p["locations"][0] or {}
+        top_dma = str(first.get("name") or "").strip()
+
+    who_h, who_b = _panel(
+        "who_headline", "who_body",
+        "The audience.",
+        (f"A {proj or 'sizable U.S.'} digital audience concentrated in the "
+         f"prime-earning 18-44 age bracket. Composition sets the ceiling "
+         f"on which media buys and partner categories will scale."),
+    )
+    where_h, where_b = _panel(
+        "where_headline", "where_body",
+        "Where they live.",
+        (f"Reach concentrates in top-3 DMAs — {top_dma or 'the coastal metros'} "
+         "leads. TikTok and Instagram carry the bulk of daily attention; "
+         "streaming skews to niche verticals not the majors."),
+    )
+    sw_h, sw_b = _panel(
+        "so_what_headline", "so_what_body",
+        "So what.",
+        ("Re-weight paid social to TikTok Spark Ads and Discord "
+         "sponsorships where the audience over-indexes. Test one "
+         "endemic partner in the strongest over-index category before "
+         "committing to a full-funnel program."),
+    )
+
+    slide = _blank_slide(prs)
+    _section_eyebrow(slide, 0.62, subj, "EXECUTIVE SUMMARY")
+    _text(slide, 0.62, 0.82, 12.0, 1.10, "The story in one page.",
+          size=32, bold=True, color=C_CREAM, line_spacing=1.05)
+    _text(slide, 0.62, 2.10, 12.0, 0.36,
+          "Three answers a CMO needs before green-lighting spend.",
+          size=12, color=C_MUTED, line_spacing=1.4)
+
+    # Three column panels. Total usable width = 12.0, gutter = 0.20 → 3.87 each.
+    col_w = 3.87
+    gutter = 0.20
+    x0 = 0.62
+    y0 = 2.80
+    panel_h = 3.75
+    panels = [
+        ("01", "WHO", who_h, who_b, C_LAVENDER),
+        ("02", "WHERE", where_h, where_b, C_LIME),
+        ("03", "SO WHAT", sw_h, sw_b, C_MAGENTA),
+    ]
+    for i, (num, kicker, hd, body, accent) in enumerate(panels):
+        x = x0 + i * (col_w + gutter)
+        _rect(slide, x, y0, col_w, panel_h, RGBColor(0x14, 0x1F, 0x22))
+        _text(slide, x + 0.35, y0 + 0.28, 1.0, 0.60, num,
+              size=32, bold=True, color=accent, line_spacing=1.0)
+        _text(slide, x + 0.35, y0 + 0.90, col_w - 0.60, 0.30, kicker,
+              size=10, bold=True, color=accent, letter_spacing=0.14)
+        _text(slide, x + 0.35, y0 + 1.30, col_w - 0.60, 0.90, hd,
+              size=17, bold=True, color=C_CREAM, line_spacing=1.10)
+        _text(slide, x + 0.35, y0 + 2.35, col_w - 0.60, panel_h - 2.50, body,
+              size=10.5, color=C_MUTED, line_spacing=1.45)
+
+    _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
+          size=8.5, color=C_MUTED2, letter_spacing=0.02)
+    _footer(slide, 0, p["name"])
+
+
+def _slide_day_in_life(prs: Presentation, p: dict):
+    """A day-in-the-life narrative portrait, stitched from real signals.
+
+    Only ships when the analyst brief returns a day_in_life narrative
+    (needs LLM to be worth the page)."""
+    narrative = _purge_pronouns(_brief_get(p, "day_in_life") or "", p["name"])
+    if not narrative or len(narrative.split()) < 40:
+        return  # skip — no real story to tell
+
+    slide = _blank_slide(prs)
+    _place_side_image(slide, p.get("_image_bytes"),
+                      x=8.20, y=0, w=SLIDE_W_IN - 8.20, h=SLIDE_H_IN,
+                      darken=0.35, subject_name=p["name"])
+    _rect(slide, 0, 0, 8.40, SLIDE_H_IN, C_DARK)
+
+    _section_eyebrow(slide, 0.62, p["name"], "DAY IN THE LIFE")
+    _text(slide, 0.62, 0.82, 7.70, 1.10, "How they live it.",
+          size=32, bold=True, color=C_CREAM, line_spacing=1.05)
+    _text(slide, 0.62, 2.05, 7.70, 0.36,
+          "The audience portrait, stitched from panel-observed behavior.",
+          size=12, color=C_MUTED, line_spacing=1.4)
+
+    _text(slide, 0.62, 2.85, 7.70, 3.80, narrative,
+          size=13, color=C_CREAM, line_spacing=1.55)
+
+    _text(slide, 0.62, 6.75, 8.0, 0.30, _source_line(p),
+          size=8.5, color=C_MUTED2, letter_spacing=0.02)
+    _footer(slide, 0, p["name"])
+
+
+def _slide_whitespace(prs: Presentation, p: dict):
+    """The whitespace slide: a single analytical call-out for the surface
+    the audience over-indexes on but marketing isn't leveraging."""
+    hd  = _purge_pronouns(_brief_get(p, "whitespace_headline") or "",
+                          p["name"])
+    body = _purge_pronouns(_brief_get(p, "whitespace_body") or "",
+                           p["name"])
+    if not hd or not body:
+        return  # LLM didn't call it out — skip rather than fake it
+
+    slide = _blank_slide(prs)
+    _section_eyebrow(slide, 0.62, p["name"], "WHITESPACE")
+    _text(slide, 0.62, 0.82, 12.0, 0.32, "WHERE THE MONEY ISN'T YET",
+          size=10.5, bold=True, color=C_LIME, letter_spacing=0.12)
+
+    _text(slide, 0.62, 1.40, 12.0, 1.20, hd,
+          size=44, bold=True, color=C_CREAM, line_spacing=1.05)
+
+    # Body sits in a highlighted panel so it reads as the analytical claim
+    _rect(slide, 0.62, 3.20, 12.0, 3.20, RGBColor(0x14, 0x1F, 0x22))
+    _text(slide, 0.90, 3.40, 11.5, 0.32, "THE OPPORTUNITY",
+          size=10, bold=True, color=C_MAGENTA, letter_spacing=0.10)
+    _text(slide, 0.90, 3.80, 11.5, 2.40, body,
+          size=15, color=C_CREAM, line_spacing=1.55)
+
+    _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
+          size=8.5, color=C_MUTED2, letter_spacing=0.02)
+    _footer(slide, 0, p["name"])
+
+
+def _slide_media_plan(prs: Presentation, p: dict):
+    """Recommended media plan: channel + % + rationale table.
+
+    Consumes the analyst brief's media_plan array. Skips if the LLM
+    didn't return a valid plan (rather than making one up)."""
+    plan = _brief_get(p, "media_plan", default=[]) or []
+    if not isinstance(plan, list):
+        return
+    # Normalize + sanity-check
+    rows: list[tuple[str, int, str]] = []
+    for row in plan[:6]:
+        if not isinstance(row, dict):
+            continue
+        ch = str(row.get("channel") or "").strip()
+        pct = int(_num(row.get("pct", 0)))
+        rationale = _purge_pronouns(str(row.get("rationale") or "").strip(),
+                                     p["name"])
+        if ch and pct > 0 and rationale:
+            rows.append((ch, pct, rationale))
+    if len(rows) < 3:
+        return
+    # Normalize % to sum to 100 if the LLM was close but not exact
+    total = sum(r[1] for r in rows)
+    if 90 <= total <= 110 and total != 100:
+        rows = [(c, round(p_ * 100 / total), r) for (c, p_, r) in rows]
+
+    slide = _blank_slide(prs)
+    _section_eyebrow(slide, 0.62, p["name"], "RECOMMENDED MEDIA PLAN")
+    _text(slide, 0.62, 0.82, 12.0, 1.10, "Where to spend, and why.",
+          size=32, bold=True, color=C_CREAM, line_spacing=1.05)
+    _text(slide, 0.62, 2.10, 12.0, 0.36,
+          "Suggested paid-media weighting to match the audience's actual "
+          "attention posture. Rebase per market as budget scales.",
+          size=11, color=C_MUTED, line_spacing=1.4)
+
+    # Column header
+    hdr_y = 3.05
+    _text(slide, 0.62, hdr_y, 3.20, 0.28, "CHANNEL",
+          size=9, bold=True, color=C_LAVENDER, letter_spacing=0.08)
+    _text(slide, 3.90, hdr_y, 1.20, 0.28, "% OF BUDGET",
+          size=9, bold=True, color=C_LAVENDER, letter_spacing=0.08,
+          align=PP_ALIGN.RIGHT)
+    _text(slide, 5.30, hdr_y, 7.30, 0.28, "RATIONALE",
+          size=9, bold=True, color=C_LAVENDER, letter_spacing=0.08)
+    _hairline(slide, 0.62, hdr_y + 0.32, 12.0, C_STROKE)
+
+    row_h = min(0.68, 3.20 / max(1, len(rows)))
+    y = hdr_y + 0.50
+    for i, (channel, pct, rationale) in enumerate(rows):
+        _text(slide, 0.62, y, 3.20, row_h, channel,
+              size=15, bold=True, color=C_CREAM,
+              anchor=MSO_ANCHOR.MIDDLE)
+        pct_color = (C_MAGENTA if pct >= 25 else
+                     (C_LIME if pct >= 15 else C_CREAM))
+        _text(slide, 3.90, y, 1.20, row_h, f"{pct}%",
+              size=22, bold=True, color=pct_color,
+              align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
+        _text(slide, 5.30, y, 7.30, row_h, rationale,
+              size=10.5, color=C_MUTED, line_spacing=1.35,
+              anchor=MSO_ANCHOR.MIDDLE)
+        if i < len(rows) - 1:
+            _hairline(slide, 0.62, y + row_h, 12.0, C_STROKE)
+        y += row_h + 0.05
+
+    _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
+          size=8.5, color=C_MUTED2, letter_spacing=0.02)
+    _footer(slide, 0, p["name"])
+
+
+def _slide_signature_affinities(prs: Presentation, p: dict):
+    """Compact roll-up of the audience's signature brand affinities across
+    ALL categories. Kills the need for one wasted slide per low-reach
+    category (Marni-at-3.6% problem)."""
+    brief_rows = _brief_get(p, "signature_affinities", default=[]) or []
+    picks: list[dict] = []
+    if isinstance(brief_rows, list):
+        for row in brief_rows[:12]:
+            if not isinstance(row, dict):
+                continue
+            brand = str(row.get("brand") or "").strip()
+            cat   = str(row.get("category") or "").strip()
+            pct   = _num(row.get("pct", 0))
+            idx   = int(_num(row.get("index", 0)))
+            note  = _purge_pronouns(str(row.get("note") or "").strip(),
+                                     p["name"])
+            if brand and pct > 0 and idx > 0:
+                picks.append({"brand": brand, "cat": cat, "pct": pct,
+                               "index": idx, "note": note})
+
+    # Fallback: pick from data ourselves when the brief is empty
+    if len(picks) < 6:
+        all_items = _all_behavioral_items(p)
+        # Score: reach × log(index over 100). Reach floor 10%, index floor 130.
+        scored = []
+        for it in all_items:
+            pct = _num(it.get("pct", 0))
+            idx = int(_num(it.get("index", 0)))
+            if pct < 10.0 or idx < 130 or idx > 400:
+                continue
+            score = pct * math.log(max(1.0, idx / 100.0) + 1)
+            scored.append((score, it))
+        scored.sort(key=lambda t: -t[0])
+        seen_brands = {r["brand"].upper() for r in picks}
+        for _, it in scored:
+            if len(picks) >= 10:
+                break
+            brand = (it.get("name") or "").strip()
+            if not brand or brand.upper() in seen_brands:
+                continue
+            picks.append({
+                "brand": brand,
+                "cat":   _pretty_cat(it.get("_cat") or ""),
+                "pct":   _num(it.get("pct", 0)),
+                "index": int(_num(it.get("index", 0))),
+                "note":  "",
+            })
+            seen_brands.add(brand.upper())
+
+    if len(picks) < 4:
+        return
+
+    slide = _blank_slide(prs)
+    _section_eyebrow(slide, 0.62, p["name"], "SIGNATURE AFFINITIES")
+    _text(slide, 0.62, 0.82, 12.0, 1.10, "The brands that define them.",
+          size=32, bold=True, color=C_CREAM, line_spacing=1.05)
+    _text(slide, 0.62, 2.10, 12.0, 0.36,
+          "The strongest over-index signals across the file — real reach "
+          "brands that actually characterize this audience.",
+          size=11, color=C_MUTED, line_spacing=1.4)
+
+    # Two-column layout, up to 5 rows each
+    left_col  = picks[:6]
+    right_col = picks[6:12]
+    col_w = 5.85
+    col_x = [0.62, 6.90]
+    row_h = 0.68
+    top_y = 2.90
+
+    for col_idx, col_rows in enumerate([left_col, right_col]):
+        cx = col_x[col_idx]
+        for i, r in enumerate(col_rows):
+            y = top_y + i * row_h
+            _text(slide, cx, y, col_w - 2.00, 0.34,
+                  r["brand"], size=13, bold=True, color=C_CREAM)
+            sub_line = r["cat"] if r["cat"] else ""
+            if r["note"]:
+                sub_line = (sub_line + " · " + r["note"]) if sub_line else r["note"]
+            _text(slide, cx, y + 0.32, col_w - 2.00, 0.28,
+                  sub_line, size=9.5, color=C_MUTED, line_spacing=1.3)
+
+            pct_color = C_LAVENDER
+            idx_color = (C_MAGENTA if r["index"] >= 200 else
+                          (C_LIME if r["index"] >= 130 else C_CREAM))
+            _text(slide, cx + col_w - 1.85, y + 0.06, 1.00, 0.44,
+                  f"{r['pct']:.1f}%",
+                  size=16, bold=True, color=pct_color,
+                  align=PP_ALIGN.RIGHT)
+            _text(slide, cx + col_w - 0.85, y + 0.06, 0.85, 0.44,
+                  f"{r['index']}",
+                  size=16, bold=True, color=idx_color,
+                  align=PP_ALIGN.RIGHT)
+            if i < len(col_rows) - 1:
+                _hairline(slide, cx, y + row_h - 0.03, col_w - 0.10, C_STROKE)
+
+    _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
+          size=8.5, color=C_MUTED2, letter_spacing=0.02)
     _footer(slide, 0, p["name"])
 
 
@@ -2692,33 +3087,75 @@ _SKIP_PERSONA_CATS = {"SOCIAL MEDIA", "SOCIAL_MEDIA", "STREAMING/PLATFORM",
                       "MPB", "MOST PURCHASED BRANDS", "MOST_PURCHASED_BRANDS"}
 
 
+def _category_earns_deep_dive(items: list) -> bool:
+    """A category earns its own deep-dive slide only if it clears the
+    McKinsey reach bar: top brand >=15% reach AND at least 2 brands >=10%
+    reach. Everything else is a wasted page (Marni-at-3.6% problem) and
+    rolls up into the signature_affinities compact slide instead."""
+    if not items:
+        return False
+    reaches = sorted(
+        (_num(it.get("pct", 0)) for it in items),
+        reverse=True,
+    )
+    if not reaches or reaches[0] < 15.0:
+        return False
+    strong_count = sum(1 for r in reaches if r >= 10.0)
+    return strong_count >= 2
+
+
 def _pick_persona_category_slides(p: dict, max_slides: int = 2) -> list[tuple[str, list]]:
-    """Pick up to N behavioral categories to spotlight as their own slides."""
+    """Pick up to N behavioral categories to spotlight as their own slides.
+
+    Applies the reach gate (_category_earns_deep_dive) so a category with a
+    3.6%-reach top brand can never eat a page. If the LLM analyst brief
+    nominated categories via ``category_why``, prefer those (in the order
+    given by the brief), otherwise fall back to canonical persona order.
+    """
     beh = p.get("behavioral") or {}
     picked: list[tuple[str, list]] = []
     seen = set()
-    # Prefer canonical persona order first
-    for pref in _PERSONA_SLIDE_ORDER:
+
+    # 1. If the analyst brief called out specific categories in category_why,
+    #    honor its picks first — the LLM already applied the reach + story
+    #    filter, and its ordering encodes narrative priority.
+    cat_why = _brief_get(p, "category_why", default={}) or {}
+    brief_cats = [k for k in cat_why.keys() if k]
+    for pref in brief_cats:
         if len(picked) >= max_slides:
             break
-        # case-insensitive match
         for cat, items in beh.items():
-            if cat in seen:
+            if cat in seen or cat.upper() in _SKIP_PERSONA_CATS:
                 continue
-            if cat.upper() == pref.upper() and items:
+            if (cat.upper() == pref.upper() and items
+                    and _category_earns_deep_dive(items)):
                 picked.append((cat, items))
                 seen.add(cat)
                 break
-    # Fallback: fill remaining slots with any high-signal category
+
+    # 2. Canonical persona order, still reach-gated.
+    for pref in _PERSONA_SLIDE_ORDER:
+        if len(picked) >= max_slides:
+            break
+        for cat, items in beh.items():
+            if cat in seen:
+                continue
+            if (cat.upper() == pref.upper() and items
+                    and _category_earns_deep_dive(items)):
+                picked.append((cat, items))
+                seen.add(cat)
+                break
+
+    # 3. Any other high-signal reach-gated category to backfill.
     if len(picked) < max_slides:
         candidates = []
         for cat, items in beh.items():
             if cat in seen or cat.upper() in _SKIP_PERSONA_CATS:
                 continue
-            if not items:
+            if not items or not _category_earns_deep_dive(items):
                 continue
             peak = max((_num(it.get("index", 0)) for it in items), default=0)
-            if peak >= 120:
+            if peak >= 130:
                 candidates.append((peak, cat, items))
         candidates.sort(key=lambda t: -t[0])
         for _, cat, items in candidates[: max_slides - len(picked)]:
