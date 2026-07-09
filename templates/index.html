@@ -23274,9 +23274,23 @@
             #trendsIQView .tiq-mix-label.tiq-mix-media-primary b  { color: #fcd34d; }
             #trendsIQView .tiq-mix-label.tiq-mix-social-primary b { color: #f9a8d4; }
             #trendsIQView .tiq-person-card { background: rgba(124, 58, 237, 0.06); border: 1px solid rgba(124, 58, 237, 0.18); border-radius: 8px; padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 0.3rem; }
-            #trendsIQView .tiq-person-name { font-weight: 600; font-size: 0.9rem; }
+            #trendsIQView .tiq-person-name { font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
             #trendsIQView .tiq-person-mentions { font-size: 0.72rem; color: var(--text-secondary); }
             #trendsIQView .tiq-person-context { font-size: 0.7rem; color: var(--text-secondary); line-height: 1.35; opacity: 0.85; }
+            /* Trend indicator badge on each person card: shows whether
+               their mentions/rank moved up, down, or held steady vs
+               yesterday's snapshot. */
+            #trendsIQView .tiq-trend {
+                display: inline-flex; align-items: center; gap: 4px;
+                padding: 2px 8px; border-radius: 999px;
+                font-size: 0.65rem; font-weight: 600;
+                letter-spacing: 0.03em; cursor: help; user-select: none;
+                white-space: nowrap;
+            }
+            #trendsIQView .tiq-trend.tiq-trend-rising  { background: rgba(34,197,94,0.16);  color: #86efac; border: 1px solid rgba(34,197,94,0.32); }
+            #trendsIQView .tiq-trend.tiq-trend-falling { background: rgba(239,68,68,0.16);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.32); }
+            #trendsIQView .tiq-trend.tiq-trend-stable  { background: rgba(148,163,184,0.14); color: #cbd5e1; border: 1px solid rgba(148,163,184,0.28); }
+            #trendsIQView .tiq-trend.tiq-trend-new     { background: rgba(196,245,66,0.18); color: #c4f542; border: 1px solid rgba(196,245,66,0.42); }
             #trendsIQView .tiq-social-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
             #trendsIQView .tiq-social-tab { padding: 0.35rem 0.75rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; font-size: 0.78rem; cursor: pointer; color: var(--text-secondary); user-select: none; }
             #trendsIQView .tiq-social-tab.active { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: #fff; border-color: transparent; }
@@ -41313,6 +41327,43 @@
             if (panel) panel.innerHTML = renderTIQPeople(rows);
         };
 
+        // Renders the up/down/flat/new pill next to a person's name.
+        // Returns '' when there's no baseline to compare against, so
+        // freshly-collected data doesn't stamp misleading "stable"
+        // arrows on people we've never seen before.
+        function _tiqRenderPersonTrend(p) {
+            var t = p.trend;
+            if (!t) return '';
+            var baseline = p.trend_baseline_day || '';
+            var pct = p.mentions_change_pct;
+            var pctLabel = '';
+            if (typeof pct === 'number' && isFinite(pct)) {
+                var sign = pct > 0 ? '+' : '';
+                pctLabel = sign + Math.round(pct * 100) + '%';
+            }
+            var rankDelta = p.rank_delta;
+            var rankLabel = '';
+            if (typeof rankDelta === 'number' && rankDelta !== 0) {
+                rankLabel = (rankDelta > 0 ? 'up ' : 'down ') + Math.abs(rankDelta) + ' ranks';
+            }
+            var tooltip;
+            if (t === 'new') {
+                tooltip = 'Wasn\u0027t in yesterday\u0027s top list.';
+            } else {
+                var parts = [];
+                if (pctLabel) parts.push('mentions ' + pctLabel);
+                if (rankLabel) parts.push(rankLabel);
+                tooltip = 'vs ' + baseline + (parts.length ? ': ' + parts.join(', ') : '');
+            }
+            var label;
+            if (t === 'rising')      label = '\u25B2 ' + (pctLabel || 'up');       // ▲
+            else if (t === 'falling')label = '\u25BC ' + (pctLabel || 'down');    // ▼
+            else if (t === 'stable') label = '\u2014';                             // em dash
+            else                     label = 'NEW';
+            return '<span class="tiq-trend tiq-trend-' + t +
+                   '" title="' + _tiqEsc(tooltip) + '">' + label + '</span>';
+        }
+
         function renderTIQPeople(rows) {
             if (!rows.length) return '<div class="tiq-empty">No trending people surfaced for this filter yet.</div>';
             var mode = window.__trendsIQ.peopleSort || 'mentions';
@@ -41342,9 +41393,13 @@
                 var context = (p.context || []).slice(0, 1).map(function(c) { return _tiqEsc(c); }).join('');
                 var mentionsProj  = Number(p.mentions_projected  != null ? p.mentions_projected  : (Number(p.mentions)  || 0) * 329990000) || 0;
                 var pageviewsProj = Number(p.pageviews_projected != null ? p.pageviews_projected : (Number(p.pageviews) || 0) * 329990000) || 0;
+                var trendPill = _tiqRenderPersonTrend(p);
                 html += '<div class="tiq-person-card">' +
-                        '<div class="tiq-person-name">' + _tiqEsc(p.name) +
-                        _tiqActions('person', 'gdelt', p.name, p.name, 'National') + '</div>' +
+                        '<div class="tiq-person-name">' +
+                          '<span>' + _tiqEsc(p.name) + '</span>' +
+                          trendPill +
+                          _tiqActions('person', 'gdelt', p.name, p.name, 'National') +
+                        '</div>' +
                         '<div class="tiq-person-mentions">' + _tiqNum(mentionsProj) + ' mentions' +
                         (pageviewsProj ? ' &middot; ' + _tiqNum(pageviewsProj) + ' pageviews' : '') +
                         '</div>' +

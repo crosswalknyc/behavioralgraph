@@ -2479,6 +2479,13 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         social_trending=social_trending,
     )
 
+    # Stamp a rising/falling/stable/new trend on every trending-person
+    # row by comparing today's mentions + rank against yesterday's
+    # snapshot. MUST run BEFORE _write_history_snapshots writes
+    # today's copy - otherwise the "prior" lookup would find today's
+    # own data and every row would read as stable.
+    trending_people = _annotate_people_with_trend(trending_people)
+
     # Attach a search/media/social buzz-mix to every Movers row so the
     # UI can show where each trend's interest is being driven from.
     movers = _annotate_movers_with_platform_mix(
@@ -2633,3 +2640,124 @@ def _write_history_snapshots(headlines: list[dict],
         })
     if people_rows:
         _put_dated_snapshot('gdelt-people', day_iso, people_rows)
+
+
+# ============================================================================
+# Trending-people trend annotation (rising / falling / stable / new)
+# ============================================================================
+# Compares today's per-person mentions + rank against yesterday's
+# `gdelt-people.json` snapshot (falls back to the most recent
+# available snapshot within the last 7 days) and stamps a `trend`
+# field on each row so the UI can render an up / down / flat arrow.
+#
+# Thresholds:
+#   NEW      - name not present in the compared snapshot
+#   RISING   - mentions grew >=25% OR rank improved by >=3
+#   FALLING  - mentions dropped >=25% OR rank worsened by >=3
+#   STABLE   - everything else (name present, minor movement only)
+#
+# Comparing against the CLOSEST prior snapshot (not against the same
+# calendar day last week) keeps the signal fresh on days where the
+# scraper has just started collecting: we simply don't stamp a trend
+# on people we've never seen before.
+# ============================================================================
+_PEOPLE_TREND_RISE_PCT = 0.25   # mentions grew 25% or more -> rising
+_PEOPLE_TREND_DROP_PCT = 0.25   # mentions dropped 25% or more -> falling
+_PEOPLE_TREND_RANK_DELTA = 3    # rank moved by 3 or more -> rising/falling
+_PEOPLE_TREND_LOOKBACK_DAYS = 7 # max days back we'll search for a baseline
+
+
+def _load_prior_people_snapshot(now: datetime) -> tuple[Optional[dict], Optional[str]]:
+    """Find the most recent gdelt-people snapshot BEFORE today.
+
+    Walks yesterday, day-before, ... up to 7 days back. Returns
+    `(rows_by_name_lower, day_iso)` for the first day that has one,
+    or `(None, None)` when no prior data is available (fresh install).
+    """
+    try:
+        s3 = _s3_client()
+    except Exception:
+        return None, None
+    for off in range(1, _PEOPLE_TREND_LOOKBACK_DAYS + 1):
+        d_iso = (now - timedelta(days=off)).date().isoformat()
+        key = _snapshot_key('gdelt-people', d_iso)
+        try:
+            obj = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=key)
+            body = json.loads(obj['Body'].read().decode('utf-8'))
+        except Exception:
+            continue
+        rows = body.get('national') or []
+        if not rows:
+            continue
+        by_name: dict[str, dict] = {}
+        for r in rows:
+            name = (r.get('name') or '').strip().lower()
+            if name:
+                by_name[name] = r
+        if by_name:
+            return by_name, d_iso
+    return None, None
+
+
+def _annotate_people_with_trend(people_rows: list[dict]) -> list[dict]:
+    """Stamp `trend` + baseline metadata on every trending-person row.
+
+    Mutates and returns the same list (also safe if called twice).
+    Every returned row has:
+      - trend: 'rising' | 'falling' | 'stable' | 'new' | None
+      - trend_baseline_day: 'YYYY-MM-DD' or None
+      - mentions_change_pct: float or None (relative delta from
+         baseline, e.g. 0.42 = +42%)
+      - rank_delta: int or None (positive = improved rank)
+    Rows with no baseline data get trend=None so the UI can skip
+    rendering the arrow rather than falsely stamping "stable".
+    """
+    if not people_rows:
+        return people_rows or []
+    now = datetime.now(timezone.utc)
+    prior, prior_day = _load_prior_people_snapshot(now)
+    if not prior:
+        for r in people_rows:
+            r['trend'] = None
+            r['trend_baseline_day']  = None
+            r['mentions_change_pct'] = None
+            r['rank_delta']          = None
+        return people_rows
+
+    for i, r in enumerate(people_rows):
+        name = (r.get('name') or '').strip().lower()
+        r['trend_baseline_day']  = prior_day
+        r['mentions_change_pct'] = None
+        r['rank_delta']          = None
+        if not name:
+            r['trend'] = None
+            continue
+        prev = prior.get(name)
+        if not prev:
+            r['trend'] = 'new'
+            continue
+        prev_mentions = int(prev.get('mentions') or 0)
+        prev_rank     = int(prev.get('rank')     or 0)
+        cur_mentions  = int(r.get('mentions')    or 0)
+        cur_rank      = i + 1
+        change_pct = None
+        if prev_mentions > 0:
+            change_pct = (cur_mentions - prev_mentions) / float(prev_mentions)
+        rank_delta = (prev_rank - cur_rank) if prev_rank else None
+        r['mentions_change_pct'] = change_pct
+        r['rank_delta']          = rank_delta
+        rising = False
+        falling = False
+        if change_pct is not None:
+            if change_pct >=  _PEOPLE_TREND_RISE_PCT: rising  = True
+            if change_pct <= -_PEOPLE_TREND_DROP_PCT: falling = True
+        if rank_delta is not None:
+            if rank_delta >=  _PEOPLE_TREND_RANK_DELTA: rising  = True
+            if rank_delta <= -_PEOPLE_TREND_RANK_DELTA: falling = True
+        if rising and not falling:
+            r['trend'] = 'rising'
+        elif falling and not rising:
+            r['trend'] = 'falling'
+        else:
+            r['trend'] = 'stable'
+    return people_rows
