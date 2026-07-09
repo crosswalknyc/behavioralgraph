@@ -18370,6 +18370,47 @@
                                     {% endif %}
                                 </div>
 
+                                {% if role == 'super_admin' %}
+                                <!-- Advanced (dispatcher) options: pin_platform + force_low_universe.
+                                     2026-07-09 Jenna dashboard = CLI parity: these are the two
+                                     spec keys the Hetzner dispatcher understands that previously
+                                     required ad-hoc /tmp/*_watcher.py scripts to apply. Wiring
+                                     them into the standard form lets super-admins launch the
+                                     exact same profile pull the CLI does (self-anchor pin +
+                                     low-universe bypass) without touching a terminal. -->
+                                <div class="form-section">
+                                    <div class="form-section-title">Advanced (Dispatcher) <span style="color: var(--text-secondary); font-size: 0.7rem; font-weight: 400;">— Super-admin only, honored on Hetzner-routed pulls</span></div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Self-anchor platform pin</label>
+                                            <input type="text" id="pin_platform" list="pinPlatformOptions" placeholder="e.g., YOUTUBE, NETFLIX, PARAMOUNT+, MGM+" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); text-transform: uppercase;">
+                                            <datalist id="pinPlatformOptions">
+                                                <option value="YOUTUBE">
+                                                <option value="NETFLIX">
+                                                <option value="PARAMOUNT+">
+                                                <option value="MGM+">
+                                                <option value="HBO MAX">
+                                                <option value="HULU">
+                                                <option value="DISNEY+">
+                                                <option value="PEACOCK">
+                                                <option value="APPLE TV+">
+                                                <option value="AMAZON PRIME VIDEO">
+                                            </datalist>
+                                            <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-top: 0.25rem;">Pins this platform to 100% BP in the streaming section, zeros siblings, renormalizes Category Share. Leave blank for no pin. Match is normalized (case-insensitive, whitespace-tolerant). Use for creators (YOUTUBE), platform-exclusive shows (PARAMOUNT+ for Invader Zim), etc.</small>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Pin section (optional)</label>
+                                            <input type="text" id="pin_section" placeholder="STREAMING/PLATFORM (default)" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                            <small style="display: block; color: var(--text-secondary); font-size: 0.7rem; font-style: italic; margin-top: 0.25rem;">Column value to pin inside. Defaults to STREAMING/PLATFORM with APP/PLATFORM USAGE fallback.</small>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <label class="checkbox-group"><input type="checkbox" id="force_low_universe"><span>Force pull even if universe is too small (bypass viability gate)</span></label>
+                                    </div>
+                                    <div style="font-size: 0.7rem; color: var(--text-secondary); font-style: italic; margin-top: 0.25rem;">Skips <code>bg.check_universe_viability</code>. Use for niche subjects (Omaze competitors, small YouTube channels, emerging creators) where the Hetzner-side low-universe gate would otherwise refuse to run.</div>
+                                </div>
+                                {% endif %}
+
                                 <div class="form-section">
                                     <div class="form-section-title">Date Ranges</div>
                                     <div class="form-row" style="margin-bottom: 0.5rem;">
@@ -83271,7 +83312,15 @@
                 is_update: getElement('is_update')?.checked || false,
                 previous_file: getElement('previous_file')?.value || '',
                 geo_zip_codes: (getElement('geo_zip_codes')?.value || '').trim(),
-                geo_dma: (getElement('geo_dma')?.value || '').trim()
+                geo_dma: (getElement('geo_dma')?.value || '').trim(),
+                // 2026-07-09 (Jenna consolidation): dashboard = CLI parity.
+                // Advanced (Dispatcher) fields — super-admin only in the UI, but
+                // the endpoint accepts them regardless and defaults to no-op.
+                // Uppercased on submit so the normalized-match inside
+                // apply_platform_pin doesn't care about the user's casing.
+                pin_platform: (getElement('pin_platform')?.value || '').trim().toUpperCase(),
+                pin_section: (getElement('pin_section')?.value || '').trim().toUpperCase(),
+                force_low_universe: getElement('force_low_universe')?.checked || false
             };
 
             console.log('📤 Sending form data:', formData);

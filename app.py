@@ -20172,6 +20172,16 @@ def submit_analysis():
         if s3_client:
             _save_job_status_to_s3(job_id, jobs[job_id])
         
+        # 2026-07-09 (Jenna consolidation): dashboard = CLI parity.
+        # Accept the three new spec keys from the request body. All default
+        # to no-op so existing callers see zero behavior change. When set,
+        # they flow through run_analysis → _run_profile_via_dispatcher →
+        # Hetzner dispatcher spec → runner template env vars →
+        # migration.post_generation_enforcers.apply_platform_pin.
+        pin_platform       = (data.get('pin_platform') or '').strip()
+        pin_section        = (data.get('pin_section') or '').strip()
+        force_low_universe = bool(data.get('force_low_universe', False))
+
         enqueue_profile_analysis_run(
             run_analysis,
             (job_id, project_name, brands, start_date, end_date,
@@ -20179,7 +20189,9 @@ def submit_analysis():
              is_genpop, purchasers_only, brand_category,
              include_frequency, is_listener_watcher, platform_name, previous_file,
              reference_demographics, reference_sample_size, reference_file_key),
-            {'geo_zip_codes': geo_zip_codes, 'geo_dma': geo_dma},
+            {'geo_zip_codes': geo_zip_codes, 'geo_dma': geo_dma,
+             'pin_platform': pin_platform, 'pin_section': pin_section,
+             'force_low_universe': force_low_universe},
             queued_job_id=job_id,
         )
         
@@ -25010,7 +25022,9 @@ def _dispatcher_supports_request(include_frequency, is_listener_watcher,
 
 def _run_profile_via_dispatcher(job_id, project_name, brands, brand_category,
                                 sample_start, sample_end, behavior_start,
-                                behavior_end, purchasers_only):
+                                behavior_end, purchasers_only,
+                                pin_platform=None, pin_section=None,
+                                force_low_universe=False):
     """Submit the profile to the Hetzner dispatcher, poll for completion,
     download the resulting S3 file, and return the local path.
 
@@ -25018,6 +25032,22 @@ def _run_profile_via_dispatcher(job_id, project_name, brands, brand_category,
     can't be retrieved. Callers should catch and fall back to inline.
 
     Returns the local path to the downloaded CSV on success.
+
+    2026-07-09 (Jenna dashboard = CLI parity consolidation):
+        `pin_platform`, `pin_section`, `force_low_universe` are the three
+        new spec keys the Hetzner dispatcher / run_parallel_profiles /
+        migration.post_generation_enforcers.apply_platform_pin chain
+        understands. They let dashboard callers request:
+          * Self-anchor pinning of a streaming platform (e.g. YOUTUBE for
+            creator profiles, PARAMOUNT+ for Invader Zim) at 100% BP with
+            siblings zeroed + Category Share renorm.
+          * Bypass of the low-universe viability gate for niche subjects
+            (Omaze competitors, Animation on FOX, Emily Calandrelli).
+        All three default to no-op so existing callers see zero behavior
+        change. When any is set, they are forwarded verbatim into the
+        dispatcher `spec` object, where run_parallel_profiles.render_runner_script
+        wires them into BG_PIN_PLATFORM / BG_PIN_SECTION env vars +
+        FORCE_LOW_UNIVERSE runner variable.
     """
     import requests as _r
     import time as _time
@@ -25052,6 +25082,18 @@ def _run_profile_via_dispatcher(job_id, project_name, brands, brand_category,
             'behavior_start': behavior_start,
             'behavior_end':   behavior_end,
             'purchasers_only': bool(purchasers_only),
+            # 2026-07-09 (Jenna consolidation): dashboard = CLI parity.
+            # These three keys are the ONLY difference between an ad-hoc
+            # /tmp/*_watcher.py pin and the shared enforcer path — the
+            # dispatcher `_ALLOWED_SPEC_KEYS` allow-list already accepts
+            # them, run_parallel_profiles.render_runner_script threads them
+            # into BG_PIN_PLATFORM / BG_PIN_SECTION env vars +
+            # FORCE_LOW_UNIVERSE runner variable, and
+            # migration.post_generation_enforcers.apply_platform_pin runs
+            # as part of run_all_enforcers.
+            'pin_platform':      (pin_platform or '').strip() or None,
+            'pin_section':       (pin_section or '').strip() or None,
+            'force_low_universe': bool(force_low_universe),
         },
     }
 
@@ -25155,7 +25197,8 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                  is_genpop, purchasers_only, brand_category,
                  include_frequency=False, is_listener_watcher=False, platform_name=None, 
                  previous_file_path=None, reference_demographics=None, reference_sample_size=None,
-                 reference_file_key=None, geo_zip_codes=None, geo_dma=None):
+                 reference_file_key=None, geo_zip_codes=None, geo_dma=None,
+                 pin_platform=None, pin_section=None, force_low_universe=False):
     """Run the behavioral graph analysis pipeline with demographic consistency validation."""
     try:
         import time as _time
@@ -25267,6 +25310,9 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                     behavior_start=behavior_start,
                     behavior_end=behavior_end,
                     purchasers_only=purchasers_only,
+                    pin_platform=pin_platform,
+                    pin_section=pin_section,
+                    force_low_universe=force_low_universe,
                 )
                 _dispatcher_handled = True
                 _completed_steps.add('universe_scan')
