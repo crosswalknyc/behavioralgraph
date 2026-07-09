@@ -606,6 +606,22 @@ _ANALYST_SYSTEM_PROMPT = (
     "    brand at <12% reach is NEVER a signature — it is noise. A brand\n"
     "    at idx >500 is NEVER a real over-index — it is subject-adjacent\n"
     "    panel skew. Omit both entirely.\n"
+    "  * GEOGRAPHY RULE. Same reach-vs-index nuance applies to DMAs but\n"
+    "    the STORY layer is different. New York, Los Angeles, Chicago,\n"
+    "    Dallas, and Atlanta will ALWAYS be the top-5 DMAs by raw reach\n"
+    "    for ANY US audience because they have the most people. That\n"
+    "    ranking alone is not an insight — it is population trivia.\n"
+    "    The meaningful analytical layer is: does this audience OVER-\n"
+    "    INDEX vs. Gen Pop in specific DMAs? A market at 2% raw reach\n"
+    "    but 285 idx means the audience is 2.85x more concentrated\n"
+    "    there than a random American would be — THAT is a partner-\n"
+    "    market test opportunity. Whenever you write about geography\n"
+    "    (where_body, takeaways, final_insight), lead with the top-2\n"
+    "    reach DMAs as media-buy ANCHORS, then explicitly call out the\n"
+    "    sharpest OVER-INDEX DMAs (min 1.5%% reach AND idx >=115 AND\n"
+    "    idx <=400) as the meaningful concentration finding. If no DMA\n"
+    "    clears the over-index bar, say so plainly ('national footprint\n"
+    "    is flat') — do not fake a partner market.\n"
     "  * MINIMUM CATEGORY BAR. Only nominate a category as worth its own "
     "    deep-dive slide if its top brand has >=15% reach AND at least "
     "    two brands have >=10% reach. Everything below that bar goes into "
@@ -807,7 +823,7 @@ _ANALYST_JSON_SPEC = (
     '     "who_headline":     "2-4 word label (e.g. \'The audience.\')",\n'
     '     "who_body":         "2-3 tight sentences (35-50 words) describing WHO they are grounded in the sharpest demographic index (age/ethnicity/income). Lead with the answer, then the number.",\n'
     '     "where_headline":   "2-4 word label (e.g. \'Where they live.\')",\n'
-    '     "where_body":       "2-3 tight sentences (35-50 words) describing WHERE they concentrate — DMA + platform. Name the top 2 DMAs and top 1-2 social/streaming surfaces with reach %.",\n'
+    '     "where_body":       "2-3 tight sentences (35-50 words) describing WHERE they concentrate — DMA + platform. STRICT geography rule: NY/LA/Chicago will always be top by raw reach for any US audience — do NOT lead with them as if it is a finding. Instead: (1) name the top-2 DMAs by reach as the scale anchors (\'anchored in NY (7.4%) and LA (5.9%)\'); (2) name the top-1 DMA by OVER-INDEX vs Gen Pop with a reach floor of ~1.5% (\'over-indexes sharply in Nashville (idx 315)\') — THAT is the meaningful find. Add the top 1-2 social/streaming surfaces with reach %.",\n'
     '     "so_what_headline": "2-4 word label (e.g. \'So what.\')",\n'
     '     "so_what_body":     "2-3 tight sentences (35-50 words) with the marketer action. Name a channel, a partner category, and a whitespace. Be prescriptive."\n'
     '  },\n'
@@ -1995,57 +2011,131 @@ def _slide_index_story(prs: Presentation, p: dict):
 
 
 def _slide_geography(prs: Presentation, p: dict):
-    """KD-style geography slide: ranked list of top DMAs with pen% and idx.
+    """Dual-panel geography slide.
 
-    Renders as a two-column list (10 rows total) with big-market callout
-    at the top. Skips itself gracefully if no location data is available."""
-    dmas = _top_dmas_ranked(p, n=10)
-    if not dmas:
-        return  # skip slide if no geo data
+    Rebuilt 2026-07-09 (round 3) after user feedback: 'yes NY and LA are
+    going to be the top markets but do they under or over-index? that's
+    how to think about it. there is a place for indexing just not that
+    as the main takeaway.'
+
+    Layout:
+      * LEFT panel  — TOP 5 BY REACH. The SCALE view. These are the
+        media-buy anchors, but any US audience will have NY / LA /
+        Chicago in the top-3 so this alone tells you nothing about
+        the audience. Reach is where the money spends.
+      * RIGHT panel — TOP 5 BY OVER-INDEX (with reach floor of 1.5% and
+        idx ceiling of 400 to filter freak-index low-N artifacts).
+        The ANALYTICAL view: markets where THIS audience concentrates
+        disproportionately vs. the U.S. baseline. That is the
+        interesting finding — Nashville at 315 idx says the audience
+        punches above its national weight there, worth a partner-market
+        test.
+      * BOTTOM — one-sentence narrative naming the sharpest over-index
+        so the CMO leaves with a specific market to test.
+    """
+    reach_dmas = _top_dmas_ranked(p, n=5)
+    if not reach_dmas:
+        return
+    reach_names = {n for n, _, _ in reach_dmas}
+    idx_dmas = _top_dmas_by_index(p, n=5,
+                                    exclude_top_reach_names=reach_names)
     slide = _blank_slide(prs)
     _section_eyebrow(slide, 0.52, p["name"], "GEOGRAPHY")
     _text(slide, 0.62, 0.82, 12.0, 1.10,
-          "Big-market reach, ranked.",
+          "Where they live vs. where they concentrate.",
           size=28, bold=True, color=C_CREAM, line_spacing=1.05)
     _text(slide, 0.62, 2.02, 12.0, 0.85,
-          f"National footprint of the {p['name']} audience, ranked by share "
-          "of panelists per Nielsen DMA. Index shows over/under vs national baseline.",
+          "Reach ranks the biggest raw audience — the media-buy anchors. "
+          "Over-index ranks where the audience is disproportionately "
+          "concentrated vs. the U.S. baseline. Both matter; they answer "
+          "different questions.",
           size=12, color=C_MUTED, line_spacing=1.4)
 
-    _text(slide, 0.62, 3.15, 12.0, 0.30, "TOP 10 NIELSEN DMAs  (RANK)",
-          size=10, bold=True, color=C_LAVENDER, letter_spacing=0.10)
-
-    # Two columns of 5 rows each
-    row_h = 0.52
+    # Two panels side by side. Tight vertical budget: 5 rows @ 0.44 =
+    # 2.20; ends at 5.90. Takeaway sits at 6.05 (h=0.55), source at
+    # 6.75. Keeps everything above the footer line at ~7.0.
     col_w = 5.90
     col_x = [0.62, 0.62 + col_w + 0.30]
-    top_y = 3.60
-    for i, (name, pct, idx) in enumerate(dmas):
-        col = i // 5
-        row = i % 5
-        x = col_x[col]
-        y = top_y + row * row_h
-        rank_lbl = f"{i+1:02d}"
-        # Rank chip
-        _text(slide, x, y, 0.55, row_h, rank_lbl,
+    hdr_y = 3.15
+    row_top = 3.70
+    row_h = 0.44
+
+    # Panel headers
+    _text(slide, col_x[0], hdr_y, col_w, 0.28,
+          "TOP 5 BY REACH  ·  MEDIA-BUY ANCHORS",
+          size=10, bold=True, color=C_LAVENDER, letter_spacing=0.10)
+    _text(slide, col_x[0], hdr_y + 0.30, col_w, 0.22,
+          "Biggest raw audience volume. Where the buy spends.",
+          size=9, color=C_MUTED2)
+
+    _text(slide, col_x[1], hdr_y, col_w, 0.28,
+          "TOP 5 BY OVER-INDEX  ·  DISPROPORTIONATE FIT",
+          size=10, bold=True, color=C_MAGENTA, letter_spacing=0.10)
+    _text(slide, col_x[1], hdr_y + 0.30, col_w, 0.22,
+          "Where the audience concentrates above U.S. baseline. "
+          "Partner-market tests live here.",
+          size=9, color=C_MUTED2)
+
+    def _draw_row(x, y, name, pct, idx, rank, is_index_panel):
+        _text(slide, x, y, 0.55, row_h, f"{rank:02d}",
               size=13, bold=True, color=C_LAVENDER, anchor=MSO_ANCHOR.MIDDLE)
-        # DMA name
         _text(slide, x + 0.55, y, col_w - 2.30, row_h,
               name, size=12, bold=True, color=C_CREAM,
               anchor=MSO_ANCHOR.MIDDLE)
-        # Pen %
         _text(slide, x + col_w - 1.70, y, 0.90, row_h,
               f"{pct:.1f}%", size=12, color=C_CREAM,
               align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
-        # Index chip
-        color = (C_MAGENTA if idx >= 150 else
-                 (C_LIME if idx >= 110 else C_MUTED))
+        if is_index_panel:
+            chip = C_MAGENTA if idx >= 150 else C_LIME
+        else:
+            chip = (C_MAGENTA if idx >= 150 else
+                     (C_LIME if idx >= 110 else
+                      (C_MUTED if idx >= 90 else C_MUTED2)))
         _text(slide, x + col_w - 0.75, y, 0.75, row_h,
               f"{int(idx)}" if idx else "—",
-              size=12, bold=True, color=color,
+              size=12, bold=True, color=chip,
               align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
-        _hairline(slide, x, y + row_h - 0.02,
-                  col_w - 0.10, C_STROKE)
+        _hairline(slide, x, y + row_h - 0.02, col_w - 0.10, C_STROKE)
+
+    for i, (name, pct, idx) in enumerate(reach_dmas):
+        _draw_row(col_x[0], row_top + i * row_h, name, pct, idx,
+                    i + 1, False)
+
+    if idx_dmas:
+        for i, (name, pct, idx) in enumerate(idx_dmas):
+            _draw_row(col_x[1], row_top + i * row_h, name, pct, idx,
+                        i + 1, True)
+    else:
+        # No DMA cleared the 115+ idx floor with meaningful reach — the
+        # audience is nationally flat. Say so honestly instead of leaving
+        # a blank column.
+        _text(slide, col_x[1], row_top, col_w, row_h * 3,
+              "No DMAs clear the +15% over-index bar with meaningful "
+              "reach — this audience distributes nationally in line "
+              "with U.S. population. Read as no partner-market lift; "
+              "media buy weights should follow raw reach.",
+              size=11, color=C_MUTED2, line_spacing=1.4)
+
+    # Bottom-line takeaway (tight — must fit in 2 lines at 10.5pt)
+    y_take = row_top + 5 * row_h + 0.20
+    if idx_dmas:
+        lead_idx = idx_dmas[0]
+        take_txt = (
+            f"THE TAKEAWAY  /  {lead_idx[0]} over-indexes at "
+            f"{int(lead_idx[2])} — the audience is ~{int(lead_idx[2]) - 100}% "
+            f"more concentrated there than the average U.S. market. Natural "
+            f"partner-DMA test alongside the reach buys in "
+            f"{reach_dmas[0][0]} and {reach_dmas[1][0] if len(reach_dmas) > 1 else 'other majors'}."
+        )
+    else:
+        take_txt = (
+            f"THE TAKEAWAY  /  National footprint is flat vs. U.S. baseline. "
+            f"Weight the buy to raw reach — {reach_dmas[0][0]}"
+            f"{', ' + reach_dmas[1][0] if len(reach_dmas) > 1 else ''} "
+            f"and other top-5 DMAs — no partner-market lift signal."
+        )
+    _text(slide, 0.62, y_take, 12.0, 0.55, take_txt,
+          size=10.5, color=C_CREAM, line_spacing=1.35)
 
     _text(slide, 0.62, 6.75, 12.0, 0.30, _source_line(p),
           size=8.5, color=C_MUTED2, letter_spacing=0.02)
@@ -5021,9 +5111,9 @@ def _top_demo_index_callouts(p: dict, n: int = 4) -> list[tuple[float, str, str]
     return picks[:n]
 
 
-def _top_dmas_ranked(p: dict, n: int = 10) -> list[tuple[str, float, float]]:
-    """Return top DMAs from ``p['locations']`` sorted by audience share,
-    with (name, pct, idx). Handles both list-of-dicts and dict shapes."""
+def _all_dmas(p: dict) -> list[tuple[str, float, float]]:
+    """Return every DMA in ``p['locations']`` as (name, pct, idx). Handles
+    both list-of-dicts and dict shapes. Unranked — callers sort."""
     locs = p.get("locations") or []
     rows: list[tuple[str, float, float]] = []
     if isinstance(locs, list):
@@ -5048,8 +5138,57 @@ def _top_dmas_ranked(p: dict, n: int = 10) -> list[tuple[str, float, float]]:
             idx = _num(v.get("index") if isinstance(v, dict) else 0)
             if k and pct:
                 rows.append((str(k).strip(), pct, idx))
+    return rows
+
+
+def _top_dmas_ranked(p: dict, n: int = 10) -> list[tuple[str, float, float]]:
+    """Return top DMAs sorted by audience share (media-buy anchor view).
+
+    Reach ranking is the SCALE view — biggest raw audience. Reads as
+    obvious for any US audience because NY / LA / Chicago will always
+    dominate on absolute panel volume regardless of the profile. Pair
+    this with ``_top_dmas_by_index`` for the analytical read."""
+    rows = _all_dmas(p)
     rows.sort(key=lambda r: -r[1])
     return rows[:n]
+
+
+def _top_dmas_by_index(p: dict, n: int = 8,
+                        min_pct: float = 1.5,
+                        min_idx: float = 115.0,
+                        max_idx: float = 400.0,
+                        exclude_top_reach_names: set = None,
+                        ) -> list[tuple[str, float, float]]:
+    """Return DMAs where the audience OVER-CONCENTRATES vs. Gen Pop — the
+    analytical read the user asked for on 2026-07-09.
+
+    Filters:
+      * ``min_pct`` (default 1.5%) — floor on raw reach so a 0.1%-share
+        DMA with a freak index doesn't get surfaced as a partner market
+      * ``min_idx`` (default 115) — must materially over-index. 100 =
+        parity with U.S. distribution; 115 = the audience is 15% more
+        concentrated there than a random American would be
+      * ``max_idx`` (default 400) — same freak-index guard the rest of
+        the deck uses; >400 is almost always a low-N panel artifact
+      * ``exclude_top_reach_names`` — optional set of DMA names already
+        surfaced on the reach panel. Duplicates read as a shallow
+        analysis, so we skip them in the over-index panel.
+
+    Sort key = index desc, then pct desc, so the most surprising
+    concentrations lead. Returns [] gracefully if no rows clear the
+    thresholds, so ``_slide_geography`` can hide the over-index panel
+    cleanly for audiences with a flat national footprint."""
+    exclude = {n.upper().strip() for n in (exclude_top_reach_names or set())}
+    rows = _all_dmas(p)
+    keep = []
+    for name, pct, idx in rows:
+        if pct < min_pct or idx < min_idx or idx > max_idx:
+            continue
+        if name.upper().strip() in exclude:
+            continue
+        keep.append((name, pct, idx))
+    keep.sort(key=lambda r: (-r[2], -r[1]))
+    return keep[:n]
 
 
 def _why_it_matters_for_category(cat: str, p: dict, top: list) -> str:
@@ -5355,13 +5494,34 @@ def _pick_takeaways(p: dict) -> list[tuple[str, str, str]]:
     body_01 = "Scale meets resonance. " + "; ".join(facts[:4]) + "."
     picks.append(("01", "Who they are.", body_01))
 
-    # 02 — Where they live
-    dmas = _top_dmas_ranked(p, n=3)
-    if dmas:
-        dma_line = ", ".join(f"{name} ({pct:.1f}%)" for name, pct, _ in dmas)
-        picks.append(("02", "Where they live.",
-                      f"Concentrated in major digital markets: {dma_line}. "
-                      "Prioritize these DMAs for high-density media buys."))
+    # 02 — Where they live vs. where they concentrate. Two halves:
+    # (a) reach line — biggest raw audience, the media-buy anchor
+    # (b) over-index line — where the audience concentrates ABOVE the
+    #     U.S. baseline (partner-market lift). Rebuilt 2026-07-09 after
+    #     user flagged "NY/LA are always top by reach, tell me who over-
+    #     indexes — that's the meaningful find."
+    reach_dmas = _top_dmas_ranked(p, n=3)
+    if reach_dmas:
+        reach_line = ", ".join(f"{name} ({pct:.1f}%)"
+                                for name, pct, _ in reach_dmas)
+        idx_dmas = _top_dmas_by_index(
+            p, n=3,
+            exclude_top_reach_names={n for n, _, _ in reach_dmas})
+        if idx_dmas:
+            idx_line = ", ".join(f"{name} (idx {int(idx)})"
+                                  for name, _, idx in idx_dmas)
+            body = (f"Media-buy anchors by raw reach: {reach_line}. But the "
+                     f"analytical read is over-index: {idx_line} — the "
+                     f"audience is disproportionately concentrated in these "
+                     f"markets vs. the U.S. baseline. Weight the big DMAs "
+                     f"for scale, add the over-index DMAs for high-fit "
+                     f"partner tests.")
+        else:
+            body = (f"Anchors by raw reach: {reach_line}. National over-"
+                     f"index is flat, so the media buy should follow raw "
+                     f"reach — no partner-market lift signal.")
+        picks.append(("02", "Where they live vs. where they concentrate.",
+                      body))
 
     # 03 — Live events (only if that data exists)
     live = _first_available(p, ["TICKETING PLATFORM", "TICKETING PLATFORMS",
