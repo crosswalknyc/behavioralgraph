@@ -42,6 +42,10 @@ SCRAPERS = [
     ('tiktok',    'scripts.trends_scrapers.tiktok',     'TikTok',    'social'),
     ('youtube',   'scripts.trends_scrapers.youtube',    'YouTube',   'social'),
     ('instagram', 'scripts.trends_scrapers.instagram',  'Instagram', 'social'),
+    # Reddit was previously fetched live at request time from Render,
+    # but Reddit blocks Render's datacenter egress. Hetzner's residential
+    # egress gets 200s so we run it here daily like every other social.
+    ('reddit',    'scripts.trends_scrapers.reddit',     'Reddit',    'social'),
     ('bestbuy',   'scripts.trends_scrapers.bestbuy',    'Best Buy',  'retailer'),
     ('nike',      'scripts.trends_scrapers.nike',       'Nike',      'retailer'),
     ('lululemon', 'scripts.trends_scrapers.lululemon',  'Lululemon', 'retailer'),
