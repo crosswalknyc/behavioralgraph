@@ -12,23 +12,39 @@ Hetzner (mode 600, gitignored). Sourced by the cron entrypoint:
 
     INSTAGRAM_USERNAME=...
     INSTAGRAM_PASSWORD=...
-    INSTAGRAM_SESSIONID=...           # PREFERRED - Chrome sessionid cookie
+    INSTAGRAM_SESSIONID=...           # Chrome sessionid cookie (see below)
     INSTAGRAM_SESSION_PATH=/root/.instagrapi_session.json
 
 Auth strategy, in priority order:
 
   1. **Persisted session file** at INSTAGRAM_SESSION_PATH. Reused across
      every daily cron run - this is the hot path 364 days a year.
-  2. **INSTAGRAM_SESSIONID cookie** (browser sessionid). We hydrate the
-     instagrapi Client directly from a Chrome-issued sessionid, which
-     skips the `/accounts/login/` endpoint entirely. This is what we do
-     on first run and any time IG invalidates the persisted session.
-     Grab the value from DevTools -> Application -> Cookies ->
-     https://www.instagram.com -> `sessionid`.
-  3. **Password login** as last-resort fallback. IG's mobile-API login
-     endpoint is aggressively fingerprinted and often rejects
-     `instagrapi` with a 400 even when the password is correct, so
-     this path is rarely useful for datacenter deployments.
+  2. **Donated sessionid** from `donate_cookies.py instagram.com`
+     (uploaded to `s3://dashboard-inputs/trends_iq_cookies/
+     instagram.com.json`). Self-service refresh: when the session
+     expires, Jenna just re-donates from Chrome and the scraper picks
+     up the new sessionid on the next cron.
+  3. **INSTAGRAM_SESSIONID env var** as legacy handoff.
+  4. **Password login** as last-resort fallback.
+
+Known limitation (2026-07): Instagram tightened their mobile-API
+fingerprint check. A Chrome-issued sessionid gets `login_required`
+when instagrapi (which impersonates a Pixel 8 Pro app) uses it against
+`i.instagram.com/api/v1/*`, even from a US residential IP - IG can tell
+the session originated in a browser context. Practical workarounds if
+Instagram signal becomes critical:
+
+  - Use a headed Playwright login flow that mints a session by driving
+    the mobile-web app + solving IG's device challenge, then hands the
+    session to instagrapi.
+  - Run instagrapi through the actual Instagram Android app under
+    scrcpy/mitmproxy to capture a mobile-context sessionid.
+  - Or accept Instagram as "coming soon" until IG changes their check.
+
+Until one of those lands, the scraper still runs, records the
+`login_required` reason in the snapshot's `error` field, and returns 0
+items so the dashboard shows a clear placeholder rather than stale
+data.
 
 Rate discipline: the daily cron pulls one Explore page (~24 items).
 Nothing else. That's ~365 requests/year from a single warm session -
@@ -48,9 +64,22 @@ import os
 import sys
 from typing import Any
 
-from ._base import run_scraper
+from ._base import load_donated_cookies, run_scraper
 
 logger = logging.getLogger(__name__)
+
+
+def _sessionid_from_donation() -> str:
+    """Pull `sessionid` out of the donated instagram.com cookies on S3.
+
+    Jenna donates cookies via `donate_cookies.py instagram.com` from her
+    laptop, which lands in `s3://dashboard-inputs/trends_iq_cookies/
+    instagram.com.json`. This lets us skip the env-var handoff entirely -
+    when the session expires she just re-runs donate_cookies from Chrome
+    and the scraper picks up the new sessionid on the next cron run.
+    """
+    donated = load_donated_cookies('instagram.com')
+    return (donated.get('sessionid') or '').strip()
 
 
 def _new_client():
@@ -93,17 +122,37 @@ def _client():
     """Build an authenticated instagrapi Client.
 
     Priority order:
-      1. Persisted settings at INSTAGRAM_SESSION_PATH.
-      2. INSTAGRAM_SESSIONID cookie (Chrome-issued).
-      3. Password login (rarely works from datacenter IPs; last resort).
+      1. Donated sessionid cookie from S3 (Chrome-issued via
+         `donate_cookies.py instagram.com`). Preferred because it's
+         self-service - Jenna re-donates from her laptop when the
+         session expires and Hetzner picks it up on the next cron.
+      2. INSTAGRAM_SESSIONID env var. Legacy handoff; still supported.
+      3. Persisted settings at INSTAGRAM_SESSION_PATH from a prior run.
+         Only tried when the donated sessionid changes (we key the
+         persisted file by sessionid so a fresh donation forces a fresh
+         auth handshake instead of resurrecting an invalid session).
+      4. Password login (rarely works from datacenter IPs; last resort).
     """
     session_path = os.environ.get('INSTAGRAM_SESSION_PATH',
                                     '/root/.instagrapi_session.json')
-    sessionid = os.environ.get('INSTAGRAM_SESSIONID', '').strip()
+    donated_sid  = _sessionid_from_donation()
+    env_sid      = os.environ.get('INSTAGRAM_SESSIONID', '').strip()
+    sessionid    = donated_sid or env_sid
+    if donated_sid:
+        logger.info("instagram: using donated sessionid from S3 "
+                     "(trends_iq_cookies/instagram.com.json)")
     username  = os.environ.get('INSTAGRAM_USERNAME', '').strip()
     password  = os.environ.get('INSTAGRAM_PASSWORD', '').strip()
 
-    # 1. Reuse the persisted session file if we have one.
+    # Key the persisted session file to the current sessionid so a fresh
+    # donation doesn't reuse a stale settings file.
+    if sessionid:
+        sid_tag = sessionid.split('%')[0][-6:]  # last 6 chars of the numeric prefix
+        session_path = f'{session_path}.{sid_tag}'
+
+    # 1/3. Reuse the persisted session file if it matches the current
+    #      sessionid. (session_path is tagged with sessionid above, so
+    #      an old persisted file for a different sessionid is invisible.)
     if os.path.exists(session_path):
         try:
             cl = _new_client()
@@ -128,7 +177,7 @@ def _client():
             logger.warning("instagram: sessionid hydrate failed (%s); "
                              "falling back to password login", e)
 
-    # 3. Password login (last resort; frequently blocked from datacenter IPs).
+    # 4. Password login (last resort; frequently blocked from datacenter IPs).
     if not (username and password):
         raise RuntimeError(
             "No usable IG credential. Set INSTAGRAM_SESSIONID (preferred) "

@@ -26,7 +26,7 @@ Two public entry points:
 The Flask endpoints in ``bg-webapp/app.py`` fetch the admin-managed profile
 image via ``image_url`` (usually a ``/api/profile-image-file/...`` URL that we
 resolve to bytes with ``urllib``) so the cover slide gets the right photo.
-Any image fetch failure falls back to a colour block with a subject initial
+Any image fetch failure falls back to a color block with a subject initial
 so the deck always builds.
 
 Dependencies (pinned in bg-webapp/requirements.txt):
@@ -575,28 +575,37 @@ _ANALYST_SYSTEM_PROMPT = (
     "      the average American.\n"
     "      Every brand row sits on a 2x2 of these two dimensions. The\n"
     "      analyst's job is to READ THE PAIR, never one alone:\n"
-    "        - MASS + LIFT (reach >=20% AND index >=130): actionable sweet\n"
-    "          spot. Media buys land here. Lead every narrative here.\n"
+    "        - MASS + LIFT (reach >=20% AND index 130-500): actionable\n"
+    "          sweet spot. Media buys land here. Lead every narrative here.\n"
     "        - SCALE (reach >=20% AND index 90-130): table stakes; the\n"
     "          audience uses this like everyone else. Not a differentiator.\n"
-    "        - SIGNATURE (reach 8-20% AND index >=150): persona colour and\n"
-    "          storytelling ONLY. These brands CANNOT deliver scale — a 8%\n"
-    "          reach brand cannot reach 92% of the audience regardless of\n"
-    "          how sharp the index. NEVER LEAD A NARRATIVE with a SIGNATURE\n"
-    "          brand. Never claim it 'anchors' a category. Never imply it\n"
-    "          drives the buy.\n"
-    "        - NOISE (reach <8% OR reach <15% at index >400): probably\n"
-    "          low-N panel artifact. Omit entirely.\n"
+    "        - SIGNATURE (reach >=12% AND <20% AND index 150-400):\n"
+    "          persona color and storytelling ONLY. These brands CANNOT\n"
+    "          deliver scale — a 15% reach brand cannot reach 85% of the\n"
+    "          audience regardless of how sharp the index. NEVER LEAD A\n"
+    "          NARRATIVE with a SIGNATURE brand. Never claim it 'anchors'\n"
+    "          a category. Never imply it drives the buy.\n"
+    "        - NOISE (reach <12% at ANY index, OR any brand with index\n"
+    "          >500, OR any brand with index >400 at reach <15%): low-N\n"
+    "          or subject-adjacent panel artifact. NEVER mention.\n"
+    "          Concrete banned examples the user has flagged:\n"
+    "            - Killstar 9.9% at idx 576 — reach <12% AND idx >500. Omit.\n"
+    "            - Urban Stems 7.9% at idx 399 — reach <12%. Omit.\n"
+    "            - Marni 3.6% at idx 263 — reach <12%. Omit.\n"
+    "          'Less than 1 in 10 of the audience does this' is too thin\n"
+    "          to earn a mention in a persona narrative no matter how\n"
+    "          sharp the index looks.\n"
     "      Correct phrasing template: 'Mass-brand shopping is anchored by\n"
     "      Nike (37%), Amazon (72%), and Levi (27%), with SIGNATURE\n"
-    "      affinities toward Urban Stems (index 245) and Killstar (208).'\n"
+    "      affinities toward Gymshark (15% reach, index 205) and Cotopaxi\n"
+    "      (14% reach, index 174).'\n"
     "      Incorrect (and banned): 'Shoppers of Urban Stems (7.9%) and\n"
-    "      Killstar (9.9%) drive this audience's commerce' — 91% of them do\n"
-    "      NOT shop those brands.\n"
+    "      Killstar (9.9%) drive this audience's commerce' — 91% of them\n"
+    "      do NOT shop those brands.\n"
     "  * SIGNAL DISCIPLINE. Do not overclaim from freak-index outliers. A\n"
-    "    brand at <8% reach and index >400 is almost always a low-N\n"
-    "    artifact — omit or note as 'micro-signal'. Only include a\n"
-    "    >=500 idx brand if it also has >=15% reach.\n"
+    "    brand at <12% reach is NEVER a signature — it is noise. A brand\n"
+    "    at idx >500 is NEVER a real over-index — it is subject-adjacent\n"
+    "    panel skew. Omit both entirely.\n"
     "  * MINIMUM CATEGORY BAR. Only nominate a category as worth its own "
     "    deep-dive slide if its top brand has >=15% reach AND at least "
     "    two brands have >=10% reach. Everything below that bar goes into "
@@ -766,7 +775,7 @@ _ANALYST_JSON_SPEC = (
     '  "portrait": {\n'
     '     "life_stage_headline":     "3-6 word life-stage label. Examples: \'Millennial/Gen-Z urban renters.\', \'Suburban Gen-X parents.\', \'Empty-nester boomers.\'",\n'
     '     "life_stage_body":         "3-4 sentences (55-80 words) painting their life stage — how they spend their days, what their household looks like, career phase, income tier. Ground in the age/income/parental data.",\n'
-    '     "mindset_headline":        "3-6 word psychographic label. Examples: \'Culture-first early adopters.\', \'Value-conscious pragmatists.\', \'Status-signalling professionals.\'",\n'
+    '     "mindset_headline":        "3-6 word psychographic label. Examples: \'Culture-first early adopters.\', \'Value-conscious pragmatists.\', \'Status-signaling professionals.\'",\n'
     '     "mindset_body":            "3-4 sentences (55-80 words) on their mindset / worldview / consumption posture. Infer from the shape of their brand and category signals. Concrete, not abstract.",\n'
     '     "cultural_posture_headline":"3-6 word cultural label. Examples: \'Terminally-online scroll-natives.\', \'Live-events + festival regulars.\', \'Prestige-media watchers.\'",\n'
     '     "cultural_posture_body":   "3-4 sentences (55-80 words) on how they consume culture — what platforms, what content, what social postures. Cite 2-3 specific brands or platforms with reach %.",\n'
@@ -788,11 +797,11 @@ _ANALYST_JSON_SPEC = (
     '  ],\n'
     '  "commerce_persona": {\n'
     '     "headline": "5-9 word shopping-personality label (no period). Examples: \'Amazon-first Instacart-heavy value shoppers.\', \'DTC-forward luxury-adjacent early adopters.\', \'Big-box + Target home-focused.\'",\n'
-    '     "body":     "90-130 word commerce portrait synthesizing MPB + RETAIL + COSMETICS + APPAREL + PERSONAL CARE. STRICT: lead with the 3-4 highest-REACH brands (mass shopping backbone — pct >=20%), then add SIGNATURE affinities in a second sentence starting with \'with signature affinities toward\'. Format brands as: BRAND (37% reach) for mass, BRAND (idx 245) for signature. NEVER lead with a <20% reach brand. Example: \'Anchored by Nike (37%), Amazon (72%), and Levi (27%), with signature affinities toward Ray-Ban (idx 135) and Under Armour (idx 135).\'"\n'
+    '     "body":     "90-130 word commerce portrait synthesizing MPB + RETAIL + COSMETICS + APPAREL + PERSONAL CARE. STRICT signal-class rules: (1) LEAD with the 3-4 highest-REACH brands (pct >=20%), format as BRAND (37% reach); (2) ADD signature affinities in a second sentence starting with \'with signature affinities toward\', format as BRAND (15% reach, index 205); (3) NEVER mention a brand with reach <12% — such brands are NOISE regardless of how sharp the index looks; (4) NEVER mention a brand with index >400 — that is subject-adjacent panel skew, not real signal. Example: \'Anchored by Nike (37%), Amazon (72%), and Levi (27%), with signature affinities toward Gymshark (15% reach, index 205) and Cotopaxi (14% reach, index 174).\' Banned: \'signature affinities toward Killstar (9.9%, idx 576) and Urban Stems (7.9%, idx 399)\' — both are NOISE class, do not cite."\n'
     '  },\n'
     '  "cultural_interests": {\n'
     '     "headline": "5-9 word cultural-interest label (no period). Examples: \'Live-music + festival regulars.\', \'Gaming-native prestige-TV watchers.\', \'Sports-first spectators, esports-curious.\'",\n'
-    '     "body":     "90-130 word integrated view of cultural time — pulls MUSIC / GAMES / FESTIVALS / TICKETING / SPORTS TEAM / STREAMING signals. STRICT: same mass-then-signature ordering as commerce_persona. Lead with the highest-reach cultural surface (e.g. \'TikTok (70%) and Spotify (52%)\'), then \'with signature interests in\' for the high-index-low-reach picks."\n'
+    '     "body":     "90-130 word integrated view of cultural time — pulls MUSIC / GAMES / FESTIVALS / TICKETING / SPORTS TEAM / STREAMING signals. STRICT signal-class rules: (1) LEAD with the highest-reach cultural surfaces (pct >=15%), e.g. \'TikTok (70%) and Spotify (52%)\'; (2) ADD signature interests with pct >=12% AND idx 150-400 only, format as BRAND (15% reach, index 205); (3) NEVER cite a brand with reach <12% or index >400 — those are NOISE. If the audience has no signature-class cultural brand, just describe the mass surfaces and stop; do not manufacture signature colour from noise."\n'
     '  },\n'
     '  "exec_summary": {\n'
     '     "who_headline":     "2-4 word label (e.g. \'The audience.\')",\n'
@@ -809,7 +818,7 @@ _ANALYST_JSON_SPEC = (
     '  },\n'
     '  "signature_affinities": [\n'
     '     { "brand": "BRAND", "category": "CATEGORY", "pct": 0.0, "index": 0, "note": "6-12 word analyst tag explaining why this signal matters" },\n'
-    '     ... (pick 8-12 brands from strongest_signals that BEST characterize this audience. Prefer meaningful reach (>=10%) AND meaningful over-index (>=130). Diverse categories. Skip freak-index micro-signals.)\n'
+    '     ... STRICT: pick 8-10 brands that BEST characterize this audience under signal-class discipline. HARD gates: pct >=12% AND index between 130 and 400 (inclusive). NEVER include a brand with reach <12% OR index >400 — those are NOISE. NEVER include a mass-reach brand (pct >=20%) — those belong on the category deep-dives and commerce_persona, NOT here. NEVER include the SUBJECT itself. Diverse categories preferred.\n'
     '  ],\n'
     '  "category_why": {\n'
     '     "CATEGORY_NAME_UPPERCASE": "One sentence (30-45 words) on why this category concentrates for this audience AND what a marketer should DO about it — brand ambassador fit, sponsor whitespace, or shelf-placement play.",\n'
@@ -1241,7 +1250,7 @@ def _fetch_image_bytes(image_url: str) -> Optional[bytes]:
 
 def _placeholder_cover(slide, subject_name: str):
     """Ambient dark-gradient cover when no image is available."""
-    # Big diagonal gradient effect using two overlapping colour blocks + a
+    # Big diagonal gradient effect using two overlapping color blocks + a
     # subtle tinted right column so the composition doesn't feel flat.
     _rect(slide, 0, 0, SLIDE_W_IN, SLIDE_H_IN, C_DARK)
     _rect(slide, 0, 0, 6.5, SLIDE_H_IN, RGBColor(0x14, 0x22, 0x24))
@@ -1666,7 +1675,7 @@ def _slide_persona_category(prs: Presentation, p: dict, cat: str, items: list):
     legend_y = 2.55
     _text(slide, 0.62, legend_y, 12.0, 0.24,
           "READ IT  /  reach = how many. index = how uniquely. "
-          "MASS+LIFT drives the buy; SIGNATURE colours the persona.",
+          "MASS+LIFT drives the buy; SIGNATURE colors the persona.",
           size=9, color=C_MUTED2, letter_spacing=0.04)
 
     n_cols = len(active_cols)
@@ -1686,7 +1695,7 @@ def _slide_persona_category(prs: Presentation, p: dict, cat: str, items: list):
     class_sub_caption = {
         _SIGCLASS_MASS_LIFT: "big reach + real lift  —  drives the buy",
         _SIGCLASS_SCALE:     "big reach at parity  —  table stakes",
-        _SIGCLASS_SIGNATURE: "small reach, sharp index  —  persona colour",
+        _SIGCLASS_SIGNATURE: "small reach, sharp index  —  persona color",
         _SIGCLASS_EMERGING:  "moderate reach + moderate lift  —  test",
         "NOTED":             "ranked signals in this category",
     }
@@ -1808,7 +1817,7 @@ def _slide_media_and_social(prs: Presentation, p: dict):
     Prior version passed items[:5] which meant HIDIVE at 2.8% reach + 363
     index was shown at giant font as the top streaming pick — analytically
     misleading because a 2.8% surface cannot deliver a media buy. Now we
-    prioritise MASS + LIFT (real reach) picks and only fall back to
+    prioritize MASS + LIFT (real reach) picks and only fall back to
     SIGNATURE if no mass surface exists.
     """
     slide = _blank_slide(prs)
@@ -2055,31 +2064,31 @@ def _slide_stat_splash(prs: Presentation, p: dict, cat: str, items: list):
     _text(slide, 0.60, 0.82, 12.0, 1.10, f"{headline} {sub}".strip(),
           size=28, bold=True, color=C_CREAM, line_spacing=1.05)
 
-    # Pick two brands worthy of giant-stat treatment. Prioritise
+    # Pick two brands worthy of giant-stat treatment. Prioritize
     # MASS+LIFT (big reach + real over-index), then SCALE (big reach),
     # then SIGNATURE (small reach + sharp index). Falling back on
     # index-desc alone would put a 3.6%-reach freak-index brand in a
     # 56pt tile — misleading at a glance.
     all_ok = [it for it in (items or []) if _num(it.get("pct", 0)) > 0]
-    prioritised: dict[str, list[dict]] = {c: [] for c in
+    prioritized: dict[str, list[dict]] = {c: [] for c in
         (_SIGCLASS_MASS_LIFT, _SIGCLASS_SCALE, _SIGCLASS_SIGNATURE,
          _SIGCLASS_EMERGING)}
     for it in all_ok:
         cls = _signal_class(it.get("pct"), it.get("index"))
-        if cls in prioritised:
-            prioritised[cls].append(it)
-    prioritised[_SIGCLASS_MASS_LIFT].sort(
+        if cls in prioritized:
+            prioritized[cls].append(it)
+    prioritized[_SIGCLASS_MASS_LIFT].sort(
         key=lambda it: -_signal_score(it.get("pct"), it.get("index")))
-    prioritised[_SIGCLASS_SCALE].sort(
+    prioritized[_SIGCLASS_SCALE].sort(
         key=lambda it: -_num(it.get("pct", 0)))
-    prioritised[_SIGCLASS_SIGNATURE].sort(
+    prioritized[_SIGCLASS_SIGNATURE].sort(
         key=lambda it: -_num(it.get("index", 0)))
-    prioritised[_SIGCLASS_EMERGING].sort(
+    prioritized[_SIGCLASS_EMERGING].sort(
         key=lambda it: -_num(it.get("index", 0)))
     top: list[dict] = []
     for cls in (_SIGCLASS_MASS_LIFT, _SIGCLASS_SCALE,
                 _SIGCLASS_EMERGING, _SIGCLASS_SIGNATURE):
-        for it in prioritised[cls]:
+        for it in prioritized[cls]:
             if it not in top:
                 top.append(it)
             if len(top) >= 2:
@@ -2617,7 +2626,7 @@ def _slide_signature_affinities(prs: Presentation, p: dict):
       * Reject freak-index (idx > 400) — panel low-N artifact
       * Only SIGNATURE (10-20% reach + >=150 idx) and EMERGING (10-20% +
         110-150 idx) belong here — the classes that actually define
-        the audience's persona colour without pretending to scale.
+        the audience's persona color without pretending to scale.
     """
     subject = str(p.get("name") or "").strip()
 
@@ -2698,14 +2707,14 @@ def _slide_signature_affinities(prs: Presentation, p: dict):
 
     slide = _blank_slide(prs)
     _section_eyebrow(slide, 0.52, p["name"], "SIGNATURE AFFINITIES")
-    _text(slide, 0.62, 0.82, 12.0, 1.10, "The brands that colour them.",
+    _text(slide, 0.62, 0.82, 12.0, 1.10, "The brands that color them.",
           size=32, bold=True, color=C_CREAM, line_spacing=1.05)
     _text(slide, 0.62, 2.05, 12.0, 0.60,
           "Signature affinities are the sharpest over-indexes across the "
           "file — the brands that give this audience its personality. "
           "They are NOT the mass-reach backbone (that lives on the "
           "category deep-dives). Use these for partner selection and "
-          "cultural signalling, not for sizing the media buy.",
+          "cultural signaling, not for sizing the media buy.",
           size=10.5, color=C_MUTED, line_spacing=1.4)
 
     # Two-column layout. Cap at 4 rows per column (was 5) so the last
@@ -3154,13 +3163,23 @@ def _slide_commerce_persona(prs: Presentation, p: dict):
     hd = _purge_pronouns(str(cp.get("headline") or "").strip(), p["name"])
     body = _purge_pronouns(str(cp.get("body") or "").strip(), p["name"])
 
-    # Quality gate: if the LLM body has no data grounding (no brand+% or
-    # brand+idx mentions), drop it so the fallback fires. Prevents the
-    # "value and convenience" generic-slop leak the user flagged.
+    # Quality gate 1: if the LLM body has no data grounding (no brand+%
+    # or brand+idx mentions), drop it so the fallback fires. Prevents
+    # the "value and convenience" generic-slop leak.
     if body and not _body_has_data_grounding(body, min_mentions=2):
         _log(f"[commerce_persona] LLM body has no data grounding, using "
               f"fallback: {body[:120]!r}")
         body = ""
+    # Quality gate 2: if the LLM body cites any sub-12% reach brand or
+    # any >400 idx brand, drop it — the user flagged 'Killstar (9.9%,
+    # idx 576)' and 'Urban Stems (7.9%, idx 399)' leaking into the
+    # narrative even though the overall body had grounding.
+    if body:
+        has_banned, offending = _body_cites_banned_brand(body)
+        if has_banned:
+            _log(f"[commerce_persona] LLM body cites banned NOISE brands, "
+                  f"using fallback: {offending}")
+            body = ""
 
     # Collect commerce-side brands across MPB + RETAIL + APPAREL/FOOTWEAR
     # + COSMETICS + PERSONAL CARE so mass/signature split has enough surface.
@@ -3212,7 +3231,7 @@ def _slide_commerce_persona(prs: Presentation, p: dict):
                 "Gen Pop that give the audience its personality without "
                 "carrying the media weight. For the plan, size the buy "
                 "against the mass brands; use the signatures for partner "
-                "selection, co-branded activations, and cultural signalling."
+                "selection, co-branded activations, and cultural signaling."
             )
         elif mass_labels:
             body = (
@@ -3269,11 +3288,18 @@ def _slide_cultural_interests(prs: Presentation, p: dict):
     hd = _purge_pronouns(str(ci.get("headline") or "").strip(), p["name"])
     body = _purge_pronouns(str(ci.get("body") or "").strip(), p["name"])
 
-    # Quality gate: kill generic LLM bodies with no brand names / numbers.
+    # Quality gate 1: kill generic LLM bodies with no brand names / numbers.
     if body and not _body_has_data_grounding(body, min_mentions=2):
         _log(f"[cultural_interests] LLM body has no data grounding, using "
               f"fallback: {body[:120]!r}")
         body = ""
+    # Quality gate 2: reject bodies citing NOISE-class brands.
+    if body:
+        has_banned, offending = _body_cites_banned_brand(body)
+        if has_banned:
+            _log(f"[cultural_interests] LLM body cites banned NOISE brands, "
+                  f"using fallback: {offending}")
+            body = ""
 
     # Fallback: check whether the profile has enough cultural-time
     # categories to justify the slide.
@@ -3985,7 +4011,7 @@ def _top_over_index_brand(p: dict, *,
     as any behavioral item exists.
 
     Callers can pass ``min_pct=1.0`` etc. if they specifically want the
-    old lax behaviour (still used by combined-deck spotlight)."""
+    old lax behavior (still used by combined-deck spotlight)."""
     all_items = _all_behavioral_items(p)
     # Tier 1: strict — real reach + meaningful (but not freak) over-index
     tier1 = [it for it in all_items
@@ -4054,9 +4080,9 @@ _SIGCLASS_LABEL = {
 _SIGCLASS_MEANING = {
     _SIGCLASS_MASS_LIFT: "Big reach and clear over-index — the actionable sweet spot for a partner buy.",
     _SIGCLASS_SCALE:     "Big reach but at Gen-Pop parity — table-stakes for the media buy, not a differentiator.",
-    _SIGCLASS_SIGNATURE: "Small reach but sharp over-index — persona colour, not a media buy at scale.",
+    _SIGCLASS_SIGNATURE: "Small reach but sharp over-index — persona color, not a media buy at scale.",
     _SIGCLASS_EMERGING:  "Moderate reach with meaningful lift — worth a test but not a headline signal.",
-    _SIGCLASS_UNDER:     "Reached but under-indexed — de-prioritise vs. the audience's over-index picks.",
+    _SIGCLASS_UNDER:     "Reached but under-indexed — de-prioritize vs. the audience's over-index picks.",
     _SIGCLASS_NOISE:     "Too little reach or a freak index — probably panel artifact, omit.",
 }
 
@@ -4065,13 +4091,19 @@ def _signal_class(pct, index) -> str:
     """Classify a (reach, index) pair. Reach in percent (0-100), index
     with 100 = parity.
 
-    Freak-index guard (added 2026-07-09 after Weezer at 46.5% reach +
-    737 idx classified as MASS+LIFT for a Green Day audience — an index
-    that extreme almost always signals subject-adjacent panel skew or a
-    computation artifact, not a real actionable signal). Any brand with
-    index > 500 is downgraded: mass-reach brands become SCALE (still
-    real reach, but stop calling them 'over-index'), everything else
-    becomes NOISE."""
+    Thresholds tightened 2026-07-09 (round 2) after user flagged
+    'Killstar (9.9%, idx 576)' and 'Urban Stems (7.9%, idx 399)' still
+    leaking into the commerce narrative — 'less than 10% of the audience'
+    is too thin to earn a mention in the persona story regardless of how
+    sharp the index reads.
+
+      * SIGNATURE minimum reach raised from 10% to 12% (was 5% with a
+        'borderline signature' bucket that let 7-9% brands ship)
+      * EMERGING minimum reach raised from 10% to 12%
+      * Freak-index ceiling holds: idx > 500 downgrades regardless of
+        reach; idx > 400 with reach < 15% becomes NOISE (Killstar 9.9%
+        at 576 → NOISE, not SIGNATURE)
+    """
     p = _num(pct)
     i = _num(index)
     if p <= 0 or i <= 0:
@@ -4084,14 +4116,12 @@ def _signal_class(pct, index) -> str:
         if i >= 90:
             return _SIGCLASS_SCALE
         return _SIGCLASS_UNDER
-    if p >= 10:
+    if p >= 12:
         if i >= 150:
             return _SIGCLASS_SIGNATURE
         if i >= 110:
             return _SIGCLASS_EMERGING
         return _SIGCLASS_NOISE
-    if 5 <= p < 10 and i >= 200:
-        return _SIGCLASS_SIGNATURE
     return _SIGCLASS_NOISE
 
 
@@ -4194,6 +4224,49 @@ def _body_has_data_grounding(body: str, min_mentions: int = 2) -> bool:
     return (len(reach_hits) + len(idx_hits) + len(paren_idx)) >= min_mentions
 
 
+def _body_cites_banned_brand(body: str,
+                              signature_min_pct: float = 12.0,
+                              max_allowed_idx: float = 400.0) -> tuple[bool, list]:
+    """Detect LLM bodies that cite brands the framework has banned as
+    NOISE — anything under ``signature_min_pct`` reach (2026-07-09
+    round-2 threshold) or with an index above ``max_allowed_idx`` (freak
+    signal, subject-adjacent panel skew).
+
+    Returns (has_banned, offending_mentions) where offending_mentions is
+    a list of (brand, pct, idx_or_None) tuples for logging. Callers
+    should DISCARD the body and fire the data-driven fallback rather
+    than trying to surgically strip the offending phrase — regex
+    surgery on natural language leaves grammatically-broken sentences.
+    """
+    if not body:
+        return False, []
+    offending: list[tuple[str, float, Optional[float]]] = []
+    # Match "BRAND (9.9%, index 576)" or "BRAND (9.9%)" or "BRAND (9.9% reach)"
+    combo_pat = re.compile(
+        r"([A-Z][A-Za-z0-9&'\-\.\+\/ ]{1,40})\s*\(\s*"
+        r"([0-9]{1,2}(?:\.[0-9])?)\s*%[^)]*?(?:index\s*|idx\s*)?"
+        r"([0-9]{2,4})?[^)]*\)"
+    )
+    for m in combo_pat.finditer(body):
+        brand = (m.group(1) or "").strip().strip(",.:;")
+        try:
+            pct = float(m.group(2))
+        except (TypeError, ValueError):
+            continue
+        try:
+            idx = float(m.group(3)) if m.group(3) else None
+        except (TypeError, ValueError):
+            idx = None
+        if len(brand) < 2:
+            continue
+        if pct < signature_min_pct:
+            offending.append((brand, pct, idx))
+            continue
+        if idx is not None and idx > max_allowed_idx:
+            offending.append((brand, pct, idx))
+    return (len(offending) > 0, offending)
+
+
 def _extract_narrated_reaches(body: str) -> list[tuple[str, float]]:
     """Return the (brand, pct) mentions in narrative order — used to
     detect when the LLM led a sentence with sub-mass brands."""
@@ -4249,11 +4322,23 @@ def _repair_leading_signature(body: str, mass: list, sig: list,
     return anchor + body
 
 
-def _split_by_reach(items: list, reach_threshold: float = 20.0
+def _split_by_reach(items: list, reach_threshold: float = 20.0,
+                     signature_min_pct: float = 12.0,
+                     signature_max_idx: float = 400.0,
                      ) -> tuple[list, list]:
-    """Return (mass_brands, signature_brands): mass = reach >= threshold,
-    signature = below. Each list is sorted appropriately for its role
-    (mass by reach desc, signature by signal_score desc)."""
+    """Return (mass_brands, signature_brands).
+
+    Thresholds tightened 2026-07-09 (round 2):
+      * mass: reach >= reach_threshold (default 20%)
+      * signature: reach in [signature_min_pct, reach_threshold) AND
+        index between 130 and signature_max_idx.
+          - min pct raised from 5% to 12% — 'less than 10% of the
+            audience does this' is too thin to earn a mention in the
+            persona narrative regardless of how sharp the index reads
+          - max idx capped at 400 — freak-index brands (Killstar at
+            9.9%/576) are almost always subject-adjacent panel skew,
+            not real actionable persona signal
+    """
     mass, sig = [], []
     for it in items or []:
         p = _num(it.get("pct", 0))
@@ -4262,7 +4347,8 @@ def _split_by_reach(items: list, reach_threshold: float = 20.0
             continue
         if p >= reach_threshold:
             mass.append(it)
-        elif p >= 5 and i >= 130:
+        elif (p >= signature_min_pct
+              and 130 <= i <= signature_max_idx):
             sig.append(it)
     mass.sort(key=lambda it: -_num(it.get("pct", 0)))
     sig.sort(key=lambda it: -_signal_score(it.get("pct", 0),
@@ -5011,10 +5097,10 @@ def _why_it_matters_for_category(cat: str, p: dict, top: list) -> str:
                 f"at a {idx} index it reads as table stakes rather than "
                 f"differentiation. Sizing follows scale, not signature.")
     elif lead_class in (_SIGCLASS_SIGNATURE, _SIGCLASS_EMERGING):
-        # Signature-tier lead: caveat that this is persona colour, not scale.
+        # Signature-tier lead: caveat that this is persona color, not scale.
         base = (f"The category is signature-tier: {name} over-indexes at {idx} "
                 f"but only reaches {pct:.1f}% of the audience. Read this as "
-                f"persona colour for {cat_pretty.lower()} — sharp taste, "
+                f"persona color for {cat_pretty.lower()} — sharp taste, "
                 "not a channel that will scale a buy on its own.")
     elif idx >= 130:
         base = (f"{name} leads with {pct:.1f}% penetration ({idx} index) — a "

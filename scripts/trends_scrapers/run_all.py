@@ -168,8 +168,15 @@ def main(argv: list[str] | None = None) -> int:
             fail_count += 1
         count = len(r.get('national') or [])
         kind = r.get('kind') or ''
-        if count == 0 and kind in {'retailer', 'streaming'}:
+        # Retailers/streaming with 0 items are always cookie-donation
+        # candidates. TikTok specifically is a soft-fail case: the CC
+        # anonymously exposes 3 preview cards, so anything <=5 (rather
+        # than exactly 0) is a signal the operator should donate
+        # ads.tiktok.com cookies to unlock the full list.
+        if kind in {'retailer', 'streaming'} and count == 0:
             empty_sources.append((r.get('source', ''), kind))
+        elif r.get('source') == 'tiktok' and count <= 5:
+            empty_sources.append(('tiktok', 'social'))
         print(f"{r.get('source', ''):<12} {kind:<9} "
                f"{count:>6}  "
                f"{(r.get('orchestrator_elapsed_s') or r.get('scrape_elapsed_s') or 0):>7.1f}s  "
@@ -192,6 +199,8 @@ def main(argv: list[str] | None = None) -> int:
             # because Bamgrid IP-gates Hetzner)
             'hulu':       'hulu.com',
             'max':        'max.com',        'primevideo': 'amazon.com',
+            # Social - TikTok CC hashtag list is login-gated as of 2026-07
+            'tiktok':     'ads.tiktok.com',
         }
         need = [domain_map[s] for s, _k in empty_sources if s in domain_map]
         if need:

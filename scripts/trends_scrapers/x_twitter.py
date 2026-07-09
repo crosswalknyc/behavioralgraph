@@ -89,10 +89,24 @@ def _parse_trends24(html: str, limit: int = 25) -> list[dict]:
 
 
 def _fetch_one(url: str) -> list[dict]:
-    r = http_get(url, headers=browser_headers(referer='https://trends24.in/'))
+    """Fetch a trends24 page.
+
+    trends24 blocks datacenter IPs (Hetzner returns an empty body / no
+    trend `<li>` matches - the scraper parses 0 items with no HTTP error).
+    We route every request through the IPRoyal residential proxy so the
+    request appears to come from a US home IP. `use_proxy=True` silently
+    no-ops if IPROYAL_PROXY_* env vars aren't configured, which keeps
+    local dev on the operator's laptop working direct.
+    """
+    r = http_get(url, headers=browser_headers(referer='https://trends24.in/'),
+                 use_proxy=True)
     if r is None or not r.ok:
         return []
-    return _parse_trends24(r.text, limit=25)
+    items = _parse_trends24(r.text, limit=25)
+    if not items and r.text:
+        logger.info("x_twitter: trends24 %s returned %d bytes but 0 trends parsed "
+                     "(likely bot-check or blank; check proxy)", url, len(r.text))
+    return items
 
 
 def fetch() -> dict[str, Any]:

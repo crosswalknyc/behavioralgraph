@@ -63,6 +63,13 @@ from pathlib import Path
 # donating hulu.com covers Max on the bundle plan.
 DEFAULT_DOMAINS = [
     'instagram.com',
+    # TikTok Creative Center gates its trending hashtag list behind login
+    # as of 2026-07: anonymous visitors see 3 preview cards + a "Log in"
+    # CTA. Donating a Creative-Center-logged-in session (visit
+    # https://ads.tiktok.com/business/creativecenter/inspiration/popular/
+    # hashtag/pc/en and click "Log in" once, then run this) unlocks the
+    # full 20-hashtag weekly list. Any TikTok/Business account works.
+    'ads.tiktok.com',
     'target.com',
     'walmart.com',
     'etsy.com',
