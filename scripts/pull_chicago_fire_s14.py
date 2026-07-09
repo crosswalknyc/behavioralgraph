@@ -69,7 +69,35 @@ _HERE = Path(__file__).resolve().parent
 _REPO = _HERE.parent
 sys.path.insert(0, str(_REPO))
 
-os.environ.setdefault("USE_CLAUDE_REASONING", "1")
+# ── Enable Claude engagement-metric research ─────────────────────────
+# The pipeline's per-title Completion Rate + Second Screen Activity
+# tiles (surfaced on the dashboard Performance Metrics grid) are gated
+# by is_claude_reasoning_enabled() which requires BOTH:
+#   1. USE_CLAUDE_REASONING truthy
+#   2. ANTHROPIC_API_KEY set
+#
+# We must:
+#   - Force USE_CLAUDE_REASONING=1 with direct assignment (setdefault
+#     silently no-ops when the parent shell exported an empty string,
+#     which is what happens when this script is spawned by a daemon
+#     that inherited the shell env).
+#   - Load .env so ANTHROPIC_API_KEY (kept out of the shell profile
+#     for security) becomes visible to the child process. The webapp's
+#     app.py does this at import time; CLI scripts must do it too or
+#     Claude research silently no-ops and the CSV omits the
+#     engagement rows → dashboard renders "—" tiles.
+os.environ["USE_CLAUDE_REASONING"] = "1"
+_ENV_FILE = _REPO / ".env"
+if _ENV_FILE.exists():
+    try:
+        from dotenv import load_dotenv  # type: ignore
+        load_dotenv(_ENV_FILE)
+    except Exception:
+        for _line in _ENV_FILE.read_text().splitlines():
+            if not _line or _line.lstrip().startswith("#") or "=" not in _line:
+                continue
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 
 from SVOD_Churn_Attribution import run_synthetic_attribution  # noqa: E402
 
