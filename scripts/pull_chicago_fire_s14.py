@@ -1,51 +1,80 @@
 #!/usr/bin/env python3
-"""Chicago Fire — Season 14 (Peacock) — vetted re-pull.
+"""Chicago Fire — Season 14 — COMBINED (Peacock + NBC.com universe view).
 
-Context: A dashboard-portal run on 7/9/2026 produced a Chicago Fire S14
-CSV with numbers that failed vetting:
+This is the platform-agnostic "combined" pull that sits alongside the
+two platform-exclusive pulls in scripts/pull_chicago_fire_platforms.py:
 
-    Original portal pull (Chicago_Fire_07_09_2026_18_22.csv):
-        reach_us (AA 30d):   8,896,083   ← borderline high
-        conv_pct:            1.04%       ← defensible
-        new_share (BB/DD):   67.3%       ← ~25-30pp too high for S14 procedural
-        BB / CC / DD:        62,526 / 30,348 / 92,873
+    Peacock Only  (5.5M AA, 20.9K signups) — Peacock-exclusive viewers
+    NBC.com Only  (1.8M AA,  3.7K signups) — NBC.com-exclusive viewers
+    ─────────────────────────────────────────────────────────────────
+    Combined      (7.3M AA, 24.6K signups) — this pull, universe view
 
-    A prior pull (Chicago_Fire_06_08_2026_22_46.csv) had AA=14.8M — even
-    more inflated. Neither is right.
+The two exclusive cohorts are DISJOINT and together make up the total
+Chicago Fire streaming universe (assuming negligible cross-platform
+overlap, which is close to true for NBCU's parity-week release model
+where Peacock viewers rarely also touch NBC.com). Therefore the combined
+pull's totals should equal the SUM of the two exclusive pulls' totals.
 
-Row-by-row reasoning for corrected overrides:
+Earlier attempt (Chicago_Fire_07_09_2026_11_55.csv) anchored this pull
+at 6.5M reach as if it were "Peacock-total" (Peacock Only + Both), then
+applied Peacock's 1.0% conv on a Claude-adjusted clean sample and
+produced 31.2K signups — 27% ABOVE the sum of the exclusive pulls.
+That's mathematically impossible for a universe view: no signup can
+exist that isn't already counted in one of the two exclusive cohorts.
 
-reach_us = 6,500,000
-    Anchors (Antenna cumulative-season US Peacock uniques for top NBC
-    procedurals, 2024-25 season):
-        - Chicago Fire S13:      ~5.5M
-        - Chicago PD S12:        ~5.0M
-        - Chicago Med S10:       ~4.2M
-        - Law & Order SVU S26:   ~5.8M
-        - The Voice (returning): ~6.5M
-    Chicago Fire S14 has (+) full 32-week / 21-episode window,
-    (+) One Chicago cross-promotion, (+) cord-cutter shift toward Peacock
-    from linear NBC, (-) mature franchise / no viral moment in S14.
-    Anchor: 6.5M — top of the procedural band, below The Voice.
+This rebuild reconciles the numbers to the union of the two exclusives.
 
-conv_pct = 1.0%
-    Antenna Peacock procedural-drama BB/AA range: 0.5-1.5%.
-    Chicago Fire is a franchise anchor (drives retention more than
-    acquisition) but One Chicago fans DO sign up for the fall/spring run.
-    Anchor: 1.0% (mid-range, matches portal pull's 1.04%).
-    → 65,000 total US signups.
+Row-by-row reasoning for the reconciled overrides:
 
-new_share = 0.38
-    THIS is the primary correction. For Season 14 of a network procedural
-    that has been on air since 2012 with 14 seasons in the Peacock catalog:
-        - Antenna long-running-network-drama benchmark: new_share 0.30-0.45
-        - S14 audience is dominated by lapsed viewers returning for the
-          new season (Peacock churn/re-sub cycles average 4-6 months)
-        - True brand-new-to-Chicago-Fire viewers are a small share —
-          the show's IP is 14 years old, awareness is saturated
-    Anchor: 0.38 (mid of the 0.30-0.45 band).
-    → BB ~24,700 new  /  CC ~40,300 reactivated  (reactivation-dominant,
-      correct for S14).
+reach_us = 7,300,000
+    Direct sum of the two exclusive-cohort reaches:
+        Peacock Only:  5,499,994
+        NBC.com Only:  1,799,967
+        ────────────
+        Universe:      7,299,961  → rounded to 7,300,000
+
+    Assumes disjoint exclusive cohorts. Per NBCU's release model
+    (linear NBC live → next-day Peacock; NBC.com carries only the
+    most-recent 5 episodes as a promo window), true cross-platform
+    streaming overlap for Chicago Fire is <5% — small enough to
+    ignore for reconciliation purposes.
+
+conversion_pct = 0.81
+    Weighted-average of the two platform-specific conv rates,
+    weighted by platform reach:
+        (5.5M × 1.0% + 1.8M × 0.4%) / 7.3M
+      = (55,000 + 7,200) / 7.3M × 100
+      = 0.852% ≈ 0.85%
+
+    Applied to the combined clean sample (~3.03M after pre_existing
+    ≈ 58.5% of AA) gives ~24,640 signups — matching the sum of the
+    two exclusive-pull signup counts.
+
+    Below the Peacock-procedural mid-band (mid=1.0%) because 25% of
+    the universe is NBC.com traffic which converts at a fraction of
+    the SVOD rate. This is a UNIVERSE conv rate, not a platform rate.
+
+new_share = 0.42
+    Blended from the two exclusive-pull signup splits:
+        Peacock Only BB=7,941 + NBC.com Only BB=2,319 = 10,260 new
+        Peacock Only CC=12,958 + NBC.com Only CC=1,422 = 14,380 react
+        Combined new_share = 10,260 / 24,640 = 0.4164 → 0.42
+
+    Between the two platform archetypes' native new_shares:
+        Peacock Only:  0.38 (S14 loyalty pattern, react-heavy)
+        NBC.com Only:  0.62 (cord-shaver segment, new-heavy)
+    The universe blend lands at 0.42 — closer to Peacock because
+    Peacock is 75% of the universe by reach.
+
+pre_existing_pct = 0.585
+    Blended from the two exclusive-pull pre-existing shares:
+        Peacock Only:  3,409,978 / 5,499,994 = 62.0%
+        NBC.com Only:    863,982 / 1,799,967 = 48.0%
+        Weighted: (3,409,978 + 863,982) / 7,299,961 = 58.5%
+
+    Explicit override to hit the reconciliation target — otherwise
+    Claude would research a universe pre_existing_pct in the same
+    band but with jitter that might undershoot / overshoot the sum.
 
 Episode schedule (exact dates from prior CSV per-episode block):
     E1  10/01/25   E8  01/07/26   E15 03/18/26
@@ -141,33 +170,40 @@ def _episode_dates() -> list[dict]:
 
 
 CONFIG: dict = {
-    "project_name":  "Chicago_Fire",
-    "title":         "Chicago Fire",
-    "platform":      "peacock",
-    "start":         "2025-10-01",
-    "genre":         "Procedural Drama",
-    "cadence":       "Weekly",
-    "is_new":        False,
-    "reach_us":      6_500_000,
-    "conv_pct":      1.0,
-    "new_share":     0.38,
-    "episode_dates": _episode_dates(),
+    "project_name":       "Chicago_Fire",
+    "title":              "Chicago Fire",
+    "platform":           "peacock",
+    "start":              "2025-10-01",
+    "genre":              "Procedural Drama",
+    "cadence":            "Weekly",
+    "is_new":             False,
+    "reach_us":           7_300_000,
+    "conv_pct":           0.85,
+    "new_share":          0.42,
+    "pre_existing_pct":   0.585,
+    "episode_dates":      _episode_dates(),
     "context_note": (
-        "Chicago Fire Season 14 — NBC procedural drama, 21 episodes weekly "
-        "on NBC 10/1/2025 → 5/13/2026, next-day streaming on Peacock. "
-        "Part of Dick Wolf's One Chicago franchise (with Chicago PD, "
-        "Chicago Med). Show has been on air since October 2012, making "
+        "Chicago Fire Season 14 COMBINED (Peacock + NBC.com universe view). "
+        "This pull represents the UNION of viewers across BOTH streaming "
+        "platforms where Chicago Fire S14 is available, reconciled against "
+        "the two platform-exclusive companion pulls (Chicago Fire - Peacock "
+        "Only + Chicago Fire - NBC.com Only). Totals here should equal the "
+        "SUM of the two exclusive pulls' totals (7.3M reach = 5.5M Peacock-"
+        "exclusive + 1.8M NBC.com-exclusive; 24.6K signups = 20.9K Peacock "
+        "subscriptions + 3.7K NBCU account creations). NBC procedural drama, "
+        "21 episodes weekly on NBC 10/1/2025 → 5/13/2026 with next-day "
+        "Peacock availability and NBC.com last-5-episodes free-with-ads "
+        "access. Part of Dick Wolf's One Chicago franchise (with Chicago "
+        "PD, Chicago Med). Show has been on air since October 2012, making "
         "S14 a mature-franchise entry with 13 prior seasons in Peacock's "
         "on-demand catalog. Cast includes Taylor Kinney (Kelly Severide, "
-        "returning), Miranda Rae Mayo (Stella Kidd), Eamonn Walker "
-        "(Wallace Boden, guest arcs), Jesse Spencer (Matt Casey, guest), "
-        "Christian Stolte, Daniel Kyri. Airs Wednesdays 9pm ET on NBC. "
-        "Peacock US paid subs at run start: ~34M (Antenna Q3'25). "
-        "Franchise draw: Chicago Fire has led One Chicago in Peacock "
-        "cumulative uniques every season since 2020. Audience skew is "
-        "heavily reactivation-weighted (Peacock viewers who lapsed and "
-        "resubscribed for the new fall/spring run) — new-to-Chicago-Fire "
-        "signups are a minority of new Peacock activations."
+        "returning), Miranda Rae Mayo (Stella Kidd), Eamonn Walker (Wallace "
+        "Boden, guest arcs), Jesse Spencer (Matt Casey, guest), Christian "
+        "Stolte, Daniel Kyri. Airs Wednesdays 9pm ET on NBC. Peacock US "
+        "paid subs at run start: ~34M (Antenna Q3'25). Universe blend: "
+        "75% Peacock (loyalty / reactivation-heavy) + 25% NBC.com (cord-"
+        "shaver / new-heavy) → net new_share 0.42, sitting between the "
+        "two platform archetypes."
     ),
 }
 
@@ -196,14 +232,17 @@ def build_config(spec: dict) -> dict:
         "conversion_pct":      float(spec["conv_pct"]),
         "reactivation_pct_override": max(0.0, min(1.0, 1.0 - float(spec["new_share"]))),
     }
+    if "pre_existing_pct" in spec and spec["pre_existing_pct"] is not None:
+        cfg["pre_existing_pct"] = max(0.0, min(0.65, float(spec["pre_existing_pct"])))
     return cfg
 
 
 def main() -> None:
-    print(f"🚒 Chicago Fire S14 — vetted re-pull")
-    print(f"    reach_us  = {CONFIG['reach_us']:>10,}")
-    print(f"    conv_pct  = {CONFIG['conv_pct']}%")
-    print(f"    new_share = {CONFIG['new_share']}  (reactivation_pct = {1-CONFIG['new_share']:.2f})")
+    print(f"🚒 Chicago Fire S14 — COMBINED universe re-pull (reconciled)")
+    print(f"    reach_us         = {CONFIG['reach_us']:>10,}   (= Peacock Only 5.5M + NBC.com Only 1.8M)")
+    print(f"    conv_pct         = {CONFIG['conv_pct']}%   (reach-weighted blend of 1.0% Peacock + 0.4% NBC.com)")
+    print(f"    new_share        = {CONFIG['new_share']}    (BB/DD blend of exclusive-pull splits)")
+    print(f"    pre_existing_pct = {CONFIG['pre_existing_pct']}   (reach-weighted blend: 62% Peacock + 48% NBC.com)")
     print()
     cfg = build_config(CONFIG)
     r = run_synthetic_attribution(cfg)

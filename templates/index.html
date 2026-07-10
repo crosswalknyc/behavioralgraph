@@ -18981,6 +18981,11 @@
                                                     <input type="number" id="customSVODNewShare" min="0" max="1" step="0.01" placeholder="e.g. 0.38" style="padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
                                                     <small>Fraction of signups that are brand-new (rest are reactivations)</small>
                                                 </div>
+                                                <div class="form-group">
+                                                    <label for="customSVODPreExisting">Pre-existing % (0–0.65)</label>
+                                                    <input type="number" id="customSVODPreExisting" min="0" max="0.65" step="0.01" placeholder="e.g. 0.58" style="padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                                                    <small>Optional — mainly for combined-universe pulls reconciling to constituent cohorts</small>
+                                                </div>
                                             </div>
                                         </div>
                                     </details>
@@ -71995,9 +72000,11 @@
             const _rawReach = document.getElementById('customSVODReachOverride')?.value?.trim();
             const _rawConv  = document.getElementById('customSVODConvPct')?.value?.trim();
             const _rawNs    = document.getElementById('customSVODNewShare')?.value?.trim();
+            const _rawPre   = document.getElementById('customSVODPreExisting')?.value?.trim();
             const reachOverride = _rawReach ? Number(_rawReach) : undefined;
             const convPctOverride = _rawConv ? Number(_rawConv) : undefined;
             const newShareOverride = _rawNs ? Number(_rawNs) : undefined;
+            const preExistingOverride = _rawPre ? Number(_rawPre) : undefined;
             if (_rawReach && (!isFinite(reachOverride) || reachOverride < 1000 || reachOverride > 500000000)) {
                 alert('Reach override must be a number between 1,000 and 500,000,000.');
                 return;
@@ -72008,6 +72015,10 @@
             }
             if (_rawNs && (!isFinite(newShareOverride) || newShareOverride < 0 || newShareOverride > 1)) {
                 alert('New share must be a number between 0 and 1 (e.g. 0.38 for 38% new).');
+                return;
+            }
+            if (_rawPre && (!isFinite(preExistingOverride) || preExistingOverride < 0 || preExistingOverride > 0.65)) {
+                alert('Pre-existing % must be a number between 0 and 0.65 (e.g. 0.58 for 58%).');
                 return;
             }
 
@@ -72053,9 +72064,10 @@
                 tracking_mode: trackingMode,
                 episode_dates: episode_dates
             };
-            if (reachOverride !== undefined)     payload.reach_us_override = reachOverride;
-            if (convPctOverride !== undefined)   payload.conversion_pct   = convPctOverride;
-            if (newShareOverride !== undefined)  payload.new_share        = newShareOverride;
+            if (reachOverride !== undefined)      payload.reach_us_override = reachOverride;
+            if (convPctOverride !== undefined)    payload.conversion_pct    = convPctOverride;
+            if (newShareOverride !== undefined)   payload.new_share         = newShareOverride;
+            if (preExistingOverride !== undefined) payload.pre_existing_pct = preExistingOverride;
             
             try {
                 const response = await fetch('/api/attribution/svod-acquisition', {

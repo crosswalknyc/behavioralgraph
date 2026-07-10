@@ -32782,6 +32782,13 @@ def submit_svod_acquisition():
                 data.get('conversion_pct'), 0.01, 15.0, 'conversion_pct')
             new_share_override = _coerce_opt_float(
                 data.get('new_share'), 0.0, 1.0, 'new_share')
+            # pre_existing_pct override — mainly useful for reconciliation
+            # runs (combined-universe pulls that must sum to their
+            # constituent exclusive-cohort pulls). Ceiling is 0.65 to
+            # match the pipeline's clamp (see SVOD_Churn_Attribution
+            # line ~6567) — every hit season expands vs. prior season.
+            pre_existing_pct_override = _coerce_opt_float(
+                data.get('pre_existing_pct'), 0.0, 0.65, 'pre_existing_pct')
         except ValueError as ve:
             return jsonify({'error': str(ve)}), 400
 
@@ -32828,6 +32835,7 @@ def submit_svod_acquisition():
                 'reach_us_override':      reach_us_override,
                 'conversion_pct':         conversion_pct_override,
                 'new_share':              new_share_override,
+                'pre_existing_pct':       pre_existing_pct_override,
             }
         }
         
@@ -33086,10 +33094,14 @@ def run_svod_acquisition(job_id):
             # form field matches the CLI script contract ("new_share")
             # and the row-by-row research docs.
             synth_config['reactivation_pct_override'] = max(0.0, min(1.0, 1.0 - float(_new_share)))
-        if _reach_override is not None or _conv_override is not None or _new_share is not None:
+        _pre_existing = params.get('pre_existing_pct')
+        if _pre_existing is not None:
+            synth_config['pre_existing_pct'] = max(0.0, min(0.65, float(_pre_existing)))
+        if (_reach_override is not None or _conv_override is not None
+                or _new_share is not None or _pre_existing is not None):
             print(f"[Subscriber IQ] Analyst overrides applied — "
                   f"reach_us={_reach_override!r}  conv_pct={_conv_override!r}  "
-                  f"new_share={_new_share!r}")
+                  f"new_share={_new_share!r}  pre_existing_pct={_pre_existing!r}")
 
         update_job_status(job_id, progress=30,
                           message='Deriving panel from tier × genre × cadence priors...')
