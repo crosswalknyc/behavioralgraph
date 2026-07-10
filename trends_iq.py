@@ -1057,6 +1057,52 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         'nvidia', 'tesla stock', 'apple stock', 'microsoft stock',
         'meta stock', 'amazon stock', 'palantir', 'amd stock',
     ],
+    # Philanthropy / nonprofit sector (added 2026-07-10). Sits in the
+    # priority list BEFORE `politics` so philanthropy-adjacent policy
+    # news ("proposed grant rules", "foundation funding") lands here
+    # instead of leaking into politics. Terms are compound where
+    # possible - single-word "grant" catches Grant Cardone, Grant Hill,
+    # Ulysses S. Grant so we don't include it bare.
+    'philanthropy': [
+        # sector-defining vocabulary
+        'philanthropy', 'philanthropist', 'philanthropic',
+        'nonprofit', 'non-profit', 'nonprofits', 'ngo', '501c3', '501(c)(3)',
+        'charity', 'charities', 'charitable',
+        'foundation grant', 'foundation funding', 'grantmaking',
+        'grant funding', 'grant rules', 'grantmaker', 'grantee',
+        'endowment', 'donor advised fund', 'daf ',
+        # fundraising surface
+        'fundraiser', 'fundraising', 'fundraise', 'gofundme',
+        'kickstarter charity', 'indiegogo relief',
+        'giving pledge', 'giving tuesday', 'year-end giving',
+        'year end giving', 'planned giving', 'donation drive',
+        'donate', 'donation', 'donations', 'donor',
+        # marquee nonprofits / NGOs
+        'red cross', 'american red cross', 'salvation army',
+        'unicef', 'united way', 'feeding america', 'meals on wheels',
+        'doctors without borders', 'msf ', 'oxfam', 'care international',
+        'save the children', 'world vision', 'habitat for humanity',
+        'goodwill', 'boys and girls club', 'boys & girls club',
+        'make a wish', 'make-a-wish', 'st jude', "st. jude",
+        "st. jude children's", 'toys for tots', 'mackenzie scott',
+        # foundations / major philanthropists
+        'gates foundation', 'bill and melinda gates',
+        'ford foundation', 'macarthur foundation', 'rockefeller foundation',
+        'carnegie corporation', 'buffett giving',
+        'chan zuckerberg', 'open society foundations',
+        'bloomberg philanthropies', 'walton foundation',
+        # relief / humanitarian
+        'disaster relief', 'humanitarian aid', 'humanitarian crisis',
+        'famine relief', 'refugee aid', 'hurricane relief',
+        'wildfire relief', 'earthquake relief', 'flood relief',
+        'ukraine relief', 'gaza aid', 'sudan aid',
+        # sector coverage
+        'chronicle of philanthropy', 'nonprofit quarterly',
+        'giving usa report', 'inside philanthropy',
+        # celebrity-driven giving (common trending pattern)
+        'megadonation', 'mega-donation', 'anonymous donor',
+        'billionaire donation', 'celebrity donation',
+    ],
     # Gaming (video-game content). Sits after entertainment/sports so
     # broadly popular events still peel off first, but before tech so
     # a Fortnite / Elden Ring / GTA search doesn't get pulled into the
@@ -1489,6 +1535,12 @@ _CATEGORY_PRIORITY = (
     # catch-all. Retail then absorbs true shopping-intent searches.
     'health', 'food', 'travel', 'auto', 'fashion', 'home', 'business',
     'retail',
+    # Philanthropy sits ahead of the political cluster so grant / policy
+    # news that also carries a partisan angle ("proposed grant rules")
+    # peels into the philanthropy bucket first. Nonprofit / charity /
+    # foundation keywords are unambiguous enough that we don't lose
+    # true political stories to it.
+    'philanthropy',
     # Political cluster: partisan buckets first, neutral politics
     # third, so Trump / MAGA / AOC peel off cleanly.
     'conservative', 'progressive', 'politics',
@@ -3269,6 +3321,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         'movers':              lambda: compute_search_movers(state),
         'wikipedia_trending':  lambda: _read_snapshot('wikipedia_trending'),
         'music_charts':        lambda: _read_snapshot('music_charts'),
+        'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
     }
 
     results: dict = {}
@@ -3301,6 +3354,12 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # one card per source. TikTok is stubbed pending Playwright build.
     music_snap    = results.get('music_charts') or {}
     music_charts  = music_snap.get('sources') or {}
+
+    # Philanthropy news snapshot -> combined list + per-source split.
+    # Frontend picks how to slice; both shapes travel in the payload.
+    phil_snap        = results.get('philanthropy_news') or {}
+    philanthropy_news = list(phil_snap.get('national') or [])[:40]
+    philanthropy_by_source = phil_snap.get('by_source') or {}
 
     trending_people = _fetch_trending_people(
         headlines,
@@ -3363,6 +3422,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'trending_people':                trending_people,
             'wikipedia_trending':             wikipedia_trending,
             'music_trending':                 music_charts,
+            'philanthropy_news':              philanthropy_news,
+            'philanthropy_news_by_source':    philanthropy_by_source,
             'social_trending':                social_trending,
             'streaming_trending':             streaming_trending,
             'products_by_retailer':           products,
@@ -3396,6 +3457,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                     if (p or {}).get('available')),
             'music':         sum(len(((music_charts.get(k) or {}).get('items') or []))
                                   for k in ('shazam', 'apple', 'tiktok')),
+            'philanthropy':  (len(philanthropy_news) +
+                              len(searches_by_category.get('philanthropy') or [])),
             'movers':    (len(movers.get('breakout') or []) +
                            len(movers.get('rising')   or []) +
                            len(movers.get('falling')  or []) +
