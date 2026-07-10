@@ -17081,25 +17081,29 @@
             margin-bottom: 1.25rem;
         }
         .app-boot-brand-mark {
-            width: 34px;
-            height: 34px;
+            background: linear-gradient(135deg, #c8e600, #a0d911);
+            padding: 0.45rem 0.7rem;
             border-radius: 8px;
-            background: linear-gradient(135deg, #5a9ad9 0%, #66d9ef 100%);
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
-            color: #05080f;
-            font-weight: 800;
+            box-shadow: 0 4px 15px rgba(200, 230, 0, 0.3), 0 0 20px rgba(200, 230, 0, 0.15);
+        }
+        .app-boot-brand-mark img {
+            height: 16px;
+            width: auto;
+            display: block;
+            filter: invert(1);
+            mix-blend-mode: multiply;
         }
         .app-boot-brand-name {
             font-size: 0.78rem;
             letter-spacing: 0.22em;
             font-weight: 700;
-            color: #66d9ef;
+            color: #c8e600;
             text-transform: uppercase;
         }
-        body[data-theme="light"] .app-boot-brand-name { color: #1e40af; }
+        body[data-theme="light"] .app-boot-brand-name { color: #5a7a00; }
         .app-boot-title {
             font-size: 1.25rem;
             font-weight: 600;
@@ -17210,7 +17214,7 @@
     <div id="appBootOverlay" class="app-boot-overlay" role="status" aria-live="polite" aria-label="Loading dashboard">
         <div class="app-boot-card">
             <div class="app-boot-brand">
-                <div class="app-boot-brand-mark">C</div>
+                <div class="app-boot-brand-mark"><img src="{{ url_for('static', filename='crosswalk-logo-white-hires.png') }}" alt="Crosswalk"></div>
                 <div class="app-boot-brand-name">Crosswalk</div>
             </div>
             <div class="app-boot-title" id="appBootTitle">Loading your dashboard</div>
