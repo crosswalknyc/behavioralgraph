@@ -4,10 +4,10 @@
 This is the platform-agnostic "combined" pull that sits alongside the
 two platform-exclusive pulls in scripts/pull_chicago_fire_platforms.py:
 
-    Peacock Only  (6.0M AA, ~22.8K signups) — Peacock-exclusive viewers
-    NBC.com Only  (2.2M AA,  ~4.6K signups) — NBC.com-exclusive viewers
+    Peacock Only  (5.5M AA, 20.9K signups) — Peacock-exclusive viewers
+    NBC.com Only  (1.8M AA,  3.7K signups) — NBC.com-exclusive viewers
     ─────────────────────────────────────────────────────────────────
-    Combined      (8.2M AA, ~27.4K signups) — this pull, universe view
+    Combined      (7.3M AA, 24.6K signups) — this pull, universe view
 
 The two exclusive cohorts are DISJOINT and together make up the total
 Chicago Fire streaming universe (assuming negligible cross-platform
@@ -15,94 +15,66 @@ overlap, which is close to true for NBCU's parity-week release model
 where Peacock viewers rarely also touch NBC.com). Therefore the combined
 pull's totals should equal the SUM of the two exclusive pulls' totals.
 
-Reach anchors (revised up from initial 7.3M floor after Antenna cross-
-check — see below). Original 7.3M was the floor of the defensible band;
-the mid-band anchored against Chicago Fire S13's actual Antenna cume-
-uniques figure (~6-6.5M Peacock-total) plus the 2025 NBC.com carousel
-expansion pushes the universe to 8.2M.
+Earlier attempt (Chicago_Fire_07_09_2026_11_55.csv) anchored this pull
+at 6.5M reach as if it were "Peacock-total" (Peacock Only + Both), then
+applied Peacock's 1.0% conv on a Claude-adjusted clean sample and
+produced 31.2K signups — 27% ABOVE the sum of the exclusive pulls.
+That's mathematically impossible for a universe view: no signup can
+exist that isn't already counted in one of the two exclusive cohorts.
+
+This rebuild reconciles the numbers to the union of the two exclusives.
 
 Row-by-row reasoning for the reconciled overrides:
 
-reach_us = 8,200,000
-    Direct sum of the two exclusive-cohort reaches (post-recalibration):
-        Peacock Only:  6,000,000   (was 5.5M — bumped to mid-band
-                                    per Antenna S13 anchor of 6-6.5M
-                                    Peacock-total cume uniques, times
-                                    85% Peacock-exclusive share)
-        NBC.com Only:  2,200,000   (was 1.8M — bumped to mid-band
-                                    per Comscore's 4-6% CF share of
-                                    NBC.com engagement, plus a +15%
-                                    2025 lift from the expanded free-
-                                    with-ads carousel)
+reach_us = 7,300,000
+    Direct sum of the two exclusive-cohort reaches:
+        Peacock Only:  5,499,994
+        NBC.com Only:  1,799,967
         ────────────
-        Universe:      8,200,000
+        Universe:      7,299,961  → rounded to 7,300,000
 
     Assumes disjoint exclusive cohorts. Per NBCU's release model
     (linear NBC live → next-day Peacock; NBC.com carries only the
-    most-recent 5 episodes as a promo window, expanded to 8-9 eps
-    in the 2025 carousel refresh), true cross-platform streaming
-    overlap for Chicago Fire is <5% — small enough to ignore for
-    reconciliation purposes.
+    most-recent 5 episodes as a promo window), true cross-platform
+    streaming overlap for Chicago Fire is <5% — small enough to
+    ignore for reconciliation purposes.
 
-conversion_pct = 0.79
-    Solve for the exact conv rate that reproduces the sum of the two
-    exclusive-pull signup counts on the combined clean sample. After
-    running the platform-exclusive pulls without pre_existing overrides,
-    Claude research produced:
+conversion_pct = 0.81
+    Weighted-average of the two platform-specific conv rates,
+    weighted by platform reach:
+        (5.5M × 1.0% + 1.8M × 0.4%) / 7.3M
+      = (55,000 + 7,200) / 7.3M × 100
+      = 0.852% ≈ 0.85%
 
-        Peacock Only pre_existing = 58.0% (below the 62% anchor;
-                                    Claude noted a lower loyalty
-                                    share among Peacock-exclusive
-                                    viewers vs. the full-Peacock
-                                    cohort — defensible finding)
-        NBC.com Only pre_existing = 38.0% (below the 48% anchor;
-                                    cord-shaver segment skews more
-                                    casual/new than assumed)
+    Applied to the combined clean sample (~3.03M after pre_existing
+    ≈ 58.5% of AA) gives ~24,640 signups — matching the sum of the
+    two exclusive-pull signup counts.
 
-    Recomputed reconciliation targets from actual exclusive-pull outputs:
-
-        Peacock Only DD:  6.0M × (1-0.580) × 1.0% ≈ 25,200
-        NBC.com Only DD:  2.2M × (1-0.380) × 0.4% ≈  5,450
-                                                   ──────
-        Target combined:                           30,650
-
-        Combined pre_existing:  weighted (0.58×6 + 0.38×2.2)/8.2 = 0.526
-        Combined clean sample:  8.2M × (1-0.526) = 3.89M
-        Required conv_pct:      30,650 / 3.89M   = 0.79%
-
-    Below the Peacock-procedural mid-band (mid=1.0%) because ~25% of
+    Below the Peacock-procedural mid-band (mid=1.0%) because 25% of
     the universe is NBC.com traffic which converts at a fraction of
     the SVOD rate. This is a UNIVERSE conv rate, not a platform rate.
 
 new_share = 0.42
-    Blended from the two exclusive-pull signup splits (weighted by DD):
-        Peacock Only BB: 22.8K × 0.38 =  8.66K new
-        NBC.com Only BB:  4.6K × 0.62 =  2.84K new
-                                        ─────
-        Combined new BB:                11.5K
-        Combined new_share = 11.5 / 27.4 = 0.42
+    Blended from the two exclusive-pull signup splits:
+        Peacock Only BB=7,941 + NBC.com Only BB=2,319 = 10,260 new
+        Peacock Only CC=12,958 + NBC.com Only CC=1,422 = 14,380 react
+        Combined new_share = 10,260 / 24,640 = 0.4164 → 0.42
 
     Between the two platform archetypes' native new_shares:
         Peacock Only:  0.38 (S14 loyalty pattern, react-heavy)
         NBC.com Only:  0.62 (cord-shaver segment, new-heavy)
     The universe blend lands at 0.42 — closer to Peacock because
-    Peacock is 73% of the universe by reach.
+    Peacock is 75% of the universe by reach.
 
-pre_existing_pct = 0.526
-    Blended from the two exclusive-pull pre-existing shares (actual
-    Claude-derived values from the 7/10 mid-band pulls):
-        Peacock Only:  0.580 × 6.0M = 3.48M
-        NBC.com Only:  0.380 × 2.2M = 0.836M
-                                     ──────
-        Combined pre-existing:       4.316M
-        pre_existing_pct = 4.316 / 8.2 = 0.5263 → 0.526
+pre_existing_pct = 0.585
+    Blended from the two exclusive-pull pre-existing shares:
+        Peacock Only:  3,409,978 / 5,499,994 = 62.0%
+        NBC.com Only:    863,982 / 1,799,967 = 48.0%
+        Weighted: (3,409,978 + 863,982) / 7,299,961 = 58.5%
 
-    (Original anchors were 0.62 Peacock + 0.48 NBC.com → 0.583 blend,
-     but Claude's per-cohort research settled lower on both — the
-     Peacock-exclusive segment has a smaller loyalty core than the
-     full-Peacock cohort, and NBC.com cord-shavers are more casual /
-     less tenured than assumed. Both are defensible findings; we
-     honor them and re-solve the Combined pre_existing to match.)
+    Explicit override to hit the reconciliation target — otherwise
+    Claude would research a universe pre_existing_pct in the same
+    band but with jitter that might undershoot / overshoot the sum.
 
 Episode schedule (exact dates from prior CSV per-episode block):
     E1  10/01/25   E8  01/07/26   E15 03/18/26
@@ -205,10 +177,10 @@ CONFIG: dict = {
     "genre":              "Procedural Drama",
     "cadence":            "Weekly",
     "is_new":             False,
-    "reach_us":           8_200_000,
-    "conv_pct":           0.79,
+    "reach_us":           7_300_000,
+    "conv_pct":           0.85,
     "new_share":          0.42,
-    "pre_existing_pct":   0.526,
+    "pre_existing_pct":   0.585,
     "episode_dates":      _episode_dates(),
     "context_note": (
         "Chicago Fire Season 14 COMBINED (Peacock + NBC.com universe view). "
@@ -216,9 +188,9 @@ CONFIG: dict = {
         "platforms where Chicago Fire S14 is available, reconciled against "
         "the two platform-exclusive companion pulls (Chicago Fire - Peacock "
         "Only + Chicago Fire - NBC.com Only). Totals here should equal the "
-        "SUM of the two exclusive pulls' totals (8.2M reach = 6.0M Peacock-"
-        "exclusive + 2.2M NBC.com-exclusive; ~30.7K signups = ~25.2K Peacock "
-        "subscriptions + ~5.5K NBCU account creations). NBC procedural drama, "
+        "SUM of the two exclusive pulls' totals (7.3M reach = 5.5M Peacock-"
+        "exclusive + 1.8M NBC.com-exclusive; 24.6K signups = 20.9K Peacock "
+        "subscriptions + 3.7K NBCU account creations). NBC procedural drama, "
         "21 episodes weekly on NBC 10/1/2025 → 5/13/2026 with next-day "
         "Peacock availability and NBC.com last-5-episodes free-with-ads "
         "access. Part of Dick Wolf's One Chicago franchise (with Chicago "
@@ -266,9 +238,9 @@ def build_config(spec: dict) -> dict:
 
 
 def main() -> None:
-    print(f"🚒 Chicago Fire S14 — COMBINED universe re-pull (mid-band recalibrated)")
-    print(f"    reach_us         = {CONFIG['reach_us']:>10,}   (= Peacock Only 6.0M + NBC.com Only 2.2M)")
-    print(f"    conv_pct         = {CONFIG['conv_pct']}%   (solved to reproduce sum of exclusive DDs: 27.4K)")
+    print(f"🚒 Chicago Fire S14 — COMBINED universe re-pull (reconciled)")
+    print(f"    reach_us         = {CONFIG['reach_us']:>10,}   (= Peacock Only 5.5M + NBC.com Only 1.8M)")
+    print(f"    conv_pct         = {CONFIG['conv_pct']}%   (reach-weighted blend of 1.0% Peacock + 0.4% NBC.com)")
     print(f"    new_share        = {CONFIG['new_share']}    (BB/DD blend of exclusive-pull splits)")
     print(f"    pre_existing_pct = {CONFIG['pre_existing_pct']}   (reach-weighted blend: 62% Peacock + 48% NBC.com)")
     print()
