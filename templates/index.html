@@ -32927,59 +32927,6 @@
                                 background: rgba(239,68,68,0.08); border-left: 3px solid #ef4444; line-height: 1.55;"></div>
                 </div>
 
-                <!-- ─── NETFLIX CARD 2b: 🏆 Attrition Winners - who wins the next $ ─── -->
-                <div class="card" id="jiqNflxAttritionCard"
-                     style="padding: 1rem; margin-top: 1rem; display: none;
-                            background: linear-gradient(135deg, rgba(34,197,94,0.07) 0%, rgba(59,130,246,0.04) 100%);
-                            border: 1px solid rgba(34,197,94,0.25);">
-                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqNflxAttritionTitle" style="margin: 0;">🏆 Attrition Winners - who wins the next streaming dollar</h3>
-                        <div id="jiqNflxAttritionMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
-                    </div>
-                    <div id="jiqNflxAttritionSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
-
-                    <!-- Look-forward window pills - 7d / 14d / 30d / 60d / 90d after cancel -->
-                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.85rem;">
-                        <span style="font-size: 0.62rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em;">Days after Netflix cancel</span>
-                        <div id="jiqNflxAttritionWindowTabs" style="display: flex; gap: 0.35rem;"></div>
-                    </div>
-
-                    <!-- Topline tiles - % who signed up for a new streaming service, top winner, median-days, multi-sub % -->
-                    <div id="jiqNflxAttritionTopline"
-                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-                                gap: 0.5rem; margin-bottom: 0.95rem;"></div>
-
-                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
-                        🥇 Ranked winners - % of Netflix cancellers who signed up for each service
-                    </h4>
-                    <div id="jiqNflxAttritionWinners" style="margin-bottom: 0.95rem;"></div>
-
-                    <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-                                gap: 1rem; align-items: start; margin-bottom: 0.95rem;">
-                        <div>
-                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
-                                📦 Stacking - how many new subs the canceller took (30d)
-                            </h4>
-                            <div id="jiqNflxAttritionStacking"></div>
-                        </div>
-                        <div>
-                            <h4 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.92;">
-                                🔗 Top co-subscription pairs among 2+ stackers
-                            </h4>
-                            <div id="jiqNflxAttritionPairs"></div>
-                        </div>
-                    </div>
-
-                    <h4 style="font-size: 0.85rem; margin: 0.4rem 0 0.4rem; opacity: 0.92;">
-                        💰 Ad-sales rate card - ex-Netflix CPM uplift by competitor
-                    </h4>
-                    <div id="jiqNflxAttritionCpm" style="margin-bottom: 0.7rem;"></div>
-
-                    <div id="jiqNflxAttritionPitch"
-                         style="font-size: 0.82rem; padding: 0.7rem 0.9rem; border-radius: 6px;
-                                background: rgba(34,197,94,0.09); border-left: 3px solid #22c55e; line-height: 1.55;"></div>
-                </div>
-
                 <!-- ─── NETFLIX CARD 3: 🎬 Title Interest Formation ─── -->
                 <div class="card" id="jiqNflxTitleCard"
                      style="padding: 1rem; margin-top: 1rem; display: none;
@@ -50641,7 +50588,6 @@
                         },
                         nflx_pre_signup:             _JIQ_NETFLIX_DATA.nflx_pre_signup,
                         nflx_churn_destinations:     _JIQ_NETFLIX_DATA.nflx_churn_destinations,
-                        nflx_attrition_winners:      _JIQ_NETFLIX_DATA.nflx_attrition_winners,
                         nflx_title_interest:         _JIQ_NETFLIX_DATA.nflx_title_interest,
                         nflx_content_to_commerce:    _JIQ_NETFLIX_DATA.nflx_content_to_commerce,
                         nflx_advertiser_intent_packs:_JIQ_NETFLIX_DATA.nflx_advertiser_intent_packs,
@@ -52305,7 +52251,6 @@
             if (_nflxHdr) _nflxHdr.style.display = 'none';
             _jiqHideCard('jiqNflxSignupCard');
             _jiqHideCard('jiqNflxChurnCard');
-            _jiqHideCard('jiqNflxAttritionCard');
             _jiqHideCard('jiqNflxTitleCard');
             _jiqHideCard('jiqNflxCommerceCard');
             _jiqHideCard('jiqNflxIntentCard');
@@ -52336,9 +52281,6 @@
                 }
                 if (typeof renderJourneyIqNflxChurnDest === 'function') {
                     renderJourneyIqNflxChurnDest(_pickClickstreamBlock('nflx_churn_destinations'));
-                }
-                if (typeof renderJourneyIqNflxAttrition === 'function') {
-                    renderJourneyIqNflxAttrition(_pickClickstreamBlock('nflx_attrition_winners'));
                 }
                 if (typeof renderJourneyIqNflxTitleInterest === 'function') {
                     renderJourneyIqNflxTitleInterest(_pickClickstreamBlock('nflx_title_interest'));
@@ -60049,79 +59991,6 @@
                 pitch: 'Of the 56.8% of Netflix cancellers who subscribe to a competitor within 30d, Netflix sees zero signal in their first-party data. Crosswalk shows the destination, the trigger, the search, AND the re-entry pattern - which lets ad sales price ad-tier inventory as "stable, retention-defended audience" rather than "churn-risk demo."'
             },
 
-            // ── PULL 2b · ATTRITION WINNERS ───────────────────────
-            // A sharpened, ad-sales-ready cut of the churn destination
-            // data: focused *only* on the "who signed up for a new
-            // streaming service after cancelling Netflix" question.
-            // Uses the same panelist cohort as nflx_churn_destinations
-            // (n=218,700 cancellers) so numbers ladder consistently.
-            nflx_attrition_winners: {
-                enabled: true,
-                title: 'Attrition Winners - who wins the next streaming dollar',
-                subtitle: 'Every canceller is a live in-market signal for another streamer. This is the ranked "winners board" of new-subscription signups in the 7/14/30/60/90 days AFTER a Netflix cancel event, with the co-subscription stack and median-days-to-signup that ad sales can price against.',
-                study_cohort_size: 218700,
-                window_default: '30d',
-                windows: {
-                    '7d':  { pct_new_sub: 31.4, median_days_to_new_sub: 3.6,  top_winner: 'Hulu',           top_winner_pct: 11.8, single_sub_pct: 74.6, multi_sub_pct: 25.4 },
-                    '14d': { pct_new_sub: 42.6, median_days_to_new_sub: 6.1,  top_winner: 'Hulu',           top_winner_pct: 14.7, single_sub_pct: 68.2, multi_sub_pct: 31.8 },
-                    '30d': { pct_new_sub: 56.8, median_days_to_new_sub: 8.4,  top_winner: 'Hulu',           top_winner_pct: 19.6, single_sub_pct: 61.3, multi_sub_pct: 38.7 },
-                    '60d': { pct_new_sub: 67.2, median_days_to_new_sub: 12.7, top_winner: 'Hulu',           top_winner_pct: 22.9, single_sub_pct: 54.8, multi_sub_pct: 45.2 },
-                    '90d': { pct_new_sub: 73.4, median_days_to_new_sub: 14.9, top_winner: 'Hulu',           top_winner_pct: 26.4, single_sub_pct: 48.1, multi_sub_pct: 51.9 }
-                },
-                // % of ALL Netflix cancellers who signed up for THIS
-                // service within the given window. Rows sum to more than
-                // pct_new_sub because a growing share of cancellers stack
-                // 2+ new subs; the stacking block below quantifies that.
-                winners: [
-                    { name: 'Hulu',             pct_30d: 19.6, pct_90d: 26.4, delta_90d: 6.8, type: 'svod',  color: '#22c55e', note: 'The #1 attrition winner. Disney-bundle upsell captures ~37% of Hulu-bound cancellers within 14d of signup.' },
-                    { name: 'Max',              pct_30d: 14.2, pct_90d: 19.1, delta_90d: 4.9, type: 'svod',  color: '#a78bfa', note: 'Spikes 3x around HBO-original launch windows. "Swap" behavior, not abandonment.' },
-                    { name: 'YouTube Premium',  pct_30d: 11.8, pct_90d: 16.7, delta_90d: 4.9, type: 'avod+', color: '#ef4444', note: '"I just watch YouTube now" - creator-economy replacement of the SVOD slot.' },
-                    { name: 'Prime Video',      pct_30d:  9.4, pct_90d: 14.6, delta_90d: 5.2, type: 'svod',  color: '#3b82f6', note: 'Zero-incremental-cost bundle with existing Prime; easiest attribution win.' },
-                    { name: 'Disney+',          pct_30d:  7.6, pct_90d: 11.3, delta_90d: 3.7, type: 'svod',  color: '#60a5fa', note: 'Family + co-viewing households over-index. Bundle-with-Hulu combo is the second-signup path.' },
-                    { name: 'Tubi',             pct_30d:  6.3, pct_90d:  8.7, delta_90d: 2.4, type: 'avod',  color: '#f59e0b', note: 'Price-driven cancellers - "free with ads" replaces the slot entirely.' },
-                    { name: 'Peacock',          pct_30d:  5.2, pct_90d:  7.4, delta_90d: 2.2, type: 'svod',  color: '#8b5cf6', note: 'NFL / live-sports trigger. Heavily seasonal - Q4 signups run 2.3x the Q2 baseline.' },
-                    { name: 'Paramount+',       pct_30d:  4.7, pct_90d:  6.9, delta_90d: 2.2, type: 'svod',  color: '#0ea5e9', note: 'Yellowstone / Sheridan-IP pull dominates. NFL sports package adds a second Q4 wave.' },
-                    { name: 'The Roku Channel', pct_30d:  4.6, pct_90d:  6.4, delta_90d: 1.8, type: 'avod',  color: '#7c3aed', note: 'Smart-TV-first households, same price-driven cohort as Tubi. Overlap with Tubi = 42%.' },
-                    { name: 'Apple TV+',        pct_30d:  4.1, pct_90d:  6.8, delta_90d: 2.7, type: 'svod',  color: '#94a3b8', note: '"One Apple original at a time" - sign up for a specific show, cancel within 45d.' }
-                ],
-                // Stacking = how many NEW streaming services a canceller
-                // signed up for in the given window. "0" is the "no new
-                // sub" cohort - churn to AVOD-only, ad-supported linear,
-                // password-share, or streaming-abandonment.
-                stacking_30d: [
-                    { count: 0, pct: 43.2, label: 'No new streaming sub',        note: 'Reverted to AVOD-only, linear, password-share, or full streaming break. 51.8% of the 30d "no new sub" cohort still watches AVOD daily.' },
-                    { count: 1, pct: 34.8, label: '1 new streaming sub',         note: 'Clean "swap" - one Netflix cancel = one competitor signup. Hulu, Max, and Prime capture 72% of these.' },
-                    { count: 2, pct: 14.9, label: '2 new streaming subs',        note: 'The "stacker" cohort - most commonly Hulu+Disney+ (bundle) or Max+Prime (prestige stack).' },
-                    { count: 3, pct:  5.4, label: '3 new streaming subs',        note: 'Heavy-viewer households - typically Hulu + a niche SVOD + an AVOD floor (Tubi / Pluto).' },
-                    { count: 4, pct:  1.7, label: '4+ new streaming subs',       note: 'Sports-driven super-stackers. Peacock + Paramount+ + Prime + one prestige service is the modal quartet.' }
-                ],
-                // Highest-share co-subscription pairs among the 20.3% of
-                // cancellers who signed up for 2+ new services within 30d.
-                // Percentages are shares of the *2+ stackers*, not of all
-                // cancellers.
-                pairs_30d: [
-                    { a: 'Hulu',        b: 'Disney+',    pct: 27.4, driver: 'Disney bundle upsell inside the Hulu signup flow.' },
-                    { a: 'Hulu',        b: 'Max',        pct: 14.8, driver: 'Prestige-drama stack - the "we still want originals" household.' },
-                    { a: 'Max',         b: 'Prime Video',pct: 11.7, driver: 'Zero-incremental Prime + HBO originals - premium-only stack.' },
-                    { a: 'Peacock',     b: 'Paramount+', pct:  9.6, driver: 'Live-sports super-stack (NFL / UEFA / MLB / SEC-football triangle).' },
-                    { a: 'Hulu',        b: 'Prime Video',pct:  8.4, driver: 'Family + household-utility stack, often bundled through Prime.' },
-                    { a: 'Tubi',        b: 'Roku Channel',pct: 7.1, driver: 'Free-only "downstream" cohort - price-driven cancellers who go AVOD.' }
-                ],
-                // Simple 5-service ad-sales rate card highlighting how
-                // much more valuable a "post-Netflix" impression is
-                // than a generic one for THAT platform. All values are
-                // CPM uplift ranges observed on advertisers who bought
-                // the crosswalk-defined ex-Netflix segment.
-                cpm_uplift: [
-                    { service: 'Hulu',        base_cpm: '$32',  ex_nflx_cpm: '$41-46',  uplift: '+28-44%',  note: 'Retention-defended audience premium; brand-safe ex-Netflix demo skews younger + higher-income.' },
-                    { service: 'Max',         base_cpm: '$36',  ex_nflx_cpm: '$46-52',  uplift: '+28-44%',  note: 'Prestige-drama context + ex-Netflix intent = highest premium CPG uplift on the roster.' },
-                    { service: 'Peacock',     base_cpm: '$28',  ex_nflx_cpm: '$38-44',  uplift: '+36-57%',  note: 'Sports + live windows drive the biggest lift; ex-Netflix cohort adds Q4 auto/insurance premium.' },
-                    { service: 'Paramount+',  base_cpm: '$26',  ex_nflx_cpm: '$34-39',  uplift: '+31-50%',  note: 'Sheridan-IP overlap + NFL = doubled unique-reach vs. their standard demo package.' },
-                    { service: 'Prime Video', base_cpm: '$34',  ex_nflx_cpm: '$41-46',  uplift: '+21-35%',  note: 'Prime shopper + ex-Netflix stack = the "premium household with intent" pack (auto + travel + luxury).' }
-                ],
-                pitch: 'For every 100 Netflix cancellers, 57 signed up for a new streaming service within 30 days - and 39 of those took MORE than one. Netflix sees zero signal here. Crosswalk hands each competitor a ranked "who won my ex-subs" list AND a stacking-cohort breakdown that ad sales can price at a +28-57% CPM uplift over their standard demo pack.'
-            },
-
             // ── PULL 3 · TITLE INTEREST FORMATION ─────────────────
             nflx_title_interest: {
                 enabled: true,
@@ -62007,50 +61876,6 @@
         };
 
         // ──────────────────────────────────────────────────────────────
-        // SHARED STUDY-WINDOW DATE CHIP
-        // Renders the meta.start_date → meta.end_date range as a compact
-        // pill so every card visibly anchors its numbers to a study
-        // window. Reused by the Netflix + Obsession per-card cohort meta
-        // helpers, the generic per-journey tab bar, and the Landman tab
-        // bar so every chart on every journey advertises its date basis.
-        // ──────────────────────────────────────────────────────────────
-        function _jiqStudyDateChip(opts) {
-            opts = opts || {};
-            var m = (window._jiqCurrentRun && window._jiqCurrentRun.meta)
-                 || (window._jiqLastSummary && window._jiqLastSummary.meta)
-                 || {};
-            var s = m.start_date, e = m.end_date;
-            if (!s || !e) return '';
-            var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            function parts(iso) {
-                var p = String(iso).split('-');
-                if (p.length < 3) return null;
-                var mo = parseInt(p[1], 10), day = parseInt(p[2], 10);
-                if (!mo || !day) return null;
-                return { yr: p[0], mo: MONTHS[mo - 1], day: day };
-            }
-            var a = parts(s), b = parts(e);
-            if (!a || !b) return '';
-            var range = (a.yr === b.yr)
-                ? (a.mo + ' ' + a.day + ' – ' + b.mo + ' ' + b.day + ', ' + b.yr)
-                : (a.mo + ' ' + a.day + ', ' + a.yr + ' – ' + b.mo + ' ' + b.day + ', ' + b.yr);
-            var bg = opts.bg || 'rgba(148,163,184,0.10)';
-            var bd = opts.border || 'rgba(148,163,184,0.32)';
-            var fg = opts.color || '#cbd5e1';
-            var title = 'Study window - every metric on this chart reflects panel activity in this date range.';
-            return '<span title="' + _jiqEsc(title) + '"'
-                 +       ' style="display:inline-flex; align-items:center; gap:0.35rem;'
-                 +              ' padding:0.16rem 0.55rem; border-radius:999px;'
-                 +              ' background:' + bg + ';'
-                 +              ' border:1px solid ' + bd + ';'
-                 +              ' font-size:0.64rem; font-weight:700;'
-                 +              ' color:' + fg + '; white-space:nowrap;">'
-                 +   '<span style="opacity:0.7; letter-spacing:0.05em;">STUDY</span>'
-                 +   '<span style="color:var(--text-primary); font-weight:800;">' + _jiqEsc(range) + '</span>'
-                 + '</span>';
-        }
-
-        // ──────────────────────────────────────────────────────────────
         // SHARED RENDERER HELPERS for the Netflix block
         // ──────────────────────────────────────────────────────────────
         function _jiqNflxAbbrevHH(n) {
@@ -62111,7 +61936,6 @@
             return '<span style="display:inline-flex; align-items:center; flex-wrap:wrap; gap:0.55rem;">'
                  +   '<span>' + prefix + ': <strong>' + _jiqFmt(cohortCount || 0) + '</strong>' + ladder + '</span>'
                  +   _jiqNflxPanelChip()
-                 +   _jiqStudyDateChip({ bg: 'rgba(229,9,20,0.08)', border: 'rgba(229,9,20,0.28)', color: '#fca5a5' })
                  + '</span>';
         }
         function _jiqNflxSetCohortMeta(metaElOrId, label, cohortCount) {
@@ -62129,7 +61953,6 @@
         var _JIQ_NFLX_TABS = [
             { id: 'signup',    cardId: 'jiqNflxSignupCard',    emoji: '🔍', label: 'Pre-Signup',     sub: '30d before sub' },
             { id: 'churn',     cardId: 'jiqNflxChurnCard',     emoji: '🔄', label: 'Churn',           sub: 'where they go next' },
-            { id: 'attrition', cardId: 'jiqNflxAttritionCard', emoji: '🏆', label: 'Attrition Winners',sub: 'who wins the next $' },
             { id: 'title',     cardId: 'jiqNflxTitleCard',     emoji: '📈', label: 'Title Demand',    sub: 'pre-launch curve' },
             { id: 'commerce',  cardId: 'jiqNflxCommerceCard',  emoji: '🛒', label: 'Commerce Lift',   sub: 'post-watch shopping' },
             { id: 'intent',    cardId: 'jiqNflxIntentCard',    emoji: '💼', label: 'Intent Packs',    sub: '15 advertiser packs' },
@@ -62148,14 +61971,7 @@
             if (!bar) return;
             bar.style.display = '';
             var active = _jiqNflxActiveTab || _JIQ_NFLX_TABS[0].id;
-            var _nflxDateChip = _jiqStudyDateChip({
-                bg: 'rgba(229,9,20,0.10)', border: 'rgba(229,9,20,0.32)', color: '#fca5a5'
-            });
-            bar.innerHTML =
-                (_nflxDateChip
-                    ? '<div style="display:flex; justify-content:flex-end; margin-bottom:0.35rem;">' + _nflxDateChip + '</div>'
-                    : '')
-                + '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:stretch;">'
+            bar.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:stretch;">'
                 + _JIQ_NFLX_TABS.map(function(t, i) {
                     var on = (t.id === active);
                     var bg = on ? 'rgba(229,9,20,0.85)' : 'rgba(255,255,255,0.04)';
@@ -62279,7 +62095,6 @@
             return '<span style="display:inline-flex; align-items:center; flex-wrap:wrap; gap:0.55rem;">'
                  +   '<span>' + prefix + ': <strong>' + _jiqFmt(cohortCount || 0) + '</strong>' + ladder + '</span>'
                  +   _jiqObsPanelChip()
-                 +   _jiqStudyDateChip({ bg: 'rgba(168,85,247,0.10)', border: 'rgba(168,85,247,0.32)', color: '#c4b5fd' })
                  + '</span>';
         }
         function _jiqObsSetCohortMeta(metaElOrId, label, cohortCount) {
@@ -62306,14 +62121,7 @@
             if (!bar) return;
             bar.style.display = '';
             var active = _jiqObsActiveTab || _JIQ_OBS_TABS[0].id;
-            var _obsDateChip = _jiqStudyDateChip({
-                bg: 'rgba(168,85,247,0.10)', border: 'rgba(168,85,247,0.32)', color: '#c4b5fd'
-            });
-            bar.innerHTML =
-                (_obsDateChip
-                    ? '<div style="display:flex; justify-content:flex-end; margin-bottom:0.35rem;">' + _obsDateChip + '</div>'
-                    : '')
-                + '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:stretch;">'
+            bar.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:stretch;">'
                 + _JIQ_OBS_TABS.map(function(t, i) {
                     var on = (t.id === active);
                     var bg = on ? 'rgba(168,85,247,0.85)' : 'rgba(255,255,255,0.04)';
@@ -63306,168 +63114,6 @@
                 paint();
             }
             _jiqNflxWindowTabs('jiqNflxChurnWindowTabs', data.windows, _jiqNflxChurnActiveWin, onChurnWindowChange);
-            paint();
-        }
-
-        // ──────────────────────────────────────────────────────────────
-        // CARD 2b · 🏆 Attrition Winners - who wins the next $
-        //
-        // Sharpened re-cut of the churn dataset focused on the single
-        // question: after cancelling Netflix, what percent of the panel
-        // signed up for a new streaming service - and which services?
-        // Also carries the stacking distribution, the top co-sub pairs,
-        // and an ad-sales CPM-uplift rate card the winner platforms can
-        // literally quote in a pitch deck.
-        // ──────────────────────────────────────────────────────────────
-        var _jiqNflxAttritionActiveWin = '30d';
-        function renderJourneyIqNflxAttrition(p) {
-            var data = (p && p.enabled !== false && p.windows) ? p : _JIQ_NETFLIX_DATA.nflx_attrition_winners;
-            if (!data) { _jiqHideCard('jiqNflxAttritionCard'); return; }
-            _jiqShowNflxCard('jiqNflxAttritionCard');
-            var titleEl = document.getElementById('jiqNflxAttritionTitle');
-            var subEl   = document.getElementById('jiqNflxAttritionSubtitle');
-            var metaEl  = document.getElementById('jiqNflxAttritionMeta');
-            var pitchEl = document.getElementById('jiqNflxAttritionPitch');
-            if (titleEl) titleEl.textContent = '🏆 ' + (data.title || '').replace(/^🏆\s*/, '');
-            if (subEl)   subEl.textContent = data.subtitle || '';
-            _jiqNflxSetCohortMeta(metaEl, 'Study cohort - Netflix cancellers in window', data.study_cohort_size || 0);
-            if (pitchEl) pitchEl.innerHTML = '<strong>Why this matters for ad sales: </strong>' + _jiqEsc(data.pitch || '');
-
-            _jiqNflxAttritionActiveWin = data.window_default || _jiqNflxAttritionActiveWin;
-
-            function paint() {
-                var w = data.windows[_jiqNflxAttritionActiveWin] || {};
-
-                var topEl = document.getElementById('jiqNflxAttritionTopline');
-                if (topEl) {
-                    topEl.innerHTML = ''
-                        + _jiqTile('% took a new streaming sub',
-                                   (w.pct_new_sub || 0).toFixed(1) + '%',
-                                   'of cancellers in ' + _jiqNflxAttritionActiveWin + ' post-cancel',
-                                   '#22c55e')
-                        + _jiqTile('#1 winner',
-                                   _jiqEsc(w.top_winner || '-'),
-                                   (w.top_winner_pct || 0).toFixed(1) + '% of cancellers',
-                                   '#22c55e')
-                        + _jiqTile('Median days to signup',
-                                   (w.median_days_to_new_sub || 0).toFixed(1) + 'd',
-                                   'from cancel to first new sub',
-                                   '#f59e0b')
-                        + _jiqTile('Multi-sub stackers',
-                                   (w.multi_sub_pct || 0).toFixed(1) + '%',
-                                   'of new-sub cohort took 2+ services',
-                                   '#3b82f6');
-                }
-
-                var winnersEl = document.getElementById('jiqNflxAttritionWinners');
-                if (winnersEl) {
-                    var ws = (data.winners || []).slice().sort(function(a, b) {
-                        return (b.pct_30d || 0) - (a.pct_30d || 0);
-                    });
-                    var maxW = ws.reduce(function(m, r) { return Math.max(m, r.pct_30d || 0, r.pct_90d || 0); }, 0);
-                    winnersEl.innerHTML = ws.map(function(r, idx) {
-                        var color = r.color || '#22c55e';
-                        var typeColor = (r.type === 'avod' ? '#94a3b8' : (r.type === 'avod+' ? '#f59e0b' : color));
-                        var rankBg = idx === 0 ? '#fbbf24' : (idx === 1 ? '#cbd5e1' : (idx === 2 ? '#d97706' : 'rgba(255,255,255,0.06)'));
-                        var rankFg = idx < 3 ? '#0f172a' : 'var(--text-secondary)';
-                        var delta = (r.delta_90d || 0);
-                        var deltaTxt = (delta >= 0 ? '+' : '') + delta.toFixed(1);
-                        return '<div style="display:grid; grid-template-columns: 28px minmax(0, 1fr); gap:0.55rem; align-items:start; padding:9px 0; border-bottom:1px solid var(--border-color);">'
-                             +   '<div style="width:26px; height:26px; border-radius:50%; background:' + rankBg + '; color:' + rankFg + ';'
-                             +              ' display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:800;">' + (idx + 1) + '</div>'
-                             +   '<div>'
-                             +     '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
-                             +       '<div>'
-                             +         '<span style="font-size:12.5px; font-weight:700;">' + _jiqEsc(r.name) + '</span>'
-                             +         '<span style="font-size:9.5px; font-weight:700; padding:1.5px 6px; border-radius:3px; margin-left:6px;'
-                             +                     ' background:' + typeColor + '22; color:' + typeColor + ';">' + _jiqEsc(r.type) + '</span>'
-                             +       '</div>'
-                             +       '<div style="font-size:12px; font-weight:700;">'
-                             +         '<span style="opacity:0.7;">30d</span> ' + (r.pct_30d || 0).toFixed(1) + '% · '
-                             +         '<span style="opacity:0.7;">90d</span> ' + (r.pct_90d || 0).toFixed(1) + '%'
-                             +         '<span style="font-size:10.5px; font-weight:700; margin-left:6px; color:#22c55e;">' + deltaTxt + 'pp Δ</span>'
-                             +       '</div>'
-                             +     '</div>'
-                             +     '<div style="display:grid; grid-template-columns: 60px 1fr; gap:6px; align-items:center; margin-top:5px;">'
-                             +       '<div style="font-size:10px; opacity:0.55;">30d →</div>' + _jiqMiniBar(r.pct_30d || 0, color, maxW)
-                             +       '<div style="font-size:10px; opacity:0.55;">90d →</div>' + _jiqMiniBar(r.pct_90d || 0, color, maxW)
-                             +     '</div>'
-                             +     '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:5px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
-                             +   '</div>'
-                             + '</div>';
-                    }).join('');
-                }
-
-                var stackEl = document.getElementById('jiqNflxAttritionStacking');
-                if (stackEl) {
-                    var st = data.stacking_30d || [];
-                    var maxS = st.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
-                    stackEl.innerHTML = st.map(function(r) {
-                        var isZero = (r.count === 0);
-                        var color = isZero ? '#94a3b8' : (r.count === 1 ? '#22c55e' : (r.count === 2 ? '#3b82f6' : (r.count === 3 ? '#a855f7' : '#ef4444')));
-                        var badge = isZero ? '0' : (r.count >= 4 ? '4+' : String(r.count));
-                        return '<div style="padding:7px 0; border-bottom:1px solid var(--border-color);">'
-                             +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
-                             +     '<div style="display:flex; align-items:center; gap:6px;">'
-                             +       '<span style="min-width:26px; height:22px; padding:0 7px; display:inline-flex; align-items:center; justify-content:center; border-radius:5px; font-size:0.72rem; font-weight:800; background:' + color + '22; color:' + color + ';">' + badge + '</span>'
-                             +       '<span style="font-size:12px; font-weight:600;">' + _jiqEsc(r.label) + '</span>'
-                             +     '</div>'
-                             +     '<div style="font-size:12px; font-weight:700; color:' + color + ';">' + (r.pct || 0).toFixed(1) + '%</div>'
-                             +   '</div>'
-                             +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.pct, color, maxS) + '</div>'
-                             +   '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.note || '') + '</div>'
-                             + '</div>';
-                    }).join('');
-                }
-
-                var pairsEl = document.getElementById('jiqNflxAttritionPairs');
-                if (pairsEl) {
-                    var ps = data.pairs_30d || [];
-                    var maxP = ps.reduce(function(m, r) { return Math.max(m, r.pct || 0); }, 0);
-                    pairsEl.innerHTML = ps.map(function(r) {
-                        return '<div style="padding:7px 0; border-bottom:1px solid var(--border-color);">'
-                             +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
-                             +     '<div style="font-size:12px; font-weight:600;">'
-                             +       _jiqEsc(r.a) + ' <span style="opacity:0.55;">×</span> ' + _jiqEsc(r.b)
-                             +     '</div>'
-                             +     '<div style="font-size:12px; font-weight:700; color:#3b82f6;">' + (r.pct || 0).toFixed(1) + '%</div>'
-                             +   '</div>'
-                             +   '<div style="margin-top:4px;">' + _jiqMiniBar(r.pct, '#3b82f6', maxP) + '</div>'
-                             +   '<div style="font-size:10.5px; color:var(--text-secondary); font-style:italic; margin-top:4px; line-height:1.45;">' + _jiqEsc(r.driver || '') + '</div>'
-                             + '</div>';
-                    }).join('');
-                }
-
-                var cpmEl = document.getElementById('jiqNflxAttritionCpm');
-                if (cpmEl) {
-                    var cp = data.cpm_uplift || [];
-                    cpmEl.innerHTML = ''
-                        + '<div style="display:grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.7fr) minmax(0, 0.9fr) minmax(0, 0.7fr) minmax(0, 2.4fr);'
-                        +            ' gap:0.55rem; padding:0.35rem 0.55rem; margin-bottom:0.35rem;'
-                        +            ' background:rgba(255,255,255,0.03); border-radius:5px;'
-                        +            ' font-size:0.62rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-secondary);">'
-                        +   '<div>Service</div><div>Base CPM</div><div>Ex-NFLX CPM</div><div style="color:#22c55e;">Uplift</div><div>Why</div>'
-                        + '</div>'
-                        + cp.map(function(r) {
-                            return '<div style="display:grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.7fr) minmax(0, 0.9fr) minmax(0, 0.7fr) minmax(0, 2.4fr);'
-                                 +            ' gap:0.55rem; padding:0.5rem 0.55rem; margin-bottom:0.35rem;'
-                                 +            ' background:rgba(34,197,94,0.045); border-left:3px solid #22c55e; border-radius:4px;'
-                                 +            ' align-items:baseline;">'
-                                 +   '<div style="font-size:0.82rem; font-weight:700;">' + _jiqEsc(r.service) + '</div>'
-                                 +   '<div style="font-size:0.78rem; font-weight:600; color:var(--text-secondary);">' + _jiqEsc(r.base_cpm) + '</div>'
-                                 +   '<div style="font-size:0.78rem; font-weight:800;">' + _jiqEsc(r.ex_nflx_cpm) + '</div>'
-                                 +   '<div style="font-size:0.78rem; font-weight:800; color:#22c55e;">' + _jiqEsc(r.uplift) + '</div>'
-                                 +   '<div style="font-size:0.72rem; color:var(--text-secondary); font-style:italic; line-height:1.45;">' + _jiqEsc(r.note) + '</div>'
-                                 + '</div>';
-                          }).join('');
-                }
-            }
-            function onAttrWindowChange(k) {
-                _jiqNflxAttritionActiveWin = k;
-                _jiqNflxWindowTabs('jiqNflxAttritionWindowTabs', data.windows, k, onAttrWindowChange);
-                paint();
-            }
-            _jiqNflxWindowTabs('jiqNflxAttritionWindowTabs', data.windows, _jiqNflxAttritionActiveWin, onAttrWindowChange);
             paint();
         }
 
@@ -67800,26 +67446,6 @@
             // it on every render is fine.
             var activeTab = nav.dataset.activeTab || 'before';
             setLandmanTab(activeTab);
-
-            // Date-window chip - stamped onto the Landman nav so every
-            // tab reveals its study window at a glance. Rendered as a
-            // dedicated slot to survive re-renders idempotently.
-            var landmanTabsBar = document.getElementById('jiqLandmanTabs');
-            if (landmanTabsBar) {
-                var landmanDateSlot = document.getElementById('jiqLandmanDateChip');
-                if (!landmanDateSlot) {
-                    landmanDateSlot = document.createElement('span');
-                    landmanDateSlot.id = 'jiqLandmanDateChip';
-                    landmanDateSlot.style.marginLeft = 'auto';
-                    landmanDateSlot.style.alignSelf = 'center';
-                    landmanTabsBar.appendChild(landmanDateSlot);
-                }
-                landmanDateSlot.innerHTML = _jiqStudyDateChip({
-                    bg: 'rgba(245,158,11,0.10)',
-                    border: 'rgba(245,158,11,0.32)',
-                    color: '#fcd34d'
-                });
-            }
         }
 
         // ──────────────────────────────────────────────────────────────
