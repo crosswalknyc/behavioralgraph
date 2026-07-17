@@ -10109,6 +10109,29 @@
             grid-template-columns: 50px minmax(0, 1fr) 52px 72px 76px 90px;
         }
 
+        /* Non-US / foreign location files (e.g. Prizeo Germany, sweepstakes): simple
+           two-column list of city + percentage, with all US-specific modules hidden. */
+        #allLocationsContainer.simple-mode .location-row {
+            grid-template-columns: minmax(0, 1fr) 100px;
+        }
+        #allLocationsContainer.simple-mode .location-row span:nth-child(1) {
+            text-align: left !important;
+            justify-self: start;
+        }
+        #allLocationsContainer.simple-mode .location-row span:nth-child(2) {
+            text-align: right !important;
+            justify-self: end;
+        }
+        #tab-location.foreign-mode #locationStats,
+        #tab-location.foreign-mode .location-section:not(#allLocationsContainer),
+        #tab-location.foreign-mode .location-grid {
+            display: none !important;
+        }
+        /* Hide the US-centric sort/search controls on the All Locations module in foreign mode */
+        #tab-location.foreign-mode #allLocationsContainer > div:first-child > div:last-child {
+            display: none !important;
+        }
+
         .location-row.header {
             font-weight: 600;
             color: var(--text-secondary);
@@ -84595,6 +84618,7 @@
                 behavioral: {},
                 categories: {},
                 locations: [],
+                rawLocations: [], // ALL LOCATION rows as-is (used for non-US / foreign city files)
                 interests: {} // For interests data
             };
 
@@ -85267,6 +85291,13 @@
                 // Location/DMA - include DMAs that have a DMA rank or map to a known canonical DMA
                 if (category === 'LOCATION' && value && (getDMARank(value) != null || getDMARank(matchCanonicalDMA(value) || '') != null)) {
                     result.locations.push({ name: value, pct: pct, index: index, genPopPct: genPopPct, projection: usProjection });
+                }
+
+                // Raw location capture: keep EVERY LOCATION row verbatim (even non-US cities that
+                // have no Nielsen DMA rank, e.g. German cities in Prizeo Germany / sweepstakes files).
+                // Used to detect non-US files and render a simple city/percentage list.
+                if (category === 'LOCATION' && value) {
+                    result.rawLocations.push({ name: value, pct: pct });
                 }
 
                 // Categories tree
@@ -98604,7 +98635,91 @@
             return arr;
         }
 
+        // Stores the original "All Locations" header markup so we can restore it after
+        // temporarily replacing it for a non-US (foreign) location file.
+        let _origAllLocationsHeaderHTML = null;
+
+        // A location file is treated as non-US ("foreign") when it has LOCATION rows but
+        // none of them are the anchor US markets New York or Los Angeles. These files
+        // (e.g. Prizeo Germany and other sweepstakes brands) carry local cities that do
+        // not map to our US Gen Pop DMA index, so we only list city + percentage.
+        function isForeignLocationData(rawLocs) {
+            if (!Array.isArray(rawLocs) || rawLocs.length === 0) return false;
+            const hasUsAnchor = rawLocs.some(function(l) {
+                const n = (l && l.name != null ? String(l.name) : '').toLowerCase();
+                return n.includes('new york') || n.includes('los angeles');
+            });
+            return !hasUsAnchor;
+        }
+
+        // Renders a simple city + percentage list for non-US files and hides/disables the
+        // US-specific LOCATION modules (regional breakdown, heat map, over/under-indexing).
+        function renderForeignLocationList(rawLocs) {
+            const tabLoc = document.getElementById('tab-location');
+            if (tabLoc) tabLoc.classList.add('foreign-mode');
+            const acont = document.getElementById('allLocationsContainer');
+            if (acont) {
+                acont.classList.add('simple-mode');
+                acont.classList.remove('hide-cw-gp');
+            }
+
+            const header = document.getElementById('allLocationsHeader');
+            if (header) {
+                if (_origAllLocationsHeaderHTML === null) _origAllLocationsHeaderHTML = header.innerHTML;
+                header.innerHTML = '<span>Location</span><span>Percentage</span>';
+            }
+
+            // Combine any duplicate city rows and sort by percentage (highest first).
+            const totals = new Map();
+            rawLocs.forEach(function(l) {
+                const name = (l && l.name != null ? String(l.name) : '').trim();
+                if (!name) return;
+                const pct = (l && typeof l.pct === 'number') ? l.pct : (parseFloat(l && l.pct) || 0);
+                totals.set(name, (totals.get(name) || 0) + pct);
+            });
+            const rows = Array.from(totals.entries())
+                .map(function(e) { return { name: e[0], pct: e[1] }; })
+                .sort(function(a, b) { return b.pct - a.pct; });
+
+            const listEl = document.getElementById('locationListAll');
+            if (listEl) {
+                listEl.innerHTML = rows.map(function(r) {
+                    return '<div class="location-row" data-name="' + escapeHtml(r.name.toLowerCase()) + '">' +
+                               '<span>' + escapeHtml(r.name) + '</span>' +
+                               '<span style="font-weight:600;">' + r.pct.toFixed(2) + '%</span>' +
+                           '</div>';
+                }).join('');
+            }
+            const countEl = document.getElementById('locationCountAll');
+            if (countEl) countEl.textContent = 'Showing ' + rows.length + ' locations';
+
+            // Clear stale US-centric module content.
+            ['locationList', 'locationListBottom', 'usHeatmap', 'regionalBreakdown', 'locationStats'].forEach(function(id) {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '';
+            });
+            allLocationData = { overIndexing: [], underIndexing: [], all: rows };
+        }
+
         function renderLocationTable(locations) {
+            // Non-US files (no New York / Los Angeles present): list the cities and their
+            // percentages only, and disable the rest of the LOCATION page.
+            const _rawLocs = (currentDashboardData && Array.isArray(currentDashboardData.rawLocations))
+                ? currentDashboardData.rawLocations : [];
+            if (isForeignLocationData(_rawLocs)) {
+                renderForeignLocationList(_rawLocs);
+                return;
+            }
+            // Normal US mode: make sure any foreign-mode styling/header is cleared.
+            const _tabLoc = document.getElementById('tab-location');
+            if (_tabLoc) _tabLoc.classList.remove('foreign-mode');
+            const _acont = document.getElementById('allLocationsContainer');
+            if (_acont) _acont.classList.remove('simple-mode');
+            if (_origAllLocationsHeaderHTML !== null) {
+                const _hdr = document.getElementById('allLocationsHeader');
+                if (_hdr) _hdr.innerHTML = _origAllLocationsHeaderHTML;
+            }
+
             locations = condenseDMALocations(locations);
             const isProjection = dashDisplayMode === 'projection';
             
