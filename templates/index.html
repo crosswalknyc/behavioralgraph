@@ -114145,12 +114145,14 @@
                 });
             }
 
-            // Determine which data to use for sorting based on sortType
+            // Determine which data to use for sorting based on sortType.
+            // Coerce to a finite number: index cells can be the string 'N/A' (item has no
+            // Gen Pop baseline) or null, and 'N/A' - number = NaN, which breaks the sort
+            // comparator and leaves the column only partially ordered. Non-numeric -> 0.
             const getSortValue = (row, idx) => {
-                if (sortType === 'index') {
-                    return row.indexData[idx] || 0;
-                }
-                return row.pctData[idx] || 0;
+                const raw = sortType === 'index' ? row.indexData[idx] : row.pctData[idx];
+                const num = typeof raw === 'number' ? raw : parseFloat(raw);
+                return Number.isFinite(num) ? num : 0;
             };
             
             // Get sort direction (use global currentSortDirection)
@@ -114326,12 +114328,14 @@
                 });
             }
 
-            // Determine which data to use for sorting based on sortType
+            // Determine which data to use for sorting based on sortType.
+            // Coerce to a finite number: index cells can be the string 'N/A' (item has no
+            // Gen Pop baseline) or null, and 'N/A' - number = NaN, which breaks the sort
+            // comparator and leaves the column only partially ordered. Non-numeric -> 0.
             const getSortValue = (row, idx) => {
-                if (sortType === 'index') {
-                    return row.indexData[idx] || 0;
-                }
-                return row.pctData[idx] || 0;
+                const raw = sortType === 'index' ? row.indexData[idx] : row.pctData[idx];
+                const num = typeof raw === 'number' ? raw : parseFloat(raw);
+                return Number.isFinite(num) ? num : 0;
             };
             
             // Get sort direction (use global currentSortDirection)
@@ -114598,12 +114602,14 @@
                 return hasNonGenPopData;
             });
 
-            // Determine which data to use for sorting based on sortType
+            // Determine which data to use for sorting based on sortType.
+            // Coerce to a finite number: index cells can be the string 'N/A' (item has no
+            // Gen Pop baseline) or null, and 'N/A' - number = NaN, which breaks the sort
+            // comparator and leaves the column only partially ordered. Non-numeric -> 0.
             const getSortValue = (row, idx) => {
-                if (sortType === 'index') {
-                    return row.indexData[idx] || 0;
-                }
-                return row.pctData[idx] || 0;
+                const raw = sortType === 'index' ? row.indexData[idx] : row.pctData[idx];
+                const num = typeof raw === 'number' ? raw : parseFloat(raw);
+                return Number.isFinite(num) ? num : 0;
             };
             
             // Get sort direction (use global currentSortDirection)
@@ -116710,7 +116716,7 @@
                     });
                     return { value, pctData, indexData };
                 });
-                const getSortValue = (row, idx) => sortType === 'index' ? (row.indexData[idx] || 0) : (row.pctData[idx] || 0);
+                const getSortValue = (row, idx) => { const raw = sortType === 'index' ? row.indexData[idx] : row.pctData[idx]; const num = typeof raw === 'number' ? raw : parseFloat(raw); return Number.isFinite(num) ? num : 0; };
                 const behSortDir = currentSortDirection || 'desc';
                 const sortProfileIdx = getSortProfileIdx(catKey);
                 if (sortProfileIdx !== null) {
@@ -116745,7 +116751,7 @@
                     });
                     return { value: name, pctData, indexData };
                 });
-                const getSortVal = (row, i) => sortType === 'index' ? (row.indexData[i] || 0) : (row.pctData[i] || 0);
+                const getSortVal = (row, i) => { const raw = sortType === 'index' ? row.indexData[i] : row.pctData[i]; const num = typeof raw === 'number' ? raw : parseFloat(raw); return Number.isFinite(num) ? num : 0; };
                 const sortDir = currentSortDirection || 'desc';
                 const locSortIdx = getSortProfileIdx('location');
                 dataRows.sort((a, b) => sortDir === 'asc' ? getSortVal(a, locSortIdx) - getSortVal(b, locSortIdx) : getSortVal(b, locSortIdx) - getSortVal(a, locSortIdx));
@@ -116775,7 +116781,7 @@
                 });
                 return { value, pctData, indexData };
             });
-            const getSortVal = (row, idx) => sortType === 'index' ? (row.indexData[idx] || 0) : (row.pctData[idx] || 0);
+            const getSortVal = (row, idx) => { const raw = sortType === 'index' ? row.indexData[idx] : row.pctData[idx]; const num = typeof raw === 'number' ? raw : parseFloat(raw); return Number.isFinite(num) ? num : 0; };
             const sortDir = currentSortDirection || 'desc';
             const getAgeSortKey = (val) => { const s = (val || '').toString().trim(); if (/^<\d+/.test(s)) return 0; if (s.includes('+')) return parseInt(s.replace(/[^0-9]/g, '')) || 99; const nums = s.match(/\d+/g); return nums && nums[0] ? parseInt(nums[0]) : 0; };
             const demoSortIdx = getSortProfileIdx(sectionKey);
