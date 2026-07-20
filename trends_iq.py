@@ -3151,6 +3151,10 @@ def _fetch_trending_people(headlines: list[dict],
     counts: Counter = Counter()
     source_diversity: dict[str, set[str]] = defaultdict(set)
     contexts: dict[str, list[str]] = defaultdict(list)
+    # Parallel list of {text, source, url, kind} dicts for each context
+    # snippet - lets the frontend render "<headline> - <outlet>" like the
+    # Movers card, and lets a click deep-link back to the article.
+    context_meta: dict[str, list[dict]] = defaultdict(list)
     for kind, text, source, url in corpus:
         for name in _extract_person_names(text):
             if kind == 'search' or kind == 'social':
@@ -3161,6 +3165,12 @@ def _fetch_trending_people(headlines: list[dict],
             snippet = (text or '').strip()
             if snippet and len(contexts[name]) < 3:
                 contexts[name].append(snippet[:140])
+                context_meta[name].append({
+                    'text':   snippet[:140],
+                    'source': source or '',
+                    'url':    url or '',
+                    'kind':   kind,
+                })
 
     # Cross-source diversity bonus: names that show up across multiple
     # source types (news + search + social) get a lift so they beat
@@ -3177,10 +3187,11 @@ def _fetch_trending_people(headlines: list[dict],
         if cnt < 2:
             continue
         people.append({
-            'name':      name,
-            'mentions':  cnt,
-            'context':   contexts.get(name, [])[:3],
-            'sources':   sorted(source_diversity.get(name, [])),
+            'name':         name,
+            'mentions':     cnt,
+            'context':      contexts.get(name, [])[:3],
+            'context_meta': context_meta.get(name, [])[:3],
+            'sources':      sorted(source_diversity.get(name, [])),
         })
         if len(people) >= 40:
             break
