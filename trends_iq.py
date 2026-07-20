@@ -1096,8 +1096,21 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         'philanthropy', 'philanthropist', 'philanthropic',
         'nonprofit', 'non-profit', 'nonprofits', 'ngo', '501c3', '501(c)(3)',
         'charity', 'charities', 'charitable',
-        'foundation grant', 'foundation funding', 'grantmaking',
-        'grant funding', 'grant rules', 'grantmaker', 'grantee',
+        # "foundation" alone would false-positive on makeup and sports
+        # club names; use context compounds instead. Together these
+        # catch every real philanthropy story: "Gates Foundation",
+        # "Ford Foundation", "family foundation", "foundation
+        # announced", "'s foundation", etc.
+        'foundation grant', 'foundation funding', 'foundation gift',
+        'foundation announced', 'foundation launches', 'foundation says',
+        'foundation moves', 'foundation to donate', 'foundation to give',
+        'foundation pledges', 'foundation commits',
+        'family foundation', 'family foundations',
+        'charitable foundation', 'private foundation',
+        'community foundation', 'nonprofit foundation',
+        'philanthropic foundation', "'s foundation",
+        'grantmaking', 'grant funding', 'grant rules',
+        'grantmaker', 'grantee', 'grant program',
         'endowment', 'donor advised fund', 'daf ',
         # fundraising surface
         'fundraiser', 'fundraising', 'fundraise', 'gofundme',
@@ -1130,6 +1143,16 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         # celebrity-driven giving (common trending pattern)
         'megadonation', 'mega-donation', 'anonymous donor',
         'billionaire donation', 'celebrity donation',
+        'celebrity giving', 'celebrity philanthropy',
+        'annual donation', 'annual gift', 'gift of $', 'donates $',
+        'donated $', 'pledges $', 'pledged $',
+        'gift to', 'donation to', 'donates to',
+        # additional foundations (Ariana Grande's Protect & Defend,
+        # Buffett family, Bezos day one, etc.)
+        'ariana grande foundation', "grande's foundation",
+        'buffett family foundation', 'day one fund', 'earth fund',
+        'bezos earth', 'melinda french', 'melinda gates',
+        'pivotal ventures', "warren buffett's",
     ],
     # Gaming (video-game content). Sits after entertainment/sports so
     # broadly popular events still peel off first, but before tech so
@@ -1777,6 +1800,11 @@ def _bucket_searches_by_category(rows: list[dict], per_bucket: int = 30
     what's already visible in Entertainment / Retail / Politics /
     Finance.
     """
+    # Bucket dict MUST list every non-overall category from
+    # `_CATEGORY_PRIORITY` - the harvest pass (and the frontend cards)
+    # skip anything not present here. Missing `philanthropy` was the
+    # bug that kept the Philanthropy card empty even when the Chronicle
+    # of Philanthropy feed had 40 items ready to fold in.
     buckets: dict[str, list[dict]] = {
         'sports':        [],
         'entertainment': [],
@@ -1792,6 +1820,7 @@ def _bucket_searches_by_category(rows: list[dict], per_bucket: int = 30
         'home':          [],
         'business':      [],
         'retail':        [],
+        'philanthropy':  [],
         'politics':      [],
         'conservative':  [],
         'progressive':   [],
@@ -1830,6 +1859,7 @@ def _augment_thin_buckets_from_pools(
         wikipedia_trending:  list[dict],
         articles_by_source:  Optional[list[dict]] = None,
         movers:              Optional[dict]      = None,
+        philanthropy_news:   Optional[list[dict]] = None,
 ) -> dict[str, list[dict]]:
     """Fold matching secondary-signal rows into category buckets that
     came out thin (< `_THIN_BUCKET_THRESHOLD` items) from the
@@ -1881,6 +1911,16 @@ def _augment_thin_buckets_from_pools(
     _news_seen_titles = {(h.get('title') or '').strip().lower()
                           for h in news_pool if h.get('title')}
     for h in (trending_headlines or []):
+        t = (h.get('title') or '').strip().lower()
+        if t and t not in _news_seen_titles:
+            news_pool.append(h)
+            _news_seen_titles.add(t)
+
+    # Philanthropy-specific feed (Chronicle of Philanthropy, NPQ, SSIR,
+    # Blue Avocado, Guardian Global Dev) - ~40 items dedicated to
+    # philanthropy stories. Merge into the news pool so the philanthropy
+    # bucket can fold them in when Google Trends misses the beat.
+    for h in (philanthropy_news or []):
         t = (h.get('title') or '').strip().lower()
         if t and t not in _news_seen_titles:
             news_pool.append(h)
@@ -3815,6 +3855,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         wikipedia_trending  = wikipedia_trending,
         articles_by_source  = articles_by_source,
         movers              = movers,
+        philanthropy_news   = philanthropy_news,
     )
 
     now = datetime.now(timezone.utc)
