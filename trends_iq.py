@@ -1514,34 +1514,100 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
     # live in tech; Tesla stock lives in finance; general car launches
     # / recalls / non-Tesla EV news live here.
     'auto': [
-        # legacy OEMs
+        # Brand-only tokens. These are the big ones - "subaru recall",
+        # "bmw starter relay", "lucid" all come through as bare-brand
+        # searches, so requiring "subaru ascent" or "lucid air" to match
+        # was too tight. Match any bare brand and let priority handle
+        # entertainment overlaps ("kim kardashian ford bronco").
+        'tesla', 'ford', 'chevy', 'chevrolet', 'toyota', 'honda',
+        'nissan', 'hyundai', 'kia', 'jeep', 'ram truck', 'dodge',
+        'chrysler', 'bmw', 'mercedes', 'mercedes-benz', 'mercedes benz',
+        'audi', 'porsche', 'volkswagen', 'vw', 'volvo', 'subaru',
+        'mazda', 'lucid', 'rivian', 'polestar', 'byd', 'nio ev',
+        'xpeng', 'genesis auto', 'cadillac', 'buick', 'lincoln car',
+        'infiniti', 'acura', 'lexus', 'mini cooper', 'maserati',
+        'lamborghini', 'ferrari', 'aston martin', 'mclaren car',
+        'bentley', 'rolls royce', 'rolls-royce', 'jaguar', 'land rover',
+        'gm', 'general motors', 'stellantis', 'waymo', 'fsd',
+        'nhtsa', 'iihs',
+        # legacy OEMs / trucks / SUVs
         'ford f-150', 'ford f150', 'ford bronco', 'ford maverick',
-        'ford mustang', 'ford ranger', 'chevrolet silverado',
-        'chevy silverado', 'chevy tahoe', 'gmc yukon', 'gmc hummer',
+        'ford mustang', 'ford ranger', 'ford explorer', 'ford edge',
+        'chevrolet silverado', 'chevy silverado', 'chevy tahoe',
+        'chevy suburban', 'chevy equinox', 'chevy trax',
+        'gmc yukon', 'gmc hummer', 'gmc sierra',
         'toyota camry', 'toyota tacoma', 'toyota tundra',
         'toyota 4runner', 'toyota land cruiser', 'toyota supra',
+        'toyota rav4', 'toyota corolla', 'toyota highlander',
+        'toyota sienna',
         'honda civic', 'honda accord', 'honda crv', 'honda cr-v',
+        'honda pilot', 'honda odyssey', 'honda ridgeline',
         'nissan altima', 'nissan rogue', 'nissan pathfinder',
-        'jeep wrangler', 'jeep grand cherokee', 'ram 1500', 'ram trx',
-        'dodge charger', 'dodge challenger',
-        # luxury / performance
-        'porsche 911', 'porsche taycan', 'bmw m3', 'bmw m5',
-        'audi rs6', 'mercedes eqs', 'lucid air',
+        'nissan sentra', 'nissan frontier',
+        'jeep wrangler', 'jeep grand cherokee', 'jeep gladiator',
+        'jeep compass', 'jeep renegade',
+        'ram 1500', 'ram trx', 'ram 2500',
+        'dodge charger', 'dodge challenger', 'dodge durango',
+        'subaru ascent', 'subaru forester', 'subaru crosstrek',
+        'subaru outback', 'subaru wrx', 'subaru impreza',
+        'subaru legacy', 'subaru brz',
+        # luxury / performance / models
+        'porsche 911', 'porsche taycan', 'porsche cayenne',
+        'porsche macan', 'porsche 718',
+        'bmw m3', 'bmw m5', 'bmw x5', 'bmw x7', 'bmw i4', 'bmw ix',
+        'audi rs6', 'audi q5', 'audi q7', 'audi e-tron', 'audi a4',
+        'mercedes eqs', 'mercedes gle', 'mercedes s-class',
+        'mercedes c-class', 'mercedes g-wagon', 'g wagon',
+        'lucid air', 'lucid gravity',
         'rivian r1s', 'rivian r1t',
+        # Tesla models
+        'model 3', 'model s', 'model x', 'model y',
+        'tesla model 3', 'tesla model s', 'tesla model x',
+        'tesla model y', 'cybertruck', 'tesla cybertruck',
+        'tesla roadster', 'tesla semi',
         # EVs (non-Tesla)
         'ev tax credit', 'ev rebate', 'ev charger', 'ev range',
-        'ev battery fire', 'byd auto', 'byd ev', 'nio ev',
-        'xpeng', 'polestar 3', 'polestar 4', 'kia ev6', 'kia ev9',
-        'hyundai ioniq', 'ford lightning', 'ford f-150 lightning',
-        'chevy bolt', 'chevy blazer ev',
-        # recalls / news
-        'car recall', 'vehicle recall', 'airbag recall',
-        'takata airbag', 'nhtsa investigation',
+        'ev battery fire', 'ev market', 'ev sales', 'ev sale',
+        'electric vehicle', 'electric car', 'electric truck',
+        'plug-in hybrid', 'plug in hybrid',
+        'byd auto', 'byd ev', 'byd atto', 'byd seal',
+        'polestar 3', 'polestar 4', 'polestar 2',
+        'kia ev6', 'kia ev9', 'kia ev5', 'kia sorento', 'kia telluride',
+        'kia sportage', 'kia seltos', 'kia forte',
+        'hyundai ioniq', 'hyundai kona', 'hyundai tucson',
+        'hyundai palisade', 'hyundai santa fe', 'hyundai elantra',
+        'ford lightning', 'ford f-150 lightning',
+        'chevy bolt', 'chevy blazer ev', 'chevy equinox ev',
+        'chevy silverado ev', 'chevy volt',
+        # recalls / news / regulator
+        'car recall', 'auto recall', 'vehicle recall', 'airbag recall',
+        'nhtsa recall', 'ford recall', 'gm recall', 'toyota recall',
+        'honda recall', 'tesla recall', 'chevy recall', 'kia recall',
+        'hyundai recall', 'nissan recall', 'bmw recall',
+        'subaru recall', 'mercedes recall', 'audi recall',
+        'volkswagen recall', 'vw recall', 'ram recall',
+        'jeep recall', 'stellantis recall', 'ev recall',
+        'takata airbag', 'nhtsa investigation', 'iihs',
+        'stellantis', 'automaker', 'auto sales', 'car sales',
+        'used car', 'used cars', 'car price', 'car prices',
+        'auto insurance rate',
+        # self-driving
+        'autopilot', 'full self-driving', 'full self driving', 'fsd',
+        'super cruise', 'blue cruise', 'autonomous vehicle',
+        'robotaxi', 'waymo', 'cruise robotaxi',
+        # auto shows / industry
+        'detroit auto show', 'geneva motor show',
+        'los angeles auto show', 'la auto show', 'ces auto',
         # racing (separate from sports team names)
-        'formula 1 race', 'monaco grand prix', 'daytona 500',
-        'indianapolis 500', 'indy 500', 'le mans',
+        'formula 1 race', 'formula 1', 'formula one', ' f1 race',
+        'nascar race', 'nascar cup', 'monaco grand prix',
+        'daytona 500', 'indianapolis 500', 'indy 500',
+        'le mans', 'imsa', 'sebring', 'daytona 24',
+        'lewis hamilton', 'max verstappen', 'charles leclerc',
+        'lando norris',
         # gas / EV crossover
         'gas prices', 'gas prices today', 'aaa gas prices',
+        'gas price', 'diesel price', 'oil price',
     ],
     # Fashion & beauty. Priority above retail so a "sephora sale" or
     # "rare beauty launch" search lands here (brand + product news)
@@ -1580,27 +1646,64 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
     # searches route here (home category context) rather than
     # generic retail.
     'home': [
-        # housing market
-        'mortgage rates', '30 year mortgage', 'housing market',
-        'zillow', 'redfin', 'realtor.com', 'realtor com',
-        'home prices', 'housing crash', 'housing bubble',
-        'rent prices', 'rent hike',
+        # housing market - broadened. Anything with "housing" or
+        # "real estate" or "mortgage" or "rent" in it lands here first.
+        'housing', 'housing market', 'housing crash', 'housing bubble',
+        'housing crisis', 'housing shortage', 'housing affordability',
+        'affordable housing', 'affordability crisis',
+        'real estate', 'realestate', 'realtor', 'realtor.com',
+        'realtor com', 'realtors',
+        'mortgage', 'mortgage rate', 'mortgage rates',
+        '30 year mortgage', '30-year mortgage', '15 year mortgage',
+        '15-year mortgage', 'fha loan', 'va loan', 'jumbo loan',
+        'home loan', 'refi', 'refinance', 'refinancing',
+        'home equity', 'heloc', 'home equity line',
+        'zillow', 'redfin', 'compass real estate', 'opendoor',
+        'homes for sale', 'home for sale', 'home listing',
+        'open house', 'home buyer', 'first time home buyer',
+        'first-time home buyer', 'starter home', 'starter homes',
+        'home price', 'home prices', 'median home price',
+        'home sale', 'home sales', 'existing home sales',
+        'new home sales', 'pending home sales',
+        'rent prices', 'rent hike', 'rent price', 'rising rent',
+        'rent control', 'apartment rent', 'section 8',
+        'landlord', 'tenant', 'eviction', 'eviction moratorium',
+        'apartment', 'apartments', 'condo', 'condominium',
+        'townhouse', 'townhome', 'foreclosure', 'foreclosures',
         # HGTV / home reno personalities
-        'joanna gaines', 'chip gaines', 'fixer upper',
+        'joanna gaines', 'chip gaines', 'fixer upper', 'magnolia',
+        'magnolia network', 'magnolia market',
         'property brothers', 'jonathan scott', 'drew scott',
-        'christina hall', 'flip or flop', 'love it or list it',
-        'martha stewart',
+        'christina hall', 'christina haack', 'flip or flop',
+        'love it or list it', 'martha stewart',
+        'ty pennington', 'extreme home makeover',
+        'ryan serhant', 'million dollar listing',
+        'selling sunset', 'selling the oc',
+        'nate berkus', 'jeremiah brent',
+        'shea mcgee', 'studio mcgee',
         # home reno / DIY
-        'home renovation', 'home reno', 'kitchen remodel',
-        'bathroom remodel', 'diy home', 'ikea hack',
+        'home renovation', 'home reno', 'renovation', 'remodel',
+        'kitchen remodel', 'bathroom remodel', 'basement remodel',
+        'diy home', 'diy project', 'ikea hack', 'ikea',
         'home depot', 'lowes', "lowe's", 'ace hardware',
+        'menards', 'harbor freight',
         'wayfair', 'west elm', 'crate and barrel', 'pottery barn',
+        'cb2', 'anthropologie home', 'restoration hardware', 'rh home',
+        'article furniture', 'floyd home', 'burrow furniture',
+        'homegoods', 'home goods', 'threshold target',
+        'hearth and hand', 'studio mcgee target',
         # aesthetics
         'cottagecore', 'modern farmhouse', 'coastal grandma',
         'coastal grandmother', 'dark academia decor',
-        'quiet luxury home',
+        'quiet luxury home', 'grandmillennial style',
+        'japandi', 'wabi-sabi decor', 'organic modern',
         # notable real estate
         'celebrity mansion', 'celebrity home', 'zillow gone wild',
+        'billion dollar home', 'most expensive house',
+        'housing bill', 'first time buyer credit',
+        # landscaping / outdoor
+        'landscaping', 'garden design', 'backyard reno',
+        'outdoor living', 'pool build',
     ],
     # Business & startups. Layoffs, IPOs, funding rounds, exec moves,
     # unicorn news. Distinct from finance (which is stocks + macro +
@@ -1689,6 +1792,25 @@ _SHORT_KEYWORD_TOKENS = {
     # Intelligence", etc.); the compound forms in tech keywords
     # like "ai chatbot", "generative ai" catch legit AI searches.
     'llm', 'nft', 'gpt',
+    # Auto brand tokens - bare-brand names are collision-prone as
+    # substrings. Word-boundary matching stops "ford" hitting
+    # "pickford / sanford / rutherford", "audi" hitting "audio /
+    # audition", "kia" hitting "arkia", "gm" hitting "gmail",
+    # "lucid" hitting "elucidate / lucidly", and "vw" hitting stray
+    # letter pairs. Long unique brands (chevrolet, volkswagen,
+    # lamborghini) don't collide but including them here is free.
+    'ford', 'chevy', 'chevrolet', 'toyota', 'honda', 'nissan',
+    'hyundai', 'kia', 'jeep', 'dodge', 'chrysler', 'bmw', 'audi',
+    'porsche', 'volkswagen', 'vw', 'volvo', 'subaru', 'mazda',
+    'lucid', 'rivian', 'polestar', 'byd', 'cadillac', 'buick',
+    'acura', 'lexus', 'infiniti', 'maserati', 'lamborghini',
+    'ferrari', 'bentley', 'jaguar', 'tesla', 'gm', 'stellantis',
+    'waymo', 'fsd', 'iihs', 'nhtsa',
+    # Home tokens with substring-collision risk. "refi" hits
+    # "refinery / referee / referred / referred". "condo" hits
+    # "condone / condoning / condor". Others are safe as substrings
+    # but including them here is idempotent.
+    'refi', 'condo',
 }
 
 
