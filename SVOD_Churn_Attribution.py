@@ -2814,7 +2814,7 @@ def _build_exclusive_cohort_note(detection, platform_name):
 
 def _research_engagement_metrics(*, show_name, platform_name, genre, content_cadence,
                                  episode_count, is_movie, runtime_minutes=None,
-                                 release_date=None, context_note=None):
+                                 release_date=None):
     """Per-title Claude research for two engagement KPIs:
 
       1) Completion Rate — what share of viewers watched the FULL piece of
@@ -2951,17 +2951,6 @@ def _research_engagement_metrics(*, show_name, platform_name, genre, content_cad
         "  • Do NOT return generic 'industry average' or 'platform tier "
         "default' numbers. Two different action movies on the same platform "
         "should NOT have identical completion or second-screen percentages.\n"
-        "  • Do NOT return identical percentages for different SEASONS of the "
-        "same show. Real per-season completion rates typically differ by "
-        "5-15 percentage points across lifecycle stages: (a) mid-run "
-        "catalog seasons have LOWER completion (samplers pulling the average "
-        "down), (b) highly anticipated revival launches have MODERATE "
-        "completion (10-ep binge drop-off from casual samplers), (c) series "
-        "FINALES have the HIGHEST completion (finale-completionist behavior "
-        "— fans watch to the end to see resolution). If asked about the same "
-        "show across seasons, DIFFERENTIATE based on lifecycle stage. Use "
-        "the ANALYST CONTEXT block in the user prompt as the primary "
-        "discriminating signal.\n"
         "  • Do NOT make up sources. If you cannot cite a specific source for "
         "this title, base your estimate on the closest comparable title you "
         "CAN cite and note which comparable you used.\n"
@@ -2969,30 +2958,6 @@ def _research_engagement_metrics(*, show_name, platform_name, genre, content_cad
         "number (e.g. 67.3, not 65-70).\n\n"
         "Output JSON only. No prose preamble, no markdown fences."
     )
-
-    # Analyst context note (per-pull) — CRITICAL for differentiating multiple
-    # pulls of the SAME show across different seasons / lifecycle stages.
-    # Without this, Claude sees identical inputs for Manifest S3 (catalog),
-    # Manifest S4 Part 1 (Netflix-original revival), and Manifest S4 Part 2
-    # (series finale) — same platform, same genre, same show-name prefix —
-    # and collapses them all to the same genre-prior completion rate.
-    # Injecting the analyst's own row-by-row context note (which spells out
-    # release-context differences: catalog-acquisition-during-viral-rescue vs.
-    # binge-original-revival-launch vs. series-finale-after-7mo-gap) gives
-    # Claude the discriminating signal it needs.
-    _ctx_block = ""
-    if context_note:
-        _ctx_trimmed = str(context_note).strip()
-        if _ctx_trimmed:
-            _ctx_block = (
-                f'\nANALYST CONTEXT (release-specific — this is the SINGLE '
-                f'most important discriminator for differentiating multiple '
-                f'seasons / parts / lifecycle stages of the same show; ground '
-                f'your completion + second-screen estimates in the SPECIFICS '
-                f'described here, especially release cadence, lifecycle stage '
-                f'catalog vs original vs finale, gap since prior season, and '
-                f'the audience-profile signals):\n{_ctx_trimmed}\n'
-            )
 
     user = (
         f'TITLE: "{clean_name}"\n'
@@ -3002,8 +2967,7 @@ def _research_engagement_metrics(*, show_name, platform_name, genre, content_cad
         f'IS MOVIE: {is_movie}\n'
         f'EPISODE COUNT: {episode_count if not is_movie else "n/a (single film)"}\n'
         f'RELEASE DATE: {release_date or "unknown"}'
-        f'{runtime_hint}'
-        f'{_ctx_block}\n'
+        f'{runtime_hint}\n\n'
         f'FORMAT GUIDANCE FOR THIS TITLE:\n{format_hint}\n\n'
         f'Return JSON only:\n'
         f'{{\n'
@@ -5256,11 +5220,6 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         runtime_minutes=p.get('episode_runtime_minutes') or p.get('runtime_minutes'),
         release_date=(p['campaign_start'].date().isoformat()
                       if hasattr(p.get('campaign_start'), 'date') else None),
-        # Per-pull analyst context — critical for differentiating same-show
-        # multi-season pulls (Manifest S3 catalog vs S4P1 original vs S4P2
-        # finale), which otherwise present as identical inputs and collapse
-        # to a single genre-prior completion rate in the Claude response.
-        context_note=p.get('context_note'),
     )
     # Persist into the research sidecar via the params dict so the caller
     # (run_synthetic_attribution) can fold this into the .research.json
