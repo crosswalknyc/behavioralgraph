@@ -40917,7 +40917,6 @@
                 { key: 'headlines', label: 'Headlines',        count: headlineCount,         icon: '📰' },
                 { key: 'people',    label: 'Trending people',  count: counts.people    || 0, icon: '👤' },
                 { key: 'music',     label: 'Music',            count: counts.music     || 0, icon: '🎵' },
-                { key: 'philanthropy', label: 'Philanthropy',  count: counts.philanthropy || 0, icon: '❤️' },
                 { key: 'social',    label: 'Social',           count: 0,                     icon: '💬' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺' },
                 { key: 'products',  label: 'Products',         count: counts.retailers || 0, icon: '🛍️' },
@@ -40938,7 +40937,8 @@
             panels.innerHTML =
                 _renderTIQPanel('movers',    renderTIQMovers(cards.movers || {available:false})) +
                 _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [],
-                                                                 cards.articles_by_source || [])) +
+                                                                 cards.articles_by_source || [],
+                                                                 cards.philanthropy_news    || [])) +
                 _renderTIQPanel('searches',  renderTIQSearches({
                     all:         cards.trending_searches             || [],
                     by_category: cards.trending_searches_by_category || {},
@@ -40946,11 +40946,6 @@
                 _renderTIQPanel('people',    renderTIQWikipedia(cards.wikipedia_trending || []) +
                                               renderTIQPeople(cards.trending_people || [])) +
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
-                _renderTIQPanel('philanthropy', renderTIQPhilanthropy({
-                    news:            cards.philanthropy_news             || [],
-                    news_by_source:  cards.philanthropy_news_by_source   || {},
-                    searches:        (cards.trending_searches_by_category || {}).philanthropy || [],
-                })) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
@@ -40963,6 +40958,13 @@
             if (window.__trendsIQ.activeTab === 'sources') {
                 window.__trendsIQ.activeTab = 'headlines';
                 window.__trendsIQ.headlinesView = 'sources';
+            }
+            // Philanthropy used to be a top-level tab. Now it's a sub-tab
+            // under Headlines. Remap any stale session state so returning
+            // users don't land on a ghost panel.
+            if (window.__trendsIQ.activeTab === 'philanthropy') {
+                window.__trendsIQ.activeTab = 'headlines';
+                window.__trendsIQ.headlinesView = 'philanthropy';
             }
             setTrendsIQTab(window.__trendsIQ.activeTab || 'searches');
 
@@ -41190,20 +41192,63 @@
             return html;
         }
 
-        function renderTIQHeadlines(rows, sources) {
-            rows    = rows    || [];
-            sources = sources || [];
+        // Philanthropy sub-tab. Single merged feed pulling Chronicle of
+        // Philanthropy, Nonprofit Quarterly, SSIR, Blue Avocado, and
+        // Guardian Global Development. Every row keeps its publication
+        // as a chip so the reader still knows where each story came from
+        // - but no per-source filter chips, per user request.
+        function _renderTIQHeadlinesPhilanthropy(rows) {
+            if (!rows || !rows.length) {
+                return '<div class="tiq-empty">No philanthropy news yet. Latest scrape hasn\u0027t landed - check back after tomorrow\u0027s refresh.</div>';
+            }
+            var html = '<div class="tiq-card"><h4>\u2764\uFE0F Philanthropy news</h4>' +
+                       '<div class="tiq-card-sub">Foundation moves, big gifts, disaster relief, sector news. Chronicle of Philanthropy, Nonprofit Quarterly, SSIR, Blue Avocado, Guardian Global Development.</div>' +
+                       '<div class="tiq-headline-list" style="max-height:720px;overflow-y:auto;">';
+            rows.forEach(function(r, i) {
+                var img = r.image
+                    ? '<div class="tiq-headline-image" style="background-image:url(\'' + _tiqEsc(r.image) + '\');"></div>'
+                    : '<div class="tiq-headline-image tiq-headline-placeholder"></div>';
+                var srcLabel = r.source_label || r.source || '';
+                var newsKey  = r.title || '';
+                var meta = srcLabel
+                    ? '<span class="tiq-badge">' + _tiqEsc(srcLabel) + '</span>'
+                    : '';
+                if (r.published) {
+                    meta += '<span class="tiq-started">' + _tiqEsc(_tiqShortDate(r.published)) + '</span>';
+                }
+                html += '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                        '<div class="tiq-row-body">' +
+                        '<div class="tiq-row-title">' +
+                        '<a href="' + _tiqEsc(r.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(r.title) + '</a>' +
+                        _tiqCrossPlatformBadge(r) +
+                        _tiqActions('philanthropy_news', 'philanthropy', newsKey, newsKey, 'National') +
+                        '</div>' +
+                        (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
+                        _tiqWhyLine(r) +
+                        '</div></div>';
+            });
+            html += '</div></div>';
+            return '<div class="tiq-cards-grid" style="grid-template-columns: 1fr;">' + html + '</div>';
+        }
+
+        function renderTIQHeadlines(rows, sources, philanthropy) {
+            rows         = rows         || [];
+            sources      = sources      || [];
+            philanthropy = philanthropy || [];
             var view = window.__trendsIQ.headlinesView || 'top';
-            // If the user landed on "sources" but no source data came
-            // back, fall back to the top view so they don't see an
-            // empty panel by default.
-            if (view === 'sources' && !sources.length && rows.length) {
-                view = 'top';
-                window.__trendsIQ.headlinesView = 'top';
+            // If the user landed on a sub-tab whose data came back empty,
+            // fall back to the top view so they don't see an empty panel.
+            if ((view === 'sources'      && !sources.length) ||
+                (view === 'philanthropy' && !philanthropy.length)) {
+                if (rows.length) {
+                    view = 'top';
+                    window.__trendsIQ.headlinesView = 'top';
+                }
             }
             var tabs = [
-                { key: 'top',     label: '📰 Top trending',   count: rows.length    },
-                { key: 'sources', label: '🏛️ By news source', count: sources.length },
+                { key: 'top',          label: '📰 Top trending',   count: rows.length         },
+                { key: 'sources',      label: '🏛️ By news source', count: sources.length      },
+                { key: 'philanthropy', label: '❤️ Philanthropy',   count: philanthropy.length },
             ];
             var tabsHtml = tabs.map(function(t) {
                 var active = (t.key === view) ? ' active' : '';
@@ -41212,14 +41257,19 @@
                 return '<div class="tiq-social-tab' + active + unavail +
                        '" onclick="setTrendsIQHeadlinesView(\'' + t.key + '\')">' + label + '</div>';
             }).join('');
-            var body = (view === 'sources')
-                     ? _renderTIQHeadlinesBySource(sources)
-                     : _renderTIQHeadlinesTop(rows);
+            var body;
+            if (view === 'sources') {
+                body = _renderTIQHeadlinesBySource(sources);
+            } else if (view === 'philanthropy') {
+                body = _renderTIQHeadlinesPhilanthropy(philanthropy);
+            } else {
+                body = _renderTIQHeadlinesTop(rows);
+            }
             return '<div class="tiq-social-tabs">' + tabsHtml + '</div>' + body;
         }
 
         window.setTrendsIQHeadlinesView = function(key) {
-            if (key !== 'top' && key !== 'sources') return;
+            if (key !== 'top' && key !== 'sources' && key !== 'philanthropy') return;
             window.__trendsIQ.headlinesView = key;
             // Repaint the Headlines panel in place; leaves the outer
             // Trends tab selection intact.
@@ -41229,7 +41279,8 @@
             if (panel) {
                 panel.innerHTML = renderTIQHeadlines(
                     data.cards.trending_headlines || [],
-                    data.cards.articles_by_source || []);
+                    data.cards.articles_by_source || [],
+                    data.cards.philanthropy_news  || []);
             }
         };
 
@@ -41837,127 +41888,6 @@
             return header + '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' + cards + '</div>';
         }
 
-        // Philanthropy tab. Two cards side-by-side:
-        //   Left  = philanthropy news feed (Chronicle + NPQ + SSIR + Blue
-        //           Avocado + Guardian Global Dev), sub-tabs let you
-        //           filter by source.
-        //   Right = trending philanthropy-tagged searches (from the
-        //           same Google Trends bucketing that powers the
-        //           category cards in the Trending tab). Scrolls
-        //           within-card to top ~100.
-        function renderTIQPhilanthropy(payload) {
-            payload = payload || {};
-            var news        = payload.news             || [];
-            var newsBySrc   = payload.news_by_source   || {};
-            var searches    = payload.searches         || [];
-
-            var activeSource = window.__trendsIQ.philSource || 'all';
-
-            // Build source-filter sub-tabs.
-            var sourceOrder = ['all'].concat(Object.keys(newsBySrc));
-            var sourceLabels = { 'all': '📰 All sources' };
-            for (var i = 0; i < news.length; i++) {
-                var r = news[i];
-                if (r && r.source && !sourceLabels[r.source]) {
-                    sourceLabels[r.source] = r.source_label || r.source;
-                }
-            }
-            var subTabs = sourceOrder.map(function(k) {
-                var active   = (k === activeSource) ? ' active' : '';
-                var lbl      = sourceLabels[k] || k;
-                var subCount = (k === 'all') ? news.length : (newsBySrc[k] || []).length;
-                return '<div class="tiq-social-tab' + active +
-                       '" onclick="setTrendsIQPhilSource(\'' + k + '\')">' +
-                       _tiqEsc(lbl) +
-                       (subCount ? ' <span class="tiq-tab-count" style="margin-left:6px;">' + subCount + '</span>' : '') +
-                       '</div>';
-            }).join('');
-
-            // News rows for the active source.
-            var newsRows = (activeSource === 'all')
-                ? news
-                : (newsBySrc[activeSource] || []);
-
-            var newsHtml;
-            if (!newsRows.length) {
-                newsHtml = '<div class="tiq-placeholder">' +
-                           '<div class="tiq-placeholder-title">No philanthropy news yet</div>' +
-                           '<div>Latest scrape hasn\'t landed - check back after tomorrow\'s refresh.</div>' +
-                           '</div>';
-            } else {
-                newsHtml = '<div class="tiq-headline-list" style="max-height:640px;overflow-y:auto;">' +
-                           newsRows.map(function(it, i) {
-                               var img = it.image
-                                   ? '<div class="tiq-headline-image" style="background-image:url(\'' + _tiqEsc(it.image) + '\');"></div>'
-                                   : '<div class="tiq-headline-image tiq-headline-placeholder"></div>';
-                               var srcLabel = it.source_label || it.source || '';
-                               var newsKey = it.title || '';
-                               var meta = srcLabel
-                                   ? '<span class="tiq-badge">' + _tiqEsc(srcLabel) + '</span>'
-                                   : '';
-                               if (it.published) {
-                                   meta += '<span class="tiq-started">' + _tiqEsc(_tiqShortDate(it.published)) + '</span>';
-                               }
-                               return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
-                                      '<div class="tiq-row-body">' +
-                                      '<div class="tiq-row-title">' +
-                                      '<a href="' + _tiqEsc(it.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>' +
-                                      _tiqCrossPlatformBadge(it) +
-                                      _tiqActions('philanthropy_news', 'philanthropy', newsKey, newsKey, 'National') +
-                                      '</div>' +
-                                      (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
-                                      _tiqWhyLine(it) +
-                                      '</div></div>';
-                           }).join('') +
-                           '</div>';
-            }
-
-            // Searches card: reuse the same row renderer as the main
-            // Trending tab so philanthropy searches carry all the same
-            // enrichment (volume, growth, related queries).
-            var searchesHtml;
-            if (!searches.length) {
-                searchesHtml = '<div class="tiq-placeholder">' +
-                               '<div class="tiq-placeholder-title">No trending philanthropy searches</div>' +
-                               '<div>Nothing in the philanthropy category has broken out today.</div>' +
-                               '</div>';
-            } else {
-                searchesHtml = '<div class="tiq-search-scroll" style="max-height:640px;">' +
-                               searches.slice(0, 100).map(function(r, i) {
-                                   return _tiqRenderSearchRow(r, i + 1);
-                               }).join('') +
-                               '</div>';
-            }
-
-            var header = '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
-                         'Trending across the philanthropy sector: sector news, ' +
-                         'foundation moves, big gifts, disaster relief, and search ' +
-                         'interest in charities and causes.' +
-                         '</div>';
-
-            return header +
-                   '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));">' +
-                   // Card 1: news feed
-                   '<div class="tiq-card">' +
-                   '<h4>📰 Philanthropy news</h4>' +
-                   '<div class="tiq-card-sub">Chronicle of Philanthropy, Nonprofit Quarterly, SSIR, Blue Avocado, Guardian Global Development.</div>' +
-                   '<div class="tiq-social-tabs" style="margin-top:8px;">' + subTabs + '</div>' +
-                   newsHtml +
-                   '</div>' +
-                   // Card 2: trending searches (philanthropy bucket)
-                   '<div class="tiq-card">' +
-                   '<h4>🔎 Trending philanthropy searches</h4>' +
-                   '<div class="tiq-card-sub">Search interest in nonprofits, foundations, and causes right now.</div>' +
-                   searchesHtml +
-                   '</div>' +
-                   '</div>';
-        }
-
-        window.setTrendsIQPhilSource = function(key) {
-            window.__trendsIQ.philSource = key;
-            _tiqRepaintActivePanel();
-        };
-
         // Shorten "Thu, 10 Jul 2026 09:34:11 GMT" -> "10 Jul". Used in
         // the philanthropy news feed to keep the meta line tight.
         function _tiqShortDate(s) {
@@ -42358,7 +42288,8 @@
             panels.innerHTML =
                 _renderTIQPanel('movers',    renderTIQMovers(cards.movers || {available:false})) +
                 _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [],
-                                                                 cards.articles_by_source || [])) +
+                                                                 cards.articles_by_source || [],
+                                                                 cards.philanthropy_news    || [])) +
                 _renderTIQPanel('searches',  renderTIQSearches({
                     all:         cards.trending_searches             || [],
                     by_category: cards.trending_searches_by_category || {},
@@ -42366,11 +42297,6 @@
                 _renderTIQPanel('people',    renderTIQWikipedia(cards.wikipedia_trending || []) +
                                               renderTIQPeople(cards.trending_people || [])) +
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
-                _renderTIQPanel('philanthropy', renderTIQPhilanthropy({
-                    news:            cards.philanthropy_news             || [],
-                    news_by_source:  cards.philanthropy_news_by_source   || {},
-                    searches:        (cards.trending_searches_by_category || {}).philanthropy || [],
-                })) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
