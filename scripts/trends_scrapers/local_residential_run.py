@@ -58,6 +58,12 @@ RESIDENTIAL_SCRAPERS = [
     ('espnplus',      'ESPN+'),
     ('max_streaming', 'Max'),
     ('netflix',       'Netflix'),
+    # Hulu (2026-07): moved here after the Hetzner cron kept returning
+    # 0 items even with donated cookies - Hulu's WAF fingerprints the
+    # datacenter IP even before the cookie check runs. From the Mac's
+    # residential IP with the same cookies, Playwright gets a full
+    # 60-title homepage back on first try.
+    ('hulu',          'Hulu'),
     # Social content scrapers (2026-07): switched from hashtag lists to
     # actual trending posts/videos/tweets. All three need a real logged-in
     # session, so they run from the laptop (where cookies live) rather

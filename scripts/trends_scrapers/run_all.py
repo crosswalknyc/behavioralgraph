@@ -58,16 +58,17 @@ SCRAPERS = [
     ('sephora',   'scripts.trends_scrapers.sephora',    'Sephora',   'retailer'),
     ('target',    'scripts.trends_scrapers.target',     'Target',    'retailer'),
     ('walmart',   'scripts.trends_scrapers.walmart',    'Walmart',   'retailer'),
-    # Streaming platforms. Hulu + Prime Video use donated cookies via
-    # cookie_domain=<host>. Netflix, Disney+, ESPN+, and Max are NOT in
-    # this list because they run from Jenna's laptop via
+    # Streaming platforms. Prime Video uses donated cookies via
+    # cookie_domain=<host>. Netflix, Disney+, ESPN+, Max, and Hulu are
+    # NOT in this list because they run from Jenna's laptop via
     # `local_residential_run.py`:
     #   - Netflix (2026-07): switched from public weekly TSV to authenticated
     #     daily scrape of netflix.com/browse, which needs the operator's
     #     donated netflix.com cookies (only available on her machine).
     #   - Disney+ / ESPN+: Bamgrid CDN IP-gates datacenter ranges.
     #   - Max: play.max.com IP-gates similarly.
-    ('hulu',       'scripts.trends_scrapers.hulu',          'Hulu',        'streaming'),
+    #   - Hulu (2026-07): kept returning 0 items from Hetzner despite
+    #     valid donated cookies; Hulu WAFs the datacenter IP pre-auth.
     ('primevideo', 'scripts.trends_scrapers.primevideo',    'Prime Video', 'streaming'),
 ]
 
