@@ -58,7 +58,10 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
         "B2B", "BANK", "BANKS", "BANKING",
         "BEAUTY", "BETTING", "BEVERAGE", "CASUAL DINING", "CPG",
         "CREDIT PROVIDERS", "CREDIT PROVIDER", "DIGITAL BANKING", "EVENTS",
-        "FOOTWEAR", "FRANCHISE", "GROCERY", "INTIMATES", "JEWELRY", "MEMBERSHIP",
+        "FESTIVAL",
+        "FOOTWEAR", "FRANCHISE", "GROCERY", "INTIMATES", "JEWELRY",
+        "LOYALTY PROGRAMS",
+        "MEMBERSHIP",
         "NON PROFIT/CHARITY", "PHARMA", "QSR", "RETAILERS", "SECURITY",
         "SWEEPSTAKES",
         "TELECOM", "TICKETING", "TOY", "TRAVEL", "VENUE", "WHERE THEY SHOP",
@@ -67,21 +70,22 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
     "TALENT": [
         "ACTOR", "ATHLETE", "COMEDIAN", "INFLUENCER/CREATOR",
         "EMERGING TALENT", "HOST/PERSONALITY", "MUSICIAN/BAND", "PODCASTER",
-        "POLITICS/ACTIVIST", "WRITER/DIRECTOR/AUTHOR/ARTIST",
+        "POLITICIAN", "POLITICS/ACTIVIST", "WRITER/DIRECTOR/AUTHOR/ARTIST",
     ],
     "CONTENT": [
         "GAME PLAYERS", "GAMES", "GAMES - PLAYERS", "MOVIE", "PODCAST",
-        "VERTICAL SHORTS",
+        "VERTICAL SHORTS", "VIDEO GAME",
         # SERIES variants are handled by startswith("SERIES") below.
     ],
     "PLATFORMS": [
         "APP/PLATFORM", "BROADCAST/CABLE", "MEDIA", "MOVIE THEATER", "PLATFORMS",
-        "SEARCH ENGINE/AI", "SOCIAL MEDIA", "STREAMING MUSIC", "STREAMING VIDEO",
-        "STREAMING/PLATFORM",
+        "SEARCH ENGINE", "SEARCH ENGINE/AI",
+        "SOCIAL MEDIA", "STREAMING MUSIC",
+        "STREAMING PLATFORM", "STREAMING VIDEO", "STREAMING/PLATFORM",
         "VIRTUAL MVPD/FAST", "VIRTUAL MVPD FAST", "VMVPD/FAST", "VMVPD",
     ],
     "SPORT": ["MILB", "MLB", "NBA", "NFL", "SPORTS ORGANIZATIONS",
-              "SPORTS ORGANIZATION", "WNBA"],
+              "SPORTS ORGANIZATION", "SPORTS TEAM", "WNBA"],
     "TRENDS": ["TRENDS", "SHOPPING INTENT"],
 }
 
@@ -91,6 +95,14 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
 # drifts — keeps the leaderboard tabs and the persisted rows consistent.
 SUBCATEGORY_ALIASES: dict[str, str] = {
     "CREATOR/INFLUENCER": "INFLUENCER/CREATOR",
+    # 2026-07-20 (Jenna audit). Non-canonical values that older Profile-IQ
+    # runs stamped into BRAND CATEGORY, all present in live S3 profiles.
+    # Collapse into the canonical bucket so leaderboards + selector agree.
+    "POLITICIAN": "POLITICS/ACTIVIST",
+    "SEARCH ENGINE": "SEARCH ENGINE/AI",
+    "STREAMING PLATFORM": "STREAMING/PLATFORM",
+    "FESTIVAL": "EVENTS",
+    "VIDEO GAME": "GAMES",
 }
 
 
