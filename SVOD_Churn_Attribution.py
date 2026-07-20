@@ -5467,11 +5467,19 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         if total_touchpoint_sum > 0:
             rows.append(("Total Platform Signups", "", total_touchpoint_sum, "accounts activated", "", "", "", "", "100.00%", total_genpop_str))
 
-    # Competitive platforms
+    # Competitive platforms — always emit in rank order (PERCENT desc).
+    # `_build_synthetic_competitive` returns a DataFrame in whatever order
+    # Claude's dict iterator produced (or the SQL query returned), which is
+    # not necessarily sorted. Explicit sort here keeps the dashboard's
+    # "COMPETITIVE PLATFORMS (% of Show Watchers)" list readable top-down.
     if not df_comp.empty:
         rows.append(("", "", "", "", "", "", "", "", "", ""))
         rows.append(("", "", "COMPETITIVE PLATFORMS (% of Show Watchers)", "", "", "", "", "", "", ""))
-        for _, row in df_comp.iterrows():
+        try:
+            df_comp_sorted = df_comp.sort_values(by="PERCENT", ascending=False, kind="stable")
+        except Exception:
+            df_comp_sorted = df_comp
+        for _, row in df_comp_sorted.iterrows():
             platform_name = (str(row["COMMON_NAME"]) if pd.notna(row["COMMON_NAME"]) else "").upper()
             rows.append((platform_name, "", "", "", "", "", "", "", f"{row['PERCENT']:.2f}%", ""))
 
@@ -5689,6 +5697,57 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         print("   Applied attribution reconciliation:")
         for c in attrib_changes:
             print(f"     → {c}")
+
+    # ── Signups Gen Pop reconciliation ──────────────────────────────────
+    # "New Platform Signups" GP is derived from clean_sample_GP * conv_pct
+    # (proportional path), while "Attributed Signups" and "Dormant to
+    # Reactive" each get their own gen_pop_projection() with independent
+    # int-rounding. Their sum can diverge from the NPS row by 1-20 in
+    # aggregate. "1st Touchpoint" is aliased to the NPS GP (see block
+    # around line ~5434), so it inherits the rounded-down value too.
+    # Meanwhile "TOTAL SIGNUPS" is written from the same NPS source.
+    # Canonical rule (per Jenna 2026-07-20): the true "Total Reactivated
+    # and Acquired Accounts" value is the SUM of attribution rows
+    # (Attributed + Dormant). Reconcile NPS + 1st Touchpoint + TOTAL
+    # SIGNUPS GP columns to that canonical sum. Idempotent.
+    _attr_gp = _dorm_gp = None
+    _nps_row = _touch1_row = _total_row = None
+    for _idx in df_out.index:
+        _cat = str(df_out.loc[_idx, "Category"] or "").strip()
+        _gp_str = str(df_out.loc[_idx, "Gen Pop Projection"] or "").replace(",", "").strip()
+        try:
+            _gp_val = int(float(_gp_str)) if _gp_str and _gp_str.replace("-", "").isdigit() else None
+        except (ValueError, TypeError):
+            _gp_val = None
+        if _cat == "Attributed Signups" and _gp_val is not None:
+            _attr_gp = _gp_val
+        elif _cat == "Dormant to Reactive" and _gp_val is not None:
+            _dorm_gp = _gp_val
+        elif _cat == "New Platform Signups":
+            _nps_row = _idx
+        elif _cat == "1st Touchpoint":
+            _touch1_row = _idx
+        elif _cat == "TOTAL SIGNUPS":
+            _total_row = _idx
+    if _attr_gp is not None and _dorm_gp is not None:
+        _canon_gp = _attr_gp + _dorm_gp
+        _canon_str = format_gen_pop(_canon_gp)
+        _reconciled = []
+        for _row_idx, _label in (
+            (_nps_row, "New Platform Signups"),
+            (_touch1_row, "1st Touchpoint"),
+            (_total_row, "TOTAL SIGNUPS"),
+        ):
+            if _row_idx is None:
+                continue
+            _before = str(df_out.loc[_row_idx, "Gen Pop Projection"] or "").replace(",", "").strip()
+            if _before != str(_canon_gp):
+                df_out.loc[_row_idx, "Gen Pop Projection"] = _canon_str
+                _reconciled.append(f"{_label}: {_before or '(empty)'} → {_canon_str}")
+        if _reconciled:
+            print("   Reconciled signups Gen Pop to Attr+Dorm sum:")
+            for _msg in _reconciled:
+                print(f"     → {_msg}")
 
     # AI VALIDATION metadata is intentionally NOT written into the CSV.
     # The Subscriber IQ dashboard renders any non-empty data row that lives
