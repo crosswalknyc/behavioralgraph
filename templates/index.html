@@ -41927,51 +41927,62 @@
                 } else if (!(s.items || []).length) {
                     body = '<div class="tiq-empty">No trending items right now.</div>';
                 } else {
-                    // Card header + subtitle. Instagram is a hashtag
-                    // list (top-hashtags.com) rather than a per-post
-                    // feed - IG's Explore requires a mobile-context
-                    // session we can't mint from Hetzner. Every other
-                    // platform is a per-item feed.
-                    var cardTitle = (s.label || k) + ' - trending now';
+                    // All platforms now surface real trending CONTENT
+                    // (posts / videos / tweets) rather than hashtag or
+                    // topic lists. Every row can carry: title (post text
+                    // / caption / tweet), creator (@handle), image
+                    // (thumbnail), and engagement metrics.
+                    var cardTitle = (s.label || k) + ' - trending in the USA';
                     var cardSub = '';
-                    if (k === 'instagram') {
-                        cardTitle = 'Instagram - popular hashtags';
-                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Top hashtags by post volume. Click any tag to open its Instagram feed.</div>';
+                    if (k === 'reddit') {
+                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Top posts today from US-heavy subreddits (news, politics, entertainment, sports).</div>';
+                    } else if (k === 'youtube') {
+                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Trending videos on YouTube US.</div>';
+                    } else if (k === 'tiktok') {
+                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Trending videos on TikTok\u0027s Discover feed.</div>';
+                    } else if (k === 'instagram') {
+                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Posts + reels ranked by IG\u0027s Explore recommendation engine.</div>';
+                    } else if (k === 'x') {
+                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Top trending tweets from x.com/explore.</div>';
                     }
                     body = '<div class="tiq-cards-grid" style="grid-template-columns: 1fr;">' +
                            '<div class="tiq-card"><h4>' + _tiqEsc(cardTitle) + '</h4>' + cardSub +
                            '<div class="tiq-headline-list">' +
                            s.items.map(function(it, i) {
-                               // Row label: Reddit posts carry `title`; every other
-                               // platform (X, TikTok, YouTube, Instagram hashtags)
-                               // carries `topic`/`hashtag` instead. Fall through the
-                               // three fields so no row ever renders as blank.
-                               var rowLabel = it.title || it.topic || it.hashtag || '';
+                               // Content row: prefer title (post/tweet text),
+                               // fall through legacy topic/hashtag fields
+                               // for any snapshot older than 2026-07 that's
+                               // still in cache.
+                               var rowLabel = it.title || it.topic || it.hashtag || '(no text)';
                                var socialKey = rowLabel;
-                               // Only Reddit + YouTube have real thumbnails; the
-                               // other platforms produce hashtag/topic rows with
-                               // no image, so the lime placeholder just wastes
-                               // horizontal space. Skip it there.
                                var img = it.image
                                    ? '<div class="tiq-headline-image" style="' + _tiqImgStyle(it.image) + '"></div>'
                                    : '';
                                var meta = '';
+                               // Creator handle on all content platforms.
+                               if (it.creator) {
+                                   var creatorHref = '';
+                                   if (k === 'tiktok') creatorHref = 'https://www.tiktok.com/' + String(it.creator).replace(/^@/, '@');
+                                   else if (k === 'instagram') creatorHref = 'https://www.instagram.com/' + String(it.creator).replace(/^@/, '');
+                                   else if (k === 'x') creatorHref = 'https://x.com/' + String(it.creator).replace(/^@/, '');
+                                   else if (k === 'youtube') creatorHref = '';
+                                   var creatorSpan = creatorHref
+                                       ? '<span><a href="' + _tiqEsc(creatorHref) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">' + _tiqEsc(it.creator) + '</a></span>'
+                                       : '<span>' + _tiqEsc(it.creator) + '</span>';
+                                   meta += creatorSpan;
+                               }
+                               if (it.channel) meta += '<span>' + _tiqEsc(it.channel) + '</span>';
                                if (typeof it.score === 'number') meta += '<span class="tiq-badge">' + _tiqNum(it.score) + ' upvotes</span>';
                                if (typeof it.comments === 'number') meta += '<span>' + _tiqNum(it.comments) + ' comments</span>';
                                if (it.subreddit) meta += '<span>r/' + _tiqEsc(it.subreddit) + '</span>';
-                               if (it.posts_display) meta += '<span class="tiq-badge">' + _tiqEsc(it.posts_display) + ' posts</span>';
-                               // TikTok hashtags carry numeric posts + views; render
-                               // both so the row body isn't just a title.
-                               if (typeof it.posts === 'number' && it.posts && !it.posts_display) {
-                                   meta += '<span class="tiq-badge">' + _tiqNum(it.posts) + ' posts</span>';
-                               }
-                               if (typeof it.views === 'number' && it.views) {
-                                   meta += '<span class="tiq-badge">' + _tiqNum(it.views) + ' views</span>';
-                               }
-                               // X trend volume ("50K Tweets") when present.
-                               if (it.volume && String(it.volume).trim()) {
-                                   meta += '<span class="tiq-badge">' + _tiqEsc(it.volume) + '</span>';
-                               }
+                               // YouTube view/like counts (strings from API).
+                               if (it.views && typeof it.views === 'string') meta += '<span class="tiq-badge">' + _tiqEsc(it.views) + ' views</span>';
+                               // X + TikTok engagement (numeric).
+                               if (typeof it.views === 'number' && it.views) meta += '<span class="tiq-badge">' + _tiqNum(it.views) + ' views</span>';
+                               if (typeof it.likes === 'number' && it.likes) meta += '<span>' + _tiqNum(it.likes) + ' likes</span>';
+                               if (typeof it.retweets === 'number' && it.retweets) meta += '<span>' + _tiqNum(it.retweets) + ' reposts</span>';
+                               if (typeof it.replies === 'number' && it.replies) meta += '<span>' + _tiqNum(it.replies) + ' replies</span>';
+                               if (it.views_display) meta += '<span class="tiq-badge">' + _tiqEsc(it.views_display) + ' views</span>';
                                return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                                       '<div class="tiq-row-body">' +
                                       '<div class="tiq-row-title"><a href="' + _tiqEsc(it.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(rowLabel) + '</a>' +

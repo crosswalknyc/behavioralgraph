@@ -58,6 +58,13 @@ RESIDENTIAL_SCRAPERS = [
     ('espnplus',      'ESPN+'),
     ('max_streaming', 'Max'),
     ('netflix',       'Netflix'),
+    # Social content scrapers (2026-07): switched from hashtag lists to
+    # actual trending posts/videos/tweets. All three need a real logged-in
+    # session, so they run from the laptop (where cookies live) rather
+    # than Hetzner.
+    ('tiktok',        'TikTok'),
+    ('instagram',     'Instagram'),
+    ('x_twitter',     'X'),
 ]
 
 

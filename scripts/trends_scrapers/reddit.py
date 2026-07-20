@@ -171,27 +171,45 @@ def _dedupe(items: list[dict]) -> list[dict]:
     return out
 
 
+# US-heavy subreddits used to build the national feed. r/popular is
+# geo-inflected by the requester's IP (Hetzner is in Germany, so it
+# was returning ~50% German r/de content), and r/all is content-neutral
+# but includes a lot of niche international subs. This mix is
+# intentionally news + culture + entertainment heavy so the "trending
+# in the USA" framing on the dashboard is accurate.
+_US_NATIONAL_SUBS = [
+    'news', 'politics', 'movies', 'television', 'entertainment', 'Music',
+    'gaming', 'technology', 'sports', 'nba', 'nfl', 'AskReddit',
+    'mildlyinteresting', 'pics', 'videos', 'todayilearned', 'worldnews',
+    'popculturechat', 'Fauxmoi', 'Marvel',
+]
+
+
 def fetch() -> dict[str, Any]:
-    """Pull r/popular + per-state subreddits. Non-fatal if a given
-    state's sub is empty; the app falls back to national."""
-    national = _dedupe(_fetch_sub('popular', limit=30))[:20]
-    time.sleep(_PER_REQUEST_SLEEP_S)
+    """Pull top-of-day posts from a curated set of US-heavy subreddits,
+    merge them by score, then layer in per-state slices from state subs.
+    r/popular is skipped because it geo-biases toward the caller's IP -
+    Hetzner is in Germany, so r/popular was returning r/de-heavy noise
+    instead of USA trending content.
+    """
+    aggregated: list[dict] = []
+    for sub in _US_NATIONAL_SUBS:
+        try:
+            rows = _fetch_sub(sub, limit=8, retries=1, timeout=10)
+        except Exception as e:
+            logger.info("reddit us-sub %s failed: %s", sub, e)
+            rows = []
+        aggregated.extend(rows)
+        time.sleep(_PER_REQUEST_SLEEP_S)
+
+    national = _dedupe(aggregated)[:40]
 
     by_state: dict[str, list[dict]] = {}
-    # If the top-level r/popular fetch was blocked (429 / 403), skip
-    # the per-state loop entirely - Reddit will just keep 429-ing us
-    # for the next several minutes and drag out the run for nothing.
-    # An existing good snapshot on S3 will stay in place because we
-    # bail out before write below when national is empty AND we have
-    # no existing snapshot to preserve; when there IS existing data,
-    # returning `{}` here lets write_snapshot overwrite with an empty
-    # payload - which is fine because the app-side reader falls back
-    # to the live fetch when the snapshot is empty.
     if not national:
-        logger.warning("reddit: r/popular returned no entries; skipping state loop")
+        logger.warning("reddit: US-heavy subs returned no entries; skipping state loop")
         return {
             'national': [],
-            'error':    'r/popular returned no entries (likely IP-blocked by Reddit)',
+            'error':    'US-heavy subs returned no entries (likely IP-blocked by Reddit)',
         }
 
     for state, slug in _STATE_SUBREDDITS.items():
