@@ -41822,26 +41822,31 @@
         }
 
         // Music trending tab. Renders one card per source. Fixed order:
-        // Spotify, Apple Music, TikTok Sounds, Shazam. Each card scrolls
-        // to its full list; the top ~5 are visible without scrolling.
+        // Spotify, Apple Music, Shazam. Each card scrolls to its full
+        // list; the top ~5 are visible without scrolling.
+        //
+        // TikTok Sounds is intentionally omitted: TikTok removed the
+        // public Songs chart from Creative Center in mid-2026 and no
+        // free alternative (SoundOn, Billboard TikTok chart) is public.
+        // The scraper still probes daily so if TikTok ever reinstates
+        // the endpoint, adding 'tiktok' back to `keys` will surface the
+        // card automatically.
         // Payload shape:
         //   music_trending = {
         //     spotify: {label, sub, items: [{rank, title, artist, url, image?}], available},
         //     apple:   {...},
-        //     tiktok:  {..., auth_required?: bool, diagnostic?: string},
         //     shazam:  {...}
         //   }
         function renderTIQMusic(sources) {
-            var keys = ['spotify', 'apple', 'tiktok', 'shazam'];
+            var keys = ['spotify', 'apple', 'shazam'];
             var present = keys.filter(function(k) { return sources[k]; });
             if (!present.length) {
                 return '<div class="tiq-empty">Music charts are warming up. Snapshot lands after the daily scraper run.</div>';
             }
             var header = '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
-                         'Four views of what people are listening to right now: ' +
+                         'Three views of what people are listening to right now: ' +
                          '<span style="color:#22c55e;">Spotify</span> is the mass-streaming chart, ' +
                          '<span style="color:#fcd34d;">Apple Music</span> is the Apple-subscriber cut, ' +
-                         '<span style="color:#f9a8d4;">TikTok Sounds</span> is the leading indicator for chart hits, ' +
                          '<span style="color:#93c5fd;">Shazam</span> is what people are IDing (discovery).' +
                          '</div>';
             var cards = present.map(function(k) {
