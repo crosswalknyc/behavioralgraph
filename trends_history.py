@@ -328,8 +328,9 @@ _SCRAPER_KIND_MAP = {
     # generic branch don't get a `unknown` kind, but history_for_item
     # short-circuits these to history_for_music because the rows sit
     # under sources[sub].items (not `national`) inside music_charts.json.
-    'apple':  'music',
-    'shazam': 'music',
+    'spotify': 'music',
+    'apple':   'music',
+    'shazam':  'music',
 }
 
 
@@ -346,7 +347,7 @@ _SOURCE_SNAPSHOT_ALIAS = {
 # under `sources[sub].items`. `tiktok` collides with the social scraper
 # of the same name, so the dispatcher gates on `kind=='music'` before
 # it looks at the source id (see history_for_item).
-_MUSIC_SUB_SOURCES = {'shazam', 'apple', 'tiktok'}
+_MUSIC_SUB_SOURCES = {'spotify', 'shazam', 'apple', 'tiktok'}
 
 
 def _gdelt_source_for_kind(kind: str) -> str:

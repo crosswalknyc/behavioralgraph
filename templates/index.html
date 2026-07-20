@@ -41761,25 +41761,28 @@
             return html;
         }
 
-        // Music trending tab. Renders one card per source (Shazam, Apple,
-        // TikTok Sounds). Each card scrolls to its full list; the top ~5
-        // are visible without scrolling. Payload shape:
+        // Music trending tab. Renders one card per source. Fixed order:
+        // Spotify, Apple Music, TikTok Sounds, Shazam. Each card scrolls
+        // to its full list; the top ~5 are visible without scrolling.
+        // Payload shape:
         //   music_trending = {
-        //     shazam: {label, sub, items: [{rank, title, artist, url, image?}], available},
-        //     apple:  {...},
-        //     tiktok: {..., available: false during Coming Soon window}
+        //     spotify: {label, sub, items: [{rank, title, artist, url, image?}], available},
+        //     apple:   {...},
+        //     tiktok:  {..., auth_required?: bool, diagnostic?: string},
+        //     shazam:  {...}
         //   }
         function renderTIQMusic(sources) {
-            var keys = ['shazam', 'apple', 'tiktok'];
+            var keys = ['spotify', 'apple', 'tiktok', 'shazam'];
             var present = keys.filter(function(k) { return sources[k]; });
             if (!present.length) {
                 return '<div class="tiq-empty">Music charts are warming up. Snapshot lands after the daily scraper run.</div>';
             }
             var header = '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
-                         'Three views of what people are listening to right now: ' +
-                         '<span style="color:#93c5fd;">Shazam</span> is what people are IDing (discovery), ' +
-                         '<span style="color:#fcd34d;">Apple Music</span> is what they\'re streaming (mainstream), ' +
-                         '<span style="color:#f9a8d4;">TikTok Sounds</span> is what\'s about to hit (leading indicator).' +
+                         'Four views of what people are listening to right now: ' +
+                         '<span style="color:#22c55e;">Spotify</span> is the mass-streaming chart, ' +
+                         '<span style="color:#fcd34d;">Apple Music</span> is the Apple-subscriber cut, ' +
+                         '<span style="color:#f9a8d4;">TikTok Sounds</span> is the leading indicator for chart hits, ' +
+                         '<span style="color:#93c5fd;">Shazam</span> is what people are IDing (discovery).' +
                          '</div>';
             var cards = present.map(function(k) {
                 var s = sources[k] || {};

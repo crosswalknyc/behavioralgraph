@@ -96,10 +96,34 @@ S3_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')
 S3_PREFIX = 'trends_iq_cookies/'
 
 
+def _cookie_applies_to_target(cookie_domain: str, target: str) -> bool:
+    """Return True iff a cookie with `Domain=cookie_domain` would be
+    sent by Chrome on a request to `target`. Cookies with a leading
+    `.` (or bare parent-domain matches) are inherited by subdomains,
+    which is how sessionid on `.tiktok.com` gets sent to `ads.tiktok.com`.
+
+    Chrome's rule: `cookie_domain` matches `target` iff
+    `target == cookie_domain` (with any leading `.` stripped) OR
+    `target.endswith('.' + cookie_domain)`.
+    """
+    cd = (cookie_domain or '').lstrip('.').lower()
+    tg = (target or '').lstrip('.').lower()
+    if not cd or not tg:
+        return False
+    return tg == cd or tg.endswith('.' + cd)
+
+
 def _read_chrome_cookies(domain: str, profile: str | None = None) -> list[dict]:
-    """Return a list of cookie dicts for `domain` from the user's Chrome
-    profile. Uses browser_cookie3, which talks to the OS Keychain on
-    macOS to decrypt Chrome's cookie DB.
+    """Return a list of cookie dicts that would apply to a request to
+    `domain` from the user's Chrome profile. This includes cookies set
+    on parent domains (e.g., `.tiktok.com` cookies apply to requests
+    to `ads.tiktok.com`), matching real browser semantics.
+
+    Previously we only asked browser_cookie3 for cookies whose Domain
+    attribute contained `domain` verbatim - that skipped the actual
+    auth cookies (sessionid, sid_guard) which sit on the parent domain
+    for cross-subdomain SSO. This is why `ads.tiktok.com` donations
+    were returning 5 cookies (settings, csrf) but no session cookie.
     """
     try:
         import browser_cookie3
@@ -109,7 +133,11 @@ def _read_chrome_cookies(domain: str, profile: str | None = None) -> list[dict]:
             "  pip3 install --user --break-system-packages browser-cookie3 boto3\n"
         )
 
-    kwargs = {'domain_name': domain}
+    # Fetch WITHOUT a domain filter so we can apply proper cookie-scope
+    # rules Python-side. `domain_name=''` (empty) returns everything;
+    # then we filter to cookies whose Domain attribute applies to
+    # `domain` under Chrome's Public Suffix rule.
+    kwargs: dict = {}
     if profile:
         # browser_cookie3 accepts `cookie_file` for non-default profiles.
         # On macOS Chrome stores each profile at:
@@ -125,6 +153,8 @@ def _read_chrome_cookies(domain: str, profile: str | None = None) -> list[dict]:
 
     cookies = []
     for c in jar:
+        if not _cookie_applies_to_target(c.domain, domain):
+            continue
         cookies.append({
             'name':     c.name,
             'value':    c.value,
