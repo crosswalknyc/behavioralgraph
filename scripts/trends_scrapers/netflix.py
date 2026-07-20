@@ -81,83 +81,234 @@ def _title_url(title: str) -> str:
 # accessibility reasons - if they ever change it, the scraper logs a
 # clear "0 titles parsed" message so we can update the regex.
 
-_NETFLIX_URLS = [
-    ('Home', 'https://www.netflix.com/browse'),
-]
-
-# Hydrated content signals - Playwright waits until at least one of
-# these appears (or the fallback timer fires) before snapshotting HTML.
-_NETFLIX_HYDRATE_SELECTORS = [
-    'a[href^="/title/"]',
-    'div[data-uia^="title-card"]',
-    'div.title-card-container',
-]
-
-# Match a Top-10 row heading and capture whether it's "TV Shows" or
-# "Movies" and whether it's the daily "Today" cut (vs. weekly).
+# Match Top-10 row headings on the logged-in browse page. Netflix
+# labels these rows several ways depending on locale/A-B test - we
+# accept any of them and classify by keyword.
+#   - "Top 10 TV Shows in the U.S. Today"
+#   - "Top 10 Movies in the U.S. Today"
+#   - "Today's Top 10 in the U.S." (single mixed row)
+# Match text of ANY tag between opening/closing brackets since Netflix
+# switches between <h2>, <h3>, and <span> in different tests.
 _NETFLIX_ROW_HEADING_RE = re.compile(
-    r'<h2[^>]*>\s*Top\s+10\s+(TV\s+Shows|Movies)\s+in\s+the\s+U\.?S\.?\s+Today\s*</h2>',
+    r'>\s*((?:Today\'?s\s+)?Top\s+10[^<]{0,80}?(?:TV\s+Shows|Movies|in\s+the\s+U\.?S\.?)[^<]{0,80})<',
     re.IGNORECASE,
 )
 
-# One title tile. Netflix renders "Poster of <Title>" for accessibility.
+# One title tile inside a Top-10 row. Netflix's authenticated home
+# (2026-07) renders each ranked tile as:
+#
+#   <a href="/browse?jbv=<video_id>"
+#      tabindex="-1"
+#      aria-label="<Title>"
+#      data-uia="ranked-card"
+#      class="...">
+#
+# `data-uia="ranked-card"` is a stable accessibility identifier
+# Netflix uses across all its A/B tests for Top-10 tiles - it's the
+# right hook. The `href="/browse?jbv=<id>"` pattern is Netflix's
+# in-app deep link (jbv = "just-be-video", opens the player). Video
+# IDs are numeric.
 _NETFLIX_TILE_RE = re.compile(
-    r'<a[^>]+href="(/title/\d+)"[^>]*'
-    r'aria-label="(?:Poster of\s+)?([^"]{2,180})"',
+    r'<a[^>]+href="/browse\?jbv=(\d+)"[^>]*'
+    r'aria-label="([^"]{2,220})"[^>]*'
+    r'data-uia="ranked-card"',
     re.IGNORECASE,
 )
+
+
+def _classify_row(heading: str) -> str:
+    """Classify a Top-10 row heading into 'tv', 'film', or 'mixed'."""
+    h = (heading or '').lower()
+    if 'tv show' in h or 'series' in h:
+        return 'tv'
+    if 'movie' in h or 'film' in h:
+        return 'film'
+    return 'mixed'
 
 
 def _extract_top10_rows(html: str) -> tuple[list[dict], list[dict]]:
-    """Given the rendered HTML of netflix.com/browse for a logged-in
-    US session, extract (top_10_tv, top_10_films). Each list is up to
-    10 items ranked by DOM order (Netflix renders them in rank order).
-    Returns ([], []) if the daily-today rows can't be located - the
-    caller then falls back to the weekly TSV.
+    """Given the rendered HTML of a logged-in browse page, extract
+    (top_10_tv, top_10_films). Falls back to a single mixed list if
+    Netflix's A/B test only exposes the combined daily row.
     """
-    # Find each daily "Today" row heading and its DOM slice. We take a
-    # generous 30KB window after each heading, which comfortably covers
-    # the 10 tiles in that row (each tile is ~300-500 bytes of HTML).
     tv_items:    list[dict] = []
     film_items:  list[dict] = []
+    mixed_items: list[dict] = []
     for m in _NETFLIX_ROW_HEADING_RE.finditer(html):
-        kind = m.group(1).lower()
-        start = m.end()
-        slice_html = html[start:start + 30_000]
+        heading = m.group(1).strip()
+        kind = _classify_row(heading)
+        # Take a generous 40KB window after each heading to cover the
+        # 10 tiles in that row (Netflix tiles are ~400-1200 bytes each
+        # after all the wrappers/data attributes).
+        slice_html = html[m.end():m.end() + 40_000]
         seen: set[str] = set()
         rows: list[dict] = []
         for tile in _NETFLIX_TILE_RE.finditer(slice_html):
-            path = tile.group(1)
-            title = unescape(tile.group(2)).strip()
+            title_id = tile.group(1)
+            aria     = unescape(tile.group(2)).strip()
+            # aria-label sometimes contains "<Title>. <runtime>. <rating>."
+            # Take the first sentence-fragment as the title.
+            title = aria.split('.')[0].strip() if '.' in aria else aria
+            if len(title) < 2 or len(title) > 200:
+                continue
             key = title.lower()
-            if not title or key in seen:
+            if key in seen:
                 continue
             seen.add(key)
             rows.append({
                 'rank':             len(rows) + 1,
                 'title':            title,
-                'category_display': 'TV' if 'tv' in kind else 'Film',
-                'url':              f'https://www.netflix.com{path}',
+                'category_display': 'TV' if kind == 'tv' else (
+                                     'Film' if kind == 'film' else ''),
+                'url':              f'https://www.netflix.com/title/{title_id}',
                 'source':           'authenticated_daily',
             })
             if len(rows) >= 10:
                 break
-        if 'tv' in kind:
-            tv_items = rows
+        if kind == 'tv':
+            tv_items = tv_items or rows
+        elif kind == 'film':
+            film_items = film_items or rows
         else:
-            film_items = rows
+            mixed_items = mixed_items or rows
+
+    # If Netflix only exposed a mixed daily row (no separate TV/Film
+    # splits), promote it into both slots so the dashboard still shows
+    # something (marked category_display='' so the frontend can style).
+    if not tv_items and not film_items and mixed_items:
+        return [], mixed_items
     return tv_items, film_items
+
+
+def _run_netflix_playwright() -> Optional[str]:
+    """Launch Chrome, inject cookies, click through the profile picker
+    if shown, and return the final rendered HTML of the browse page.
+    Returns None on any failure.
+    """
+    try:
+        from ._playwright import _lazy_playwright, _launch_browser, _try_stealth, UA
+        from ._base import load_donated_cookies_playwright
+    except Exception as e:
+        logger.info("netflix: playwright helper import failed: %s", e)
+        return None
+
+    sp = _lazy_playwright()
+    if sp is None:
+        return None
+
+    donated = load_donated_cookies_playwright('netflix.com')
+    if not donated:
+        logger.info("netflix: no netflix.com cookies in S3")
+        return None
+
+    html: Optional[str] = None
+    with sp() as pw:
+        try:
+            browser, _channel = _launch_browser(pw, prefer_chrome=True,
+                                                  proxy=None)
+        except Exception as e:
+            logger.warning("netflix: playwright launch failed: %s", e)
+            return None
+
+        ctx = browser.new_context(
+            user_agent=UA,
+            viewport={'width': 1440, 'height': 900},
+            locale='en-US',
+            timezone_id='America/New_York',
+            extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
+        )
+        try:
+            ctx.add_cookies(donated)
+            logger.info("netflix: injected %d cookies", len(donated))
+        except Exception as e:
+            logger.info("netflix: cookie injection failed: %s", e)
+
+        page = ctx.new_page()
+        _try_stealth(page)
+
+        try:
+            # Homepage warm-up so the session cookies attach cleanly.
+            page.goto('https://www.netflix.com/', wait_until='domcontentloaded',
+                       timeout=45000)
+            page.wait_for_timeout(2000)
+
+            page.goto('https://www.netflix.com/browse',
+                       wait_until='domcontentloaded', timeout=45000)
+
+            # Wait for EITHER the profile picker OR the browse tiles
+            # to appear. Which one appears first tells us where we are.
+            picker_sel = '[data-uia="action-select-profile+primary"], ' \
+                         '.profile-link, [data-uia^="action-select-profile"]'
+            browse_sel = 'a[href^="/title/"], [data-uia^="title-card"], ' \
+                         '.title-card-container'
+
+            profile_link = None
+            try:
+                # Wait up to 8s for the picker to attach - if not seen we
+                # probably landed directly on browse.
+                page.wait_for_selector(f'{picker_sel}, {browse_sel}',
+                                        timeout=8000, state='attached')
+            except Exception:
+                pass
+
+            profile_link = page.query_selector(picker_sel)
+            if profile_link:
+                logger.info("netflix: profile picker detected, clicking primary profile")
+                profile_link.click()
+                # Netflix loads browse client-side after profile click;
+                # wait for a ranked-card tile to appear (the Top-10
+                # rows are the highest-priority lazy-loaded content).
+                try:
+                    page.wait_for_selector(
+                        'a[data-uia="ranked-card"], a[href^="/title/"], '
+                        '[data-uia^="title-card"]',
+                        timeout=25000, state='attached')
+                except Exception:
+                    logger.info("netflix: no tile after profile click "
+                                 "within 25s; snapshotting anyway")
+
+            # Force lazy rows to render by scrolling several times
+            # with pauses. Netflix loads rows in batches as they enter
+            # viewport, so a single wheel event only gets ~1 row past
+            # the fold. Six scrolls at 800px each covers ~5000px of
+            # content, which comfortably includes both Top-10 rows.
+            page.wait_for_timeout(3000)
+            for i in range(6):
+                page.mouse.wheel(0, 800)
+                page.wait_for_timeout(1200)
+            # Scroll back to top so the render captures the earlier
+            # rows (which may have unmounted if the virtualizer is
+            # aggressive). Then one final small scroll to let the
+            # bottom row re-hydrate.
+            page.mouse.wheel(0, -6000)
+            page.wait_for_timeout(1500)
+            page.mouse.wheel(0, 3000)
+            page.wait_for_timeout(2000)
+            html = page.content()
+            logger.info("netflix: rendered %d-byte body on final page",
+                         len(html or ''))
+        except Exception as e:
+            logger.warning("netflix: navigation failed: %s", e)
+
+        try:
+            ctx.close()
+        except Exception:
+            pass
+        try:
+            browser.close()
+        except Exception:
+            pass
+
+    return html
 
 
 def _fetch_authenticated_daily() -> Optional[dict]:
     """Try the authenticated Playwright path. Returns a payload dict on
     success, None on failure (caller falls back to weekly TSV)."""
     try:
-        from ._playwright import render_pages
         from ._base import cookie_donation_status
     except Exception as e:
-        logger.info("netflix: playwright helper unavailable (%s); "
-                     "falling back to weekly TSV", e)
+        logger.info("netflix: cookie_donation_status import failed: %s", e)
         return None
 
     # Skip the auth path entirely when no netflix.com cookies have been
@@ -165,50 +316,37 @@ def _fetch_authenticated_daily() -> Optional[dict]:
     # a session just gets the marketing landing page, wastes ~30s per
     # invocation, and adds no signal.
     status = cookie_donation_status('netflix.com')
-    if not (status and status.get('available')):
+    if not (status and status.get('donated')):
         logger.info("netflix: no donated netflix.com cookies "
                      "(donate via `donate_cookies.py netflix.com` from your "
                      "laptop). Falling back to weekly TSV.")
         return None
 
     logger.info("netflix: attempting authenticated daily scrape "
-                 "(cookies age=%sh)", status.get('age_hours'))
+                 "(cookies count=%s age=%sh)",
+                 status.get('count'), status.get('age_hours'))
 
-    try:
-        rendered = render_pages(_NETFLIX_URLS,
-                                 homepage='https://www.netflix.com/',
-                                 cookie_domain='netflix.com',
-                                 wait_selectors=_NETFLIX_HYDRATE_SELECTORS,
-                                 wait_ms=6000,
-                                 scroll_ms=2500,
-                                 hydration_wait_ms=15000)
-    except Exception as e:
-        logger.warning("netflix: Playwright render failed: %s", e)
+    html = _run_netflix_playwright()
+    if not html:
+        logger.info("netflix: playwright returned nothing; using weekly TSV")
         return None
 
-    if not rendered:
-        logger.info("netflix: Playwright returned no pages; falling back")
-        return None
-
-    # Only one URL, one result. We still guard for len(rendered) == 0.
-    _, html = rendered[0]
-    logger.info("netflix: rendered %d-byte body", len(html or ''))
-    tv_items, film_items = _extract_top10_rows(html or '')
+    tv_items, film_items = _extract_top10_rows(html)
 
     if not tv_items and not film_items:
-        # Two likely causes:
-        #   (1) not logged in - Netflix redirected us to the marketing
-        #       page, in which case the heading pattern doesn't appear
-        #   (2) Netflix changed the heading/tile DOM
-        # Fall through to the TSV so the tile isn't empty; the log
-        # explains which one it is.
-        if 'Top 10' not in (html or ''):
+        if 'Top 10' not in html:
             logger.info("netflix: 'Top 10' text not in rendered body - "
-                         "session almost certainly expired. Re-donate cookies.")
+                         "still on profile picker or session expired. "
+                         "Re-donate netflix.com cookies.")
         else:
             logger.info("netflix: 'Top 10' text present but tiles didn't "
-                         "parse - Netflix DOM likely changed. Update the "
-                         "regexes in netflix.py.")
+                         "parse - Netflix DOM likely changed. Inspect "
+                         "/tmp/netflix_body_debug.html.")
+            try:
+                from pathlib import Path
+                Path('/tmp/netflix_body_debug.html').write_text(html)
+            except Exception:
+                pass
         return None
 
     logger.info("netflix: authenticated daily parsed %d TV + %d Films",
