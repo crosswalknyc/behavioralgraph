@@ -1030,32 +1030,60 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         # markets - compound forms only; single words like 'stock' and
         # 'shares' catch "livestock", "share the news", "market a product",
         # and pollute the finance card.
-        'nasdaq', 'dow jones', 's&p 500', 'sp500',
+        'nasdaq', 'dow jones', 's&p 500', 'sp500', 's & p 500',
+        'russell 2000', 'russell 1000', 'ftse', 'nikkei',
         'stock market', 'stock price', 'stock jumps', 'stock drops',
+        'stock plunges', 'stock soars', 'stock surges', 'stock crashes',
+        'stock hits record', 'stock hit record', 'record high',
         'shares climb', 'shares fall', 'shares surge', 'shares plunge',
+        'shares tumble', 'shares slide', 'shares rally',
         'market rally', 'market sell-off', 'market sell off',
+        'market crash', 'market rout', 'market swoon',
         'stock sell-off', 'stock sell off', 'ipo pricing',
-        'quarterly earnings', 'dividend', 'buyback',
-        # "merger" and "acquisition" without qualifiers hit sports
-        # trade news ("Mets acquire reliever...") - tighten to compound
-        # M&A forms only.
-        'corporate merger', 'company acquisition', 'merger deal',
-        'acquisition deal',
+        'quarterly earnings', 'dividend', 'dividend hike',
+        'dividend cut', 'buyback', 'stock buyback', 'share buyback',
         # macro
-        'inflation', 'interest rate', 'rate cut', 'rate hike',
-        'recession', 'gdp', 'unemployment rate', 'cpi', 'ppi', 'tariff',
-        'jobs report', 'nonfarm payroll',
+        'inflation', 'inflation report', 'inflation cools',
+        'inflation hot', 'core inflation', 'interest rate', 'rate cut',
+        'rate hike', 'rate hold', 'rate pause', 'recession',
+        'recession fears', 'recession odds', 'soft landing',
+        'gdp', 'gdp growth', 'gdp report', 'unemployment rate',
+        'jobless claims', 'cpi', 'ppi', 'pce', 'pce inflation',
+        'tariff', 'tariffs', 'trade deficit', 'trade war',
+        'jobs report', 'nonfarm payroll', 'jobs data',
+        'consumer sentiment', 'consumer confidence',
+        'yield curve', 'yield inversion', '10-year yield',
+        'treasury yield', 'bond yield',
         # institutions (compound to avoid short-token false hits)
         'federal reserve', 'fed rate', 'fed cut', 'fed hike',
-        'fed meeting', 'jerome powell', 'janet yellen', 'us treasury',
-        'wall street', 'goldman sachs', 'jpmorgan', 'blackrock',
-        'berkshire', 'warren buffett',
+        'fed meeting', 'fomc', 'fomc minutes', 'jerome powell',
+        'janet yellen', 'scott bessent', 'us treasury',
+        'treasury secretary', 'wall street', 'goldman sachs',
+        'jpmorgan', 'jp morgan', 'morgan stanley', 'citigroup',
+        'bank of america', 'blackrock', 'vanguard', 'fidelity',
+        'berkshire', 'berkshire hathaway', 'warren buffett',
+        'charlie munger', 'jamie dimon', 'david solomon',
         # crypto
-        'bitcoin', 'btc', 'ethereum', 'crypto', 'coinbase',
-        'stablecoin',
+        'bitcoin', 'btc', 'bitcoin price', 'ethereum', 'eth price',
+        'crypto crash', 'crypto rally', 'crypto', 'coinbase',
+        'stablecoin', 'usdc', 'usdt', 'tether', 'binance', 'solana',
+        'sol price', 'bitcoin etf', 'ethereum etf', 'spot etf',
+        'crypto etf',
         # bellwether tickers - use "stock" suffix for common-word brands
-        'nvidia', 'tesla stock', 'apple stock', 'microsoft stock',
-        'meta stock', 'amazon stock', 'palantir', 'amd stock',
+        'nvidia', 'nvda stock', 'tesla stock', 'tsla stock',
+        'apple stock', 'aapl stock', 'microsoft stock', 'msft stock',
+        'meta stock', 'meta earnings', 'amazon stock', 'amzn stock',
+        'palantir', 'palantir stock', 'plt stock', 'amd stock',
+        'super micro', 'smci', 'broadcom', 'arm stock',
+        'oracle stock',
+        # gold / oil / commodities
+        'gold price', 'gold rally', 'gold record', 'silver price',
+        'oil price', 'crude oil', 'brent crude', 'wti crude',
+        'gas price', 'natural gas', 'copper price', 'commodity prices',
+        # bonds / rates - 'mortgage rate/rates/30-year' are in `home`
+        # since they're primarily a housing-market signal, not a
+        # markets signal. Keep the pure-yield tickers here.
+        'refi rate', 'auto loan rate', 'high yield savings',
     ],
     # Philanthropy / nonprofit sector (added 2026-07-10). Sits in the
     # priority list BEFORE `politics` so philanthropy-adjacent policy
@@ -1236,29 +1264,104 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
     # or a Diddy-style federal case peels off crime instead of getting
     # counted as political news.
     'crime': [
-        # trial vocabulary
-        'trial', 'murder trial', 'murder charges', 'jury verdict',
-        'guilty verdict', 'not guilty verdict', 'sentencing hearing',
-        'plea deal', 'plea agreement', 'grand jury indictment',
-        'federal indictment', 'racketeering', 'rico charges',
-        'search warrant', 'fbi raid',
-        # trafficking / abuse
+        # trial / court vocabulary
+        'murder trial', 'homicide trial', 'murder charges', 'murder charge',
+        'jury verdict', 'jury deliberations', 'guilty verdict',
+        'not guilty verdict', 'sentencing hearing', 'sentenced to',
+        'sentenced to life', 'life sentence', 'death penalty',
+        'death row', 'plea deal', 'plea agreement', 'plea bargain',
+        'guilty plea', 'no contest', 'nolo contendere',
+        'grand jury indictment', 'grand jury indicts', 'federal indictment',
+        'racketeering', 'rico charges', 'search warrant', 'fbi raid',
+        'atf raid', 'dea raid', 'arraigned', 'arraignment', 'extradited',
+        'extradition', 'mistrial', 'hung jury', 'reversed conviction',
+        'exonerated', 'wrongful conviction', 'cold case',
+        # violence types + verbs (compound where a bare noun would
+        # collide with sports / music - 'shot' alone hits "took the shot",
+        # so use 'shot dead' / 'shot and killed' / 'shot to death')
+        'shot dead', 'shot and killed', 'shot to death', 'fatal shooting',
+        'gunned down', 'stabbed to death', 'fatal stabbing', 'stabbing death',
+        'beaten to death', 'strangled', 'strangulation death',
+        'found dead', 'body found', 'body recovered', 'body identified',
+        'human remains', 'remains found', 'remains identified',
+        'dismembered', 'decapitated',
+        'homicide investigation', 'homicide case', 'double homicide',
+        'triple homicide', 'quadruple homicide', 'murder-suicide',
+        'murder suicide', 'suspected homicide', 'ruled a homicide',
+        'ruled homicide', 'brutal murder',
+        # trafficking / abuse / exploitation
         'sex trafficking', 'human trafficking', 'child trafficking',
-        'kidnapping', 'kidnapped',
-        # true-crime blockbusters (2024-2026)
-        'karen read', 'diddy trial', 'sean combs', 'p diddy trial',
-        'ghislaine maxwell', 'jeffrey epstein', 'epstein list',
-        'epstein files', 'idaho murders', 'bryan kohberger',
-        'chad daybell', 'lori vallow', 'susan smith', 'ryan wesley routh',
-        'gilgo beach killer', 'delphi murders',
+        'labor trafficking', 'sexual assault', 'sexual abuse',
+        'sexual battery', 'sex offender', 'child predator',
+        'child sex abuse', 'child sexual abuse', 'pedophile',
+        'sextortion', 'sextortion scheme', 'grooming charges',
+        'kidnapping', 'kidnapped', 'child abduction', 'abduction',
         # missing / disappearance
-        'missing person', 'missing woman', 'missing hiker', 'amber alert',
-        'gone missing',
+        'missing person', 'missing woman', 'missing man', 'missing girl',
+        'missing boy', 'missing hiker', 'missing camper', 'missing child',
+        'missing since', 'amber alert', 'silver alert', 'endangered missing',
+        'gone missing', 'vanished without', 'last seen',
+        'search for missing', 'body of missing',
+        # manhunt / wanted / fugitive
+        'manhunt', 'nationwide manhunt', 'multi-state manhunt',
+        'wanted man', 'wanted woman', 'wanted for', 'fugitive',
+        'on the run', 'at large', 'suspect at large', 'america\'s most wanted',
         # shootings / attacks
         'mass shooting', 'active shooter', 'school shooting',
-        'shooting suspect', 'gunman opens fire',
-        # attempts on public figures (high traffic driver)
+        'grocery store shooting', 'mall shooting', 'movie theater shooting',
+        'church shooting', 'synagogue shooting', 'mosque shooting',
+        'workplace shooting', 'shooting suspect', 'shooting victim',
+        'shooting rampage', 'gunman opens fire', 'gunman shot',
+        # police / officer involved
+        'officer killed', 'officer shot', 'officer down',
+        'police shooting', 'police-involved shooting', 'trooper killed',
+        'deputy killed', 'deputy shot', 'sheriff shot', 'officer ambush',
+        'police standoff', 'hostage situation', 'barricaded suspect',
+        # property / theft
+        'armed robbery', 'bank robbery', 'home invasion',
+        'carjacking', 'attempted carjacking', 'grand theft auto arrest',
+        'burglary ring', 'arson', 'arson attack', 'arson suspect',
+        # hate / bias / terror
+        'hate crime', 'bias crime', 'antisemitic attack',
+        'antisemitic incident', 'terrorist attack', 'domestic terror',
+        'bomb threat', 'pipe bomb', 'suicide bomber', 'mass casualty',
+        # cartels / gangs / organized
+        'cartel violence', 'cartel leader', 'sinaloa cartel',
+        'jalisco cartel', 'cjng', 'gang violence', 'gang shooting',
+        'organized crime', 'mafia bust', 'drug bust', 'meth lab',
+        'fentanyl bust', 'cocaine bust', 'trafficking ring',
+        # domestic - use compound forms so bare 'restraining order' (which
+        # often refers to a corporate injunction / court order in a business
+        # deal) doesn't fold in as crime.
+        'domestic violence', 'domestic incident',
+        'domestic restraining order', 'domestic violence restraining',
+        'protective order violation', 'stalking charges',
+        'stalker arrested', 'intimate partner violence',
+        'ex-boyfriend charged', 'ex-husband charged',
+        # fraud / financial crime (leans a bit finance-adjacent but
+        # story-driven fraud is a crime beat, not a markets beat)
+        'wire fraud', 'securities fraud', 'ponzi scheme',
+        'insurance fraud', 'medicare fraud', 'medicaid fraud',
+        'tax fraud', 'crypto fraud', 'sam bankman-fried', 'sbf trial',
+        'elizabeth holmes', 'theranos',
+        # true-crime blockbusters (2024-2026)
+        'karen read', 'diddy trial', 'sean combs trial', 'p diddy trial',
+        'ghislaine maxwell', 'jeffrey epstein', 'epstein list',
+        'epstein files', 'epstein documents', 'idaho murders',
+        'bryan kohberger', 'chad daybell', 'lori vallow',
+        'susan smith', 'ryan wesley routh', 'gilgo beach killer',
+        'delphi murders', 'richard allen', 'gabby petito',
+        'brian laundrie', 'menendez brothers', 'harvey weinstein',
+        'kelsey berreth', 'patrick frazee', 'travis rudolph',
+        'luigi mangione', 'mangione', 'daniel penny',
+        'alec baldwin rust', 'rust shooting', 'halyna hutchins',
+        # public-figure attempts / assassinations (huge traffic drivers)
         'assassination attempt', 'assassinated', 'suspect arrested',
+        'suspect in custody', 'person of interest', 'suspect identified',
+        # generic sector nouns (kept late so more-specific compounds hit
+        # first)
+        'homicide', 'murder case', 'murder mystery', 'cold-blooded',
+        'true crime',
     ],
     # Health & wellness. GLP-1s / Ozempic drove massive 2024-2026
     # trend traffic; mental health, workouts, and wellness fads
@@ -1268,29 +1371,61 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         'ozempic', 'wegovy', 'mounjaro', 'zepbound', 'saxenda',
         'glp-1', 'glp 1', 'compounded semaglutide', 'compounded tirzepatide',
         'weight loss drug', 'weight loss shot', 'weight loss injection',
+        'weight loss pill', 'semaglutide', 'tirzepatide',
         # workouts / fitness fads
         'peloton', 'orange theory', 'orangetheory', 'crossfit',
         'hyrox', 'run club', 'zone 2 training', 'zone two training',
-        'cold plunge', 'sauna', 'red light therapy',
+        'cold plunge', 'ice bath', 'sauna', 'red light therapy',
         # mental health
-        'mental health day', 'burnout symptoms', 'anxiety symptoms',
-        'depression symptoms', 'therapy trend',
+        'mental health', 'mental health day', 'burnout symptoms',
+        'anxiety symptoms', 'depression symptoms', 'therapy trend',
         'ssri', 'antidepressant', 'ketamine therapy',
-        'psilocybin therapy',
+        'psilocybin therapy', 'suicide prevention', 'suicide hotline',
         # diet / nutrition fads
         'protein powder', 'creatine benefits', 'electrolyte drink',
         'liquid iv', 'lmnt', 'element',
         'seed oils', 'raw milk', 'carnivore diet', 'keto diet',
-        'intermittent fasting',
+        'intermittent fasting', 'mediterranean diet',
         # supplement / wellness brand universe
         'ag1', 'athletic greens', 'huberman', 'andrew huberman',
         'attia', 'peter attia', 'bryan johnson', "don't die",
-        # medical news
-        'rsv vaccine', 'measles outbreak', 'bird flu', 'h5n1',
-        'covid variant', 'norovirus outbreak', 'mpox',
+        # outbreaks + infectious disease (2024-2026 heavy beat)
+        'rsv vaccine', 'measles outbreak', 'measles cases',
+        'measles case', 'bird flu', 'h5n1', 'h5n1 outbreak',
+        'avian flu', 'covid variant', 'covid cases', 'long covid',
+        'norovirus outbreak', 'norovirus', 'salmonella outbreak',
+        'salmonella recall', 'e coli outbreak', 'e. coli outbreak',
+        'listeria outbreak', 'listeria recall', 'mpox', 'monkeypox',
+        'polio case', 'polio outbreak', 'zika virus',
+        'dengue outbreak', 'malaria', 'ebola outbreak',
+        # cancer / chronic disease (huge search vertical)
+        'cancer diagnosis', 'cancer treatment', 'cancer survivor',
+        'stage 4 cancer', 'stage 4', 'breast cancer',
+        'colon cancer', 'colorectal cancer', 'lung cancer',
+        'prostate cancer', 'pancreatic cancer', 'brain tumor',
+        'chemotherapy', 'chemo treatment', 'radiation therapy',
+        'diabetes', 'type 1 diabetes', 'type 2 diabetes',
+        'alzheimer', 'dementia', 'parkinson',
+        # medical devices / procedures
+        'brain implant', 'neuralink patient', 'cochlear implant',
+        'organ transplant', 'kidney transplant', 'heart transplant',
         # institutions
-        'cdc guidelines', 'fda approval', 'fda advisory',
-        'rfk hhs', 'rfk secretary',
+        'cdc guidelines', 'cdc report', 'cdc advisory',
+        'fda approval', 'fda advisory', 'fda recall', 'fda ban',
+        'rfk hhs', 'rfk secretary', 'hhs secretary', 'nih director',
+        'surgeon general', 'who report', 'world health organization',
+        # public-health drugs / recalls
+        'drug recall', 'medication recall', 'birth control recall',
+        'tylenol recall', 'ibuprofen recall',
+        # sexual / reproductive health
+        'ivf ruling', 'ivf treatment', 'in vitro fertilization',
+        'abortion pill', 'mifepristone', 'plan b',
+        # public-figure health news (huge search driver)
+        'health scare', 'hospitalized', 'in the hospital',
+        'medical emergency', 'health update', 'medical leave',
+        # general medical vocab (kept late so specific compounds hit
+        # first)
+        'symptoms', 'medication', 'prescription', 'antibiotic',
     ],
     # Food & recipes. Restaurant news + viral recipes + celebrity
     # chef beats. Priority above retail so a "chick-fil-a menu"
@@ -1448,34 +1583,72 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
     # unicorn news. Distinct from finance (which is stocks + macro +
     # crypto prices) - this is corporate / operational business news.
     'business': [
+        # M&A / deal news (2026 is a big M&A cycle - Paramount / WBD /
+        # etc. - so make sure these land here, not in finance or crime)
+        'merger', 'acquisition', 'acquires', 'acquiring',
+        'buyout', 'takeover', 'take-private', 'take private',
+        'go private', 'going private', 'spin-off', 'spinoff',
+        'divestiture', 'carve-out', 'carve out',
+        'paramount merger', 'warner bros merger', 'warner bros discovery',
+        'wbd merger', 'skydance paramount', 'skydance merger',
+        'disney fox', 'microsoft activision', 'us steel nippon',
+        'kroger albertsons', 'capital one discover', 'chevron hess',
+        'temporary restraining order', 'preliminary injunction',
+        'deal blocked', 'deal cleared', 'deal approved',
+        'antitrust review', 'antitrust ruling', 'antitrust case',
+        'antitrust lawsuit', 'ftc lawsuit', 'ftc investigation',
+        'doj antitrust', 'doj lawsuit', 'sec charges',
+        'sec settlement', 'consent decree',
         # unicorns / startups
-        'startup funding', 'series a', 'series b', 'series c',
-        'unicorn startup', 'yc demo day', 'y combinator',
-        'stripe valuation', 'databricks valuation', 'canva valuation',
+        'startup funding', 'series a funding', 'series b funding',
+        'series c funding', 'unicorn startup', 'yc demo day',
+        'y combinator', 'stripe valuation', 'databricks valuation',
+        'canva valuation', 'perplexity funding',
         # IPO wave
         'ipo filing', 'ipo debut', 'ipo priced', 'ipo dropped',
-        'direct listing', 'spac merger', 'reverse merger',
+        'ipo pop', 'direct listing', 'spac merger', 'reverse merger',
+        'files for ipo', 'plans to ipo', 'files s-1',
         # famous private company news
-        'openai valuation', 'anthropic funding', 'anthropic valuation',
-        'perplexity funding', 'databricks earnings',
-        'stripe ipo', 'databricks ipo',
-        # layoffs / RIFs
-        'layoffs', 'mass layoffs', 'tech layoffs', 'layoff round',
-        'workforce reduction', 'reduction in force',
-        'severance package', 'severance offer',
+        'openai valuation', 'openai funding', 'anthropic funding',
+        'anthropic valuation', 'stripe ipo', 'databricks ipo',
+        'databricks earnings',
+        # earnings / quarterly moves (business-side beats)
+        'quarterly loss', 'quarterly profit', 'earnings beat',
+        'earnings miss', 'revenue beat', 'revenue miss',
+        'guidance cut', 'guidance raised', 'lowered guidance',
+        'raised guidance', 'profit warning',
+        # layoffs / RIFs (massive traffic driver 2024-2026)
+        'layoffs', 'laid off', 'laying off', 'mass layoffs',
+        'tech layoffs', 'layoff round', 'workforce reduction',
+        'reduction in force', 'severance package', 'severance offer',
+        'job cuts', 'cutting jobs', 'cut jobs', 'workforce cuts',
+        'hiring freeze', 'restructuring plan', 'restructuring charge',
+        'shutting down office', 'closing headquarters',
         # exec moves
         'ceo resigns', 'ceo fired', 'ceo steps down', 'new ceo',
+        'ceo replaced', 'ceo ousted', 'ceo out', 'named ceo',
         'cfo resigns', 'cfo fired', 'cto resigns',
-        'shareholder lawsuit', 'shareholder revolt',
-        # antitrust / regulation
-        'ftc lawsuit', 'ftc investigation', 'doj antitrust',
-        'antitrust ruling', 'antitrust case',
+        'chair resigns', 'chairman resigns', 'chief resigns',
+        'board fires', 'board ousts', 'shareholder lawsuit',
+        'shareholder revolt', 'proxy fight', 'activist investor',
         # famous execs (business context, not stock price)
         'satya nadella', 'sundar pichai', 'tim cook', 'andy jassy',
         'mark zuckerberg', 'evan spiegel', 'brian chesky',
-        'shou zi chew',
+        'shou zi chew', 'sam altman', 'dario amodei',
+        'jensen huang', 'lisa su', 'linda yaccarino',
+        'bob iger', 'david zaslav',
+        # bankruptcy / distress
+        'chapter 11', 'files bankruptcy', 'bankruptcy filing',
+        'bankruptcy protection', 'chapter 7', 'insolvency',
+        'creditors', 'debt restructuring',
         # brand strategy news
         'rebrand', 'brand refresh', 'logo redesign',
+        # sector-defining companies in a business-story context (as
+        # opposed to consumer / tech / finance context)
+        'boeing quality', 'boeing scandal', 'starbucks earnings',
+        'nike layoffs', 'target earnings', 'target layoffs',
+        'gm layoffs', 'ford layoffs', 'meta layoffs', 'google layoffs',
+        'amazon layoffs', 'microsoft layoffs',
     ],
 }
 # Short tokens matched by word boundary to prevent false positives like
@@ -1634,6 +1807,229 @@ def _bucket_searches_by_category(rows: list[dict], per_bucket: int = 30
             if c in buckets and c != 'overall' and len(buckets[c]) < per_bucket:
                 buckets[c].append(r)
     return buckets
+
+
+# Minimum items in a category bucket before we STOP folding in
+# secondary-signal rows (headlines / trending-people / wikipedia). Any
+# bucket at or above this count is left as pure Google-Trends. Buckets
+# below this count get augmented with matching rows from other pools
+# so a category never renders empty when the news / people / wiki
+# pools obviously carry the beat.
+_THIN_BUCKET_THRESHOLD = 8
+
+# Category-specific cap on how many fold-in rows we'll add from
+# secondary pools. Prevents one big headline pool from turning a card
+# into a news-only feed.
+_HARVEST_CAP_PER_POOL = 6
+
+
+def _augment_thin_buckets_from_pools(
+        by_cat:              dict[str, list[dict]],
+        trending_headlines:  list[dict],
+        trending_people:     list[dict],
+        wikipedia_trending:  list[dict],
+        articles_by_source:  Optional[list[dict]] = None,
+        movers:              Optional[dict]      = None,
+) -> dict[str, list[dict]]:
+    """Fold matching secondary-signal rows into category buckets that
+    came out thin (< `_THIN_BUCKET_THRESHOLD` items) from the
+    Google-Trends-only bucketing pass.
+
+    Runs the SAME `_categorize_search_term` matcher against the title
+    of each headline / person / wiki article, so a "Karen Read verdict"
+    headline lands in `crime` and a "Jack Smith" GDELT person lands in
+    `crime` too.  Each fold-in row is stamped with `origin` so the UI
+    can render it with a subtle "via news" / "via people" / "via wiki"
+    badge instead of pretending it's a Google search.
+
+    This is the fix for the "how can crime be empty for 7 days" UX
+    complaint: Google Trends is only ONE of five trending signals, and
+    when the top-search pool skews sports-and-entertainment on a given
+    day, the other pools still carry the crime / health / finance /
+    business beat that the user expects to see.
+    """
+    if not by_cat:
+        return by_cat
+
+    def _add(bucket_key: str, row: dict, origin: str, source_label: str,
+              url_key: str, seen: set):
+        # Dedupe within a single bucket by URL first, then by lowercased
+        # title so a headline and its wiki article don't both fold in.
+        key = (bucket_key, url_key.lower() if url_key else '',
+                (row.get('_harvest_key') or ''))
+        if key in seen:
+            return
+        seen.add(key)
+        by_cat[bucket_key].append(row)
+
+    # We build a shared "seen" set across the whole pass so a Karen
+    # Read headline doesn't get folded in twice as (news) and (person).
+    seen: set = set()
+
+    # 1) Headlines. First mine `articles_by_source` (the wider pool -
+    #    up to ~110 articles across all outlets), then fall back to the
+    #    top-15 flat list. Both feed the same news fold-in path.
+    news_pool: list[dict] = []
+    for outlet in (articles_by_source or []):
+        for a in (outlet.get('articles') or []):
+            merged = dict(a)
+            merged.setdefault('source',        outlet.get('source', ''))
+            merged.setdefault('source_label',  outlet.get('source', ''))
+            merged.setdefault('domain',        outlet.get('domain', ''))
+            news_pool.append(merged)
+    # Fall through with the flat list too (dedup by lowercased title).
+    _news_seen_titles = {(h.get('title') or '').strip().lower()
+                          for h in news_pool if h.get('title')}
+    for h in (trending_headlines or []):
+        t = (h.get('title') or '').strip().lower()
+        if t and t not in _news_seen_titles:
+            news_pool.append(h)
+            _news_seen_titles.add(t)
+
+    for h in news_pool:
+        title = (h.get('title') or '').strip()
+        if not title:
+            continue
+        cats = _categorize_search_term(title, [])
+        if not cats:
+            continue
+        cat = cats[0]
+        if cat not in by_cat:
+            continue
+        if len(by_cat[cat]) >= _THIN_BUCKET_THRESHOLD:
+            continue
+        # Cap per-pool fold-ins.
+        already_news = sum(1 for r in by_cat[cat] if r.get('origin') == 'news')
+        if already_news >= _HARVEST_CAP_PER_POOL:
+            continue
+        folded = {
+            'term':          title,
+            'value':         None,
+            'growth':        None,
+            'related':       [],
+            'related_queries': [],
+            'url':           h.get('url'),
+            'image':         h.get('image'),
+            'origin':        'news',
+            'origin_label':  (h.get('source_label') or h.get('source')
+                               or 'news'),
+            'origin_domain': h.get('domain') or '',
+            'seendate':      h.get('seendate') or '',
+            '_harvest_key':  'news:' + title.lower(),
+        }
+        _add(cat, folded, 'news',
+              folded['origin_label'], h.get('url') or '', seen)
+
+    # 2) Trending people. Row shape (post-annotate): {name, mentions,
+    #    projected_mentions, projected_pageviews, trend, ...}.
+    for p in (trending_people or []):
+        name = (p.get('name') or '').strip()
+        if not name:
+            continue
+        cats = _categorize_search_term(name, [])
+        if not cats:
+            continue
+        cat = cats[0]
+        if cat not in by_cat:
+            continue
+        if len(by_cat[cat]) >= _THIN_BUCKET_THRESHOLD:
+            continue
+        already_people = sum(1 for r in by_cat[cat] if r.get('origin') == 'person')
+        if already_people >= _HARVEST_CAP_PER_POOL:
+            continue
+        folded = {
+            'term':          name,
+            'value':         p.get('mentions'),
+            'growth':        None,
+            'related':       [],
+            'related_queries': [],
+            'url':           None,
+            'image':         None,
+            'origin':        'person',
+            'origin_label':  'trending people',
+            'projected_mentions':   p.get('projected_mentions'),
+            'projected_pageviews':  p.get('projected_pageviews'),
+            'trend':         p.get('trend'),
+            '_harvest_key':  'person:' + name.lower(),
+        }
+        _add(cat, folded, 'person', 'trending people',
+              '', seen)
+
+    # 3) Movers rising / breakout / falling / sustained. Each list is
+    #    a set of {term, source, growth, ...} rows. Terms here often
+    #    are the freshest signal in the whole dashboard - if a crime
+    #    story is breaking out today it'll be in `breakout` even before
+    #    it hits the top trending list. So we mine movers WITH a
+    #    slightly higher per-pool cap because these are highest-signal.
+    if movers and isinstance(movers, dict):
+        for bucket_name in ('breakout', 'rising', 'sustained', 'falling'):
+            for m in (movers.get(bucket_name) or []):
+                term = (m.get('term') or m.get('name') or '').strip()
+                if not term:
+                    continue
+                cats = _categorize_search_term(term, [])
+                if not cats:
+                    continue
+                cat = cats[0]
+                if cat not in by_cat:
+                    continue
+                if len(by_cat[cat]) >= _THIN_BUCKET_THRESHOLD:
+                    continue
+                already_mv = sum(1 for r in by_cat[cat]
+                                    if r.get('origin') == 'mover')
+                if already_mv >= _HARVEST_CAP_PER_POOL:
+                    continue
+                folded = {
+                    'term':           term,
+                    'value':          m.get('growth'),
+                    'growth':         m.get('growth'),
+                    'related':        [],
+                    'related_queries': [],
+                    'url':            None,
+                    'image':          None,
+                    'origin':         'mover',
+                    'origin_label':   bucket_name,
+                    '_harvest_key':   'mover:' + term.lower(),
+                }
+                _add(cat, folded, 'mover', bucket_name, '', seen)
+
+    # 4) Wikipedia trending. Row shape: {title, url, views_today,
+    #    delta_pct, is_new, ...}.
+    for w in (wikipedia_trending or []):
+        title = (w.get('title') or '').strip()
+        if not title:
+            continue
+        # Wikipedia article titles often include underscores; normalize
+        # for matching but keep the original for display.
+        haystack = title.replace('_', ' ')
+        cats = _categorize_search_term(haystack, [])
+        if not cats:
+            continue
+        cat = cats[0]
+        if cat not in by_cat:
+            continue
+        if len(by_cat[cat]) >= _THIN_BUCKET_THRESHOLD:
+            continue
+        already_wiki = sum(1 for r in by_cat[cat] if r.get('origin') == 'wikipedia')
+        if already_wiki >= _HARVEST_CAP_PER_POOL:
+            continue
+        folded = {
+            'term':          haystack,
+            'value':         w.get('views_today'),
+            'growth':        w.get('delta_pct'),
+            'related':       [],
+            'related_queries': [],
+            'url':           w.get('url'),
+            'image':         None,
+            'origin':        'wikipedia',
+            'origin_label':  'Wikipedia',
+            'is_new':        w.get('is_new'),
+            '_harvest_key':  'wiki:' + title.lower(),
+        }
+        _add(cat, folded, 'wikipedia', 'Wikipedia',
+              w.get('url') or '', seen)
+
+    return by_cat
 
 
 # ============================================================================
@@ -3402,6 +3798,24 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # Finance (top 20 each). Category buckets are computed from the same
     # underlying list so counts add up predictably.
     searches_by_category = _bucket_searches_by_category(trending_searches, per_bucket=100)
+
+    # A category card should NEVER render empty just because Google
+    # Trends happened to skew sports+entertainment that day. Fold in
+    # matching rows from the three other pools we already have -
+    # trending news headlines, GDELT trending people, and Wikipedia
+    # trending articles - stamped with `origin` so the UI can label
+    # them as "via news / people / wiki" instead of pretending they're
+    # Google searches. Only buckets under `_THIN_BUCKET_THRESHOLD` get
+    # augmented, so healthy buckets stay pure. See
+    # `_augment_thin_buckets_from_pools`.
+    searches_by_category = _augment_thin_buckets_from_pools(
+        searches_by_category,
+        trending_headlines  = headlines,
+        trending_people     = trending_people,
+        wikipedia_trending  = wikipedia_trending,
+        articles_by_source  = articles_by_source,
+        movers              = movers,
+    )
 
     now = datetime.now(timezone.utc)
     payload = {
