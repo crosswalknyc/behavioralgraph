@@ -23388,6 +23388,14 @@
                 background: linear-gradient(135deg, rgba(251,146,60,0.20) 0%, rgba(239,68,68,0.20) 100%);
                 color: #fdba74; border: 1px solid rgba(251,146,60,0.42);
             }
+            /* Fold-in origin pills. Shown on category-card rows that
+               were sourced from a non-search trending pool (news /
+               wikipedia / people / movers). Kept subtle so real Google
+               Trends searches still visually dominate the card. */
+            #trendsIQView .tiq-badge.tiq-origin-news   { background: rgba(59,130,246,0.15);  color: #93c5fd; }
+            #trendsIQView .tiq-badge.tiq-origin-person { background: rgba(168,85,247,0.15);  color: #d8b4fe; }
+            #trendsIQView .tiq-badge.tiq-origin-wiki   { background: rgba(148,163,184,0.18); color: #cbd5e1; }
+            #trendsIQView .tiq-badge.tiq-origin-mover  { background: rgba(34,197,94,0.15);   color: #86efac; }
             #trendsIQView .tiq-social-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
             #trendsIQView .tiq-social-tab { padding: 0.35rem 0.75rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; font-size: 0.78rem; cursor: pointer; color: var(--text-secondary); user-select: none; }
             #trendsIQView .tiq-social-tab.active { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: #fff; border-color: transparent; }
@@ -41239,6 +41247,43 @@
         // rank / badges / breakdown chip / news-strip styling stays
         // consistent. Falls back gracefully when trendspy fields are
         // missing (e.g. RSS-only days) so old snapshots keep rendering.
+        // Small pill shown when a category-card row was folded in from
+        // a non-search pool (news / people / wikipedia / movers). Prevents
+        // the "no crime searches" empty state when adjacent trending
+        // pools obviously carry the beat. See
+        // `_augment_thin_buckets_from_pools` in trends_iq.py.
+        function _tiqOriginBadge(r) {
+            if (!r || !r.origin || r.origin === 'search') return '';
+            var lbl, cls, icon;
+            switch (r.origin) {
+                case 'news':
+                    icon = '📰';
+                    lbl  = 'via ' + (r.origin_label || 'news');
+                    cls  = 'tiq-origin-news';
+                    break;
+                case 'person':
+                    icon = '👤';
+                    lbl  = 'via trending people';
+                    cls  = 'tiq-origin-person';
+                    break;
+                case 'wikipedia':
+                    icon = '🌐';
+                    lbl  = 'via Wikipedia';
+                    cls  = 'tiq-origin-wiki';
+                    break;
+                case 'mover':
+                    icon = '📈';
+                    lbl  = 'via ' + (r.origin_label || 'movers');
+                    cls  = 'tiq-origin-mover';
+                    break;
+                default:
+                    return '';
+            }
+            return ' <span class="tiq-badge ' + cls +
+                   '" title="This row was folded in from a non-search trending pool">' +
+                   icon + ' ' + _tiqEsc(lbl) + '</span>';
+        }
+
         function _tiqRenderSearchRow(r, rank) {
             var volLabel  = _tiqFormatVolume(r.volume || r.score || 0);
             var growth    = Number(r.volume_growth_pct || 0);
@@ -41246,6 +41291,7 @@
             var hot       = r.days_trending >= 3;
             var breakdown = (r.trend_keywords || []).slice(0, 6);
             var news      = (r.news_articles  || []).slice(0, 2);
+            var origin    = r.origin || 'search';
 
             var badges = '';
             if (volLabel) {
@@ -41296,9 +41342,22 @@
                            '</div>';
             }
 
+            // Fold-in rows (news / wikipedia) carry a URL - make the
+            // term text a link when present; otherwise render as plain
+            // text like a normal search row.
+            var termHtml;
+            if (origin !== 'search' && r.url) {
+                termHtml = '<a href="' + _tiqEsc(r.url) +
+                           '" target="_blank" rel="noopener" style="color:inherit;">' +
+                           _tiqEsc(r.term) + '</a>';
+            } else {
+                termHtml = _tiqEsc(r.term);
+            }
+
             return '<div class="tiq-row"><div class="tiq-rank">' + rank + '</div>' +
                    '<div class="tiq-row-body">' +
-                   '<div class="tiq-row-title">' + _tiqEsc(r.term) +
+                   '<div class="tiq-row-title">' + termHtml +
+                   _tiqOriginBadge(r) +
                    _tiqCrossPlatformBadge(r) +
                    _tiqActions('search', 'google', r.term, r.term, 'National') + '</div>' +
                    _tiqWhyLine(r) +
@@ -41316,7 +41375,14 @@
         // maxItems, default 100).
         function _tiqRenderSearchCard(title, subtitle, rows, opts) {
             opts = opts || {};
-            var emptyMsg = opts.emptyMsg || 'No trending searches in this category right now.';
+            // Empty-state wording. When every trending pool (searches +
+            // news + wikipedia + people + movers) misses this category
+            // in the current window, be honest about it - don't say
+            // "no searches" which reads as a bug. See
+            // `_augment_thin_buckets_from_pools`.
+            var emptyMsg = opts.emptyMsg ||
+                'No matches across searches, news, or trending pools ' +
+                'in this window. Refreshes on the next scraper run.';
             var body;
             if (!rows || !rows.length) {
                 body = '<div class="tiq-card-sub" style="opacity:0.7;padding:16px 4px;">' + _tiqEsc(emptyMsg) + '</div>';
