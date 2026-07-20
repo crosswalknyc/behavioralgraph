@@ -318,7 +318,35 @@ _SCRAPER_KIND_MAP = {
     # kind. See `_gdelt_source_for_kind`.
     'gdelt':         'headline',
     'gdelt-people':  'person',
+    # Wikipedia + Philanthropy: frontend `source` differs from the
+    # snapshot filename, so the reader has to alias via
+    # _SOURCE_SNAPSHOT_ALIAS below. Rows sit under `national` with the
+    # standard `title` key so the generic matcher works unchanged.
+    'wikipedia':    'wikipedia',
+    'philanthropy': 'news',
+    # Music sub-sources - registered here so callers reaching the
+    # generic branch don't get a `unknown` kind, but history_for_item
+    # short-circuits these to history_for_music because the rows sit
+    # under sources[sub].items (not `national`) inside music_charts.json.
+    'apple':  'music',
+    'shazam': 'music',
 }
+
+
+# When the frontend `source` differs from the S3 snapshot filename, map
+# it here. `wikipedia` -> `wikipedia_trending.json`, `philanthropy` ->
+# `philanthropy_news.json`. Everything else uses source as filename.
+_SOURCE_SNAPSHOT_ALIAS = {
+    'wikipedia':    'wikipedia_trending',
+    'philanthropy': 'philanthropy_news',
+}
+
+
+# Music sub-source ids that live inside the `music_charts` snapshot
+# under `sources[sub].items`. `tiktok` collides with the social scraper
+# of the same name, so the dispatcher gates on `kind=='music'` before
+# it looks at the source id (see history_for_item).
+_MUSIC_SUB_SOURCES = {'shazam', 'apple', 'tiktok'}
 
 
 def _gdelt_source_for_kind(kind: str) -> str:
@@ -386,10 +414,11 @@ def history_for_scraper(source: str, key: str, *,
     if not slug:
         return _empty_arc(_SCRAPER_KIND_MAP.get(source, 'unknown'), source, key, geo)
     kind = _SCRAPER_KIND_MAP.get(source, 'unknown')
+    snapshot_name = _SOURCE_SNAPSHOT_ALIAS.get(source, source)
     day_list = _iter_recent_days(days)
     arc_days: list[dict] = []
     for day_iso in day_list:
-        payload = _fetch_day(f"{_SCRAPER_DATED_PREFIX}", day_iso, suffix=source)
+        payload = _fetch_day(f"{_SCRAPER_DATED_PREFIX}", day_iso, suffix=snapshot_name)
         rows: list = []
         if isinstance(payload, dict):
             rows = payload.get('national') or []
@@ -412,6 +441,84 @@ def history_for_scraper(source: str, key: str, *,
 
 
 # ────────────────────────────────────────────────────────────────────────────
+# Music historical (Shazam / Apple Music / TikTok Sounds)
+# ────────────────────────────────────────────────────────────────────────────
+def _find_music_row(rows: list, clicked_slug: str
+                    ) -> Optional[tuple[int, dict]]:
+    """Match a music row by slug. Music rows are keyed on `title` +
+    `artist`, but the clicked key is either `title` alone or
+    `title - artist` depending on where it came from. Try direct
+    combined-slug, then title-only, then substring on either side."""
+    if not isinstance(rows, list) or not clicked_slug:
+        return None
+
+    for i, r in enumerate(rows):
+        if not isinstance(r, dict):
+            continue
+        title  = (r.get('title') or '').strip()
+        artist = (r.get('artist') or '').strip()
+        combined = f"{title} - {artist}" if artist else title
+        if _slug(combined) == clicked_slug or _slug(title) == clicked_slug:
+            rank = int(r.get('rank') or (i + 1))
+            return rank, r
+
+    for i, r in enumerate(rows):
+        if not isinstance(r, dict):
+            continue
+        title_slug = _slug(r.get('title') or '')
+        if not title_slug or len(title_slug) < 4:
+            continue
+        if title_slug in clicked_slug or clicked_slug in title_slug:
+            rank = int(r.get('rank') or (i + 1))
+            return rank, r
+    return None
+
+
+def history_for_music(sub: str, key: str, *,
+                      days: int = DEFAULT_DAYS,
+                      geo: str = 'National') -> dict:
+    """Reconstruct the arc for a music item. `sub` is one of
+    `shazam`/`apple`/`tiktok` and identifies which sub-list inside the
+    daily `music_charts.json` snapshot to read.
+
+    Music snapshots differ from every other scraper: they put rows
+    under `sources[sub].items[]` rather than `national`. Rows carry
+    `title` + `artist`; the clicked key is usually
+    `"<title> - <artist>"` so we fuzzy-match both forms."""
+    slug = _slug(key)
+    if not slug:
+        return _empty_arc('music', sub, key, geo)
+    day_list = _iter_recent_days(days)
+    arc_days: list[dict] = []
+    for day_iso in day_list:
+        payload = _fetch_day(f"{_SCRAPER_DATED_PREFIX}", day_iso,
+                             suffix='music_charts')
+        rows: list = []
+        if isinstance(payload, dict):
+            sub_block = (payload.get('sources') or {}).get(sub) or {}
+            rows = sub_block.get('items') or []
+        hit = _find_music_row(rows, slug)
+        if hit is not None:
+            rank, r = hit
+            title  = (r.get('title') or '').strip()
+            artist = (r.get('artist') or '').strip()
+            arc_days.append({
+                'date':        day_iso,
+                'rank':        rank,
+                'score':       None,
+                'matched_key': f"{title} - {artist}" if artist else title,
+                'present':     True,
+                'url':         r.get('url'),
+                'image':       r.get('image'),
+            })
+        else:
+            arc_days.append({'date': day_iso, 'rank': None,
+                             'score': None, 'present': False})
+    return _summarize_arc(arc_days, kind='music', source=sub,
+                           key=key, geo=geo)
+
+
+# ────────────────────────────────────────────────────────────────────────────
 # Dispatcher
 # ────────────────────────────────────────────────────────────────────────────
 def history_for_item(kind: str, source: str, key: str, *,
@@ -423,13 +530,19 @@ def history_for_item(kind: str, source: str, key: str, *,
     if not key:
         return _empty_arc(kind, source, key, geo)
 
-    cache_slug = f"{kind}:{source}:{_slug(key)}:{_slug(geo)}:{days}"
+    cache_slug = f"v2:{kind}:{source}:{_slug(key)}:{_slug(geo)}:{days}"
     if not force_refresh:
         cached = _read_history_cache(cache_slug)
         if cached is not None:
             return cached
 
-    if source == 'google' or kind == 'search':
+    kind_l = (kind or '').lower()
+
+    # Music has to come first because the `tiktok` source id also
+    # matches a social scraper snapshot; kind='music' disambiguates.
+    if kind_l == 'music' and source in _MUSIC_SUB_SOURCES:
+        arc = history_for_music(source, key, days=days, geo=geo)
+    elif source == 'google' or kind_l == 'search':
         arc = history_for_search(key, geo=geo, days=days)
     elif source == 'gdelt':
         # Route by kind: headlines live in gdelt.json, people live in
@@ -447,7 +560,11 @@ def history_for_item(kind: str, source: str, key: str, *,
         arc = _empty_arc(kind or 'unknown', source, key, geo)
         arc['error'] = f'no historical source for source={source!r} kind={kind!r}'
 
-    _write_history_cache(cache_slug, arc)
+    # Don't persist empty arcs (total_days=0). Those are 'never even
+    # looked' arcs coming out of _empty_arc, and caching them for 6h
+    # would mask code-side fixes to the dispatcher.
+    if arc.get('total_days'):
+        _write_history_cache(cache_slug, arc)
     return arc
 
 
