@@ -46,10 +46,18 @@ logger = logging.getLogger('local_residential_run')
 
 # The list of scraper module names to run. Add here when a new residential-
 # only scraper is added.
+#
+# Netflix (2026-07) is here because we switched from the public weekly TSV
+# (only updated Tuesdays) to an authenticated daily scrape of the
+# logged-in netflix.com homepage's "Top 10 in the U.S. Today" rows.
+# The auth path uses the operator's donated netflix.com cookies, which
+# live on their laptop, so this scraper naturally belongs here rather
+# than on Hetzner.
 RESIDENTIAL_SCRAPERS = [
     ('disneyplus',    'Disney+'),
     ('espnplus',      'ESPN+'),
     ('max_streaming', 'Max'),
+    ('netflix',       'Netflix'),
 ]
 
 
@@ -72,9 +80,35 @@ def _run_scraper(module_name: str, label: str) -> int:
     return proc.returncode
 
 
+def _refresh_cookies() -> int:
+    """Auto-donate cookies for every DEFAULT_DOMAINS entry before running
+    the scrapers. Runs the same `donate_cookies.py` script the operator
+    would run manually, so residential + Hetzner + all cookie-degraded
+    scrapers get fresh sessions on every daily run. No-op if the
+    subprocess exits non-zero (missing keychain access, no Chrome
+    profile, etc.) - the scraper batch still proceeds with whatever
+    cookies are currently in S3.
+    """
+    logger.info("refreshing donated cookies from local Chrome ...")
+    cmd = [sys.executable, '-m',
+           'scripts.trends_scrapers.donate_cookies']
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                           cwd=str(Path(__file__).resolve().parents[2]))
+    if proc.stdout:
+        logger.info("[donate_cookies stdout] %s", proc.stdout.strip())
+    if proc.stderr:
+        logger.info("[donate_cookies stderr] %s", proc.stderr.strip())
+    if proc.returncode != 0:
+        logger.warning("donate_cookies exited %d; continuing with existing "
+                        "cookies in S3", proc.returncode)
+    return proc.returncode
+
+
 def _run_all() -> int:
-    """Run every RESIDENTIAL_SCRAPERS entry in-process order. Returns 0
-    if at least one succeeded, 1 if all failed."""
+    """Refresh donated cookies from local Chrome, then run every
+    RESIDENTIAL_SCRAPERS entry. Returns 0 if at least one scraper
+    succeeded, 1 if all failed."""
+    _refresh_cookies()
     ok_count = 0
     for module_name, label in RESIDENTIAL_SCRAPERS:
         rc = _run_scraper(module_name, label)
@@ -124,19 +158,28 @@ def _launchd_plist_body(repo_root: Path, python_bin: str) -> str:
         <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
         <key>AWS_REGION</key>
         <string>us-east-2</string>
+        <!-- Critical: without PYTHONPATH, `python3 -m scripts...` fails
+             with ModuleNotFoundError even when WorkingDirectory is set.
+             launchd does not add the WorkingDirectory to sys.path. -->
+        <key>PYTHONPATH</key>
+        <string>{repo_root}</string>
     </dict>
 
-    <!-- 9am local time daily -->
+    <!-- 8am local time daily. Refreshes cookies + runs residential
+         scrapers before the dashboard's morning traffic peak. -->
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>9</integer>
+        <integer>8</integer>
         <key>Minute</key>
         <integer>0</integer>
     </dict>
 
+    <!-- If Mac was asleep at 8am, fire when it wakes. Also fires at
+         agent-load time so `--install-launchd` runs the batch once
+         immediately for smoke testing. -->
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
 
     <key>StandardOutPath</key>
     <string>{log_dir}/stdout.log</string>
@@ -175,8 +218,8 @@ def _install_launchd() -> int:
         logger.warning("launchctl not available - manually run `launchctl "
                         "load -w %s`", plist_path)
         return 1
-    logger.info("Installed. Will run at 9am local daily. Logs: %s",
-                 _launchd_log_dir())
+    logger.info("Installed. Will run at 8am local daily (and at load). "
+                 "Logs: %s", _launchd_log_dir())
     return 0
 
 
