@@ -62,7 +62,13 @@ from pathlib import Path
 # Hulu bundles respectively - donating disneyplus.com covers ESPN+, and
 # donating hulu.com covers Max on the bundle plan.
 DEFAULT_DOMAINS = [
-    'instagram.com',
+    # Social - content-focused scrapers (2026-07 switch: hashtags -> real
+    # posts/videos/tweets). All three need a logged-in session because
+    # the public explore/discover pages hide the good content behind
+    # walls for anonymous visitors.
+    'instagram.com',   # instagram.com/explore trending posts
+    'tiktok.com',      # tiktok.com/discover trending videos (public /discover)
+    'x.com',           # x.com/explore trending tweets (requires login)
     # TikTok Creative Center gates its trending hashtag list behind login
     # as of 2026-07: anonymous visitors see 3 preview cards + a "Log in"
     # CTA. Donating a Creative-Center-logged-in session (visit

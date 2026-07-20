@@ -41,16 +41,12 @@ SCRAPERS = [
     ('wikipedia_trending', 'scripts.trends_scrapers.wikipedia_trending', 'Wikipedia',            'search'),
     ('music_charts',       'scripts.trends_scrapers.music_charts',       'Music',                'music'),
     ('philanthropy_news',  'scripts.trends_scrapers.philanthropy_news',  'Philanthropy news',    'news'),
-    ('x',         'scripts.trends_scrapers.x_twitter',  'X',         'social'),
-    ('tiktok',    'scripts.trends_scrapers.tiktok',     'TikTok',    'social'),
     ('youtube',   'scripts.trends_scrapers.youtube',    'YouTube',   'social'),
-    # Instagram was previously scraped via instagrapi against a
-    # Chrome-issued sessionid, but IG's WAF login_required's every
-    # datacenter request. Switched to a hashtag-tracker fallback that
-    # publishes the top-100 IG hashtags by post volume with no auth.
-    # Legacy scripts.trends_scrapers.instagram is kept in-repo in case
-    # IG ever eases the check and we want to revive the Explore feed.
-    ('instagram', 'scripts.trends_scrapers.instagram_hashtags', 'Instagram', 'social'),
+    # X, TikTok, and Instagram are NOT in this list. As of 2026-07 they
+    # were switched from hashtag/topic lists to real trending posts /
+    # videos / tweets, which require donated cookies + a residential IP
+    # (all three fingerprint Hetzner's datacenter egress). They now run
+    # daily from Jenna's laptop via `local_residential_run.py`.
     # Reddit was previously fetched live at request time from Render,
     # but Reddit blocks Render's datacenter egress. Hetzner's residential
     # egress gets 200s so we run it here daily like every other social.

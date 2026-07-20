@@ -1,291 +1,218 @@
 """
-Instagram trending scraper via instagrapi.
+Instagram trending scraper - real trending posts / reels from
+instagram.com/explore (USA).
 
-Uses instagrapi's Explore + Reels-tray feeds against a logged-in account
-to surface what Instagram is pushing on the Explore tab today. Explore
-is IG's closest analog to "trending" - it's the algorithmic feed the
-Discover/search tab is built on and is what marketing teams watch to
-gauge which reels/creators are getting distribution today.
+2026-07 switch: previously we scraped top-hashtags.com's all-time
+hashtag popularity list (#love, #instagood, ...) which was neither
+"trending" nor "content". Jenna's ask ("show trending content, not
+hashtags") means we now surface actual posts and reels from the /explore
+feed - what IG's own recommendation algorithm decides is worth showing
+someone right now.
 
-Credentials live in `/root/finished_codes/.env.trends_scrapers` on
-Hetzner (mode 600, gitignored). Sourced by the cron entrypoint:
+Auth is required. The /explore page redirects anonymous visitors to the
+login wall. We inject donated instagram.com cookies (via
+`donate_cookies.py`) so the Playwright session is logged in as Jenna's
+regular IG account. Runs from residential IPs only because IG WAFs
+datacenter egress hard.
 
-    INSTAGRAM_USERNAME=...
-    INSTAGRAM_PASSWORD=...
-    INSTAGRAM_SESSIONID=...           # Chrome sessionid cookie (see below)
-    INSTAGRAM_SESSION_PATH=/root/.instagrapi_session.json
+Snapshot shape (matches `_base.py` social contract):
 
-Auth strategy, in priority order:
-
-  1. **Persisted session file** at INSTAGRAM_SESSION_PATH. Reused across
-     every daily cron run - this is the hot path 364 days a year.
-  2. **Donated sessionid** from `donate_cookies.py instagram.com`
-     (uploaded to `s3://dashboard-inputs/trends_iq_cookies/
-     instagram.com.json`). Self-service refresh: when the session
-     expires, Jenna just re-donates from Chrome and the scraper picks
-     up the new sessionid on the next cron.
-  3. **INSTAGRAM_SESSIONID env var** as legacy handoff.
-  4. **Password login** as last-resort fallback.
-
-Known limitation (2026-07): Instagram tightened their mobile-API
-fingerprint check. A Chrome-issued sessionid gets `login_required`
-when instagrapi (which impersonates a Pixel 8 Pro app) uses it against
-`i.instagram.com/api/v1/*`, even from a US residential IP - IG can tell
-the session originated in a browser context. Practical workarounds if
-Instagram signal becomes critical:
-
-  - Use a headed Playwright login flow that mints a session by driving
-    the mobile-web app + solving IG's device challenge, then hands the
-    session to instagrapi.
-  - Run instagrapi through the actual Instagram Android app under
-    scrcpy/mitmproxy to capture a mobile-context sessionid.
-  - Or accept Instagram as "coming soon" until IG changes their check.
-
-Until one of those lands, the scraper still runs, records the
-`login_required` reason in the snapshot's `error` field, and returns 0
-items so the dashboard shows a clear placeholder rather than stale
-data.
-
-Rate discipline: the daily cron pulls one Explore page (~24 items).
-Nothing else. That's ~365 requests/year from a single warm session -
-well below the auto-lockout threshold. If IG invalidates the session,
-grab a fresh sessionid cookie from Chrome and update the env var.
+    {
+      "source":   "instagram",
+      "label":    "Instagram",
+      "kind":     "social",
+      "national": [
+          {
+              "rank":    1,
+              "title":   "caption or alt text",
+              "creator": "@handle",
+              "url":     "https://www.instagram.com/reel/{shortcode}/",
+              "image":   "https://scontent-.../{jpg}",
+              "kind":    "reel" | "post",
+          }, ...
+      ],
+      ...
+    }
 
 Standalone:
 
-    source /root/finished_codes/.env.trends_scrapers
     python3 -m scripts.trends_scrapers.instagram
 """
 
 from __future__ import annotations
 
 import logging
-import os
+import re
 import sys
 from typing import Any
 
-from ._base import load_donated_cookies, run_scraper
+from ._base import run_scraper
 
 logger = logging.getLogger(__name__)
 
 
-def _sessionid_from_donation() -> str:
-    """Pull `sessionid` out of the donated instagram.com cookies on S3.
+# IG post / reel URL patterns on /explore:
+#   /reel/{shortcode}/    - Reels (short vertical video)
+#   /p/{shortcode}/       - Photo / carousel / IGTV post
+# Shortcodes are alphanumeric + '-_', typically 10-12 chars.
+_IG_HREF_RE = re.compile(
+    r'href="(/(reel|p)/([A-Za-z0-9_\-]{8,20})/?)"',
+    re.IGNORECASE,
+)
 
-    Jenna donates cookies via `donate_cookies.py instagram.com` from her
-    laptop, which lands in `s3://dashboard-inputs/trends_iq_cookies/
-    instagram.com.json`. This lets us skip the env-var handoff entirely -
-    when the session expires she just re-runs donate_cookies from Chrome
-    and the scraper picks up the new sessionid on the next cron run.
+
+def _parse_explore_html(html: str, limit: int = 30) -> list[dict]:
+    """Extract trending posts/reels from an /explore page render.
+
+    IG's 2026 explore DOM is aggressively minimal: post/reel anchors
+    render with almost no metadata attached (no alt text, no captions,
+    no aria-labels), and most items are <video> elements rather than
+    <img>. Rather than guess at brittle DOM structure, we:
+
+      1. Extract every unique /p/{shortcode}/ or /reel/{shortcode}/
+         URL in DOM order (which matches visual rank).
+      2. Use IG's public `/media/?size=l` redirect endpoint for the
+         thumbnail (works whether the underlying post is an image,
+         carousel, or reel first-frame; IG serves an appropriately
+         sized thumbnail for all three).
+
+    Result: reliable clickable rows with thumbnails, ranked by IG's
+    own Explore recommendation engine.
     """
-    donated = load_donated_cookies('instagram.com')
-    return (donated.get('sessionid') or '').strip()
-
-
-def _new_client():
-    """Fresh instagrapi Client with pacing settings applied."""
-    try:
-        from instagrapi import Client  # type: ignore
-    except ImportError as e:
-        raise RuntimeError(
-            "instagrapi not installed - run `pip3 install --break-system-packages "
-            "instagrapi pillow` on Hetzner") from e
-    cl = Client()
-    cl.delay_range = [1, 3]  # match instagrapi recommended pacing
-    return cl
-
-
-def _persist(cl, session_path: str) -> None:
-    """Write instagrapi settings to disk with mode-600 permissions."""
-    try:
-        cl.dump_settings(session_path)
-        os.chmod(session_path, 0o600)
-    except Exception as e:
-        logger.warning("instagram: failed to persist session: %s", e)
-
-
-def _hydrate_from_sessionid(cl, sessionid: str) -> None:
-    """Inject a Chrome-issued `sessionid` cookie into instagrapi.
-
-    This lets us skip the mobile-API login endpoint entirely. instagrapi
-    exposes `login_by_sessionid()` for exactly this workflow.
-    """
-    cl.login_by_sessionid(sessionid)
-
-
-def _validate(cl) -> None:
-    """Cheap authenticated ping to confirm the session is live."""
-    cl.get_timeline_feed()
-
-
-def _client():
-    """Build an authenticated instagrapi Client.
-
-    Priority order:
-      1. Donated sessionid cookie from S3 (Chrome-issued via
-         `donate_cookies.py instagram.com`). Preferred because it's
-         self-service - Jenna re-donates from her laptop when the
-         session expires and Hetzner picks it up on the next cron.
-      2. INSTAGRAM_SESSIONID env var. Legacy handoff; still supported.
-      3. Persisted settings at INSTAGRAM_SESSION_PATH from a prior run.
-         Only tried when the donated sessionid changes (we key the
-         persisted file by sessionid so a fresh donation forces a fresh
-         auth handshake instead of resurrecting an invalid session).
-      4. Password login (rarely works from datacenter IPs; last resort).
-    """
-    session_path = os.environ.get('INSTAGRAM_SESSION_PATH',
-                                    '/root/.instagrapi_session.json')
-    donated_sid  = _sessionid_from_donation()
-    env_sid      = os.environ.get('INSTAGRAM_SESSIONID', '').strip()
-    sessionid    = donated_sid or env_sid
-    if donated_sid:
-        logger.info("instagram: using donated sessionid from S3 "
-                     "(trends_iq_cookies/instagram.com.json)")
-    username  = os.environ.get('INSTAGRAM_USERNAME', '').strip()
-    password  = os.environ.get('INSTAGRAM_PASSWORD', '').strip()
-
-    # Key the persisted session file to the current sessionid so a fresh
-    # donation doesn't reuse a stale settings file.
-    if sessionid:
-        sid_tag = sessionid.split('%')[0][-6:]  # last 6 chars of the numeric prefix
-        session_path = f'{session_path}.{sid_tag}'
-
-    # 1/3. Reuse the persisted session file if it matches the current
-    #      sessionid. (session_path is tagged with sessionid above, so
-    #      an old persisted file for a different sessionid is invisible.)
-    if os.path.exists(session_path):
-        try:
-            cl = _new_client()
-            cl.load_settings(session_path)
-            _validate(cl)
-            logger.info("instagram: reused persisted session at %s", session_path)
-            return cl
-        except Exception as e:
-            logger.info("instagram: persisted session invalid (%s); "
-                         "trying sessionid cookie", type(e).__name__)
-
-    # 2. Hydrate from a browser-issued sessionid cookie.
-    if sessionid:
-        try:
-            cl = _new_client()
-            _hydrate_from_sessionid(cl, sessionid)
-            _validate(cl)
-            _persist(cl, session_path)
-            logger.info("instagram: hydrated new session from sessionid cookie")
-            return cl
-        except Exception as e:
-            logger.warning("instagram: sessionid hydrate failed (%s); "
-                             "falling back to password login", e)
-
-    # 4. Password login (last resort; frequently blocked from datacenter IPs).
-    if not (username and password):
-        raise RuntimeError(
-            "No usable IG credential. Set INSTAGRAM_SESSIONID (preferred) "
-            "or INSTAGRAM_USERNAME+PASSWORD in "
-            "/root/finished_codes/.env.trends_scrapers")
-    cl = _new_client()
-    cl.login(username, password)
-    _persist(cl, session_path)
-    logger.info("instagram: authenticated via password login")
-    return cl
-
-
-def _serialize_media(m, rank: int) -> dict:
-    """Turn an instagrapi Media object into our normalized snapshot row."""
-    try:
-        caption = (getattr(m, 'caption_text', '') or '').strip()
-    except Exception:
-        caption = ''
-    try:
-        user = getattr(m, 'user', None)
-        username = getattr(user, 'username', '') if user else ''
-        full_name = getattr(user, 'full_name', '') if user else ''
-    except Exception:
-        username = ''
-        full_name = ''
-
-    topic = caption[:120] if caption else (f'@{username}' if username else 'Trending post')
-
-    image = ''
-    for attr in ('thumbnail_url', 'display_url'):
-        v = getattr(m, attr, None)
-        if v:
-            image = str(v)
-            break
-    if not image:
-        try:
-            resources = getattr(m, 'resources', None) or []
-            if resources:
-                first = resources[0]
-                image = str(getattr(first, 'thumbnail_url', '') or '')
-        except Exception:
-            pass
-
-    code = getattr(m, 'code', '') or ''
-    media_type = getattr(m, 'media_type', None)
-    product_type = getattr(m, 'product_type', '') or ''
-    # 2 with product_type='clips' means Reels. media_type=1 is a photo,
-    # media_type=2 is a video, media_type=8 is a carousel.
-    is_reel = (media_type == 2 and product_type == 'clips')
-    url = f'https://www.instagram.com/reel/{code}/' if is_reel else \
-          f'https://www.instagram.com/p/{code}/'
-
-    return {
-        'rank':      rank,
-        'topic':     topic,
-        'username':  username,
-        'full_name': full_name,
-        'url':       url,
-        'image':     image,
-        'likes':     int(getattr(m, 'like_count', 0) or 0),
-        'comments':  int(getattr(m, 'comment_count', 0) or 0),
-        'views':     int(getattr(m, 'view_count', 0) or 0) if media_type == 2 else None,
-        'kind':      'reel' if is_reel else ('video' if media_type == 2 else
-                     ('photo' if media_type == 1 else 'carousel' if media_type == 8 else 'post')),
-    }
-
-
-def _pull_explore(cl, limit: int) -> list[dict]:
-    """Pull the Explore feed and normalize."""
-    medias = []
-    try:
-        # instagrapi's Explore paginator returns Media objects.
-        result = cl.explore_page()
-        if isinstance(result, tuple):
-            medias = result[0]
-        else:
-            medias = result or []
-    except Exception as e:
-        logger.warning("instagram explore fetch failed: %s", e)
+    if not html:
         return []
-    out: list[dict] = []
-    for i, m in enumerate(medias[:limit]):
+    seen: set[str] = set()
+    items: list[dict] = []
+    for m in _IG_HREF_RE.finditer(html):
+        path, kind, code = m.group(1), m.group(2), m.group(3)
+        if code in seen:
+            continue
+        seen.add(code)
+        # /p/{code}/media/?size=l returns a 302 redirect to the actual
+        # CDN image for the post (image posts, carousel first frame,
+        # or reel first frame). Works without auth for public posts.
+        # Followed transparently by <img> tags in the browser.
+        thumb = f'https://www.instagram.com/p/{code}/media/?size=l'
+        items.append({
+            'rank':    len(items) + 1,
+            'title':   '',      # captions require a separate GraphQL fetch
+            'creator': '',      # not exposed in explore DOM
+            'url':     f'https://www.instagram.com{path}',
+            'image':   thumb,
+            'kind':    kind,    # 'reel' or 'p'
+        })
+        if len(items) >= limit:
+            break
+    return items
+
+
+def _fetch_playwright() -> list[dict]:
+    """Load instagram.com/explore with Playwright + donated cookies."""
+    try:
+        from ._playwright import (_lazy_playwright, _launch_browser,
+                                  _try_stealth, UA)
+        from ._base import (load_donated_cookies_playwright,
+                            cookie_donation_status)
+    except Exception as e:
+        logger.info("instagram: playwright helpers unavailable: %s", e)
+        return []
+    sp = _lazy_playwright()
+    if sp is None:
+        logger.info("instagram: playwright not installed")
+        return []
+
+    domain = 'instagram.com'
+    status = cookie_donation_status(domain)
+    if not (status and status.get('donated')):
+        logger.info("instagram: no donated %s cookies - /explore requires "
+                    "login, so we'll get redirected to the wall. Run "
+                    "donate_cookies.py instagram.com from the operator's "
+                    "laptop.", domain)
+        return []
+    donated = load_donated_cookies_playwright(domain) or []
+    if not donated:
+        return []
+
+    html_out = ''
+    with sp() as pw:
         try:
-            out.append(_serialize_media(m, rank=i + 1))
+            browser, _ch = _launch_browser(pw, prefer_chrome=True, proxy=None)
         except Exception as e:
-            logger.debug("instagram media serialize failed: %s", e)
-    return out
+            logger.warning("instagram playwright launch failed: %s", e)
+            return []
+        try:
+            ctx = browser.new_context(
+                user_agent=UA,
+                viewport={'width': 1440, 'height': 900},
+                locale='en-US',
+                timezone_id='America/New_York',
+                extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
+            )
+            try:
+                ctx.add_cookies(donated)
+                logger.info("instagram: injected %d instagram.com cookies "
+                            "(age=%.1fh)",
+                            len(donated), status.get('age_hours') or -1)
+            except Exception as e:
+                logger.info("instagram: cookie inject failed: %s", e)
+
+            page = ctx.new_page()
+            _try_stealth(page)
+            try:
+                page.goto('https://www.instagram.com/',
+                          wait_until='domcontentloaded', timeout=30_000)
+                page.wait_for_timeout(2500)
+                page.goto('https://www.instagram.com/explore/',
+                          wait_until='domcontentloaded', timeout=45_000)
+                # Wait for at least one post-card anchor.
+                try:
+                    page.wait_for_selector('a[href^="/reel/"], a[href^="/p/"]',
+                                            timeout=15_000)
+                except Exception:
+                    logger.info("instagram: no /reel or /p anchors within 15s; "
+                                "may be a login redirect")
+                for _ in range(4):
+                    page.mouse.wheel(0, 1500)
+                    page.wait_for_timeout(1000)
+                html_out = page.content() or ''
+                # Diagnostic: if we ended up at /accounts/login we know
+                # the cookies were invalidated.
+                cur = page.url or ''
+                if '/accounts/login' in cur or 'login' in cur:
+                    logger.warning("instagram: navigation ended at %s - "
+                                    "donated cookies likely expired", cur)
+            except Exception as e:
+                logger.info("instagram /explore navigation error: %s", e)
+        finally:
+            try: browser.close()
+            except Exception: pass
+
+    items = _parse_explore_html(html_out, limit=30)
+    if not items:
+        logger.info("instagram: /explore yielded 0 items (html len=%d)",
+                    len(html_out))
+    else:
+        logger.info("instagram: /explore yielded %d items", len(items))
+    return items
 
 
 def fetch() -> dict[str, Any]:
-    try:
-        cl = _client()
-    except Exception as e:
+    items = _fetch_playwright()
+    if not items:
         return {
-            'national':  [],
-            'available': False,
-            'error':     f'{type(e).__name__}: {e}',
+            'national': [],
+            'error':    ('instagram /explore returned no posts. Check that '
+                         'instagram.com cookies are donated and unexpired '
+                         '(python3 scripts/trends_scrapers/donate_cookies.py '
+                         'instagram.com) and that this ran from a '
+                         'residential IP.'),
         }
-    national = _pull_explore(cl, limit=24)
-    return {
-        'national':  national,
-        'available': bool(national),
-    }
+    return {'national': items[:20]}
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO,
-                         format='%(asctime)s %(levelname)s %(name)s %(message)s')
+                        format='%(asctime)s %(levelname)s %(name)s %(message)s')
     result = run_scraper('instagram', 'Instagram', 'social', fetch)
     print(f"instagram: national={len(result.get('national', []))} "
-           f"error={result.get('error')}", file=sys.stderr)
+          f"error={result.get('error')}", file=sys.stderr)
