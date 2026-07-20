@@ -23304,7 +23304,7 @@
             #trendsIQView .tiq-source-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 0.35rem; margin-bottom: 0.35rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
             #trendsIQView .tiq-source-name { font-weight: 600; font-size: 0.9rem; }
             #trendsIQView .tiq-source-domain { font-size: 0.72rem; color: var(--text-secondary); }
-            #trendsIQView .tiq-people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.65rem; }
+            #trendsIQView .tiq-people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.65rem; align-items: stretch; }
             /* 5-up searches layout: Overall (scrollable) + 4 category cards.
                auto-fill wraps to 3->2->1 columns on narrower viewports. */
             /* 7 cards now: Overall + Entertainment + Retail +
@@ -41652,6 +41652,46 @@
                    'color:#c9d3e0;">\u201C' + _tiqEsc(row.why) + '\u201D</div>';
         }
 
+        // "Why they're trending" caption for a person card. Same italic
+        // quoted style as _tiqWhyLine but with a fallback ladder so we
+        // always show *something* for people who have mentions but no
+        // Claude-generated `why`:
+        //   1. `p.why`           (Claude daily one-liner, top ~15 people)
+        //   2. `p.context_meta`  (the actual article/search headline
+        //                         mentioning them, plus outlet)
+        //   3. `p.context`       (legacy string-only field, still on
+        //                         cached payloads from before the meta
+        //                         field was added)
+        function _tiqPersonWhyLine(p) {
+            if (!p) return '';
+            if (p.why) return _tiqWhyLine(p);
+            var meta = (p.context_meta || [])[0];
+            var text = '';
+            var source = '';
+            var url = '';
+            if (meta && meta.text) {
+                text   = meta.text;
+                source = meta.source || '';
+                url    = meta.url    || '';
+            } else if ((p.context || []).length) {
+                text = p.context[0];
+            }
+            if (!text) return '';
+            var body = _tiqEsc(text);
+            if (source) {
+                body += ' <span style="opacity:0.7;">\u2014 ' + _tiqEsc(source) + '</span>';
+            }
+            // Wrap the caption in an <a> when we have the article URL,
+            // so a click deep-links to the piece that surfaced the name.
+            var content = url
+                ? '<a href="' + _tiqEsc(url) + '" target="_blank" rel="noopener" ' +
+                  'style="color:inherit;text-decoration:none;">\u201C' + body + '\u201D</a>'
+                : '\u201C' + body + '\u201D';
+            return '<div class="tiq-row-why" style="' +
+                   'font-size:12px;opacity:0.85;margin-top:4px;font-style:italic;' +
+                   'color:#c9d3e0;line-height:1.35;">' + content + '</div>';
+        }
+
         // "Cultural moment" pill for any row the backend marked with
         // `cross_platform: true` (name/topic trending on 3+ distinct
         // platforms in the same window). Tooltip lists which
@@ -41803,11 +41843,17 @@
                        '</div>' +
                        '<div class="tiq-people-grid">';
             sorted.forEach(function(p) {
-                var context = (p.context || []).slice(0, 1).map(function(c) { return _tiqEsc(c); }).join('');
                 var mentionsProj  = Number(p.mentions_projected  != null ? p.mentions_projected  : (Number(p.mentions)  || 0) * 329990000) || 0;
                 var pageviewsProj = Number(p.pageviews_projected != null ? p.pageviews_projected : (Number(p.pageviews) || 0) * 329990000) || 0;
                 var trendPill = _tiqRenderPersonTrend(p);
                 var crossPill = _tiqCrossPlatformBadge(p);
+                // "Why they're trending" caption. Prefers Claude's
+                // daily one-liner (`p.why`) if present, otherwise falls
+                // back to the top article/headline mentioning them
+                // (`context_meta[0]`), rendered like the Movers row's
+                // related-headline caption. Deep-links to the source
+                // when we have a URL for the article.
+                var whyHtml = _tiqPersonWhyLine(p);
                 html += '<div class="tiq-person-card">' +
                         '<div class="tiq-person-name">' +
                           '<span>' + _tiqEsc(p.name) + '</span>' +
@@ -41818,8 +41864,7 @@
                         '<div class="tiq-person-mentions">' + _tiqNum(mentionsProj) + ' mentions' +
                         (pageviewsProj ? ' &middot; ' + _tiqNum(pageviewsProj) + ' pageviews' : '') +
                         '</div>' +
-                        _tiqWhyLine(p) +
-                        (context ? '<div class="tiq-person-context">' + context + '</div>' : '') +
+                        whyHtml +
                         '</div>';
             });
             html += '</div></div>';
