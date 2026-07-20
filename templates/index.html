@@ -40979,6 +40979,20 @@
             document.querySelectorAll('#trendsIQPanels .tiq-panel').forEach(function(el) {
                 el.classList.toggle('active', el.getAttribute('data-tiq-panel') === key);
             });
+            // Snap streaming back to Netflix every time the user enters the
+            // streaming top-tab. Their per-platform selection sticks while
+            // browsing (setTrendsIQStreaming preserves it) but leaving and
+            // returning resets the anchor so nobody ever lands on a stale
+            // Disney+/Max/Prime tab from an earlier session.
+            if (key === 'streaming') {
+                var s = (window.__trendsIQ.lastData &&
+                         window.__trendsIQ.lastData.cards &&
+                         window.__trendsIQ.lastData.cards.streaming_trending) || {};
+                if (s.netflix && s.netflix.available &&
+                    typeof window.setTrendsIQStreaming === 'function') {
+                    window.setTrendsIQStreaming('netflix');
+                }
+            }
         };
 
         // ============================================================
@@ -41998,13 +42012,22 @@
             var keys = _tiqStreamOrder.filter(function(k) { return streaming[k]; })
                 .concat(allKeys.filter(function(k) { return _tiqStreamOrder.indexOf(k) === -1; }));
 
-            // Pick default active platform: the first one with data.
+            // Pick default active platform. Netflix is the anchor - it's
+            // the only platform with a fully public feed, has the richest
+            // history, and is what users expect to see first. Only fall
+            // through to "first available" if Netflix genuinely isn't in
+            // the payload.
             if (!window.__trendsIQ.activeStreaming ||
                 !streaming[window.__trendsIQ.activeStreaming]) {
-                var firstWithData = keys.find(function(k) {
-                    return (streaming[k] || {}).available;
-                }) || keys[0];
-                window.__trendsIQ.activeStreaming = firstWithData;
+                var preferred = null;
+                if (streaming.netflix && streaming.netflix.available) {
+                    preferred = 'netflix';
+                } else {
+                    preferred = keys.find(function(k) {
+                        return (streaming[k] || {}).available;
+                    }) || keys[0];
+                }
+                window.__trendsIQ.activeStreaming = preferred;
             }
 
             var tabs = keys.map(function(k) {
