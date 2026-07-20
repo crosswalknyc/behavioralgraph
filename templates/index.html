@@ -2496,6 +2496,128 @@
         .marketing-retarget-title { font-weight: 700; font-size: 0.9rem; color: var(--text-primary); display: flex; gap: 0.4rem; align-items: center; }
         .marketing-retarget-body { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4; }
 
+        /* Creator Roster + Brand Partners (Marketing tab) ------------------
+           Reuses .marketing-platform-grid + .marketing-plat-card / .marketing-plat-tag
+           for the base card + tag chip styles, and adds tier-specific badges
+           and a grouped-partners wrapper. */
+        .marketing-tier {
+            font-size: 0.62rem;
+            letter-spacing: 0.08em;
+            padding: 0.18rem 0.5rem;
+            border-radius: 999px;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-family: 'Space Mono', monospace;
+            white-space: nowrap;
+        }
+        .marketing-tier.macro    { background: rgba(139, 92, 246, 0.22); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.5); }
+        .marketing-tier.mid      { background: rgba(102, 217, 239, 0.18); color: #66d9ef; border: 1px solid rgba(102, 217, 239, 0.4); }
+        .marketing-tier.micro    { background: rgba(16, 185, 129, 0.18); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); }
+        .marketing-tier.mass     { background: rgba(139, 92, 246, 0.22); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.5); }
+        .marketing-tier.signature{ background: rgba(102, 217, 239, 0.18); color: #66d9ef; border: 1px solid rgba(102, 217, 239, 0.4); }
+        .marketing-tier.giveaway { background: rgba(253, 151, 31, 0.16); color: #fd971f; border: 1px solid rgba(253, 151, 31, 0.4); }
+        .marketing-tier.ambassador{background: rgba(236, 72, 153, 0.16); color: #ec4899; border: 1px solid rgba(236, 72, 153, 0.4); }
+        body[data-theme="light"] .marketing-tier.macro,
+        body[data-theme="light"] .marketing-tier.mass       { color: #6d28d9; }
+        body[data-theme="light"] .marketing-tier.mid,
+        body[data-theme="light"] .marketing-tier.signature  { color: #0e7490; }
+        body[data-theme="light"] .marketing-tier.micro      { color: #047857; }
+        body[data-theme="light"] .marketing-tier.giveaway   { color: #b45309; }
+        body[data-theme="light"] .marketing-tier.ambassador { color: #be185d; }
+
+        .marketing-fit-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.22), rgba(102, 217, 239, 0.18));
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            color: var(--text-primary);
+            border-radius: 999px;
+            padding: 0.15rem 0.55rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+        .marketing-fit-pill small { font-weight: 500; opacity: 0.7; letter-spacing: 0.03em; }
+
+        .marketing-partners-wrap { display: flex; flex-direction: column; gap: 1.1rem; }
+        .marketing-partners-group {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0.9rem 1rem 1rem;
+        }
+        .marketing-partners-group-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.65rem;
+            padding-bottom: 0.55rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .marketing-partners-group-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+        .marketing-partners-group-note {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            max-width: 62%;
+            text-align: right;
+        }
+        .marketing-partners-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 0.6rem;
+        }
+        .marketing-partner-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.65rem 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+        .marketing-partner-card-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 0.5rem;
+        }
+        .marketing-partner-card-name {
+            font-weight: 700;
+            font-size: 0.92rem;
+            color: var(--text-primary);
+        }
+        .marketing-partner-card-cat {
+            font-size: 0.66rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            font-family: 'Space Mono', monospace;
+            white-space: nowrap;
+        }
+        .marketing-partner-card-metrics {
+            display: flex;
+            gap: 0.85rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+        }
+        .marketing-partner-card-metrics b { color: var(--text-primary); font-weight: 700; }
+
         .marketing-ai-output {
             background: var(--bg-input);
             border: 1px solid var(--border-color);
@@ -20215,7 +20337,7 @@
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                                    <button class="tab-btn tool-tab has-tooltip" data-feature="marketing" data-tooltip="Marketing: Digital ad buying playbook — media mix, per-platform priority, lookalike seed spec, geo targeting, and retargeting." onclick="showTab('marketing')"><span class="tab-icon">📣</span><span class="tab-label">MARKETING</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                                    <button class="tab-btn tool-tab has-tooltip" data-feature="marketing" data-tooltip="Marketing: Digital ad buying playbook - media mix, per-platform priority, lookalike seed spec, geo targeting, retargeting, creator roster, and brand-partner shortlist." onclick="showTab('marketing')"><span class="tab-icon">📣</span><span class="tab-label">MARKETING</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                 </div>
                                 <div class="toolbar-section-label">ANALYSIS TOOLS</div>
@@ -21443,6 +21565,8 @@
                         <button class="marketing-subtab"        data-mkt-tab="lookalike" onclick="showMarketingSection('lookalike')" role="tab">🎯 <span>Lookalike Seed</span></button>
                         <button class="marketing-subtab"        data-mkt-tab="geo"       onclick="showMarketingSection('geo')"       role="tab">📍 <span>Geo Targeting</span></button>
                         <button class="marketing-subtab"        data-mkt-tab="retarget"  onclick="showMarketingSection('retarget')"  role="tab">🔄 <span>Retargeting</span></button>
+                        <button class="marketing-subtab"        data-mkt-tab="creators"  onclick="showMarketingSection('creators')"  role="tab">🎬 <span>Creator Roster</span></button>
+                        <button class="marketing-subtab"        data-mkt-tab="partners"  onclick="showMarketingSection('partners')"  role="tab">🤝 <span>Brand Partners</span></button>
                         <button class="marketing-subtab"        data-mkt-tab="ai"        onclick="showMarketingSection('ai')"        role="tab">✨ <span>AI Playbook</span></button>
                     </div>
 
@@ -21481,9 +21605,25 @@
                     <section class="marketing-section marketing-sub-panel" data-mkt-panel="retarget">
                         <div class="marketing-section-head">
                             <h3>Retargeting &amp; Always-On Surfaces</h3>
-                            <span class="marketing-section-sub">Where this audience naturally spends time — best surfaces for sequential messaging and always-on brand presence.</span>
+                            <span class="marketing-section-sub">Where this audience naturally spends time - best surfaces for sequential messaging and always-on brand presence.</span>
                         </div>
                         <div id="marketingRetargetBlock" class="marketing-retarget"></div>
+                    </section>
+
+                    <section class="marketing-section marketing-sub-panel" data-mkt-panel="creators">
+                        <div class="marketing-section-head">
+                            <h3>Recommended Influencer &amp; Creator Roster</h3>
+                            <span class="marketing-section-sub">Talent whose own audiences over-index against this profile, ranked by fit score. Each card shows creator tier (macro / mid / micro), the platforms where this audience is most reachable, and the rationale for the pick.</span>
+                        </div>
+                        <div id="marketingCreatorRoster" class="marketing-platform-grid"></div>
+                    </section>
+
+                    <section class="marketing-section marketing-sub-panel" data-mkt-panel="partners">
+                        <div class="marketing-section-head">
+                            <h3>Recommended Brand Partners &amp; Co-Marketing Targets</h3>
+                            <span class="marketing-section-sub">Brands with the highest audience overlap, grouped by suggested activation type - co-promo / cross-marketing, sweepstakes and giveaways, paid integration, or ambassador program.</span>
+                        </div>
+                        <div id="marketingBrandPartners" class="marketing-partners-wrap"></div>
                     </section>
 
                     <section class="marketing-section marketing-sub-panel" id="marketingAISection" data-mkt-panel="ai">
@@ -82086,7 +82226,7 @@
             content: { icon: '🎬', title: 'Content', desc: 'Content consumption preferences including genres, formats, and viewing habits.' },
             segmentation: { icon: '🎛️', title: 'Segment Builder', desc: 'Build custom audience segments with demographic and behavioral filters.' },
             comparison: { icon: '⚖️', title: 'Compare', desc: 'Side-by-side comparison of multiple profiles.' },
-            marketing: { icon: '📣', title: 'Marketing', desc: 'Digital ad buying playbook: media mix, per-platform priority, lookalike seed spec, geo targeting, and creative notes.' }
+            marketing: { icon: '📣', title: 'Marketing', desc: 'Digital ad buying playbook: media mix, per-platform priority, lookalike seed spec, geo targeting, retargeting surfaces, creator roster, and brand-partner shortlist.' }
         };
         
         function updateSegmentBuilderTitle() {
@@ -82979,6 +83119,287 @@
                 el.innerHTML = cards || '<div class="marketing-empty">No retargeting surfaces detected in the data.</div>';
             }
 
+            // ---------- Creator Roster + Brand Partners shared helpers ----------
+            // Categories that count as talent/creator signals. Order matters
+            // only for de-dup: the first list to yield a name owns it.
+            const _MKT_TALENT_CATS = [
+                'INFLUENCER/CREATOR', 'CREATOR/INFLUENCER',
+                'HOST/PERSONALITY', 'PODCASTER',
+                'COMEDIAN', 'MUSICIAN/BAND',
+                'ACTOR', 'ATHLETE',
+                'WRITER/DIRECTOR/AUTHOR/ARTIST', 'EMERGING TALENT',
+                'POLITICS/ACTIVIST', 'POLITICIAN',
+                'TALENT'
+            ];
+            // Categories that count as brand-partner signals. QSR / RETAIL /
+            // TRAVEL / etc. are all fair game for co-promo. Excludes pure
+            // media / streaming / social (already covered elsewhere).
+            const _MKT_BRAND_CATS = [
+                'MOST PURCHASED BRANDS', 'MPB',
+                'APPAREL/FOOTWEAR', 'APPAREL', 'FOOTWEAR', 'ACTIVEWEAR',
+                'BEAUTY', 'INTIMATES', 'JEWELRY',
+                'ACCESSORIES', 'CPG', 'BEVERAGE',
+                'QSR', 'CASUAL DINING', 'FRANCHISE',
+                'RETAIL', 'RETAILERS', 'GROCERY',
+                'TRAVEL', 'AUTOMOBILE',
+                'BANK', 'BANKS', 'BANKING', 'DIGITAL BANKING',
+                'CREDIT PROVIDERS', 'CREDIT PROVIDER',
+                'TELECOM', 'TICKETING',
+                'MEMBERSHIP', 'LOYALTY PROGRAMS',
+                'WORKOUT FACILITY',
+                'VENUE', 'EVENTS', 'FESTIVAL',
+                'AMUSEMENT PARKS', 'MOVIE THEATER',
+                'PHARMA', 'SECURITY', 'TOY',
+                'NON PROFIT/CHARITY', 'B2B', 'SWEEPSTAKES'
+            ];
+            // Categories that MPB / retail rows commonly map to on the
+            // dashboard - used to reverse-lookup a friendlier category tag
+            // per brand than the raw hostmap category.
+            function _mkCatOwnerFor(brandName) {
+                if (!brandName) return '';
+                const norm = _mkNorm(brandName);
+                const behav = _mkBehav();
+                for (const cat of _MKT_BRAND_CATS) {
+                    const items = behav[cat];
+                    if (!Array.isArray(items)) continue;
+                    if (items.some(it => _mkNorm(it && it.name) === norm)) {
+                        return cat;
+                    }
+                }
+                return '';
+            }
+            // Filter helper: exclude the profile subject from its own signals
+            // (rule: don't cite the subject as a partner for itself).
+            function _mkNotSubject(name) {
+                const subj = _mkNorm(_mkProfileName());
+                if (!subj) return true;
+                const n = _mkNorm(name);
+                if (!n) return false;
+                // Reject exact match, or where either fully contains the other.
+                if (n === subj) return false;
+                if (n.length >= 4 && subj.length >= 4) {
+                    if (n.includes(subj) || subj.includes(n)) return false;
+                }
+                return true;
+            }
+            // Fit score: reach-weighted signal. Tempers freak-index bias by
+            // taking sqrt of index/100. Matches the Profile IQ deck-builder's
+            // signal-score convention.
+            function _mkFitScore(pct, index) {
+                const p = Math.max(0, Number(pct) || 0);
+                const i = Math.max(50, Number(index) || 100);
+                return p * Math.sqrt(i / 100);
+            }
+            // Top platforms the audience actually engages with, capped at N.
+            // Returns [{name, pct}, ...] sorted by pct desc.
+            function _mkTopEngagementPlatforms(N=3) {
+                const items = _mkItemsFromCats([
+                    'SOCIAL MEDIA', 'SOCIAL MEDIA/USE',
+                    'STREAMING/PLATFORM', 'STREAMING VIDEO',
+                    'STREAMING/MUSIC', 'STREAMING MUSIC',
+                    'PODCAST'
+                ]);
+                return items
+                    .filter(x => x && x.name && Number(x.pct) > 0)
+                    .slice(0, N)
+                    .map(x => ({ name: x.name, pct: Number(x.pct) || 0 }));
+            }
+
+            // ---------- Creator Roster ----------
+            function _mkRenderCreators() {
+                const el = document.getElementById('marketingCreatorRoster');
+                if (!el) return;
+                // Pull ALL talent items across categories. Preserve the
+                // sub-category via a per-item lookup for the card label.
+                const behav = _mkBehav();
+                const seenName = new Set();
+                const rows = [];
+                _MKT_TALENT_CATS.forEach(cat => {
+                    const items = behav[cat];
+                    if (!Array.isArray(items)) return;
+                    items.forEach(it => {
+                        if (!it || !it.name) return;
+                        const norm = _mkNorm(it.name);
+                        if (!norm || seenName.has(norm)) return;
+                        if (!_mkNotSubject(it.name)) return;
+                        const pct = Number(it.pct) || 0;
+                        const idx = Number(it.index) || 0;
+                        if (pct <= 0) return;
+                        // Skip weak signals: too little reach AND not strong
+                        // over-index either. (< 0.5% AND < 150 idx = noise)
+                        if (pct < 0.5 && idx < 150) return;
+                        seenName.add(norm);
+                        rows.push({
+                            name: it.name,
+                            cat: cat,
+                            pct: pct,
+                            index: idx,
+                            fit: _mkFitScore(pct, idx)
+                        });
+                    });
+                });
+                if (!rows.length) {
+                    el.innerHTML = '<div class="marketing-empty">No creator / talent overlap detected in this profile\'s behavioral data.</div>';
+                    return;
+                }
+                rows.sort((a, b) => b.fit - a.fit);
+                const top = rows.slice(0, 12);
+
+                const gender = _mkGenderSkew();
+                const median = _mkMedianAge();
+                const platforms = _mkTopEngagementPlatforms(3);
+                const platformLine = platforms.length
+                    ? platforms.map(p => `${p.name} (${p.pct.toFixed(0)}%)`).join(' · ')
+                    : 'No platform signal available';
+
+                const audienceBits = [];
+                if (median) audienceBits.push(`age ${Math.max(18, median-8)}-${median+10}`);
+                if (gender.primary && gender.primary !== '—') {
+                    audienceBits.push(`${gender.primary.toLowerCase()}-lean (${Math.round(gender.pct)}%)`);
+                }
+                const audienceLine = audienceBits.join(' · ') || 'demographic detail below';
+
+                // Tier by reach magnitude - a proxy for the creator's own
+                // audience scale, since overlap % here IS the audience-size
+                // signal within this profile. Macro = mass overlap, Mid =
+                // mid-tier, Micro = niche.
+                const tierFor = (pct) => {
+                    if (pct >= 15) return { key: 'macro', label: 'Macro' };
+                    if (pct >= 5)  return { key: 'mid',   label: 'Mid-tier' };
+                    return { key: 'micro', label: 'Micro' };
+                };
+                // Rationale is data-grounded: reach + index + fit archetype.
+                const rationaleFor = (r) => {
+                    const idxTxt = r.index > 0 ? Math.round(r.index) + ' idx' : 'no baseline';
+                    const parts = [`${r.pct.toFixed(1)}% of the audience overlaps with this talent's fan base (${idxTxt} vs Gen Pop).`];
+                    if (r.index >= 300) {
+                        parts.push('Extreme over-index - a signature cultural marker for this audience, ideal for identity-driven creative.');
+                    } else if (r.index >= 150) {
+                        parts.push('Strong over-index - this talent will feel like an authentic tastemaker, not a mass endorsement.');
+                    } else if (r.index >= 110) {
+                        parts.push('Slight over-index - safe mainstream choice with proven audience alignment.');
+                    } else {
+                        parts.push('Reach without strong over-index - use for scale, not for identity.');
+                    }
+                    return parts.join(' ');
+                };
+
+                el.innerHTML = top.map(r => {
+                    const tier = tierFor(r.pct);
+                    const catLabel = (r.cat || '').replace('/', ' / ');
+                    return `
+                        <div class="marketing-plat-card">
+                            <div class="marketing-plat-head">
+                                <div class="marketing-plat-title">
+                                    <span class="marketing-plat-icon">🎤</span>
+                                    ${(r.name || '').replace(/</g,'&lt;')}
+                                </div>
+                                <span class="marketing-tier ${tier.key}">${tier.label}</span>
+                            </div>
+                            <div class="marketing-plat-metrics">
+                                <div class="marketing-plat-metric"><b>${r.pct.toFixed(1)}% overlap</b></div>
+                                <div class="marketing-plat-metric"><b>${r.index > 0 ? Math.round(r.index) : '—'} idx</b></div>
+                                <div class="marketing-plat-metric"><span class="marketing-fit-pill">${r.fit.toFixed(0)}<small>fit</small></span></div>
+                            </div>
+                            <div class="marketing-plat-seed"><b>Category.</b> ${catLabel.replace(/</g,'&lt;')}</div>
+                            <div class="marketing-plat-seed"><b>Best platforms to activate.</b> ${platformLine.replace(/</g,'&lt;')}</div>
+                            <div class="marketing-plat-seed"><b>Audience match.</b> ${audienceLine.replace(/</g,'&lt;')}</div>
+                            <div class="marketing-plat-seed"><b>Why.</b> ${rationaleFor(r).replace(/</g,'&lt;')}</div>
+                        </div>`;
+                }).join('');
+            }
+
+            // ---------- Brand Partners ----------
+            function _mkRenderPartners() {
+                const el = document.getElementById('marketingBrandPartners');
+                if (!el) return;
+                const behav = _mkBehav();
+                const seenName = new Set();
+                const rows = [];
+                _MKT_BRAND_CATS.forEach(cat => {
+                    const items = behav[cat];
+                    if (!Array.isArray(items)) return;
+                    items.forEach(it => {
+                        if (!it || !it.name) return;
+                        const norm = _mkNorm(it.name);
+                        if (!norm || seenName.has(norm)) return;
+                        if (!_mkNotSubject(it.name)) return;
+                        const pct = Number(it.pct) || 0;
+                        const idx = Number(it.index) || 0;
+                        if (pct <= 0) return;
+                        if (pct < 1 && idx < 150) return; // ignore true noise
+                        seenName.add(norm);
+                        rows.push({
+                            name: it.name,
+                            cat: cat,
+                            pct: pct,
+                            index: idx,
+                            fit: _mkFitScore(pct, idx)
+                        });
+                    });
+                });
+                if (!rows.length) {
+                    el.innerHTML = '<div class="marketing-empty">No brand overlap detected in this profile\'s behavioral data.</div>';
+                    return;
+                }
+
+                // Bucket by activation type. A brand can only land in one
+                // bucket (the highest-tier one it qualifies for).
+                const buckets = { mass: [], signature: [], giveaway: [], ambassador: [] };
+                rows.forEach(r => {
+                    if (r.pct >= 25 && r.index >= 110) buckets.mass.push(r);
+                    else if (r.pct >= 10 && r.index >= 130) buckets.signature.push(r);
+                    else if (r.pct >= 3 && r.index >= 200) buckets.giveaway.push(r);
+                    else if (r.pct < 3 && r.index >= 300) buckets.ambassador.push(r);
+                    else if (r.pct >= 10 && r.index >= 100) buckets.signature.push(r); // catch-all mid
+                });
+                Object.keys(buckets).forEach(k => buckets[k].sort((a,b) => b.fit - a.fit));
+
+                const groupDefs = [
+                    { key: 'mass',       tier: 'mass',       icon: '📣', title: 'Mass Co-Promo / Cross-Marketing',
+                      note: 'Both audiences resonate broadly - ideal for reciprocal social amplification, joint email blasts, or shared-audience creative refreshes. Low friction, low novelty.' },
+                    { key: 'signature',  tier: 'signature',  icon: '🤝', title: 'Signature Partner / Paid Integration',
+                      note: 'The sweet spot for a premium tie-in. Enough reach to move the needle, over-index sharp enough to feel authentic. Use for paid integrations, capsule collabs, and content series sponsorships.' },
+                    { key: 'giveaway',   tier: 'giveaway',   icon: '🎁', title: 'Sweepstakes / Giveaway / Limited Drop',
+                      note: 'Niche passionate overlap - great for exclusive drops, sweepstakes prizes, and FOMO-driven UGC. Reach is smaller, but signal-per-impression is high.' },
+                    { key: 'ambassador', tier: 'ambassador', icon: '💎', title: 'Ambassador / Loyalty Program',
+                      note: 'Very tight cultural fit with a small but ultra-passionate overlap. Use for brand-ambassador seeding, invite-only events, or long-tenure loyalty perks.' }
+                ];
+
+                const html = groupDefs.map(g => {
+                    const items = (buckets[g.key] || []).slice(0, 12);
+                    if (!items.length) return '';
+                    const cards = items.map(r => {
+                        const cat = (r.cat || '').replace('/', ' / ');
+                        return `
+                            <div class="marketing-partner-card">
+                                <div class="marketing-partner-card-head">
+                                    <div class="marketing-partner-card-name">${(r.name || '').replace(/</g,'&lt;')}</div>
+                                    <div class="marketing-partner-card-cat">${cat.replace(/</g,'&lt;')}</div>
+                                </div>
+                                <div class="marketing-partner-card-metrics">
+                                    <span><b>${r.pct.toFixed(1)}%</b> overlap</span>
+                                    <span><b>${r.index > 0 ? Math.round(r.index) : '—'}</b> idx</span>
+                                    <span class="marketing-fit-pill">${r.fit.toFixed(0)}<small>fit</small></span>
+                                </div>
+                            </div>`;
+                    }).join('');
+                    return `
+                        <div class="marketing-partners-group">
+                            <div class="marketing-partners-group-head">
+                                <div class="marketing-partners-group-title">
+                                    <span style="font-size:1.1rem;">${g.icon}</span>
+                                    <span class="marketing-tier ${g.tier}">${g.title}</span>
+                                </div>
+                                <div class="marketing-partners-group-note">${g.note}</div>
+                            </div>
+                            <div class="marketing-partners-cards">${cards}</div>
+                        </div>`;
+                }).filter(Boolean).join('');
+
+                el.innerHTML = html || '<div class="marketing-empty">Brand overlap detected but no candidates cleared the minimum reach + index thresholds for any activation tier.</div>';
+            }
+
             // ---------- Sub-tab navigation ----------
             let _mktActiveSection = 'mix';
             window.showMarketingSection = function(key) {
@@ -83057,22 +83478,24 @@
                 const heroSub  = document.getElementById('marketingHeroSub');
                 if (!d || !d.behavioral) {
                     if (heroName) heroName.textContent = 'Marketing';
-                    if (heroSub)  heroSub.textContent = 'Load a profile to generate a media plan, per-platform buying guide, and lookalike seed spec.';
-                    ['marketingSnapshotRow','marketingMediaMix','marketingPlatformGrid','marketingLookalike','marketingGeoBlock','marketingRetargetBlock']
+                    if (heroSub)  heroSub.textContent = 'Load a profile to generate a media plan, per-platform buying guide, lookalike seed, creator roster, and brand-partner shortlist.';
+                    ['marketingSnapshotRow','marketingMediaMix','marketingPlatformGrid','marketingLookalike','marketingGeoBlock','marketingRetargetBlock','marketingCreatorRoster','marketingBrandPartners']
                         .forEach(id => { const e = document.getElementById(id); if (e) e.innerHTML = '<div class="marketing-empty">No profile loaded.</div>'; });
                     // Still apply current sub-tab so the empty-state text renders in the right place
                     if (typeof window.showMarketingSection === 'function') window.showMarketingSection(_mktActiveSection);
                     return;
                 }
                 const name = _mkProfileName();
-                if (heroName) heroName.textContent = `${name} — Marketing Playbook`;
-                if (heroSub)  heroSub.textContent  = `Ad-buying media mix, per-platform priority, lookalike seed, geo targeting, and retargeting surfaces derived from ${formatNumber(Number(d.sampleSize||0))} panelists and their trailing-12-month digital behavior.`;
+                if (heroName) heroName.textContent = `${name} - Marketing Playbook`;
+                if (heroSub)  heroSub.textContent  = `Ad-buying media mix, per-platform priority, lookalike seed, geo targeting, retargeting surfaces, creator roster, and brand-partner shortlist derived from ${formatNumber(Number(d.sampleSize||0))} panelists and their trailing-12-month digital behavior.`;
                 _mkRenderSnapshot();
                 _mkRenderMediaMix();
                 _mkRenderPlatformGrid();
                 _mkRenderLookalike();
                 _mkRenderGeo();
                 _mkRenderRetarget();
+                _mkRenderCreators();
+                _mkRenderPartners();
                 // Preserve the user's active sub-tab across re-renders (e.g. Refresh
                 // click, profile switch). Default to 'mix' the first time.
                 if (typeof window.showMarketingSection === 'function') {
