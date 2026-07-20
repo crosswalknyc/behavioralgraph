@@ -78,10 +78,10 @@ DEFAULT_DOMAINS = [
     'bestbuy.com',
     'nike.com',
     'ulta.com',
-    # Streaming - top 5 services (Netflix scrapes public TSVs, no cookies
-    # needed). Bundle notes:
+    # Streaming - top 6 services. Bundle notes:
     #   - disneyplus.com session unlocks Disney+ and ESPN+
     #   - hulu.com session unlocks Hulu and Max (on bundle plan)
+    'netflix.com',     # 2026-07: switched from weekly TSV to authenticated daily
     'disneyplus.com',
     'hulu.com',
     'max.com',
