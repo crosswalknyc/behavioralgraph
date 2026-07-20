@@ -3194,8 +3194,12 @@
                         </div>
                     </div>
                     
-                    <!-- Impact IQ Access -->
-                    <div class="dashboard-access-item">
+                    <!-- 🎯 IMPACT IQ Access - section hidden 2026-07-19
+                         (removed from admin grants per Jenna). The
+                         hasTicketSalesIQAccess checkbox is kept
+                         (hidden) so JS handlers reading its .checked
+                         value keep working without null-deref errors. -->
+                    <div class="dashboard-access-item" style="display: none;">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasTicketSalesIQAccess" checked>
@@ -3238,8 +3242,12 @@
                         </div>
                     </div>
 
-                    <!-- ROAS IQ Access -->
-                    <div class="dashboard-access-item">
+                    <!-- 💰 ROAS IQ Access - section hidden 2026-07-19
+                         (removed from admin grants per Jenna). The
+                         hasROASIQAccess checkbox is kept (hidden) so
+                         JS handlers reading its .checked value keep
+                         working without null-deref errors. -->
+                    <div class="dashboard-access-item" style="display: none;">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasROASIQAccess">
@@ -3288,8 +3296,12 @@
                         </div>
                     </div>
 
-                    <!-- Flywheel Conversion Access -->
-                    <div class="dashboard-access-item">
+                    <!-- 🔄 FLYWHEEL IQ Access - section hidden 2026-07-19
+                         (removed from admin grants per Jenna). The
+                         hasFlywheelConversionAccess checkbox is kept
+                         (hidden) so JS handlers reading its .checked
+                         value keep working without null-deref errors. -->
+                    <div class="dashboard-access-item" style="display: none;">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasFlywheelConversionAccess">
