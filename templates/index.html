@@ -41928,16 +41928,39 @@
                            '<div class="tiq-card"><h4>' + _tiqEsc(cardTitle) + '</h4>' + cardSub +
                            '<div class="tiq-headline-list">' +
                            s.items.map(function(it, i) {
-                               var img = '<div class="tiq-headline-image" style="' + _tiqImgStyle(it.image) + '"></div>';
+                               // Row label: Reddit posts carry `title`; every other
+                               // platform (X, TikTok, YouTube, Instagram hashtags)
+                               // carries `topic`/`hashtag` instead. Fall through the
+                               // three fields so no row ever renders as blank.
+                               var rowLabel = it.title || it.topic || it.hashtag || '';
+                               var socialKey = rowLabel;
+                               // Only Reddit + YouTube have real thumbnails; the
+                               // other platforms produce hashtag/topic rows with
+                               // no image, so the lime placeholder just wastes
+                               // horizontal space. Skip it there.
+                               var img = it.image
+                                   ? '<div class="tiq-headline-image" style="' + _tiqImgStyle(it.image) + '"></div>'
+                                   : '';
                                var meta = '';
                                if (typeof it.score === 'number') meta += '<span class="tiq-badge">' + _tiqNum(it.score) + ' upvotes</span>';
                                if (typeof it.comments === 'number') meta += '<span>' + _tiqNum(it.comments) + ' comments</span>';
                                if (it.subreddit) meta += '<span>r/' + _tiqEsc(it.subreddit) + '</span>';
                                if (it.posts_display) meta += '<span class="tiq-badge">' + _tiqEsc(it.posts_display) + ' posts</span>';
-                               var socialKey = it.title || it.topic || it.hashtag || '';
+                               // TikTok hashtags carry numeric posts + views; render
+                               // both so the row body isn't just a title.
+                               if (typeof it.posts === 'number' && it.posts && !it.posts_display) {
+                                   meta += '<span class="tiq-badge">' + _tiqNum(it.posts) + ' posts</span>';
+                               }
+                               if (typeof it.views === 'number' && it.views) {
+                                   meta += '<span class="tiq-badge">' + _tiqNum(it.views) + ' views</span>';
+                               }
+                               // X trend volume ("50K Tweets") when present.
+                               if (it.volume && String(it.volume).trim()) {
+                                   meta += '<span class="tiq-badge">' + _tiqEsc(it.volume) + '</span>';
+                               }
                                return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                                       '<div class="tiq-row-body">' +
-                                      '<div class="tiq-row-title"><a href="' + _tiqEsc(it.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>' +
+                                      '<div class="tiq-row-title"><a href="' + _tiqEsc(it.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(rowLabel) + '</a>' +
                                       _tiqCrossPlatformBadge(it) +
                                       _tiqActions('social', k, socialKey, socialKey, 'National') + '</div>' +
                                       (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +

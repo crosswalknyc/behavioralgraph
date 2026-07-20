@@ -48,14 +48,12 @@ import re
 import sys
 from typing import Any, Optional
 
-import requests
+from ._base import http_get, browser_headers
 
 logger = logging.getLogger(__name__)
 
 
 _SRC_URL = 'https://top-hashtags.com/instagram/'
-_UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) '
-        'Gecko/20100101 Firefox/120.0')
 
 # Post-count multipliers used by top-hashtags.com (also common on
 # every hashtag-tracker site). Case-insensitive suffix match after we
@@ -100,13 +98,20 @@ _ROW_RE = re.compile(
 
 
 def _fetch_html() -> str:
-    r = requests.get(_SRC_URL,
-                      headers={'User-Agent': _UA,
-                                'Accept':     'text/html,application/xhtml+xml'},
-                      timeout=20)
-    if not r.ok:
-        raise RuntimeError(f'top-hashtags.com returned http {r.status_code}')
-    return r.text
+    """top-hashtags.com is fronted by Cloudflare which 403s any plain
+    `requests` call on the JA3 fingerprint alone. `http_get` in
+    `_base.py` transparently uses curl_cffi's Chrome impersonation
+    when available, which passes the fingerprint check and returns a
+    normal 200 with the hashtag table."""
+    r = http_get(_SRC_URL,
+                 headers=browser_headers(referer='https://www.google.com/'),
+                 impersonate='chrome124')
+    if r is None:
+        raise RuntimeError('top-hashtags.com: request exhausted retries')
+    if not getattr(r, 'ok', False):
+        raise RuntimeError(f'top-hashtags.com returned http '
+                            f'{getattr(r, "status_code", "??")}')
+    return r.text or ''
 
 
 def _parse_rows(html: str, *, limit: int = 100) -> list[dict]:
