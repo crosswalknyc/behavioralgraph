@@ -3069,8 +3069,24 @@
                     <small style="color: var(--text-secondary); font-size: 0.65rem;">Shown on deck title and thank you slides (bottom right)</small>
                 </div>
 
-                <div class="access-section">
-                    <h4 style="margin-bottom: 1rem;">🎯 Dashboard Access</h4>
+                <div class="access-section" id="dashboardAccessSection">
+                    <h4 style="margin-bottom: 0.75rem;">🎯 Dashboard Access</h4>
+
+                    <!-- Product filter (added 2026-07-19). Filters the sibling
+                         .dashboard-access-item cards below by their visible text.
+                         Skips cards flagged data-admin-hidden="true" so hidden
+                         products stay hidden regardless of the query. -->
+                    <div style="display: flex; gap: 0.5rem; align-items: center; margin: 0 0 1rem; padding: 0.5rem 0.75rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px;">
+                        <span style="font-size: 0.9rem; opacity: 0.7;">🔍</span>
+                        <input type="text" id="dashboardAccessFilter"
+                               placeholder="Filter products (e.g. Profile, Trends, SF Conversion)..."
+                               oninput="filterDashboardAccessItems(this.value)"
+                               style="flex: 1; padding: 0.4rem 0.5rem; background: transparent; border: none; color: var(--text-primary); font-size: 0.85rem; outline: none;">
+                        <button type="button" class="btn btn-small btn-secondary"
+                                onclick="document.getElementById('dashboardAccessFilter').value=''; filterDashboardAccessItems('');"
+                                style="padding: 0.25rem 0.6rem; font-size: 0.7rem;">Clear</button>
+                        <span id="dashboardAccessFilterCount" style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap;"></span>
+                    </div>
 
                     <!-- Access to New Releases -->
                     <div style="margin-bottom: 1rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem;">
@@ -3199,7 +3215,7 @@
                          hasTicketSalesIQAccess checkbox is kept
                          (hidden) so JS handlers reading its .checked
                          value keep working without null-deref errors. -->
-                    <div class="dashboard-access-item" style="display: none;">
+                    <div class="dashboard-access-item" style="display: none;" data-admin-hidden="true">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasTicketSalesIQAccess" checked>
@@ -3247,7 +3263,7 @@
                          hasROASIQAccess checkbox is kept (hidden) so
                          JS handlers reading its .checked value keep
                          working without null-deref errors. -->
-                    <div class="dashboard-access-item" style="display: none;">
+                    <div class="dashboard-access-item" style="display: none;" data-admin-hidden="true">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasROASIQAccess">
@@ -3259,12 +3275,12 @@
                         </small>
                     </div>
 
-                    <!-- E-Commerce IQ Access — section hidden (E-Commerce IQ
+                    <!-- E-Commerce IQ Access - section hidden (E-Commerce IQ
                          was fully removed from the dashboard). The
                          hasEcommerceIQAccess checkbox is kept (hidden) so
-                         that JS handlers reading its `.checked` value keep
+                         that JS handlers reading its .checked value keep
                          working without null-deref errors. -->
-                    <div class="dashboard-access-item" style="display: none;">
+                    <div class="dashboard-access-item" style="display: none;" data-admin-hidden="true">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasEcommerceIQAccess">
@@ -3301,7 +3317,7 @@
                          hasFlywheelConversionAccess checkbox is kept
                          (hidden) so JS handlers reading its .checked
                          value keep working without null-deref errors. -->
-                    <div class="dashboard-access-item" style="display: none;">
+                    <div class="dashboard-access-item" style="display: none;" data-admin-hidden="true">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasFlywheelConversionAccess">
@@ -3438,8 +3454,12 @@
                         </div>
                     </div>
 
-                    <!-- Talent Fit Assessment Access -->
-                    <div class="dashboard-access-item">
+                    <!-- 🎭 Talent Fit Assessment Access - section hidden 2026-07-19
+                         (removed from admin grants per Jenna). The
+                         hasTalentFitAccess checkbox is kept (hidden) so JS
+                         handlers reading its .checked value keep working
+                         without null-deref errors. -->
+                    <div class="dashboard-access-item" style="display: none;" data-admin-hidden="true">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasTalentFitAccess">
@@ -3587,8 +3607,11 @@
                         </div>
                     </div>
                     
-                    <!-- Ticket Sales Tracker Access -->
-                    <div class="dashboard-access-item">
+                    <!-- 🎬 TICKET SALES TRACKER Access - section hidden 2026-07-19
+                         (removed from admin grants per Jenna). Inner checkboxes
+                         are kept (hidden) so JS handlers reading their
+                         .checked values keep working without null-deref. -->
+                    <div class="dashboard-access-item" style="display: none;" data-admin-hidden="true">
                         <div class="dashboard-access-header" onclick="toggleDashboardSection('ticketSalesTracker')">
                             <span style="font-weight: 600;">🎬 TICKET SALES TRACKER</span>
                             <span class="collapse-icon rotated" id="ticketSalesTrackerIcon">▼</span>
@@ -3610,8 +3633,11 @@
                         </div>
                     </div>
                     
-                    <!-- Rankers IQ Access -->
-                    <div class="dashboard-access-item">
+                    <!-- 📊 RANKERS IQ Access - section hidden 2026-07-19
+                         (removed from admin grants per Jenna). Inner ranker-
+                         option checkboxes are kept (hidden) so JS handlers
+                         reading .checked values keep working without null-deref. -->
+                    <div class="dashboard-access-item" style="display: none;" data-admin-hidden="true">
                         <div class="dashboard-access-header" onclick="toggleDashboardSection('rankersIQ')">
                             <label class="checkbox-group" onclick="event.stopPropagation()">
                                 <input type="checkbox" id="hasRankersIQAccess" onchange="toggleRankersIQSection()">
@@ -10469,6 +10495,33 @@
             const per = document.getElementById('hoursRecurringMonthly');
             const row = document.getElementById('hoursRecurringMonthsRow');
             if (row) row.style.display = (per && per.checked) ? '' : 'none';
+        }
+
+        // Product filter for the "🎯 Dashboard Access" section in the
+        // create/edit user modal. Filters the top-level product cards
+        // (`.dashboard-access-item`) by their visible text. Cards flagged
+        // `data-admin-hidden="true"` stay hidden regardless of query.
+        function filterDashboardAccessItems(query) {
+            const section = document.getElementById('dashboardAccessSection');
+            if (!section) return;
+            const q = (query || '').trim().toLowerCase();
+            const items = section.querySelectorAll(':scope > .dashboard-access-item');
+            let shown = 0, total = 0;
+            items.forEach(item => {
+                if (item.dataset.adminHidden === 'true') {
+                    item.style.display = 'none';
+                    return;
+                }
+                total += 1;
+                const text = (item.textContent || '').toLowerCase();
+                const match = !q || text.includes(q);
+                item.style.display = match ? '' : 'none';
+                if (match) shown += 1;
+            });
+            const counter = document.getElementById('dashboardAccessFilterCount');
+            if (counter) {
+                counter.textContent = q ? `${shown} / ${total}` : '';
+            }
         }
 
         // Collapsible Dashboard Section Toggle
