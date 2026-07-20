@@ -588,6 +588,145 @@ def _load_tiktok_cookies_from_s3() -> Optional[dict]:
     return None
 
 
+# ---------------------------------------------------------------------------
+# iTunes Search API artwork enrichment
+# ---------------------------------------------------------------------------
+# Apple Music's RSS ships artwork out of the box, but the Spotify (kworb HTML)
+# and Shazam (CSV) feeds don't. iTunes Search API (itunes.apple.com/search)
+# is free, unauthenticated, and returns the same `artworkUrl100` field Apple's
+# own RSS uses. We hit it once per Spotify/Shazam item to backfill artwork so
+# every card in the Music tab renders with a thumbnail, not just Apple's.
+#
+# Rate limit: undocumented but ~20 req/sec is safe. 100 Spotify + 100 Shazam
+# lookups run in ~10-15s with 8 concurrent workers. Cached in-process by
+# (artist, title) so if Shazam and Spotify both list the same track we only
+# pay for one lookup.
+_ITUNES_SEARCH_URL = 'https://itunes.apple.com/search'
+
+
+_DEEZER_SEARCH_URL = 'https://api.deezer.com/search'
+
+
+def _try_itunes(title: str, artist: str) -> str:
+    """iTunes Search API lookup. Empty string on miss/error."""
+    try:
+        r = requests.get(
+            _ITUNES_SEARCH_URL,
+            params={
+                'term':   f'{title} {artist}'.strip(),
+                'entity': 'song',
+                'limit':  1,
+                'media':  'music',
+            },
+            headers={'User-Agent': _UA},
+            timeout=8,
+        )
+        if not r.ok:
+            return ''
+        results = ((r.json() or {}).get('results') or [])
+        if not results:
+            return ''
+        art = results[0].get('artworkUrl100') or ''
+        # Upgrade 100x100 to 300x300 - iTunes CDN honors any square
+        # size in the URL path pattern .../100x100bb.jpg. Nicer for
+        # retina thumbnails.
+        if '100x100' in art:
+            art = art.replace('100x100', '300x300')
+        return art
+    except Exception as e:
+        logger.debug("itunes lookup failed for %r %r: %s", title, artist, e)
+        return ''
+
+
+def _try_deezer(title: str, artist: str) -> str:
+    """Deezer's public search API - fallback when iTunes doesn't have
+    the track. Deezer indexes newer/regional/TikTok-driven releases
+    faster than iTunes, so Shazam's discovery chart matches better
+    here. Returns 250x250 `album.cover_medium` (empty on miss)."""
+    try:
+        r = requests.get(
+            _DEEZER_SEARCH_URL,
+            params={
+                # Use Deezer's structured query syntax so we get an
+                # exact match on both title and artist, not a fuzzy
+                # OR search that returns cover songs.
+                'q':     f'track:"{title}" artist:"{artist}"',
+                'limit': 1,
+            },
+            headers={'User-Agent': _UA},
+            timeout=8,
+        )
+        if not r.ok:
+            return ''
+        results = ((r.json() or {}).get('data') or [])
+        if not results:
+            # Retry without structured operators - Deezer's exact
+            # match sometimes over-restricts on tracks with punctuation
+            # differences ("hate that i made you love me" vs "Hate That
+            # I Made You Love Me"). One free-text retry often lands it.
+            r = requests.get(
+                _DEEZER_SEARCH_URL,
+                params={'q': f'{title} {artist}', 'limit': 1},
+                headers={'User-Agent': _UA},
+                timeout=8,
+            )
+            if not r.ok:
+                return ''
+            results = ((r.json() or {}).get('data') or [])
+            if not results:
+                return ''
+        album = (results[0] or {}).get('album') or {}
+        # Prefer cover_big (500px) > cover_medium (250px) > cover_small
+        return album.get('cover_big') or album.get('cover_medium') or ''
+    except Exception as e:
+        logger.debug("deezer lookup failed for %r %r: %s", title, artist, e)
+        return ''
+
+
+def _itunes_artwork_lookup(title: str, artist: str,
+                            cache: dict[tuple[str, str], str]
+                            ) -> str:
+    """Return an artwork URL for the (title, artist). Tries iTunes
+    first (widest catalog for mainstream), Deezer second (better on
+    TikTok-driven / new / regional releases). '' if both miss.
+    Cached in-place by (title, artist) key."""
+    key = (title.strip().lower(), (artist or '').strip().lower())
+    if key in cache:
+        return cache[key]
+    art = _try_itunes(title, artist)
+    if not art:
+        art = _try_deezer(title, artist)
+    cache[key] = art
+    return art
+
+
+def _enrich_with_itunes_artwork(items: list[dict],
+                                 cache: dict[tuple[str, str], str],
+                                 max_workers: int = 8) -> None:
+    """Mutate `items` in place to add an `image` field via iTunes Search.
+    Skips items that already have an image (Apple's own feed).
+    """
+    if not items:
+        return
+    needs: list[dict] = [it for it in items
+                          if not it.get('image')
+                          and it.get('title')
+                          and it.get('artist')]
+    if not needs:
+        return
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            list(pool.map(
+                lambda it: it.__setitem__(
+                    'image',
+                    _itunes_artwork_lookup(it['title'], it['artist'], cache)
+                ),
+                needs))
+    except Exception as e:
+        logger.info("itunes artwork batch failed: %s", e)
+
+
 def fetch() -> dict[str, Any]:
     """Pull all four sources in sequence. Each is best-effort - a single
     source failing produces an empty items[] for that source but the
@@ -599,6 +738,19 @@ def fetch() -> dict[str, Any]:
     apple_items   = _fetch_apple(limit=50)
     shazam_items  = _fetch_shazam(limit=100)
     tt_items, tt_meta = _fetch_tiktok_sounds(limit=40)
+
+    # Backfill artwork thumbnails from iTunes Search API for every
+    # source that doesn't ship its own image field. Shared cache so a
+    # track that appears on both Spotify and Shazam is only looked up
+    # once. Apple items already carry `artworkUrl100` from the RSS,
+    # so `_enrich_with_itunes_artwork` no-ops on them. TikTok items
+    # rarely have artist metadata, but we run enrichment anyway - it
+    # skips items missing artist/title.
+    art_cache: dict[tuple[str, str], str] = {}
+    _enrich_with_itunes_artwork(spotify_items, art_cache)
+    _enrich_with_itunes_artwork(shazam_items,  art_cache)
+    _enrich_with_itunes_artwork(tt_items,      art_cache)
+    logger.info("itunes artwork cache: %d unique lookups", len(art_cache))
 
     # TikTok sub label reflects what actually happened. Since mid-2026
     # TikTok has removed the public Songs chart entirely; we still

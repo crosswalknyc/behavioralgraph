@@ -23301,6 +23301,8 @@
             #trendsIQView .tiq-mover-badge.dropped { background: rgba(239, 68, 68, 0.18);  color: #fca5a5; }
             #trendsIQView .tiq-headline-list { display: flex; flex-direction: column; }
             #trendsIQView .tiq-headline-image { flex: 0 0 64px; width: 64px; height: 48px; background-size: cover; background-position: center; border-radius: 4px; background-color: #c4f542; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' preserveAspectRatio='xMidYMid slice'%3E%3Crect width='24' height='24' fill='%23c4f542'/%3E%3Cg fill='%23ffffff'%3E%3Cpolygon points='7,5 9,5 5,19 3,19'/%3E%3Cpolygon points='13,5 15,5 11,19 9,19'/%3E%3Cpolygon points='19,5 21,5 17,19 15,19'/%3E%3C/g%3E%3C/svg%3E"); }
+            /* Music tracks: square 48x48 thumbnail with a music-note fallback for the ~25% of Shazam discovery tracks that neither iTunes nor Deezer indexed yet. */
+            #trendsIQView .tiq-music-image { flex: 0 0 48px; width: 48px; height: 48px; background-size: cover; background-position: center; border-radius: 4px; background-color: #1e293b; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' preserveAspectRatio='xMidYMid slice'%3E%3Crect width='24' height='24' fill='%231e293b'/%3E%3Cpath d='M9 17V5l10-2v12' stroke='%237c3aed' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='7' cy='17' r='2' fill='%237c3aed'/%3E%3Ccircle cx='17' cy='15' r='2' fill='%237c3aed'/%3E%3C/svg%3E"); }
             #trendsIQView .tiq-source-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 0.35rem; margin-bottom: 0.35rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
             #trendsIQView .tiq-source-name { font-weight: 600; font-size: 0.9rem; }
             #trendsIQView .tiq-source-domain { font-size: 0.72rem; color: var(--text-secondary); }
@@ -40873,6 +40875,20 @@
             }
             return "background-image: url(\"" + _TIQ_PLACEHOLDER_URL + "\");";
         }
+        // Same idea as _tiqImgStyle but doesn't stack the lime headline
+        // placeholder underneath - music rows use the .tiq-music-image
+        // class which already ships its own square music-note fallback
+        // via background-image, so we just need the top-layer real
+        // artwork URL when we have one.
+        function _tiqMusicImgStyle(url) {
+            if (!url) return '';
+            var u = String(url)
+                .replace(/'/g,  "%27")
+                .replace(/"/g,  "%22")
+                .replace(/</g,  "%3C")
+                .replace(/>/g,  "%3E");
+            return "background-image: url('" + u + "');";
+        }
         function _tiqNum(n) {
             n = Number(n);
             if (!isFinite(n)) return '0';
@@ -41841,9 +41857,13 @@
                     body = '<div class="tiq-card-sub">' + _tiqEsc(s.sub || '') + '</div>' +
                            '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
                            items.map(function(it, i) {
-                               var img = it.image
-                                   ? '<div class="tiq-headline-image" style="background-image:url(\'' + _tiqEsc(it.image) + '\');"></div>'
-                                   : '';
+                               // Always render a square album-art tile.
+                               // Real artwork stacks over a music-note
+                               // placeholder that shows for tracks
+                               // neither iTunes nor Deezer indexed yet
+                               // (~25% of Shazam's discovery chart).
+                               var img = '<div class="tiq-music-image" style="' +
+                                         _tiqMusicImgStyle(it.image) + '"></div>';
                                var titleLine = it.url
                                    ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
                                    : _tiqEsc(it.title);
