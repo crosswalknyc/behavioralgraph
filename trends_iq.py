@@ -3911,7 +3911,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'streaming':     sum(1 for p in streaming_trending.values()
                                     if (p or {}).get('available')),
             'music':         sum(len(((music_charts.get(k) or {}).get('items') or []))
-                                  for k in ('shazam', 'apple', 'tiktok')),
+                                  for k in ('spotify', 'apple', 'tiktok', 'shazam')),
             'philanthropy':  (len(philanthropy_news) +
                               len(searches_by_category.get('philanthropy') or [])),
             'movers':    (len(movers.get('breakout') or []) +
