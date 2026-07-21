@@ -111290,7 +111290,37 @@
             
             // Load regular profiles from allJobs
             comparisonProfiles = allJobs.filter(j => j.status === 'cached' || j.status === 'completed');
-            
+
+            // 2026-07-21 (Jenna): only the most-recent Gen Pop should show
+            // up on the comparison tab. Older year cuts (Gen_Pop_2023,
+            // Gen_Pop_2024, etc.) are kept in S3 for historical lookup but
+            // are hidden from the comparison profile picker so the sidebar
+            // and header don't list them alongside the current one.
+            // resolveGenPopFileName() is defined much earlier in this file
+            // and returns the s3_key/job_id of the winner (highest year).
+            try {
+                const genPopEntries = comparisonProfiles.filter(p => {
+                    const key = (p.s3_key || p.job_id || '').toLowerCase();
+                    const name = (p.project_name || p.display_name || '').toLowerCase();
+                    return key.includes('gen_pop') || key.includes('gen pop')
+                        || name.includes('gen pop') || name.includes('gen_pop');
+                });
+                if (genPopEntries.length > 1) {
+                    const winnerKey = (typeof resolveGenPopFileName === 'function')
+                        ? resolveGenPopFileName(genPopEntries)
+                        : null;
+                    if (winnerKey) {
+                        comparisonProfiles = comparisonProfiles.filter(p => {
+                            const key = p.s3_key || p.job_id || '';
+                            const isGenPop = genPopEntries.includes(p);
+                            return !isGenPop || key === winnerKey;
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn('Gen Pop dedupe skipped:', e);
+            }
+
             // Re-add any segment profiles from persistent storage
             segmentProfilesForComparison.forEach(seg => {
                 if (!comparisonProfiles.some(p => p.name === seg.name && p.isSegment)) {
