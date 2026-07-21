@@ -21517,9 +21517,11 @@
                     <div class="comparison-container">
                         <div class="comparison-sidebar">
                             <div class="sidebar-section">
-                                <div style="background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px; padding: 0.5rem; margin-bottom: 0.75rem; font-size: 0.75rem;">
-                                    💡 <strong>All open tabs</strong> and <strong>Gen Pop</strong> are auto-selected for comparison
-                                </div>
+                                <!-- 2026-07-21 (Jenna): removed the "All open tabs and Gen Pop
+                                     are auto-selected for comparison" callout - the behavior
+                                     is still true (see autoSelectDefaultProfiles) but the
+                                     hint takes up sidebar space without adding value now
+                                     that only one Gen Pop shows up. -->
                                 <div style="position: relative; margin-bottom: 0.75rem;">
                                     <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
                                     <input type="text" id="compSearchInput" placeholder="Search profiles" oninput="filterComparisonProfiles()" style="padding-left: 32px; width: 100%; box-sizing: border-box;">
