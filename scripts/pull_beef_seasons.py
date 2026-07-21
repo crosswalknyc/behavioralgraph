@@ -46,7 +46,22 @@ _HERE = Path(__file__).resolve().parent
 _REPO = _HERE.parent
 sys.path.insert(0, str(_REPO))
 
-os.environ.setdefault("USE_CLAUDE_REASONING", "1")
+# Force Claude reasoning + load .env for ANTHROPIC_API_KEY (same pattern
+# as pull_chicago_fire_s14.py, pull_widows_bay_full_season.py). Using =
+# instead of setdefault so an empty env var from the parent shell still
+# gets flipped on.
+os.environ["USE_CLAUDE_REASONING"] = "1"
+_ENV_FILE = _REPO / ".env"
+if _ENV_FILE.exists():
+    try:
+        from dotenv import load_dotenv  # type: ignore
+        load_dotenv(_ENV_FILE)
+    except Exception:
+        for _line in _ENV_FILE.read_text().splitlines():
+            if not _line or _line.lstrip().startswith("#") or "=" not in _line:
+                continue
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 
 from SVOD_Churn_Attribution import run_synthetic_attribution  # noqa: E402
 
@@ -140,46 +155,39 @@ CONFIGS: list[dict] = [
 
     # ─── Season 2 (April 16, 2026) ─────────────────────────────────────
     #
-    # ROW-BY-ROW REASONING:
+    # ROW-BY-ROW REASONING (RECALIBRATED 2026-07-21 against Netflix "What
+    # We Watched" H1 2026 published actuals):
     #
-    # reach_us = 9.0M
-    #   Anthology continuation with completely new cast — brand awareness
-    #   from S1 Emmy sweep + Oscar Isaac / Carey Mulligan star power +
-    #   pre-launch Emmy nomination announcements (16 nods) drives higher
-    #   30-day US reach than S1 despite anthology headwind. Currently
-    #   Netflix Top-3 US (as of 7/8/26). Anchors:
-    #     - Ripley (2024, prestige-anthology adjacent): ~5.5M 30-day
-    #     - Griselda (2024, biopic-anthology): ~10M 30-day
-    #     - True Detective S4 (2024, HBO limited-anthology): ~5M — HBO
-    #     - Beef S1 (2023):                                 ~8M
-    #   Beef S2 has: (+) brand recall (Emmy sweep), (+) star cast, (+)
-    #   Netflix subscriber-base growth (~90M vs 75M = +20%), (-) anthology
-    #   requires fresh audience trust, (-) 8 eps vs 10 (shorter binge
-    #   window), (-) Netflix saturation reducing viral discovery.
-    #   Net anchor: 9M — modestly above S1 on brand + star power.
+    # reach_us = 5,100,000  (was 9,000,000, -43%)
+    #   Netflix WWR H1 2026 for "BEEF: Season 2":
+    #     - Global Hours Viewed: 75.1M
+    #     - Global Views:        12.8M  (Hours / Runtime, completion-eq)
+    #     - Release:             2026-04-16 (in-window, ~2.5 mo tail)
     #
-    # conv_pct = 1.4%
-    #   Netflix Q1'26 has ~90M US paid subs — heavier saturation than
-    #   2023. Fewer non-subscribers left to convert. But Beef brand +
-    #   Emmy-nomination timing (right around release) creates a
-    #   meaningful attribution window. Antenna 2026 prestige-limited BB/AA
-    #   range: 1.0-1.8%. Anchor mid-lower: 1.4% → ~126K new signups.
-    #   Lower % than S1 but on a bigger reach base.
+    #   Derivation using content-type-specific Views/Reach ratio for
+    #   prestige binge dramas (see netflix-what-we-watched.mdc):
+    #     US_share      = 0.40   (US-Asian cast + US market anchor,
+    #                             above the 33% scripted-original baseline
+    #                             because Emmy-nom coverage was US-heavy)
+    #     US_views      = 12.8M × 0.40 = 5.12M
+    #     V/R (prestige) = 1.00   (high completion + modest rewatch)
+    #     reach_us      = 5.12M / 1.00 = 5.12M
     #
-    # new_share = 0.42
-    #   2026-era Netflix acquisition is heavily reactivation-skewed
-    #   (~40% new / 60% reactivation for mature service). For Beef S2
-    #   specifically, the anthology-continuation dynamic tilts EVEN MORE
-    #   toward reactivation:
-    #     - S1 fans from 2023 who churned (typical 12-24mo lifecycle)
-    #       and came back specifically for S2 anthology → reactivation
-    #     - Existing Netflix subs who never watched S1 discover via
-    #       Emmy-nomination coverage → not new/reactivation, they're AA
-    #       inside the base
-    #     - Genuine new-to-Netflix from Oscar Isaac / Carey Mulligan
-    #       fandoms → small share of new signups
-    #   Anchor new_share: 0.42 (below 2026 baseline 0.40 by only 2pp
-    #   because star-power modestly lifts new-Netflix conversions).
+    #   Anchor: 5.1M. Prior 9.0M anchor was set BEFORE we had Netflix's
+    #   published Views data and effectively counted every viewer of the
+    #   Emmy-nominations coverage as a probable streamer. WWR shows the
+    #   actual completion-equivalent US audience is roughly half that.
+    #   Cross-check: 5.1M matches Nielsen streaming top-10 shape for
+    #   Beef S2 (peaked ~1.3B minutes viewed in week 2 = ~5-6M uniques).
+    #
+    # conv_pct = 1.4% (unchanged)
+    #   Rate is intrinsic to the show's demand curve; absolute signup
+    #   count now scales with the revised reach (~5.1M × 1.4% ≈ 71K
+    #   new signups panel-projected, vs the prior 126K).
+    #
+    # new_share = 0.42 (unchanged)
+    #   Anthology-continuation dynamics + Netflix maturity → 42% new /
+    #   58% reactivation. Unchanged from prior reasoning.
     {
         "project_name":  "Beef_-_Season_2",
         "title":         "Beef Season 2",
@@ -188,7 +196,7 @@ CONFIGS: list[dict] = [
         "genre":         COMEDY_DRAMA_ANTHOLOGY,
         "cadence":       "All at Once",
         "is_new":        False,
-        "reach_us":      9_000_000,
+        "reach_us":      5_100_000,
         "conv_pct":      1.4,
         "new_share":     0.42,
         "episode_dates": _eps_binge("2026-04-16", 8),
@@ -207,7 +215,13 @@ CONFIGS: list[dict] = [
             "Emmy nominations for the 2026 ceremony (leading the "
             "limited/anthology category). Released three years and ten "
             "days after S1. Netflix US paid subs at launch: ~90M "
-            "(Antenna Q1'26). Anthology framing means S1 viewership is "
+            "(Antenna Q1'26). Reach anchor RECALIBRATED 2026-07-21 "
+            "against Netflix's published 'What We Watched' H1 2026 "
+            "actuals: Beef S2 registered 12.8M global Views over the "
+            "H1 window; at 40% US share and 1.0 Views/Reach ratio for "
+            "prestige-binge drama, that resolves to ~5.1M unique US "
+            "accounts (down from prior 9.0M anchor set before WWR data "
+            "was available). Anthology framing means S1 viewership is "
             "NOT a prerequisite, opening the audience funnel while "
             "leveraging brand recall for marketing pull."
         ),
