@@ -21579,7 +21579,8 @@
                             <div class="marketing-hero-actions">
                                 <button class="marketing-btn marketing-btn-secondary" onclick="renderMarketingTab()">↻ Refresh</button>
                                 <button class="marketing-btn marketing-btn-secondary" onclick="copyMarketingLookalikeSeed()">📋 Copy Seed</button>
-                                <button class="marketing-btn marketing-btn-primary" onclick="generateMarketingAIPlaybook()">✨ Generate AI Playbook</button>
+                                <!-- 2026-07-21 (Jenna): removed 'Generate AI Playbook' button
+                                     and its subtab/section below. -->
                             </div>
                         </div>
                         <div id="marketingSnapshotRow" class="marketing-snapshot-row"></div>
@@ -21594,7 +21595,7 @@
                         <button class="marketing-subtab"        data-mkt-tab="retarget"  onclick="showMarketingSection('retarget')"  role="tab">🔄 <span>Retargeting</span></button>
                         <button class="marketing-subtab"        data-mkt-tab="creators"  onclick="showMarketingSection('creators')"  role="tab">🎬 <span>Creator Roster</span></button>
                         <button class="marketing-subtab"        data-mkt-tab="partners"  onclick="showMarketingSection('partners')"  role="tab">🤝 <span>Brand Partners</span></button>
-                        <button class="marketing-subtab"        data-mkt-tab="ai"        onclick="showMarketingSection('ai')"        role="tab">✨ <span>AI Playbook</span></button>
+                        <!-- 2026-07-21 (Jenna): 'AI Playbook' subtab removed. -->
                     </div>
 
                     <section class="marketing-section marketing-sub-panel active" data-mkt-panel="mix">
@@ -21653,17 +21654,8 @@
                         <div id="marketingBrandPartners" class="marketing-partners-wrap"></div>
                     </section>
 
-                    <section class="marketing-section marketing-sub-panel" id="marketingAISection" data-mkt-panel="ai">
-                        <div class="marketing-section-head">
-                            <h3>✨ AI-Generated Ad Playbook</h3>
-                            <span class="marketing-section-sub">Auto-generated strategic narrative you can paste into a brief. Click <b>Generate AI Playbook</b> in the header to run.</span>
-                        </div>
-                        <div id="marketingAIOutput" class="marketing-ai-output">
-                            <div style="color:var(--text-secondary);text-align:center;padding:1.5rem;">
-                                ✨ Click <b>Generate AI Playbook</b> in the header to produce a strategic narrative for this audience.
-                            </div>
-                        </div>
-                    </section>
+                    <!-- 2026-07-21 (Jenna): 'AI-Generated Ad Playbook' panel removed
+                         (was <section data-mkt-panel="ai" id="marketingAISection">). -->
                 </div>
             </div>
 
@@ -83485,49 +83477,13 @@
             };
 
             // ---------- AI Playbook ----------
-            window.generateMarketingAIPlaybook = async function() {
-                const out = document.getElementById('marketingAIOutput');
-                if (!out) return;
-                // Switch to the AI sub-tab so the output is visible immediately.
-                if (typeof window.showMarketingSection === 'function') {
-                    window.showMarketingSection('ai');
-                }
-                out.innerHTML = '<div style="color:var(--text-secondary);">✨ Generating AI ad playbook...</div>';
-                try {
-                    const d = (typeof currentDashboardData !== 'undefined') ? currentDashboardData : {};
-                    const p = (typeof currentProfileData !== 'undefined') ? currentProfileData : {};
-                    const payload = {
-                        profile: {
-                            name: p.name || _mkProfileName(),
-                            sampleSize: d.sampleSize || 0,
-                            projectedUS: d.projectedUS || 0,
-                            demographics: d.demographics || {},
-                            behavioral: d.behavioral || {},
-                            locations: (d.locations || []).slice(0, 15)
-                        }
-                    };
-                    const res = await fetch('/api/ai/marketing', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    const j = await res.json();
-                    if (!res.ok || j.error) {
-                        out.innerHTML = `<div style="color:var(--index-under);">${(j.error||'AI request failed').replace(/</g,'&lt;')}</div>`;
-                        return;
-                    }
-                    const raw = (j.strategy || '').toString();
-                    // Simple markdown → html: bold, headers, line breaks
-                    const html = raw
-                        .replace(/</g, '&lt;')
-                        .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-                        .replace(/^###\s?(.+)$/gm, '<h3>$1</h3>')
-                        .replace(/^##\s?(.+)$/gm, '<h2>$1</h2>')
-                        .replace(/^#\s?(.+)$/gm, '<h1>$1</h1>');
-                    out.innerHTML = html;
-                } catch(e) {
-                    out.innerHTML = `<div style="color:var(--index-under);">AI request failed: ${(e.message||'').replace(/</g,'&lt;')}</div>`;
-                }
+            // 2026-07-21 (Jenna): the marketing-tab AI Playbook feature was
+            // removed (header button + subtab + output panel). The backend
+            // /api/ai/marketing route is still used by a separate strategy
+            // button elsewhere in the app, so it stays. This stub logs and
+            // no-ops if anything still holds a stale reference.
+            window.generateMarketingAIPlaybook = function() {
+                console.warn('generateMarketingAIPlaybook is deprecated and no longer wired.');
             };
 
             // ---------- Main entry ----------
