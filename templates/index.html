@@ -97696,10 +97696,24 @@
                 const runKey = sortBy.slice('cmp:'.length);
                 const runEntry = (_comparisonRunsState && _comparisonRunsState.runsByKey)
                     ? _comparisonRunsState.runsByKey[runKey] : null;
-                const lookup = runEntry ? _cmpFlatBehavioralPctLookup(runEntry.parsed) : {};
+                // Sort by the SAME value shown in this cut's column. The cut
+                // column is filled by a category-scoped lookup (row's own
+                // category first, then any-category fallback) in
+                // applyComparisonRunsToCategoryTables. A flat first-hit lookup
+                // returns a different pct whenever a brand appears in more than
+                // one category (TALENT vs ACTOR, SPORTS vs NFL, Most Purchased
+                // sub-cats), which made the sorted column look only partially
+                // ordered. Mirror the display lookup so sort === what's shown.
+                const catLookup = runEntry ? _cmpBuildBehavioralLookup(runEntry.parsed) : {};
                 const cohortPct = (i) => {
-                    const v = lookup[_cmpNormName(i.name || '')];
-                    return (v == null) ? -Infinity : v;
+                    const nm = _cmpNormName(i.name || '');
+                    let m = (cat && catLookup[cat]) ? catLookup[cat][nm] : null;
+                    if (!m) {
+                        for (const c of Object.keys(catLookup)) {
+                            if (catLookup[c][nm]) { m = catLookup[c][nm]; break; }
+                        }
+                    }
+                    return (m && m.pct != null) ? m.pct : -Infinity;
                 };
                 sorted = items.sort((a, b) => cohortPct(b) - cohortPct(a));
             } else {
