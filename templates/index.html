@@ -2513,6 +2513,7 @@
         .marketing-tier.macro    { background: rgba(139, 92, 246, 0.22); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.5); }
         .marketing-tier.mid      { background: rgba(102, 217, 239, 0.18); color: #66d9ef; border: 1px solid rgba(102, 217, 239, 0.4); }
         .marketing-tier.micro    { background: rgba(16, 185, 129, 0.18); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); }
+        .marketing-tier.nano     { background: rgba(236, 72, 153, 0.16); color: #ec4899; border: 1px solid rgba(236, 72, 153, 0.4); }
         .marketing-tier.mass     { background: rgba(139, 92, 246, 0.22); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.5); }
         .marketing-tier.signature{ background: rgba(102, 217, 239, 0.18); color: #66d9ef; border: 1px solid rgba(102, 217, 239, 0.4); }
         .marketing-tier.giveaway { background: rgba(253, 151, 31, 0.16); color: #fd971f; border: 1px solid rgba(253, 151, 31, 0.4); }
@@ -2523,6 +2524,7 @@
         body[data-theme="light"] .marketing-tier.signature  { color: #0e7490; }
         body[data-theme="light"] .marketing-tier.micro      { color: #047857; }
         body[data-theme="light"] .marketing-tier.giveaway   { color: #b45309; }
+        body[data-theme="light"] .marketing-tier.nano,
         body[data-theme="light"] .marketing-tier.ambassador { color: #be185d; }
 
         .marketing-fit-pill {
@@ -21613,9 +21615,9 @@
                     <section class="marketing-section marketing-sub-panel" data-mkt-panel="creators">
                         <div class="marketing-section-head">
                             <h3>Recommended Influencer &amp; Creator Roster</h3>
-                            <span class="marketing-section-sub">Talent whose own audiences over-index against this profile, ranked by fit score. Each card shows creator tier (macro / mid / micro), the platforms where this audience is most reachable, and the rationale for the pick.</span>
+                            <span class="marketing-section-sub">Talent whose own audiences over-index against this profile, grouped by tier (Macro / Mid / Micro / Nano) so every strata surfaces. Each card shows overlap %, index, fit score, best platforms to activate, audience match, and the rationale for the pick.</span>
                         </div>
-                        <div id="marketingCreatorRoster" class="marketing-platform-grid"></div>
+                        <div id="marketingCreatorRoster" class="marketing-partners-wrap"></div>
                     </section>
 
                     <section class="marketing-section marketing-sub-panel" data-mkt-panel="partners">
@@ -83225,9 +83227,11 @@
                         const pct = Number(it.pct) || 0;
                         const idx = Number(it.index) || 0;
                         if (pct <= 0) return;
-                        // Skip weak signals: too little reach AND not strong
-                        // over-index either. (< 0.5% AND < 150 idx = noise)
-                        if (pct < 0.5 && idx < 150) return;
+                        // Very-noise floor. Reach < 0.2% AND no meaningful
+                        // over-index (< 130) is not a signal, it's a rounding
+                        // artifact. Every real Nano candidate has to earn
+                        // its spot with an index >= 130.
+                        if (pct < 0.2 && idx < 130) return;
                         seenName.add(norm);
                         rows.push({
                             name: it.name,
@@ -83242,8 +83246,6 @@
                     el.innerHTML = '<div class="marketing-empty">No creator / talent overlap detected in this profile\'s behavioral data.</div>';
                     return;
                 }
-                rows.sort((a, b) => b.fit - a.fit);
-                const top = rows.slice(0, 12);
 
                 const gender = _mkGenderSkew();
                 const median = _mkMedianAge();
@@ -83251,7 +83253,6 @@
                 const platformLine = platforms.length
                     ? platforms.map(p => `${p.name} (${p.pct.toFixed(0)}%)`).join(' · ')
                     : 'No platform signal available';
-
                 const audienceBits = [];
                 if (median) audienceBits.push(`age ${Math.max(18, median-8)}-${median+10}`);
                 if (gender.primary && gender.primary !== '—') {
@@ -83259,15 +83260,21 @@
                 }
                 const audienceLine = audienceBits.join(' · ') || 'demographic detail below';
 
-                // Tier by reach magnitude - a proxy for the creator's own
-                // audience scale, since overlap % here IS the audience-size
-                // signal within this profile. Macro = mass overlap, Mid =
-                // mid-tier, Micro = niche.
-                const tierFor = (pct) => {
-                    if (pct >= 15) return { key: 'macro', label: 'Macro' };
-                    if (pct >= 5)  return { key: 'mid',   label: 'Mid-tier' };
-                    return { key: 'micro', label: 'Micro' };
-                };
+                // Tier by overlap magnitude. Overlap % here is the share of
+                // this profile's audience that ALSO engages with the talent -
+                // a proxy for how big / reachable the creator is at this
+                // audience's scale. Every candidate lands in exactly one
+                // bucket. Nano additionally requires idx >= 150 (hyper-niche
+                // must be an ACTIVE over-index, not a rounding artifact).
+                const buckets = { macro: [], mid: [], micro: [], nano: [] };
+                rows.forEach(r => {
+                    if (r.pct >= 15)      buckets.macro.push(r);
+                    else if (r.pct >= 5)  buckets.mid.push(r);
+                    else if (r.pct >= 1)  buckets.micro.push(r);
+                    else if (r.index >= 150) buckets.nano.push(r);
+                });
+                Object.keys(buckets).forEach(k => buckets[k].sort((a,b) => b.fit - a.fit));
+
                 // Rationale is data-grounded: reach + index + fit archetype.
                 const rationaleFor = (r) => {
                     const idxTxt = r.index > 0 ? Math.round(r.index) + ' idx' : 'no baseline';
@@ -83284,8 +83291,18 @@
                     return parts.join(' ');
                 };
 
-                el.innerHTML = top.map(r => {
-                    const tier = tierFor(r.pct);
+                const groupDefs = [
+                    { key: 'macro', tier: 'macro', icon: '📣', title: 'Macro Creators',
+                      note: 'Broad-appeal / celebrity-scale talent. Use for launch moments, tentpole campaigns, and mass-reach amplification. Highest fee, lowest novelty.' },
+                    { key: 'mid',   tier: 'mid',   icon: '🎤', title: 'Mid-tier Creators',
+                      note: 'Established creators with proven audience alignment. The sweet spot for paid integrations, capsule collabs, and content series where authenticity + reach both matter.' },
+                    { key: 'micro', tier: 'micro', icon: '🎯', title: 'Micro Creators',
+                      note: 'Niche authorities. Lower reach, sharper cultural fit. Ideal for community-driven activations, product-launch seeding, and always-on brand-affinity halo.' },
+                    { key: 'nano',  tier: 'nano',  icon: '💎', title: 'Nano Creators',
+                      note: 'Hyper-niche / emerging voices with strong over-index but small overlap. Use for scrappy UGC seeding, gifting programs, invite-only launches, and early-tastemaker plays before they scale.' }
+                ];
+
+                const cardFor = (r) => {
                     const catLabel = (r.cat || '').replace('/', ' / ');
                     return `
                         <div class="marketing-plat-card">
@@ -83294,19 +83311,38 @@
                                     <span class="marketing-plat-icon">🎤</span>
                                     ${(r.name || '').replace(/</g,'&lt;')}
                                 </div>
-                                <span class="marketing-tier ${tier.key}">${tier.label}</span>
+                                <span class="marketing-fit-pill">${r.fit.toFixed(0)}<small>fit</small></span>
                             </div>
                             <div class="marketing-plat-metrics">
                                 <div class="marketing-plat-metric"><b>${r.pct.toFixed(1)}% overlap</b></div>
                                 <div class="marketing-plat-metric"><b>${r.index > 0 ? Math.round(r.index) : '—'} idx</b></div>
-                                <div class="marketing-plat-metric"><span class="marketing-fit-pill">${r.fit.toFixed(0)}<small>fit</small></span></div>
                             </div>
                             <div class="marketing-plat-seed"><b>Category.</b> ${catLabel.replace(/</g,'&lt;')}</div>
                             <div class="marketing-plat-seed"><b>Best platforms to activate.</b> ${platformLine.replace(/</g,'&lt;')}</div>
                             <div class="marketing-plat-seed"><b>Audience match.</b> ${audienceLine.replace(/</g,'&lt;')}</div>
                             <div class="marketing-plat-seed"><b>Why.</b> ${rationaleFor(r).replace(/</g,'&lt;')}</div>
                         </div>`;
-                }).join('');
+                };
+
+                const html = groupDefs.map(g => {
+                    const items = (buckets[g.key] || []).slice(0, 6);
+                    if (!items.length) return '';
+                    const cards = items.map(cardFor).join('');
+                    return `
+                        <div class="marketing-partners-group">
+                            <div class="marketing-partners-group-head">
+                                <div class="marketing-partners-group-title">
+                                    <span style="font-size:1.1rem;">${g.icon}</span>
+                                    <span class="marketing-tier ${g.tier}">${g.title}</span>
+                                    <span style="font-size:0.72rem;color:var(--text-secondary);font-weight:500;letter-spacing:0.03em;">${items.length} shown</span>
+                                </div>
+                                <div class="marketing-partners-group-note">${g.note}</div>
+                            </div>
+                            <div class="marketing-platform-grid">${cards}</div>
+                        </div>`;
+                }).filter(Boolean).join('');
+
+                el.innerHTML = html || '<div class="marketing-empty">Talent overlap detected but no candidates cleared the minimum thresholds for any creator tier.</div>';
             }
 
             // ---------- Brand Partners ----------
