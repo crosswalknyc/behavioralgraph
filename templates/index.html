@@ -23474,7 +23474,7 @@
                 background-size: cover;
                 background-position: center;
             }
-            #trendsIQView .tiq-search-news-img { flex: 0 0 42px; width: 42px; height: 32px; background-size: cover; background-position: center; border-radius: 4px; background-color: #000000; background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA0OCc+PHJlY3Qgd2lkdGg9JzY0JyBoZWlnaHQ9JzQ4JyBmaWxsPScjMDAwMDAwJy8+PHRleHQgeD0nMzInIHk9JzIwJyB0ZXh0LWFuY2hvcj0nbWlkZGxlJyBmb250LWZhbWlseT0nQXJpYWwsSGVsdmV0aWNhLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nNycgZm9udC13ZWlnaHQ9JzcwMCcgZmlsbD0nI2M0ZjU0Mic+Q1JPU1NXQUxLPC90ZXh0Pjx0ZXh0IHg9JzMyJyB5PSczMycgdGV4dC1hbmNob3I9J21pZGRsZScgZm9udC1mYW1pbHk9J0FyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzYnIGZvbnQtd2VpZ2h0PSc3MDAnIGxldHRlci1zcGFjaW5nPScxJyBmaWxsPScjYzRmNTQyJz5UUkVORElORzwvdGV4dD48L3N2Zz4="); }
+            #trendsIQView .tiq-search-news-img { flex: 0 0 42px; width: 42px; height: 32px; border-radius: 4px; background-color: #000000; }
             #trendsIQView .tiq-search-news-body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
             #trendsIQView .tiq-search-news-source { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
             #trendsIQView .tiq-search-news-title { font-size: 0.75rem; color: var(--text-primary); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
@@ -23485,7 +23485,19 @@
             #trendsIQView .tiq-mover-badge.flat    { background: rgba(148, 163, 184, 0.2); color: #cbd5f5; }
             #trendsIQView .tiq-mover-badge.dropped { background: rgba(239, 68, 68, 0.18);  color: #fca5a5; }
             #trendsIQView .tiq-headline-list { display: flex; flex-direction: column; }
-            #trendsIQView .tiq-headline-image { flex: 0 0 64px; width: 64px; height: 48px; background-size: cover; background-position: center; border-radius: 4px; background-color: #000000; background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA0OCc+PHJlY3Qgd2lkdGg9JzY0JyBoZWlnaHQ9JzQ4JyBmaWxsPScjMDAwMDAwJy8+PHRleHQgeD0nMzInIHk9JzIwJyB0ZXh0LWFuY2hvcj0nbWlkZGxlJyBmb250LWZhbWlseT0nQXJpYWwsSGVsdmV0aWNhLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nNycgZm9udC13ZWlnaHQ9JzcwMCcgZmlsbD0nI2M0ZjU0Mic+Q1JPU1NXQUxLPC90ZXh0Pjx0ZXh0IHg9JzMyJyB5PSczMycgdGV4dC1hbmNob3I9J21pZGRsZScgZm9udC1mYW1pbHk9J0FyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzYnIGZvbnQtd2VpZ2h0PSc3MDAnIGxldHRlci1zcGFjaW5nPScxJyBmaWxsPScjYzRmNTQyJz5UUkVORElORzwvdGV4dD48L3N2Zz4="); }
+            #trendsIQView .tiq-headline-image { flex: 0 0 64px; width: 64px; height: 48px; border-radius: 4px; background-color: #000000; }
+            /* CROSSWALK / TRENDING fallback rendered as real HTML text (not an
+               SVG background) so it renders in every browser incl. Safari, which
+               won't paint <text> inside an SVG data-URI background. The real
+               thumbnail is an <img> layered on top; on 404/paywall it removes
+               itself (onerror) and the lime lockup underneath shows through. */
+            #trendsIQView .tiq-ph { position: relative; overflow: hidden; }
+            #trendsIQView .tiq-ph-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; z-index: 1; }
+            #trendsIQView .tiq-ph-label { position: absolute; inset: 0; z-index: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; line-height: 1; color: #c4f542; font-family: Arial, Helvetica, sans-serif; font-weight: 800; text-transform: uppercase; pointer-events: none; }
+            #trendsIQView .tiq-ph-label > span:first-child { font-size: 9px; letter-spacing: 0; }
+            #trendsIQView .tiq-ph-label > span:last-child { font-size: 7px; font-weight: 700; letter-spacing: 1.5px; }
+            #trendsIQView .tiq-search-news-img .tiq-ph-label > span:first-child { font-size: 6.5px; letter-spacing: 0; }
+            #trendsIQView .tiq-search-news-img .tiq-ph-label > span:last-child { font-size: 5px; letter-spacing: 0.5px; }
             /* Music tracks: square 48x48 thumbnail with a music-note fallback for the ~25% of Shazam discovery tracks that neither iTunes nor Deezer indexed yet. */
             #trendsIQView .tiq-music-image { flex: 0 0 48px; width: 48px; height: 48px; background-size: cover; background-position: center; border-radius: 4px; background-color: #1e293b; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' preserveAspectRatio='xMidYMid slice'%3E%3Crect width='24' height='24' fill='%231e293b'/%3E%3Cpath d='M9 17V5l10-2v12' stroke='%237c3aed' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='7' cy='17' r='2' fill='%237c3aed'/%3E%3Ccircle cx='17' cy='15' r='2' fill='%237c3aed'/%3E%3C/svg%3E"); }
             /* Streaming poster: portrait 40x56 tile (2:2.8 aspect - close to standard poster ratio) with a film-strip fallback for titles iTunes Search doesn't have artwork for. Cover-fits so square iTunes artwork or true portrait posters both render cleanly. */
@@ -41639,29 +41651,22 @@
         }
 
         function _tiqEsc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-        // Black CROSSWALK / TRENDING placeholder SVG used everywhere a
-        // Trends thumbnail might have no image URL, or where the URL 404s /
-        // is paywalled. Layered UNDERNEATH the real image so failed loads
-        // fall through automatically (CSS multi-value background-image).
-        var _TIQ_PLACEHOLDER_URL = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA0OCc+PHJlY3Qgd2lkdGg9JzY0JyBoZWlnaHQ9JzQ4JyBmaWxsPScjMDAwMDAwJy8+PHRleHQgeD0nMzInIHk9JzIwJyB0ZXh0LWFuY2hvcj0nbWlkZGxlJyBmb250LWZhbWlseT0nQXJpYWwsSGVsdmV0aWNhLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nNycgZm9udC13ZWlnaHQ9JzcwMCcgZmlsbD0nI2M0ZjU0Mic+Q1JPU1NXQUxLPC90ZXh0Pjx0ZXh0IHg9JzMyJyB5PSczMycgdGV4dC1hbmNob3I9J21pZGRsZScgZm9udC1mYW1pbHk9J0FyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzYnIGZvbnQtd2VpZ2h0PSc3MDAnIGxldHRlci1zcGFjaW5nPScxJyBmaWxsPScjYzRmNTQyJz5UUkVORElORzwvdGV4dD48L3N2Zz4=";
-        function _tiqImgStyle(url) {
-            // Percent-encode the chars that could break out of either
-            // the CSS url('...') or the enclosing style="..." attribute.
-            if (url) {
-                var u = String(url)
-                    .replace(/'/g,  "%27")
-                    .replace(/"/g,  "%22")
-                    .replace(/</g,  "%3C")
-                    .replace(/>/g,  "%3E");
-                return "background-image: url('" + u + "'), url(\"" + _TIQ_PLACEHOLDER_URL + "\");";
-            }
-            return "background-image: url(\"" + _TIQ_PLACEHOLDER_URL + "\");";
+        // CROSSWALK / TRENDING fallback chip. Renders the lockup as real HTML
+        // text (see .tiq-ph-label CSS) rather than an SVG data-URI background,
+        // because Safari/WebKit refuses to paint <text> inside an SVG used as a
+        // background-image (only the black <rect> showed). The real thumbnail is
+        // an <img> layered on top; if it 404s / is paywalled it removes itself
+        // (onerror) and the lime lockup underneath shows through automatically.
+        function _tiqImgCell(cls, url) {
+            var label = '<span class="tiq-ph-label"><span>CROSSWALK</span><span>TRENDING</span></span>';
+            var img = url
+                ? '<img class="tiq-ph-img" src="' + _tiqEsc(url) + '" loading="lazy" alt="" onerror="this.remove()">'
+                : '';
+            return '<div class="' + cls + ' tiq-ph">' + label + img + '</div>';
         }
-        // Same idea as _tiqImgStyle but doesn't stack the lime headline
-        // placeholder underneath - music rows use the .tiq-music-image
-        // class which already ships its own square music-note fallback
-        // via background-image, so we just need the top-layer real
-        // artwork URL when we have one.
+        // Music rows use the .tiq-music-image class which already ships its
+        // own square music-note fallback via background-image, so we just need
+        // the top-layer real artwork URL when we have one (no CROSSWALK chip).
         function _tiqMusicImgStyle(url) {
             if (!url) return '';
             var u = String(url)
@@ -42192,7 +42197,7 @@
                        '<div class="tiq-card-sub">Aggregated across major news outlets.</div>' +
                        '<div class="tiq-headline-list">';
             rows.forEach(function(r, i) {
-                var img = '<div class="tiq-headline-image" style="' + _tiqImgStyle(r.image) + '"></div>';
+                var img = _tiqImgCell('tiq-headline-image', r.image);
                 html += '<div class="tiq-row">' +
                         '<div class="tiq-rank">' + (i + 1) + '</div>' +
                         img +
@@ -42247,9 +42252,7 @@
                        '<div class="tiq-card-sub">Foundation moves, big gifts, disaster relief, sector news. Chronicle of Philanthropy, Nonprofit Quarterly, SSIR, Blue Avocado, Guardian Global Development.</div>' +
                        '<div class="tiq-headline-list" style="max-height:720px;overflow-y:auto;">';
             rows.forEach(function(r, i) {
-                var img = r.image
-                    ? '<div class="tiq-headline-image" style="background-image:url(\'' + _tiqEsc(r.image) + '\');"></div>'
-                    : '<div class="tiq-headline-image tiq-headline-placeholder"></div>';
+                var img = _tiqImgCell('tiq-headline-image', r.image);
                 var srcLabel = r.source_label || r.source || '';
                 var newsKey  = r.title || '';
                 var meta = srcLabel
@@ -42432,7 +42435,7 @@
             if (news.length) {
                 newsHtml = '<div class="tiq-search-news">' +
                     news.map(function(a) {
-                        var img = '<div class="tiq-search-news-img" style="' + _tiqImgStyle(a.image) + '"></div>';
+                        var img = _tiqImgCell('tiq-search-news-img', a.image);
                         return '<a class="tiq-search-news-item" href="' + _tiqEsc(a.url || '#') +
                                '" target="_blank" rel="noopener">' +
                                img +
@@ -43085,7 +43088,7 @@
                                }
                                var socialKey = rowLabel;
                                var img = it.image
-                                   ? '<div class="tiq-headline-image" style="' + _tiqImgStyle(it.image) + '"></div>'
+                                   ? _tiqImgCell('tiq-headline-image', it.image)
                                    : '';
                                var meta = '';
                                // Creator handle on all content platforms.
