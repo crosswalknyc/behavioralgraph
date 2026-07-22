@@ -36143,6 +36143,28 @@
         }
         
         // Normalize ethnicity/education for display (legacy labels → standard labels).
+        // 2026-07-22 (Jenna): universal loose key for label lookup. Any
+        // pair of strings that "should be the same brand/bucket" but
+        // differ only in apostrophes / casing / whitespace must resolve
+        // to the same key. Used as a widening fallback (never a
+        // replacement) for exact-match lookups across:
+        //   * demographics rebuild (_rebuildDemoGenPop)
+        //   * demo table render (_cmpNormKey)
+        //   * behavioral Gen Pop lookup (getGenPopValue / parseAllData)
+        //   * TST-tab demo lookup (_tstGetGenPop)
+        // So "McDonald's" matches "MCDONALDS", "Bachelor's Degree"
+        // matches "BACHELORS DEGREE", "Doesn't Have Children" matches
+        // "DOESNT HAVE CHILDREN", etc. Both curly (U+2019) and straight
+        // (U+0027) apostrophes are stripped so paste-in from Word /
+        // Google Docs also normalizes cleanly.
+        window._looseKey = function(s) {
+            return String(s == null ? '' : s)
+                .trim()
+                .toLowerCase()
+                .replace(/[\u2019\u2018']/g, '')
+                .replace(/\s+/g, ' ');
+        };
+
         function displayDemographicLabel(s) {
             if (s == null || typeof s !== 'string') return s;
             const v = String(s).trim().toLowerCase();
@@ -41106,23 +41128,35 @@
             // "Trending" (search categories) leads the strip because
             // it's the most-used view.
             var headlineCount = (counts.headlines || 0) + (counts.sources || 0);
+            // Tooltip copy per top-level tab. Kept alongside the tabs
+            // array so it's easy to see and update in one place.
             var tabs = [
-                { key: 'searches',  label: 'Trending',         count: counts.searches  || 0, icon: '🔎' },
-                { key: 'movers',    label: 'Movers',           count: counts.movers    || 0, icon: '🚀' },
-                { key: 'headlines', label: 'Headlines',        count: headlineCount,         icon: '📰' },
-                { key: 'people',    label: 'Trending people',  count: counts.people    || 0, icon: '👤' },
-                { key: 'music',     label: 'Music',            count: counts.music     || 0, icon: '🎵' },
-                { key: 'social',    label: 'Social',           count: 0,                     icon: '💬' },
-                { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺' },
-                { key: 'products',  label: 'Products',         count: counts.retailers || 0, icon: '🛍️' },
-                { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★' },
+                { key: 'searches',  label: 'Trending',         count: counts.searches  || 0, icon: '🔎',
+                  tip: 'Trending searches: The top ~300 Google search queries + hashtags in the window, sliced into overall / entertainment / retail / politics / finance / sports. What people are actively typing into search boxes right now.' },
+                { key: 'movers',    label: 'Movers',           count: counts.movers    || 0, icon: '🚀',
+                  tip: 'Movers: Day-over-day and week-over-week momentum. Rising, falling, breakout, and sustained-heat buckets computed from the dated snapshot history in S3. Requires a few days of history before it lights up.' },
+                { key: 'headlines', label: 'Headlines',        count: headlineCount,         icon: '📰',
+                  tip: 'Headlines: Top stories from major news outlets (CNN, NYT, WSJ, Reuters, CNBC, MS NOW, Fox, etc.), plus a By-Source view that groups the same articles by outlet, plus a Philanthropy sub-tab for the causes and campaigns making news.' },
+                { key: 'people',    label: 'Trending people',  count: counts.people    || 0, icon: '👤',
+                  tip: 'Trending people: Individuals rising across news, Wikipedia page-view spikes, social mentions, and search. Each row shows why they are trending (Claude one-liner from the surrounding article context) and a direction indicator (up / down / stable).' },
+                { key: 'music',     label: 'Music',            count: counts.music     || 0, icon: '🎵',
+                  tip: 'Music: Three views of what people are listening to right now. Spotify (mass-streaming chart), Apple Music (Apple-subscriber cut), Shazam (what people are IDing, discovery signal).' },
+                { key: 'social',    label: 'Social',           count: 0,                     icon: '💬',
+                  tip: 'Social: Real trending content (posts, videos, tweets) on Reddit, YouTube, TikTok, Instagram, and X. Not hashtag lists. Reddit is US-heavy subreddits (news, politics, entertainment); YouTube is US-region trending; TikTok / IG / X pull from your logged-in explore feeds via donated cookies.' },
+                { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
+                  tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, Max, Prime Video, and ESPN+, split into Film and TV. Netflix data comes from its authenticated daily browse feed; the others come from the platforms\u0027 own trending rails.' },
+                { key: 'products',  label: 'Products',         count: counts.retailers || 0, icon: '🛍️',
+                  tip: 'Products: Best-sellers / trending SKUs at Amazon, Target, Walmart, Nike, Sephora, Ulta, Best Buy, Etsy, and Lululemon. Price + rank + link where available.' },
+                { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★',
+                  tip: 'Watchlist: The trends you have starred. Populates the daily digest email so you get pinged when anything on this list breaks out, drops off, or crosses a threshold you set.' },
             ];
             var strip = document.getElementById('trendsIQTabStrip');
             strip.style.display = 'flex';
             strip.innerHTML = tabs.map(function(t) {
                 var active = (t.key === (window.__trendsIQ.activeTab || 'movers')) ? ' active' : '';
                 var badgeId = (t.key === 'watchlist') ? ' id="trendsIQWatchBadge"' : '';
-                return '<div class="tiq-tab' + active + '" data-tiq-tab="' + t.key + '" onclick="setTrendsIQTab(\'' + t.key + '\')">' +
+                var tipAttr = t.tip ? ' data-tooltip="' + _tiqEsc(t.tip) + '"' : '';
+                return '<div class="tiq-tab has-tooltip' + active + '" data-tiq-tab="' + t.key + '"' + tipAttr + ' onclick="setTrendsIQTab(\'' + t.key + '\')">' +
                        '<span>' + t.icon + '</span><span>' + t.label + '</span>' +
                        (t.count ? '<span class="tiq-tab-count"' + badgeId + '>' + t.count + '</span>' : (t.key === 'watchlist' ? '<span class="tiq-tab-count"' + badgeId + ' style="display:none;"></span>' : '')) +
                        '</div>';
@@ -77944,7 +77978,16 @@
                 let pct = gp[v]; if(pct!=null) return pct;
                 const ethKey = (v||'').toLowerCase()==='latinx'||(v||'').toLowerCase()==='latino'?'Hispanic or Latino':v;
                 pct = gp[ethKey]; if(pct!=null) return pct;
+                // Case-insensitive
                 for(const k of Object.keys(gp)){ if((k||'').toLowerCase()===(v||'').toLowerCase()) return gp[k]; }
+                // Loose match (apostrophe / whitespace stripped) so
+                // e.g. "Bachelor's Degree" resolves to "BACHELORS DEGREE".
+                if(typeof window._looseKey === 'function') {
+                    const vLoose = window._looseKey(v);
+                    for(const k of Object.keys(gp)){
+                        if(window._looseKey(k) === vLoose) return gp[k];
+                    }
+                }
                 return null;
             };
             if(genPopBaselineData?.demographics?.[keyLower]) {
@@ -84978,15 +85021,28 @@
                     }
                 }
                 
-                // For behavioral - use case-insensitive matching
+                // For behavioral - use case-insensitive matching,
+                // then a loose match (apostrophe/whitespace-stripped)
+                // as a widening fallback so brands like "McDonald's" /
+                // "MCDONALDS", "Trader Joe's" / "TRADER JOES", "Levi's"
+                // / "LEVIS", "Domino's" / "DOMINOS" unify. Without the
+                // fallback, any brand written with an apostrophe in the
+                // profile CSV but stored without one in the Gen Pop
+                // file (or vice versa) rendered as 0% and no Index.
                 if (genPopBaselineData.behavioral && genPopBaselineData.behavioral[category]) {
                     const valueUpper = (value || '').trim().toUpperCase();
-                    const item = genPopBaselineData.behavioral[category].find(i => 
+                    let item = genPopBaselineData.behavioral[category].find(i =>
                         (i.name || '').trim().toUpperCase() === valueUpper
                     );
+                    if (!item && typeof window._looseKey === 'function') {
+                        const valueLoose = window._looseKey(value);
+                        item = genPopBaselineData.behavioral[category].find(i =>
+                            window._looseKey(i.name) === valueLoose
+                        );
+                    }
                     if (item) return item.pct || 0;
                 }
-                
+
                 return 0;
             }
             
@@ -85200,12 +85256,20 @@
                     }
                 } else {
                     // For behavioral items, try to get Gen Pop percentage and projection from loaded baseline data
-                    // Use case-insensitive lookup with trimming to ensure match
+                    // Use case-insensitive lookup with trimming to ensure match, then a
+                    // loose (apostrophe/whitespace-stripped) match so brands like
+                    // "McDonald's" / "MCDONALDS" or "Levi's" / "LEVIS" unify.
                     const valueUpper = (value || '').trim().toUpperCase();
                     if (genPopBaselineData && genPopBaselineData.behavioral && genPopBaselineData.behavioral[category]) {
-                        const genPopItem = genPopBaselineData.behavioral[category].find(item => 
+                        let genPopItem = genPopBaselineData.behavioral[category].find(item =>
                             (item.name || '').trim().toUpperCase() === valueUpper
                         );
+                        if (!genPopItem && typeof window._looseKey === 'function') {
+                            const valueLoose = window._looseKey(value);
+                            genPopItem = genPopBaselineData.behavioral[category].find(item =>
+                                window._looseKey(item.name) === valueLoose
+                            );
+                        }
                         if (genPopItem) {
                             genPopPct = genPopItem.pct || 0;
                             genPopProjection = genPopItem.projection || 0;
@@ -90838,10 +90902,11 @@
         // Gen Pop -- 2026-07-22 fix: strip both straight (U+0027) and curly (U+2019) apostrophes
         // + collapse whitespace so those variants unify).
         function _rebuildDemoGenPop(profileDemo, gpDemo) {
-            const _demoKeyLoose = (s) => String(s == null ? '' : s)
-                .trim().toLowerCase()
-                .replace(/[\u2019\u2018']/g, '')      // strip apostrophes (curly + straight)
-                .replace(/\s+/g, ' ');                 // collapse whitespace
+            // Delegate to the shared window._looseKey so all label
+            // lookups in the app share ONE normalization rule.
+            const _demoKeyLoose = (s) => (typeof window._looseKey === 'function')
+                ? window._looseKey(s)
+                : String(s == null ? '' : s).trim().toLowerCase();
             const out = {};
             for (const cat of Object.keys(profileDemo || {})) {
                 const bucket = profileDemo[cat];
@@ -93774,15 +93839,12 @@
                 parentalStatus: 'parental_status',
                 occupation: 'occupation'
             };
-            // 2026-07-22 fix: strip apostrophes (both straight U+0027 and
-            // curly U+2019) so bucket labels like "Bachelor's Degree"
-            // unify with Gen Pop's "BACHELORS DEGREE" during the demo
-            // table render. Without this, the row rendered with N/A in
-            // the Gen Pop column and no Index.
-            const _cmpNormKey = (s) => String(s == null ? '' : s)
-                .trim().toLowerCase()
-                .replace(/[\u2019\u2018']/g, '')
-                .replace(/\s+/g, ' ');
+            // Delegate to the shared window._looseKey so bucket
+            // labels like "Bachelor's Degree" unify with Gen Pop's
+            // "BACHELORS DEGREE" during the demo table render.
+            const _cmpNormKey = (s) => (typeof window._looseKey === 'function')
+                ? window._looseKey(s)
+                : String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' ');
 
             const _fmtPct = (v) => {
                 const n = Number(v);
@@ -128826,6 +128888,44 @@
                     <div class="chat-conversation-header">
                         <button class="chat-back-btn" onclick="backToChatContacts()">&lt;</button>
                         <div class="chat-conversation-avatar" id="chatConvoAvatar">
+                            <div class="avatar-initials">?</div>
+                        </div>
+                        <span class="chat-conversation-name" id="chatConvoName">Chat</span>
+                    </div>
+                    <div class="chat-messages" id="chatMessages"></div>
+                    <div class="chat-input-area">
+                        <input type="text" id="chatMessageInput" placeholder="Type a message..." onkeypress="handleChatKeyPress(event)">
+                        <button class="chat-send-btn" onclick="sendChatMessage()">send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    -->
+    
+    <!-- Left-justified footer with data source - hidden 2026-06-03 because the
+         fixed-position bar was overlaying the bottom of dashboard views and
+         clipping content (request: "remove this navy bar so I can see more").
+         Kept in DOM (display:none) so we can flip it back on by removing the
+         style if attribution is needed again. -->
+    <footer class="app-footer" style="display: none;">
+        <img src="/static/crosswalk-logo-small.png" alt="Crosswalk" class="app-footer-logo" onerror="this.src='/static/crosswalk-logo.png'; this.style.height='24px';">
+        <span class="app-footer-text">Data Source: Crosswalk's Intelligence Platform, a 10M Gen Pop Digital Behavioral Panel</span>
+    </footer>
+
+
+</body>
+</html>
+</html>
+
+
+
+
+
+
+
+
+class="chat-conversation-avatar" id="chatConvoAvatar">
                             <div class="avatar-initials">?</div>
                         </div>
                         <span class="chat-conversation-name" id="chatConvoName">Chat</span>
