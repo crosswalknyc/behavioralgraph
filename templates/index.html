@@ -88120,20 +88120,33 @@
                 });
             });
 
-            // Location rows. Profile pct is the 4th child <span>. Gen Pop
-            // only exists on the "all" table (CW Gen Pop column, 5th
-            // child) - for over/under tables we leave data-cmp-pct-genpop
-            // unset, so picking Gen Pop falls back to "-".
+            // Location rows. Look up Profile and Gen Pop cells by
+            // CLASS, NOT by span position, because
+            // applyComparisonRunsToCategoryTables has already injected
+            // one `.cmp-col-cell` per selected cohort BEFORE the
+            // `.cw-gp-col` cell (see the `_findAnchor` helper in that
+            // function). After injection the positional layout is:
+            //   spans[0]=dmaRank, spans[1]=dmaName, spans[2]=profileRank,
+            //   spans[3]=.profile-col, spans[4..4+N]=injected cohorts,
+            //   spans[4+N]=.cw-gp-col, spans[5+N]=gpCensus, spans[6+N]=.index-col
+            // So `spans[4]` used to be the CW Gen Pop cell but is now
+            // the first injected cohort cell (e.g. Avid). That was
+            // causing `data-cmp-pct-genpop` to be stamped with the
+            // Avid pct, which made the Avid-vs-GP picker compute
+            // Avid / Avid * 100 = 100 for EVERY row on the location
+            // table. (Reported 2026-07-22 by Jenna: "if i select avid
+            // vs gen pop for index it shows just 100 for index under
+            // location".)
+            //
+            // Over/under tables have `.profile-col` but no
+            // `.cw-gp-col` - querySelector returns null there so
+            // `data-cmp-pct-genpop` stays unset, matching the prior
+            // behavior of picking Gen Pop falling back to "-".
             document.querySelectorAll('.location-row').forEach(row => {
-                const spans = row.children;
-                if (spans && spans[3]) row.setAttribute('data-cmp-pct-profile', parsePct(spans[3].textContent) ?? '');
-                // CW Gen Pop is 5th child in the All-table only - detect
-                // via the .cw-gp-col class on its header (which we don't
-                // tag rows with directly), so probe by sibling count.
-                const allParent = row.closest('#allLocationsContainer');
-                if (allParent && spans[4]) {
-                    row.setAttribute('data-cmp-pct-genpop', parsePct(spans[4].textContent) ?? '');
-                }
+                const profileEl = row.querySelector('.profile-col');
+                if (profileEl) row.setAttribute('data-cmp-pct-profile', parsePct(profileEl.textContent) ?? '');
+                const gpEl = row.querySelector('.cw-gp-col');
+                if (gpEl) row.setAttribute('data-cmp-pct-genpop', parsePct(gpEl.textContent) ?? '');
                 const cmpCells = row.querySelectorAll('.cmp-col-cell');
                 cmpCells.forEach((c, i) => {
                     const k = series[i] && series[i].key;
