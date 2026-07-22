@@ -42633,8 +42633,12 @@
                             }
                         });
                     }
-                    var weekLabel = s.week_us ? ' Week of ' + _tiqEsc(s.week_us) + '.' : '';
-                    var subtitle = 'Top titles on ' + _tiqEsc(s.label || k) + '.' + weekLabel;
+                    // "Week of ..." dropped 2026-07-22: for Netflix the
+                    // week window is the same for every card and doesn't
+                    // add signal in the subtitle; for the other platforms
+                    // the value was misleading anyway (we scrape daily,
+                    // not weekly) - so no date stamp anywhere.
+                    var subtitle = 'Top titles on ' + _tiqEsc(s.label || k) + '.';
                     // Row meta is intentionally suppressed for streaming
                     // cards. The `weeks_in_top10` pill was removed because
                     // non-Netflix platforms are derived from our own snapshot
