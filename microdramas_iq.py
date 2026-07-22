@@ -87,6 +87,18 @@ S3_CACHE_PREFIX       = 'microdramas_iq/cache/'
 
 CACHE_TTL_S           = int(os.environ.get('MICRODRAMAS_IQ_CACHE_TTL', '1800'))  # 30 min
 
+# Competitor sources. Each has a dated snapshot per day so we can look
+# back over any window. Kept ordered so the Competitors tab renders the
+# largest platform first.
+COMPETITOR_SOURCES = [
+    {'source': 'reelshort', 'label': 'ReelShort',
+     'mau_millions': 18.0,
+     'note': 'Largest vertical-drama app in North America.'},
+    {'source': 'dramabox',  'label': 'DramaBox',
+     'mau_millions': 13.0,
+     'note': 'Second-largest by MAU. Heavy overlap with ReelShort audience.'},
+]
+
 
 # ============================================================================
 # View-estimate calibration
@@ -462,6 +474,267 @@ def _title_audience(title_entry: dict) -> dict:
         'interests':          OVERALL_AUDIENCE['interests'],
         'platform_affinities': OVERALL_AUDIENCE['platform_affinities'],
         'tilt_applied':       tilt or None,
+    }
+
+
+# ============================================================================
+# Competitor surface - ReelShort + DramaBox lookback over N days
+# ============================================================================
+# Each competitor scraper writes a dated snapshot per day at
+#   s3://dashboard-inputs/microdramas_iq/snapshots/{YYYY-MM-DD}/{source}.json
+# This surface reads the last N days and reconstructs per-title rank
+# arcs so the dashboard can render movers (up / down / new / dropped)
+# just like Trends IQ.
+
+_COMPETITOR_WINDOW_OPTIONS = [
+    {'value': '1',  'label': 'Today'},
+    {'value': '3',  'label': 'Last 3 days'},
+    {'value': '7',  'label': 'Last 7 days'},
+    {'value': '14', 'label': 'Last 14 days'},
+    {'value': '30', 'label': 'Last 30 days'},
+]
+
+
+def _read_dated_snapshot(source: str, day_iso: str) -> Optional[dict]:
+    key = S3_SNAPSHOT_DATED.format(date=day_iso, source=source)
+    return _read_json(key)
+
+
+def _read_history_days(source: str, days: int) -> list[dict]:
+    """Return up to `days` dated snapshots, oldest first. Missing days
+    just get skipped - callers should handle sparse arcs."""
+    out: list[dict] = []
+    today = date.today()
+    for offset in range(days - 1, -1, -1):
+        d = (today - timedelta(days=offset)).isoformat()
+        snap = _read_dated_snapshot(source, d)
+        if snap:
+            snap['observed_date'] = d
+            out.append(snap)
+    return out
+
+
+def _title_norm_key(title: str) -> str:
+    return re.sub(r'[^a-z0-9]+', '', (title or '').lower())
+
+
+def _build_arc(source: str, days: int) -> dict:
+    """Return a per-title arc across the last `days` snapshots.
+
+    Shape:
+      {
+        'observed_dates': ['2026-07-16', ..., '2026-07-22'],
+        'titles': [
+          { 'title', 'poster_url', 'deep_link', 'genre',
+            'episodes_count', 'avg_rating',
+            'ranks_by_date': {'2026-07-16': 1, '2026-07-22': 3},
+            'current_rank', 'previous_rank', 'best_rank', 'worst_rank',
+            'rank_delta', 'status': 'stable|up|down|new|dropped',
+            'days_in_window' }
+        ]
+      }
+    """
+    history = _read_history_days(source, days)
+    observed_dates = [h['observed_date'] for h in history]
+
+    # Aggregate per title
+    per_title: dict[str, dict] = {}
+    for snap in history:
+        d = snap.get('observed_date')
+        for row in snap.get('titles') or []:
+            title = (row.get('title') or '').strip()
+            if not title:
+                continue
+            k = _title_norm_key(title)
+            entry = per_title.get(k) or {
+                'key':            k,
+                'title':          title,
+                'poster_url':     row.get('poster_url') or '',
+                'deep_link':      row.get('deep_link') or '',
+                'genre':          row.get('genre') or '',
+                'episodes_count': row.get('episodes_count'),
+                'avg_rating':     row.get('avg_rating'),
+                'ranks_by_date':  {},
+            }
+            # Prefer the freshest metadata for display
+            if row.get('poster_url'):     entry['poster_url']     = row['poster_url']
+            if row.get('deep_link'):      entry['deep_link']      = row['deep_link']
+            if row.get('genre'):          entry['genre']          = row['genre']
+            if row.get('episodes_count') is not None:
+                entry['episodes_count'] = row['episodes_count']
+            if row.get('avg_rating') is not None:
+                entry['avg_rating'] = row['avg_rating']
+            entry['ranks_by_date'][d] = row.get('rank')
+            per_title[k] = entry
+
+    # Rank movement math
+    titles: list[dict] = []
+    if not observed_dates:
+        return {'observed_dates': [], 'titles': []}
+
+    latest = observed_dates[-1]
+    earliest = observed_dates[0]
+
+    for e in per_title.values():
+        ranks = [e['ranks_by_date'].get(d) for d in observed_dates]
+        non_none = [r for r in ranks if isinstance(r, int)]
+        current_rank = e['ranks_by_date'].get(latest)
+        # Previous = the most recent rank BEFORE the latest observation
+        previous_rank = None
+        for d in reversed(observed_dates[:-1]):
+            r = e['ranks_by_date'].get(d)
+            if isinstance(r, int):
+                previous_rank = r
+                break
+        rank_delta = None
+        if isinstance(current_rank, int) and isinstance(previous_rank, int):
+            # Positive delta = moved up (rank number decreased)
+            rank_delta = previous_rank - current_rank
+
+        status = 'stable'
+        if current_rank is None:
+            status = 'dropped'
+        elif previous_rank is None:
+            status = 'new'
+        elif rank_delta is not None:
+            if rank_delta >= 2:
+                status = 'up'
+            elif rank_delta <= -2:
+                status = 'down'
+            else:
+                status = 'stable'
+
+        e['current_rank']  = current_rank
+        e['previous_rank'] = previous_rank
+        e['best_rank']     = min(non_none) if non_none else None
+        e['worst_rank']    = max(non_none) if non_none else None
+        e['rank_delta']    = rank_delta
+        e['status']        = status
+        e['days_in_window'] = len(non_none)
+        titles.append(e)
+
+    # Sort:
+    #   1. Current rank (present titles first, ordered by rank)
+    #   2. Dropped titles last, ordered by best_rank
+    def _sort_key(t):
+        cr = t.get('current_rank')
+        if isinstance(cr, int):
+            return (0, cr)
+        best = t.get('best_rank') or 999
+        return (1, best)
+    titles.sort(key=_sort_key)
+
+    return {
+        'observed_dates': observed_dates,
+        'earliest_date':  earliest,
+        'latest_date':    latest,
+        'titles':         titles,
+    }
+
+
+def compute_competitors_view(filters: Optional[dict] = None) -> dict:
+    """Return per-platform top titles with rank movement over the window.
+
+    filters:
+      window_days: int  (default 7, max 30)
+      top_n:       int  (default 20, max 25)
+      genre:       str  (optional filter, matches genre substring)
+    """
+    filters = filters or {}
+    window_days = int(filters.get('window_days') or 7)
+    window_days = max(1, min(30, window_days))
+    top_n       = int(filters.get('top_n') or 20)
+    top_n       = max(1, min(25, top_n))
+    genre_filter = (filters.get('genre') or '').strip().lower()
+
+    platforms = []
+    for cfg in COMPETITOR_SOURCES:
+        source = cfg['source']
+        arc = _build_arc(source, window_days)
+        titles = arc.get('titles') or []
+
+        if genre_filter:
+            titles = [t for t in titles
+                       if genre_filter in (t.get('genre') or '').lower()]
+
+        # Cap to top_n by current rank (or best rank if dropped)
+        titles = titles[:top_n]
+
+        # Genre breakdown for the panel
+        genre_counts: dict[str, int] = {}
+        for t in arc.get('titles') or []:
+            g = (t.get('genre') or 'Uncategorized').strip() or 'Uncategorized'
+            genre_counts[g] = genre_counts.get(g, 0) + 1
+        genre_breakdown = sorted(
+            [{'genre': g, 'count': c} for g, c in genre_counts.items()],
+            key=lambda x: x['count'], reverse=True,
+        )
+
+        platforms.append({
+            'source':          source,
+            'label':           cfg['label'],
+            'mau_millions':    cfg['mau_millions'],
+            'note':            cfg['note'],
+            'observed_dates':  arc.get('observed_dates') or [],
+            'earliest_date':   arc.get('earliest_date'),
+            'latest_date':     arc.get('latest_date'),
+            'titles':          titles,
+            'total_titles':    len(arc.get('titles') or []),
+            'genre_breakdown': genre_breakdown,
+        })
+
+    # Cross-platform title overlap (titles appearing on both charts in
+    # the window). This is the answer to "what titles are hot across
+    # the whole vertical-drama ecosystem right now?"
+    overlap: dict[str, dict] = {}
+    for p in platforms:
+        for t in p.get('titles') or []:
+            k = t.get('key')
+            if not k:
+                continue
+            slot = overlap.setdefault(k, {
+                'title':         t.get('title'),
+                'genre':         t.get('genre'),
+                'poster_url':    t.get('poster_url'),
+                'per_platform':  {},
+            })
+            slot['per_platform'][p['source']] = {
+                'label':         p['label'],
+                'current_rank':  t.get('current_rank'),
+                'previous_rank': t.get('previous_rank'),
+                'rank_delta':    t.get('rank_delta'),
+                'status':        t.get('status'),
+            }
+    cross = [v for v in overlap.values() if len(v['per_platform']) >= 2]
+    cross.sort(key=lambda x: min(
+        (p.get('current_rank') or 999)
+        for p in x['per_platform'].values()
+    ))
+
+    return {
+        'success':        True,
+        'filters':        {
+            'window_days': window_days,
+            'top_n':       top_n,
+            'genre':       genre_filter or None,
+        },
+        'generated_at':   datetime.now(timezone.utc).isoformat(),
+        'window_options': _COMPETITOR_WINDOW_OPTIONS,
+        'platforms':      platforms,
+        'cross_platform_titles': cross,
+        'methodology':    [
+            'Each competitor scraper writes a dated snapshot per day. '
+            'The window looks back N days and reconstructs per-title '
+            'rank arcs across those snapshots.',
+            'Movement status: "up" = climbed 2+ positions vs. previous '
+            'observation, "down" = dropped 2+ positions, "new" = first '
+            'appearance in this window, "dropped" = present earlier '
+            'but not on the current-day chart.',
+            'ReelShort MAU 18M and DramaBox MAU 13M are the panel '
+            'anchors for cross-title reach comparisons (data.ai Q1 2026).',
+            'When a title appears on both charts within the same '
+            'window it surfaces in the Cross-platform titles rail.',
+        ],
     }
 
 

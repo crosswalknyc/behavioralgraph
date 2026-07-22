@@ -27,7 +27,9 @@ import sys
 
 SCRAPERS = [
     # (source_key, module_path, label)
-    ('peacock', 'scripts.microdramas_scrapers.peacock', 'Peacock'),
+    ('peacock',   'scripts.microdramas_scrapers.peacock',   'Peacock'),
+    ('reelshort', 'scripts.microdramas_scrapers.reelshort', 'ReelShort'),
+    ('dramabox',  'scripts.microdramas_scrapers.dramabox',  'DramaBox'),
 ]
 
 

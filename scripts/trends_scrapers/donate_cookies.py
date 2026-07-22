@@ -101,6 +101,12 @@ DEFAULT_DOMAINS = [
     # peacocktv.com hub is paid-only, so a donated logged-in session
     # is required for the microdrama hub rails to render.
     'peacocktv.com',
+    # 2026-07-22: ReelShort + DramaBox added for the Microdramas IQ
+    # Competitors tab. Both apps expose a public top-chart web page,
+    # but they anti-bot the datacenter IP heavily; donated cookies +
+    # residential proxy gets us past that.
+    'reelshort.com',
+    'dramabox.com',
 ]
 
 S3_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')

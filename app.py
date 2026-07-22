@@ -15229,6 +15229,28 @@ def api_microdramas_iq_data():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/microdramas-iq/competitors', methods=['POST'])
+@requires_auth
+def api_microdramas_iq_competitors():
+    """Return per-platform top titles + rank movement for ReelShort and
+    DramaBox over the given window (default 7 days)."""
+    ok, err = _require_microdramas_iq()
+    if not ok:
+        return err
+    try:
+        req = request.get_json(silent=True) or {}
+        filters = {
+            'window_days': req.get('window_days'),
+            'top_n':       req.get('top_n'),
+            'genre':       req.get('genre'),
+        }
+        payload = _microdramas_iq.compute_competitors_view(filters)
+        return jsonify(payload)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # ============================================================================
 # TRENDS IQ - Watchlist / Alerts / Digest
 # ============================================================================

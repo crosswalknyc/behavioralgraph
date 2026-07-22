@@ -23743,10 +23743,41 @@
             #microdramasIQView .miq-loading-overlay { display: flex; align-items: center; justify-content: center; padding: 3rem; color: var(--text-secondary); font-size: 0.88rem; gap: 0.75rem; }
             #microdramasIQView .miq-spinner { width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.15); border-top-color: #ec4899; border-radius: 50%; animation: miq-spin 0.9s linear infinite; }
             @keyframes miq-spin { to { transform: rotate(360deg); } }
+            /* Competitors tab */
+            #microdramasIQView .miq-comp-filter { display: flex; gap: 0.75rem; align-items: end; flex-wrap: wrap; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.6rem 0.85rem; margin-bottom: 1rem; }
+            #microdramasIQView .miq-comp-filter label { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem; display: block; }
+            #microdramasIQView .miq-comp-filter select { background: rgba(0,0,0,0.4); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.85rem; min-width: 150px; }
+            #microdramasIQView .miq-platform-block { margin-bottom: 1.5rem; }
+            #microdramasIQView .miq-platform-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.4rem; }
+            #microdramasIQView .miq-platform-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
+            #microdramasIQView .miq-platform-meta { font-size: 0.78rem; color: var(--text-secondary); }
+            #microdramasIQView .miq-comp-table { width: 100%; border-collapse: separate; border-spacing: 0; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; font-size: 0.85rem; }
+            #microdramasIQView .miq-comp-table th { background: rgba(255,255,255,0.04); text-align: left; padding: 0.55rem 0.75rem; font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.08); }
+            #microdramasIQView .miq-comp-table td { padding: 0.55rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+            #microdramasIQView .miq-comp-table tr:last-child td { border-bottom: none; }
+            #microdramasIQView .miq-comp-table tr:hover td { background: rgba(236, 72, 153, 0.05); }
+            #microdramasIQView .miq-rank { font-variant-numeric: tabular-nums; font-weight: 600; }
+            #microdramasIQView .miq-delta { font-size: 0.78rem; font-variant-numeric: tabular-nums; padding: 0.15rem 0.4rem; border-radius: 6px; display: inline-flex; align-items: center; gap: 0.2rem; }
+            #microdramasIQView .miq-delta.up { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+            #microdramasIQView .miq-delta.down { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+            #microdramasIQView .miq-delta.new { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+            #microdramasIQView .miq-delta.dropped { background: rgba(255, 255, 255, 0.08); color: var(--text-secondary); text-decoration: line-through; }
+            #microdramasIQView .miq-delta.stable { background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); }
+            #microdramasIQView .miq-mini-thumb { width: 28px; height: 44px; border-radius: 4px; background-size: cover; background-position: center; background-color: rgba(139, 92, 246, 0.15); display: inline-block; vertical-align: middle; margin-right: 0.5rem; }
+            #microdramasIQView .miq-genre-tag { font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 10px; background: rgba(139, 92, 246, 0.15); color: #c4b5fd; text-transform: uppercase; letter-spacing: 0.04em; }
+            #microdramasIQView .miq-cross-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.6rem; margin-top: 0.6rem; }
+            #microdramasIQView .miq-cross-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.6rem 0.75rem; }
+            #microdramasIQView .miq-cross-title { font-size: 0.88rem; font-weight: 600; margin-bottom: 0.3rem; }
+            #microdramasIQView .miq-cross-plats { display: flex; gap: 0.3rem; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-secondary); }
+            #microdramasIQView .miq-cross-chip { padding: 0.15rem 0.5rem; border-radius: 6px; background: rgba(255,255,255,0.05); }
+            #microdramasIQView .miq-empty-panel { padding: 1.5rem; text-align: center; color: var(--text-secondary); font-size: 0.85rem; background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.08); border-radius: 8px; }
             body[data-theme="light"] #microdramasIQView .miq-kpi,
             body[data-theme="light"] #microdramasIQView .miq-title-card,
-            body[data-theme="light"] #microdramasIQView .miq-audience-card { background: #fff; border-color: rgba(0,0,0,0.08); }
-            body[data-theme="light"] #microdramasIQView .miq-filter-bar { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.08); }
+            body[data-theme="light"] #microdramasIQView .miq-audience-card,
+            body[data-theme="light"] #microdramasIQView .miq-comp-table,
+            body[data-theme="light"] #microdramasIQView .miq-cross-card { background: #fff; border-color: rgba(0,0,0,0.08); }
+            body[data-theme="light"] #microdramasIQView .miq-filter-bar,
+            body[data-theme="light"] #microdramasIQView .miq-comp-filter { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.08); }
         </style>
         <div id="microdramasIQView">
             <div class="miq-header">
@@ -23776,7 +23807,8 @@
                 <span id="microdramasIQMeta">Loading catalog...</span>
             </div>
             <div class="miq-tabstrip">
-                <button type="button" class="miq-tab active" data-panel="titles" onclick="setMicrodramasIQTab('titles')">Titles</button>
+                <button type="button" class="miq-tab active" data-panel="titles" onclick="setMicrodramasIQTab('titles')">Peacock titles</button>
+                <button type="button" class="miq-tab" data-panel="competitors" onclick="setMicrodramasIQTab('competitors')">ReelShort &amp; DramaBox</button>
                 <button type="button" class="miq-tab" data-panel="audience" onclick="setMicrodramasIQTab('audience')">Overall audience</button>
                 <button type="button" class="miq-tab" data-panel="method" onclick="setMicrodramasIQTab('method')">Methodology &amp; coverage</button>
             </div>
@@ -23786,6 +23818,44 @@
             </div>
             <div class="miq-panel active" data-panel="titles">
                 <div id="microdramasIQTitleGrid" class="miq-title-grid"></div>
+            </div>
+            <div class="miq-panel" data-panel="competitors">
+                <div class="miq-comp-filter">
+                    <div>
+                        <label for="microdramasIQCompWindow">Look back</label>
+                        <select id="microdramasIQCompWindow"></select>
+                    </div>
+                    <div>
+                        <label for="microdramasIQCompTopN">Show</label>
+                        <select id="microdramasIQCompTopN">
+                            <option value="10">Top 10</option>
+                            <option value="20" selected>Top 20</option>
+                            <option value="25">Top 25</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="microdramasIQCompGenre">Genre</label>
+                        <select id="microdramasIQCompGenre">
+                            <option value="">All genres</option>
+                            <option value="Werewolf">Werewolf</option>
+                            <option value="Billionaire">Billionaire</option>
+                            <option value="CEO">CEO</option>
+                            <option value="Mafia">Mafia</option>
+                            <option value="Revenge">Revenge</option>
+                            <option value="Second Chance">Second Chance</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>&nbsp;</label>
+                        <button type="button" class="miq-apply-btn" onclick="applyMicrodramasIQCompetitors()">Apply</button>
+                    </div>
+                </div>
+                <div id="microdramasIQCompMeta" class="miq-meta"></div>
+                <div id="microdramasIQCompContainer"></div>
+                <div class="miq-audience-card" style="margin-top: 1.25rem;">
+                    <h4>Cross-platform titles (on both charts in this window)</h4>
+                    <div id="microdramasIQCrossGrid" class="miq-cross-grid"></div>
+                </div>
             </div>
             <div class="miq-panel" data-panel="audience">
                 <div id="microdramasIQAudience" class="miq-audience-grid"></div>
@@ -41333,6 +41403,160 @@
                 if (p.getAttribute('data-panel') === panel) p.classList.add('active');
                 else p.classList.remove('active');
             });
+            // Lazy-load competitors on first entry
+            if (panel === 'competitors' && !window.__microdramasIQ.compLoaded) {
+                initMicrodramasIQCompetitors();
+            }
+        }
+
+        // ===================== MICRODRAMAS COMPETITORS =====================
+        function initMicrodramasIQCompetitors() {
+            var winEl = document.getElementById('microdramasIQCompWindow');
+            if (winEl && !winEl.options.length) {
+                // Default 7 days per user spec, matching the Trends tab window UX
+                var opts = [
+                    {value: '1',  label: 'Today'},
+                    {value: '3',  label: 'Last 3 days'},
+                    {value: '7',  label: 'Last 7 days'},
+                    {value: '14', label: 'Last 14 days'},
+                    {value: '30', label: 'Last 30 days'},
+                ];
+                opts.forEach(function(o) { winEl.appendChild(new Option(o.label, o.value)); });
+                winEl.value = '7';
+            }
+            window.__microdramasIQ.compLoaded = true;
+            applyMicrodramasIQCompetitors();
+        }
+
+        async function applyMicrodramasIQCompetitors() {
+            var meta = document.getElementById('microdramasIQCompMeta');
+            var container = document.getElementById('microdramasIQCompContainer');
+            if (meta) meta.textContent = 'Loading ReelShort + DramaBox top charts...';
+            if (container) container.innerHTML = '';
+            var body = {
+                window_days: parseInt((document.getElementById('microdramasIQCompWindow') || {}).value || '7', 10),
+                top_n:       parseInt((document.getElementById('microdramasIQCompTopN') || {}).value || '20', 10),
+                genre:       (document.getElementById('microdramasIQCompGenre') || {}).value || '',
+            };
+            try {
+                var resp = await fetch('/api/microdramas-iq/competitors', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                var d = await resp.json();
+                if (!d || !d.success) throw new Error(d && d.error ? d.error : 'Failed to load competitors');
+                window.__microdramasIQ.compData = d;
+                renderMicrodramasIQCompetitors(d);
+            } catch (e) {
+                console.error('Microdramas competitors error:', e);
+                if (container) container.innerHTML = '<div class="miq-empty-panel">Could not load competitor charts: ' + (e.message || e) + '</div>';
+                if (meta) meta.textContent = '';
+            }
+        }
+
+        function _miqDeltaChip(status, delta) {
+            if (status === 'new') return '<span class="miq-delta new">NEW</span>';
+            if (status === 'dropped') return '<span class="miq-delta dropped">off chart</span>';
+            if (status === 'stable' || delta == null) return '<span class="miq-delta stable">-</span>';
+            var d = Number(delta);
+            if (d > 0) return '<span class="miq-delta up">▲ ' + d + '</span>';
+            if (d < 0) return '<span class="miq-delta down">▼ ' + Math.abs(d) + '</span>';
+            return '<span class="miq-delta stable">-</span>';
+        }
+
+        function renderMicrodramasIQCompetitors(d) {
+            var meta = document.getElementById('microdramasIQCompMeta');
+            var container = document.getElementById('microdramasIQCompContainer');
+            var cross = document.getElementById('microdramasIQCrossGrid');
+            if (!container) return;
+            var f = d.filters || {};
+            if (meta) {
+                var range = '';
+                if ((d.platforms || []).length && d.platforms[0].earliest_date && d.platforms[0].latest_date) {
+                    range = ' (' + d.platforms[0].earliest_date + ' to ' + d.platforms[0].latest_date + ')';
+                }
+                meta.textContent = 'Window: last ' + f.window_days + ' day(s)' + range + '. Top ' + f.top_n + ' per platform.';
+            }
+            container.innerHTML = '';
+            (d.platforms || []).forEach(function(p) {
+                var block = document.createElement('div');
+                block.className = 'miq-platform-block';
+                var titles = p.titles || [];
+                if (!titles.length) {
+                    block.innerHTML =
+                        '<div class="miq-platform-header">' +
+                            '<h3 class="miq-platform-title">' + p.label + '</h3>' +
+                            '<div class="miq-platform-meta">' + (p.mau_millions ? p.mau_millions + 'M MAU' : '') + '</div>' +
+                        '</div>' +
+                        '<div class="miq-empty-panel">No observations in this window yet. Run the ' + p.source + ' scraper to populate.</div>';
+                    container.appendChild(block);
+                    return;
+                }
+                var rows = titles.map(function(t) {
+                    var thumb = t.poster_url
+                        ? '<span class="miq-mini-thumb" style="background-image:url(\'' + t.poster_url.replace(/"/g,'&quot;') + '\')"></span>'
+                        : '<span class="miq-mini-thumb"></span>';
+                    var titleHtml = t.deep_link
+                        ? '<a href="' + t.deep_link + '" target="_blank" rel="noopener" style="color: inherit; text-decoration: none;">' + (t.title || '') + '</a>'
+                        : (t.title || '');
+                    var current = (t.current_rank == null) ? '-' : '#' + t.current_rank;
+                    var best    = (t.best_rank == null) ? '-' : '#' + t.best_rank;
+                    var days    = (t.days_in_window || 0) + '/' + (p.observed_dates || []).length;
+                    var rating  = (t.avg_rating == null) ? '' : Number(t.avg_rating).toFixed(1) + ' ★';
+                    var eps     = (t.episodes_count == null) ? '' : t.episodes_count + ' eps';
+                    var meta2   = [rating, eps].filter(function(x){return x;}).join(' · ');
+                    return '<tr>' +
+                        '<td class="miq-rank">' + current + '</td>' +
+                        '<td>' + _miqDeltaChip(t.status, t.rank_delta) + '</td>' +
+                        '<td>' + thumb + titleHtml +
+                            (meta2 ? '<div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">' + meta2 + '</div>' : '') +
+                        '</td>' +
+                        '<td>' + (t.genre ? '<span class="miq-genre-tag">' + t.genre + '</span>' : '') + '</td>' +
+                        '<td>' + best + '</td>' +
+                        '<td style="color: var(--text-secondary); font-size: 0.78rem;">' + days + '</td>' +
+                    '</tr>';
+                }).join('');
+                block.innerHTML =
+                    '<div class="miq-platform-header">' +
+                        '<h3 class="miq-platform-title">' + p.label + '</h3>' +
+                        '<div class="miq-platform-meta">' + (p.mau_millions ? p.mau_millions + 'M MAU · ' : '') + p.note + '</div>' +
+                    '</div>' +
+                    '<table class="miq-comp-table">' +
+                        '<thead><tr>' +
+                            '<th style="width:60px">Rank</th>' +
+                            '<th style="width:80px">Move</th>' +
+                            '<th>Title</th>' +
+                            '<th style="width:120px">Genre</th>' +
+                            '<th style="width:60px">Best</th>' +
+                            '<th style="width:60px">Days</th>' +
+                        '</tr></thead>' +
+                        '<tbody>' + rows + '</tbody>' +
+                    '</table>';
+                container.appendChild(block);
+            });
+
+            // Cross-platform titles rail
+            if (cross) {
+                var xtiles = d.cross_platform_titles || [];
+                if (!xtiles.length) {
+                    cross.innerHTML = '<div class="miq-empty-panel" style="grid-column: 1 / -1;">No titles appear on both charts in this window yet.</div>';
+                } else {
+                    cross.innerHTML = xtiles.slice(0, 12).map(function(x) {
+                        var chips = Object.keys(x.per_platform || {}).map(function(src) {
+                            var pp = x.per_platform[src];
+                            var r = pp.current_rank ? '#' + pp.current_rank : '-';
+                            return '<span class="miq-cross-chip">' + pp.label + ' ' + r + '</span>';
+                        }).join('');
+                        return '<div class="miq-cross-card">' +
+                            '<div class="miq-cross-title">' + x.title + '</div>' +
+                            (x.genre ? '<div style="margin-bottom: 0.35rem;"><span class="miq-genre-tag">' + x.genre + '</span></div>' : '') +
+                            '<div class="miq-cross-plats">' + chips + '</div>' +
+                        '</div>';
+                    }).join('');
+                }
+            }
         }
 
         async function loadTrendsIQFilterOptions() {
