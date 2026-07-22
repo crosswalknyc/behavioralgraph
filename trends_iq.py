@@ -3572,6 +3572,292 @@ def _annotate_streaming_weeks(slug: str, items: list[dict]) -> None:
         it['weeks_in_top10'] = min(len(combined), _STREAMING_HISTORY_WEEKS + 1)
 
 
+# ---------------------------------------------------------------------------
+# Poster / thumbnail enrichment for streaming Top-10 rows.
+#
+# None of the six streaming scrapers capture thumbnails (Netflix's HTML
+# has box art but it's user-personalized; the others' Playwright DOM
+# extractors focus on titles). Rather than teach each scraper to grab a
+# poster, we look them up centrally via Wikipedia:
+#
+#   1. OpenSearch to resolve fuzzy title -> exact page slug
+#      (adds " TV series" / " film" as a suffix hint for disambiguation)
+#   2. REST summary API to grab the infobox thumbnail
+#   3. MediaWiki pageimages action as a fallback (finds title-card art
+#      on pages where the summary API's thumbnail was stripped)
+#
+# iTunes Search was tried first and hit ~0% for streaming exclusives
+# (Netflix/Disney+/Prime originals aren't sold on iTunes), so this
+# ended up being the right lookup path. Wikipedia hits ~80% on the
+# common Top-10 titles; the ~20% that miss (mostly ESPN+ studio shows,
+# brand-new series without a settled Wikipedia article) fall back to
+# the film-strip SVG placeholder in the frontend.
+#
+# Substring guard on match: we normalize both the queried title and
+# the candidate page title (strip punctuation + lowercase) and require
+# the query to be a substring of the candidate. This prevents wrong
+# matches like Landman -> "Lawman (TV series)" that fuzzy OpenSearch
+# hits would otherwise return.
+#
+# Cached at module scope so lookups are ~one-time per unique title
+# across the life of the Flask worker.
+# ---------------------------------------------------------------------------
+
+_WIKI_POSTER_CACHE: dict[tuple[str, str], str] = {}
+_WIKI_POSTER_UA = 'BehavioralGraphTrendsBot/1.0 (jenna@crosswalknyc.com)'
+_WIKI_OPENSEARCH_URL = 'https://en.wikipedia.org/w/api.php'
+_WIKI_SUMMARY_URL    = 'https://en.wikipedia.org/api/rest_v1/page/summary/'
+_WIKI_PAGEIMAGES_URL = 'https://en.wikipedia.org/w/api.php'
+
+
+def _norm_title_for_poster(title: str) -> str:
+    """Strip trailing "(S1)" / "Season 1" / ": Season 2" style suffixes
+    and year tags so the Wikipedia match rate is higher."""
+    t = str(title or '').strip()
+    if not t:
+        return ''
+    # ": Season 3" or " Season 3"
+    t = re.sub(r'[:\s]+season\s+\d+.*$', '', t, flags=re.IGNORECASE)
+    # " (S3)" / ": S3"
+    t = re.sub(r'[:\s]*\(?s\d+\)?$', '', t, flags=re.IGNORECASE)
+    # "(2026)" year tag
+    t = re.sub(r'\s*\(\d{4}\)\s*$', '', t)
+    return t.strip(' :-')
+
+
+def _norm_for_match(s: str) -> str:
+    """Lowercase + strip non-alphanumeric for substring matching between
+    a query title and a candidate Wikipedia page title. This lets
+    "Deadpool & Wolverine" match "Deadpool & Wolverine" via alpha-only
+    comparison while rejecting "Landman" -> "Lawman (TV series)".
+    """
+    return re.sub(r'[^a-z0-9]+', '', str(s).lower())
+
+
+def _wiki_opensearch_titles(query: str, limit: int = 5) -> list[str]:
+    try:
+        r = requests.get(
+            _WIKI_OPENSEARCH_URL,
+            params={'action': 'opensearch', 'search': query, 'limit': limit,
+                    'format': 'json', 'namespace': 0},
+            headers={'User-Agent': _WIKI_POSTER_UA},
+            timeout=6,
+        )
+        if not r.ok:
+            return []
+        j = r.json()
+        # Response shape: [query, [titles], [descriptions], [urls]]
+        if isinstance(j, list) and len(j) >= 2 and isinstance(j[1], list):
+            return [str(t) for t in j[1]]
+    except Exception as e:
+        logger.debug("wiki opensearch failed for %r: %s", query, e)
+    return []
+
+
+def _wiki_summary_thumb(title: str) -> str:
+    """REST page-summary lookup. Returns originalimage preferred,
+    thumbnail fallback. Skips disambiguation pages."""
+    try:
+        slug = urllib.parse.quote(title.replace(' ', '_'), safe='()&')
+        r = requests.get(
+            _WIKI_SUMMARY_URL + slug,
+            headers={'User-Agent': _WIKI_POSTER_UA},
+            timeout=6,
+        )
+        if not r.ok:
+            return ''
+        d = r.json() or {}
+        if d.get('type') == 'disambiguation':
+            return ''
+        img = d.get('originalimage') or d.get('thumbnail') or {}
+        return img.get('source') or ''
+    except Exception as e:
+        logger.debug("wiki summary failed for %r: %s", title, e)
+        return ''
+
+
+def _wiki_pageimages_thumb(title: str) -> str:
+    """MediaWiki pageimages fallback - picks up lead images the REST
+    summary endpoint sometimes strips (title cards, free-license
+    infobox art)."""
+    try:
+        r = requests.get(
+            _WIKI_PAGEIMAGES_URL,
+            params={'action': 'query', 'titles': title, 'prop': 'pageimages',
+                    'format': 'json', 'pithumbsize': 500, 'redirects': 1},
+            headers={'User-Agent': _WIKI_POSTER_UA},
+            timeout=6,
+        )
+        if not r.ok:
+            return ''
+        pages = ((r.json() or {}).get('query') or {}).get('pages') or {}
+        for _, p in pages.items():
+            thumb = (p.get('thumbnail') or {}).get('source') or ''
+            if thumb:
+                return thumb
+    except Exception as e:
+        logger.debug("wiki pageimages failed for %r: %s", title, e)
+    return ''
+
+
+# Disambiguation-tag whitelists on Wikipedia page titles. When a user is
+# looking at the streaming Top-10 they expect a movie/TV poster, not a
+# novel cover or a hip-hop song. These tags in a page's disambiguation
+# suffix cause the candidate to be rejected outright.
+_WIKI_KIND_REJECT_TAGS = (
+    'novel', 'book', 'song', 'album', 'video game', 'game', 'poem',
+    'play', 'musical', 'opera', 'comic', 'manga', 'painting',
+    'ballet', 'short story', 'anthology', 'franchise', 'disambiguation',
+)
+
+
+def _candidate_kind_hint(candidate: str) -> str:
+    """Extract the disambiguation kind from a Wikipedia page title.
+
+    "It Ends with Us (film)"  -> 'film'
+    "The Bear (TV series)"    -> 'tv'
+    "Fallout series"          -> 'tv'   (bare " series" suffix)
+    "Squid Game"              -> ''      (no disambiguator)
+    "It Ends with Us (Colleen Hoover novel)" -> 'novel'
+    """
+    s = str(candidate or '').lower()
+    m = re.search(r'\(([^)]+)\)\s*$', s)
+    tag = (m.group(1) if m else '').strip()
+    # Bare " series" or " film" with no parens (rare but happens)
+    if not tag:
+        for suffix in (' tv series', ' tv show', ' film', ' movie', ' series'):
+            if s.endswith(suffix):
+                tag = suffix.strip()
+                break
+    if not tag:
+        return ''
+    if 'tv' in tag or 'television' in tag or tag.endswith('series') or 'show' in tag:
+        return 'tv'
+    if 'film' in tag or 'movie' in tag or re.match(r'\d{4}\s*film', tag):
+        return 'film'
+    if any(reject in tag for reject in _WIKI_KIND_REJECT_TAGS):
+        return 'reject'
+    return 'other'
+
+
+def _wiki_poster_lookup(title: str, kind: str) -> str:
+    """Wikipedia-driven poster lookup for a streaming title.
+
+    kind: 'Film' or 'TV' - biases the OpenSearch disambiguation.
+    Returns '' on miss. Cached in module scope.
+
+    Filter policy per candidate:
+      - Substring guard: normalized query must be a substring of
+        normalized candidate (rejects "Landman" -> "Lawman").
+      - Kind guard: rejects novel/song/album/game/etc disambiguations
+        outright. Allows the exact-kind disambiguation (film for films,
+        tv for TV) and bare candidates (no disambiguator).
+    """
+    q = _norm_title_for_poster(title)
+    if not q:
+        return ''
+    is_film = str(kind or '').strip().lower() in ('film', 'films', 'movie', 'movies')
+    want_kind = 'film' if is_film else 'tv'
+    cache_key = (q.lower(), want_kind)
+    if cache_key in _WIKI_POSTER_CACHE:
+        return _WIKI_POSTER_CACHE[cache_key]
+    suffix = ' film' if is_film else ' TV series'
+    # Try suffixed query first (disambiguates "Fallout" -> TV vs game),
+    # then raw as fallback, then union the two so we score across a
+    # wider pool.
+    suffixed = _wiki_opensearch_titles(q + suffix, limit=5)
+    bare     = _wiki_opensearch_titles(q,          limit=5)
+    seen: set[str] = set()
+    candidates: list[str] = []
+    for c in suffixed + bare:
+        if c not in seen:
+            candidates.append(c)
+            seen.add(c)
+    tn = _norm_for_match(q)
+
+    # Bucket candidates by kind so we can enforce strict fallback rules
+    # instead of just ranking. Order of preference:
+    #   1. want-kind (film for films, tv for TV) - safest match
+    #   2. bare (no disambiguator) - only if NO want-kind candidate
+    #      showed up in OpenSearch at all; guards against Wednesday
+    #      resolving to the day of the week / Odin painting.
+    # Reject-kinds (novel, song, album, video game, etc.) are dropped
+    # unconditionally.
+    want_bucket: list[str] = []
+    bare_bucket: list[str] = []
+    for c in candidates:
+        k = _candidate_kind_hint(c)
+        if k == 'reject':
+            continue
+        if k == want_kind:
+            want_bucket.append(c)
+        elif k == '':
+            bare_bucket.append(c)
+        # 'other' and wrong-kind are ignored - too risky to lift a
+        # poster from "The Diplomat" -> "Dipset (hip hop group)" or
+        # "Reacher" -> some obscure town.
+
+    # If any want-kind candidate exists, we ONLY try those. This makes
+    # Wednesday MISS (better than showing an Odin painting) rather than
+    # fall through to the bare "Wednesday" article.
+    try_order = want_bucket if want_bucket else bare_bucket
+
+    art = ''
+    for cand in try_order[:5]:
+        # Substring guard against fuzzy mismatches.
+        if tn not in _norm_for_match(cand):
+            continue
+        art = _wiki_summary_thumb(cand) or _wiki_pageimages_thumb(cand)
+        if art:
+            break
+    _WIKI_POSTER_CACHE[cache_key] = art
+    return art
+
+
+def _enrich_streaming_with_posters(items: list[dict], default_kind: str,
+                                    max_workers: int = 8) -> None:
+    """Mutate items in place, adding an `image` field via Wikipedia.
+
+    default_kind: 'Film' or 'TV', used when the item doesn't carry a
+    category_display.
+
+    Skips items that already have an image. Thread-pools lookups so a
+    full six-platform payload (~120 unique titles across films + tv)
+    doesn't add 30+ seconds of latency on a cold cache; each lookup is
+    ~250-500ms serial. On a warm cache (repeat renders) this is
+    effectively free.
+    """
+    if not items:
+        return
+    needs: list[tuple[dict, str, str]] = []
+    for it in items:
+        if it.get('image'):
+            continue
+        title = it.get('title') or ''
+        if not title:
+            continue
+        kind = it.get('category_display') or default_kind or 'TV'
+        needs.append((it, title, kind))
+    if not needs:
+        return
+    try:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(_wiki_poster_lookup, title, kind): it
+                for (it, title, kind) in needs
+            }
+            for fut in as_completed(futures):
+                it = futures[fut]
+                try:
+                    art = fut.result() or ''
+                except Exception:
+                    art = ''
+                if art:
+                    it['image'] = art
+    except Exception as e:
+        logger.info("streaming poster batch failed: %s", e)
+
+
 def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
                                 keywords: Optional[list[str]] = None) -> dict:
     """Fan out to every streaming platform's daily snapshot.
@@ -3618,6 +3904,16 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
             if netflix_films or netflix_tv:
                 films = netflix_films[:20]
                 tv    = netflix_tv[:20]
+
+        # Enrich Film + TV rows with an `image` field via iTunes Search.
+        # Cached at module scope so subsequent renders (same title, same
+        # kind) return instantly. First cold render of a new title
+        # costs ~150ms; batched across a full payload it's ~500ms total.
+        _enrich_streaming_with_posters(films, 'Film')
+        _enrich_streaming_with_posters(tv,    'TV')
+        # Also enrich the flat `items` list so any consumer that reads
+        # it (drilldown, legacy renderer) gets thumbnails too.
+        _enrich_streaming_with_posters(items, 'TV')
 
         payload = {
             'label':      label,
