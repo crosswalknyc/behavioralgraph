@@ -41697,6 +41697,154 @@
             }
         }
 
+        // ==============================================================
+        // Microdramas IQ - Title audience modal (click-through drill-down)
+        // ==============================================================
+        window.__microdramasIQ = window.__microdramasIQ || {};
+        window.__microdramasIQ.audienceCache = window.__microdramasIQ.audienceCache || {};
+
+        function openMicrodramasIQTitleModal(t) {
+            if (!t || !t.title) return;
+            var modal  = document.getElementById('microdramasIQModal');
+            var title  = document.getElementById('microdramasIQModalTitle');
+            var sub    = document.getElementById('microdramasIQModalSub');
+            var poster = document.getElementById('microdramasIQModalPoster');
+            var body   = document.getElementById('microdramasIQModalContent');
+            if (!modal || !title || !body) return;
+
+            title.textContent = t.title;
+            var subLine = [t.series && t.series !== t.title ? t.series : null,
+                            t.genre, t.platform].filter(function(x){return x;}).join(' · ');
+            if (sub) sub.textContent = subLine;
+
+            // Modal poster: same gradient rule as the card thumbs
+            if (t.poster_url) {
+                poster.style.backgroundImage = 'url("' + String(t.poster_url).replace(/"/g,'&quot;') + '")';
+                poster.style.backgroundSize = 'cover';
+                poster.style.backgroundPosition = 'center';
+                poster.removeAttribute('data-genre');
+                poster.innerHTML = '';
+            } else {
+                var g = t.genre || 'Werewolf';
+                var initial = ((t.title || '?').trim().charAt(0) || '?').toUpperCase();
+                var glyph = _MIQ_GENRE_GLYPH[g] || '📱';
+                poster.setAttribute('data-genre', g);
+                poster.style.backgroundImage = '';
+                poster.classList.add('miq-poster');
+                poster.innerHTML =
+                    '<div style="display:flex; flex-direction:column; align-items:center; gap:0.15rem;">' +
+                        '<div style="font-size:1.4rem; opacity:0.85;">' + glyph + '</div>' +
+                        '<div style="font-size:1.35rem; font-weight:700;">' + _miqEscape(initial) + '</div>' +
+                    '</div>';
+            }
+
+            body.innerHTML =
+                '<div class="miq-modal-loading">' +
+                    '<div style="width:14px; height:14px; border:2px solid rgba(255,255,255,0.2); border-top-color: rgba(255,255,255,0.85); border-radius:50%; animation: spin 0.9s linear infinite;"></div>' +
+                    'Researching audience for &ldquo;' + _miqEscape(t.title) + '&rdquo;...' +
+                '</div>';
+
+            modal.classList.add('active');
+
+            var cacheKey = t.title + '|' + (t.series || '') + '|' + (t.platform || '');
+            var cached = window.__microdramasIQ.audienceCache[cacheKey];
+            if (cached) {
+                _renderMicrodramasIQAudienceModal(cached);
+                return;
+            }
+
+            fetch('/api/microdramas-iq/title-audience', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    title:    t.title,
+                    series:   t.series || '',
+                    genre:    t.genre || '',
+                    platform: t.platform || '',
+                }),
+            })
+            .then(function(r){ return r.json(); })
+            .then(function(d) {
+                if (!d || !d.success) {
+                    body.innerHTML = '<div class="miq-modal-loading" style="color:#f87171;">Could not research audience: ' + _miqEscape((d && d.error) || 'unknown') + '</div>';
+                    return;
+                }
+                window.__microdramasIQ.audienceCache[cacheKey] = d;
+                _renderMicrodramasIQAudienceModal(d);
+            })
+            .catch(function(err) {
+                body.innerHTML = '<div class="miq-modal-loading" style="color:#f87171;">Network error: ' + _miqEscape(err && err.message || err) + '</div>';
+            });
+        }
+
+        function closeMicrodramasIQModal() {
+            var modal = document.getElementById('microdramasIQModal');
+            if (modal) modal.classList.remove('active');
+        }
+
+        // Close on ESC
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                var modal = document.getElementById('microdramasIQModal');
+                if (modal && modal.classList.contains('active')) {
+                    closeMicrodramasIQModal();
+                }
+            }
+        });
+
+        function _renderMicrodramasIQAudienceModal(d) {
+            var body = document.getElementById('microdramasIQModalContent');
+            if (!body) return;
+
+            var demoOrder  = d.demo_order  || ['gender','age','ethnicity','income','education','relationship','parental_status','occupation','sexual_orientation'];
+            var demoLabels = d.demo_labels || {};
+            var demographics = d.demographics || {};
+
+            var demoCards = demoOrder.map(function(cat) {
+                var rows = demographics[cat] || [];
+                if (!rows.length) return '';
+                var displayLabel = demoLabels[cat] || cat.replace(/_/g,' ').replace(/\b\w/g, function(c){return c.toUpperCase();});
+                var rowHtml = rows.map(function(r) {
+                    var pct = Number(r.pct || 0);
+                    return '<div class="miq-demo-row">' +
+                        '<div style="color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + _miqEscape(r.label) + '</div>' +
+                        '<div class="miq-demo-bar-track"><div class="miq-demo-bar-fill" style="width:' + Math.min(100, Math.max(0, pct)).toFixed(1) + '%;"></div></div>' +
+                        '<div class="miq-demo-pct">' + pct.toFixed(1) + '%</div>' +
+                    '</div>';
+                }).join('');
+                return '<div class="miq-demo-card">' +
+                    '<h4>' + _miqEscape(displayLabel) + '</h4>' + rowHtml +
+                '</div>';
+            }).join('');
+
+            var interests = (d.interests || []).map(function(r) {
+                var idx = Number(r.index || 100);
+                var pct = Math.min(100, Math.max(0, idx / 2.6)); // scale 0-260 -> 0-100%
+                var chipColor = idx >= 130 ? '#a3e635' : (idx >= 90 ? '#fbbf24' : '#94a3b8');
+                return '<div class="miq-demo-row">' +
+                    '<div style="color:var(--text-secondary);">' + _miqEscape(r.label) + '</div>' +
+                    '<div class="miq-demo-bar-track"><div class="miq-demo-bar-fill" style="width:' + pct.toFixed(1) + '%; background:' + chipColor + ';"></div></div>' +
+                    '<div class="miq-demo-pct" style="color:' + chipColor + ';">' + idx + '</div>' +
+                '</div>';
+            }).join('');
+
+            var platforms = (d.platform_affinities || []).map(function(r) {
+                var reach = Number(r.reach_pct || 0);
+                return '<div class="miq-demo-row">' +
+                    '<div style="color:var(--text-secondary);">' + _miqEscape(r.label) + '</div>' +
+                    '<div class="miq-demo-bar-track"><div class="miq-demo-bar-fill" style="width:' + Math.min(100, Math.max(0, reach)).toFixed(1) + '%; background:linear-gradient(90deg,#3b82f6,#8b5cf6);"></div></div>' +
+                    '<div class="miq-demo-pct">' + reach.toFixed(1) + '%</div>' +
+                '</div>';
+            }).join('');
+
+            body.innerHTML =
+                (d.audience_summary ? '<div class="miq-modal-summary">' + _miqEscape(d.audience_summary) + '</div>' : '') +
+                '<div class="miq-modal-demos">' + demoCards + '</div>' +
+                (interests ? '<div class="miq-demo-card" style="margin-top:0.85rem;"><h4>Interests (index vs Gen Pop)</h4>' + interests + '</div>' : '') +
+                (platforms ? '<div class="miq-demo-card" style="margin-top:0.85rem;"><h4>Platform affinities (% reach)</h4>' + platforms + '</div>' : '');
+        }
+
         async function loadTrendsIQFilterOptions() {
             try {
                 var resp = await fetch('/api/trends-iq/filter-options', { credentials: 'same-origin' });
@@ -43087,12 +43235,10 @@
             if (!present.length) {
                 return '<div class="tiq-empty">Music charts are warming up. Snapshot lands after the daily scraper run.</div>';
             }
-            var header = '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
-                         'Three views of what people are listening to right now: ' +
-                         '<span style="color:#22c55e;">Spotify</span> is the mass-streaming chart, ' +
-                         '<span style="color:#fcd34d;">Apple Music</span> is the Apple-subscriber cut, ' +
-                         '<span style="color:#93c5fd;">Shazam</span> is what people are IDing (discovery).' +
-                         '</div>';
+            // 2026-07-22: intro banner removed per Jenna. The card-level
+            // sub-labels + the HOVER tooltip on each source pill already
+            // explain what Spotify / Apple Music / Shazam represent.
+            var header = '';
             var cards = present.map(function(k) {
                 var s = sources[k] || {};
                 var items = s.items || [];
