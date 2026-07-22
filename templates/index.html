@@ -42470,8 +42470,30 @@
                                // Content row: prefer title (post/tweet text),
                                // fall through legacy topic/hashtag fields
                                // for any snapshot older than 2026-07 that's
-                               // still in cache.
-                               var rowLabel = it.title || it.topic || it.hashtag || '(no text)';
+                               // still in cache. Instagram explore posts
+                               // often have no extractable caption (IG's
+                               // /explore DOM strips them), so fall back
+                               // to a type label + creator handle rather
+                               // than the ugly "(no text)" placeholder.
+                               var rowLabel = it.title || it.topic || it.hashtag || '';
+                               if (!rowLabel) {
+                                   if (k === 'instagram') {
+                                       var kindLabel = (it.kind === 'reel') ? 'Reel' : 'Post';
+                                       rowLabel = it.creator
+                                           ? (it.creator + ' - ' + kindLabel)
+                                           : ('Instagram ' + kindLabel);
+                                   } else if (k === 'tiktok') {
+                                       rowLabel = it.creator
+                                           ? (it.creator + ' - TikTok video')
+                                           : 'TikTok video';
+                                   } else if (k === 'x') {
+                                       rowLabel = it.creator
+                                           ? (it.creator + ' - Tweet')
+                                           : 'Tweet';
+                                   } else {
+                                       rowLabel = 'View post';
+                                   }
+                               }
                                var socialKey = rowLabel;
                                var img = it.image
                                    ? '<div class="tiq-headline-image" style="' + _tiqImgStyle(it.image) + '"></div>'
