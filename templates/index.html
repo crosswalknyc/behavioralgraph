@@ -90833,22 +90833,31 @@
         }
         
         // Rebuild demographicsGenPop using the profile's own keys but values from the Gen Pop baseline.
-        // This avoids key-casing mismatches (e.g. 'FEMALE' in profile vs 'Female' in Gen Pop file).
+        // This avoids key-casing mismatches (e.g. 'FEMALE' in profile vs 'Female' in Gen Pop file)
+        // AND punctuation drift (e.g. "Bachelor's Degree" in profile vs "BACHELORS DEGREE" in
+        // Gen Pop -- 2026-07-22 fix: strip both straight (U+0027) and curly (U+2019) apostrophes
+        // + collapse whitespace so those variants unify).
         function _rebuildDemoGenPop(profileDemo, gpDemo) {
+            const _demoKeyLoose = (s) => String(s == null ? '' : s)
+                .trim().toLowerCase()
+                .replace(/[\u2019\u2018']/g, '')      // strip apostrophes (curly + straight)
+                .replace(/\s+/g, ' ');                 // collapse whitespace
             const out = {};
             for (const cat of Object.keys(profileDemo || {})) {
                 const bucket = profileDemo[cat];
                 const gpBucket = gpDemo[cat] || {};
                 if (!bucket || typeof bucket !== 'object') continue;
                 out[cat] = {};
+                // Build a loose-keyed index of the Gen Pop bucket so every
+                // profile key gets one O(k) scan instead of an inner loop
+                // per row (also lets punctuation variants match cleanly).
+                const gpLoose = {};
+                for (const [gk, gv] of Object.entries(gpBucket)) {
+                    gpLoose[_demoKeyLoose(gk)] = gv;
+                }
                 for (const key of Object.keys(bucket)) {
-                    const keyLower = (key || '').toLowerCase();
-                    let val = gpBucket[key];
-                    if (val == null) {
-                        for (const [gk, gv] of Object.entries(gpBucket)) {
-                            if ((gk || '').toLowerCase() === keyLower) { val = gv; break; }
-                        }
-                    }
+                    let val = gpBucket[key];                 // exact match
+                    if (val == null) val = gpLoose[_demoKeyLoose(key)]; // punctuation/case fallback
                     out[cat][key] = val != null ? val : 0;
                 }
             }
@@ -93765,7 +93774,15 @@
                 parentalStatus: 'parental_status',
                 occupation: 'occupation'
             };
-            const _cmpNormKey = (s) => String(s == null ? '' : s).trim().toLowerCase().replace(/\s+/g, ' ');
+            // 2026-07-22 fix: strip apostrophes (both straight U+0027 and
+            // curly U+2019) so bucket labels like "Bachelor's Degree"
+            // unify with Gen Pop's "BACHELORS DEGREE" during the demo
+            // table render. Without this, the row rendered with N/A in
+            // the Gen Pop column and no Index.
+            const _cmpNormKey = (s) => String(s == null ? '' : s)
+                .trim().toLowerCase()
+                .replace(/[\u2019\u2018']/g, '')
+                .replace(/\s+/g, ' ');
 
             const _fmtPct = (v) => {
                 const n = Number(v);
