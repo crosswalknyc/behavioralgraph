@@ -41513,7 +41513,10 @@
         function _renderMoverRow(row) {
             var rankNow  = row.rank_today ? ('#' + row.rank_today) : '';
             var rankPrev = row.rank_prev  ? ('was #' + row.rank_prev) : '';
-            var ratio    = row.score_ratio ? (row.score_ratio + 'x score') : '';
+            // The 'Nx score' badge was removed 2026-07-22 (Jenna: too
+            // internal / confusing next to the rank pills). The score
+            // ratio still drives which bucket a term lands in (breakout /
+            // climbing / cooling / dropped), it just doesn't render.
             var relatedHtml = (row.related || []).slice(0, 1).map(function(x){ return _tiqEsc(x); }).join('');
             var mixHtml = _tiqRenderPlatformMix(row.platform_mix);
             return '<div class="tiq-row">' +
@@ -41524,7 +41527,6 @@
                      '<div class="tiq-row-meta">' +
                        _tiqMoverBadge(row) +
                        (rankPrev ? '<span class="tiq-badge">' + rankPrev + '</span>' : '') +
-                       (ratio    ? '<span class="tiq-badge">' + ratio    + '</span>' : '') +
                        (relatedHtml ? '<span style="opacity:0.75;">' + relatedHtml + '</span>' : '') +
                      '</div>' +
                      mixHtml +
