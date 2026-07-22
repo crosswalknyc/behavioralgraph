@@ -41210,6 +41210,226 @@
             return '<div class="tiq-panel" data-tiq-panel="' + key + '">' + inner + '</div>';
         }
 
+        // ============================================================
+        // Post-render tooltip sweep.
+        // Rather than sprinkle has-tooltip + data-tooltip on every card
+        // header across ~10 renderTIQ* functions, we keep a single map
+        // of {card_title -> tooltip copy} + {sub_tab_label -> tooltip
+        // copy} and walk the panels after each render / repaint,
+        // matching by exact text.
+        //
+        // The upstream .has-tooltip / #globalTooltip infrastructure
+        // (Profile IQ) does the actual show/hide on hover and is gated
+        // globally by the top-nav "HOVER ON / OFF" toggle. All we do
+        // here is stamp the classes + attributes on freshly rendered
+        // Trends IQ elements.
+        // ============================================================
+        var TIQ_CARD_TOOLTIPS = {
+            // ---------- Movers ----------
+            'Breakout':          'Breakout: Brand new in the current window - wasn\u0027t trending last week. Something just hit the culture.',
+            'Climbing':          'Climbing: In the top-N both then and now, with rank up 3+ or score up 2x+. Sustained upward momentum.',
+            'Rising':            'Climbing: In the top-N both then and now, with rank up 3+ or score up 2x+. Sustained upward momentum.',
+            'Cooling':           'Cooling: Slipped in the rankings, or fell off the top list entirely.',
+            'Falling':           'Cooling: Slipped in the rankings, or fell off the top list entirely.',
+            'Sustained':         'Sustained heat: Ranking similar in both windows. Durable interest, not a one-day spike.',
+            'Sustained heat':    'Sustained heat: Ranking similar in both windows. Durable interest, not a one-day spike.',
+            // ---------- Headlines ----------
+            'Top headlines':                     'Top headlines: The most-picked-up stories across the outlets we monitor, ranked by cross-source coverage in the window.',
+            'By news source':                    'By news source: Same stories, grouped by outlet. See what CNN vs. MS NOW vs. WSJ vs. Fox is leading with today.',
+            'Philanthropy news':                 'Philanthropy news: Cause-driven headlines - campaigns, gifts, disasters, foundations, non-profits. Same window as Top headlines.',
+            'Conservative news':                 'Conservative news: Right-leaning outlet cut (Fox, NY Post, Daily Wire, National Review, Washington Times). Same window as Top headlines.',
+            'Progressive news':                  'Progressive news: Left-leaning outlet cut (MSNBC/MS NOW, HuffPost, Mother Jones, The Nation, The Guardian US). Same window as Top headlines.',
+            // ---------- Trending people ----------
+            // Two distinct cards live on this tab. Distinguish them:
+            //   * 🌐 Trending People (title case) = Wikipedia pageview
+            //     spikes - the most-looked-up people this window.
+            //   * 👤 Trending people (lowercase p) = fusion index across
+            //     news + wiki + social + search.
+            'Trending People':  'Wikipedia trending people: Individuals with the biggest page-view spike on Wikipedia in the window. Leading indicator of who people are trying to understand right now.',
+            'Trending people':  'Trending people (fusion): Individuals gaining attention across news + Wikipedia + social + search. Each row includes a one-line "why they are trending" caption and a direction indicator (up / down / stable).',
+            // ---------- Music ----------
+            // Music cards render one card per service. The h4 comes
+            // straight from the backend `label` field.
+            'Music':                             'Music trending: Spotify (mass-streaming chart), Apple Music (Apple-subscriber cut), Shazam (discovery / ID signal).',
+            'Spotify':                           'Spotify: US mass-streaming Top 50. Where mainstream listening is right now.',
+            'Apple Music':                       'Apple Music: US Top chart. The Apple-subscriber cut, tends to skew slightly older / more premium than Spotify.',
+            'Shazam':                            'Shazam: US Top 200 song IDs. Discovery signal - what people heard somewhere and looked up. Leading indicator for breakout tracks.',
+            // ---------- Social ----------
+            'Reddit - trending in the USA':      'Reddit: Top posts today from US-heavy subreddits (r/news, r/politics, r/movies, r/television, r/sports, r/gaming, r/AskReddit, r/popculturechat, etc.).',
+            'YouTube - trending in the USA':    'YouTube: Videos on YouTube US Trending. Ranked by YouTube\u0027s own regional trending algorithm.',
+            'TikTok - trending in the USA':      'TikTok: Videos on TikTok\u0027s Discover feed. Requires donated tiktok.com cookies.',
+            'Instagram - trending in the USA':   'Instagram: Posts + reels from IG\u0027s Explore recommendation engine. Requires donated instagram.com cookies.',
+            'X - trending in the USA':           'X: Trending tweets from x.com/explore. Requires donated x.com cookies with a valid auth_token.',
+            // ---------- Streaming (Film / TV split inside each platform sub-tab) ----------
+            'Film':      'Film: Top movies on this streamer right now, from the platform\u0027s own Top-10 / trending rail.',
+            'TV':        'TV: Top series on this streamer right now, from the platform\u0027s own Top-10 / trending rail.',
+            // ---------- Products / Retailers ----------
+            // Individual retailer panels render one card per category
+            // ("Best Sellers - top 10", "Movers & Shakers - top 10",
+            // etc.). Match on the pre-" - top 10" prefix.
+            'Best Sellers':      'Best Sellers: Ranked product list from the retailer\u0027s best-sellers page. Refreshed daily.',
+            'Movers & Shakers':  'Movers & Shakers: Products with the biggest 24-hour sales rank jump. Leading indicator of momentum.',
+            'Trending':          'Trending: Products currently rising on this retailer, per their own trending feed.',
+            'New Arrivals':      'New Arrivals: Newly launched SKUs from this retailer, ordered by launch date.',
+            'Top 10':            'Top 10: Ranked product list from the retailer\u0027s own top-10 feed. Refreshed daily.',
+            // ---------- Trending searches sub-cards ----------
+            // Keys match the actual _tiqRenderSearchCard title AFTER
+            // _tiqNormalizeHeader strips the leading emoji.
+            'Overall':               'Overall trending: The top ~300 Google search queries + hashtags in the window, no category filter. The catch-all view.',
+            'Entertainment':         'Entertainment: Movies, TV, celebrities, music, awards shows, tour announcements, red carpet, casting news.',
+            'Retail':                'Retail: Product launches, sales, best-seller queries, brand mentions, coupon codes, restocks.',
+            'Politics':              'Politics: Candidates, policy debates, election news, government actions, Congress, courts.',
+            'Conservative':          'Conservative politics: Queries + hashtags trending on the right - candidates, causes, outlets (Fox, Daily Wire, NR), movements.',
+            'Progressive':           'Progressive politics: Queries + hashtags trending on the left - candidates, causes, outlets (MS NOW, HuffPost, Mother Jones), movements.',
+            'Finance / Wall St':     'Finance / Wall Street: Tickers, market events, IPOs, earnings, crypto, macro news, Fed decisions.',
+            'Sports':                'Sports: Athletes, teams, leagues, games, results, injuries, trade rumors, playoff pushes.',
+            'Tech':                  'Tech: Product launches, AI news, gadgets, apps, security incidents, industry moves.',
+            'Health & Wellness':     'Health & Wellness: Wellness trends, diagnoses, treatments, drug news, fitness, mental health.',
+            'Gaming':                'Gaming: Game launches, patches, in-game events, esports, streamer news, console cycles.',
+            'Food & Recipes':        'Food & Recipes: Restaurants, recipes, food-in-the-news, dietary trends, viral dishes.',
+            'Travel':                'Travel: Destinations, flight / hotel deals, travel-in-the-news, cruise news, visa changes.',
+            'Auto & EVs':            'Auto & EVs: Car launches, recalls, EV news, industry moves, gas prices, autonomous driving.',
+            'Fashion & Beauty':      'Fashion & Beauty: Trends, launches, celebrity styling, brand news, runway, viral products.',
+            'Weather':               'Weather: Storms, heat waves, cold snaps, natural disasters, wildfire smoke, air quality.',
+            'Crime':                 'Crime: Cases, verdicts, investigations, missing persons, high-profile trials.',
+            'Business':              'Business: Corporate news, layoffs, acquisitions, executive changes, industry moves.',
+            'Home & Real Estate':    'Home & Real Estate: Housing market, mortgage rates, home trends, real-estate-in-the-news.',
+            'Philanthropy':          'Philanthropy: Cause-driven queries - foundations, campaigns, disasters, charity events, gifts.',
+            // ---------- Watchlist ----------
+            'Your watchlist':        'Your watchlist: Trends you have starred. Populates the daily digest email so you get pinged when anything on this list breaks out, drops off, or crosses a threshold you set.',
+        };
+
+        // Sub-tab pills that appear inside individual panels (social
+        // platform pills, streaming platform pills, headline sub-tabs,
+        // search category chips, music service pills, retailer pills).
+        var TIQ_SUBTAB_TOOLTIPS = {
+            // Social platform sub-tabs
+            'Reddit':      'Reddit: Top posts today from US-heavy subreddits.',
+            'YouTube':     'YouTube: US region trending videos.',
+            'TikTok':      'TikTok: Trending videos from TikTok\u0027s Discover feed (requires donated cookies).',
+            'Instagram':   'Instagram: Trending posts + reels from IG\u0027s Explore feed (requires donated cookies).',
+            'X':           'X: Trending tweets from x.com/explore (requires donated cookies with auth_token).',
+            // Streaming platform sub-tabs
+            'Netflix':     'Netflix: Authenticated daily Top-10 scrape from netflix.com/browse.',
+            'Disney+':     'Disney+: Trending titles from disneyplus.com/browse (requires donated Disney+ cookies).',
+            'Hulu':        'Hulu: Trending titles from hulu.com (requires donated Hulu cookies).',
+            'Max':         'Max: Trending titles from play.max.com (requires donated Max cookies).',
+            'Prime Video': 'Prime Video: Trending titles from amazon.com/gp/video (requires donated Amazon cookies).',
+            'ESPN+':       'ESPN+: Trending programs from disneyplus.com/browse/espn (uses Disney+ cookies via bundle).',
+            // Headlines sub-tabs. Keys match _tiqNormalizeHeader output
+            // of the actual pill text (emoji stripped, trailing count
+            // stripped).
+            'Top trending':    'Top trending headlines: The most-picked-up stories across the outlets we monitor, ranked by cross-source coverage.',
+            'By news source':  'By news source: Same articles, grouped by outlet. See what CNN vs. MS NOW vs. WSJ vs. Fox is leading with today.',
+            'Philanthropy':    'Philanthropy: Cause-driven news - campaigns, disasters, foundations, charity events, gifts.',
+            'Conservative':    'Conservative news: Right-leaning outlet cut (Fox, NY Post, Daily Wire, National Review).',
+            'Progressive':     'Progressive news: Left-leaning outlet cut (MS NOW, HuffPost, Mother Jones, The Nation).',
+            // Music service sub-tabs
+            'Spotify':      'Spotify: US mass-streaming top chart.',
+            'Apple Music':  'Apple Music: US chart from the Apple subscriber cut.',
+            'Shazam':       'Shazam: US discovery signal (what people are IDing).',
+            // Retailer sub-tabs
+            'Amazon':       'Amazon Movers & Shakers: Biggest 24-hour rank jumps.',
+            'Target':       'Target Best Sellers.',
+            'Walmart':      'Walmart Best Sellers.',
+            'Nike':         'Nike Best Sellers.',
+            'Sephora':      'Sephora Best Sellers.',
+            'Ulta':         'Ulta Best Sellers.',
+            'Best Buy':     'Best Buy Best Sellers.',
+            'Etsy':         'Etsy Trending.',
+            'Lululemon':    'Lululemon Best Sellers.',
+        };
+
+        // Strip leading emoji / symbol / non-word chars off a header
+        // string so "📰 Top trending headlines" -> "Top trending
+        // headlines" and matches the TIQ_CARD_TOOLTIPS keys cleanly.
+        // Also collapses inner whitespace and strips any trailing
+        // count (either "(300)" parenthesised or a bare " 300" suffix
+        // that comes from a rendered <span class="tiq-tab-count">).
+        function _tiqNormalizeHeader(s) {
+            var t = String(s || '').replace(/\s+/g, ' ').trim();
+            // Strip leading non-letter/non-digit chars (emojis, arrows,
+            // hearts, stars, glyphs).
+            t = t.replace(/^[^\p{L}\p{N}]+/u, '').trim();
+            // Strip trailing " (123)" style counts.
+            t = t.replace(/\s*\(\s*\d[\d,]*\s*\)\s*$/, '').trim();
+            // Strip trailing bare " 123" counts appended by a
+            // .tiq-tab-count span (textContent concatenates the number).
+            t = t.replace(/\s+\d[\d,]*\s*$/, '').trim();
+            return t;
+        }
+
+        function _tiqLookup(map, raw) {
+            if (!raw) return '';
+            var tip = map[raw];
+            if (tip) return tip;
+            // Fallback: prefix match. "Best Sellers - top 10" hits key
+            // "Best Sellers"; "Trending people (fusion)" hits key
+            // "Trending people".
+            var keys = Object.keys(map);
+            for (var i = 0; i < keys.length; i++) {
+                if (raw.indexOf(keys[i]) === 0) return map[keys[i]];
+            }
+            return '';
+        }
+
+        function _tiqApplyTooltips() {
+            var panels = document.getElementById('trendsIQPanels');
+            if (!panels) return;
+            // Card headers (h4 inside .tiq-card). Match on emoji-stripped
+            // text so "📰 Top trending headlines" resolves to the map key
+            // "Top trending headlines".
+            panels.querySelectorAll('.tiq-card h4').forEach(function(h) {
+                if (h.classList.contains('has-tooltip')) return;
+                var raw = _tiqNormalizeHeader(h.textContent);
+                var tip = _tiqLookup(TIQ_CARD_TOOLTIPS, raw);
+                if (tip) {
+                    h.classList.add('has-tooltip');
+                    h.setAttribute('data-tooltip', tip);
+                }
+            });
+            // Sub-tab pills. Multiple classes are used depending on
+            // the panel: .tiq-social-tab (social / streaming / headline
+            // sub-tabs), .tiq-retailer-tab (products), and any other
+            // pill-shaped selector inside a panel. Cover them all.
+            panels.querySelectorAll('.tiq-social-tab, .tiq-retailer-tab').forEach(function(el) {
+                if (el.classList.contains('has-tooltip')) return;
+                var raw = _tiqNormalizeHeader(el.textContent);
+                var tip = _tiqLookup(TIQ_SUBTAB_TOOLTIPS, raw);
+                if (tip) {
+                    el.classList.add('has-tooltip');
+                    el.setAttribute('data-tooltip', tip);
+                }
+            });
+            // Row action icons (star / chart) rendered by _tiqActions().
+            // They ship a native `title=` attribute which we upgrade to
+            // a data-tooltip so it uses the Profile-IQ-style styled
+            // tooltip instead of the plain browser one. We also enrich
+            // the copy so hover explains the button's purpose in full.
+            panels.querySelectorAll('.tiq-action-btn').forEach(function(el) {
+                if (el.classList.contains('has-tooltip')) return;
+                var t = (el.getAttribute('title') || '').trim();
+                var glyph = (el.textContent || '').trim();
+                var tip;
+                if (t === 'Add to watchlist') {
+                    tip = 'Add to Watchlist: Star this trend. Watched items surface in the daily digest email when they break out, drop off, or cross a threshold you set.';
+                } else if (t === 'Remove from watchlist') {
+                    tip = 'Remove from Watchlist: Unstar this trend. It will stop appearing in your digest.';
+                } else if (t === 'View historical arc' || glyph === '📈') {
+                    tip = 'Historical arc: Day-by-day trajectory for this trend, reconstructed from daily snapshots. Shows how rank / volume / mention share has moved over the last 14 days.';
+                } else if (t) {
+                    tip = t;
+                }
+                if (tip) {
+                    el.classList.add('has-tooltip');
+                    el.setAttribute('data-tooltip', tip);
+                    // Remove native title so we don't get a doubled-up
+                    // browser tooltip on hover.
+                    el.removeAttribute('title');
+                }
+            });
+        }
+
         window.setTrendsIQTab = function(key) {
             window.__trendsIQ.activeTab = key;
             document.querySelectorAll('#trendsIQTabStrip .tiq-tab').forEach(function(el) {
@@ -41218,6 +41438,10 @@
             document.querySelectorAll('#trendsIQPanels .tiq-panel').forEach(function(el) {
                 el.classList.toggle('active', el.getAttribute('data-tiq-panel') === key);
             });
+            // Re-apply tooltips - some panels are lazy-rendered / repainted
+            // when the tab is switched (streaming platform pills, watchlist),
+            // so run the sweep here too, not just after the top-level render.
+            _tiqApplyTooltips();
             // Snap streaming back to Netflix every time the user enters the
             // streaming top-tab. Their per-platform selection sticks while
             // browsing (setTrendsIQStreaming preserves it) but leaving and
