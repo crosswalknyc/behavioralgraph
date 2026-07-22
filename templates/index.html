@@ -42099,10 +42099,25 @@
         // snapshot (Claude-authored, refreshed once per day). Rendered
         // subtly so it doesn't compete with the rank + delta numbers.
         function _tiqWhyLine(row) {
-            if (!row || !row.why) return '';
+            if (!row) return '';
+            // Fallback ladder:
+            //   1. row.why          - Claude one-liner (Trending People
+            //                         fusion card writes this)
+            //   2. row.description  - Wikipedia short desc, e.g.
+            //                         "American Deaf actress"
+            //                         (wikipedia_trending scraper)
+            //   3. row.extract      - Wikipedia 1-2 sentence extract
+            //                         (wikipedia_trending scraper)
+            var text = row.why || row.description || row.extract || '';
+            if (!text) return '';
+            // Wikipedia extracts can be long. Cap at ~180 chars so the
+            // caption stays 1-2 lines in the row.
+            if (text.length > 180) {
+                text = text.slice(0, 178).replace(/\s+\S*$/, '') + '\u2026';
+            }
             return '<div class="tiq-row-why" style="' +
                    'font-size:12px;opacity:0.75;margin-top:3px;font-style:italic;' +
-                   'color:#c9d3e0;">\u201C' + _tiqEsc(row.why) + '\u201D</div>';
+                   'color:#c9d3e0;line-height:1.35;">\u201C' + _tiqEsc(text) + '\u201D</div>';
         }
 
         // "Why they're trending" caption for a person card. Same italic

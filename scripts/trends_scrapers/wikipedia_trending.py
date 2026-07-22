@@ -41,6 +41,7 @@ import logging
 import re
 import sys
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from typing import Any, Optional
 
@@ -52,6 +53,12 @@ logger = logging.getLogger(__name__)
 _UA = 'BG-Trends/1.0 (jenna@crosswalknyc.com)'
 _API = ('https://wikimedia.org/api/rest_v1/metrics/pageviews/top/'
         'en.wikipedia/all-access/{year}/{month:02d}/{day:02d}')
+
+# Wikimedia's page-summary REST endpoint. Returns a short "description"
+# (one-line, e.g. "American Deaf actress") and a 1-2 sentence "extract".
+# Free, no auth. We hit this for every article we surface so each row
+# comes with a "what is this / why is this trending" caption.
+_SUMMARY_API = 'https://en.wikipedia.org/api/rest_v1/page/summary/{slug}'
 
 # Article-title prefixes / patterns we always drop before ranking.
 # Wikipedia's top-1000 is >30% meta / infrastructure pages that add
@@ -159,6 +166,66 @@ def _wiki_url(article_slug: str) -> str:
     return f'https://en.wikipedia.org/wiki/{article_slug}'
 
 
+def _fetch_summary(article_slug: str) -> dict:
+    """Hit the page-summary REST endpoint for a single article.
+
+    Returns `{"description": ..., "extract": ..., "thumbnail_url": ...}`.
+    Any field may be empty. Silent on network / parse failures so a
+    single missing summary never blocks the batch.
+    """
+    url = _SUMMARY_API.format(slug=article_slug)
+    try:
+        r = requests.get(url, headers={'User-Agent': _UA}, timeout=8)
+    except Exception as e:
+        logger.debug("wiki summary %s: %s", article_slug, e)
+        return {}
+    if not r.ok:
+        # 404 is expected for redirected / renamed pages, don't spam
+        # the logs.
+        if r.status_code != 404:
+            logger.debug("wiki summary %s: http %s", article_slug, r.status_code)
+        return {}
+    try:
+        data = r.json()
+    except Exception:
+        return {}
+    thumb = (data.get('thumbnail') or {}).get('source') or ''
+    return {
+        'description': (data.get('description') or '').strip(),
+        'extract':     (data.get('extract') or '').strip(),
+        'thumbnail':   thumb,
+    }
+
+
+def _enrich_with_summaries(rows: list[dict], max_workers: int = 12) -> None:
+    """Attach `description` + `extract` + `thumbnail` fields to each row.
+
+    Runs summary lookups in a thread pool because we're doing ~30 HTTP
+    calls that are each ~200ms; sequentially that's 6 seconds, in
+    parallel it's ~500ms. Wikimedia rate-limits generously (200 req/s
+    per IP) so 12 concurrent is safe.
+    """
+    if not rows:
+        return
+    slugs = [r['article'] for r in rows]
+    results: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_fetch_summary, s): s for s in slugs}
+        for fut in as_completed(futures):
+            slug = futures[fut]
+            try:
+                results[slug] = fut.result() or {}
+            except Exception as e:
+                logger.debug("wiki summary future %s: %s", slug, e)
+                results[slug] = {}
+    for r in rows:
+        s = results.get(r['article']) or {}
+        r['description'] = s.get('description') or ''
+        r['extract']     = s.get('extract')     or ''
+        if s.get('thumbnail'):
+            r['thumbnail'] = s['thumbnail']
+
+
 def fetch() -> dict[str, Any]:
     """Pull yesterday + day-before-yesterday, compute delta, rank.
 
@@ -232,11 +299,21 @@ def fetch() -> dict[str, Any]:
     rows.sort(key=lambda r: (r['delta_pct'], r['delta_abs']), reverse=True)
 
     # Re-stamp our final rank (1..N).
-    for i, r in enumerate(rows[:_TOP_N], start=1):
+    top = rows[:_TOP_N]
+    for i, r in enumerate(top, start=1):
         r['rank'] = i
 
+    # Attach a one-liner "what is this" caption to every surfaced row.
+    # We use Wikipedia's own summary API - free, fast in parallel,
+    # always available. For rows that are trending BECAUSE of a
+    # current event (which is nearly all of them, by construction),
+    # the article description reads as the "why" a normal person needs
+    # to make sense of the entry ("American Deaf actress" for Kaylee
+    # Hottle, "1965 Boeing 727 accident" for Pan Am Flight 526A, etc).
+    _enrich_with_summaries(top)
+
     return {
-        'national':      rows[:_TOP_N],
+        'national':      top,
         'available':     True,
         'anchor_day':    today_anchor.isoformat(),
         'compare_day':   prior.isoformat(),
