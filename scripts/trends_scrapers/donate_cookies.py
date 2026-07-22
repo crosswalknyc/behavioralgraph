@@ -225,10 +225,30 @@ def main() -> int:
           f"{'to /tmp' if args.dry_run else f'to s3://{S3_BUCKET}/{S3_PREFIX}'}")
     print()
 
+    # Legacy-domain hints. When a domain rebrands, Chrome may still hold
+    # cookies for the old host name and none for the new one. Explaining
+    # this once, in place, saves a lot of "the cookies were donated but
+    # the scraper still fails" back-and-forth.
+    LEGACY_DOMAIN_HINTS = {
+        'max.com':       'hbomax.com',   # rebrand 2023
+        'x.com':         'twitter.com',  # rebrand 2023
+    }
+
     for domain in domains:
         cookies = _read_chrome_cookies(domain, profile=args.profile)
         if not cookies:
             print(f"  {domain:<20s} 0 cookies - skipping (are you logged in / have you visited it?)")
+            legacy = LEGACY_DOMAIN_HINTS.get(domain)
+            if legacy:
+                legacy_cookies = _read_chrome_cookies(legacy, profile=args.profile)
+                if legacy_cookies:
+                    print(f"  {domain:<20s} ! Chrome has {len(legacy_cookies)} "
+                          f"cookies for the legacy '{legacy}' domain but none "
+                          f"for '{domain}'.")
+                    print(f"  {domain:<20s}   Visit https://play.{domain} in "
+                          f"Chrome and sign in there. Chrome will drop fresh "
+                          f"cookies under the current domain; re-run this "
+                          f"script and the donation will succeed.")
             continue
         try:
             uri = _upload_to_s3(domain, cookies, dry_run=args.dry_run)
