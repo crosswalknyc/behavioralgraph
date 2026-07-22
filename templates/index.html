@@ -39435,19 +39435,19 @@
                 // means Google Trends itself returned nothing across
                 // the 7-day snapshot window.
                 body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.7rem 0;">'
-                    + 'Google Trends returned no data for this geo across the past 7 days (the endpoint sometimes throttles or comes back empty, and snapshots accumulate as the dashboard is used). Try again later, or pick a different geography.'
+                    + 'No trending data for this geography in the past 7 days. Try another geography, or check back later.'
                     + '</div>';
                 return;
             }
-            // When the backend fell back to unfiltered Trends (no terms
+            // When the backend fell back to unfiltered trends (no terms
             // cleared the political filter for this slice), show a tiny
             // dim hint so the user knows the list is "what's hot here"
-            // rather than "what's politically hot here" - but still
+            // rather than "what's politically hot here", but still
             // render the rows so the card never goes empty.
             var fallbackNote = '';
             if (meta && meta.used_fallback) {
                 fallbackNote = '<div style="color: var(--text-secondary); font-size: 0.72rem; padding: 0 0 0.5rem 0; opacity: 0.75;">'
-                             + 'No purely political topics trended here in the past 7 days \u2014 showing top Google Trends for this geo.'
+                             + 'No purely political topics trended here in the past 7 days. Showing top trends for this geography.'
                              + '</div>';
             }
 
@@ -39511,7 +39511,7 @@
                          +   '<div class="bq-trending-head">'
                          +     '<div class="bq-trending-rank">#' + (idx + 1) + '</div>'
                          +     '<div class="bq-trending-term">' + _bqEscape(cleanTerm) + '</div>'
-                         +     '<div class="bq-trending-traffic" title="Peak approx. search volume from Google Trends in the past 7 days">' + fmtTraffic(r.score) + '</div>'
+                         +     '<div class="bq-trending-traffic" title="Peak approximate search volume over the past 7 days">' + fmtTraffic(r.score) + '</div>'
                          +   '</div>'
                          +   '<div class="bq-trending-meta">'
                          +     whyChip(r.why_political)
@@ -39541,7 +39541,7 @@
 
             if (!rows || !rows.length) {
                 body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.7rem 0;">'
-                    + 'Google Trends returned no data for this geo across the past 7 days. Snapshots accumulate as the dashboard is used \u2014 try again later, or pick a different geography.'
+                    + 'No trending data for this geography in the past 7 days. Try another geography, or check back later.'
                     + '</div>';
                 return;
             }
@@ -39586,7 +39586,7 @@
                          +   '<div class="bq-trending-head">'
                          +     '<div class="bq-trending-rank">#' + (idx + 1) + '</div>'
                          +     '<div class="bq-trending-term">' + _bqEscape(cleanTerm) + '</div>'
-                         +     '<div class="bq-trending-traffic" title="Peak approx. search volume from Google Trends in the past 7 days">' + fmtTraffic(r.score) + '</div>'
+                         +     '<div class="bq-trending-traffic" title="Peak approximate search volume over the past 7 days">' + fmtTraffic(r.score) + '</div>'
                          +   '</div>'
                          +   '<div class="bq-trending-meta">'
                          +     daysChip(r)
@@ -42776,8 +42776,7 @@
             // "no searches" which reads as a bug. See
             // `_augment_thin_buckets_from_pools`.
             var emptyMsg = opts.emptyMsg ||
-                'No matches across searches, news, or trending pools ' +
-                'in this window. Refreshes on the next scraper run.';
+                'No matches in this window. Check back later.';
             var body;
             if (!rows || !rows.length) {
                 body = '<div class="tiq-card-sub" style="opacity:0.7;padding:16px 4px;">' + _tiqEsc(emptyMsg) + '</div>';
@@ -43236,7 +43235,7 @@
             var keys = ['spotify', 'apple', 'shazam'];
             var present = keys.filter(function(k) { return sources[k]; });
             if (!present.length) {
-                return '<div class="tiq-empty">Music charts are warming up. Snapshot lands after the daily scraper run.</div>';
+                return '<div class="tiq-empty">Music charts are warming up. Check back later.</div>';
             }
             // 2026-07-22: intro banner removed per Jenna. The card-level
             // sub-labels + the HOVER tooltip on each source pill already
@@ -43328,15 +43327,15 @@
                     var cardTitle = (s.label || k) + ' - trending in the USA';
                     var cardSub = '';
                     if (k === 'reddit') {
-                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Top posts today from US-heavy subreddits (news, politics, entertainment, sports).</div>';
+                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Top posts trending in the US right now.</div>';
                     } else if (k === 'youtube') {
-                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Trending videos on YouTube US.</div>';
+                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Videos trending in the US right now.</div>';
                     } else if (k === 'tiktok') {
-                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Trending videos on TikTok\u0027s Discover feed.</div>';
+                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Trending videos in the US right now.</div>';
                     } else if (k === 'instagram') {
-                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Posts + reels ranked by IG\u0027s Explore recommendation engine.</div>';
+                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Trending posts and reels in the US right now.</div>';
                     } else if (k === 'x') {
-                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Top trending tweets from x.com/explore.</div>';
+                        cardSub = '<div class="tiq-card-sub" style="margin-bottom:8px;">Trending tweets in the US right now.</div>';
                     }
                     body = '<div class="tiq-cards-grid" style="grid-template-columns: 1fr;">' +
                            '<div class="tiq-card"><h4>' + _tiqEsc(cardTitle) + '</h4>' + cardSub +
