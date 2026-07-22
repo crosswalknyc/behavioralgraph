@@ -8252,9 +8252,14 @@
         body.foreign-profile .interest-genpop,
         body.foreign-profile .diff-col-gp,
         body.foreign-profile .spotlight-genpop { display: none !important; }
-        /* Demographics: Demographic Profile Summary + Key Differentiators (Characteristic | Profile | Index) */
+        /* Demographics: Demographic Profile Summary + Key Differentiators. Foreign
+           profiles have no US Gen Pop baseline, so the "vs Gen Pop" Index is also
+           meaningless - drop BOTH the Gen Pop column and the Index column, leaving
+           Characteristic | Profile only. */
+        body.foreign-profile .demo-summary-header .index-col,
+        body.foreign-profile .insight-row-genpop .index-col { display: none !important; }
         body.foreign-profile .demo-summary-header,
-        body.foreign-profile .insight-row-genpop { grid-template-columns: minmax(0,1fr) 72px 42px !important; }
+        body.foreign-profile .insight-row-genpop { grid-template-columns: minmax(0,1fr) 72px !important; }
         /* Behavioral cards + demographic table-mode tables (checkbox | name | Profile | Index) */
         body.foreign-profile .behavioral-table { grid-template-columns: 28px minmax(100px, 1fr) 78px 64px; }
         /* Interests list (icon | name | Profile | Index) */
@@ -92686,6 +92691,15 @@
         }
 
         function renderCharts(demographics, demographicsIndex = {}, demographicsProjection = {}, demographicsGenPop = {}) {
+            // Foreign profiles (LOCATION file with no New York / Los Angeles anchor)
+            // have no US Gen Pop baseline, so the "GP: x%" penetration and the
+            // (vs Gen Pop) index are meaningless. Blank both inputs so every demo
+            // chart / table / bar label (Age, Gender, etc.) drops GP % and index and
+            // the over/under-index bar colors fall back to neutral.
+            if (typeof isForeignProfile === 'function' && isForeignProfile()) {
+                demographicsIndex = {};
+                demographicsGenPop = {};
+            }
             lastRenderedDemographics = demographics || {};
             lastRenderedDemographicsIndex = demographicsIndex || {};
             lastRenderedDemographicsProjection = demographicsProjection || {};
@@ -94015,7 +94029,8 @@
             const profileName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || 'Profile';
             const profileVal = profMed > 0 ? `${profMed.toFixed(2)} years` : 'N/A';
             const genPopVal  = gpMed > 0 ? `${gpMed.toFixed(2)} years` : 'N/A';
-            const isGP = (typeof isSelectedProfileGenPop === 'function') ? isSelectedProfileGenPop() : false;
+            const isGP = ((typeof isSelectedProfileGenPop === 'function') && isSelectedProfileGenPop())
+                || (typeof isForeignProfile === 'function' && isForeignProfile());
 
             const cohortSeries = (typeof _comparisonRunsState !== 'undefined' && _comparisonRunsState)
                 ? ((_comparisonRunsState.selectedKeys || [])
@@ -94064,7 +94079,8 @@
             const profileName = (typeof currentProfileData !== 'undefined' && currentProfileData && currentProfileData.name) || 'Profile';
             const profileVal = baseRes.profile ? `$${baseRes.profile.value}` : 'N/A';
             const genPopVal  = baseRes.genPop ? `$${baseRes.genPop.value}` : 'N/A';
-            const isGP = (typeof isSelectedProfileGenPop === 'function') ? isSelectedProfileGenPop() : false;
+            const isGP = ((typeof isSelectedProfileGenPop === 'function') && isSelectedProfileGenPop())
+                || (typeof isForeignProfile === 'function' && isForeignProfile());
 
             const cohortSeries = (typeof _comparisonRunsState !== 'undefined' && _comparisonRunsState)
                 ? ((_comparisonRunsState.selectedKeys || [])
