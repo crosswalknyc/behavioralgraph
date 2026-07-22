@@ -1,11 +1,11 @@
 """
-Music charts scraper - Shazam Top 200, Apple Music Top 50, TikTok Sounds.
+Music charts scraper - Shazam Top 200, Apple Music Top 100, TikTok Sounds.
 
 Aggregates the three biggest free music trending signals into a single
 snapshot the dashboard renders as one tab:
 
     Shazam Top 200 US       -> what people are IDing right now (discovery)
-    Apple Music Top 50 US   -> what people are streaming right now
+    Apple Music Top 100 US  -> what people are streaming right now
     TikTok Trending Sounds  -> what's about to hit the charts (leading indicator)
 
 Snapshot shape (kind='music'):
@@ -17,7 +17,7 @@ Snapshot shape (kind='music'):
       "fetched_at": "...",
       "sources": {
         "shazam":   {"label": "Shazam Top 200 (US)",   "items": [{...}]},
-        "apple":    {"label": "Apple Music Top 50 (US)","items": [{...}]},
+        "apple":    {"label": "Apple Music Top 100 (US)","items": [{...}]},
         "tiktok":   {"label": "TikTok Sounds",         "items": [{...}], "available": bool}
       }
     }
@@ -181,13 +181,20 @@ def _fetch_shazam(limit: int = 100) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Apple Music Top 50 US  (public RSS/JSON, no auth)
+# Apple Music Top 100 US  (public RSS/JSON, no auth)
 # ---------------------------------------------------------------------------
+# 2026-07-22: bumped from Top 50 to Top 100. Jenna asked for 200 but
+# Apple's public marketing RSS caps out at 100 - anything higher returns
+# HTTP 500. The legacy iTunes RSS Generator (`itunes.apple.com/us/rss/
+# topsongs/limit=200/json`) accepts limit=200 but only returns ~80
+# entries AND measures iTunes Store PURCHASES, not Apple Music streams.
+# So 100 is the ceiling for a real Apple Music stream signal from a
+# public unauthenticated feed.
 _APPLE_URL = ('https://rss.applemarketingtools.com/api/v2/us/music/'
-               'most-played/50/songs.json')
+               'most-played/100/songs.json')
 
 
-def _fetch_apple(limit: int = 50) -> list[dict]:
+def _fetch_apple(limit: int = 100) -> list[dict]:
     """Apple's RSS marketing API is normally instant but occasionally
     returns transient 502s. Retry up to 3 times with backoff."""
     import time
@@ -735,7 +742,7 @@ def fetch() -> dict[str, Any]:
     Order of `sources` here doesn't dictate render order (the frontend
     picks that); we sort roughly by production cost."""
     spotify_items = _fetch_spotify(limit=100)
-    apple_items   = _fetch_apple(limit=50)
+    apple_items   = _fetch_apple(limit=100)
     shazam_items  = _fetch_shazam(limit=100)
     tt_items, tt_meta = _fetch_tiktok_sounds(limit=40)
 
@@ -783,7 +790,7 @@ def fetch() -> dict[str, Any]:
                 'available': bool(spotify_items),
             },
             'apple': {
-                'label':     'Apple Music Top 50 (US)',
+                'label':     'Apple Music Top 100 (US)',
                 'sub':       'What Apple Music subscribers are playing.',
                 'items':     apple_items,
                 'available': bool(apple_items),

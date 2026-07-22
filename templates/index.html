@@ -23679,9 +23679,27 @@
             body[data-theme="light"] #trendsIQView .tiq-row-title { color: #1a1a2e; }
         </style>
         <div id="trendsIQView">
-            <div class="tiq-header">
+            <div class="tiq-header" style="position: relative;">
                 <h2 class="tiq-title">📈 Trends <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Culture Trends tracker</span></h2>
                 <p class="tiq-subtitle">What is trending across search, news, social, and retail right now. Filter by DMA, State, or National.</p>
+                <!--
+                    Trends IQ ships its own HOVER ON/OFF toggle in the top-
+                    right of the header. Wires to the same global
+                    `toggleHoverDescriptors()` used by Profile IQ + every
+                    other IQ view; body.hover-disabled is what actually
+                    gates the tooltip renderer. Kept here rather than
+                    inside the main Profile IQ .action-buttons-row because
+                    that row lives INSIDE #dashboardView which is hidden
+                    when Trends IQ is open (so the shared toggle disappears
+                    along with everything else in Profile IQ's toolbar).
+                -->
+                <div class="display-mode-toggle has-tooltip"
+                     id="trendsIQHoverToggle"
+                     onclick="toggleHoverDescriptors()"
+                     data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements."
+                     style="position: absolute; top: 0; right: 0;">
+                    <span id="trendsIQHoverToggleLabel">HOVER ON</span>
+                </div>
             </div>
             <div class="tiq-filter-bar">
                 <div>
@@ -23769,6 +23787,48 @@
             #microdramasIQView .miq-loading-overlay { display: flex; align-items: center; justify-content: center; padding: 3rem; color: var(--text-secondary); font-size: 0.88rem; gap: 0.75rem; }
             #microdramasIQView .miq-spinner { width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.15); border-top-color: #ec4899; border-radius: 50%; animation: miq-spin 0.9s linear infinite; }
             @keyframes miq-spin { to { transform: rotate(360deg); } }
+            /* Fallback gradient posters keyed on genre (used when
+             * the scraper hasn't captured a poster_url yet). Each
+             * genre gets its own gradient + emoji glyph so the grid
+             * reads distinctly even when the image is placeholder. */
+            #microdramasIQView .miq-poster { display: flex; align-items: center; justify-content: center; font-size: 2.4rem; text-shadow: 0 2px 12px rgba(0,0,0,0.35); color: rgba(255,255,255,0.92); }
+            #microdramasIQView .miq-poster[data-genre="Werewolf"]      { background: linear-gradient(135deg, #6d28d9, #1e1b4b); }
+            #microdramasIQView .miq-poster[data-genre="Billionaire"]   { background: linear-gradient(135deg, #d97706, #78350f); }
+            #microdramasIQView .miq-poster[data-genre="CEO"]           { background: linear-gradient(135deg, #db2777, #831843); }
+            #microdramasIQView .miq-poster[data-genre="Mafia"]         { background: linear-gradient(135deg, #1f2937, #6b7280); }
+            #microdramasIQView .miq-poster[data-genre="Revenge"]       { background: linear-gradient(135deg, #dc2626, #4c0519); }
+            #microdramasIQView .miq-poster[data-genre="Second Chance"] { background: linear-gradient(135deg, #059669, #064e3b); }
+            #microdramasIQView .miq-poster-initial { font-size: 3.2rem; font-weight: 700; letter-spacing: -0.02em; text-align: center; padding: 0 0.5rem; line-height: 1.05; }
+
+            /* Title-audience modal (opens when a card / competitor row is clicked) */
+            #microdramasIQModal { position: fixed; inset: 0; z-index: 9500; background: rgba(0,0,0,0.65); display: none; align-items: center; justify-content: center; padding: 2rem; }
+            #microdramasIQModal.active { display: flex; }
+            #microdramasIQModal .miq-modal-panel { background: var(--bg-primary, #0b0b1a); border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; width: 100%; max-width: 960px; max-height: 90vh; overflow: auto; box-shadow: 0 30px 80px rgba(0,0,0,0.6); }
+            body[data-theme="light"] #microdramasIQModal .miq-modal-panel { background: #fff; border-color: rgba(0,0,0,0.08); }
+            #microdramasIQModal .miq-modal-header { display: flex; gap: 1rem; padding: 1.1rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.06); align-items: center; position: sticky; top: 0; background: inherit; z-index: 2; }
+            #microdramasIQModal .miq-modal-poster { width: 72px; aspect-ratio: 9/16; border-radius: 6px; background-size: cover; background-position: center; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; color: rgba(255,255,255,0.92); flex-shrink: 0; }
+            #microdramasIQModal .miq-modal-title-wrap { flex: 1; min-width: 0; }
+            #microdramasIQModal .miq-modal-title { font-size: 1.2rem; font-weight: 600; margin: 0; }
+            #microdramasIQModal .miq-modal-sub { font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.2rem; }
+            #microdramasIQModal .miq-modal-close { background: rgba(255,255,255,0.08); border: none; color: var(--text-primary); font-size: 1.2rem; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; }
+            #microdramasIQModal .miq-modal-close:hover { background: rgba(255,255,255,0.15); }
+            #microdramasIQModal .miq-modal-body { padding: 1.1rem 1.25rem; }
+            #microdramasIQModal .miq-modal-summary { font-size: 0.9rem; color: var(--text-primary); background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0.8rem 1rem; margin-bottom: 1rem; line-height: 1.5; }
+            #microdramasIQModal .miq-modal-source-chip { display: inline-block; font-size: 0.68rem; padding: 0.15rem 0.55rem; border-radius: 10px; background: rgba(139, 92, 246, 0.15); color: #c4b5fd; letter-spacing: 0.04em; text-transform: uppercase; margin-left: 0.5rem; vertical-align: middle; }
+            #microdramasIQModal .miq-modal-demos { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0.85rem; }
+            #microdramasIQModal .miq-demo-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0.85rem 1rem; }
+            #microdramasIQModal .miq-demo-card h4 { margin: 0 0 0.5rem; font-size: 0.82rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
+            #microdramasIQModal .miq-demo-row { display: grid; grid-template-columns: 160px 1fr auto; gap: 0.5rem; align-items: center; padding: 0.2rem 0; font-size: 0.82rem; }
+            #microdramasIQModal .miq-demo-bar-track { background: rgba(255,255,255,0.05); border-radius: 4px; height: 8px; position: relative; overflow: hidden; }
+            #microdramasIQModal .miq-demo-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #ec4899, #8b5cf6); border-radius: 4px; }
+            #microdramasIQModal .miq-demo-pct { font-variant-numeric: tabular-nums; text-align: right; min-width: 3.4rem; }
+            body[data-theme="light"] #microdramasIQModal .miq-modal-summary,
+            body[data-theme="light"] #microdramasIQModal .miq-demo-card { background: #fafafa; border-color: rgba(0,0,0,0.08); }
+            body[data-theme="light"] #microdramasIQModal .miq-demo-bar-track { background: rgba(0,0,0,0.06); }
+            #microdramasIQModal .miq-modal-loading { display: flex; align-items: center; justify-content: center; gap: 0.6rem; padding: 3rem 1rem; color: var(--text-secondary); font-size: 0.88rem; }
+            #microdramasIQView .miq-title-card { cursor: pointer; }
+            #microdramasIQView .miq-comp-table tbody tr { cursor: pointer; }
+
             /* Competitors tab */
             #microdramasIQView .miq-comp-filter { display: flex; gap: 0.75rem; align-items: end; flex-wrap: wrap; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.6rem 0.85rem; margin-bottom: 1rem; }
             #microdramasIQView .miq-comp-filter label { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem; display: block; }
@@ -23884,6 +23944,23 @@
             </div>
             <div class="miq-panel" data-panel="audience">
                 <div id="microdramasIQAudience" class="miq-audience-grid"></div>
+            </div>
+        </div>
+
+        <!-- MICRODRAMAS IQ - Title audience modal (click-through drill-down) -->
+        <div id="microdramasIQModal" role="dialog" aria-modal="true" aria-labelledby="microdramasIQModalTitle" onclick="if (event.target === this) closeMicrodramasIQModal();">
+            <div class="miq-modal-panel" role="document">
+                <div class="miq-modal-header">
+                    <div id="microdramasIQModalPoster" class="miq-modal-poster"></div>
+                    <div class="miq-modal-title-wrap">
+                        <h3 id="microdramasIQModalTitle" class="miq-modal-title">Loading...</h3>
+                        <div id="microdramasIQModalSub" class="miq-modal-sub"></div>
+                    </div>
+                    <button type="button" class="miq-modal-close" aria-label="Close" onclick="closeMicrodramasIQModal()">×</button>
+                </div>
+                <div class="miq-modal-body">
+                    <div id="microdramasIQModalContent"></div>
+                </div>
             </div>
         </div>
 
@@ -41179,6 +41256,17 @@
             _trendsIQHideAllOtherViews();
             var view = document.getElementById('trendsIQView');
             if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
+            // Sync the in-header HOVER toggle to the persisted state so
+            // "OFF" from a previous session doesn't reset to "ON" just
+            // because the element got a fresh DOM. Idempotent - safe
+            // to call every time the view opens.
+            try {
+                var hoverOn = localStorage.getItem('bg_hover_enabled') !== 'false';
+                var t = document.getElementById('trendsIQHoverToggle');
+                var l = document.getElementById('trendsIQHoverToggleLabel');
+                if (l) l.textContent = hoverOn ? 'HOVER ON' : 'HOVER OFF';
+                if (t) t.classList.toggle('active', !hoverOn);
+            } catch (e) { /* localStorage disabled - ignore */ }
             if (!window.__trendsIQ.filterOptions) {
                 loadTrendsIQFilterOptions().then(function() {
                     applyTrendsIQFilters();
@@ -41310,6 +41398,30 @@
             renderMicrodramasIQAudience(d.audience_overall || {});
         }
 
+        // Fallback gradient poster keyed on genre + title initial.
+        // Used when the scraper hasn't captured a real poster_url yet.
+        var _MIQ_GENRE_GLYPH = {
+            'Werewolf': '🐺', 'Billionaire': '💎', 'CEO': '💼',
+            'Mafia': '🕶️', 'Revenge': '⚔️', 'Second Chance': '💫',
+        };
+        function _miqPosterHTML(t) {
+            var url = t.poster_url;
+            if (url) {
+                var safe = url.replace(/"/g, '&quot;');
+                return '<div class="miq-poster" style="background-image:url(\'' + safe + '\'); background-size:cover; background-position:center;"></div>';
+            }
+            var g = t.genre || 'Werewolf';
+            var glyph = _MIQ_GENRE_GLYPH[g] || '📱';
+            var initial = ((t.title || '?').trim().charAt(0) || '?').toUpperCase();
+            return '<div class="miq-poster" data-genre="' + g + '">' +
+                '<div style="display:flex; flex-direction:column; align-items:center; gap:0.35rem;">' +
+                    '<div style="font-size:2rem; opacity:0.85;">' + glyph + '</div>' +
+                    '<div class="miq-poster-initial">' + initial + '</div>' +
+                '</div>' +
+            '</div>';
+        }
+        function _miqEscape(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
         function renderMicrodramasIQTitles(titles) {
             var grid = document.getElementById('microdramasIQTitleGrid');
             if (!grid) return;
@@ -41321,16 +41433,14 @@
             titles.forEach(function(t) {
                 var card = document.createElement('div');
                 card.className = 'miq-title-card';
-                var poster = '';
-                if (t.poster_url) poster = ' style="background-image:url(\'' + t.poster_url.replace(/"/g, '&quot;') + '\')"';
                 var curveBars = (t.view_daily_curve || []).map(function(c) {
                     var h = Math.max(6, Math.round((c.views || 0) / 20000));
                     return '<div class="miq-window-cell" style="height:' + Math.min(100, h) + '%"></div>';
                 }).join('');
                 card.innerHTML =
-                    '<div class="miq-poster"' + poster + '></div>' +
-                    (t.series ? '<div class="miq-title-series">' + t.series + '</div>' : '') +
-                    '<div class="miq-title-row">' + (t.title || '') + '</div>' +
+                    _miqPosterHTML(t) +
+                    (t.series ? '<div class="miq-title-series">' + _miqEscape(t.series) + '</div>' : '') +
+                    '<div class="miq-title-row">' + _miqEscape(t.title || '') + '</div>' +
                     '<div class="miq-title-metrics">' +
                         '<div><div class="miq-metric-label">28d reach</div><div class="miq-metric-value">' + _miqFormatNumber(t.view_28d_estimate) + '</div></div>' +
                         '<div><div class="miq-metric-label">Best rank</div><div class="miq-metric-value">' + (t.surface_rank_best == null ? '-' : '#' + t.surface_rank_best) + '</div></div>' +
@@ -41338,6 +41448,15 @@
                         '<div><div class="miq-metric-label">Days in catalog</div><div class="miq-metric-value">' + (t.days_since_first_observed || 0) + '</div></div>' +
                     '</div>' +
                     '<div class="miq-window-bar">' + curveBars + '</div>';
+                card.addEventListener('click', function() {
+                    openMicrodramasIQTitleModal({
+                        title:    t.title,
+                        series:   t.series,
+                        genre:    t.genre,
+                        platform: 'Peacock',
+                        poster_url: t.poster_url,
+                    });
+                });
                 grid.appendChild(card);
             });
         }
@@ -41487,26 +41606,37 @@
                     container.appendChild(block);
                     return;
                 }
-                var rows = titles.map(function(t) {
-                    var thumb = t.poster_url
-                        ? '<span class="miq-mini-thumb" style="background-image:url(\'' + t.poster_url.replace(/"/g,'&quot;') + '\')"></span>'
-                        : '<span class="miq-mini-thumb"></span>';
-                    var titleHtml = t.deep_link
-                        ? '<a href="' + t.deep_link + '" target="_blank" rel="noopener" style="color: inherit; text-decoration: none;">' + (t.title || '') + '</a>'
-                        : (t.title || '');
+                var rows = titles.map(function(t, idx) {
+                    // Mini thumb: real poster if we have one, otherwise a
+                    // genre-keyed gradient mini-thumb with the initial.
+                    var thumb;
+                    if (t.poster_url) {
+                        thumb = '<span class="miq-mini-thumb" style="background-image:url(\'' + t.poster_url.replace(/"/g,'&quot;') + '\'); background-size:cover; background-position:center;"></span>';
+                    } else {
+                        var g = t.genre || 'Werewolf';
+                        var initial = ((t.title || '?').trim().charAt(0) || '?').toUpperCase();
+                        thumb = '<span class="miq-mini-thumb miq-poster" data-genre="' + g + '" style="display:inline-flex; align-items:center; justify-content:center; font-size:0.78rem; font-weight:700; color:rgba(255,255,255,0.9);">' + _miqEscape(initial) + '</span>';
+                    }
+                    var titleHtml = _miqEscape(t.title || '');
                     var current = (t.current_rank == null) ? '-' : '#' + t.current_rank;
                     var best    = (t.best_rank == null) ? '-' : '#' + t.best_rank;
                     var days    = (t.days_in_window || 0) + '/' + (p.observed_dates || []).length;
                     var rating  = (t.avg_rating == null) ? '' : Number(t.avg_rating).toFixed(1) + ' ★';
                     var eps     = (t.episodes_count == null) ? '' : t.episodes_count + ' eps';
                     var meta2   = [rating, eps].filter(function(x){return x;}).join(' · ');
-                    return '<tr>' +
+                    // Encode payload so the row can open the modal. Deep-link
+                    // is preserved as an inline chip so the user can still hop
+                    // to the source without triggering the drill-down.
+                    var deepChip = t.deep_link
+                        ? ' <a href="' + _miqEscape(t.deep_link) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();" style="font-size:0.72rem; color:var(--text-secondary); margin-left:0.4rem;">↗</a>'
+                        : '';
+                    return '<tr data-miq-title="' + _miqEscape(t.title || '') + '" data-miq-series="' + _miqEscape(t.series || t.title || '') + '" data-miq-genre="' + _miqEscape(t.genre || '') + '" data-miq-platform="' + _miqEscape(p.label || '') + '" data-miq-poster="' + _miqEscape(t.poster_url || '') + '">' +
                         '<td class="miq-rank">' + current + '</td>' +
                         '<td>' + _miqDeltaChip(t.status, t.rank_delta) + '</td>' +
-                        '<td>' + thumb + titleHtml +
+                        '<td>' + thumb + titleHtml + deepChip +
                             (meta2 ? '<div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">' + meta2 + '</div>' : '') +
                         '</td>' +
-                        '<td>' + (t.genre ? '<span class="miq-genre-tag">' + t.genre + '</span>' : '') + '</td>' +
+                        '<td>' + (t.genre ? '<span class="miq-genre-tag">' + _miqEscape(t.genre) + '</span>' : '') + '</td>' +
                         '<td>' + best + '</td>' +
                         '<td style="color: var(--text-secondary); font-size: 0.78rem;">' + days + '</td>' +
                     '</tr>';
@@ -41528,6 +41658,21 @@
                         '<tbody>' + rows + '</tbody>' +
                     '</table>';
                 container.appendChild(block);
+                // Delegate clicks on this platform's rows -> open the audience modal.
+                var tbody = block.querySelector('.miq-comp-table tbody');
+                if (tbody) {
+                    tbody.addEventListener('click', function(ev) {
+                        var tr = ev.target.closest('tr[data-miq-title]');
+                        if (!tr) return;
+                        openMicrodramasIQTitleModal({
+                            title:      tr.getAttribute('data-miq-title'),
+                            series:     tr.getAttribute('data-miq-series'),
+                            genre:      tr.getAttribute('data-miq-genre'),
+                            platform:   tr.getAttribute('data-miq-platform'),
+                            poster_url: tr.getAttribute('data-miq-poster'),
+                        });
+                    });
+                }
             });
 
             // Cross-platform titles rail
@@ -41824,8 +41969,8 @@
             // Music cards render one card per service. The h4 comes
             // straight from the backend `label` field.
             'Music':                             'Music trending: Spotify (mass-streaming chart), Apple Music (Apple-subscriber cut), Shazam (discovery / ID signal).',
-            'Spotify':                           'Spotify: US mass-streaming Top 50. Where mainstream listening is right now.',
-            'Apple Music':                       'Apple Music: US Top chart. The Apple-subscriber cut, tends to skew slightly older / more premium than Spotify.',
+            'Spotify':                           'Spotify: US mass-streaming Top 200. Where mainstream listening is right now.',
+            'Apple Music':                       'Apple Music: US Top 100. The Apple-subscriber cut, tends to skew slightly older / more premium than Spotify.',
             'Shazam':                            'Shazam: US Top 200 song IDs. Discovery signal - what people heard somewhere and looked up. Leading indicator for breakout tracks.',
             // ---------- Social ----------
             'Reddit - trending in the USA':      'Reddit: Top posts today from US-heavy subreddits (r/news, r/politics, r/movies, r/television, r/sports, r/gaming, r/AskReddit, r/popculturechat, etc.).',
@@ -42011,6 +42156,14 @@
             document.querySelectorAll('#trendsIQPanels .tiq-panel').forEach(function(el) {
                 el.classList.toggle('active', el.getAttribute('data-tiq-panel') === key);
             });
+            // Safety net: some cards inject nested content after their
+            // parent panel's initial HTML is stamped (e.g. Streaming's
+            // per-platform sub-panels re-render lazily, Music's rows may
+            // paint after the enrichment RPC returns, Trending People
+            // caption may hydrate from context_meta). Re-run the sweep
+            // once immediately AND once after 300ms to catch any late
+            // paints without doubling the first-render cost.
+            setTimeout(_tiqApplyTooltips, 300);
             // Re-apply tooltips - some panels are lazy-rendered / repainted
             // when the tab is switched (streaming platform pills, watchlist),
             // so run the sweep here too, not just after the top-level render.
@@ -92050,6 +92203,11 @@
             const tstLabel = document.getElementById('tstHoverToggleLabel');
             const llmoToggle = document.getElementById('llmoHoverToggle');
             const llmoLabel = document.getElementById('llmoHoverToggleLabel');
+            // Trends IQ ships its own toggle in the trendsIQView header
+            // (Profile IQ's toolbar is inside #dashboardView which is
+            // hidden when Trends IQ is active).
+            const trendsToggle = document.getElementById('trendsIQHoverToggle');
+            const trendsLabel = document.getElementById('trendsIQHoverToggleLabel');
             const tooltip = document.getElementById('globalTooltip');
             
             if (hoverEnabled) {
@@ -92061,6 +92219,8 @@
                 if (tstLabel) tstLabel.textContent = 'HOVER ON';
                 if (llmoToggle) llmoToggle.classList.remove('active');
                 if (llmoLabel) llmoLabel.textContent = 'HOVER ON';
+                if (trendsToggle) trendsToggle.classList.remove('active');
+                if (trendsLabel) trendsLabel.textContent = 'HOVER ON';
                 document.body.classList.remove('hover-disabled');
                 tstDemographicsHoverEnabled = true;
                 localStorage.setItem('bg_tst_demographics_hover', 'true');
@@ -92075,6 +92235,8 @@
                 if (tstLabel) tstLabel.textContent = 'HOVER OFF';
                 if (llmoToggle) llmoToggle.classList.add('active');
                 if (llmoLabel) llmoLabel.textContent = 'HOVER OFF';
+                if (trendsToggle) trendsToggle.classList.add('active');
+                if (trendsLabel) trendsLabel.textContent = 'HOVER OFF';
                 document.body.classList.add('hover-disabled');
                 tstDemographicsHoverEnabled = false;
                 localStorage.setItem('bg_tst_demographics_hover', 'false');
@@ -92124,6 +92286,11 @@
                 if (llmoHToggle) llmoHToggle.classList.remove('active');
                 llmoHLabel.textContent = 'HOVER ON';
             }
+            // Trends IQ hover toggle - mirror the saved state on load.
+            const trendsHToggle = document.getElementById('trendsIQHoverToggle');
+            const trendsHLabel  = document.getElementById('trendsIQHoverToggleLabel');
+            if (trendsHLabel) trendsHLabel.textContent = hoverOn ? 'HOVER ON' : 'HOVER OFF';
+            if (trendsHToggle) trendsHToggle.classList.toggle('active', !hoverOn);
             if (!tickerOn && (tickerToggle || tickerLabel)) {
                 if (tickerToggle) tickerToggle.classList.add('active');
                 if (tickerLabel) tickerLabel.textContent = 'HOVER OFF';
