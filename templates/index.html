@@ -23764,15 +23764,18 @@
             #microdramasIQView .miq-panel { display: none; }
             #microdramasIQView .miq-panel.active { display: block; }
             #microdramasIQView .miq-title-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.85rem; }
-            #microdramasIQView .miq-title-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; cursor: pointer; transition: border-color 0.15s ease, transform 0.15s ease; }
+            #microdramasIQView .miq-title-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0.75rem; display: grid; grid-template-columns: 56px 1fr; grid-template-rows: auto auto auto; column-gap: 0.7rem; row-gap: 0.4rem; align-items: start; cursor: pointer; transition: border-color 0.15s ease, transform 0.15s ease; }
             #microdramasIQView .miq-title-card:hover { border-color: rgba(236, 72, 153, 0.5); transform: translateY(-1px); }
-            #microdramasIQView .miq-poster { width: 100%; aspect-ratio: 9 / 16; background: linear-gradient(135deg, rgba(236, 72, 153, 0.15), rgba(139, 92, 246, 0.15)); border-radius: 8px; background-size: cover; background-position: center; }
-            #microdramasIQView .miq-title-row { font-size: 0.95rem; font-weight: 600; line-height: 1.2; }
-            #microdramasIQView .miq-title-series { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
-            #microdramasIQView .miq-title-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; font-size: 0.78rem; }
-            #microdramasIQView .miq-metric-label { color: var(--text-secondary); font-size: 0.7rem; }
-            #microdramasIQView .miq-metric-value { font-weight: 600; }
-            #microdramasIQView .miq-window-bar { display: flex; gap: 2px; height: 24px; margin-top: 0.35rem; align-items: end; }
+            /* Small 9:16 poster thumb pinned to the top-left of the card,
+             * spanning the title + series rows. Metrics + curve flow
+             * full-width below (grid-column: 1 / -1). */
+            #microdramasIQView .miq-poster { width: 56px; aspect-ratio: 9 / 16; background: linear-gradient(135deg, rgba(236, 72, 153, 0.15), rgba(139, 92, 246, 0.15)); border-radius: 6px; background-size: cover; background-position: center; grid-column: 1 / 2; grid-row: 1 / 3; }
+            #microdramasIQView .miq-title-series { font-size: 0.68rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; grid-column: 2 / 3; grid-row: 1 / 2; }
+            #microdramasIQView .miq-title-row { font-size: 0.9rem; font-weight: 600; line-height: 1.2; grid-column: 2 / 3; grid-row: 2 / 3; }
+            #microdramasIQView .miq-title-metrics { grid-column: 1 / -1; grid-row: 3 / 4; display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem 0.5rem; font-size: 0.75rem; margin-top: 0.25rem; }
+            #microdramasIQView .miq-metric-label { color: var(--text-secondary); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; }
+            #microdramasIQView .miq-metric-value { font-weight: 600; font-size: 0.85rem; }
+            #microdramasIQView .miq-window-bar { grid-column: 1 / -1; display: flex; gap: 2px; height: 20px; margin-top: 0.35rem; align-items: end; }
             #microdramasIQView .miq-window-cell { flex: 1; background: linear-gradient(180deg, #ec4899, #8b5cf6); border-radius: 2px 2px 0 0; opacity: 0.7; }
             #microdramasIQView .miq-audience-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
             #microdramasIQView .miq-audience-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; }
@@ -23791,14 +23794,14 @@
              * the scraper hasn't captured a poster_url yet). Each
              * genre gets its own gradient + emoji glyph so the grid
              * reads distinctly even when the image is placeholder. */
-            #microdramasIQView .miq-poster { display: flex; align-items: center; justify-content: center; font-size: 2.4rem; text-shadow: 0 2px 12px rgba(0,0,0,0.35); color: rgba(255,255,255,0.92); }
+            #microdramasIQView .miq-poster { display: flex; align-items: center; justify-content: center; font-size: 0.95rem; text-shadow: 0 1px 4px rgba(0,0,0,0.35); color: rgba(255,255,255,0.92); overflow: hidden; }
             #microdramasIQView .miq-poster[data-genre="Werewolf"]      { background: linear-gradient(135deg, #6d28d9, #1e1b4b); }
             #microdramasIQView .miq-poster[data-genre="Billionaire"]   { background: linear-gradient(135deg, #d97706, #78350f); }
             #microdramasIQView .miq-poster[data-genre="CEO"]           { background: linear-gradient(135deg, #db2777, #831843); }
             #microdramasIQView .miq-poster[data-genre="Mafia"]         { background: linear-gradient(135deg, #1f2937, #6b7280); }
             #microdramasIQView .miq-poster[data-genre="Revenge"]       { background: linear-gradient(135deg, #dc2626, #4c0519); }
             #microdramasIQView .miq-poster[data-genre="Second Chance"] { background: linear-gradient(135deg, #059669, #064e3b); }
-            #microdramasIQView .miq-poster-initial { font-size: 3.2rem; font-weight: 700; letter-spacing: -0.02em; text-align: center; padding: 0 0.5rem; line-height: 1.05; }
+            #microdramasIQView .miq-poster-initial { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; text-align: center; padding: 0; line-height: 1; }
 
             /* Title-audience modal (opens when a card / competitor row is clicked) */
             #microdramasIQModal { position: fixed; inset: 0; z-index: 9500; background: rgba(0,0,0,0.65); display: none; align-items: center; justify-content: center; padding: 2rem; }
@@ -41414,8 +41417,8 @@
             var glyph = _MIQ_GENRE_GLYPH[g] || '📱';
             var initial = ((t.title || '?').trim().charAt(0) || '?').toUpperCase();
             return '<div class="miq-poster" data-genre="' + g + '">' +
-                '<div style="display:flex; flex-direction:column; align-items:center; gap:0.35rem;">' +
-                    '<div style="font-size:2rem; opacity:0.85;">' + glyph + '</div>' +
+                '<div style="display:flex; flex-direction:column; align-items:center; gap:0.1rem; line-height:1;">' +
+                    '<div style="font-size:0.85rem; opacity:0.85;">' + glyph + '</div>' +
                     '<div class="miq-poster-initial">' + initial + '</div>' +
                 '</div>' +
             '</div>';
@@ -41998,21 +42001,21 @@
             // array so it's easy to see and update in one place.
             var tabs = [
                 { key: 'searches',  label: 'Trending',         count: counts.searches  || 0, icon: '🔎',
-                  tip: 'Trending searches: The top ~300 Google search queries + hashtags in the window, sliced into overall / entertainment / retail / politics / finance / sports. What people are actively typing into search boxes right now.' },
+                  tip: 'Trending searches: The top search queries and hashtags in the window, sliced into overall, entertainment, retail, politics, finance, sports, and more. What people are actively looking for right now.' },
                 { key: 'movers',    label: 'Movers',           count: counts.movers    || 0, icon: '🚀',
-                  tip: 'Movers: Day-over-day and week-over-week momentum. Rising, falling, breakout, and sustained-heat buckets computed from the dated snapshot history in S3. Requires a few days of history before it lights up.' },
+                  tip: 'Movers: Day-over-day and week-over-week momentum. Breakout, climbing, cooling, and sustained-heat buckets show which trends are gaining, holding, or losing steam.' },
                 { key: 'headlines', label: 'Headlines',        count: headlineCount,         icon: '📰',
-                  tip: 'Headlines: Top stories from major news outlets (CNN, NYT, WSJ, Reuters, CNBC, MS NOW, Fox, etc.), plus a By-Source view that groups the same articles by outlet, plus a Philanthropy sub-tab for the causes and campaigns making news.' },
+                  tip: 'Headlines: Top stories from major news outlets, plus a By-Source view that groups the same stories by outlet, plus a Philanthropy sub-tab for the causes and campaigns making news.' },
                 { key: 'people',    label: 'Trending people',  count: counts.people    || 0, icon: '👤',
-                  tip: 'Trending people: Individuals rising across news, Wikipedia page-view spikes, social mentions, and search. Each row shows why they are trending (Claude one-liner from the surrounding article context) and a direction indicator (up / down / stable).' },
+                  tip: 'Trending people: Individuals rising across news, Wikipedia interest, social, and search. Each row shows a one-line "why they are trending" caption and a direction indicator (up, down, or stable).' },
                 { key: 'music',     label: 'Music',            count: counts.music     || 0, icon: '🎵',
-                  tip: 'Music: Three views of what people are listening to right now. Spotify (mass-streaming chart), Apple Music (Apple-subscriber cut), Shazam (what people are IDing, discovery signal).' },
+                  tip: 'Music: Spotify, Apple Music, and Shazam. What people are streaming, playing, and identifying right now.' },
                 { key: 'social',    label: 'Social',           count: 0,                     icon: '💬',
-                  tip: 'Social: Real trending content (posts, videos, tweets) on Reddit, YouTube, TikTok, Instagram, and X. Not hashtag lists. Reddit is US-heavy subreddits (news, politics, entertainment); YouTube is US-region trending; TikTok / IG / X pull from your logged-in explore feeds via donated cookies.' },
+                  tip: 'Social: Trending posts, videos, and tweets on Reddit, YouTube, TikTok, Instagram, and X. Real content, not hashtag lists.' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
-                  tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, Max, Prime Video, and ESPN+, split into Film and TV. Netflix data comes from its authenticated daily browse feed; the others come from the platforms\u0027 own trending rails.' },
+                  tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, Max, Prime Video, and ESPN+, split into Film and TV.' },
                 { key: 'products',  label: 'Products',         count: counts.retailers || 0, icon: '🛍️',
-                  tip: 'Products: Best-sellers / trending SKUs at Amazon, Target, Walmart, Nike, Sephora, Ulta, Best Buy, Etsy, and Lululemon. Price + rank + link where available.' },
+                  tip: 'Products: Best-sellers and trending SKUs at Amazon, Target, Walmart, Nike, Sephora, Ulta, Best Buy, Etsy, and Lululemon. Price, rank, and link where available.' },
                 { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★',
                   tip: 'Watchlist: The trends you have starred. Populates the daily digest email so you get pinged when anything on this list breaks out, drops off, or crosses a threshold you set.' },
             ];
@@ -42092,61 +42095,61 @@
         // ============================================================
         var TIQ_CARD_TOOLTIPS = {
             // ---------- Movers ----------
-            'Breakout':          'Breakout: Brand new in the current window - wasn\u0027t trending last week. Something just hit the culture.',
-            'Climbing':          'Climbing: In the top-N both then and now, with rank up 3+ or score up 2x+. Sustained upward momentum.',
-            'Rising':            'Climbing: In the top-N both then and now, with rank up 3+ or score up 2x+. Sustained upward momentum.',
+            'Breakout':          'Breakout: Brand new in the current window. Something just hit the culture.',
+            'Climbing':          'Climbing: Gaining ground week over week. Sustained upward momentum.',
+            'Rising':            'Climbing: Gaining ground week over week. Sustained upward momentum.',
             'Cooling':           'Cooling: Slipped in the rankings, or fell off the top list entirely.',
             'Falling':           'Cooling: Slipped in the rankings, or fell off the top list entirely.',
-            'Sustained':         'Sustained heat: Ranking similar in both windows. Durable interest, not a one-day spike.',
-            'Sustained heat':    'Sustained heat: Ranking similar in both windows. Durable interest, not a one-day spike.',
+            'Sustained':         'Sustained heat: Holding steady week over week. Durable interest, not a one-day spike.',
+            'Sustained heat':    'Sustained heat: Holding steady week over week. Durable interest, not a one-day spike.',
             // ---------- Headlines ----------
-            'Top headlines':                     'Top headlines: The most-picked-up stories across the outlets we monitor, ranked by cross-source coverage in the window.',
-            'By news source':                    'By news source: Same stories, grouped by outlet. See what CNN vs. MS NOW vs. WSJ vs. Fox is leading with today.',
-            'Philanthropy news':                 'Philanthropy news: Cause-driven headlines - campaigns, gifts, disasters, foundations, non-profits. Same window as Top headlines.',
-            'Conservative news':                 'Conservative news: Right-leaning outlet cut (Fox, NY Post, Daily Wire, National Review, Washington Times). Same window as Top headlines.',
-            'Progressive news':                  'Progressive news: Left-leaning outlet cut (MSNBC/MS NOW, HuffPost, Mother Jones, The Nation, The Guardian US). Same window as Top headlines.',
+            'Top headlines':                     'Top headlines: The most-picked-up stories across major news outlets in the window.',
+            'By news source':                    'By news source: Same stories, grouped by outlet. See what each outlet is leading with today.',
+            'Philanthropy news':                 'Philanthropy news: Cause-driven headlines. Campaigns, gifts, disasters, foundations, non-profits.',
+            'Conservative news':                 'Conservative news: Right-leaning outlet cut.',
+            'Progressive news':                  'Progressive news: Left-leaning outlet cut.',
             // ---------- Trending people ----------
             // Two distinct cards live on this tab. Distinguish them:
             //   * 🌐 Trending People (title case) = Wikipedia pageview
             //     spikes - the most-looked-up people this window.
             //   * 👤 Trending people (lowercase p) = fusion index across
             //     news + wiki + social + search.
-            'Trending People':  'Wikipedia trending people: Individuals with the biggest page-view spike on Wikipedia in the window. Leading indicator of who people are trying to understand right now.',
-            'Trending people':  'Trending people (fusion): Individuals gaining attention across news + Wikipedia + social + search. Each row includes a one-line "why they are trending" caption and a direction indicator (up / down / stable).',
+            'Trending People':  'Trending People: Individuals with the biggest interest spike this window. Who people are trying to understand right now.',
+            'Trending people':  'Trending people: Individuals gaining attention across news, social, and search. Each row shows a one-line "why they are trending" caption and a direction indicator.',
             // ---------- Music ----------
             // Music cards render one card per service. The h4 comes
             // straight from the backend `label` field.
-            'Music':                             'Music trending: Spotify (mass-streaming chart), Apple Music (Apple-subscriber cut), Shazam (discovery / ID signal).',
+            'Music':                             'Music trending: What people are streaming, playing, and identifying right now.',
             'Spotify':                           'Spotify: US mass-streaming Top 200. Where mainstream listening is right now.',
-            'Apple Music':                       'Apple Music: US Top 100. The Apple-subscriber cut, tends to skew slightly older / more premium than Spotify.',
+            'Apple Music':                       'Apple Music: US Top 100. Skews slightly older and more premium than Spotify.',
             'Shazam':                            'Shazam: US Top 200 song IDs. Discovery signal - what people heard somewhere and looked up. Leading indicator for breakout tracks.',
             // ---------- Social ----------
-            'Reddit - trending in the USA':      'Reddit: Top posts today from US-heavy subreddits (r/news, r/politics, r/movies, r/television, r/sports, r/gaming, r/AskReddit, r/popculturechat, etc.).',
-            'YouTube - trending in the USA':    'YouTube: Videos on YouTube US Trending. Ranked by YouTube\u0027s own regional trending algorithm.',
-            'TikTok - trending in the USA':      'TikTok: Videos on TikTok\u0027s Discover feed. Requires donated tiktok.com cookies.',
-            'Instagram - trending in the USA':   'Instagram: Posts + reels from IG\u0027s Explore recommendation engine. Requires donated instagram.com cookies.',
-            'X - trending in the USA':           'X: Trending tweets from x.com/explore. Requires donated x.com cookies with a valid auth_token.',
+            'Reddit - trending in the USA':      'Reddit: Top posts today across the US.',
+            'YouTube - trending in the USA':     'YouTube: Videos trending in the US right now.',
+            'TikTok - trending in the USA':      'TikTok: Trending videos in the US right now.',
+            'Instagram - trending in the USA':   'Instagram: Trending posts and reels in the US right now.',
+            'X - trending in the USA':           'X: Trending tweets in the US right now.',
             // ---------- Streaming (Film / TV split inside each platform sub-tab) ----------
-            'Film':      'Film: Top movies on this streamer right now, from the platform\u0027s own Top-10 / trending rail.',
-            'TV':        'TV: Top series on this streamer right now, from the platform\u0027s own Top-10 / trending rail.',
+            'Film':      'Film: Top movies on this platform right now.',
+            'TV':        'TV: Top series on this platform right now.',
             // ---------- Products / Retailers ----------
             // Individual retailer panels render one card per category
             // ("Best Sellers - top 10", "Movers & Shakers - top 10",
             // etc.). Match on the pre-" - top 10" prefix.
-            'Best Sellers':      'Best Sellers: Ranked product list from the retailer\u0027s best-sellers page. Refreshed daily.',
-            'Movers & Shakers':  'Movers & Shakers: Products with the biggest 24-hour sales rank jump. Leading indicator of momentum.',
-            'Trending':          'Trending: Products currently rising on this retailer, per their own trending feed.',
-            'New Arrivals':      'New Arrivals: Newly launched SKUs from this retailer, ordered by launch date.',
-            'Top 10':            'Top 10: Ranked product list from the retailer\u0027s own top-10 feed. Refreshed daily.',
+            'Best Sellers':      'Best Sellers: Top-ranked products at this retailer right now.',
+            'Movers & Shakers':  'Movers & Shakers: Products with the biggest 24-hour rank jump. Leading indicator of momentum.',
+            'Trending':          'Trending: Products currently rising at this retailer.',
+            'New Arrivals':      'New Arrivals: Newly launched products, ordered by launch date.',
+            'Top 10':            'Top 10: The retailer\u0027s top-ranked products right now.',
             // ---------- Trending searches sub-cards ----------
             // Keys match the actual _tiqRenderSearchCard title AFTER
             // _tiqNormalizeHeader strips the leading emoji.
-            'Overall':               'Overall trending: The top ~300 Google search queries + hashtags in the window, no category filter. The catch-all view.',
+            'Overall':               'Overall trending: The top search queries and hashtags in the window, no category filter. The catch-all view.',
             'Entertainment':         'Entertainment: Movies, TV, celebrities, music, awards shows, tour announcements, red carpet, casting news.',
             'Retail':                'Retail: Product launches, sales, best-seller queries, brand mentions, coupon codes, restocks.',
             'Politics':              'Politics: Candidates, policy debates, election news, government actions, Congress, courts.',
-            'Conservative':          'Conservative politics: Queries + hashtags trending on the right - candidates, causes, outlets (Fox, Daily Wire, NR), movements.',
-            'Progressive':           'Progressive politics: Queries + hashtags trending on the left - candidates, causes, outlets (MS NOW, HuffPost, Mother Jones), movements.',
+            'Conservative':          'Conservative politics: Candidates, causes, and movements trending on the right.',
+            'Progressive':           'Progressive politics: Candidates, causes, and movements trending on the left.',
             'Finance / Wall St':     'Finance / Wall Street: Tickers, market events, IPOs, earnings, crypto, macro news, Fed decisions.',
             'Sports':                'Sports: Athletes, teams, leagues, games, results, injuries, trade rumors, playoff pushes.',
             'Tech':                  'Tech: Product launches, AI news, gadgets, apps, security incidents, industry moves.',
@@ -42160,7 +42163,7 @@
             'Crime':                 'Crime: Cases, verdicts, investigations, missing persons, high-profile trials.',
             'Business':              'Business: Corporate news, layoffs, acquisitions, executive changes, industry moves.',
             'Home & Real Estate':    'Home & Real Estate: Housing market, mortgage rates, home trends, real-estate-in-the-news.',
-            'Philanthropy':          'Philanthropy: Cause-driven queries - foundations, campaigns, disasters, charity events, gifts.',
+            'Philanthropy':          'Philanthropy: Cause-driven queries. Foundations, campaigns, disasters, charity events, gifts.',
             // ---------- Watchlist ----------
             'Your watchlist':        'Your watchlist: Trends you have starred. Populates the daily digest email so you get pinged when anything on this list breaks out, drops off, or crosses a threshold you set.',
         };
@@ -42170,30 +42173,30 @@
         // search category chips, music service pills, retailer pills).
         var TIQ_SUBTAB_TOOLTIPS = {
             // Social platform sub-tabs
-            'Reddit':      'Reddit: Top posts today from US-heavy subreddits.',
-            'YouTube':     'YouTube: US region trending videos.',
-            'TikTok':      'TikTok: Trending videos from TikTok\u0027s Discover feed (requires donated cookies).',
-            'Instagram':   'Instagram: Trending posts + reels from IG\u0027s Explore feed (requires donated cookies).',
-            'X':           'X: Trending tweets from x.com/explore (requires donated cookies with auth_token).',
+            'Reddit':      'Reddit: Top posts trending in the US right now.',
+            'YouTube':     'YouTube: Videos trending in the US right now.',
+            'TikTok':      'TikTok: Trending videos in the US right now.',
+            'Instagram':   'Instagram: Trending posts and reels in the US right now.',
+            'X':           'X: Trending tweets in the US right now.',
             // Streaming platform sub-tabs
-            'Netflix':     'Netflix: Authenticated daily Top-10 scrape from netflix.com/browse.',
-            'Disney+':     'Disney+: Trending titles from disneyplus.com/browse (requires donated Disney+ cookies).',
-            'Hulu':        'Hulu: Trending titles from hulu.com (requires donated Hulu cookies).',
-            'Max':         'Max: Trending titles from play.max.com (requires donated Max cookies).',
-            'Prime Video': 'Prime Video: Trending titles from amazon.com/gp/video (requires donated Amazon cookies).',
-            'ESPN+':       'ESPN+: Trending programs from disneyplus.com/browse/espn (uses Disney+ cookies via bundle).',
+            'Netflix':     'Netflix: Daily Top-10 titles.',
+            'Disney+':     'Disney+: Trending titles right now.',
+            'Hulu':        'Hulu: Trending titles right now.',
+            'Max':         'Max: Trending titles right now.',
+            'Prime Video': 'Prime Video: Trending titles right now.',
+            'ESPN+':       'ESPN+: Trending programs right now.',
             // Headlines sub-tabs. Keys match _tiqNormalizeHeader output
             // of the actual pill text (emoji stripped, trailing count
             // stripped).
-            'Top trending':    'Top trending headlines: The most-picked-up stories across the outlets we monitor, ranked by cross-source coverage.',
-            'By news source':  'By news source: Same articles, grouped by outlet. See what CNN vs. MS NOW vs. WSJ vs. Fox is leading with today.',
-            'Philanthropy':    'Philanthropy: Cause-driven news - campaigns, disasters, foundations, charity events, gifts.',
-            'Conservative':    'Conservative news: Right-leaning outlet cut (Fox, NY Post, Daily Wire, National Review).',
-            'Progressive':     'Progressive news: Left-leaning outlet cut (MS NOW, HuffPost, Mother Jones, The Nation).',
+            'Top trending':    'Top trending headlines: The most-picked-up stories across major outlets right now.',
+            'By news source':  'By news source: Same stories, grouped by outlet. See what each outlet is leading with today.',
+            'Philanthropy':    'Philanthropy: Cause-driven news. Campaigns, disasters, foundations, charity events, gifts.',
+            'Conservative':    'Conservative news: Right-leaning outlet cut.',
+            'Progressive':     'Progressive news: Left-leaning outlet cut.',
             // Music service sub-tabs
             'Spotify':      'Spotify: US mass-streaming top chart.',
-            'Apple Music':  'Apple Music: US chart from the Apple subscriber cut.',
-            'Shazam':       'Shazam: US discovery signal (what people are IDing).',
+            'Apple Music':  'Apple Music: Top chart from the Apple subscriber base.',
+            'Shazam':       'Shazam: US discovery signal. What people are identifying right now.',
             // Retailer sub-tabs
             'Amazon':       'Amazon Movers & Shakers: Biggest 24-hour rank jumps.',
             'Target':       'Target Best Sellers.',
@@ -42282,7 +42285,7 @@
                 } else if (t === 'Remove from watchlist') {
                     tip = 'Remove from Watchlist: Unstar this trend. It will stop appearing in your digest.';
                 } else if (t === 'View historical arc' || glyph === '📈') {
-                    tip = 'Historical arc: Day-by-day trajectory for this trend, reconstructed from daily snapshots. Shows how rank / volume / mention share has moved over the last 14 days.';
+                    tip = 'Historical arc: Day-by-day trajectory for this trend. Shows how rank, volume, and mention share have moved over the last 14 days.';
                 } else if (t) {
                     tip = t;
                 }
@@ -42417,7 +42420,7 @@
         function renderTIQMovers(movers) {
             movers = movers || {};
             if (!movers.available) {
-                var note = movers.note || 'Collecting daily snapshots. Movers view unlocks after a few days of history.';
+                var note = movers.note || 'Movers is warming up. Check back in a few days once history builds up.';
                 return '<div class="tiq-empty">' +
                        '<div style="font-size:16px;font-weight:600;margin-bottom:6px;">Movers is warming up</div>' +
                        '<div>' + _tiqEsc(note) + '</div>' +
@@ -42427,21 +42430,21 @@
             if (movers.today_day && movers.baseline_day) {
                 span = 'Comparing ' + _tiqEsc(movers.today_day) + ' against ' + _tiqEsc(movers.baseline_day) + '.';
             }
-            // Only render buckets that actually have data. Google Trends
-            // daily lists turn over hard between days, so Climbing and
-            // Sustained often can't populate; showing empty tiles reads
-            // worse than dropping them.
+            // Only render buckets that actually have data. Daily trending
+            // lists turn over hard between days, so Climbing and Sustained
+            // often can't populate; showing empty tiles reads worse than
+            // dropping them.
             var buckets = [
-                { title: '🔥 Breakout',      sub: 'Brand new in the current window; wasn\'t trending last week.',                       rows: movers.breakout  },
-                { title: '📈 Climbing',      sub: 'In the top-N both then and now, with rank up 3+ or score up 2x+.',                    rows: movers.rising    },
+                { title: '🔥 Breakout',      sub: 'Brand new in the current window. Wasn\'t trending last week.',                        rows: movers.breakout  },
+                { title: '📈 Climbing',      sub: 'Gaining ground week over week. Sustained upward momentum.',                          rows: movers.rising    },
                 { title: '📉 Cooling',       sub: 'Slipped in the rankings, or fell off the top list entirely.',                        rows: movers.falling   },
-                { title: '⭐ Sustained heat', sub: 'Ranking similar in both windows: durable interest, not a one-day spike.',            rows: movers.sustained },
+                { title: '⭐ Sustained heat', sub: 'Holding steady week over week. Durable interest, not a one-day spike.',              rows: movers.sustained },
             ];
             var populated = buckets.filter(function(b) { return b.rows && b.rows.length; });
             if (!populated.length) {
                 return '<div class="tiq-empty">' +
                        '<div style="font-size:16px;font-weight:600;margin-bottom:6px;">Movers is warming up</div>' +
-                       '<div>No directional signal yet in this window. Try again once a few more days of snapshots have accumulated, or switch to another geo.</div>' +
+                       '<div>No directional signal yet in this window. Try another geography, or check back later.</div>' +
                        '</div>';
             }
             var header = '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
@@ -42528,10 +42531,10 @@
         // - but no per-source filter chips, per user request.
         function _renderTIQHeadlinesPhilanthropy(rows) {
             if (!rows || !rows.length) {
-                return '<div class="tiq-empty">No philanthropy news yet. Latest scrape hasn\u0027t landed - check back after tomorrow\u0027s refresh.</div>';
+                return '<div class="tiq-empty">No philanthropy news yet. Check back later.</div>';
             }
             var html = '<div class="tiq-card"><h4>\u2764\uFE0F Philanthropy news</h4>' +
-                       '<div class="tiq-card-sub">Foundation moves, big gifts, disaster relief, sector news. Chronicle of Philanthropy, Nonprofit Quarterly, SSIR, Blue Avocado, Guardian Global Development.</div>' +
+                       '<div class="tiq-card-sub">Foundation moves, big gifts, disaster relief, sector news.</div>' +
                        '<div class="tiq-headline-list" style="max-height:720px;overflow-y:auto;">';
             rows.forEach(function(r, i) {
                 var img = _tiqImgCell('tiq-headline-image', r.image);
