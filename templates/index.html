@@ -17840,30 +17840,44 @@
                     <span class="view-nav-label">SELECT PRODUCT:</span>
                     <div class="view-nav-custom-wrap" id="viewNavCustomWrap">
                         <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate" aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;min-width:0;">
-                            {# Display order 2026-07-07 (Trends group re-nests
-                               Talent Ranker under it per user request):
+                            {# Display order 2026-07-22 (Content Ranker removed
+                               per Jenna):
                                  Profile IQ, Subscriber IQ, Digital Journey IQ,
                                  Trends (group: Trends dashboard + Talent Ranker),
-                                 Content Ranker, Blue IQ, Fin IQ, LLMO IQ,
+                                 Microdramas, Blue IQ, Fin IQ, LLMO IQ,
                                  SF Conversion, Intent IQ, ROAS IQ,
                                  Brand Partnership, Flywheel Conversion,
                                  Analysis IQ, Share of Time, Workspace,
                                  then tail (Admin).
 
-                               History: "Culture Ranker" (2026-05) -> "Talent
-                               Ranker" (2026-07-07) and moved from a top-level
-                               dropdown entry to a nested item inside the
-                               Trends group. The option value stays
-                               `cultureRankerIQ` so all internal JS wiring
-                               (showCultureRankerIQ, viewNavProducts map,
-                               _rankerTabFilter='culture', etc.) keeps
-                               working unchanged. #}
+                               History:
+                                 * "Culture Ranker" (2026-05) -> "Talent
+                                   Ranker" (2026-07-07) and moved from a
+                                   top-level dropdown entry to a nested
+                                   item inside the Trends group. The
+                                   option value stays `cultureRankerIQ`
+                                   so all internal JS wiring
+                                   (showCultureRankerIQ, viewNavProducts
+                                   map, _rankerTabFilter='culture')
+                                   keeps working unchanged.
+                                 * "Content Ranker" (2026-05 - 2026-07-22)
+                                   removed per Jenna 2026-07-22. It was
+                                   a filter-overlay on the shared
+                                   rankerIQView (tab strip narrowed to
+                                   content/platforms/netflixch/trends/
+                                   other via _rankerTabFilter='content').
+                                   Handler, map entry, access-flag row,
+                                   and 'content' branch in
+                                   _applyRankerTabFilter all deleted.
+                                   The content-only tab buttons still
+                                   live in the DOM but are unreachable
+                                   now that no entrypoint sets
+                                   _rankerTabFilter='content'. #}
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
                             <option value="journeyIQ" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
                             <option value="trendsIQ" data-group="Trends" {% if not has_trends_iq_access %}disabled{% endif %}>📈 Trends</option>
                             <option value="cultureRankerIQ" data-group="Trends" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Talent Ranker</option>
-                            <option value="contentRankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>🎬 Content Ranker</option>
                             <option value="microdramasIQ" {% if not has_microdramas_iq_access %}disabled{% endif %}>📱 Microdramas</option>
                             <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
@@ -23822,7 +23836,6 @@
                 <button type="button" class="miq-tab active" data-panel="titles" onclick="setMicrodramasIQTab('titles')">Peacock titles</button>
                 <button type="button" class="miq-tab" data-panel="competitors" onclick="setMicrodramasIQTab('competitors')">ReelShort &amp; DramaBox</button>
                 <button type="button" class="miq-tab" data-panel="audience" onclick="setMicrodramasIQTab('audience')">Overall audience</button>
-                <button type="button" class="miq-tab" data-panel="method" onclick="setMicrodramasIQTab('method')">Methodology &amp; coverage</button>
             </div>
             <div id="microdramasIQLoading" class="miq-loading-overlay" style="display: none;">
                 <div class="miq-spinner"></div>
@@ -23871,31 +23884,6 @@
             </div>
             <div class="miq-panel" data-panel="audience">
                 <div id="microdramasIQAudience" class="miq-audience-grid"></div>
-            </div>
-            <div class="miq-panel" data-panel="method">
-                <div id="microdramasIQMethod" class="miq-audience-card">
-                    <h4>Methodology</h4>
-                    <ul class="miq-method-list" id="microdramasIQMethodList"></ul>
-                </div>
-                <div id="microdramasIQCoverage" class="miq-audience-card" style="margin-top: 1rem;">
-                    <h4>Coverage &amp; limitations</h4>
-                    <ul class="miq-method-list">
-                        <li>Titles catalog builds from the daily observed set on Peacock's microdrama hub rails + homepage carousels. Titles that never surface in a rail are captured only when a deep-link is observed elsewhere.</li>
-                        <li>28-day window is anchored on the first-observed date, not the true premiere date, so the window is a lower bound when a title existed before we started observing.</li>
-                        <li>Audience profile uses the Peacock Shorts hub audience mix as the panel-anchor and tilts per title by title/series keyword heuristics (romance, mafia, sports).</li>
-                        <li>Peacock does not publish per-title view counts. Reach values are calibrated to the 41M paid subscriber base and comparable vertical-drama benchmarks (ReelShort, DramaBox, GoodShort).</li>
-                        <li>Mobile-first content that lives only inside the Peacock app (not the web hub) is not currently in the catalog. See "Recommended next steps" below.</li>
-                    </ul>
-                </div>
-                <div class="miq-audience-card" style="margin-top: 1rem;">
-                    <h4>Recommended next steps</h4>
-                    <ul class="miq-method-list">
-                        <li>Extend the scraper to hit the Peacock mobile app manifests (via a proxied device session) so app-only titles land in the catalog.</li>
-                        <li>Add per-episode observation so retention curves can be measured across a series arc.</li>
-                        <li>Cross-reference Peacock's microdrama titles against BG's talent + brand hostmap so co-star and sponsorship overlap can be surfaced per title.</li>
-                        <li>Wire per-title alerting to notify when a new title first surfaces on the hero rail (day 0 of the 28-day window).</li>
-                    </ul>
-                </div>
             </div>
         </div>
 
@@ -35597,7 +35585,8 @@
                 sfConversion: showSFConversion,
                 llmoIQ: showLLMOIQ,
                 cultureRankerIQ: function() { if (typeof showCultureRankerIQ === 'function') showCultureRankerIQ(); },
-                contentRankerIQ: function() { if (typeof showContentRankerIQ === 'function') showContentRankerIQ(); },
+                // 2026-07-22 (Jenna): contentRankerIQ handler removed
+                // with the Content Ranker product itself.
                 rankerIQ: showRankerIQ,
                 ticketSalesIQ: showTicketSalesIQ,
                 ticketSalesTracker: showTicketSalesTracker,
@@ -35724,7 +35713,8 @@
                         ['talentFitIQ', !!d.has_talent_fit_access],
                         ['llmoIQ', !!d.has_llmo_iq_access],
                         ['cultureRankerIQ', !!d.has_rankers_iq_access],
-                        ['contentRankerIQ', !!d.has_rankers_iq_access],
+                        // 2026-07-22 (Jenna): contentRankerIQ mapping removed
+                        // with the Content Ranker product itself.
                         ['ticketSalesIQ', !!d.has_ticket_sales_iq_access],
                         ['ticketSalesTracker', !!d.has_ticket_sales_tracker_access],
                         ['hedgeFundIQ', !!d.has_hedge_fund_iq_access],
@@ -41318,7 +41308,6 @@
             }
             renderMicrodramasIQTitles(d.titles || []);
             renderMicrodramasIQAudience(d.audience_overall || {});
-            renderMicrodramasIQMethod(d.methodology || []);
         }
 
         function renderMicrodramasIQTitles(titles) {
@@ -41395,14 +41384,6 @@
                 (aud.platform_affinities || []).map(function(r) { return _miqBarRow(r.label, r.reach_pct); }).join('') +
                 '</div>';
             el.innerHTML = html;
-        }
-
-        function renderMicrodramasIQMethod(methodology) {
-            var el = document.getElementById('microdramasIQMethodList');
-            if (!el) return;
-            el.innerHTML = (methodology || []).map(function(line) {
-                return '<li>' + line + '</li>';
-            }).join('');
         }
 
         function setMicrodramasIQTab(panel) {
@@ -44884,23 +44865,21 @@
             if (typeof showRankerIQPlatform === 'function') showRankerIQPlatform('talent');
         };
 
-        // Content Ranker: Content, Platforms, Netflix, Trends, Other
-        window.showContentRankerIQ = function() {
-            window._rankerTabFilter = 'content';
-            var dd = document.getElementById('viewNavDropdown');
-            var opt = dd && dd.querySelector('option[value="contentRankerIQ"]');
-            if (opt && opt.disabled) return;
-            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('contentRankerIQ');
-            showRankerIQ();
-            var title = document.querySelector('#rankerIQView > h2');
-            if (title) title.textContent = '🎬 Content Ranker';
-            _applyRankerTabFilter();
-            if (typeof showRankerIQPlatform === 'function') showRankerIQPlatform('content');
-        };
+        // 2026-07-22 (Jenna): Content Ranker removed. The former
+        // `showContentRankerIQ` handler (which set
+        // _rankerTabFilter='content', selected the contentRankerIQ
+        // dropdown option, and re-titled the view "🎬 Content Ranker")
+        // is deleted along with the dropdown entry, nav-handler map
+        // row, and access-flag mapping. If it needs to come back later
+        // the pattern to follow is the still-in-place
+        // `showCultureRankerIQ` a few lines above.
 
         function _applyRankerTabFilter() {
+            // Only 'culture' is a meaningful filter now that Content
+            // Ranker is gone; any other value (or null) shows every
+            // tab so a direct showRankerIQ() call from a deep-link
+            // still renders the full tab strip.
             var cultureSlugs = ['talent', 'brands', 'sport'];
-            var contentSlugs = ['content', 'platforms', 'netflixch', 'trends', 'other'];
             var allBtns = document.querySelectorAll('.rankers-container .rankers-platform-tabs .tab-btn');
             allBtns.forEach(function(btn) {
                 var onclick = btn.getAttribute('onclick') || '';
@@ -44908,8 +44887,6 @@
                 var slug = match ? match[1] : '';
                 if (window._rankerTabFilter === 'culture') {
                     btn.style.display = cultureSlugs.indexOf(slug) >= 0 ? '' : 'none';
-                } else if (window._rankerTabFilter === 'content') {
-                    btn.style.display = contentSlugs.indexOf(slug) >= 0 ? '' : 'none';
                 } else {
                     btn.style.display = '';
                 }
