@@ -46,6 +46,12 @@ except Exception as _trends_watchlist_err:
     _trends_watchlist = None
     print(f"⚠️ Trends watchlist module unavailable: {_trends_watchlist_err}")
 
+try:
+    import microdramas_iq as _microdramas_iq  # type: ignore
+except Exception as _microdramas_iq_err:
+    _microdramas_iq = None
+    print(f"⚠️ Microdramas IQ module unavailable at import time: {_microdramas_iq_err}")
+
 import uuid
 import json
 import csv
@@ -4191,6 +4197,7 @@ def create_user():
             'has_impact_iq_access': req_data.get('has_impact_iq_access', cd.get('has_impact_iq_access', True) if cd else True),
             'impact_iq_journeys': req_data.get('impact_iq_journeys', cd.get('impact_iq_journeys', ['*']) if cd else ['*']) or ['*'],
             'has_trends_iq_access': req_data.get('has_trends_iq_access', cd.get('has_trends_iq_access', False) if cd else False),
+            'has_microdramas_iq_access': req_data.get('has_microdramas_iq_access', cd.get('has_microdramas_iq_access', False) if cd else False),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
@@ -4372,6 +4379,8 @@ def update_user(username):
             user['has_blue_iq_access'] = bool(req_data['has_blue_iq_access'])
         if 'has_trends_iq_access' in req_data:
             user['has_trends_iq_access'] = bool(req_data['has_trends_iq_access'])
+        if 'has_microdramas_iq_access' in req_data:
+            user['has_microdramas_iq_access'] = bool(req_data['has_microdramas_iq_access'])
         if 'has_impact_iq_access' in req_data:
             user['has_impact_iq_access'] = bool(req_data['has_impact_iq_access'])
         if 'impact_iq_journeys' in req_data:
@@ -4789,6 +4798,7 @@ def restore_defaults_all_users():
             user['has_impact_iq_access'] = True
             user['impact_iq_journeys'] = ['*']
             user['has_trends_iq_access'] = False
+            user['has_microdramas_iq_access'] = False
             count += 1
         save_users(data)
         return jsonify({'success': True, 'message': f'Restored defaults for {count} user(s)', 'count': count})
@@ -5665,6 +5675,7 @@ def api_set_company_defaults(company_name):
             'has_impact_iq_access': req.get('has_impact_iq_access', True),
             'impact_iq_journeys': req.get('impact_iq_journeys', ['*']) or ['*'],
             'has_trends_iq_access': req.get('has_trends_iq_access', False),
+            'has_microdramas_iq_access': req.get('has_microdramas_iq_access', False),
             'credits': req.get('credits', 5),
             'auto_access_new': req.get('auto_access_new', {}),
         }
@@ -5731,6 +5742,7 @@ def api_reset_company_users(company_name):
                 user['has_impact_iq_access'] = cd.get('has_impact_iq_access', True)
                 user['impact_iq_journeys'] = list(cd.get('impact_iq_journeys', ['*']) or ['*'])
                 user['has_trends_iq_access'] = cd.get('has_trends_iq_access', False)
+                user['has_microdramas_iq_access'] = cd.get('has_microdramas_iq_access', False)
                 user['credits'] = cd.get('credits', 5)
                 user['auto_access_new'] = dict(cd.get('auto_access_new', {}))
             else:
@@ -5760,6 +5772,7 @@ def api_reset_company_users(company_name):
                 user['has_impact_iq_access'] = True
                 user['impact_iq_journeys'] = ['*']
                 user['has_trends_iq_access'] = False
+                user['has_microdramas_iq_access'] = False
                 user['credits'] = 5
                 user['auto_access_new'] = {}
             if user.get('has_share_of_time_access') is False:
@@ -7819,6 +7832,7 @@ def compute_product_access_flags(user, role):
             'impact_iq_journeys': ['*'],
             'has_helm_iq_access': True,
             'has_trends_iq_access': True,
+            'has_microdramas_iq_access': True,
         }
     u = user or {}
     has_sot_view = bool(u.get('has_share_of_time_access', True))
@@ -7857,6 +7871,7 @@ def compute_product_access_flags(user, role):
         'impact_iq_journeys': list(u.get('impact_iq_journeys', ['*']) or ['*']),
         'has_helm_iq_access': role == 'super_admin',
         'has_trends_iq_access': bool(u.get('has_trends_iq_access', False)),
+        'has_microdramas_iq_access': bool(u.get('has_microdramas_iq_access', False)),
     }
 
 
@@ -7956,6 +7971,7 @@ def index():
     impact_iq_journeys = _acc.get('impact_iq_journeys', ['*']) or ['*']
     has_helm_iq = _acc.get('has_helm_iq_access', False)
     has_trends_iq = _acc.get('has_trends_iq_access', False)
+    has_microdramas_iq = _acc.get('has_microdramas_iq_access', False)
 
     # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
@@ -8018,6 +8034,7 @@ def index():
                            impact_iq_journeys=impact_iq_journeys,
                            has_helm_iq_access=has_helm_iq,
                            has_trends_iq_access=has_trends_iq,
+                           has_microdramas_iq_access=has_microdramas_iq,
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -15155,6 +15172,64 @@ def api_trends_iq_history():
 
 
 # ============================================================================
+# MICRODRAMAS IQ - Peacock mobile-first microdrama audience insights
+# ============================================================================
+# Answers: (1) can we identify + measure Peacock microdrama titles?
+# (2) rank titles by 28-day activity from first-observed date?
+# (3) profile the audience for overall + top titles?
+# (4) methodology + coverage + limitations.
+# See bg-webapp/microdramas_iq.py.
+def _require_microdramas_iq():
+    """Return (False, error_response) if Microdramas IQ isn't available for this user."""
+    user = get_current_user()
+    if not user:
+        return False, (jsonify({'success': False, 'error': 'Not authenticated'}), 401)
+    role = _normalize_role(user.get('role', 'user'))
+    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+    if not acc.get('has_microdramas_iq_access'):
+        return False, (jsonify({'success': False, 'error': 'Microdramas IQ access not enabled'}), 403)
+    if _microdramas_iq is None:
+        return False, (jsonify({'success': False, 'error': 'Microdramas IQ module not loaded'}), 500)
+    return True, None
+
+
+@app.route('/api/microdramas-iq/filter-options', methods=['GET'])
+@requires_auth
+def api_microdramas_iq_filter_options():
+    """Return sort + window + audience-cut choices."""
+    ok, err = _require_microdramas_iq()
+    if not ok:
+        return err
+    try:
+        return jsonify({'success': True, **_microdramas_iq.get_filter_options()})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/microdramas-iq/data', methods=['POST'])
+@requires_auth
+def api_microdramas_iq_data():
+    """Compute the Microdramas IQ view for the given filters."""
+    ok, err = _require_microdramas_iq()
+    if not ok:
+        return err
+    try:
+        req = request.get_json(silent=True) or {}
+        filters = {
+            'sort':          req.get('sort'),
+            'window_days':   req.get('window_days'),
+            'audience_cut':  req.get('audience_cut'),
+        }
+        force = bool(req.get('force_refresh'))
+        payload = _microdramas_iq.compute_view(filters, force_refresh=force)
+        return jsonify(payload)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================================
 # TRENDS IQ - Watchlist / Alerts / Digest
 # ============================================================================
 # Per-user watchlists live at s3://dashboard-inputs/trends_iq_watchlists/
@@ -19129,6 +19204,7 @@ DEFAULT_HIDDEN_PRODUCTS = {
     'llmoIQ': False,
     'sfConversion': False,
     'intentIQ': False,
+    'impactIQ': False,          # 2026-07-22 sync-gap fix (was in dropdown/admin, missing here)
     'roasIQ': False,
     'brandPartnershipIQ': False,
     'flywheelConversion': False,
@@ -19136,6 +19212,7 @@ DEFAULT_HIDDEN_PRODUCTS = {
     'shareOfTimeIQ': False,
     'workspace': False,
     'helmIQ': False,
+    'microdramasIQ': False,     # 2026-07-22 added with <option value="microdramasIQ">
 }
 
 

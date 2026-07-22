@@ -17864,6 +17864,7 @@
                             <option value="trendsIQ" data-group="Trends" {% if not has_trends_iq_access %}disabled{% endif %}>📈 Trends</option>
                             <option value="cultureRankerIQ" data-group="Trends" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Talent Ranker</option>
                             <option value="contentRankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>🎬 Content Ranker</option>
+                            <option value="microdramasIQ" {% if not has_microdramas_iq_access %}disabled{% endif %}>📱 Microdramas</option>
                             <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
@@ -23694,6 +23695,126 @@
             </div>
             <div id="trendsIQTabStrip" class="tiq-tabstrip" style="display: none;"></div>
             <div id="trendsIQPanels"></div>
+        </div>
+
+        <!-- MICRODRAMAS IQ VIEW (Peacock mobile-first microdrama audience insights) -->
+        <style>
+            #microdramasIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: auto; padding: 1.25rem 1.5rem; }
+            #microdramasIQView .miq-header { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
+            #microdramasIQView .miq-title { font-size: 1.45rem; font-weight: 600; margin: 0; }
+            #microdramasIQView .miq-subtitle { font-size: 0.85rem; color: var(--text-secondary); margin: 0; max-width: 780px; }
+            #microdramasIQView .miq-kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+            #microdramasIQView .miq-kpi { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.75rem 1rem; }
+            #microdramasIQView .miq-kpi-label { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+            #microdramasIQView .miq-kpi-value { font-size: 1.2rem; font-weight: 600; margin-top: 0.25rem; }
+            #microdramasIQView .miq-filter-bar { display: flex; gap: 0.75rem; align-items: end; flex-wrap: wrap; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+            #microdramasIQView .miq-filter-bar label { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem; display: block; }
+            #microdramasIQView .miq-filter-bar select { background: rgba(0,0,0,0.4); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.85rem; min-width: 180px; }
+            #microdramasIQView .miq-apply-btn { background: linear-gradient(135deg, #ec4899, #8b5cf6); color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+            #microdramasIQView .miq-apply-btn:hover { opacity: 0.9; }
+            #microdramasIQView .miq-meta { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem; }
+            #microdramasIQView .miq-tabstrip { display: flex; gap: 0.25rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.5rem; margin-bottom: 1rem; }
+            #microdramasIQView .miq-tab { background: transparent; border: none; color: var(--text-secondary); padding: 0.5rem 0.85rem; font-size: 0.82rem; font-weight: 500; cursor: pointer; border-radius: 6px; }
+            #microdramasIQView .miq-tab:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+            #microdramasIQView .miq-tab.active { background: linear-gradient(135deg, #ec4899, #8b5cf6); color: #fff; }
+            #microdramasIQView .miq-panel { display: none; }
+            #microdramasIQView .miq-panel.active { display: block; }
+            #microdramasIQView .miq-title-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.85rem; }
+            #microdramasIQView .miq-title-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; cursor: pointer; transition: border-color 0.15s ease, transform 0.15s ease; }
+            #microdramasIQView .miq-title-card:hover { border-color: rgba(236, 72, 153, 0.5); transform: translateY(-1px); }
+            #microdramasIQView .miq-poster { width: 100%; aspect-ratio: 9 / 16; background: linear-gradient(135deg, rgba(236, 72, 153, 0.15), rgba(139, 92, 246, 0.15)); border-radius: 8px; background-size: cover; background-position: center; }
+            #microdramasIQView .miq-title-row { font-size: 0.95rem; font-weight: 600; line-height: 1.2; }
+            #microdramasIQView .miq-title-series { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+            #microdramasIQView .miq-title-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; font-size: 0.78rem; }
+            #microdramasIQView .miq-metric-label { color: var(--text-secondary); font-size: 0.7rem; }
+            #microdramasIQView .miq-metric-value { font-weight: 600; }
+            #microdramasIQView .miq-window-bar { display: flex; gap: 2px; height: 24px; margin-top: 0.35rem; align-items: end; }
+            #microdramasIQView .miq-window-cell { flex: 1; background: linear-gradient(180deg, #ec4899, #8b5cf6); border-radius: 2px 2px 0 0; opacity: 0.7; }
+            #microdramasIQView .miq-audience-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+            #microdramasIQView .miq-audience-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; }
+            #microdramasIQView .miq-audience-card h4 { margin: 0 0 0.6rem; font-size: 0.9rem; font-weight: 600; }
+            #microdramasIQView .miq-audience-row { display: grid; grid-template-columns: 130px 1fr auto; gap: 0.5rem; align-items: center; padding: 0.25rem 0; font-size: 0.82rem; }
+            #microdramasIQView .miq-audience-bar-track { background: rgba(255,255,255,0.05); border-radius: 4px; height: 8px; position: relative; overflow: hidden; }
+            #microdramasIQView .miq-audience-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #ec4899, #8b5cf6); border-radius: 4px; }
+            #microdramasIQView .miq-audience-pct { font-variant-numeric: tabular-nums; text-align: right; min-width: 3.5rem; }
+            #microdramasIQView .miq-method-list { list-style: disc; padding-left: 1.2rem; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.55; }
+            #microdramasIQView .miq-method-list li { margin-bottom: 0.35rem; }
+            #microdramasIQView .miq-empty { padding: 2rem; text-align: center; color: var(--text-secondary); font-size: 0.88rem; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.08); }
+            #microdramasIQView .miq-loading-overlay { display: flex; align-items: center; justify-content: center; padding: 3rem; color: var(--text-secondary); font-size: 0.88rem; gap: 0.75rem; }
+            #microdramasIQView .miq-spinner { width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.15); border-top-color: #ec4899; border-radius: 50%; animation: miq-spin 0.9s linear infinite; }
+            @keyframes miq-spin { to { transform: rotate(360deg); } }
+            body[data-theme="light"] #microdramasIQView .miq-kpi,
+            body[data-theme="light"] #microdramasIQView .miq-title-card,
+            body[data-theme="light"] #microdramasIQView .miq-audience-card { background: #fff; border-color: rgba(0,0,0,0.08); }
+            body[data-theme="light"] #microdramasIQView .miq-filter-bar { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.08); }
+        </style>
+        <div id="microdramasIQView">
+            <div class="miq-header">
+                <h2 class="miq-title">📱 Microdramas <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Peacock mobile-first audience insights</span></h2>
+                <p class="miq-subtitle">Titles catalog, 28-day audience windows from first-observed date, and audience profile for Peacock's mobile-first microdrama slate. Ranked by observed hub surface position and first-window reach.</p>
+            </div>
+            <div class="miq-kpi-row" id="microdramasIQKpiRow"></div>
+            <div class="miq-filter-bar">
+                <div>
+                    <label for="microdramasIQSort">Sort by</label>
+                    <select id="microdramasIQSort"></select>
+                </div>
+                <div>
+                    <label for="microdramasIQWindow">Window</label>
+                    <select id="microdramasIQWindow"></select>
+                </div>
+                <div>
+                    <label for="microdramasIQCut">Audience cut</label>
+                    <select id="microdramasIQCut"></select>
+                </div>
+                <div>
+                    <label>&nbsp;</label>
+                    <button type="button" class="miq-apply-btn" onclick="applyMicrodramasIQFilters()">Apply</button>
+                </div>
+            </div>
+            <div class="miq-meta">
+                <span id="microdramasIQMeta">Loading catalog...</span>
+            </div>
+            <div class="miq-tabstrip">
+                <button type="button" class="miq-tab active" data-panel="titles" onclick="setMicrodramasIQTab('titles')">Titles</button>
+                <button type="button" class="miq-tab" data-panel="audience" onclick="setMicrodramasIQTab('audience')">Overall audience</button>
+                <button type="button" class="miq-tab" data-panel="method" onclick="setMicrodramasIQTab('method')">Methodology &amp; coverage</button>
+            </div>
+            <div id="microdramasIQLoading" class="miq-loading-overlay" style="display: none;">
+                <div class="miq-spinner"></div>
+                <div>Loading Peacock microdrama titles...</div>
+            </div>
+            <div class="miq-panel active" data-panel="titles">
+                <div id="microdramasIQTitleGrid" class="miq-title-grid"></div>
+            </div>
+            <div class="miq-panel" data-panel="audience">
+                <div id="microdramasIQAudience" class="miq-audience-grid"></div>
+            </div>
+            <div class="miq-panel" data-panel="method">
+                <div id="microdramasIQMethod" class="miq-audience-card">
+                    <h4>Methodology</h4>
+                    <ul class="miq-method-list" id="microdramasIQMethodList"></ul>
+                </div>
+                <div id="microdramasIQCoverage" class="miq-audience-card" style="margin-top: 1rem;">
+                    <h4>Coverage &amp; limitations</h4>
+                    <ul class="miq-method-list">
+                        <li>Titles catalog builds from the daily observed set on Peacock's microdrama hub rails + homepage carousels. Titles that never surface in a rail are captured only when a deep-link is observed elsewhere.</li>
+                        <li>28-day window is anchored on the first-observed date, not the true premiere date, so the window is a lower bound when a title existed before we started observing.</li>
+                        <li>Audience profile uses the Peacock Shorts hub audience mix as the panel-anchor and tilts per title by title/series keyword heuristics (romance, mafia, sports).</li>
+                        <li>Peacock does not publish per-title view counts. Reach values are calibrated to the 41M paid subscriber base and comparable vertical-drama benchmarks (ReelShort, DramaBox, GoodShort).</li>
+                        <li>Mobile-first content that lives only inside the Peacock app (not the web hub) is not currently in the catalog. See "Recommended next steps" below.</li>
+                    </ul>
+                </div>
+                <div class="miq-audience-card" style="margin-top: 1rem;">
+                    <h4>Recommended next steps</h4>
+                    <ul class="miq-method-list">
+                        <li>Extend the scraper to hit the Peacock mobile app manifests (via a proxied device session) so app-only titles land in the catalog.</li>
+                        <li>Add per-episode observation so retention curves can be measured across a series arc.</li>
+                        <li>Cross-reference Peacock's microdrama titles against BG's talent + brand hostmap so co-star and sponsorship overlap can be surfaced per title.</li>
+                        <li>Wire per-title alerting to notify when a new title first surfaces on the hero rail (day 0 of the 28-day window).</li>
+                    </ul>
+                </div>
+            </div>
         </div>
 
         <!-- INTENT IQ VIEW (Title-scoped marketing-intent measurement) -->
@@ -35362,7 +35483,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, trendsIQ: function() { if (typeof showTrendsIQ === 'function') showTrendsIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, helmIQ: function() { var c = document.querySelector('.container'); if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } } var v = document.getElementById('helmIQView'); if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 auto; min-height:500px; height:calc(100vh - 80px); overflow-y:auto; visibility:visible; position:relative; z-index:50;'); var bt = document.getElementById('helm-tab-build'); if (bt) bt.setAttribute('style', 'display:block; padding:1.5rem;'); var ft = document.getElementById('helm-tab-financials'); if (ft) ft.setAttribute('style', 'display:none;'); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, trendsIQ: function() { if (typeof showTrendsIQ === 'function') showTrendsIQ(); }, microdramasIQ: function() { if (typeof showMicrodramasIQ === 'function') showMicrodramasIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, helmIQ: function() { var c = document.querySelector('.container'); if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } } var v = document.getElementById('helmIQView'); if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 auto; min-height:500px; height:calc(100vh - 80px); overflow-y:auto; visibility:visible; position:relative; z-index:50;'); var bt = document.getElementById('helm-tab-build'); if (bt) bt.setAttribute('style', 'display:block; padding:1.5rem;'); var ft = document.getElementById('helm-tab-financials'); if (ft) ft.setAttribute('style', 'display:none;'); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -35421,6 +35542,7 @@
                 talentFitIQ: showTalentFitIQ,
                 blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); },
                 trendsIQ: function() { if (typeof showTrendsIQ === 'function') showTrendsIQ(); },
+                microdramasIQ: function() { if (typeof showMicrodramasIQ === 'function') showMicrodramasIQ(); },
                 intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); },
                 helmIQ: function() {
                     var c = document.querySelector('.container');
@@ -35531,6 +35653,7 @@
                         ['workspace', d.has_workspace_access !== false],
                         ['blueIQ', !!d.has_blue_iq_access],
                         ['trendsIQ', !!d.has_trends_iq_access],
+                        ['microdramasIQ', !!d.has_microdramas_iq_access],
                         ['intentIQ', d.has_intent_iq_access !== false],
                         ['helmIQ', !!d.has_helm_iq_access]
                     ];
@@ -40969,7 +41092,7 @@
                        'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
                        'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
                        'shareOfTimeIQView','flywheelConversionView','talentFitIQView','journeyIQView',
-                       'intentIQView','blueIQView','helmIQView'];
+                       'intentIQView','blueIQView','helmIQView','microdramasIQView'];
             ids.forEach(function(id) {
                 var el = document.getElementById(id);
                 if (el) el.style.display = 'none';
@@ -40992,6 +41115,225 @@
                 applyTrendsIQFilters();
             }
         };
+
+        // ===================== MICRODRAMAS IQ VIEW =====================
+        // Peacock mobile-first microdrama audience insights. Titles catalog +
+        // 28-day audience windows from first-observed date + audience profile.
+        window.__microdramasIQ = { filterOptions: null, lastData: null, activePanel: 'titles', inFlight: null };
+
+        function _microdramasIQHideAllOtherViews() {
+            var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
+                       'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
+                       'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
+                       'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
+                       'shareOfTimeIQView','flywheelConversionView','talentFitIQView','journeyIQView',
+                       'intentIQView','blueIQView','helmIQView','trendsIQView'];
+            ids.forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+        }
+
+        window.showMicrodramasIQ = function() {
+            var dd = document.getElementById('viewNavDropdown');
+            var opt = dd && dd.querySelector('option[value="microdramasIQ"]');
+            if (opt && opt.disabled) return;
+            if (typeof setViewNavDropdown === 'function') setViewNavDropdown('microdramasIQ');
+            _microdramasIQHideAllOtherViews();
+            var view = document.getElementById('microdramasIQView');
+            if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
+            if (!window.__microdramasIQ.filterOptions) {
+                loadMicrodramasIQFilterOptions().then(function() {
+                    applyMicrodramasIQFilters();
+                });
+            } else if (!window.__microdramasIQ.lastData) {
+                applyMicrodramasIQFilters();
+            }
+        };
+
+        async function loadMicrodramasIQFilterOptions() {
+            try {
+                var resp = await fetch('/api/microdramas-iq/filter-options', { credentials: 'same-origin' });
+                var d = await resp.json();
+                if (!d || !d.success) throw new Error(d && d.error ? d.error : 'Failed to load filter options');
+                window.__microdramasIQ.filterOptions = d;
+                var sortEl = document.getElementById('microdramasIQSort');
+                var winEl  = document.getElementById('microdramasIQWindow');
+                var cutEl  = document.getElementById('microdramasIQCut');
+                if (sortEl) {
+                    sortEl.innerHTML = '';
+                    (d.sort_options || []).forEach(function(o) { sortEl.appendChild(new Option(o.label, o.value)); });
+                }
+                if (winEl) {
+                    winEl.innerHTML = '';
+                    (d.window_options || []).forEach(function(o) { winEl.appendChild(new Option(o.label, o.value)); });
+                    winEl.value = '28';
+                }
+                if (cutEl) {
+                    cutEl.innerHTML = '';
+                    (d.audience_cuts || []).forEach(function(o) { cutEl.appendChild(new Option(o.label, o.value)); });
+                }
+            } catch (e) {
+                console.error('Microdramas IQ filter-options error:', e);
+                var meta = document.getElementById('microdramasIQMeta');
+                if (meta) meta.textContent = 'Could not load filter options: ' + (e.message || e);
+            }
+        }
+
+        async function applyMicrodramasIQFilters() {
+            var loading = document.getElementById('microdramasIQLoading');
+            var grid    = document.getElementById('microdramasIQTitleGrid');
+            if (loading) loading.style.display = 'flex';
+            if (grid) grid.innerHTML = '';
+            var body = {
+                sort:         (document.getElementById('microdramasIQSort') || {}).value || 'view_28d',
+                window_days:  parseInt((document.getElementById('microdramasIQWindow') || {}).value || '28', 10),
+                audience_cut: (document.getElementById('microdramasIQCut') || {}).value || 'all',
+            };
+            try {
+                var resp = await fetch('/api/microdramas-iq/data', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                var d = await resp.json();
+                if (!d || !d.success) throw new Error(d && d.error ? d.error : 'Failed to load data');
+                window.__microdramasIQ.lastData = d;
+                renderMicrodramasIQ(d);
+            } catch (e) {
+                console.error('Microdramas IQ data error:', e);
+                if (grid) grid.innerHTML = '<div class="miq-empty">Could not load titles: ' + (e.message || e) + '</div>';
+            } finally {
+                if (loading) loading.style.display = 'none';
+            }
+        }
+
+        function _miqFormatNumber(n) {
+            if (n == null) return '0';
+            n = Number(n);
+            if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+            if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+            return String(Math.round(n));
+        }
+
+        function renderMicrodramasIQ(d) {
+            var kpi = document.getElementById('microdramasIQKpiRow');
+            var meta = document.getElementById('microdramasIQMeta');
+            var cov = d.coverage || {};
+            var totalAudience = (d.audience_overall || {}).panel_users_reached || 0;
+            var usReach = (d.audience_overall || {}).us_projected_reach || 0;
+            if (kpi) {
+                kpi.innerHTML =
+                    '<div class="miq-kpi"><div class="miq-kpi-label">Titles observed</div><div class="miq-kpi-value">' + (cov.titles_observed || 0) + '</div></div>' +
+                    '<div class="miq-kpi"><div class="miq-kpi-label">Days of history</div><div class="miq-kpi-value">' + (cov.days_of_history || 0) + '</div></div>' +
+                    '<div class="miq-kpi"><div class="miq-kpi-label">Overall audience (panel)</div><div class="miq-kpi-value">' + _miqFormatNumber(totalAudience) + '</div></div>' +
+                    '<div class="miq-kpi"><div class="miq-kpi-label">US Gen Pop reach</div><div class="miq-kpi-value">' + _miqFormatNumber(usReach) + '</div></div>';
+            }
+            if (meta) {
+                var upd = cov.last_updated ? new Date(cov.last_updated).toLocaleString() : '';
+                meta.textContent = 'Showing ' + (d.titles || []).length + ' of ' + (cov.titles_observed || 0) + ' titles.' + (upd ? ' Catalog updated ' + upd + '.' : '');
+            }
+            renderMicrodramasIQTitles(d.titles || []);
+            renderMicrodramasIQAudience(d.audience_overall || {});
+            renderMicrodramasIQMethod(d.methodology || []);
+        }
+
+        function renderMicrodramasIQTitles(titles) {
+            var grid = document.getElementById('microdramasIQTitleGrid');
+            if (!grid) return;
+            if (!titles.length) {
+                grid.innerHTML = '<div class="miq-empty">No titles in the catalog yet. Run the Peacock scraper (scripts/microdramas_scrapers/peacock.py) to populate.</div>';
+                return;
+            }
+            grid.innerHTML = '';
+            titles.forEach(function(t) {
+                var card = document.createElement('div');
+                card.className = 'miq-title-card';
+                var poster = '';
+                if (t.poster_url) poster = ' style="background-image:url(\'' + t.poster_url.replace(/"/g, '&quot;') + '\')"';
+                var curveBars = (t.view_daily_curve || []).map(function(c) {
+                    var h = Math.max(6, Math.round((c.views || 0) / 20000));
+                    return '<div class="miq-window-cell" style="height:' + Math.min(100, h) + '%"></div>';
+                }).join('');
+                card.innerHTML =
+                    '<div class="miq-poster"' + poster + '></div>' +
+                    (t.series ? '<div class="miq-title-series">' + t.series + '</div>' : '') +
+                    '<div class="miq-title-row">' + (t.title || '') + '</div>' +
+                    '<div class="miq-title-metrics">' +
+                        '<div><div class="miq-metric-label">28d reach</div><div class="miq-metric-value">' + _miqFormatNumber(t.view_28d_estimate) + '</div></div>' +
+                        '<div><div class="miq-metric-label">Best rank</div><div class="miq-metric-value">' + (t.surface_rank_best == null ? '-' : '#' + t.surface_rank_best) + '</div></div>' +
+                        '<div><div class="miq-metric-label">First observed</div><div class="miq-metric-value">' + (t.first_observed_date || '-') + '</div></div>' +
+                        '<div><div class="miq-metric-label">Days in catalog</div><div class="miq-metric-value">' + (t.days_since_first_observed || 0) + '</div></div>' +
+                    '</div>' +
+                    '<div class="miq-window-bar">' + curveBars + '</div>';
+                grid.appendChild(card);
+            });
+        }
+
+        function _miqBarRow(label, pct) {
+            var w = Math.max(0, Math.min(100, Number(pct) || 0));
+            return '<div class="miq-audience-row">' +
+                '<div>' + label + '</div>' +
+                '<div class="miq-audience-bar-track"><div class="miq-audience-bar-fill" style="width:' + w + '%"></div></div>' +
+                '<div class="miq-audience-pct">' + w.toFixed(1) + '%</div>' +
+            '</div>';
+        }
+
+        function _miqIndexRow(label, idx) {
+            var w = Math.max(0, Math.min(100, (Number(idx) || 0) / 2.5));
+            return '<div class="miq-audience-row">' +
+                '<div>' + label + '</div>' +
+                '<div class="miq-audience-bar-track"><div class="miq-audience-bar-fill" style="width:' + w + '%"></div></div>' +
+                '<div class="miq-audience-pct">' + (Number(idx) || 0) + '</div>' +
+            '</div>';
+        }
+
+        function renderMicrodramasIQAudience(aud) {
+            var el = document.getElementById('microdramasIQAudience');
+            if (!el) return;
+            var demos = aud.demographics || {};
+            var html = '';
+            var demoBlocks = [
+                ['Gender',    demos.gender    || []],
+                ['Age',       demos.age       || []],
+                ['Ethnicity', demos.ethnicity || []],
+                ['Income',    demos.income    || []],
+                ['Location',  demos.location  || []],
+            ];
+            demoBlocks.forEach(function(b) {
+                html += '<div class="miq-audience-card"><h4>' + b[0] + '</h4>' +
+                    b[1].map(function(r) { return _miqBarRow(r.label, r.pct); }).join('') +
+                    '</div>';
+            });
+            html += '<div class="miq-audience-card"><h4>Interests (index vs Gen Pop)</h4>' +
+                (aud.interests || []).map(function(r) { return _miqIndexRow(r.label, r.index); }).join('') +
+                '</div>';
+            html += '<div class="miq-audience-card"><h4>Platform affinities (reach)</h4>' +
+                (aud.platform_affinities || []).map(function(r) { return _miqBarRow(r.label, r.reach_pct); }).join('') +
+                '</div>';
+            el.innerHTML = html;
+        }
+
+        function renderMicrodramasIQMethod(methodology) {
+            var el = document.getElementById('microdramasIQMethodList');
+            if (!el) return;
+            el.innerHTML = (methodology || []).map(function(line) {
+                return '<li>' + line + '</li>';
+            }).join('');
+        }
+
+        function setMicrodramasIQTab(panel) {
+            window.__microdramasIQ.activePanel = panel;
+            document.querySelectorAll('#microdramasIQView .miq-tab').forEach(function(b) {
+                if (b.getAttribute('data-panel') === panel) b.classList.add('active');
+                else b.classList.remove('active');
+            });
+            document.querySelectorAll('#microdramasIQView .miq-panel').forEach(function(p) {
+                if (p.getAttribute('data-panel') === panel) p.classList.add('active');
+                else p.classList.remove('active');
+            });
+        }
 
         async function loadTrendsIQFilterOptions() {
             try {

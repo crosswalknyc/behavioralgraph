@@ -96,6 +96,11 @@ DEFAULT_DOMAINS = [
     # disneyplus.com/browse/espn (Disney bundle), so the disneyplus.com
     # cookie already covers it. Add 'plus.espn.com' here only if you
     # ever want to scrape the standalone ESPN+ web player.
+    #
+    # 2026-07-22: Peacock added for the Microdramas IQ module. The
+    # peacocktv.com hub is paid-only, so a donated logged-in session
+    # is required for the microdrama hub rails to render.
+    'peacocktv.com',
 ]
 
 S3_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')
