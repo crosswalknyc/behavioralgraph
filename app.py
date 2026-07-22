@@ -52,6 +52,12 @@ except Exception as _microdramas_iq_err:
     _microdramas_iq = None
     print(f"⚠️ Microdramas IQ module unavailable at import time: {_microdramas_iq_err}")
 
+try:
+    import microdramas_audience_agent as _microdramas_audience_agent  # type: ignore
+except Exception as _microdramas_audience_agent_err:
+    _microdramas_audience_agent = None
+    print(f"⚠️ Microdramas audience agent unavailable at import time: {_microdramas_audience_agent_err}")
+
 import uuid
 import json
 import csv
@@ -15245,6 +15251,36 @@ def api_microdramas_iq_competitors():
             'genre':       req.get('genre'),
         }
         payload = _microdramas_iq.compute_competitors_view(filters)
+        return jsonify(payload)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/microdramas-iq/title-audience', methods=['POST'])
+@requires_auth
+def api_microdramas_iq_title_audience():
+    """Research one microdrama title's audience with the Claude-backed
+    agent (falls back to a keyword-tilt heuristic when Claude is
+    unavailable). Cached in S3 by title+series+platform hash."""
+    ok, err = _require_microdramas_iq()
+    if not ok:
+        return err
+    if _microdramas_audience_agent is None:
+        return jsonify({'success': False, 'error': 'Audience agent not loaded'}), 500
+    try:
+        req = request.get_json(silent=True) or {}
+        title    = (req.get('title')    or '').strip()
+        series   = (req.get('series')   or '').strip()
+        genre    = (req.get('genre')    or '').strip()
+        platform = (req.get('platform') or '').strip()
+        force    = bool(req.get('force_refresh'))
+        if not title:
+            return jsonify({'success': False, 'error': 'title is required'}), 400
+        payload = _microdramas_audience_agent.research_title_audience(
+            title, series=series, genre=genre, platform=platform,
+            force_refresh=force,
+        )
         return jsonify(payload)
     except Exception as e:
         traceback.print_exc()

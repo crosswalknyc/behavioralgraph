@@ -293,6 +293,7 @@ def integrate_snapshot(snapshot: dict, *, source: str = 'peacock') -> dict:
             'series':               row.get('series') or '',
             'poster_url':           row.get('poster_url') or '',
             'deep_link':            row.get('deep_link') or '',
+            'genre':                row.get('genre') or '',
             'first_observed_date': today,
             'observations':        [],
             'episodes':            [],
@@ -305,6 +306,8 @@ def integrate_snapshot(snapshot: dict, *, source: str = 'peacock') -> dict:
             entry['deep_link'] = row['deep_link']
         if row.get('series'):
             entry['series'] = row['series']
+        if row.get('genre'):
+            entry['genre'] = row['genre']
 
         entry['last_observed_date'] = today
         entry['observations'].append({
@@ -792,6 +795,7 @@ def _serialize_title(entry: dict, *, window_days: int) -> dict:
         'key':                 entry.get('key'),
         'title':               entry.get('title'),
         'series':              entry.get('series') or None,
+        'genre':               entry.get('genre') or None,
         'poster_url':          entry.get('poster_url') or None,
         'deep_link':           entry.get('deep_link') or None,
         'first_observed_date': first_iso,
