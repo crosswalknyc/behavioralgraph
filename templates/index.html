@@ -8244,6 +8244,26 @@
         /* Behavioral spotlight modal: hide Gen Pop and Index when profile is Gen Pop */
         body.profile-is-genpop .spotlight-genpop,
         body.profile-is-genpop .spotlight-index { display: none !important; }
+        /* Non-US / foreign profiles (e.g. Prizeo Germany, sweepstakes): Gen Pop is a US
+           baseline that doesn't apply, so hide every Gen Pop column across Insights,
+           Demographics, Behavioral and Interests cards. Profile % and Index are kept.
+           Parent grids are reflowed to drop the (now display:none) Gen Pop track. */
+        body.foreign-profile .genpop-col,
+        body.foreign-profile .interest-genpop,
+        body.foreign-profile .diff-col-gp,
+        body.foreign-profile .spotlight-genpop { display: none !important; }
+        /* Demographics: Demographic Profile Summary + Key Differentiators (Characteristic | Profile | Index) */
+        body.foreign-profile .demo-summary-header,
+        body.foreign-profile .insight-row-genpop { grid-template-columns: minmax(0,1fr) 72px 42px !important; }
+        /* Behavioral cards + demographic table-mode tables (checkbox | name | Profile | Index) */
+        body.foreign-profile .behavioral-table { grid-template-columns: 28px minmax(100px, 1fr) 78px 64px; }
+        /* Interests list (icon | name | Profile | Index) */
+        body.foreign-profile .interest-header-row,
+        body.foreign-profile .interest-item { grid-template-columns: 40px minmax(150px, 1fr) 105px 90px; }
+        /* Behavioral spotlight modal (rank | name | Profile | Index) */
+        body.foreign-profile .spotlight-item { grid-template-columns: 40px 1fr 100px 80px; }
+        /* Occupation "Gen Pop Actuals" sub-table is entirely US census data */
+        body.foreign-profile #occupationGpActualsTable { display: none !important; }
         .insights-list {
             display: flex;
             flex-direction: column;
@@ -84591,7 +84611,7 @@
             currentDashboardData = parsed;
 
             document.getElementById('dashSampleSize').textContent = formatNumber(parsed.sampleSize);
-            document.getElementById('dashProjectedUS').textContent = formatNumber(parsed.projectedUS);
+            document.getElementById('dashProjectedUS').textContent = isForeignProfile(parsed) ? 'N/A' : formatNumber(parsed.projectedUS);
             
             // IMPORTANT: Also set currentProfileData for AI and export features
             currentProfileData = {
@@ -84605,6 +84625,7 @@
                 dateRange: resolvedDateRange
             };
             applyGenPopMode();
+            applyForeignProfileMode(parsed);
 
             // Load profile selector in sidebar (instead of categories)
             loadDashboardProfiles();
@@ -90628,7 +90649,7 @@
             const sampleSizeEl = document.getElementById('dashSampleSize');
             const projectedUSEl = document.getElementById('dashProjectedUS');
             if (sampleSizeEl) sampleSizeEl.textContent = formatNumber(parsed.sampleSize);
-            if (projectedUSEl) projectedUSEl.textContent = formatNumber(parsed.projectedUS);
+            if (projectedUSEl) projectedUSEl.textContent = isForeignProfile(parsed) ? 'N/A' : formatNumber(parsed.projectedUS);
             
             // Store profile data for AI features
             currentProfileData = {
@@ -90642,6 +90663,7 @@
                 dateRange: dateRange || ''
             };
             applyGenPopMode();
+            applyForeignProfileMode(parsed);
             updateSegmentBuilderTitle();
             
             // Update favorite button
@@ -90939,6 +90961,19 @@
         
         function applyGenPopMode() {
             document.body.classList.toggle('profile-is-genpop', isSelectedProfileGenPop());
+        }
+
+        // Non-US / foreign profiles (e.g. Prizeo Germany, sweepstakes) carry no US Gen Pop
+        // baseline, so the Gen Pop columns and the US projection number are meaningless.
+        // Detection reuses the LOCATION heuristic: LOCATION rows exist but none is New York
+        // or Los Angeles => the file is a foreign/non-US city file.
+        function isForeignProfile(data) {
+            const d = data || currentDashboardData;
+            return !!(d && Array.isArray(d.rawLocations) && isForeignLocationData(d.rawLocations));
+        }
+
+        function applyForeignProfileMode(data) {
+            document.body.classList.toggle('foreign-profile', isForeignProfile(data));
         }
         
         function toggleDashboardDisplayMode() {
@@ -104642,7 +104677,7 @@
 
             // Metrics row
             document.getElementById('insightsSampleSize').textContent = formatNumber(data.sampleSize || 0);
-            document.getElementById('insightsProjectedUS').textContent = formatNumber(data.projectedUS || 0);
+            document.getElementById('insightsProjectedUS').textContent = isForeignProfile(data) ? 'N/A' : formatNumber(data.projectedUS || 0);
             document.getElementById('insightsDateRange').textContent = currentProfileData?.dateRange || data.dateRange || 'Not specified';
             document.getElementById('totalDataPoints').textContent = allItems.length.toLocaleString();
 
