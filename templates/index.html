@@ -96673,7 +96673,20 @@
                 if (upper.includes('WHERE THEY DINE')) return '🍽️';
                 return '📊';
             }
-            
+
+            // Foreign profiles (LOCATION file has no New York / Los Angeles anchor
+            // market) have no US Gen Pop baseline, so any "vs Gen Pop" index is
+            // meaningless. Treat Gen Pop as unavailable for EVERY behavioral item so
+            // the Index column reads N/A across ALL cards - not just the ones whose
+            // items happen to lack a US Gen Pop match (e.g. Most Purchased Brands
+            // worked before, but Social Media platforms matched the US baseline and
+            // kept showing an index).
+            const _profileIsForeign = (typeof isForeignLocationData === 'function')
+                && isForeignLocationData(
+                    (currentDashboardData && Array.isArray(currentDashboardData.rawLocations))
+                        ? currentDashboardData.rawLocations : []
+                );
+
             container.innerHTML = sortedCats.map((cat, idx) => {
                 const catId = cat.replace(/[^a-zA-Z0-9]/g, '');
                 const items = aggregatedBehavioral[cat];
@@ -96693,7 +96706,7 @@
                 // Mark each item with whether it has a same-category Gen Pop match.
                 // Do NOT infer matches from other categories.
                 dedupedItems.forEach(item => {
-                    item._hasGenPopMatch = isCurrentGenPop || ((item.genPopPct ?? 0) > 0);
+                    item._hasGenPopMatch = !_profileIsForeign && (isCurrentGenPop || ((item.genPopPct ?? 0) > 0));
                 });
                 // Show ALL items (don't filter) - Gen Pop and Index will show "N/A" for items without gen pop match
                 const filteredItems = dedupedItems;
