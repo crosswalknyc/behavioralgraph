@@ -22101,7 +22101,17 @@ def release_from_purgatory(purgatory_id):
         profile_category = item.get('category', '')
         auto_add_runs_to_all_users(new_key, key_category_map={new_key: profile_category})
         auto_add_to_quick_selects(new_key)
-        
+
+        # 2026-07-22 (Jenna): refresh this category's precomputed norm so
+        # the dashboard's "Show Category Norm" checkbox picks up the new
+        # profile immediately. Debounced per-category, daemon-threaded,
+        # never raises. See migration/category_norm_refresh.py.
+        try:
+            from migration.category_norm_refresh import schedule_recompute
+            schedule_recompute(profile_category)
+        except Exception as _norm_err:
+            print(f"⚠️  category-norm refresh scheduling failed on purgatory release: {_norm_err}")
+
         print(f"✅ Released from purgatory: {old_key} -> {new_key}")
         return True, new_key
     except Exception as e:
@@ -24587,6 +24597,23 @@ def smart_cache_update():
         if new_s3_keys:
             auto_add_runs_to_all_users(new_s3_keys, key_category_map=new_key_cats)
             auto_add_to_quick_selects(new_s3_keys)
+
+            # 2026-07-22 (Jenna): keep `s3://dashboard-inputs/system/category_norms.json`
+            # fresh as new profiles land. Debounced per-category so a burst of
+            # uploads (e.g. avid-fan skin batch) collapses into one recompute per
+            # category. Runs on a daemon thread, never raises, never blocks. Fixes
+            # the ATHLETE=N=2 staleness bug where the norms file went 6 weeks
+            # without regeneration while 23 new athlete profiles landed.
+            try:
+                from migration.category_norm_refresh import schedule_recompute
+                cats_seen = set()
+                for k in new_s3_keys:
+                    cat = new_key_cats.get(k)
+                    if cat and cat not in cats_seen:
+                        cats_seen.add(cat)
+                        schedule_recompute(cat)
+            except Exception as _norm_err:
+                print(f"⚠️  category-norm refresh scheduling failed after cache smart-update: {_norm_err}")
 
         return {'new': new_count, 'updated': updated_count, 'deleted': deleted_count, 'total': len(s3_cache['jobs'])}
         
