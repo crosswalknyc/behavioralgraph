@@ -1964,14 +1964,26 @@ def _bucket_searches_by_category(rows: list[dict], per_bucket: int = 30
 # secondary-signal rows (headlines / trending-people / wikipedia). Any
 # bucket at or above this count is left as pure Google-Trends. Buckets
 # below this count get augmented with matching rows from other pools
-# so a category never renders empty when the news / people / wiki
+# so a category never renders thin when the news / people / wiki
 # pools obviously carry the beat.
-_THIN_BUCKET_THRESHOLD = 8
+#
+# 2026-07-22 (Jenna): bumped 8 -> 10 to guarantee every trending card
+# on the Trends tab shows at least ~10 hits when there's matching
+# signal available anywhere in the secondary pools.
+_THIN_BUCKET_THRESHOLD = 10
 
 # Category-specific cap on how many fold-in rows we'll add from
 # secondary pools. Prevents one big headline pool from turning a card
-# into a news-only feed.
-_HARVEST_CAP_PER_POOL = 6
+# into a news-only feed WHEN the other pools also have content.
+#
+# 2026-07-22 (Jenna): bumped 6 -> 10 so a single pool CAN fully fill a
+# card up to the threshold when the other pools happen to miss the
+# category. Previously a bucket with 6 news items and 0 elsewhere
+# stalled at 6 (below the threshold) because the news-cap fired
+# before the target was reached. Since we still stop at
+# _THIN_BUCKET_THRESHOLD overall, a healthy multi-pool card is
+# unchanged; only "one pool has the beat" cards benefit.
+_HARVEST_CAP_PER_POOL = 10
 
 
 def _augment_thin_buckets_from_pools(
