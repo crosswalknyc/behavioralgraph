@@ -6174,6 +6174,27 @@
             word-wrap: break-word;
             line-height: 1.3;
         }
+        /* Click-to-sort header cells (mirrors .behavioral-sortable). The
+           sort arrow lives inside an inline-flex cell so it stays glued to
+           the LEFT of the header label even though the numeric columns
+           right-align. Arrow is hidden until the column is the active sort. */
+        .interest-header-row .interest-sortable {
+            cursor: pointer;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            transition: color 0.15s ease;
+        }
+        .interest-header-row .interest-sortable:hover { color: var(--accent-cyan); }
+        .interest-header-row .interest-sortable.active-sort { color: var(--accent-cyan); }
+        .interest-header-row .interest-sortable .sort-arrow {
+            font-size: 0.75em;
+            opacity: 0;
+            margin-right: 1px;
+            transition: opacity 0.15s ease;
+        }
+        .interest-header-row .interest-sortable.active-sort .sort-arrow { opacity: 1; }
         
         /* Rank (#) + Item stay left. Total Universe / Gen Pop / Index
            headers right-align to match their data cells. Per user rule
@@ -20945,15 +20966,9 @@
                             </span>
                         </div>
                         <div class="interests-filter" style="display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
-                            <span style="font-size: 0.75rem; color: var(--text-secondary);">Sort:</span>
+                            <span style="font-size: 0.75rem; color: var(--text-secondary);">Category:</span>
                             <select id="interestsCategorySelect" onchange="filterInterests()" class="interests-dropdown has-tooltip" data-tooltip="Filter by Category" style="min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
                                 <option value="all">All</option>
-                            </select>
-                            <select id="interestsSortSelect" onchange="sortInterests(this.value)" class="has-tooltip" data-tooltip="Sort Interests" style="width: auto; min-width: 80px; padding: 0.35rem 2rem 0.35rem 0.75rem; font-size: 0.75rem;">
-                                <option value="pct" selected>% ↓</option>
-                                <option value="index">Idx ↓</option>
-                                <option value="genpop">GP ↓</option>
-                                <option value="alpha">A-Z</option>
                             </select>
                             <input type="text" id="interestsSearchInput" placeholder="Search..." class="has-tooltip" data-tooltip="Search Interests" oninput="filterInterests()" style="flex: 1; min-width: 120px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                         </div>
@@ -92883,11 +92898,19 @@
                         const gpHeader = intHeader.querySelector('.genpop-col');
                         series.forEach((entry, idx) => {
                             const span = document.createElement('span');
-                            span.className = 'cmp-col-cell';
+                            // Cohort cut headers double as click-to-sort
+                            // triggers (key = "cmp:<runKey>") so they behave
+                            // like the base interest columns.
+                            span.className = 'cmp-col-cell interest-sortable';
+                            span.dataset.sortKey = 'cmp:' + entry.key;
                             const label = entry.label || ('Run ' + (idx + 1));
-                            span.textContent = label;
-                            span.title = label;
-                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.7rem;text-align:right;justify-self:end;align-self:end;font-weight:600;white-space:normal;word-wrap:break-word;line-height:1.3;min-width:0;padding-right:8px;';
+                            const arrow = document.createElement('span');
+                            arrow.className = 'sort-arrow';
+                            arrow.textContent = '↓';
+                            span.appendChild(arrow);
+                            span.appendChild(document.createTextNode(label));
+                            span.title = 'Sort by ' + label;
+                            span.style.cssText = 'color:' + palette[idx % palette.length] + ';font-size:0.7rem;text-align:right;justify-self:end;align-self:end;font-weight:600;white-space:normal;word-wrap:break-word;line-height:1.3;min-width:0;padding-right:8px;cursor:pointer;user-select:none;';
                             if (gpHeader) intHeader.insertBefore(span, gpHeader);
                             else intHeader.appendChild(span);
                         });
@@ -92917,6 +92940,12 @@
                     intGrid.classList.remove('cmp-hide-profile');
                     if (intHeader) intHeader.style.gridTemplateColumns = '';
                     intItems.forEach(row => { row.style.gridTemplateColumns = ''; });
+                }
+                // Repaint sort arrows so a freshly-injected cohort column
+                // (or the base columns after a cut is removed) shows the
+                // correct active-sort indicator.
+                if (typeof _updateInterestSortArrows === 'function') {
+                    try { _updateInterestSortArrows(); } catch (_) {}
                 }
             }
 
@@ -98075,6 +98104,7 @@
         
         let allInterestsData = [];
         let currentInterestSort = 'pct';
+        let currentInterestSortDir = 'desc';
         
         function renderInterests(interests) {
             const container = document.getElementById('interestsGrid');
@@ -98735,28 +98765,48 @@
                 filtered = filtered.filter(item => item.name.toLowerCase().includes(searchTerm));
             }
             
-            // Sort based on current selection
+            // Sort based on the active column + direction. Clicking a
+            // header sets currentInterestSort / currentInterestSortDir (see
+            // sortInterestsColumn). Cohort cut columns use a "cmp:<runKey>"
+            // key and are sorted by that run's interest pct (rows missing
+            // from the run sink to the bottom).
             let sorted = [...filtered];
-            if (currentInterestSort === 'index') sorted.sort((a, b) => b.index - a.index);
-            else if (currentInterestSort === 'pct') sorted.sort((a, b) => b.pct - a.pct);
-            else if (currentInterestSort === 'genpop') {
+            const _dir = (currentInterestSortDir === 'asc') ? 1 : -1;
+            if (currentInterestSort && currentInterestSort.indexOf('cmp:') === 0) {
+                const _runKey = currentInterestSort.slice('cmp:'.length);
+                const _runEntry = (_comparisonRunsState && _comparisonRunsState.runsByKey)
+                    ? _comparisonRunsState.runsByKey[_runKey] : null;
+                const _lookup = _runEntry ? _cmpBuildInterestsLookup(_runEntry.parsed) : {};
+                const _cohortPct = (i) => {
+                    const m = _lookup[_cmpNormName(i.name || '')];
+                    return (m && m.pct != null) ? m.pct : -Infinity;
+                };
+                sorted.sort((a, b) => (_cohortPct(a) - _cohortPct(b)) * _dir);
+            } else if (currentInterestSort === 'index') {
+                sorted.sort((a, b) => ((a.index || 0) - (b.index || 0)) * _dir);
+            } else if (currentInterestSort === 'genpop') {
                 const gp = (i) => (i.genPopPct ?? 0);
-                sorted.sort((a, b) => gp(b) - gp(a));
-            } else if (currentInterestSort === 'alpha') sorted.sort((a, b) => a.name.localeCompare(b.name));
+                sorted.sort((a, b) => (gp(a) - gp(b)) * _dir);
+            } else if (currentInterestSort === 'alpha') {
+                sorted.sort((a, b) => (a.name || '').localeCompare(b.name || '') * _dir);
+            } else {
+                sorted.sort((a, b) => ((a.pct || 0) - (b.pct || 0)) * _dir);
+            }
             
             // Update count
             updateInterestsCount(items);
             
             const maxPct = Math.max(...sorted.map(i => i.pct), 1);
             
-            // Add header row - matching locations table format
+            // Add header row - click any column to sort (mirrors the
+            // behavioral tab). The rank (#) column is not sortable.
             const headerRow = `
                 <div class="interest-header-row">
                     <span>#</span>
-                    <span>Item</span>
-                    <span class="profile-col">Profile</span>
-                    <span class="genpop-col">Gen Pop</span>
-                    <span class="index-col">Index</span>
+                    <span class="interest-sortable" data-sort-key="alpha" title="Sort A-Z"><span class="sort-arrow">↓</span>Item</span>
+                    <span class="interest-sortable profile-col" data-sort-key="pct" title="Sort by Profile %"><span class="sort-arrow">↓</span>Profile</span>
+                    <span class="interest-sortable genpop-col" data-sort-key="genpop" title="Sort by Gen Pop %"><span class="sort-arrow">↓</span>Gen Pop</span>
+                    <span class="interest-sortable index-col" data-sort-key="index" title="Sort by Index"><span class="sort-arrow">↓</span>Index</span>
                 </div>
             `;
             
@@ -98786,6 +98836,77 @@
             }).join('');
             
             container.innerHTML = headerRow + itemsHtml;
+
+            // Re-inject any active comparison cohort columns (the innerHTML
+            // above wiped the injected .cmp-col-cell spans) and repaint the
+            // sort-arrow indicators on every header cell. Both are cheap
+            // no-ops when no comparison runs are active.
+            if (typeof applyComparisonRunsToCategoryTables === 'function') {
+                try { applyComparisonRunsToCategoryTables(); }
+                catch (e) { console.warn('[renderInterestsList] compare re-apply failed', e); }
+            }
+            _updateInterestSortArrows();
+        }
+
+        // Repaint the ↓/↑ sort-arrow indicators across the interests header
+        // so the active column (base OR injected cohort cut) shows the
+        // current direction and the rest stay dimmed.
+        function _updateInterestSortArrows() {
+            const grid = document.getElementById('interestsGrid');
+            if (!grid) return;
+            const header = grid.querySelector('.interest-header-row');
+            if (!header) return;
+            const activeKey = currentInterestSort || 'pct';
+            const arrow = (currentInterestSortDir === 'asc') ? '↑' : '↓';
+            header.querySelectorAll('.interest-sortable').forEach(h => {
+                const key = h.dataset.sortKey;
+                let arrowEl = h.querySelector('.sort-arrow');
+                if (!arrowEl) {
+                    arrowEl = document.createElement('span');
+                    arrowEl.className = 'sort-arrow';
+                    h.insertBefore(arrowEl, h.firstChild);
+                }
+                if (key === activeKey) {
+                    h.classList.add('active-sort');
+                    arrowEl.textContent = arrow;
+                } else {
+                    h.classList.remove('active-sort');
+                    arrowEl.textContent = '↓';
+                }
+            });
+        }
+
+        // Column-header sort: clicking the active column flips asc<->desc;
+        // clicking a new column resets to a sensible default (A-Z asc for
+        // the Item column, largest-first desc for every numeric column).
+        function sortInterestsColumn(sortBy) {
+            if (!sortBy) return;
+            if (sortBy === currentInterestSort) {
+                currentInterestSortDir = (currentInterestSortDir === 'desc') ? 'asc' : 'desc';
+            } else {
+                currentInterestSort = sortBy;
+                currentInterestSortDir = (sortBy === 'alpha') ? 'asc' : 'desc';
+            }
+            if (allInterestsData.length > 0) {
+                renderInterestsList(allInterestsData);
+            }
+        }
+
+        // Delegated click handler for the interests header cells (including
+        // cohort cut cells injected by compare-mode). Bound once; survives
+        // re-renders.
+        if (!window._interestHeaderClickBound) {
+            window._interestHeaderClickBound = true;
+            document.addEventListener('click', function (e) {
+                const btn = e.target.closest('.interest-header-row .interest-sortable');
+                if (!btn) return;
+                const grid = document.getElementById('interestsGrid');
+                if (!grid || !grid.contains(btn)) return;
+                const key = btn.dataset.sortKey;
+                if (!key) return;
+                try { sortInterestsColumn(key); }
+                catch (err) { console.warn('[sortInterestsColumn] failed', err); }
+            }, true);
         }
         
         function sortInterests(sortBy) {
