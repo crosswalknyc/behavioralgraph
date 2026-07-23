@@ -23771,6 +23771,11 @@
             #microdramasIQView .miq-window-bar { display: flex; gap: 2px; height: 20px; margin-top: 0.3rem; align-items: end; }
             #microdramasIQView .miq-window-cell { flex: 1; background: linear-gradient(180deg, #ec4899, #8b5cf6); border-radius: 2px 2px 0 0; opacity: 0.7; }
             #microdramasIQView .miq-window-cell-empty { background: rgba(255,255,255,0.06); opacity: 0.5; }
+            #microdramasIQView .miq-spark-wrap { position: relative; margin-top: 0.4rem; padding: 0.15rem 0 0.1rem; border-top: 1px dashed rgba(255,255,255,0.06); }
+            #microdramasIQView .miq-sparkline { display: block; width: 100%; height: 36px; overflow: visible; }
+            #microdramasIQView .miq-spark-dot { fill: #ec4899; }
+            #microdramasIQView .miq-spark-dot-last { fill: #fbcfe8; stroke: #ec4899; stroke-width: 1; }
+            #microdramasIQView .miq-trend { font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.2rem; font-variant-numeric: tabular-nums; }
             #microdramasIQView .miq-audience-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
             #microdramasIQView .miq-audience-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; }
             #microdramasIQView .miq-audience-card h4 { margin: 0 0 0.6rem; font-size: 0.9rem; font-weight: 600; }
@@ -42928,6 +42933,12 @@
             } else {
                 secondaryMetric = { label: 'First seen', value: t.earliest_date || '-' };
             }
+            // Trend line reads as editorial copy ("New on chart",
+            // "Peak #1 (held 7d)", "▲ Climbed 3 spots vs prior obs"),
+            // which is what carried the confusion away from the raw
+            // bar strip. The sparkline still shows the shape of the
+            // week; the trend line spells out the punchline.
+            var trend = _miqTrendLine(t);
             return '<div class="miq-title-row">' + _miqEscape(t.title || '') + '</div>' +
                 '<div class="miq-title-metrics">' +
                     '<div><div class="miq-metric-label">' + pm.label + '</div><div class="miq-metric-value">' + pm.value + '</div></div>' +
@@ -42935,7 +42946,27 @@
                     '<div><div class="miq-metric-label">Current rank</div><div class="miq-metric-value">' + _miqCurrentRank(t) + '</div></div>' +
                     '<div><div class="miq-metric-label">Best rank</div><div class="miq-metric-value">' + _miqBestRank(t) + '</div></div>' +
                 '</div>' +
-                '<div class="miq-window-bar">' + curveBars + '</div>';
+                (curveBars ? '<div class="miq-spark-wrap" title="' + _miqEscape(_miqSparkTooltip(t, platform)) + '">' + curveBars + '</div>' : '') +
+                (trend ? '<div class="miq-trend">' + _miqEscape(trend) + '</div>' : '');
+        }
+
+        // Hover tooltip: spells out each observed day so the user
+        // never has to guess what the sparkline is plotting.
+        function _miqSparkTooltip(t, platform) {
+            if (platform === 'Peacock') {
+                var curve = t.view_daily_curve || [];
+                if (!curve.length) return '';
+                return 'Daily views over window:\n' + curve.map(function(c) {
+                    return (c.date || '') + ': ' + _miqFormatNumber(c.views || 0);
+                }).join('\n');
+            }
+            var dates = t.__observedDates || [];
+            var ranks = t.ranks_by_date || {};
+            if (!dates.length) return '';
+            return 'Daily chart rank (higher = better, top of line = #1):\n' + dates.map(function(d) {
+                var r = ranks[d];
+                return d + ': ' + (Number.isFinite(r) ? '#' + r : 'off chart');
+            }).join('\n');
         }
 
         function _miqCurrentRank(t) {
@@ -42948,21 +42979,148 @@
             return (r == null) ? '-' : '#' + r;
         }
 
-        function _miqRankArcBars(t, observedDates) {
-            // For competitor cards: render a rank arc as bars where
-            // taller = better rank. Missing days show as an empty cell.
-            var dates = observedDates || [];
-            if (!dates.length) return '';
-            var ranks = t.ranks_by_date || {};
-            return dates.map(function(d) {
-                var r = ranks[d];
-                if (!Number.isFinite(r)) {
-                    return '<div class="miq-window-cell miq-window-cell-empty" style="height:8%"></div>';
+        // SVG sparkline. `points` is an array of numeric y-values in
+        // display space (already normalized to 0..1 where 1 = top).
+        // Nulls in `points` render as gaps (the line breaks). Dots are
+        // drawn on observed points only.
+        function _miqSparklineSVG(points, opts) {
+            opts = opts || {};
+            var w = opts.width || 220;   // logical viewBox width
+            var h = opts.height || 36;   // logical viewBox height
+            var pad = 3;                 // top/bottom padding so dots aren't clipped
+            var n = points.length;
+            if (n === 0) return '';
+            // x positions evenly spaced from left to right
+            function xAt(i) { return pad + (i * (w - 2 * pad) / Math.max(1, n - 1)); }
+            function yAt(v) {
+                // v in [0, 1] where 1 = top; y in SVG is inverted
+                var vv = Math.max(0, Math.min(1, v));
+                return pad + (1 - vv) * (h - 2 * pad);
+            }
+            // Build a polyline path, breaking on nulls
+            var segs = [];
+            var cur = null;
+            for (var i = 0; i < n; i++) {
+                var v = points[i];
+                if (v == null || !Number.isFinite(v)) {
+                    if (cur && cur.length) { segs.push(cur); cur = null; }
+                } else {
+                    if (!cur) cur = [];
+                    cur.push([xAt(i), yAt(v)]);
                 }
-                // Higher rank position = lower bar. Cap at 40.
-                var h = Math.max(8, Math.round(100 - Math.min(40, r) * 2.3));
-                return '<div class="miq-window-cell" style="height:' + h + '%"></div>';
-            }).join('');
+            }
+            if (cur && cur.length) segs.push(cur);
+            var pathD = segs.map(function(seg) {
+                return seg.map(function(p, k) {
+                    return (k === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1);
+                }).join(' ');
+            }).join(' ');
+            // Area under the line (only for the first continuous segment
+            // to keep it visually clean when there are gaps)
+            var areaD = '';
+            if (segs.length && segs[0].length > 1) {
+                var s = segs[0];
+                areaD = 'M' + s[0][0].toFixed(1) + ',' + (h - pad).toFixed(1) +
+                    s.map(function(p) { return ' L' + p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('') +
+                    ' L' + s[s.length - 1][0].toFixed(1) + ',' + (h - pad).toFixed(1) + ' Z';
+            }
+            // Dots
+            var dots = '';
+            for (var j = 0; j < n; j++) {
+                var vj = points[j];
+                if (vj == null || !Number.isFinite(vj)) continue;
+                var isLast = (j === n - 1);
+                dots += '<circle cx="' + xAt(j).toFixed(1) + '" cy="' + yAt(vj).toFixed(1) +
+                    '" r="' + (isLast ? 2.6 : 1.6) + '" class="miq-spark-dot' +
+                    (isLast ? ' miq-spark-dot-last' : '') + '"/>';
+            }
+            var gid = 'mgrad-' + Math.random().toString(36).slice(2, 9);
+            var aid = 'marea-' + Math.random().toString(36).slice(2, 9);
+            return '<svg class="miq-sparkline" viewBox="0 0 ' + w + ' ' + h +
+                '" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' +
+                '<defs>' +
+                    '<linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="0">' +
+                        '<stop offset="0%" stop-color="#ec4899"/>' +
+                        '<stop offset="100%" stop-color="#8b5cf6"/>' +
+                    '</linearGradient>' +
+                    '<linearGradient id="' + aid + '" x1="0" y1="0" x2="0" y2="1">' +
+                        '<stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.28"/>' +
+                        '<stop offset="100%" stop-color="#8b5cf6" stop-opacity="0"/>' +
+                    '</linearGradient>' +
+                '</defs>' +
+                (areaD ? '<path d="' + areaD + '" fill="url(#' + aid + ')" stroke="none"/>' : '') +
+                (pathD ? '<path d="' + pathD + '" fill="none" stroke="url(#' + gid + ')" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>' : '') +
+                dots +
+            '</svg>';
+        }
+
+        // Build the sparkline y-values for a competitor title.
+        // Rank is inverted so #1 = 1.0 (top) and rank 40 = 0.0 (bottom).
+        function _miqRankSparkline(t, observedDates) {
+            var dates = observedDates || [];
+            var ranks = t.ranks_by_date || {};
+            var pts = dates.map(function(d) {
+                var r = ranks[d];
+                if (!Number.isFinite(r)) return null;
+                var capped = Math.min(40, Math.max(1, r));
+                return 1 - ((capped - 1) / 39);
+            });
+            return _miqSparklineSVG(pts);
+        }
+
+        // Build the sparkline y-values for a Peacock title using its
+        // daily view curve. Normalizes to the max in-window value so
+        // the shape of the curve is what matters, not absolute height.
+        function _miqViewSparkline(t) {
+            var curve = t.view_daily_curve || [];
+            if (!curve.length) return '';
+            var vals = curve.map(function(c) { return Number(c.views) || 0; });
+            var mx = Math.max.apply(null, vals) || 1;
+            var pts = vals.map(function(v) { return v / mx; });
+            return _miqSparklineSVG(pts);
+        }
+
+        // Short text summary of the movement so the sparkline doesn't
+        // have to carry the whole load. Handles: new on chart, held
+        // steady, climbed, slipped. For Peacock (which has no rank arc
+        // but does have a view curve) we compare first-half vs
+        // second-half of the window and say growing / cooling / steady.
+        function _miqTrendLine(t) {
+            // Peacock branch: view curve trend
+            if (t.view_daily_curve && t.view_daily_curve.length >= 2) {
+                var curve = t.view_daily_curve;
+                var mid = Math.floor(curve.length / 2);
+                var early = 0, late = 0;
+                for (var i = 0; i < curve.length; i++) {
+                    var v = Number(curve[i].views) || 0;
+                    if (i < mid) early += v; else late += v;
+                }
+                if (early > 0) {
+                    var pct = Math.round(((late - early) / early) * 100);
+                    if (pct >= 10)  return '▲ Growing (+' + pct + '% vs early week)';
+                    if (pct <= -10) return '▼ Cooling (' + pct + '% vs early week)';
+                    return 'Steady week over week';
+                }
+                if (late > 0) return 'New viewership this week';
+                return '';
+            }
+            // Competitor branch: rank movement
+            var cur = (t.current_rank != null) ? t.current_rank : t.surface_rank_current;
+            var best = (t.best_rank != null) ? t.best_rank : t.surface_rank_best;
+            var prev = t.previous_rank;
+            var days = t.days_in_window;
+            if (t.status === 'new') return 'New on chart';
+            if (cur != null && best != null && cur === best && days && days >= 3) {
+                return 'Peak #' + best + ' (held ' + days + 'd)';
+            }
+            if (Number.isFinite(cur) && Number.isFinite(prev)) {
+                var d = prev - cur;  // positive = climbed
+                if (d > 0)      return '▲ Climbed ' + d + ' spot' + (d === 1 ? '' : 's') + ' vs prior obs';
+                if (d < 0)      return '▼ Slipped ' + Math.abs(d) + ' spot' + (d === -1 ? '' : 's') + ' vs prior obs';
+                return 'Steady at #' + cur;
+            }
+            if (cur == null && best != null) return 'Off chart (peak #' + best + ')';
+            return '';
         }
 
         function renderMicrodramasIQTitles(titles) {
@@ -42976,15 +43134,12 @@
             titles.forEach(function(t) {
                 var card = document.createElement('div');
                 card.className = 'miq-title-card';
-                var curveBars = (t.view_daily_curve || []).map(function(c) {
-                    var h = Math.max(6, Math.round((c.views || 0) / 20000));
-                    return '<div class="miq-window-cell" style="height:' + Math.min(100, h) + '%"></div>';
-                }).join('');
+                var spark = _miqViewSparkline(t);
                 var primary = {
                     label: '28d reach',
                     value: _miqFormatNumber(t.view_28d_estimate),
                 };
-                card.innerHTML = _miqCardHTML(t, 'Peacock', curveBars, primary);
+                card.innerHTML = _miqCardHTML(t, 'Peacock', spark, primary);
                 card.addEventListener('click', function() {
                     openMicrodramasIQTitleModal({
                         title:    t.title,
@@ -43026,7 +43181,12 @@
             titles.forEach(function(t) {
                 var card = document.createElement('div');
                 card.className = 'miq-title-card';
-                var curveBars = _miqRankArcBars(t, platform.observed_dates);
+                // Stash observed_dates on the title so the sparkline
+                // tooltip helper (_miqSparkTooltip) can label each dot
+                // with the actual date. We hydrate this transiently on
+                // the title record itself, not the API payload.
+                t.__observedDates = platform.observed_dates || [];
+                var spark = _miqRankSparkline(t, platform.observed_dates);
                 // Primary metric: NetShort doesn't publish read counts,
                 // so surface Rank as the top-left metric there. Others
                 // show Reads.
@@ -43042,7 +43202,7 @@
                         value: t.read_count_display || _miqFormatNumber(t.read_count),
                     };
                 }
-                card.innerHTML = _miqCardHTML(t, platform.label, curveBars, primary);
+                card.innerHTML = _miqCardHTML(t, platform.label, spark, primary);
                 card.addEventListener('click', function() {
                     openMicrodramasIQTitleModal({
                         title:    t.title,
