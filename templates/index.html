@@ -23758,19 +23758,15 @@
             #microdramasIQView .miq-tab.active { background: linear-gradient(135deg, #ec4899, #8b5cf6); color: #fff; }
             #microdramasIQView .miq-panel { display: none; }
             #microdramasIQView .miq-panel.active { display: block; }
-            #microdramasIQView .miq-title-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.85rem; }
-            #microdramasIQView .miq-title-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0.75rem; display: grid; grid-template-columns: 56px 1fr; grid-template-rows: auto auto auto; column-gap: 0.7rem; row-gap: 0.4rem; align-items: start; cursor: pointer; transition: border-color 0.15s ease, transform 0.15s ease; }
+            #microdramasIQView .miq-title-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
+            #microdramasIQView .miq-title-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0.75rem 0.85rem; display: flex; flex-direction: column; gap: 0.4rem; cursor: pointer; transition: border-color 0.15s ease, transform 0.15s ease; }
             #microdramasIQView .miq-title-card:hover { border-color: rgba(236, 72, 153, 0.5); transform: translateY(-1px); }
-            /* Small 9:16 poster thumb pinned to the top-left of the card,
-             * spanning the title + series rows. Metrics + curve flow
-             * full-width below (grid-column: 1 / -1). */
-            #microdramasIQView .miq-poster { width: 56px; aspect-ratio: 9 / 16; background: linear-gradient(135deg, rgba(236, 72, 153, 0.15), rgba(139, 92, 246, 0.15)); border-radius: 6px; background-size: cover; background-position: center; grid-column: 1 / 2; grid-row: 1 / 3; }
-            #microdramasIQView .miq-title-series { font-size: 0.68rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; grid-column: 2 / 3; grid-row: 1 / 2; }
-            #microdramasIQView .miq-title-row { font-size: 0.9rem; font-weight: 600; line-height: 1.2; grid-column: 2 / 3; grid-row: 2 / 3; }
-            #microdramasIQView .miq-title-metrics { grid-column: 1 / -1; grid-row: 3 / 4; display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem 0.5rem; font-size: 0.75rem; margin-top: 0.25rem; }
+            #microdramasIQView .miq-title-series { font-size: 0.68rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+            #microdramasIQView .miq-title-row { font-size: 0.95rem; font-weight: 600; line-height: 1.25; }
+            #microdramasIQView .miq-title-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem 0.5rem; font-size: 0.75rem; margin-top: 0.2rem; }
             #microdramasIQView .miq-metric-label { color: var(--text-secondary); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.03em; }
             #microdramasIQView .miq-metric-value { font-weight: 600; font-size: 0.85rem; }
-            #microdramasIQView .miq-window-bar { grid-column: 1 / -1; display: flex; gap: 2px; height: 20px; margin-top: 0.35rem; align-items: end; }
+            #microdramasIQView .miq-window-bar { display: flex; gap: 2px; height: 20px; margin-top: 0.3rem; align-items: end; }
             #microdramasIQView .miq-window-cell { flex: 1; background: linear-gradient(180deg, #ec4899, #8b5cf6); border-radius: 2px 2px 0 0; opacity: 0.7; }
             #microdramasIQView .miq-audience-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
             #microdramasIQView .miq-audience-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; }
@@ -23785,18 +23781,15 @@
             #microdramasIQView .miq-loading-overlay { display: flex; align-items: center; justify-content: center; padding: 3rem; color: var(--text-secondary); font-size: 0.88rem; gap: 0.75rem; }
             #microdramasIQView .miq-spinner { width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.15); border-top-color: #ec4899; border-radius: 50%; animation: miq-spin 0.9s linear infinite; }
             @keyframes miq-spin { to { transform: rotate(360deg); } }
-            /* Fallback gradient posters keyed on genre (used when
-             * the scraper hasn't captured a poster_url yet). Each
-             * genre gets its own gradient + emoji glyph so the grid
-             * reads distinctly even when the image is placeholder. */
-            #microdramasIQView .miq-poster { display: flex; align-items: center; justify-content: center; font-size: 0.95rem; text-shadow: 0 1px 4px rgba(0,0,0,0.35); color: rgba(255,255,255,0.92); overflow: hidden; }
-            #microdramasIQView .miq-poster[data-genre="Werewolf"]      { background: linear-gradient(135deg, #6d28d9, #1e1b4b); }
-            #microdramasIQView .miq-poster[data-genre="Billionaire"]   { background: linear-gradient(135deg, #d97706, #78350f); }
-            #microdramasIQView .miq-poster[data-genre="CEO"]           { background: linear-gradient(135deg, #db2777, #831843); }
-            #microdramasIQView .miq-poster[data-genre="Mafia"]         { background: linear-gradient(135deg, #1f2937, #6b7280); }
-            #microdramasIQView .miq-poster[data-genre="Revenge"]       { background: linear-gradient(135deg, #dc2626, #4c0519); }
-            #microdramasIQView .miq-poster[data-genre="Second Chance"] { background: linear-gradient(135deg, #059669, #064e3b); }
-            #microdramasIQView .miq-poster-initial { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; text-align: center; padding: 0; line-height: 1; }
+            /* Genre color chip (small pill next to the title on Peacock
+             * cards - replaces the poster now that images are gone). */
+            #microdramasIQView .miq-genre-chip { display: inline-block; padding: 0.1rem 0.5rem; font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 10px; margin-right: 0.4rem; vertical-align: middle; color: rgba(255,255,255,0.95); }
+            #microdramasIQView .miq-genre-chip[data-genre="Werewolf"]      { background: linear-gradient(90deg, #6d28d9, #1e1b4b); }
+            #microdramasIQView .miq-genre-chip[data-genre="Billionaire"]   { background: linear-gradient(90deg, #d97706, #78350f); }
+            #microdramasIQView .miq-genre-chip[data-genre="CEO"]           { background: linear-gradient(90deg, #db2777, #831843); }
+            #microdramasIQView .miq-genre-chip[data-genre="Mafia"]         { background: linear-gradient(90deg, #374151, #6b7280); }
+            #microdramasIQView .miq-genre-chip[data-genre="Revenge"]       { background: linear-gradient(90deg, #dc2626, #4c0519); }
+            #microdramasIQView .miq-genre-chip[data-genre="Second Chance"] { background: linear-gradient(90deg, #059669, #064e3b); }
 
             /* Title-audience modal (opens when a card / competitor row is clicked) */
             #microdramasIQModal { position: fixed; inset: 0; z-index: 9500; background: rgba(0,0,0,0.65); display: none; align-items: center; justify-content: center; padding: 2rem; }
@@ -23804,7 +23797,6 @@
             #microdramasIQModal .miq-modal-panel { background: var(--bg-primary, #0b0b1a); border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; width: 100%; max-width: 960px; max-height: 90vh; overflow: auto; box-shadow: 0 30px 80px rgba(0,0,0,0.6); }
             body[data-theme="light"] #microdramasIQModal .miq-modal-panel { background: #fff; border-color: rgba(0,0,0,0.08); }
             #microdramasIQModal .miq-modal-header { display: flex; gap: 1rem; padding: 1.1rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.06); align-items: center; position: sticky; top: 0; background: inherit; z-index: 2; }
-            #microdramasIQModal .miq-modal-poster { width: 72px; aspect-ratio: 9/16; border-radius: 6px; background-size: cover; background-position: center; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; color: rgba(255,255,255,0.92); flex-shrink: 0; }
             #microdramasIQModal .miq-modal-title-wrap { flex: 1; min-width: 0; }
             #microdramasIQModal .miq-modal-title { font-size: 1.2rem; font-weight: 600; margin: 0; }
             #microdramasIQModal .miq-modal-sub { font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.2rem; }
@@ -23847,7 +23839,6 @@
             #microdramasIQView .miq-delta.new { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
             #microdramasIQView .miq-delta.dropped { background: rgba(255, 255, 255, 0.08); color: var(--text-secondary); text-decoration: line-through; }
             #microdramasIQView .miq-delta.stable { background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); }
-            #microdramasIQView .miq-mini-thumb { width: 28px; height: 44px; border-radius: 4px; background-size: cover; background-position: center; background-color: rgba(139, 92, 246, 0.15); display: inline-block; vertical-align: middle; margin-right: 0.5rem; }
             #microdramasIQView .miq-genre-tag { font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 10px; background: rgba(139, 92, 246, 0.15); color: #c4b5fd; text-transform: uppercase; letter-spacing: 0.04em; }
             #microdramasIQView .miq-cross-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.6rem; margin-top: 0.6rem; }
             #microdramasIQView .miq-cross-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.6rem 0.75rem; }
@@ -23949,7 +23940,6 @@
         <div id="microdramasIQModal" role="dialog" aria-modal="true" aria-labelledby="microdramasIQModalTitle" onclick="if (event.target === this) closeMicrodramasIQModal();">
             <div class="miq-modal-panel" role="document">
                 <div class="miq-modal-header">
-                    <div id="microdramasIQModalPoster" class="miq-modal-poster"></div>
                     <div class="miq-modal-title-wrap">
                         <h3 id="microdramasIQModalTitle" class="miq-modal-title">Loading...</h3>
                         <div id="microdramasIQModalSub" class="miq-modal-sub"></div>
@@ -41396,28 +41386,6 @@
             renderMicrodramasIQAudience(d.audience_overall || {});
         }
 
-        // Fallback gradient poster keyed on genre + title initial.
-        // Used when the scraper hasn't captured a real poster_url yet.
-        var _MIQ_GENRE_GLYPH = {
-            'Werewolf': '🐺', 'Billionaire': '💎', 'CEO': '💼',
-            'Mafia': '🕶️', 'Revenge': '⚔️', 'Second Chance': '💫',
-        };
-        function _miqPosterHTML(t) {
-            var url = t.poster_url;
-            if (url) {
-                var safe = url.replace(/"/g, '&quot;');
-                return '<div class="miq-poster" style="background-image:url(\'' + safe + '\'); background-size:cover; background-position:center;"></div>';
-            }
-            var g = t.genre || 'Werewolf';
-            var glyph = _MIQ_GENRE_GLYPH[g] || '📱';
-            var initial = ((t.title || '?').trim().charAt(0) || '?').toUpperCase();
-            return '<div class="miq-poster" data-genre="' + g + '">' +
-                '<div style="display:flex; flex-direction:column; align-items:center; gap:0.1rem; line-height:1;">' +
-                    '<div style="font-size:0.85rem; opacity:0.85;">' + glyph + '</div>' +
-                    '<div class="miq-poster-initial">' + initial + '</div>' +
-                '</div>' +
-            '</div>';
-        }
         function _miqEscape(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 
         function renderMicrodramasIQTitles(titles) {
@@ -41435,10 +41403,12 @@
                     var h = Math.max(6, Math.round((c.views || 0) / 20000));
                     return '<div class="miq-window-cell" style="height:' + Math.min(100, h) + '%"></div>';
                 }).join('');
+                var genreChip = t.genre
+                    ? '<span class="miq-genre-chip" data-genre="' + _miqEscape(t.genre) + '">' + _miqEscape(t.genre) + '</span>'
+                    : '';
                 card.innerHTML =
-                    _miqPosterHTML(t) +
                     (t.series ? '<div class="miq-title-series">' + _miqEscape(t.series) + '</div>' : '') +
-                    '<div class="miq-title-row">' + _miqEscape(t.title || '') + '</div>' +
+                    '<div class="miq-title-row">' + genreChip + _miqEscape(t.title || '') + '</div>' +
                     '<div class="miq-title-metrics">' +
                         '<div><div class="miq-metric-label">28d reach</div><div class="miq-metric-value">' + _miqFormatNumber(t.view_28d_estimate) + '</div></div>' +
                         '<div><div class="miq-metric-label">Best rank</div><div class="miq-metric-value">' + (t.surface_rank_best == null ? '-' : '#' + t.surface_rank_best) + '</div></div>' +
@@ -41452,7 +41422,6 @@
                         series:   t.series,
                         genre:    t.genre,
                         platform: 'Peacock',
-                        poster_url: t.poster_url,
                     });
                 });
                 grid.appendChild(card);
@@ -41605,16 +41574,6 @@
                     return;
                 }
                 var rows = titles.map(function(t, idx) {
-                    // Mini thumb: real poster if we have one, otherwise a
-                    // genre-keyed gradient mini-thumb with the initial.
-                    var thumb;
-                    if (t.poster_url) {
-                        thumb = '<span class="miq-mini-thumb" style="background-image:url(\'' + t.poster_url.replace(/"/g,'&quot;') + '\'); background-size:cover; background-position:center;"></span>';
-                    } else {
-                        var g = t.genre || 'Werewolf';
-                        var initial = ((t.title || '?').trim().charAt(0) || '?').toUpperCase();
-                        thumb = '<span class="miq-mini-thumb miq-poster" data-genre="' + g + '" style="display:inline-flex; align-items:center; justify-content:center; font-size:0.78rem; font-weight:700; color:rgba(255,255,255,0.9);">' + _miqEscape(initial) + '</span>';
-                    }
                     var titleHtml = _miqEscape(t.title || '');
                     var current = (t.current_rank == null) ? '-' : '#' + t.current_rank;
                     var best    = (t.best_rank == null) ? '-' : '#' + t.best_rank;
@@ -41622,16 +41581,15 @@
                     var rating  = (t.avg_rating == null) ? '' : Number(t.avg_rating).toFixed(1) + ' ★';
                     var eps     = (t.episodes_count == null) ? '' : t.episodes_count + ' eps';
                     var meta2   = [rating, eps].filter(function(x){return x;}).join(' · ');
-                    // Encode payload so the row can open the modal. Deep-link
-                    // is preserved as an inline chip so the user can still hop
-                    // to the source without triggering the drill-down.
+                    // Deep-link preserved as an inline chip so the user can
+                    // hop to the source without triggering the drill-down.
                     var deepChip = t.deep_link
                         ? ' <a href="' + _miqEscape(t.deep_link) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();" style="font-size:0.72rem; color:var(--text-secondary); margin-left:0.4rem;">↗</a>'
                         : '';
-                    return '<tr data-miq-title="' + _miqEscape(t.title || '') + '" data-miq-series="' + _miqEscape(t.series || t.title || '') + '" data-miq-genre="' + _miqEscape(t.genre || '') + '" data-miq-platform="' + _miqEscape(p.label || '') + '" data-miq-poster="' + _miqEscape(t.poster_url || '') + '">' +
+                    return '<tr data-miq-title="' + _miqEscape(t.title || '') + '" data-miq-series="' + _miqEscape(t.series || t.title || '') + '" data-miq-genre="' + _miqEscape(t.genre || '') + '" data-miq-platform="' + _miqEscape(p.label || '') + '">' +
                         '<td class="miq-rank">' + current + '</td>' +
                         '<td>' + _miqDeltaChip(t.status, t.rank_delta) + '</td>' +
-                        '<td>' + thumb + titleHtml + deepChip +
+                        '<td>' + titleHtml + deepChip +
                             (meta2 ? '<div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">' + meta2 + '</div>' : '') +
                         '</td>' +
                         '<td>' + (t.genre ? '<span class="miq-genre-tag">' + _miqEscape(t.genre) + '</span>' : '') + '</td>' +
@@ -41663,11 +41621,10 @@
                         var tr = ev.target.closest('tr[data-miq-title]');
                         if (!tr) return;
                         openMicrodramasIQTitleModal({
-                            title:      tr.getAttribute('data-miq-title'),
-                            series:     tr.getAttribute('data-miq-series'),
-                            genre:      tr.getAttribute('data-miq-genre'),
-                            platform:   tr.getAttribute('data-miq-platform'),
-                            poster_url: tr.getAttribute('data-miq-poster'),
+                            title:    tr.getAttribute('data-miq-title'),
+                            series:   tr.getAttribute('data-miq-series'),
+                            genre:    tr.getAttribute('data-miq-genre'),
+                            platform: tr.getAttribute('data-miq-platform'),
                         });
                     });
                 }
@@ -41703,38 +41660,16 @@
 
         function openMicrodramasIQTitleModal(t) {
             if (!t || !t.title) return;
-            var modal  = document.getElementById('microdramasIQModal');
-            var title  = document.getElementById('microdramasIQModalTitle');
-            var sub    = document.getElementById('microdramasIQModalSub');
-            var poster = document.getElementById('microdramasIQModalPoster');
-            var body   = document.getElementById('microdramasIQModalContent');
+            var modal = document.getElementById('microdramasIQModal');
+            var title = document.getElementById('microdramasIQModalTitle');
+            var sub   = document.getElementById('microdramasIQModalSub');
+            var body  = document.getElementById('microdramasIQModalContent');
             if (!modal || !title || !body) return;
 
             title.textContent = t.title;
             var subLine = [t.series && t.series !== t.title ? t.series : null,
                             t.genre, t.platform].filter(function(x){return x;}).join(' · ');
             if (sub) sub.textContent = subLine;
-
-            // Modal poster: same gradient rule as the card thumbs
-            if (t.poster_url) {
-                poster.style.backgroundImage = 'url("' + String(t.poster_url).replace(/"/g,'&quot;') + '")';
-                poster.style.backgroundSize = 'cover';
-                poster.style.backgroundPosition = 'center';
-                poster.removeAttribute('data-genre');
-                poster.innerHTML = '';
-            } else {
-                var g = t.genre || 'Werewolf';
-                var initial = ((t.title || '?').trim().charAt(0) || '?').toUpperCase();
-                var glyph = _MIQ_GENRE_GLYPH[g] || '📱';
-                poster.setAttribute('data-genre', g);
-                poster.style.backgroundImage = '';
-                poster.classList.add('miq-poster');
-                poster.innerHTML =
-                    '<div style="display:flex; flex-direction:column; align-items:center; gap:0.15rem;">' +
-                        '<div style="font-size:1.4rem; opacity:0.85;">' + glyph + '</div>' +
-                        '<div style="font-size:1.35rem; font-weight:700;">' + _miqEscape(initial) + '</div>' +
-                    '</div>';
-            }
 
             body.innerHTML =
                 '<div class="miq-modal-loading">' +
