@@ -1137,6 +1137,14 @@ def compute_view(filters: Optional[dict] = None,
     genre_filter = (filters.get('genre') or '').strip().lower()
     start_date_s = (filters.get('start_date') or '').strip() or None
     end_date_s   = (filters.get('end_date')   or '').strip() or None
+    # top_n mirrors the "Show" filter on the competitor tabs: cap the
+    # returned title list at N (default 20). 0 / None = uncapped.
+    try:
+        top_n = int(filters.get('top_n') or 0)
+    except (TypeError, ValueError):
+        top_n = 0
+    if top_n:
+        top_n = max(1, min(50, top_n))
     # Custom range: derive window_days from the requested date range
     # (inclusive). Otherwise cap window_days at 28 as before.
     if start_date_s and end_date_s:
@@ -1157,6 +1165,7 @@ def compute_view(filters: Optional[dict] = None,
         'window_days':  window_days,
         'audience_cut': cut,
         'genre':        genre_filter,
+        'top_n':        top_n,
         'start_date':   start_date_s,
         'end_date':     end_date_s,
     })
@@ -1175,6 +1184,10 @@ def compute_view(filters: Optional[dict] = None,
                        if genre_filter in (t.get('genre') or '').lower()]
     serialized = _sort_titles(serialized, sort_key)
     display = _apply_audience_cut(serialized, cut)
+    # "Show" filter (Top N) applied last so it caps the SORTED list.
+    # 0 / falsy = uncapped, matching the "All" / no-value behaviour.
+    if top_n:
+        display = display[:top_n]
 
     first_scrape = catalog.get('first_scrape')
     days_of_history = 0
@@ -1192,6 +1205,7 @@ def compute_view(filters: Optional[dict] = None,
             'window_days':   window_days,
             'audience_cut':  cut,
             'genre':         genre_filter or None,
+            'top_n':         top_n or None,
             'start_date':    start_date_s,
             'end_date':      end_date_s,
         },
