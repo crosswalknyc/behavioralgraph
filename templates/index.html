@@ -92468,8 +92468,22 @@
                 if (_currentProfileYearForHeader && _hdr) {
                     const _pcol2 = _hdr.querySelector('.profile-col');
                     if (_pcol2) {
-                        const _orig = _pcol2.dataset.cmpOrigText || _pcol2.textContent || '';
-                        if (!_pcol2.dataset.cmpOrigText) _pcol2.dataset.cmpOrigText = _orig;
+                        // Capture the bare label WITHOUT the sort-arrow
+                        // glyph. Reading raw textContent would fold the
+                        // "↓" from the .sort-arrow span into the label and
+                        // bake it in permanently (the relabel below writes
+                        // via textContent, wiping the real arrow span while
+                        // _updateBehavioralSortArrows re-adds a fresh one) -
+                        // leaving a redundant "↓Total Universe 2025" arrow
+                        // stuck immediately before the text.
+                        let _orig = _pcol2.dataset.cmpOrigText;
+                        if (_orig == null) {
+                            const _arrowEl = _pcol2.querySelector('.sort-arrow');
+                            _orig = _arrowEl
+                                ? (_pcol2.textContent || '').replace(_arrowEl.textContent || '', '').trim()
+                                : (_pcol2.textContent || '').trim();
+                            _pcol2.dataset.cmpOrigText = _orig;
+                        }
                         const _base = (_orig || _baseCohortLabel()).trim();
                         const _suffix = ' ' + _currentProfileYearForHeader;
                         _pcol2.textContent = _base.endsWith(_suffix) ? _base : (_base + _suffix);
@@ -92510,8 +92524,21 @@
                         arrow.className = 'sort-arrow';
                         arrow.textContent = '↓';
                         span.appendChild(arrow);
-                        const labelText = document.createTextNode(label);
-                        span.appendChild(labelText);
+                        // Stack multi-word cohort labels onto two lines
+                        // (first word on line 1, the remainder on line 2)
+                        // so short labels like "Casual Male" wrap the same
+                        // way the longer "Casual Female" already does under
+                        // natural wrapping - keeping every cohort header a
+                        // consistent two-line block instead of a mix of
+                        // one- and two-line headers.
+                        const _lblWords = String(label).split(/\s+/).filter(Boolean);
+                        if (_lblWords.length > 1) {
+                            span.appendChild(document.createTextNode(_lblWords[0]));
+                            span.appendChild(document.createElement('br'));
+                            span.appendChild(document.createTextNode(_lblWords.slice(1).join(' ')));
+                        } else {
+                            span.appendChild(document.createTextNode(label));
+                        }
                         span.title = 'Sort by ' + label;
                         // Header label is allowed to wrap inside its
                         // own column so long cohort names (e.g.
