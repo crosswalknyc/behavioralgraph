@@ -43219,16 +43219,10 @@
             var meta = document.getElementById(metaId);
             if (!grid) return;
             var titles = platform.titles || [];
-            if (meta) {
-                var range = '';
-                if (platform.earliest_date && platform.latest_date) {
-                    range = platform.earliest_date + ' to ' + platform.latest_date;
-                }
-                meta.textContent =
-                    (platform.mau_millions ? platform.mau_millions + 'M MAU' : '') +
-                    (platform.note ? ' - ' + platform.note : '') +
-                    (range ? ' - Window: ' + range : '');
-            }
+            // Platform sub-line (MAU + editorial note + window) removed
+            // per user directive. The filter bar already communicates the
+            // active window; each card's sparkline carries the shape.
+            if (meta) meta.textContent = '';
             if (!titles.length) {
                 grid.innerHTML = '<div class="miq-empty">No observations in this window yet. Daily scraper (05:30 UTC) populates automatically.</div>';
                 return;
