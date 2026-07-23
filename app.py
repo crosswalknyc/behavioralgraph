@@ -15227,6 +15227,7 @@ def api_microdramas_iq_data():
             'window_days':   req.get('window_days'),
             'audience_cut':  req.get('audience_cut'),
             'genre':         req.get('genre'),
+            'top_n':         req.get('top_n'),
             'start_date':    req.get('start_date'),
             'end_date':      req.get('end_date'),
         }
