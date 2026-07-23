@@ -212,10 +212,19 @@ def _daily_estimate(observations: list[dict]) -> tuple[list[dict], int]:
 # ============================================================================
 # S3 IO
 # ============================================================================
+# --- boto3 client reuse ---
+# A single boto3 client per process keeps TCP + auth setup out of the
+# hot path. boto3 clients are thread-safe for the calls we make.
+_S3_CLIENT_CACHE: dict[str, object] = {}
+
 def _s3_client():
     import boto3  # type: ignore
     region = os.environ.get('AWS_REGION') or 'us-east-2'
-    return boto3.client('s3', region_name=region)
+    cli = _S3_CLIENT_CACHE.get(region)
+    if cli is None:
+        cli = boto3.client('s3', region_name=region)
+        _S3_CLIENT_CACHE[region] = cli
+    return cli
 
 
 def _read_json(key: str) -> Optional[dict]:
@@ -227,6 +236,136 @@ def _read_json(key: str) -> Optional[dict]:
     except Exception as e:
         logger.info("microdramas_iq: cannot read s3://%s/%s (%s)", S3_BUCKET, key, e)
         return None
+
+
+# ============================================================================
+# In-process caches
+# ============================================================================
+# There are two caches that dramatically cut latency for the dashboard:
+#
+# 1. Snapshot cache (_SNAPSHOT_CACHE)
+#    - Historical daily snapshots at s3://.../snapshots/{date}/{source}.json
+#      are IMMUTABLE once the day is over - the cron only writes today's
+#      snapshot. Past-day entries never expire in-process.
+#    - Today's snapshot has a 60-minute TTL so re-scrapes propagate.
+#    - Keyed by (source, day_iso).
+#
+# 2. View cache (_VIEW_CACHE)
+#    - The output of compute_view / compute_competitors_view is cached
+#      for 15 minutes, keyed by a normalized JSON of the filter dict.
+#    - Any single API request that would otherwise fan out to 30+ S3
+#      reads becomes a single dict lookup once the cache is warm.
+#
+# The cron endpoint (api_cron_microdramas_scrapers) calls
+# invalidate_todays_snapshot_cache() + invalidate_view_cache() after
+# writing new snapshots so the next dashboard hit sees fresh data. It
+# then pre-warms the most common view queries so the first user click
+# is instant instead of paying the compute cost.
+
+_SNAPSHOT_CACHE: dict[tuple, tuple] = {}  # (source, day) -> (ts_epoch, snapshot_dict)
+_TODAY_TTL_SECONDS = 60 * 60  # 60 min for today's snapshot
+
+_VIEW_CACHE: dict[str, tuple] = {}         # cache_key -> (ts_epoch, payload)
+_VIEW_TTL_SECONDS = 15 * 60
+
+
+def _today_iso() -> str:
+    return date.today().isoformat()
+
+
+def _cached_read_dated_snapshot(source: str, day_iso: str) -> Optional[dict]:
+    """Snapshot read with in-process caching.
+
+    Past days: cache forever (immutable).
+    Today:     cache for 60 minutes (or until the cron busts the entry).
+    """
+    key = (source, day_iso)
+    hit = _SNAPSHOT_CACHE.get(key)
+    now = time.time()
+    if hit is not None:
+        ts, payload = hit
+        if day_iso < _today_iso():
+            return payload  # immutable historical day, always safe to serve
+        if (now - ts) < _TODAY_TTL_SECONDS:
+            return payload
+    # Miss (or stale): hit S3
+    s3_key = S3_SNAPSHOT_DATED.format(date=day_iso, source=source)
+    payload = _read_json(s3_key)
+    # Cache negative results too (as None) so we don't hammer S3 on
+    # gaps. Historical gaps stay cached forever; today's gap gets the
+    # same 60-min TTL so a mid-day scrape can populate it.
+    _SNAPSHOT_CACHE[key] = (now, payload)
+    return payload
+
+
+def invalidate_todays_snapshot_cache() -> None:
+    """Drop every cached entry for today's date across all sources.
+
+    Called by the cron endpoint right after the scrapers write fresh
+    snapshots so the next dashboard hit reflects the new data.
+    """
+    today = _today_iso()
+    for k in [k for k in _SNAPSHOT_CACHE.keys() if k[1] == today]:
+        _SNAPSHOT_CACHE.pop(k, None)
+
+
+def _view_cache_key(prefix: str, filters: dict) -> str:
+    # Normalize None -> missing so `{'genre': None}` and `{}` cache
+    # under the same key. Sort so key ordering is stable.
+    clean = {k: v for k, v in (filters or {}).items() if v not in (None, '')}
+    return prefix + '|' + json.dumps(clean, sort_keys=True, default=str)
+
+
+def _view_cache_get(key: str) -> Optional[dict]:
+    hit = _VIEW_CACHE.get(key)
+    if hit is None:
+        return None
+    ts, payload = hit
+    if (time.time() - ts) < _VIEW_TTL_SECONDS:
+        return payload
+    _VIEW_CACHE.pop(key, None)
+    return None
+
+
+def _view_cache_set(key: str, payload: dict) -> None:
+    _VIEW_CACHE[key] = (time.time(), payload)
+
+
+def invalidate_view_cache() -> None:
+    """Drop every cached view payload. Called after the scrapers run so
+    the next dashboard hit recomputes against fresh snapshots."""
+    _VIEW_CACHE.clear()
+
+
+def prewarm_common_views() -> dict:
+    """Precompute the most common dashboard queries so the first user
+    click after a scrape is instant. Returns a summary dict for
+    logging.
+
+    Common queries:
+    - Peacock default (window_days=7, sort=view_28d, cut=all)
+    - Competitors default (window_days=7, top_n=20, all genres)
+    - Competitors 30-day (window_days=30, top_n=20, all genres)
+    """
+    warmed = {'peacock': False, 'comp_7d': False, 'comp_30d': False,
+              'errors': []}
+    try:
+        compute_view({'sort': 'view_28d', 'window_days': 7,
+                       'audience_cut': 'all'})
+        warmed['peacock'] = True
+    except Exception as e:
+        warmed['errors'].append(f'peacock: {e}')
+    try:
+        compute_competitors_view({'window_days': 7, 'top_n': 20})
+        warmed['comp_7d'] = True
+    except Exception as e:
+        warmed['errors'].append(f'comp_7d: {e}')
+    try:
+        compute_competitors_view({'window_days': 30, 'top_n': 20})
+        warmed['comp_30d'] = True
+    except Exception as e:
+        warmed['errors'].append(f'comp_30d: {e}')
+    return warmed
 
 
 def _write_json(key: str, payload: dict, *, cache_control: str = 'no-cache') -> None:
@@ -505,8 +644,10 @@ _COMPETITOR_WINDOW_OPTIONS = [
 
 
 def _read_dated_snapshot(source: str, day_iso: str) -> Optional[dict]:
-    key = S3_SNAPSHOT_DATED.format(date=day_iso, source=source)
-    return _read_json(key)
+    # Delegates to the in-process cache so any given (source, day) tuple
+    # only hits S3 once per process (or once per 60 min for today's
+    # snapshot). See _cached_read_dated_snapshot for the caching rules.
+    return _cached_read_dated_snapshot(source, day_iso)
 
 
 def _read_history_days(source: str, days: int,
@@ -712,6 +853,18 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
     top_n       = max(1, min(25, top_n))
     genre_filter = (filters.get('genre') or '').strip().lower()
 
+    # View cache: identical filters within 15 min return instantly
+    _cache_key = _view_cache_key('competitors', {
+        'window_days': window_days,
+        'top_n':       top_n,
+        'genre':       genre_filter,
+        'start_date':  start_date,
+        'end_date':    end_date,
+    })
+    _cached = _view_cache_get(_cache_key)
+    if _cached is not None:
+        return _cached
+
     platforms = []
     for cfg in COMPETITOR_SOURCES:
         source = cfg['source']
@@ -777,12 +930,14 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
         for p in x['per_platform'].values()
     ))
 
-    return {
+    _payload = {
         'success':        True,
         'filters':        {
             'window_days': window_days,
             'top_n':       top_n,
             'genre':       genre_filter or None,
+            'start_date':  start_date,
+            'end_date':    end_date,
         },
         'generated_at':   datetime.now(timezone.utc).isoformat(),
         'window_options': _COMPETITOR_WINDOW_OPTIONS,
@@ -802,6 +957,8 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
             'window it surfaces in the Cross-platform titles rail.',
         ],
     }
+    _view_cache_set(_cache_key, _payload)
+    return _payload
 
 
 # ============================================================================
@@ -951,6 +1108,21 @@ def compute_view(filters: Optional[dict] = None,
     else:
         window_days = max(1, min(28, window_days))
 
+    # View cache: identical filters within 15 min return instantly.
+    # force_refresh (used by future admin tools) bypasses the cache.
+    _cache_key = _view_cache_key('peacock', {
+        'sort':         sort_key,
+        'window_days':  window_days,
+        'audience_cut': cut,
+        'genre':        genre_filter,
+        'start_date':   start_date_s,
+        'end_date':     end_date_s,
+    })
+    if not force_refresh:
+        _cached = _view_cache_get(_cache_key)
+        if _cached is not None:
+            return _cached
+
     catalog = read_catalog()
     titles_dict = catalog.get('titles') or {}
 
@@ -971,12 +1143,15 @@ def compute_view(filters: Optional[dict] = None,
         except Exception:
             pass
 
-    return {
+    _payload = {
         'success':      True,
         'filters':      {
             'sort':          sort_key,
             'window_days':   window_days,
             'audience_cut':  cut,
+            'genre':         genre_filter or None,
+            'start_date':    start_date_s,
+            'end_date':      end_date_s,
         },
         'generated_at': datetime.now(timezone.utc).isoformat(),
         'titles':       display,
@@ -1006,3 +1181,5 @@ def compute_view(filters: Optional[dict] = None,
             'shape published in NBCU\'s Peacock Shorts investor deck.',
         ],
     }
+    _view_cache_set(_cache_key, _payload)
+    return _payload

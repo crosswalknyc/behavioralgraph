@@ -43823,6 +43823,7 @@
             // ---------- Podcasts ----------
             'Apple Podcasts Top 100 (US)':       'Apple Podcasts: The Apple chart of top-listened shows in the US right now.',
             'Spotify Podcast Charts (US)':       'Spotify Podcast Charts: Top listened-to podcasts on Spotify in the US.',
+            'Netflix video podcasts':            'Netflix video podcasts: Every podcast Netflix carries as a streamable video show. Editorial list from Netflix Tudum.',
             'Amazon Music Podcasts (US)':        'Amazon Music Podcasts: Top listened-to podcasts on Amazon Music in the US.',
             'Audible Podcasts (US)':             'Audible Podcasts: Top listened-to podcasts on Audible in the US.',
             // ---------- Books ----------
@@ -45019,7 +45020,9 @@
         // ============================================================
 
         function renderTIQPodcasts(sources) {
-            var keys = ['apple', 'spotify', 'amazon', 'audible'];
+            // Order: Apple (biggest chart) -> Spotify -> Netflix (their
+            // curated video-podcast lineup) -> Amazon -> Audible.
+            var keys = ['apple', 'spotify', 'netflix', 'amazon', 'audible'];
             var present = keys.filter(function(k) { return sources[k]; });
             if (!present.length) {
                 return '<div class="tiq-empty">Podcast charts are warming up. Check back later.</div>';

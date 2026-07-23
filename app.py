@@ -15288,6 +15288,8 @@ def api_cron_microdramas_scrapers():
             ('peacock',   'scripts.microdramas_scrapers.peacock',   'Peacock'),
             ('reelshort', 'scripts.microdramas_scrapers.reelshort', 'ReelShort'),
             ('dramabox',  'scripts.microdramas_scrapers.dramabox',  'DramaBox'),
+            ('goodshort', 'scripts.microdramas_scrapers.goodshort', 'GoodShort'),
+            ('netshort',  'scripts.microdramas_scrapers.netshort',  'NetShort'),
         ]:
             try:
                 module = importlib.import_module(mod_path)
@@ -15300,11 +15302,27 @@ def api_cron_microdramas_scrapers():
                 traceback.print_exc()
                 results.append({'source': source, 'label': label, 'titles': 0,
                                  'ok': False, 'error': str(e)})
+
+        # Cache invalidation + pre-warm so the first dashboard hit
+        # after the scrape is instant. Today's snapshots + all
+        # computed view payloads get busted, then the common queries
+        # are recomputed (which repopulates the caches).
+        warm_summary = {}
+        if _microdramas_iq is not None:
+            try:
+                _microdramas_iq.invalidate_todays_snapshot_cache()
+                _microdramas_iq.invalidate_view_cache()
+                warm_summary = _microdramas_iq.prewarm_common_views()
+            except Exception as e:
+                traceback.print_exc()
+                warm_summary = {'error': str(e)}
+
         from datetime import timezone as _tz  # local-import for parity with the rest of the file
         return jsonify({
             'success':    True,
             'total':      total,
             'per_source': results,
+            'cache':      warm_summary,
             'ran_at':     datetime.now(_tz.utc).isoformat(),
         })
     except Exception as e:
