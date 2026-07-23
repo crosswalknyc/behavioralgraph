@@ -741,6 +741,11 @@ def _build_arc(source: str, days: int,
                 'book_id':        row.get('book_id') or '',
                 'is_new':         bool(row.get('is_new')),
                 'ranks_by_date':  {},
+                # Per-date total-reads ("views") series so the card
+                # sparkline can plot view volume over the window instead
+                # of chart rank. Empty for sources with no read count
+                # (e.g. NetShort), where the frontend falls back to rank.
+                'reads_by_date':  {},
             }
             # Prefer the freshest metadata for display
             if row.get('poster_url'):     entry['poster_url']     = row['poster_url']
@@ -760,6 +765,8 @@ def _build_arc(source: str, days: int,
             if row.get('is_new') is not None:
                 entry['is_new'] = bool(row['is_new'])
             entry['ranks_by_date'][d] = row.get('rank')
+            if row.get('read_count') is not None:
+                entry['reads_by_date'][d] = row.get('read_count')
             per_title[k] = entry
 
     # Rank movement math
