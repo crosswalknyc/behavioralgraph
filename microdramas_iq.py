@@ -557,6 +557,14 @@ def _build_arc(source: str, days: int) -> dict:
                 'genre':          row.get('genre') or '',
                 'episodes_count': row.get('episodes_count'),
                 'avg_rating':     row.get('avg_rating'),
+                # ReelShort-specific enrichment (harmless for other sources
+                # since they won't set these keys)
+                'themes':         row.get('themes') or [],
+                'rail':           row.get('rail') or '',
+                'read_count':     row.get('read_count'),
+                'collect_count':  row.get('collect_count'),
+                'book_id':        row.get('book_id') or '',
+                'is_new':         bool(row.get('is_new')),
                 'ranks_by_date':  {},
             }
             # Prefer the freshest metadata for display
@@ -567,6 +575,15 @@ def _build_arc(source: str, days: int) -> dict:
                 entry['episodes_count'] = row['episodes_count']
             if row.get('avg_rating') is not None:
                 entry['avg_rating'] = row['avg_rating']
+            if row.get('themes'):         entry['themes']         = row['themes']
+            if row.get('rail'):           entry['rail']           = row['rail']
+            if row.get('read_count') is not None:
+                entry['read_count'] = row['read_count']
+            if row.get('collect_count') is not None:
+                entry['collect_count'] = row['collect_count']
+            if row.get('book_id'):        entry['book_id']        = row['book_id']
+            if row.get('is_new') is not None:
+                entry['is_new'] = bool(row['is_new'])
             entry['ranks_by_date'][d] = row.get('rank')
             per_title[k] = entry
 

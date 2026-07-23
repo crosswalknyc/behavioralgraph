@@ -23831,6 +23831,10 @@
             #microdramasIQView .miq-delta.dropped { background: rgba(255, 255, 255, 0.08); color: var(--text-secondary); text-decoration: line-through; }
             #microdramasIQView .miq-delta.stable { background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); }
             #microdramasIQView .miq-genre-tag { font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 10px; background: rgba(139, 92, 246, 0.15); color: #c4b5fd; text-transform: uppercase; letter-spacing: 0.04em; }
+            #microdramasIQView .miq-rail-chip { display: inline-block; font-size: 0.65rem; padding: 0.1rem 0.45rem; margin-left: 0.35rem; border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; vertical-align: middle; }
+            #microdramasIQView .miq-rail-chip[data-rail="TOP"] { background: rgba(251, 191, 36, 0.15); color: #fcd34d; }
+            #microdramasIQView .miq-rail-chip[data-rail="New Release"] { background: rgba(34, 197, 94, 0.15); color: #86efac; }
+            #microdramasIQView .miq-rail-chip[data-rail="Reel Original 🌏"] { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
             #microdramasIQView .miq-cross-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.6rem; margin-top: 0.6rem; }
             #microdramasIQView .miq-cross-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.6rem 0.75rem; }
             #microdramasIQView .miq-cross-title { font-size: 0.88rem; font-weight: 600; margin-bottom: 0.3rem; }
@@ -41565,10 +41569,17 @@
                     var titleHtml = _miqEscape(t.title || '');
                     var current = (t.current_rank == null) ? '-' : '#' + t.current_rank;
                     var best    = (t.best_rank == null) ? '-' : '#' + t.best_rank;
-                    var days    = (t.days_in_window || 0) + '/' + (p.observed_dates || []).length;
                     var rating  = (t.avg_rating == null) ? '' : Number(t.avg_rating).toFixed(1) + ' ★';
                     var eps     = (t.episodes_count == null) ? '' : t.episodes_count + ' eps';
                     var meta2   = [rating, eps].filter(function(x){return x;}).join(' · ');
+                    var reads   = (t.read_count == null) ? '-' : _miqFormatNumber(t.read_count);
+                    // ReelShort surfaces which rail a title is on (TOP,
+                    // New Release, Reel Original, More Recommended, etc).
+                    // Show that inline with the title so ranking context
+                    // is legible without an extra column.
+                    var railChip = t.rail
+                        ? ' <span class="miq-rail-chip" data-rail="' + _miqEscape(t.rail) + '">' + _miqEscape(t.rail) + '</span>'
+                        : '';
                     // Deep-link preserved as an inline chip so the user can
                     // hop to the source without triggering the drill-down.
                     var deepChip = t.deep_link
@@ -41577,12 +41588,12 @@
                     return '<tr data-miq-title="' + _miqEscape(t.title || '') + '" data-miq-series="' + _miqEscape(t.series || t.title || '') + '" data-miq-genre="' + _miqEscape(t.genre || '') + '" data-miq-platform="' + _miqEscape(p.label || '') + '">' +
                         '<td class="miq-rank">' + current + '</td>' +
                         '<td>' + _miqDeltaChip(t.status, t.rank_delta) + '</td>' +
-                        '<td>' + titleHtml + deepChip +
+                        '<td>' + titleHtml + railChip + deepChip +
                             (meta2 ? '<div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">' + meta2 + '</div>' : '') +
                         '</td>' +
                         '<td>' + (t.genre ? '<span class="miq-genre-tag">' + _miqEscape(t.genre) + '</span>' : '') + '</td>' +
+                        '<td style="font-variant-numeric: tabular-nums;">' + reads + '</td>' +
                         '<td>' + best + '</td>' +
-                        '<td style="color: var(--text-secondary); font-size: 0.78rem;">' + days + '</td>' +
                     '</tr>';
                 }).join('');
                 block.innerHTML =
@@ -41596,8 +41607,8 @@
                             '<th style="width:80px">Move</th>' +
                             '<th>Title</th>' +
                             '<th style="width:120px">Genre</th>' +
+                            '<th style="width:80px">Reads</th>' +
                             '<th style="width:60px">Best</th>' +
-                            '<th style="width:60px">Days</th>' +
                         '</tr></thead>' +
                         '<tbody>' + rows + '</tbody>' +
                     '</table>';
