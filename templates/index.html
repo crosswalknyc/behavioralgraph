@@ -42936,6 +42936,9 @@
                 var upd = cov.last_updated ? new Date(cov.last_updated).toLocaleString() : '';
                 meta.textContent = 'Showing ' + (d.titles || []).length + ' of ' + (cov.titles_observed || 0) + ' titles.' + (upd ? ' Catalog updated ' + upd + '.' : '');
             }
+            // Stash the window size so the Peacock reach metric can
+            // label itself dynamically (7d / 14d / 28d / custom).
+            window.__microdramasIQ.currentWindowDays = (d.filters || {}).window_days || 28;
             renderMicrodramasIQTitles(d.titles || []);
         }
 
@@ -43181,9 +43184,16 @@
                 var card = document.createElement('div');
                 card.className = 'miq-title-card';
                 var spark = _miqViewSparkline(t);
+                var wd = window.__microdramasIQ.currentWindowDays || 28;
+                // Prefer the current-window estimate when a non-28d
+                // window is active so the number tracks the Look back
+                // filter; fall back to the 28d estimate otherwise.
+                var reachVal = (wd === 28)
+                    ? t.view_28d_estimate
+                    : (t.view_window_estimate != null ? t.view_window_estimate : t.view_28d_estimate);
                 var primary = {
-                    label: '28d reach',
-                    value: _miqFormatNumber(t.view_28d_estimate),
+                    label: wd + 'd reach',
+                    value: _miqFormatNumber(reachVal),
                 };
                 card.innerHTML = _miqCardHTML(t, 'Peacock', spark, primary);
                 card.addEventListener('click', function() {

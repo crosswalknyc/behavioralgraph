@@ -509,10 +509,34 @@ def _read_dated_snapshot(source: str, day_iso: str) -> Optional[dict]:
     return _read_json(key)
 
 
-def _read_history_days(source: str, days: int) -> list[dict]:
-    """Return up to `days` dated snapshots, oldest first. Missing days
-    just get skipped - callers should handle sparse arcs."""
+def _read_history_days(source: str, days: int,
+                        *, start_date: Optional[str] = None,
+                        end_date: Optional[str] = None) -> list[dict]:
+    """Return dated snapshots, oldest first. Missing days just get
+    skipped - callers should handle sparse arcs.
+
+    Two modes:
+    - `days`: walk back `days` from today (the historical behavior).
+    - `start_date` + `end_date` (ISO YYYY-MM-DD): explicit inclusive
+      range. When both are provided they take precedence over `days`.
+    """
     out: list[dict] = []
+    if start_date and end_date:
+        try:
+            start = datetime.fromisoformat(start_date).date()
+            end   = datetime.fromisoformat(end_date).date()
+        except Exception:
+            start = end = None
+        if start and end and start <= end:
+            cur = start
+            while cur <= end:
+                d = cur.isoformat()
+                snap = _read_dated_snapshot(source, d)
+                if snap:
+                    snap['observed_date'] = d
+                    out.append(snap)
+                cur += timedelta(days=1)
+            return out
     today = date.today()
     for offset in range(days - 1, -1, -1):
         d = (today - timedelta(days=offset)).isoformat()
@@ -527,7 +551,9 @@ def _title_norm_key(title: str) -> str:
     return re.sub(r'[^a-z0-9]+', '', (title or '').lower())
 
 
-def _build_arc(source: str, days: int) -> dict:
+def _build_arc(source: str, days: int,
+               *, start_date: Optional[str] = None,
+               end_date: Optional[str] = None) -> dict:
     """Return a per-title arc across the last `days` snapshots.
 
     Shape:
@@ -543,7 +569,9 @@ def _build_arc(source: str, days: int) -> dict:
         ]
       }
     """
-    history = _read_history_days(source, days)
+    history = _read_history_days(source, days,
+                                   start_date=start_date,
+                                   end_date=end_date)
     observed_dates = [h['observed_date'] for h in history]
 
     # Aggregate per title
@@ -662,13 +690,24 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
     """Return per-platform top titles with rank movement over the window.
 
     filters:
-      window_days: int  (default 7, max 30)
-      top_n:       int  (default 20, max 25)
-      genre:       str  (optional filter, matches genre substring)
+      window_days: int   (default 7; capped at 30 when start/end absent)
+      top_n:       int   (default 20, max 25)
+      genre:       str   (optional filter, matches genre substring)
+      start_date:  str   (optional ISO YYYY-MM-DD, inclusive)
+      end_date:    str   (optional ISO YYYY-MM-DD, inclusive)
+
+    When both `start_date` and `end_date` are supplied they win over
+    `window_days` (custom range mode). Otherwise the historical
+    "last N days ending today" behavior applies.
     """
     filters = filters or {}
+    start_date = (filters.get('start_date') or '').strip() or None
+    end_date   = (filters.get('end_date')   or '').strip() or None
     window_days = int(filters.get('window_days') or 7)
-    window_days = max(1, min(30, window_days))
+    # Only cap window_days when we're in "last N days" mode. Custom
+    # range mode is bounded by the actual date range the user picked.
+    if not (start_date and end_date):
+        window_days = max(1, min(30, window_days))
     top_n       = int(filters.get('top_n') or 20)
     top_n       = max(1, min(25, top_n))
     genre_filter = (filters.get('genre') or '').strip().lower()
@@ -676,7 +715,8 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
     platforms = []
     for cfg in COMPETITOR_SOURCES:
         source = cfg['source']
-        arc = _build_arc(source, window_days)
+        arc = _build_arc(source, window_days,
+                          start_date=start_date, end_date=end_date)
         titles = arc.get('titles') or []
 
         if genre_filter:
@@ -877,18 +917,48 @@ def _apply_audience_cut(titles: list[dict], cut: str) -> list[dict]:
 def compute_view(filters: Optional[dict] = None,
                  *, force_refresh: bool = False) -> dict:
     """Build the full Microdramas IQ payload for the current catalog +
-    filters."""
+    filters.
+
+    filters:
+      sort:         'view_28d' | 'surface_rank' | 'first_observed' | 'episodes'
+      window_days:  int  (default 28, capped at 28 in "last N days" mode)
+      audience_cut: 'all' | ...
+      genre:        str  (optional substring match on title genre)
+      start_date:   str  (optional ISO YYYY-MM-DD, inclusive)
+      end_date:     str  (optional ISO YYYY-MM-DD, inclusive)
+
+    When both `start_date` and `end_date` are provided, the reach
+    window is derived from the date range (end - start + 1, uncapped)
+    so custom ranges longer than 28 days are supported.
+    """
     filters = filters or {}
     sort_key    = str(filters.get('sort') or 'view_28d')
     window_days = int(filters.get('window_days') or 28)
     cut         = str(filters.get('audience_cut') or 'all')
-    window_days = max(1, min(28, window_days))
+    genre_filter = (filters.get('genre') or '').strip().lower()
+    start_date_s = (filters.get('start_date') or '').strip() or None
+    end_date_s   = (filters.get('end_date')   or '').strip() or None
+    # Custom range: derive window_days from the requested date range
+    # (inclusive). Otherwise cap window_days at 28 as before.
+    if start_date_s and end_date_s:
+        try:
+            _s = datetime.fromisoformat(start_date_s).date()
+            _e = datetime.fromisoformat(end_date_s).date()
+            if _s <= _e:
+                window_days = max(1, (_e - _s).days + 1)
+        except Exception:
+            pass
+    else:
+        window_days = max(1, min(28, window_days))
 
     catalog = read_catalog()
     titles_dict = catalog.get('titles') or {}
 
     serialized = [_serialize_title(e, window_days=window_days)
                    for e in titles_dict.values()]
+    if genre_filter:
+        serialized = [t for t in serialized
+                       if genre_filter in (t.get('genre') or '').lower()]
     serialized = _sort_titles(serialized, sort_key)
     display = _apply_audience_cut(serialized, cut)
 
