@@ -43023,36 +43023,63 @@
                 (trend ? '<div class="miq-trend">' + _miqEscape(trend) + '</div>' : '');
         }
 
-        // Hover tooltip: spells out each observed day so the user
-        // never has to guess what the sparkline is plotting.
+        // Competitor snapshots are dated by their FETCH date, but the
+        // source view counts lag one calendar day behind (today's fetch
+        // reports yesterday's numbers). Shift the *displayed* date one day
+        // back so the latest point reads the real data date (e.g. a
+        // Thursday fetch shows Wed). Labels only - reads_by_date lookups
+        // keep the real (unshifted) snapshot-date keys. Peacock's curve is
+        // launch-relative (not a calendar feed), so it is never shifted.
+        var _MIQ_DATA_LAG_DAYS = 1;
+        function _miqLagDate(ds) {
+            if (!ds || !_MIQ_DATA_LAG_DAYS) return ds;
+            var dt = new Date(ds + 'T00:00:00Z');
+            if (isNaN(dt.getTime())) return ds;
+            dt.setUTCDate(dt.getUTCDate() - _MIQ_DATA_LAG_DAYS);
+            return dt.toISOString().slice(0, 10);
+        }
+        // "Wed 7/22" from an ISO date string (weekday + M/D).
+        function _miqDayLabel(ds) {
+            if (!ds) return '';
+            var parts = String(ds).split('-');
+            var md = (parts.length === 3)
+                ? (parseInt(parts[1], 10) + '/' + parseInt(parts[2], 10))
+                : ds;
+            var dt = new Date(ds + 'T00:00:00Z');
+            var WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+            var wd = isNaN(dt.getTime()) ? '' : WD[dt.getUTCDay()];
+            return (wd ? wd + ' ' : '') + md;
+        }
+
+        // Hover tooltip: spells out each observed day (weekday + date) and
+        // its view count so the sparkline is never a mystery.
         function _miqSparkTooltip(t, platform) {
-            // Peacock plots its daily view curve; competitors plot the
-            // per-date total-reads ("views") series. Both spell out the
-            // daily values here so the sparkline is never a mystery.
+            // Peacock plots its daily view curve (launch-relative dates,
+            // no lag shift); competitors plot the per-date total-reads
+            // ("views") series with the one-day data-lag correction.
             if (platform === 'Peacock') {
                 var curve = t.view_daily_curve || [];
                 if (curve.length) {
-                    return 'Daily views over window:\n' + curve.map(function(c) {
-                        return (c.date || '') + ': ' + _miqFormatNumber(c.views || 0);
+                    return 'Daily views:\n' + curve.map(function(c) {
+                        return _miqDayLabel(c.date) + ': ' + _miqFormatNumber(c.views || 0);
                     }).join('\n');
                 }
             }
             var dates = t.__observedDates || t.observed_dates || [];
             var reads = t.reads_by_date || {};
-            // Prefer the daily views series (matches the sparkline). Fall
-            // back to chart rank for sources with no read data (NetShort).
             var hasReads = dates.some(function(d) { return Number.isFinite(Number(reads[d])); });
             if (dates.length && hasReads) {
-                return 'Daily views over window:\n' + dates.map(function(d) {
+                return 'Daily views:\n' + dates.map(function(d) {
                     var v = reads[d];
-                    return d + ': ' + (Number.isFinite(Number(v)) ? _miqFormatNumber(v) : '-');
+                    return _miqDayLabel(_miqLagDate(d)) + ': ' + (Number.isFinite(Number(v)) ? _miqFormatNumber(v) : '-');
                 }).join('\n');
             }
+            // Last-resort fallback only when a source has no view data.
             var ranks = t.ranks_by_date || {};
             if (!dates.length) return '';
             return 'Daily chart rank (higher = better, top of line = #1):\n' + dates.map(function(d) {
                 var r = ranks[d];
-                return d + ': ' + (Number.isFinite(r) ? '#' + r : 'off chart');
+                return _miqDayLabel(_miqLagDate(d)) + ': ' + (Number.isFinite(r) ? '#' + r : 'off chart');
             }).join('\n');
         }
 
@@ -43193,7 +43220,9 @@
                 var capped = Math.min(40, Math.max(1, r));
                 return 1 - ((capped - 1) / 39);
             });
-            return _miqSparklineSVG(pts, { dates: dates });
+            // Axis labels use the data-lag-corrected dates; point lookups
+            // above use the real snapshot-date keys.
+            return _miqSparklineSVG(pts, { dates: dates.map(_miqLagDate) });
         }
 
         // Build the sparkline for a competitor title from its per-date
@@ -43217,7 +43246,9 @@
                 if (v == null) return null;
                 return range === 0 ? 0.5 : (v - mn) / range;
             });
-            return _miqSparklineSVG(pts, { dates: dates });
+            // Axis labels use the data-lag-corrected dates; point lookups
+            // above use the real snapshot-date keys (reads_by_date).
+            return _miqSparklineSVG(pts, { dates: dates.map(_miqLagDate) });
         }
 
         // Build the sparkline y-values for a Peacock title using its
