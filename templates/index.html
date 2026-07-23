@@ -42926,16 +42926,11 @@
                 label: 'Reads',
                 value: t.read_count_display || _miqFormatNumber(t.read_count) || '-',
             };
-            // "Series" line: use series if present, else the rail chip
-            // (competitors don't have a series concept, but they have a
-            // rail context like "TOP" or "Trending Now" that plays the
-            // same visual role - a small line above the title)
-            var seriesLine = '';
-            if (t.series && t.series !== t.title) {
-                seriesLine = '<div class="miq-title-series">' + _miqEscape(t.series) + '</div>';
-            } else if (t.rail) {
-                seriesLine = '<div class="miq-title-series">' + _miqEscape(t.rail) + '</div>';
-            }
+            // Series/rail descriptor line intentionally removed - the
+            // card leads directly with the title. Rail context (TOP,
+            // Trending Now, FEATURED HERO, etc.) added noise more than
+            // it added signal; we already show Current rank + Best rank
+            // in the metrics grid, which is a cleaner ranking cue.
             // Second metric: episode count is the most useful "what
             // does this title contain" signal across every platform, so
             // Peacock now mirrors the competitor tabs and surfaces
@@ -42957,8 +42952,7 @@
             } else {
                 secondaryMetric = { label: 'First seen', value: t.earliest_date || '-' };
             }
-            return seriesLine +
-                '<div class="miq-title-row">' + _miqEscape(t.title || '') + '</div>' +
+            return '<div class="miq-title-row">' + _miqEscape(t.title || '') + '</div>' +
                 '<div class="miq-title-metrics">' +
                     '<div><div class="miq-metric-label">' + pm.label + '</div><div class="miq-metric-value">' + pm.value + '</div></div>' +
                     '<div><div class="miq-metric-label">' + secondaryMetric.label + '</div><div class="miq-metric-value">' + secondaryMetric.value + '</div></div>' +
