@@ -16,12 +16,28 @@ Sources (2026-07):
                                      in 2026 (old `/api/charts/top` gone,
                                      replaced by category-scoped endpoints);
                                      this is the current path.
-    Amazon Music Podcasts        -> stub (music.amazon.com/podcasts renders
-                                     client-side; needs donated cookies +
-                                     Playwright).
-    Audible Podcasts             -> stub (audible.com/pd rendering also client-
-                                     side; ships with an operator instruction
-                                     until cookies are donated).
+    Amazon Music Podcasts        -> stub. music.amazon.com/podcasts is a
+                                     React SPA (~11KB shell, zero inlined
+                                     data). No free-tier public analog to
+                                     Spotify's byspotify.com marketing
+                                     endpoint exists: podcasts.amazon.com is
+                                     dead, podcasters.amazon.com is the
+                                     publisher portal, and music.amazon.com's
+                                     internal GraphQL requires an auth token.
+                                     Populates once music.amazon.com cookies
+                                     are donated via donate_cookies.py and a
+                                     Playwright DOM scrape ships.
+    Audible Podcasts             -> `www.audible.com/ep/podcasts`, public
+                                     server-rendered HTML. Audible curates a
+                                     landing page with 8 carousels (Popular
+                                     Podcasts, Audible Originals, True Crime,
+                                     News, History, Comedy, Health & Fitness,
+                                     Sports). Each item is an <adbl-product-
+                                     grid-item> with ASIN, title, publisher,
+                                     cover, and deep-link. We flatten and
+                                     dedupe by ASIN into a single ranked
+                                     list, section-major then position within
+                                     section.
     Netflix video podcasts       -> `netflix.com/tudum/podcasts`, public
                                      server-rendered HTML page maintained by
                                      Netflix Tudum editorial. Every podcast
@@ -43,7 +59,7 @@ Snapshot shape (kind='podcast'):
         "apple":   {"label": "Apple Podcasts Top 100 (US)", "items": [{...}], "available": bool},
         "spotify": {"label": "Spotify Podcast Charts (US)", "items": [{...}], "available": bool},
         "amazon":  {"label": "Amazon Music Podcasts (US)",  "items": [],      "available": False, "sub": "..."},
-        "audible": {"label": "Audible Podcasts (US)",       "items": [],      "available": False, "sub": "..."},
+        "audible": {"label": "Audible Podcasts (US)",       "items": [{...}], "available": bool},
         "netflix": {"label": "Netflix video podcasts",      "items": [{...}], "available": bool}
       }
     }
@@ -228,22 +244,172 @@ def _fetch_spotify_podcasts(limit: int = 100) -> tuple[list[dict], str]:
 # ---------------------------------------------------------------------------
 def _fetch_amazon_podcasts(limit: int = 100) -> tuple[list[dict], str]:
     """Stub. music.amazon.com/podcasts is a full React SPA that fetches
-    its rails client-side after auth. Populates once amazon.com cookies
-    donated via `donate_cookies.py amazon.com` unlock a Playwright DOM
-    scrape (planned follow-up).
+    its rails client-side after auth. Unlike Spotify (which has a
+    public byspotify.com marketing endpoint) and Audible (whose /ep/
+    podcasts page is server-rendered), Amazon Music has NO free-tier
+    public analog - podcasts.amazon.com is dead, podcasters.amazon.com
+    is the publisher portal, and music.amazon.com's internal GraphQL
+    requires an auth token. Populates once music.amazon.com cookies
+    are donated via `donate_cookies.py music.amazon.com` and a
+    Playwright DOM scrape ships.
     """
     return [], 'Warming up.'
 
 
 # ---------------------------------------------------------------------------
-# Audible Podcasts  (stub - needs cookies)
+# Audible Podcasts  (public server-rendered HTML on audible.com/ep/podcasts)
 # ---------------------------------------------------------------------------
+# Audible curates a podcast landing page with 8 carousels. The page is
+# fully server-rendered (~780KB) - every item ships as an <adbl-product-
+# grid-item> block with ASIN, title, publisher, cover art and deep-link.
+# We flatten across canonical sections, dedupe by ASIN and preserve
+# first-seen order (section-major then in-carousel position). Each row
+# carries `category` for context; the frontend renders it in the row
+# meta line under the publisher.
+_AUDIBLE_PODCASTS_URL = 'https://www.audible.com/ep/podcasts'
+
+# Section order = the order we want the flattened list to reflect.
+# "Popular Podcasts" is Audible's own editorial top list -> row 1.
+# "Audible Originals" is Audible-produced exclusives -> row 19-ish.
+# Genre carousels fill out the tail.
+_AUDIBLE_SECTIONS = (
+    'Popular Podcasts',
+    'Audible Originals',
+    'True Crime',
+    'News',
+    'History',
+    'Comedy',
+    'Health & Fitness',
+    'Sports',
+)
+
+# Matches one carousel item. Class names on <adbl-product-grid-item>
+# are stable (they're custom elements, not utility-CSS hashes); if
+# Audible ever renames data-widget/data-asin the regex will just fail
+# closed and _fetch_audible_podcasts returns [] with "Warming up.".
+_AUDIBLE_ITEM_RE = re.compile(
+    r'<div[^>]+adbl-asin-impression[^>]*'
+    r'data-asin="(?P<asin>[A-Z0-9]{10})"[^>]*'
+    r'data-widget="product-carousel"[^>]*'
+    r'data-position="(?P<pos>\d+)"'
+    r'.*?'
+    r'<img[^>]+src="(?P<img>https://m\.media-amazon\.com/images/[^"]+)"[^>]*'
+    r'\s+alt="(?P<alt>[^"]{5,300})"'
+    r'.*?'
+    r'<adbl-metadata slot="title"[^>]*>\s*<a[^>]+>(?P<title>[^<]+)</a>'
+    r'.*?'
+    r'<adbl-metadata slot="author"[^>]*>.*?searchAuthor=(?P<pub>[^&"]+)',
+    re.DOTALL,
+)
+
+# `<h3 slot="title">Popular Podcasts</h3>` (main carousels) OR
+# `<h3>Category Name</h3>` (More Categories block).
+_AUDIBLE_SECTION_RE = re.compile(
+    r'<h3(?:\s+slot="title")?[^>]*>([^<]{3,120})</h3>'
+)
+
+
 def _fetch_audible_podcasts(limit: int = 100) -> tuple[list[dict], str]:
-    """Stub. audible.com/pd renders client-side; anonymous callers get a
-    React shell (~250KB HTML, zero product data). Populates once
-    audible.com cookies are donated.
+    """Parse audible.com/ep/podcasts into a normalized carousel-flattened
+    list. Returns (items, sub) where `sub` is the operator-facing note
+    used when items[] is empty (transient failure only).
     """
-    return [], 'Warming up.'
+    try:
+        r = requests.get(
+            _AUDIBLE_PODCASTS_URL,
+            headers={
+                'User-Agent':      _UA,
+                'Accept':          ('text/html,application/xhtml+xml,'
+                                     'application/xml;q=0.9,*/*;q=0.8'),
+                'Accept-Language': 'en-US,en;q=0.9',
+            },
+            timeout=25,
+        )
+    except Exception as e:
+        logger.warning("audible podcasts: %s", e)
+        return [], 'Warming up.'
+    if not r.ok:
+        logger.warning("audible podcasts: http %s", r.status_code)
+        return [], 'Warming up.'
+    html = r.text or ''
+    if len(html) < 50_000:
+        logger.warning("audible podcasts: html too small (%d bytes) - "
+                       "likely served an anti-bot shell", len(html))
+        return [], 'Warming up.'
+
+    # Walk sections in DOM order so we can tag each item with the
+    # carousel it came from. Only carousels in _AUDIBLE_SECTIONS count.
+    from urllib.parse import unquote
+    section_marks = [(m.start(), m.group(1).strip())
+                     for m in _AUDIBLE_SECTION_RE.finditer(html)]
+
+    def section_for(offset: int) -> str:
+        current = ''
+        for pos, label in section_marks:
+            if pos > offset:
+                break
+            current = label
+        return current
+
+    # First pass: collect items into per-section buckets so we can
+    # emit in canonical section order regardless of DOM ordering.
+    buckets: dict[str, list[dict]] = {s: [] for s in _AUDIBLE_SECTIONS}
+    seen_asins: set[str] = set()
+
+    for m in _AUDIBLE_ITEM_RE.finditer(html):
+        asin = m.group('asin')
+        if asin in seen_asins:
+            continue
+        section = section_for(m.start())
+        if section not in buckets:
+            continue
+        title = _html.unescape(m.group('title').strip())
+        if not title:
+            continue
+        publisher = _html.unescape(
+            unquote(m.group('pub').replace('+', ' ')).strip()
+        )
+        # Prefer the higher-res 500px cover if we can construct it from
+        # the 240px src (Audible serves the same asset at multiple sizes
+        # via `_SL240_`, `_SL500_`, etc.).
+        img = m.group('img')
+        if '_SL240_' in img:
+            img = img.replace('_SL240_', '_SL500_')
+        buckets[section].append({
+            'asin':      asin,
+            'title':     title,
+            'publisher': publisher,
+            'image':     img,
+            'category':  section,
+        })
+        seen_asins.add(asin)
+
+    # Flatten in canonical order, assign ranks.
+    items: list[dict] = []
+    for section in _AUDIBLE_SECTIONS:
+        for row in buckets[section]:
+            items.append({
+                'rank':        len(items) + 1,
+                'title':       row['title'],
+                # Publisher slots in the same "artist" field music /
+                # Spotify / Apple podcasts use so the row renderer needs
+                # no special case.
+                'artist':      row['publisher'],
+                # Section becomes description so the card row has extra
+                # context (e.g. "Popular Podcasts", "True Crime").
+                'description': row['category'],
+                'url':         f'https://www.audible.com/pd/{row["asin"]}',
+                'image':       row['image'],
+                # Also expose the section as `category` for any future
+                # renderer that wants to color-code by carousel.
+                'category':    row['category'],
+            })
+            if len(items) >= limit:
+                return items, ''
+
+    if not items:
+        return [], 'Warming up.'
+    return items, ''
 
 
 # ---------------------------------------------------------------------------
@@ -378,10 +544,9 @@ def _fetch_netflix_podcasts(limit: int = 60) -> tuple[list[dict], str]:
 
 
 def fetch() -> dict[str, Any]:
-    """Pull all five sources. Apple, Spotify and Netflix return live
-    chart / catalog data from public endpoints; Amazon Music and
-    Audible ship as available=False with an operator-facing `sub`
-    until cookies are donated.
+    """Pull all five sources. Apple, Spotify, Netflix and Audible return
+    live data from public endpoints; Amazon Music remains stubbed
+    until music.amazon.com cookies + a Playwright DOM scrape ship.
     """
     apple_items = _fetch_apple_podcasts(limit=100)
     spot_items, spot_sub = _fetch_spotify_podcasts(limit=100)
@@ -421,7 +586,7 @@ def fetch() -> dict[str, Any]:
             },
             'audible': {
                 'label':     'Audible Podcasts (US)',
-                'sub':       aud_sub,
+                'sub':       (aud_sub or 'What Audible is featuring on their podcast landing page across Popular, Originals, and top genres.'),
                 'items':     aud_items,
                 'available': bool(aud_items),
             },
