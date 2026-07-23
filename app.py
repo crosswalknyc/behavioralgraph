@@ -15257,6 +15257,56 @@ def api_microdramas_iq_competitors():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/cron/microdramas-scrapers', methods=['POST', 'GET'])
+def api_cron_microdramas_scrapers():
+    """Run the Microdramas IQ scrapers (Peacock + ReelShort + DramaBox) on
+    demand. Called by the `microdramas-scrapers-daily-cron` Render cron
+    at 05:30 UTC daily; also usable via curl to force an out-of-band
+    refresh:
+
+        curl -X POST 'https://.../api/cron/microdramas-scrapers?secret=$CRON_SECRET'
+
+    Each scraper's fetch() auto-falls-back to a curated baseline when the
+    live pull returns nothing, so today's snapshot always integrates into
+    the catalog (advancing first_observed_date / days_in_window)."""
+    secret = request.headers.get('X-Cron-Secret') or request.args.get('secret') or ''
+    expected = os.environ.get('CRON_SECRET', '')
+    if not expected or secret != expected:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    try:
+        # Import lazily so a missing dep in the scraper stack doesn't
+        # block boot for the rest of the app.
+        import importlib
+        results = []
+        total = 0
+        for source, mod_path, label in [
+            ('peacock',   'scripts.microdramas_scrapers.peacock',   'Peacock'),
+            ('reelshort', 'scripts.microdramas_scrapers.reelshort', 'ReelShort'),
+            ('dramabox',  'scripts.microdramas_scrapers.dramabox',  'DramaBox'),
+        ]:
+            try:
+                module = importlib.import_module(mod_path)
+                payload = module.fetch()
+                module._write_snapshot(payload)
+                n = len(payload.get('titles') or [])
+                total += n
+                results.append({'source': source, 'label': label, 'titles': n, 'ok': True})
+            except Exception as e:
+                traceback.print_exc()
+                results.append({'source': source, 'label': label, 'titles': 0,
+                                 'ok': False, 'error': str(e)})
+        from datetime import timezone as _tz  # local-import for parity with the rest of the file
+        return jsonify({
+            'success':    True,
+            'total':      total,
+            'per_source': results,
+            'ran_at':     datetime.now(_tz.utc).isoformat(),
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/microdramas-iq/title-audience', methods=['POST'])
 @requires_auth
 def api_microdramas_iq_title_audience():
