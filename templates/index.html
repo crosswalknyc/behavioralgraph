@@ -23510,7 +23510,7 @@
             /* Music tracks: square 48x48 thumbnail with a music-note fallback for the ~25% of Shazam discovery tracks that neither iTunes nor Deezer indexed yet. */
             #trendsIQView .tiq-music-image { flex: 0 0 48px; width: 48px; height: 48px; background-size: cover; background-position: center; border-radius: 4px; background-color: #1e293b; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' preserveAspectRatio='xMidYMid slice'%3E%3Crect width='24' height='24' fill='%231e293b'/%3E%3Cpath d='M9 17V5l10-2v12' stroke='%237c3aed' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='7' cy='17' r='2' fill='%237c3aed'/%3E%3Ccircle cx='17' cy='15' r='2' fill='%237c3aed'/%3E%3C/svg%3E"); }
             /* Streaming poster: portrait 40x56 tile (2:2.8 aspect - close to standard poster ratio) with a lime CROSSWALK ///-mark fallback for titles iTunes Search doesn't have artwork for. Cover-fits so square iTunes artwork or true portrait posters both render cleanly. */
-            #trendsIQView .tiq-poster-image { flex: 0 0 40px; width: 40px; height: 56px; background-size: cover; background-position: center; border-radius: 4px; background-color: #c4f542; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 56' preserveAspectRatio='xMidYMid slice'%3E%3Crect width='40' height='56' fill='%23c4f542'/%3E%3Cg transform='translate(6.5 16.4) scale(0.73)' fill='%230f1115'%3E%3Cpath d='M2 5 L11 3 L13 27 L4 29 Z'/%3E%3Cpath d='M13 5 L22 3 L24 27 L15 29 Z'/%3E%3Cpath d='M24 5 L33 3 L35 27 L26 29 Z'/%3E%3C/g%3E%3C/svg%3E"); }
+            #trendsIQView .tiq-poster-image { flex: 0 0 40px; width: 40px; height: 56px; background-size: cover; background-position: center; border-radius: 4px; background-color: #c4f542; background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA0MCA1NicgcHJlc2VydmVBc3BlY3RSYXRpbz0neE1pZFlNaWQgc2xpY2UnPjxyZWN0IHdpZHRoPSc0MCcgaGVpZ2h0PSc1NicgZmlsbD0nI2M0ZjU0MicvPjxnIHRyYW5zZm9ybT0ndHJhbnNsYXRlKDYuNSAxNi40KSBzY2FsZSgwLjczKScgZmlsbD0nIzBmMTExNSc+PHBhdGggZD0nTTIgNSBMMTEgMyBMMTMgMjcgTDQgMjkgWicvPjxwYXRoIGQ9J00xMyA1IEwyMiAzIEwyNCAyNyBMMTUgMjkgWicvPjxwYXRoIGQ9J00yNCA1IEwzMyAzIEwzNSAyNyBMMjYgMjkgWicvPjwvZz48L3N2Zz4="); }
             #trendsIQView .tiq-source-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 0.35rem; margin-bottom: 0.35rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
             #trendsIQView .tiq-source-name { font-weight: 600; font-size: 0.9rem; }
             #trendsIQView .tiq-source-domain { font-size: 0.72rem; color: var(--text-secondary); }
@@ -41949,19 +41949,20 @@
             return "background-image: url('" + u + "');";
         }
         // Lime CROSSWALK ///-mark placeholder for the streaming poster tiles
-        // (portrait 40x56). Uses SVG *shapes* (not <text>), so it renders as a
-        // background-image in every browser incl. Safari. Layered UNDER the real
-        // iTunes poster so titles with no artwork - or whose poster URL 404s /
-        // is paywalled - fall through to the lime mark automatically.
-        var _TIQ_POSTER_PLACEHOLDER_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 56' preserveAspectRatio='xMidYMid slice'%3E%3Crect width='40' height='56' fill='%23c4f542'/%3E%3Cg transform='translate(6.5 16.4) scale(0.73)' fill='%230f1115'%3E%3Cpath d='M2 5 L11 3 L13 27 L4 29 Z'/%3E%3Cpath d='M13 5 L22 3 L24 27 L15 29 Z'/%3E%3Cpath d='M24 5 L33 3 L35 27 L26 29 Z'/%3E%3C/g%3E%3C/svg%3E";
+        // (portrait 40x56). SVG *shapes* (not <text>), base64-encoded so the
+        // data-URI has no quotes/spaces/parens that could break out of the
+        // single-quoted url() inside the double-quoted style="" attribute. Layered
+        // UNDER the real iTunes poster so titles with no artwork - or whose poster
+        // URL 404s / is paywalled - fall through to the lime mark automatically.
+        var _TIQ_POSTER_PLACEHOLDER_URL = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA0MCA1NicgcHJlc2VydmVBc3BlY3RSYXRpbz0neE1pZFlNaWQgc2xpY2UnPjxyZWN0IHdpZHRoPSc0MCcgaGVpZ2h0PSc1NicgZmlsbD0nI2M0ZjU0MicvPjxnIHRyYW5zZm9ybT0ndHJhbnNsYXRlKDYuNSAxNi40KSBzY2FsZSgwLjczKScgZmlsbD0nIzBmMTExNSc+PHBhdGggZD0nTTIgNSBMMTEgMyBMMTMgMjcgTDQgMjkgWicvPjxwYXRoIGQ9J00xMyA1IEwyMiAzIEwyNCAyNyBMMTUgMjkgWicvPjxwYXRoIGQ9J00yNCA1IEwzMyAzIEwzNSAyNyBMMjYgMjkgWicvPjwvZz48L3N2Zz4=";
         function _tiqPosterImgStyle(url) {
-            if (!url) return "background-image: url(\"" + _TIQ_POSTER_PLACEHOLDER_URL + "\");";
+            if (!url) return "background-image: url('" + _TIQ_POSTER_PLACEHOLDER_URL + "');";
             var u = String(url)
                 .replace(/'/g,  "%27")
                 .replace(/"/g,  "%22")
                 .replace(/</g,  "%3C")
                 .replace(/>/g,  "%3E");
-            return "background-image: url('" + u + "'), url(\"" + _TIQ_POSTER_PLACEHOLDER_URL + "\");";
+            return "background-image: url('" + u + "'), url('" + _TIQ_POSTER_PLACEHOLDER_URL + "');";
         }
         function _tiqNum(n) {
             n = Number(n);
