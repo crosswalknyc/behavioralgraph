@@ -23884,8 +23884,6 @@
                 <button type="button" class="miq-tab"        data-panel="dramabox"  onclick="setMicrodramasIQTab('dramabox')">DramaBox</button>
                 <button type="button" class="miq-tab"        data-panel="goodshort" onclick="setMicrodramasIQTab('goodshort')">GoodShort</button>
                 <button type="button" class="miq-tab"        data-panel="netshort"  onclick="setMicrodramasIQTab('netshort')">NetShort</button>
-                <button type="button" class="miq-tab"        data-panel="cross"     onclick="setMicrodramasIQTab('cross')">Cross-platform</button>
-                <button type="button" class="miq-tab"        data-panel="audience"  onclick="setMicrodramasIQTab('audience')">Overall audience</button>
             </div>
             <div id="microdramasIQLoading" class="miq-loading-overlay" style="display: none;">
                 <div class="miq-spinner"></div>
@@ -23945,16 +23943,6 @@
             <div class="miq-panel" data-panel="netshort">
                 <div id="microdramasIQNetShortMeta" class="miq-meta"></div>
                 <div id="microdramasIQNetShortGrid" class="miq-title-grid"></div>
-            </div>
-
-            <!-- Cross-platform overlap (titles appearing on 2+ charts in the window) -->
-            <div class="miq-panel" data-panel="cross">
-                <div id="microdramasIQCrossMeta" class="miq-meta"></div>
-                <div id="microdramasIQCrossGrid" class="miq-cross-grid"></div>
-            </div>
-
-            <div class="miq-panel" data-panel="audience">
-                <div id="microdramasIQAudience" class="miq-audience-grid"></div>
             </div>
         </div>
 
@@ -42909,7 +42897,6 @@
                 meta.textContent = 'Showing ' + (d.titles || []).length + ' of ' + (cov.titles_observed || 0) + ' titles.' + (upd ? ' Catalog updated ' + upd + '.' : '');
             }
             renderMicrodramasIQTitles(d.titles || []);
-            renderMicrodramasIQAudience(d.audience_overall || {});
         }
 
         function _miqEscape(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
@@ -43124,7 +43111,7 @@
         }
 
         // Panels that share the competitor filter bar + data payload.
-        var _MIQ_COMPETITOR_PANELS = ['reelshort', 'dramabox', 'goodshort', 'netshort', 'cross'];
+        var _MIQ_COMPETITOR_PANELS = ['reelshort', 'dramabox', 'goodshort', 'netshort'];
 
         function setMicrodramasIQTab(panel) {
             window.__microdramasIQ.activePanel = panel;
@@ -43220,33 +43207,6 @@
             (d.platforms || []).forEach(function(p) {
                 renderMicrodramasIQPlatformGrid(p.source, p);
             });
-
-            // Cross-platform overlap panel (its own tab)
-            var cross = document.getElementById('microdramasIQCrossGrid');
-            var crossMeta = document.getElementById('microdramasIQCrossMeta');
-            var f = d.filters || {};
-            if (crossMeta) {
-                crossMeta.textContent = 'Window: last ' + f.window_days + ' day(s). Titles appearing on 2+ platform charts.';
-            }
-            if (cross) {
-                var xtiles = d.cross_platform_titles || [];
-                if (!xtiles.length) {
-                    cross.innerHTML = '<div class="miq-empty-panel" style="grid-column: 1 / -1;">No titles appear on multiple platform charts in this window yet.</div>';
-                } else {
-                    cross.innerHTML = xtiles.slice(0, 24).map(function(x) {
-                        var chips = Object.keys(x.per_platform || {}).map(function(src) {
-                            var pp = x.per_platform[src];
-                            var r = pp.current_rank ? '#' + pp.current_rank : '-';
-                            return '<span class="miq-cross-chip">' + _miqEscape(pp.label) + ' ' + r + '</span>';
-                        }).join('');
-                        return '<div class="miq-cross-card">' +
-                            '<div class="miq-cross-title">' + _miqEscape(x.title) + '</div>' +
-                            (x.genre ? '<div style="margin-bottom: 0.35rem;"><span class="miq-genre-tag">' + _miqEscape(x.genre) + '</span></div>' : '') +
-                            '<div class="miq-cross-plats">' + chips + '</div>' +
-                        '</div>';
-                    }).join('');
-                }
-            }
         }
 
         // ==============================================================
