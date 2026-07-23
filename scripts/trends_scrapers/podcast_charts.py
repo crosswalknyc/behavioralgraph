@@ -7,13 +7,15 @@ renders as one tab, mirroring the structure of `music_charts.py`.
 Sources (2026-07):
 
     Apple Podcasts Top 100 US    -> `rss.marketingtools.apple.com`, public JSON
-    Spotify Podcast Charts       -> stub (their public chart endpoint returns
-                                     500 for anonymous callers, and the
-                                     `podcastcharts.byspotify.com` UI fetches
-                                     the data client-side after an OAuth
-                                     handshake). Once Spotify reopens the API
-                                     or an operator donates open.spotify.com
-                                     cookies, the stub picks up automatically.
+    Spotify Podcast Charts       -> `podcastcharts.byspotify.com/api/charts/
+                                     top-podcasts?region=us&limit=100`. Public
+                                     JSON, no OAuth. Returns the same Top 200
+                                     shows the byspotify.com UI renders, with
+                                     rank movement flags (UP / DOWN /
+                                     UNCHANGED). Spotify restructured the site
+                                     in 2026 (old `/api/charts/top` gone,
+                                     replaced by category-scoped endpoints);
+                                     this is the current path.
     Amazon Music Podcasts        -> stub (music.amazon.com/podcasts renders
                                      client-side; needs donated cookies +
                                      Playwright).
@@ -39,7 +41,7 @@ Snapshot shape (kind='podcast'):
       "fetched_at": "...",
       "sources": {
         "apple":   {"label": "Apple Podcasts Top 100 (US)", "items": [{...}], "available": bool},
-        "spotify": {"label": "Spotify Podcast Charts (US)", "items": [],      "available": False, "sub": "..."},
+        "spotify": {"label": "Spotify Podcast Charts (US)", "items": [{...}], "available": bool},
         "amazon":  {"label": "Amazon Music Podcasts (US)",  "items": [],      "available": False, "sub": "..."},
         "audible": {"label": "Audible Podcasts (US)",       "items": [],      "available": False, "sub": "..."},
         "netflix": {"label": "Netflix video podcasts",      "items": [{...}], "available": bool}
@@ -133,22 +135,92 @@ def _fetch_apple_podcasts(limit: int = 100) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Spotify Podcast Charts  (stub - see module docstring for why)
+# Spotify Podcast Charts (public JSON on podcastcharts.byspotify.com)
 # ---------------------------------------------------------------------------
+# The byspotify.com marketing site fetches its Top 200 client-side from
+# `/api/charts/{categoryId}?region={cc}&limit=100`. That endpoint is
+# fully anonymous - no OAuth, no cookies, no fingerprint games needed.
+# Spotify restructured the site in 2026: the old `/api/charts/top`
+# always 500s now, replaced by category-scoped endpoints. We hit
+# `top-podcasts` which is the flagship Top 200 shows list.
+#
+# Response is a JSON array of:
+#   { showUri, chartRankMove, showName, showPublisher,
+#     showImageUrl, showDescription }
+# Rank is array position (1-indexed). chartRankMove ∈
+# {UP, DOWN, UNCHANGED}. showUri is `spotify:show:<id>`, which maps
+# 1:1 to `open.spotify.com/show/<id>` for click-through.
+_SPOTIFY_PODCAST_URL = 'https://podcastcharts.byspotify.com/api/charts/top-podcasts'
+
+
 def _fetch_spotify_podcasts(limit: int = 100) -> tuple[list[dict], str]:
-    """Return `(items, sub)`. Items is [] until an operator donates a
-    fully-authed open.spotify.com session; `sub` explains state so the
-    dashboard can render a helpful message.
+    """Fetch the US Top Podcasts chart from Spotify's public byspotify.com
+    endpoint. Returns `(items, sub)` where `sub` is the operator-facing
+    note used when items[] is empty (transient failure only).
     """
-    # Spotify locked their podcast chart API behind an internal OAuth
-    # scope in mid-2026: the byspotify.com marketing site works, but
-    # their `/api/charts/top?region=us` returns 500 for every anonymous
-    # caller. Even swapping a working session cookie doesn't unlock it
-    # from the marketing subdomain; a proper Web API call requires an
-    # app-registered client-credentials token. We'll build that path
-    # once an operator gets Spotify to approve API access.
-    return [], ('Spotify\u0027s public podcast chart endpoint is currently '
-                'gated. We\u0027re working on an alternate signal path.')
+    params = {'region': 'us', 'limit': str(max(limit, 100))}
+    headers = {
+        'User-Agent':      _UA,
+        'Accept':          'application/json',
+        # Referer/Origin match the marketing site so requests look like
+        # the same fetch the byspotify.com UI issues. Not strictly
+        # required today (endpoint is open) but cheap insurance if
+        # Spotify tightens the CORS/referrer check later.
+        'Referer':         'https://podcastcharts.byspotify.com/us/top-podcasts',
+        'Origin':          'https://podcastcharts.byspotify.com',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+    resp = None
+    for attempt in range(3):
+        try:
+            resp = requests.get(_SPOTIFY_PODCAST_URL,
+                                params=params, headers=headers, timeout=20)
+        except Exception as e:
+            logger.info("spotify podcasts attempt %d: %s", attempt + 1, e)
+            time.sleep(1 + attempt)
+            continue
+        if resp.status_code == 429 or resp.status_code >= 500:
+            logger.info("spotify podcasts attempt %d: http %s",
+                        attempt + 1, resp.status_code)
+            time.sleep(2 + attempt)
+            continue
+        break
+    if not resp or not resp.ok:
+        logger.warning("spotify podcasts: gave up (last=%s)",
+                       getattr(resp, 'status_code', None))
+        return [], 'Warming up.'
+    try:
+        data = resp.json()
+    except Exception as e:
+        logger.warning("spotify podcasts: json parse: %s", e)
+        return [], 'Warming up.'
+    if not isinstance(data, list) or not data:
+        return [], 'Warming up.'
+
+    items: list[dict] = []
+    for i, row in enumerate(data[:limit], start=1):
+        if not isinstance(row, dict):
+            continue
+        title = (row.get('showName') or '').strip()
+        if not title:
+            continue
+        uri = row.get('showUri') or ''
+        # spotify:show:XXX -> open.spotify.com/show/XXX
+        show_id = uri.rsplit(':', 1)[-1] if uri.startswith('spotify:show:') else ''
+        url = f'https://open.spotify.com/show/{show_id}' if show_id else ''
+        items.append({
+            'rank':        i,
+            'title':       title,
+            'artist':      (row.get('showPublisher') or '').strip(),
+            'description': (row.get('showDescription') or '').strip(),
+            'url':         url,
+            'image':       row.get('showImageUrl') or '',
+            # Rank movement flag ('UP' | 'DOWN' | 'UNCHANGED'). Free
+            # signal from Spotify - not currently rendered but useful
+            # for future "Movers" surfacing without a re-scrape.
+            'move':        row.get('chartRankMove') or 'UNCHANGED',
+        })
+    return items, ''
 
 
 # ---------------------------------------------------------------------------
@@ -306,9 +378,10 @@ def _fetch_netflix_podcasts(limit: int = 60) -> tuple[list[dict], str]:
 
 
 def fetch() -> dict[str, Any]:
-    """Pull all five sources. Apple + Netflix currently return data
-    from public endpoints; Spotify / Amazon / Audible ship as
-    available=False with an operator-facing `sub` until cookies land.
+    """Pull all five sources. Apple, Spotify and Netflix return live
+    chart / catalog data from public endpoints; Amazon Music and
+    Audible ship as available=False with an operator-facing `sub`
+    until cookies are donated.
     """
     apple_items = _fetch_apple_podcasts(limit=100)
     spot_items, spot_sub = _fetch_spotify_podcasts(limit=100)
@@ -330,7 +403,7 @@ def fetch() -> dict[str, Any]:
             },
             'spotify': {
                 'label':     'Spotify Podcast Charts (US)',
-                'sub':       spot_sub,
+                'sub':       (spot_sub or 'The Spotify US Top 200 podcasts. Refreshes daily.'),
                 'items':     spot_items,
                 'available': bool(spot_items),
             },
