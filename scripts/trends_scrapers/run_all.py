@@ -40,6 +40,9 @@ SCRAPERS = [
     ('google_wide',        'scripts.trends_scrapers.google_trends_wide', 'Google Trends (wide)', 'search'),
     ('wikipedia_trending', 'scripts.trends_scrapers.wikipedia_trending', 'Wikipedia',            'search'),
     ('music_charts',       'scripts.trends_scrapers.music_charts',       'Music',                'music'),
+    ('podcast_charts',     'scripts.trends_scrapers.podcast_charts',     'Podcasts',             'podcast'),
+    ('book_charts',        'scripts.trends_scrapers.book_charts',        'Books',                'book'),
+    ('libby_trends',       'scripts.trends_scrapers.libby_trends',       'Libby popular',        'libby'),
     ('philanthropy_news',  'scripts.trends_scrapers.philanthropy_news',  'Philanthropy news',    'news'),
     ('youtube',   'scripts.trends_scrapers.youtube',    'YouTube',   'social'),
     # X, TikTok, and Instagram are NOT in this list. As of 2026-07 they

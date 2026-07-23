@@ -23861,22 +23861,55 @@
                 <h2 class="miq-title">📱 Microdramas <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Peacock mobile-first audience insights</span></h2>
                 <p class="miq-subtitle">Titles catalog, 28-day audience windows from first-observed date, and audience profile for Peacock's mobile-first microdrama slate. Ranked by observed hub surface position and first-window reach.</p>
             </div>
-            <div class="miq-filter-bar">
+            <!-- Unified filter bar: applies to whichever tab is active.
+                 Peacock uses Look back + Genre; competitor tabs also
+                 use Show (Top N). Custom range reveals from/to inputs. -->
+            <div class="miq-filter-bar" id="microdramasIQUnifiedFilter">
                 <div>
-                    <label for="microdramasIQSort">Sort by</label>
-                    <select id="microdramasIQSort"></select>
+                    <label for="microdramasIQWindow">Look back</label>
+                    <select id="microdramasIQWindow" onchange="_miqOnWindowChange()">
+                        <option value="1">Today</option>
+                        <option value="3">Last 3 days</option>
+                        <option value="7" selected>Last 7 days</option>
+                        <option value="14">Last 14 days</option>
+                        <option value="28">Last 28 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="custom">Custom range...</option>
+                    </select>
+                </div>
+                <div id="microdramasIQCustomFromWrap" style="display:none;">
+                    <label for="microdramasIQCustomFrom">From</label>
+                    <input type="date" id="microdramasIQCustomFrom" />
+                </div>
+                <div id="microdramasIQCustomToWrap" style="display:none;">
+                    <label for="microdramasIQCustomTo">To</label>
+                    <input type="date" id="microdramasIQCustomTo" />
+                </div>
+                <div id="microdramasIQTopNWrap" style="display:none;">
+                    <label for="microdramasIQTopN">Show</label>
+                    <select id="microdramasIQTopN">
+                        <option value="10">Top 10</option>
+                        <option value="20" selected>Top 20</option>
+                        <option value="25">Top 25</option>
+                    </select>
                 </div>
                 <div>
-                    <label for="microdramasIQWindow">Window</label>
-                    <select id="microdramasIQWindow"></select>
-                </div>
-                <div>
-                    <label for="microdramasIQCut">Audience cut</label>
-                    <select id="microdramasIQCut"></select>
+                    <label for="microdramasIQGenre">Genre</label>
+                    <select id="microdramasIQGenre">
+                        <option value="">All genres</option>
+                        <option value="Werewolf">Werewolf</option>
+                        <option value="Billionaire">Billionaire</option>
+                        <option value="CEO">CEO</option>
+                        <option value="Mafia">Mafia</option>
+                        <option value="Revenge">Revenge</option>
+                        <option value="Second Chance">Second Chance</option>
+                        <option value="Romance">Romance</option>
+                        <option value="Drama">Drama</option>
+                    </select>
                 </div>
                 <div>
                     <label>&nbsp;</label>
-                    <button type="button" class="miq-apply-btn" onclick="applyMicrodramasIQFilters()">Apply</button>
+                    <button type="button" class="miq-apply-btn" onclick="applyMicrodramasIQUnified()">Apply</button>
                 </div>
             </div>
             <div class="miq-meta">
@@ -23892,38 +23925,6 @@
             <div id="microdramasIQLoading" class="miq-loading-overlay" style="display: none;">
                 <div class="miq-spinner"></div>
                 <div>Loading microdrama titles...</div>
-            </div>
-
-            <!-- Shared competitor filter bar: hidden on Peacock / cross / audience tabs -->
-            <div class="miq-comp-filter" id="microdramasIQCompFilter" style="display: none;">
-                <div>
-                    <label for="microdramasIQCompWindow">Look back</label>
-                    <select id="microdramasIQCompWindow"></select>
-                </div>
-                <div>
-                    <label for="microdramasIQCompTopN">Show</label>
-                    <select id="microdramasIQCompTopN">
-                        <option value="10">Top 10</option>
-                        <option value="20" selected>Top 20</option>
-                        <option value="25">Top 25</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="microdramasIQCompGenre">Genre</label>
-                    <select id="microdramasIQCompGenre">
-                        <option value="">All genres</option>
-                        <option value="Werewolf">Werewolf</option>
-                        <option value="Billionaire">Billionaire</option>
-                        <option value="CEO">CEO</option>
-                        <option value="Mafia">Mafia</option>
-                        <option value="Revenge">Revenge</option>
-                        <option value="Second Chance">Second Chance</option>
-                    </select>
-                </div>
-                <div>
-                    <label>&nbsp;</label>
-                    <button type="button" class="miq-apply-btn" onclick="applyMicrodramasIQCompetitors()">Apply</button>
-                </div>
             </div>
 
             <!-- Peacock panel (original card-grid design; kept as the reference layout) -->
@@ -42739,7 +42740,7 @@
         // Google Trends, GDELT, major news RSS feeds, Reddit, YouTube,
         // and retailer bestseller pages. Every tab renders its own card
         // grid.
-        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'searches', activeSocial: 'reddit', activeRetailer: 'amazon', headlinesView: 'top', inFlight: null };
+        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'searches', activeSocial: 'reddit', activeRetailer: 'amazon', activeLibby: 'ebook', headlinesView: 'top', inFlight: null };
 
         function _trendsIQHideAllOtherViews() {
             var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
@@ -42818,32 +42819,70 @@
         };
 
         async function loadMicrodramasIQFilterOptions() {
+            // The unified filter bar carries its own <option> values
+            // inline, so all we need from the server is a signal that
+            // access is confirmed. We still hit the endpoint so the
+            // filter-options payload can influence future work.
             try {
                 var resp = await fetch('/api/microdramas-iq/filter-options', { credentials: 'same-origin' });
                 var d = await resp.json();
-                if (!d || !d.success) throw new Error(d && d.error ? d.error : 'Failed to load filter options');
-                window.__microdramasIQ.filterOptions = d;
-                var sortEl = document.getElementById('microdramasIQSort');
-                var winEl  = document.getElementById('microdramasIQWindow');
-                var cutEl  = document.getElementById('microdramasIQCut');
-                if (sortEl) {
-                    sortEl.innerHTML = '';
-                    (d.sort_options || []).forEach(function(o) { sortEl.appendChild(new Option(o.label, o.value)); });
-                }
-                if (winEl) {
-                    winEl.innerHTML = '';
-                    (d.window_options || []).forEach(function(o) { winEl.appendChild(new Option(o.label, o.value)); });
-                    winEl.value = '28';
-                }
-                if (cutEl) {
-                    cutEl.innerHTML = '';
-                    (d.audience_cuts || []).forEach(function(o) { cutEl.appendChild(new Option(o.label, o.value)); });
-                }
+                if (d && d.success) window.__microdramasIQ.filterOptions = d;
             } catch (e) {
                 console.error('Microdramas IQ filter-options error:', e);
-                var meta = document.getElementById('microdramasIQMeta');
-                if (meta) meta.textContent = 'Could not load filter options: ' + (e.message || e);
             }
+            // Default the custom-range date inputs to a 7-day window
+            // ending today so if the user switches to Custom the inputs
+            // start populated.
+            var toEl   = document.getElementById('microdramasIQCustomTo');
+            var fromEl = document.getElementById('microdramasIQCustomFrom');
+            if (toEl && fromEl && !toEl.value) {
+                var today = new Date();
+                var earlier = new Date(today.getTime() - 6 * 86400000);
+                toEl.value   = today.toISOString().slice(0, 10);
+                fromEl.value = earlier.toISOString().slice(0, 10);
+            }
+        }
+
+        function _miqOnWindowChange() {
+            // Show or hide the date-range inputs depending on whether
+            // the user picked "Custom range..." from the Look back
+            // dropdown.
+            var winEl = document.getElementById('microdramasIQWindow');
+            var custom = winEl && winEl.value === 'custom';
+            var fromWrap = document.getElementById('microdramasIQCustomFromWrap');
+            var toWrap   = document.getElementById('microdramasIQCustomToWrap');
+            if (fromWrap) fromWrap.style.display = custom ? '' : 'none';
+            if (toWrap)   toWrap.style.display   = custom ? '' : 'none';
+        }
+
+        function _miqCurrentFilters() {
+            // Read the unified filter bar. Returns { window_days,
+            // start_date, end_date, top_n, genre }.
+            var winEl = document.getElementById('microdramasIQWindow');
+            var winVal = (winEl && winEl.value) || '7';
+            var start_date = '', end_date = '';
+            var window_days = null;
+            if (winVal === 'custom') {
+                start_date = (document.getElementById('microdramasIQCustomFrom') || {}).value || '';
+                end_date   = (document.getElementById('microdramasIQCustomTo')   || {}).value || '';
+            } else {
+                window_days = parseInt(winVal, 10);
+            }
+            return {
+                window_days: window_days,
+                start_date:  start_date || null,
+                end_date:    end_date   || null,
+                top_n:       parseInt((document.getElementById('microdramasIQTopN') || {}).value || '20', 10),
+                genre:       (document.getElementById('microdramasIQGenre') || {}).value || '',
+            };
+        }
+
+        // Dispatch Apply to the correct loader based on which tab is
+        // currently active.
+        function applyMicrodramasIQUnified() {
+            var panel = (window.__microdramasIQ && window.__microdramasIQ.activePanel) || 'peacock';
+            if (panel === 'peacock') return applyMicrodramasIQFilters();
+            return applyMicrodramasIQCompetitors();
         }
 
         async function applyMicrodramasIQFilters() {
@@ -42851,10 +42890,17 @@
             var grid    = document.getElementById('microdramasIQTitleGrid');
             if (loading) loading.style.display = 'flex';
             if (grid) grid.innerHTML = '';
+            var f = _miqCurrentFilters();
+            // Peacock keeps its own defaults for the fields that don't
+            // live in the unified bar (sort, audience_cut) - they're
+            // filled in with sensible defaults on the backend.
             var body = {
-                sort:         (document.getElementById('microdramasIQSort') || {}).value || 'view_28d',
-                window_days:  parseInt((document.getElementById('microdramasIQWindow') || {}).value || '28', 10),
-                audience_cut: (document.getElementById('microdramasIQCut') || {}).value || 'all',
+                sort:         'view_28d',
+                audience_cut: 'all',
+                window_days:  f.window_days || 28,
+                start_date:   f.start_date,
+                end_date:     f.end_date,
+                genre:        f.genre,
             };
             try {
                 var resp = await fetch('/api/microdramas-iq/data', {
@@ -43259,7 +43305,7 @@
             el.innerHTML = html;
         }
 
-        // Panels that share the competitor filter bar + data payload.
+        // Panels that use the competitor payload.
         var _MIQ_COMPETITOR_PANELS = ['reelshort', 'dramabox', 'goodshort', 'netshort'];
 
         function setMicrodramasIQTab(panel) {
@@ -43272,52 +43318,37 @@
                 if (p.getAttribute('data-panel') === panel) p.classList.add('active');
                 else p.classList.remove('active');
             });
-            // Filter bar (look-back / top-N / genre) applies only to the
-            // competitor + cross panels. Peacock and audience use their
-            // own controls.
-            var filterBar = document.getElementById('microdramasIQCompFilter');
-            if (filterBar) {
-                filterBar.style.display = (_MIQ_COMPETITOR_PANELS.indexOf(panel) >= 0) ? 'flex' : 'none';
+            // "Show" (Top N) only applies when a per-platform chart is
+            // being ranked; hide it on Peacock (which displays the full
+            // catalog).
+            var topWrap = document.getElementById('microdramasIQTopNWrap');
+            if (topWrap) {
+                topWrap.style.display = (_MIQ_COMPETITOR_PANELS.indexOf(panel) >= 0) ? '' : 'none';
             }
             // Lazy-load competitor data the first time any competitor
-            // tab is opened, then just re-highlight the panel on subsequent
-            // switches (data is cached in window.__microdramasIQ.compData).
+            // tab is opened.
             if (_MIQ_COMPETITOR_PANELS.indexOf(panel) >= 0 && !window.__microdramasIQ.compLoaded) {
-                initMicrodramasIQCompetitors();
+                window.__microdramasIQ.compLoaded = true;
+                applyMicrodramasIQCompetitors();
             }
         }
 
         // ===================== MICRODRAMAS COMPETITORS =====================
-        function initMicrodramasIQCompetitors() {
-            var winEl = document.getElementById('microdramasIQCompWindow');
-            if (winEl && !winEl.options.length) {
-                // Default 7 days per user spec, matching the Trends tab window UX
-                var opts = [
-                    {value: '1',  label: 'Today'},
-                    {value: '3',  label: 'Last 3 days'},
-                    {value: '7',  label: 'Last 7 days'},
-                    {value: '14', label: 'Last 14 days'},
-                    {value: '30', label: 'Last 30 days'},
-                ];
-                opts.forEach(function(o) { winEl.appendChild(new Option(o.label, o.value)); });
-                winEl.value = '7';
-            }
-            window.__microdramasIQ.compLoaded = true;
-            applyMicrodramasIQCompetitors();
-        }
-
         async function applyMicrodramasIQCompetitors() {
-            // Show a loading state in whichever competitor panel is
-            // currently active. All four platforms share one fetch.
+            // Show a loading state in every competitor panel; all four
+            // platforms share one backend fetch.
             var loadingMsg = 'Loading competitor charts...';
             ['ReelShort', 'DramaBox', 'GoodShort', 'NetShort'].forEach(function(p) {
                 var meta = document.getElementById('microdramasIQ' + p + 'Meta');
                 if (meta) meta.textContent = loadingMsg;
             });
+            var f = _miqCurrentFilters();
             var body = {
-                window_days: parseInt((document.getElementById('microdramasIQCompWindow') || {}).value || '7', 10),
-                top_n:       parseInt((document.getElementById('microdramasIQCompTopN') || {}).value || '20', 10),
-                genre:       (document.getElementById('microdramasIQCompGenre') || {}).value || '',
+                window_days: f.window_days || 7,
+                start_date:  f.start_date,
+                end_date:    f.end_date,
+                top_n:       f.top_n || 20,
+                genre:       f.genre,
             };
             try {
                 var resp = await fetch('/api/microdramas-iq/competitors', {
@@ -43646,7 +43677,13 @@
                 { key: 'people',    label: 'Trending people',  count: counts.people    || 0, icon: '👤',
                   tip: 'Trending people: Individuals rising across news, Wikipedia interest, social, and search. Each row shows a one-line "why they are trending" caption and a direction indicator (up, down, or stable).' },
                 { key: 'music',     label: 'Music',            count: counts.music     || 0, icon: '🎵',
-                  tip: 'Music: Spotify, Apple Music, and Shazam. What people are streaming, playing, and identifying right now.' },
+                  tip: 'Music: Spotify, Apple Music, Shazam, and Amazon Music. What people are streaming, playing, and identifying right now.' },
+                { key: 'podcasts',  label: 'Podcasts',         count: counts.podcasts  || 0, icon: '🎙️',
+                  tip: 'Podcasts: Trending shows on Apple Podcasts, Spotify, Amazon Music, and Audible.' },
+                { key: 'books',     label: 'Books',            count: counts.books     || 0, icon: '📚',
+                  tip: 'Books: Best-selling and trending titles across Amazon, Apple Books, and Audible.' },
+                { key: 'libby',     label: 'Libby',            count: counts.libby     || 0, icon: '🏛️',
+                  tip: 'Libby popular: The most-borrowed titles from LA County Library right now, split by eBook, audiobook, and magazine.' },
                 { key: 'social',    label: 'Social',           count: 0,                     icon: '💬',
                   tip: 'Social: Trending posts, videos, and tweets on Reddit, YouTube, TikTok, Instagram, and X. Real content, not hashtag lists.' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
@@ -43681,6 +43718,9 @@
                 _renderTIQPanel('people',    renderTIQWikipedia(cards.wikipedia_trending || []) +
                                               renderTIQPeople(cards.trending_people || [])) +
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
+                _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
+                _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {})) +
+                _renderTIQPanel('libby',     renderTIQLibby(cards.libby_trending || {})) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
@@ -43760,6 +43800,20 @@
             'Spotify':                           'Spotify: US mass-streaming Top 200. Where mainstream listening is right now.',
             'Apple Music':                       'Apple Music: US Top 100. Skews slightly older and more premium than Spotify.',
             'Shazam':                            'Shazam: US Top 200 song IDs. Discovery signal - what people heard somewhere and looked up. Leading indicator for breakout tracks.',
+            'Amazon Music Top 200 (US)':         'Amazon Music: US Top 200 tracks.',
+            // ---------- Podcasts ----------
+            'Apple Podcasts Top 100 (US)':       'Apple Podcasts: The Apple chart of top-listened shows in the US right now.',
+            'Spotify Podcast Charts (US)':       'Spotify Podcast Charts: Top listened-to podcasts on Spotify in the US.',
+            'Amazon Music Podcasts (US)':        'Amazon Music Podcasts: Top listened-to podcasts on Amazon Music in the US.',
+            'Audible Podcasts (US)':             'Audible Podcasts: Top listened-to podcasts on Audible in the US.',
+            // ---------- Books ----------
+            'Amazon Best-Sellers (Books)':       'Amazon Best-Sellers: The top-selling books on Amazon right now.',
+            'Apple Books Top 100 (US)':          'Apple Books: The top-paid chart in the Apple Books store.',
+            'Audible Best-Sellers':              'Audible Best-Sellers: The top-selling audiobooks on Audible right now.',
+            // ---------- Libby ----------
+            'Popular eBooks':                    'Popular eBooks: The most-borrowed eBooks on Libby (LA County Library) right now.',
+            'Popular Audiobooks':                'Popular Audiobooks: The most-borrowed audiobooks on Libby (LA County Library) right now.',
+            'Popular Magazines':                 'Popular Magazines: The most-read magazines on Libby (LA County Library) right now.',
             // ---------- Social ----------
             'Reddit - trending in the USA':      'Reddit: Top posts today across the US.',
             'YouTube - trending in the USA':     'YouTube: Videos trending in the US right now.',
@@ -43834,6 +43888,10 @@
             'Spotify':      'Spotify: US mass-streaming top chart.',
             'Apple Music':  'Apple Music: Top chart from the Apple subscriber base.',
             'Shazam':       'Shazam: US discovery signal. What people are identifying right now.',
+            // Libby media-type sub-tabs
+            '📖 eBooks':     'eBooks: Most-borrowed eBooks on Libby right now.',
+            '🎧 Audiobooks': 'Audiobooks: Most-borrowed audiobooks on Libby right now.',
+            '📰 Magazines':  'Magazines: Most-read magazines on Libby right now.',
             // Retailer sub-tabs
             'Amazon':       'Amazon Movers & Shakers: Biggest 24-hour rank jumps.',
             'Target':       'Target Best Sellers.',
@@ -44869,7 +44927,10 @@
         //     shazam:  {...}
         //   }
         function renderTIQMusic(sources) {
-            var keys = ['spotify', 'apple', 'shazam'];
+            // Amazon Music is stub-only today (needs cookies + Playwright);
+            // include it in the render order so the card slot exists and
+            // shows a "warming up" placeholder until data lands.
+            var keys = ['spotify', 'apple', 'shazam', 'amazon'];
             var present = keys.filter(function(k) { return sources[k]; });
             if (!present.length) {
                 return '<div class="tiq-empty">Music charts are warming up. Check back later.</div>';
@@ -44920,6 +44981,205 @@
             }).join('');
             return header + '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' + cards + '</div>';
         }
+
+        // ============================================================
+        // Podcasts / Books / Libby
+        //
+        // These three tabs share the same top-level card grammar as
+        // Music (one card per source, `sources` dict keyed by slug,
+        // each source = {label, sub, items, available}), so the
+        // renderers below are near-identical to renderTIQMusic. The
+        // small differences are:
+        //   - Podcasts: square artwork tile (podcast covers are square)
+        //   - Books:    portrait cover tile (book jackets are 2:3)
+        //   - Libby:    same card style + a "borrow" pill in the meta
+        //               row + a media-type sub-tab strip so the user
+        //               can flip between eBooks / Audiobooks /
+        //               Magazines the same way they flip between
+        //               streaming platforms.
+        // ============================================================
+
+        function renderTIQPodcasts(sources) {
+            var keys = ['apple', 'spotify', 'amazon', 'audible'];
+            var present = keys.filter(function(k) { return sources[k]; });
+            if (!present.length) {
+                return '<div class="tiq-empty">Podcast charts are warming up. Check back later.</div>';
+            }
+            var cards = present.map(function(k) {
+                var s = sources[k] || {};
+                var items = s.items || [];
+                var body;
+                if (!s.available || !items.length) {
+                    body = '<div class="tiq-placeholder">' +
+                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
+                           '<div>' + _tiqEsc(s.sub || 'Warming up.') + '</div>' +
+                           '</div>';
+                } else {
+                    body = '<div class="tiq-card-sub">' + _tiqEsc(s.sub || '') + '</div>' +
+                           '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                           items.map(function(it, i) {
+                               // Podcast covers are square. Reuse the
+                               // music-image class so styling stays in
+                               // one place.
+                               var img = '<div class="tiq-music-image" style="' +
+                                         _tiqMusicImgStyle(it.image) + '"></div>';
+                               var titleLine = it.url
+                                   ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
+                                   : _tiqEsc(it.title);
+                               var podKey = it.title + ' - ' + (it.artist || '');
+                               return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                                      '<div class="tiq-row-body">' +
+                                      '<div class="tiq-row-title">' + titleLine +
+                                      _tiqCrossPlatformBadge(it) +
+                                      _tiqActions('podcast', k, podKey, podKey, 'National') +
+                                      '</div>' +
+                                      (it.artist ? '<div class="tiq-row-meta">' + _tiqEsc(it.artist) + '</div>' : '') +
+                                      '</div></div>';
+                           }).join('') +
+                           '</div>';
+                }
+                return '<div class="tiq-card">' +
+                       '<h4>' + _tiqEsc(s.label || k) + '</h4>' +
+                       body +
+                       '</div>';
+            }).join('');
+            return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' + cards + '</div>';
+        }
+
+        function renderTIQBooks(sources) {
+            var keys = ['amazon', 'apple', 'audible'];
+            var present = keys.filter(function(k) { return sources[k]; });
+            if (!present.length) {
+                return '<div class="tiq-empty">Book charts are warming up. Check back later.</div>';
+            }
+            var cards = present.map(function(k) {
+                var s = sources[k] || {};
+                var items = s.items || [];
+                var body;
+                if (!s.available || !items.length) {
+                    body = '<div class="tiq-placeholder">' +
+                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
+                           '<div>' + _tiqEsc(s.sub || 'Warming up.') + '</div>' +
+                           '</div>';
+                } else {
+                    body = '<div class="tiq-card-sub">' + _tiqEsc(s.sub || '') + '</div>' +
+                           '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                           items.map(function(it, i) {
+                               // Books use portrait cover tiles; reuse
+                               // the streaming poster helper since book
+                               // jackets and film posters share the
+                               // same 2:3-ish aspect ratio + CROSSWALK
+                               // fallback tile.
+                               var img = _tiqPosterCell(it.image);
+                               var titleLine = it.url
+                                   ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
+                                   : _tiqEsc(it.title);
+                               var bookKey = it.title + ' - ' + (it.artist || '');
+                               var meta = '';
+                               if (it.artist) meta += '<span>' + _tiqEsc(it.artist) + '</span>';
+                               if (it.price) meta += '<span class="tiq-badge">' + _tiqEsc(it.price) + '</span>';
+                               return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                                      '<div class="tiq-row-body">' +
+                                      '<div class="tiq-row-title">' + titleLine +
+                                      _tiqCrossPlatformBadge(it) +
+                                      _tiqActions('book', k, bookKey, bookKey, 'National') +
+                                      '</div>' +
+                                      (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
+                                      '</div></div>';
+                           }).join('') +
+                           '</div>';
+                }
+                return '<div class="tiq-card">' +
+                       '<h4>' + _tiqEsc(s.label || k) + '</h4>' +
+                       body +
+                       '</div>';
+            }).join('');
+            return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' + cards + '</div>';
+        }
+
+        function renderTIQLibby(sources) {
+            // Libby ships one card per media type: eBook / Audiobook /
+            // Magazine. Render as a sub-tab strip (like Streaming) so
+            // one type is in focus at a time and the shelf stays
+            // readable.
+            var keys = ['ebook', 'audiobook', 'magazine'];
+            var present = keys.filter(function(k) { return sources[k]; });
+            if (!present.length) {
+                return '<div class="tiq-empty">Libby popular is warming up. Check back later.</div>';
+            }
+            var iconMap  = { ebook: '📖', audiobook: '🎧', magazine: '📰' };
+            var labelMap = { ebook: 'eBooks', audiobook: 'Audiobooks', magazine: 'Magazines' };
+            var active = window.__trendsIQ.activeLibby;
+            if (!active || present.indexOf(active) === -1) active = present[0];
+            var tabs = present.map(function(k) {
+                var s = sources[k] || {};
+                var cls = (k === active) ? ' active' : '';
+                var unavail = !s.available ? ' unavailable' : '';
+                return '<div class="tiq-social-tab' + cls + unavail + '" data-tiq-libby="' + k + '" onclick="setTrendsIQLibby(\'' + k + '\')">' +
+                       (iconMap[k] || '') + ' ' + _tiqEsc(labelMap[k] || s.label || k) +
+                       '</div>';
+            }).join('');
+            var panels = present.map(function(k) {
+                var s = sources[k] || {};
+                var items = s.items || [];
+                var cls = (k === active) ? ' active' : '';
+                var body;
+                if (!s.available || !items.length) {
+                    body = '<div class="tiq-placeholder">' +
+                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
+                           '<div>' + _tiqEsc(s.sub || 'Warming up.') + '</div>' +
+                           '</div>';
+                } else {
+                    body = '<div class="tiq-cards-grid" style="grid-template-columns: 1fr;">' +
+                           '<div class="tiq-card"><h4>' + _tiqEsc(s.label || k) + '</h4>' +
+                           '<div class="tiq-card-sub" style="margin-bottom:8px;">' + _tiqEsc(s.sub || '') + '</div>' +
+                           '<div class="tiq-headline-list">' +
+                           items.map(function(it, i) {
+                               // Same portrait cover treatment as Books;
+                               // magazines happen to be square but the
+                               // container crop handles both cleanly.
+                               var img = _tiqPosterCell(it.image);
+                               var titleLine = it.url
+                                   ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
+                                   : _tiqEsc(it.title);
+                               var libbyKey = it.title + ' - ' + (it.artist || k);
+                               var meta = '';
+                               if (it.artist) meta += '<span>' + _tiqEsc(it.artist) + '</span>';
+                               if (it.availability) {
+                                   var availCls = (it.availability === 'Available') ? 'tiq-badge' : 'tiq-badge';
+                                   meta += '<span class="' + availCls + '">' + _tiqEsc(it.availability) + '</span>';
+                               }
+                               if (typeof it.holds === 'number' && it.holds > 0) {
+                                   meta += '<span>' + _tiqNum(it.holds) + ' holds</span>';
+                               }
+                               if (it.subjects && it.subjects.length) {
+                                   meta += '<span style="opacity:0.75;">' + _tiqEsc(it.subjects.slice(0, 2).join(', ')) + '</span>';
+                               }
+                               return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                                      '<div class="tiq-row-body">' +
+                                      '<div class="tiq-row-title">' + titleLine +
+                                      _tiqCrossPlatformBadge(it) +
+                                      _tiqActions('libby', k, libbyKey, libbyKey, 'National') +
+                                      '</div>' +
+                                      (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
+                                      '</div></div>';
+                           }).join('') +
+                           '</div></div></div>';
+                }
+                return '<div class="tiq-social-panel' + cls + '" data-tiq-libby-panel="' + k + '">' + body + '</div>';
+            }).join('');
+            return '<div class="tiq-social-tabs">' + tabs + '</div>' + panels;
+        }
+
+        window.setTrendsIQLibby = function(key) {
+            window.__trendsIQ.activeLibby = key;
+            document.querySelectorAll('#trendsIQPanels .tiq-social-tab[data-tiq-libby]').forEach(function(el) {
+                el.classList.toggle('active', el.getAttribute('data-tiq-libby') === key);
+            });
+            document.querySelectorAll('#trendsIQPanels [data-tiq-libby-panel]').forEach(function(el) {
+                el.classList.toggle('active', el.getAttribute('data-tiq-libby-panel') === key);
+            });
+        };
 
         // Shorten "Thu, 10 Jul 2026 09:34:11 GMT" -> "10 Jul". Used in
         // the philanthropy news feed to keep the meta line tight.
@@ -45375,6 +45635,9 @@
                 _renderTIQPanel('people',    renderTIQWikipedia(cards.wikipedia_trending || []) +
                                               renderTIQPeople(cards.trending_people || [])) +
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
+                _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
+                _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {})) +
+                _renderTIQPanel('libby',     renderTIQLibby(cards.libby_trending || {})) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +

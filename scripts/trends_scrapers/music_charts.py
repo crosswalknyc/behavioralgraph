@@ -734,8 +734,22 @@ def _enrich_with_itunes_artwork(items: list[dict],
         logger.info("itunes artwork batch failed: %s", e)
 
 
+# ---------------------------------------------------------------------------
+# Amazon Music Top 200  (stub - needs cookies + Playwright)
+# ---------------------------------------------------------------------------
+# music.amazon.com/genres/global-charts-top-100 renders fully client-
+# side (~11KB HTML shell, zero inlined chart data). The public browse
+# page also caps at 100; Amazon Music's own Web Player exposes 200 but
+# is auth-gated. Populates once amazon.com cookies unlock a Playwright
+# scrape (planned follow-up); until then the card ships as
+# available=False with an operator instruction.
+def _fetch_amazon_music(limit: int = 200) -> tuple[list[dict], str]:
+    """Stub. Returns ([], operator_sub)."""
+    return [], 'Warming up.'
+
+
 def fetch() -> dict[str, Any]:
-    """Pull all four sources in sequence. Each is best-effort - a single
+    """Pull all sources in sequence. Each is best-effort - a single
     source failing produces an empty items[] for that source but the
     snapshot still writes.
 
@@ -745,6 +759,7 @@ def fetch() -> dict[str, Any]:
     apple_items   = _fetch_apple(limit=100)
     shazam_items  = _fetch_shazam(limit=100)
     tt_items, tt_meta = _fetch_tiktok_sounds(limit=40)
+    amz_items, amz_sub = _fetch_amazon_music(limit=200)
 
     # Backfill artwork thumbnails from iTunes Search API for every
     # source that doesn't ship its own image field. Shared cache so a
@@ -811,6 +826,12 @@ def fetch() -> dict[str, Any]:
                 'sub':       "What people are IDing right now - the discovery signal.",
                 'items':     shazam_items,
                 'available': bool(shazam_items),
+            },
+            'amazon': {
+                'label':     'Amazon Music Top 200 (US)',
+                'sub':       amz_sub,
+                'items':     amz_items,
+                'available': bool(amz_items),
             },
         },
     }

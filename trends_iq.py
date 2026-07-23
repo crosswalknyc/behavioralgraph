@@ -4198,6 +4198,9 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         'movers':              lambda: compute_search_movers(state),
         'wikipedia_trending':  lambda: _read_snapshot('wikipedia_trending'),
         'music_charts':        lambda: _read_snapshot('music_charts'),
+        'podcast_charts':      lambda: _read_snapshot('podcast_charts'),
+        'book_charts':         lambda: _read_snapshot('book_charts'),
+        'libby_trends':        lambda: _read_snapshot('libby_trends'),
         'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
     }
 
@@ -4225,12 +4228,25 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     wiki_snap          = results.get('wikipedia_trending') or {}
     wikipedia_trending = list(wiki_snap.get('national') or [])[:30]
 
-    # Music charts (Shazam + Apple Music + TikTok Sounds). The scraper
-    # returns {sources: {shazam:{items:...}, apple:{...}, tiktok:{...}}}.
-    # We pass the whole sources dict through so the frontend can render
-    # one card per source. TikTok is stubbed pending Playwright build.
+    # Music charts (Spotify + Apple Music + Shazam + TikTok + Amazon).
+    # Scraper returns {sources: {spotify:{items:...}, apple:{...}, ...}}.
+    # Pass the whole sources dict through; frontend renders one card
+    # per source.
     music_snap    = results.get('music_charts') or {}
     music_charts  = music_snap.get('sources') or {}
+
+    # Podcast charts (Apple Podcasts primary; Spotify / Amazon / Audible
+    # stubbed with operator messaging until cookies land).
+    podcast_snap   = results.get('podcast_charts') or {}
+    podcast_charts = podcast_snap.get('sources') or {}
+
+    # Book charts (Amazon Best-Sellers + Apple Books; Audible stubbed).
+    book_snap    = results.get('book_charts') or {}
+    book_charts  = book_snap.get('sources') or {}
+
+    # Libby popular for LA County (ebook / audiobook / magazine split).
+    libby_snap    = results.get('libby_trends') or {}
+    libby_trends  = libby_snap.get('sources') or {}
 
     # Philanthropy news snapshot -> combined list + per-source split.
     # Frontend picks how to slice; both shapes travel in the payload.
@@ -4318,6 +4334,9 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'trending_people':                trending_people,
             'wikipedia_trending':             wikipedia_trending,
             'music_trending':                 music_charts,
+            'podcasts_trending':              podcast_charts,
+            'books_trending':                 book_charts,
+            'libby_trending':                 libby_trends,
             'philanthropy_news':              philanthropy_news,
             'philanthropy_news_by_source':    philanthropy_by_source,
             'social_trending':                social_trending,
@@ -4352,7 +4371,13 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'streaming':     sum(1 for p in streaming_trending.values()
                                     if (p or {}).get('available')),
             'music':         sum(len(((music_charts.get(k) or {}).get('items') or []))
-                                  for k in ('spotify', 'apple', 'tiktok', 'shazam')),
+                                  for k in ('spotify', 'apple', 'tiktok', 'shazam', 'amazon')),
+            'podcasts':      sum(len(((podcast_charts.get(k) or {}).get('items') or []))
+                                  for k in ('apple', 'spotify', 'amazon', 'audible')),
+            'books':         sum(len(((book_charts.get(k) or {}).get('items') or []))
+                                  for k in ('amazon', 'apple', 'audible')),
+            'libby':         sum(len(((libby_trends.get(k) or {}).get('items') or []))
+                                  for k in ('ebook', 'audiobook', 'magazine')),
             'philanthropy':  (len(philanthropy_news) +
                               len(searches_by_category.get('philanthropy') or [])),
             'movers':    (len(movers.get('breakout') or []) +

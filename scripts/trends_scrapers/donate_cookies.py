@@ -107,6 +107,19 @@ DEFAULT_DOMAINS = [
     # residential proxy gets us past that.
     'reelshort.com',
     'dramabox.com',
+    # 2026-07-23: Podcasts / Books / Music new-source domains. All
+    # three ship a React shell with zero inlined chart data for
+    # anonymous visitors, so a logged-in session is required for the
+    # Playwright follow-ups to reach the top-list rails.
+    #   - music.amazon.com: Amazon Music Top 200 + Amazon Music Podcasts
+    #     rails (same amazon.com session works for both)
+    #   - audible.com: Audible best-sellers + Audible Podcasts. Amazon
+    #     account with an Audible membership is enough.
+    #   - open.spotify.com: Spotify Podcast Charts (their marketing
+    #     charts endpoint currently 500s for anonymous clients; a fully-
+    #     authed session lets us hit the Web API charts endpoint).
+    'audible.com',
+    'open.spotify.com',
 ]
 
 S3_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')
