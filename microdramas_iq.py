@@ -780,6 +780,16 @@ def _serialize_title(entry: dict, *, window_days: int) -> dict:
     surface_rank_best = min(ranks) if ranks else None
     surface_rank_avg  = round(sum(ranks) / len(ranks), 1) if ranks else None
 
+    # Current rank = the rank from the most recent observation (whatever
+    # source last touched this title). If the latest observation didn't
+    # carry a rank, walk backwards until we find one.
+    surface_rank_current = None
+    for o in sorted(obs, key=lambda x: x.get('observed_date') or '', reverse=True):
+        r = o.get('rank')
+        if isinstance(r, int):
+            surface_rank_current = r
+            break
+
     first_iso = entry.get('first_observed_date') or ''
     days_since = 0
     if first_iso:
@@ -803,8 +813,9 @@ def _serialize_title(entry: dict, *, window_days: int) -> dict:
         'days_since_first_observed': days_since,
         'observations_count':  len(obs),
         'episodes_count':      len(entry.get('episodes') or []),
-        'surface_rank_best':   surface_rank_best,
-        'surface_rank_avg':    surface_rank_avg,
+        'surface_rank_current': surface_rank_current,
+        'surface_rank_best':    surface_rank_best,
+        'surface_rank_avg':     surface_rank_avg,
         'view_daily_curve':    curve_win,
         'view_window_estimate': view_win,
         'view_28d_estimate':   total_28,
