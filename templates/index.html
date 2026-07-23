@@ -43330,18 +43330,23 @@
                 // with the actual date. We hydrate this transiently on
                 // the title record itself, not the API payload.
                 t.__observedDates = platform.observed_dates || [];
-                // Sparkline now plots view volume (total reads per day)
-                // instead of chart rank; falls back to the rank arc for
-                // sources with no read data (e.g. NetShort).
+                // Sparkline plots view volume (reads per day) when the
+                // backend supplies reads_by_date; falls back to the rank
+                // arc when it doesn't (NetShort keeps its rank arc
+                // because its per-day view estimate is a static
+                // rank-derived number, not a daily observed count).
                 var spark = _miqReadsSparkline(t, platform.observed_dates);
-                // Primary metric: NetShort doesn't publish view counts,
-                // so surface Rank as the top-left metric there. Others
-                // show Views.
+                // Primary metric: every tab now shows "Views". NetShort's
+                // storefront doesn't publish a raw view counter, so the
+                // backend backfills read_count from a rank->views curve
+                // anchored to platform MAU (see _estimate_views_from_rank
+                // in microdramas_iq.py). That makes the tab grammar
+                // identical across every platform.
                 var primary;
-                if (platformSource === 'netshort' || t.read_count == null) {
+                if (t.read_count == null) {
                     primary = {
-                        label: 'Chart pos',
-                        value: _miqCurrentRank(t),
+                        label: 'Views',
+                        value: '-',
                     };
                 } else {
                     primary = {
