@@ -16,6 +16,13 @@ Sources (2026-07):
     Audible best-sellers        -> stub (audible.com/adblbestsellers renders
                                     client-side; ships with an operator
                                     instruction until cookies are donated).
+    Spotify audiobooks          -> stub (open.spotify.com/genre/audiobooks-web
+                                    is a ~6KB React shell; no public JSON
+                                    chart endpoint exists and the Spotify
+                                    Web API doesn't expose a "top audiobooks"
+                                    surface. Populates once open.spotify.com
+                                    cookies are donated - same session that
+                                    unlocks Spotify Podcast Charts.
 
 Snapshot shape (kind='book'):
 
@@ -27,7 +34,8 @@ Snapshot shape (kind='book'):
       "sources": {
         "amazon":  {"label": "Amazon Best-Sellers", "items": [{...}], "available": bool},
         "apple":   {"label": "Apple Books Top 100 (US)", "items": [{...}], "available": bool},
-        "audible": {"label": "Audible Best-Sellers", "items": [], "available": False, "sub": "..."}
+        "audible": {"label": "Audible Best-Sellers", "items": [], "available": False, "sub": "..."},
+        "spotify": {"label": "Spotify Audiobooks",   "items": [], "available": False, "sub": "..."}
       }
     }
 
@@ -281,9 +289,33 @@ def _fetch_audible_books(limit: int = 100) -> tuple[list[dict], str]:
     return [], 'Warming up.'
 
 
+# ---------------------------------------------------------------------------
+# Spotify Audiobooks  (stub - needs cookies + Playwright)
+# ---------------------------------------------------------------------------
+# Spotify launched audiobooks as part of Premium in 2023 and the browse
+# lineup lives at `open.spotify.com/genre/audiobooks-web`. That URL
+# returns HTTP 200 to anonymous clients but ships only a ~6KB React
+# shell (no server-rendered content); the actual audiobook shelves are
+# fetched client-side after auth.
+#
+# Unlike podcasts, Spotify does NOT expose an `audiobookcharts.byspotify
+# .com` marketing subdomain, and the Web API's `/audiobooks/{id}` and
+# `/audiobooks?ids=...` endpoints are per-title only (no `top` or
+# `popular` list). The only way to get a ranked audiobook lineup today
+# is a Playwright scrape of the browse page with a logged-in session.
+#
+# Populates automatically once open.spotify.com cookies are donated -
+# same session that unlocks Spotify Podcast Charts, so one cookie run
+# covers both tabs.
+def _fetch_spotify_audiobooks(limit: int = 100) -> tuple[list[dict], str]:
+    """Stub. Returns ([], operator_sub)."""
+    return [], 'Warming up.'
+
+
 def fetch() -> dict[str, Any]:
-    """Pull all three sources. Amazon + Apple are the primary signals
-    today; Audible ships as available=False until cookies land.
+    """Pull all four sources. Amazon + Apple are the primary signals
+    today; Audible and Spotify audiobooks ship as available=False
+    until cookies land.
     """
     amazon_items = _fetch_amazon_books(limit=50)
     # Prefer paid chart when it's populated (books people are actually
@@ -292,11 +324,12 @@ def fetch() -> dict[str, Any]:
     apple_items  = _fetch_apple_books(limit=100, tier='paid')
     if not apple_items:
         apple_items = _fetch_apple_books(limit=100, tier='free')
-    aud_items, aud_sub = _fetch_audible_books(limit=100)
+    aud_items,  aud_sub = _fetch_audible_books(limit=100)
+    spot_items, spot_sub = _fetch_spotify_audiobooks(limit=100)
 
     return {
         'national':  amazon_items[:50] or apple_items[:50],
-        'available': bool(amazon_items or apple_items or aud_items),
+        'available': bool(amazon_items or apple_items or aud_items or spot_items),
         'sources': {
             'amazon': {
                 'label':     'Amazon Best-Sellers (Books)',
@@ -315,6 +348,12 @@ def fetch() -> dict[str, Any]:
                 'sub':       aud_sub,
                 'items':     aud_items,
                 'available': bool(aud_items),
+            },
+            'spotify': {
+                'label':     'Spotify Audiobooks',
+                'sub':       spot_sub,
+                'items':     spot_items,
+                'available': bool(spot_items),
             },
         },
     }

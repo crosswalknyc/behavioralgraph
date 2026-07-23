@@ -4375,7 +4375,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'podcasts':      sum(len(((podcast_charts.get(k) or {}).get('items') or []))
                                   for k in ('apple', 'spotify', 'amazon', 'audible')),
             'books':         sum(len(((book_charts.get(k) or {}).get('items') or []))
-                                  for k in ('amazon', 'apple', 'audible')),
+                                  for k in ('amazon', 'apple', 'audible', 'spotify')),
             'libby':         sum(len(((libby_trends.get(k) or {}).get('items') or []))
                                   for k in ('ebook', 'audiobook', 'magazine')),
             'philanthropy':  (len(philanthropy_news) +
