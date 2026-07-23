@@ -23770,6 +23770,7 @@
             #microdramasIQView .miq-metric-value { font-weight: 600; font-size: 0.85rem; }
             #microdramasIQView .miq-window-bar { display: flex; gap: 2px; height: 20px; margin-top: 0.3rem; align-items: end; }
             #microdramasIQView .miq-window-cell { flex: 1; background: linear-gradient(180deg, #ec4899, #8b5cf6); border-radius: 2px 2px 0 0; opacity: 0.7; }
+            #microdramasIQView .miq-window-cell-empty { background: rgba(255,255,255,0.06); opacity: 0.5; }
             #microdramasIQView .miq-audience-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
             #microdramasIQView .miq-audience-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; }
             #microdramasIQView .miq-audience-card h4 { margin: 0 0 0.6rem; font-size: 0.9rem; font-weight: 600; }
@@ -23878,55 +23879,80 @@
                 <span id="microdramasIQMeta">Loading catalog...</span>
             </div>
             <div class="miq-tabstrip">
-                <button type="button" class="miq-tab active" data-panel="titles" onclick="setMicrodramasIQTab('titles')">Peacock titles</button>
-                <button type="button" class="miq-tab" data-panel="competitors" onclick="setMicrodramasIQTab('competitors')">ReelShort &amp; DramaBox</button>
-                <button type="button" class="miq-tab" data-panel="audience" onclick="setMicrodramasIQTab('audience')">Overall audience</button>
+                <button type="button" class="miq-tab active" data-panel="peacock"   onclick="setMicrodramasIQTab('peacock')">Peacock</button>
+                <button type="button" class="miq-tab"        data-panel="reelshort" onclick="setMicrodramasIQTab('reelshort')">ReelShort</button>
+                <button type="button" class="miq-tab"        data-panel="dramabox"  onclick="setMicrodramasIQTab('dramabox')">DramaBox</button>
+                <button type="button" class="miq-tab"        data-panel="goodshort" onclick="setMicrodramasIQTab('goodshort')">GoodShort</button>
+                <button type="button" class="miq-tab"        data-panel="netshort"  onclick="setMicrodramasIQTab('netshort')">NetShort</button>
+                <button type="button" class="miq-tab"        data-panel="cross"     onclick="setMicrodramasIQTab('cross')">Cross-platform</button>
+                <button type="button" class="miq-tab"        data-panel="audience"  onclick="setMicrodramasIQTab('audience')">Overall audience</button>
             </div>
             <div id="microdramasIQLoading" class="miq-loading-overlay" style="display: none;">
                 <div class="miq-spinner"></div>
-                <div>Loading Peacock microdrama titles...</div>
+                <div>Loading microdrama titles...</div>
             </div>
-            <div class="miq-panel active" data-panel="titles">
+
+            <!-- Shared competitor filter bar: hidden on Peacock / cross / audience tabs -->
+            <div class="miq-comp-filter" id="microdramasIQCompFilter" style="display: none;">
+                <div>
+                    <label for="microdramasIQCompWindow">Look back</label>
+                    <select id="microdramasIQCompWindow"></select>
+                </div>
+                <div>
+                    <label for="microdramasIQCompTopN">Show</label>
+                    <select id="microdramasIQCompTopN">
+                        <option value="10">Top 10</option>
+                        <option value="20" selected>Top 20</option>
+                        <option value="25">Top 25</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="microdramasIQCompGenre">Genre</label>
+                    <select id="microdramasIQCompGenre">
+                        <option value="">All genres</option>
+                        <option value="Werewolf">Werewolf</option>
+                        <option value="Billionaire">Billionaire</option>
+                        <option value="CEO">CEO</option>
+                        <option value="Mafia">Mafia</option>
+                        <option value="Revenge">Revenge</option>
+                        <option value="Second Chance">Second Chance</option>
+                    </select>
+                </div>
+                <div>
+                    <label>&nbsp;</label>
+                    <button type="button" class="miq-apply-btn" onclick="applyMicrodramasIQCompetitors()">Apply</button>
+                </div>
+            </div>
+
+            <!-- Peacock panel (original card-grid design; kept as the reference layout) -->
+            <div class="miq-panel active" data-panel="peacock">
                 <div id="microdramasIQTitleGrid" class="miq-title-grid"></div>
             </div>
-            <div class="miq-panel" data-panel="competitors">
-                <div class="miq-comp-filter">
-                    <div>
-                        <label for="microdramasIQCompWindow">Look back</label>
-                        <select id="microdramasIQCompWindow"></select>
-                    </div>
-                    <div>
-                        <label for="microdramasIQCompTopN">Show</label>
-                        <select id="microdramasIQCompTopN">
-                            <option value="10">Top 10</option>
-                            <option value="20" selected>Top 20</option>
-                            <option value="25">Top 25</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="microdramasIQCompGenre">Genre</label>
-                        <select id="microdramasIQCompGenre">
-                            <option value="">All genres</option>
-                            <option value="Werewolf">Werewolf</option>
-                            <option value="Billionaire">Billionaire</option>
-                            <option value="CEO">CEO</option>
-                            <option value="Mafia">Mafia</option>
-                            <option value="Revenge">Revenge</option>
-                            <option value="Second Chance">Second Chance</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label>&nbsp;</label>
-                        <button type="button" class="miq-apply-btn" onclick="applyMicrodramasIQCompetitors()">Apply</button>
-                    </div>
-                </div>
-                <div id="microdramasIQCompMeta" class="miq-meta"></div>
-                <div id="microdramasIQCompContainer"></div>
-                <div class="miq-audience-card" style="margin-top: 1.25rem;">
-                    <h4>Cross-platform titles (on both charts in this window)</h4>
-                    <div id="microdramasIQCrossGrid" class="miq-cross-grid"></div>
-                </div>
+
+            <!-- Per-competitor panels: each uses the same card-grid layout as Peacock -->
+            <div class="miq-panel" data-panel="reelshort">
+                <div id="microdramasIQReelShortMeta" class="miq-meta"></div>
+                <div id="microdramasIQReelShortGrid" class="miq-title-grid"></div>
             </div>
+            <div class="miq-panel" data-panel="dramabox">
+                <div id="microdramasIQDramaBoxMeta" class="miq-meta"></div>
+                <div id="microdramasIQDramaBoxGrid" class="miq-title-grid"></div>
+            </div>
+            <div class="miq-panel" data-panel="goodshort">
+                <div id="microdramasIQGoodShortMeta" class="miq-meta"></div>
+                <div id="microdramasIQGoodShortGrid" class="miq-title-grid"></div>
+            </div>
+            <div class="miq-panel" data-panel="netshort">
+                <div id="microdramasIQNetShortMeta" class="miq-meta"></div>
+                <div id="microdramasIQNetShortGrid" class="miq-title-grid"></div>
+            </div>
+
+            <!-- Cross-platform overlap (titles appearing on 2+ charts in the window) -->
+            <div class="miq-panel" data-panel="cross">
+                <div id="microdramasIQCrossMeta" class="miq-meta"></div>
+                <div id="microdramasIQCrossGrid" class="miq-cross-grid"></div>
+            </div>
+
             <div class="miq-panel" data-panel="audience">
                 <div id="microdramasIQAudience" class="miq-audience-grid"></div>
             </div>
@@ -42767,7 +42793,7 @@
         // ===================== MICRODRAMAS IQ VIEW =====================
         // Peacock mobile-first microdrama audience insights. Titles catalog +
         // 28-day audience windows from first-observed date + audience profile.
-        window.__microdramasIQ = { filterOptions: null, lastData: null, activePanel: 'titles', inFlight: null };
+        window.__microdramasIQ = { filterOptions: null, lastData: null, activePanel: 'peacock', inFlight: null };
 
         function _microdramasIQHideAllOtherViews() {
             var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
@@ -42888,6 +42914,85 @@
 
         function _miqEscape(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 
+        // Shared card HTML used by BOTH Peacock and competitor tabs so
+        // every platform reads with identical visual grammar.
+        //   platform: 'Peacock' | 'ReelShort' | 'DramaBox' | 'GoodShort' | 'NetShort'
+        //   t: title record from the respective API
+        //   curveBars: pre-rendered inner HTML for the bottom bar strip
+        //              (view-volume curve for Peacock, rank-arc for competitors)
+        function _miqCardHTML(t, platform, curveBars, primaryMetric) {
+            // primaryMetric = { label, value } - defaults vary per platform
+            var pm = primaryMetric || {
+                label: 'Reads',
+                value: t.read_count_display || _miqFormatNumber(t.read_count) || '-',
+            };
+            // "Series" line: use series if present, else the rail chip
+            // (competitors don't have a series concept, but they have a
+            // rail context like "TOP" or "Trending Now" that plays the
+            // same visual role - a small line above the title)
+            var seriesLine = '';
+            if (t.series && t.series !== t.title) {
+                seriesLine = '<div class="miq-title-series">' + _miqEscape(t.series) + '</div>';
+            } else if (t.rail) {
+                seriesLine = '<div class="miq-title-series">' + _miqEscape(t.rail) + '</div>';
+            }
+            // Second metric: platforms with a "first observed" (Peacock)
+            // get that; competitors get their genre or the number of
+            // episodes (whichever is more informative).
+            var secondaryMetric;
+            if (platform === 'Peacock') {
+                secondaryMetric = {
+                    label: 'First observed',
+                    value: t.first_observed_date || '-',
+                };
+            } else if (t.episodes_count != null) {
+                secondaryMetric = {
+                    label: 'Episodes',
+                    value: String(t.episodes_count),
+                };
+            } else if (t.genre) {
+                secondaryMetric = { label: 'Genre', value: t.genre };
+            } else {
+                secondaryMetric = { label: 'First seen', value: t.earliest_date || '-' };
+            }
+            return seriesLine +
+                '<div class="miq-title-row">' + _miqEscape(t.title || '') + '</div>' +
+                '<div class="miq-title-metrics">' +
+                    '<div><div class="miq-metric-label">' + pm.label + '</div><div class="miq-metric-value">' + pm.value + '</div></div>' +
+                    '<div><div class="miq-metric-label">' + secondaryMetric.label + '</div><div class="miq-metric-value">' + secondaryMetric.value + '</div></div>' +
+                    '<div><div class="miq-metric-label">Current rank</div><div class="miq-metric-value">' + _miqCurrentRank(t) + '</div></div>' +
+                    '<div><div class="miq-metric-label">Best rank</div><div class="miq-metric-value">' + _miqBestRank(t) + '</div></div>' +
+                '</div>' +
+                '<div class="miq-window-bar">' + curveBars + '</div>';
+        }
+
+        function _miqCurrentRank(t) {
+            // Peacock uses `surface_rank_current`, competitors use `current_rank`
+            var r = (t.surface_rank_current != null) ? t.surface_rank_current : t.current_rank;
+            return (r == null) ? '-' : '#' + r;
+        }
+        function _miqBestRank(t) {
+            var r = (t.surface_rank_best != null) ? t.surface_rank_best : t.best_rank;
+            return (r == null) ? '-' : '#' + r;
+        }
+
+        function _miqRankArcBars(t, observedDates) {
+            // For competitor cards: render a rank arc as bars where
+            // taller = better rank. Missing days show as an empty cell.
+            var dates = observedDates || [];
+            if (!dates.length) return '';
+            var ranks = t.ranks_by_date || {};
+            return dates.map(function(d) {
+                var r = ranks[d];
+                if (!Number.isFinite(r)) {
+                    return '<div class="miq-window-cell miq-window-cell-empty" style="height:8%"></div>';
+                }
+                // Higher rank position = lower bar. Cap at 40.
+                var h = Math.max(8, Math.round(100 - Math.min(40, r) * 2.3));
+                return '<div class="miq-window-cell" style="height:' + h + '%"></div>';
+            }).join('');
+        }
+
         function renderMicrodramasIQTitles(titles) {
             var grid = document.getElementById('microdramasIQTitleGrid');
             if (!grid) return;
@@ -42903,22 +43008,75 @@
                     var h = Math.max(6, Math.round((c.views || 0) / 20000));
                     return '<div class="miq-window-cell" style="height:' + Math.min(100, h) + '%"></div>';
                 }).join('');
-                card.innerHTML =
-                    (t.series ? '<div class="miq-title-series">' + _miqEscape(t.series) + '</div>' : '') +
-                    '<div class="miq-title-row">' + _miqEscape(t.title || '') + '</div>' +
-                    '<div class="miq-title-metrics">' +
-                        '<div><div class="miq-metric-label">28d reach</div><div class="miq-metric-value">' + _miqFormatNumber(t.view_28d_estimate) + '</div></div>' +
-                        '<div><div class="miq-metric-label">First observed</div><div class="miq-metric-value">' + (t.first_observed_date || '-') + '</div></div>' +
-                        '<div><div class="miq-metric-label">Current rank</div><div class="miq-metric-value">' + (t.surface_rank_current == null ? '-' : '#' + t.surface_rank_current) + '</div></div>' +
-                        '<div><div class="miq-metric-label">Best rank</div><div class="miq-metric-value">' + (t.surface_rank_best == null ? '-' : '#' + t.surface_rank_best) + '</div></div>' +
-                    '</div>' +
-                    '<div class="miq-window-bar">' + curveBars + '</div>';
+                var primary = {
+                    label: '28d reach',
+                    value: _miqFormatNumber(t.view_28d_estimate),
+                };
+                card.innerHTML = _miqCardHTML(t, 'Peacock', curveBars, primary);
                 card.addEventListener('click', function() {
                     openMicrodramasIQTitleModal({
                         title:    t.title,
                         series:   t.series,
                         genre:    t.genre,
                         platform: 'Peacock',
+                    });
+                });
+                grid.appendChild(card);
+            });
+        }
+
+        // Render one competitor platform's titles as a card grid. Same
+        // visual grammar as Peacock; primary metric switches per
+        // platform (Reads for ReelShort/DramaBox/GoodShort, Rank for
+        // NetShort since NetShort doesn't publish view counts).
+        function renderMicrodramasIQPlatformGrid(platformSource, platform) {
+            var gridId = 'microdramasIQ' + platform.label.replace(/[^A-Za-z]/g, '') + 'Grid';
+            var metaId = 'microdramasIQ' + platform.label.replace(/[^A-Za-z]/g, '') + 'Meta';
+            var grid = document.getElementById(gridId);
+            var meta = document.getElementById(metaId);
+            if (!grid) return;
+            var titles = platform.titles || [];
+            if (meta) {
+                var range = '';
+                if (platform.earliest_date && platform.latest_date) {
+                    range = platform.earliest_date + ' to ' + platform.latest_date;
+                }
+                meta.textContent =
+                    (platform.mau_millions ? platform.mau_millions + 'M MAU' : '') +
+                    (platform.note ? ' - ' + platform.note : '') +
+                    (range ? ' - Window: ' + range : '');
+            }
+            if (!titles.length) {
+                grid.innerHTML = '<div class="miq-empty">No observations in this window yet. Daily scraper (05:30 UTC) populates automatically.</div>';
+                return;
+            }
+            grid.innerHTML = '';
+            titles.forEach(function(t) {
+                var card = document.createElement('div');
+                card.className = 'miq-title-card';
+                var curveBars = _miqRankArcBars(t, platform.observed_dates);
+                // Primary metric: NetShort doesn't publish read counts,
+                // so surface Rank as the top-left metric there. Others
+                // show Reads.
+                var primary;
+                if (platformSource === 'netshort' || t.read_count == null) {
+                    primary = {
+                        label: 'Chart pos',
+                        value: _miqCurrentRank(t),
+                    };
+                } else {
+                    primary = {
+                        label: 'Reads',
+                        value: t.read_count_display || _miqFormatNumber(t.read_count),
+                    };
+                }
+                card.innerHTML = _miqCardHTML(t, platform.label, curveBars, primary);
+                card.addEventListener('click', function() {
+                    openMicrodramasIQTitleModal({
+                        title:    t.title,
+                        series:   t.series || t.title,
+                        genre:    t.genre,
+                        platform: platform.label,
                     });
                 });
                 grid.appendChild(card);
@@ -42969,6 +43127,9 @@
             el.innerHTML = html;
         }
 
+        // Panels that share the competitor filter bar + data payload.
+        var _MIQ_COMPETITOR_PANELS = ['reelshort', 'dramabox', 'goodshort', 'netshort', 'cross'];
+
         function setMicrodramasIQTab(panel) {
             window.__microdramasIQ.activePanel = panel;
             document.querySelectorAll('#microdramasIQView .miq-tab').forEach(function(b) {
@@ -42979,8 +43140,17 @@
                 if (p.getAttribute('data-panel') === panel) p.classList.add('active');
                 else p.classList.remove('active');
             });
-            // Lazy-load competitors on first entry
-            if (panel === 'competitors' && !window.__microdramasIQ.compLoaded) {
+            // Filter bar (look-back / top-N / genre) applies only to the
+            // competitor + cross panels. Peacock and audience use their
+            // own controls.
+            var filterBar = document.getElementById('microdramasIQCompFilter');
+            if (filterBar) {
+                filterBar.style.display = (_MIQ_COMPETITOR_PANELS.indexOf(panel) >= 0) ? 'flex' : 'none';
+            }
+            // Lazy-load competitor data the first time any competitor
+            // tab is opened, then just re-highlight the panel on subsequent
+            // switches (data is cached in window.__microdramasIQ.compData).
+            if (_MIQ_COMPETITOR_PANELS.indexOf(panel) >= 0 && !window.__microdramasIQ.compLoaded) {
                 initMicrodramasIQCompetitors();
             }
         }
@@ -43005,10 +43175,13 @@
         }
 
         async function applyMicrodramasIQCompetitors() {
-            var meta = document.getElementById('microdramasIQCompMeta');
-            var container = document.getElementById('microdramasIQCompContainer');
-            if (meta) meta.textContent = 'Loading ReelShort + DramaBox top charts...';
-            if (container) container.innerHTML = '';
+            // Show a loading state in whichever competitor panel is
+            // currently active. All four platforms share one fetch.
+            var loadingMsg = 'Loading competitor charts...';
+            ['ReelShort', 'DramaBox', 'GoodShort', 'NetShort'].forEach(function(p) {
+                var meta = document.getElementById('microdramasIQ' + p + 'Meta');
+                if (meta) meta.textContent = loadingMsg;
+            });
             var body = {
                 window_days: parseInt((document.getElementById('microdramasIQCompWindow') || {}).value || '7', 10),
                 top_n:       parseInt((document.getElementById('microdramasIQCompTopN') || {}).value || '20', 10),
@@ -43027,8 +43200,12 @@
                 renderMicrodramasIQCompetitors(d);
             } catch (e) {
                 console.error('Microdramas competitors error:', e);
-                if (container) container.innerHTML = '<div class="miq-empty-panel">Could not load competitor charts: ' + (e.message || e) + '</div>';
-                if (meta) meta.textContent = '';
+                ['ReelShort', 'DramaBox', 'GoodShort', 'NetShort'].forEach(function(p) {
+                    var meta = document.getElementById('microdramasIQ' + p + 'Meta');
+                    var grid = document.getElementById('microdramasIQ' + p + 'Grid');
+                    if (meta) meta.textContent = '';
+                    if (grid) grid.innerHTML = '<div class="miq-empty-panel">Could not load ' + p + ' chart: ' + (e.message || e) + '</div>';
+                });
             }
         }
 
@@ -43043,112 +43220,32 @@
         }
 
         function renderMicrodramasIQCompetitors(d) {
-            var meta = document.getElementById('microdramasIQCompMeta');
-            var container = document.getElementById('microdramasIQCompContainer');
-            var cross = document.getElementById('microdramasIQCrossGrid');
-            if (!container) return;
-            var f = d.filters || {};
-            if (meta) {
-                var range = '';
-                if ((d.platforms || []).length && d.platforms[0].earliest_date && d.platforms[0].latest_date) {
-                    range = ' (' + d.platforms[0].earliest_date + ' to ' + d.platforms[0].latest_date + ')';
-                }
-                meta.textContent = 'Window: last ' + f.window_days + ' day(s)' + range + '. Top ' + f.top_n + ' per platform.';
-            }
-            container.innerHTML = '';
+            // Fan each platform's titles into its own dedicated card grid.
             (d.platforms || []).forEach(function(p) {
-                var block = document.createElement('div');
-                block.className = 'miq-platform-block';
-                var titles = p.titles || [];
-                if (!titles.length) {
-                    block.innerHTML =
-                        '<div class="miq-platform-header">' +
-                            '<h3 class="miq-platform-title">' + p.label + '</h3>' +
-                            '<div class="miq-platform-meta">' + (p.mau_millions ? p.mau_millions + 'M MAU' : '') + '</div>' +
-                        '</div>' +
-                        '<div class="miq-empty-panel">No observations in this window yet. Run the ' + p.source + ' scraper to populate.</div>';
-                    container.appendChild(block);
-                    return;
-                }
-                var rows = titles.map(function(t, idx) {
-                    var titleHtml = _miqEscape(t.title || '');
-                    var current = (t.current_rank == null) ? '-' : '#' + t.current_rank;
-                    var best    = (t.best_rank == null) ? '-' : '#' + t.best_rank;
-                    var rating  = (t.avg_rating == null) ? '' : Number(t.avg_rating).toFixed(1) + ' ★';
-                    var eps     = (t.episodes_count == null) ? '' : t.episodes_count + ' eps';
-                    var meta2   = [rating, eps].filter(function(x){return x;}).join(' · ');
-                    var reads   = (t.read_count == null) ? '-' : _miqFormatNumber(t.read_count);
-                    // ReelShort surfaces which rail a title is on (TOP,
-                    // New Release, Reel Original, More Recommended, etc).
-                    // Show that inline with the title so ranking context
-                    // is legible without an extra column.
-                    var railChip = t.rail
-                        ? ' <span class="miq-rail-chip" data-rail="' + _miqEscape(t.rail) + '">' + _miqEscape(t.rail) + '</span>'
-                        : '';
-                    // Deep-link preserved as an inline chip so the user can
-                    // hop to the source without triggering the drill-down.
-                    var deepChip = t.deep_link
-                        ? ' <a href="' + _miqEscape(t.deep_link) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();" style="font-size:0.72rem; color:var(--text-secondary); margin-left:0.4rem;">↗</a>'
-                        : '';
-                    return '<tr data-miq-title="' + _miqEscape(t.title || '') + '" data-miq-series="' + _miqEscape(t.series || t.title || '') + '" data-miq-genre="' + _miqEscape(t.genre || '') + '" data-miq-platform="' + _miqEscape(p.label || '') + '">' +
-                        '<td class="miq-rank">' + current + '</td>' +
-                        '<td>' + _miqDeltaChip(t.status, t.rank_delta) + '</td>' +
-                        '<td>' + titleHtml + railChip + deepChip +
-                            (meta2 ? '<div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px;">' + meta2 + '</div>' : '') +
-                        '</td>' +
-                        '<td>' + (t.genre ? '<span class="miq-genre-tag">' + _miqEscape(t.genre) + '</span>' : '') + '</td>' +
-                        '<td style="font-variant-numeric: tabular-nums;">' + reads + '</td>' +
-                        '<td>' + best + '</td>' +
-                    '</tr>';
-                }).join('');
-                block.innerHTML =
-                    '<div class="miq-platform-header">' +
-                        '<h3 class="miq-platform-title">' + p.label + '</h3>' +
-                        '<div class="miq-platform-meta">' + (p.mau_millions ? p.mau_millions + 'M MAU · ' : '') + p.note + '</div>' +
-                    '</div>' +
-                    '<table class="miq-comp-table">' +
-                        '<thead><tr>' +
-                            '<th style="width:60px">Rank</th>' +
-                            '<th style="width:80px">Move</th>' +
-                            '<th>Title</th>' +
-                            '<th style="width:120px">Genre</th>' +
-                            '<th style="width:80px">Reads</th>' +
-                            '<th style="width:60px">Best</th>' +
-                        '</tr></thead>' +
-                        '<tbody>' + rows + '</tbody>' +
-                    '</table>';
-                container.appendChild(block);
-                // Delegate clicks on this platform's rows -> open the audience modal.
-                var tbody = block.querySelector('.miq-comp-table tbody');
-                if (tbody) {
-                    tbody.addEventListener('click', function(ev) {
-                        var tr = ev.target.closest('tr[data-miq-title]');
-                        if (!tr) return;
-                        openMicrodramasIQTitleModal({
-                            title:    tr.getAttribute('data-miq-title'),
-                            series:   tr.getAttribute('data-miq-series'),
-                            genre:    tr.getAttribute('data-miq-genre'),
-                            platform: tr.getAttribute('data-miq-platform'),
-                        });
-                    });
-                }
+                renderMicrodramasIQPlatformGrid(p.source, p);
             });
 
-            // Cross-platform titles rail
+            // Cross-platform overlap panel (its own tab)
+            var cross = document.getElementById('microdramasIQCrossGrid');
+            var crossMeta = document.getElementById('microdramasIQCrossMeta');
+            var f = d.filters || {};
+            if (crossMeta) {
+                crossMeta.textContent = 'Window: last ' + f.window_days + ' day(s). Titles appearing on 2+ platform charts.';
+            }
             if (cross) {
                 var xtiles = d.cross_platform_titles || [];
                 if (!xtiles.length) {
-                    cross.innerHTML = '<div class="miq-empty-panel" style="grid-column: 1 / -1;">No titles appear on both charts in this window yet.</div>';
+                    cross.innerHTML = '<div class="miq-empty-panel" style="grid-column: 1 / -1;">No titles appear on multiple platform charts in this window yet.</div>';
                 } else {
-                    cross.innerHTML = xtiles.slice(0, 12).map(function(x) {
+                    cross.innerHTML = xtiles.slice(0, 24).map(function(x) {
                         var chips = Object.keys(x.per_platform || {}).map(function(src) {
                             var pp = x.per_platform[src];
                             var r = pp.current_rank ? '#' + pp.current_rank : '-';
-                            return '<span class="miq-cross-chip">' + pp.label + ' ' + r + '</span>';
+                            return '<span class="miq-cross-chip">' + _miqEscape(pp.label) + ' ' + r + '</span>';
                         }).join('');
                         return '<div class="miq-cross-card">' +
-                            '<div class="miq-cross-title">' + x.title + '</div>' +
-                            (x.genre ? '<div style="margin-bottom: 0.35rem;"><span class="miq-genre-tag">' + x.genre + '</span></div>' : '') +
+                            '<div class="miq-cross-title">' + _miqEscape(x.title) + '</div>' +
+                            (x.genre ? '<div style="margin-bottom: 0.35rem;"><span class="miq-genre-tag">' + _miqEscape(x.genre) + '</span></div>' : '') +
                             '<div class="miq-cross-plats">' + chips + '</div>' +
                         '</div>';
                     }).join('');
