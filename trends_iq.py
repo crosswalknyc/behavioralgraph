@@ -4374,10 +4374,13 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                   for k in ('spotify', 'apple', 'tiktok', 'shazam', 'amazon')),
             'podcasts':      sum(len(((podcast_charts.get(k) or {}).get('items') or []))
                                   for k in ('apple', 'spotify', 'amazon', 'audible')),
-            'books':         sum(len(((book_charts.get(k) or {}).get('items') or []))
-                                  for k in ('amazon', 'apple', 'audible', 'spotify')),
-            'libby':         sum(len(((libby_trends.get(k) or {}).get('items') or []))
-                                  for k in ('ebook', 'audiobook', 'magazine')),
+            # Libby folds into the Books tab as three sibling cards
+            # (Popular eBooks / Audiobooks / Magazines), so its item
+            # counts roll into `books` for the tab badge.
+            'books':         (sum(len(((book_charts.get(k) or {}).get('items') or []))
+                                  for k in ('amazon', 'apple', 'audible', 'spotify')) +
+                              sum(len(((libby_trends.get(k) or {}).get('items') or []))
+                                  for k in ('ebook', 'audiobook', 'magazine'))),
             'philanthropy':  (len(philanthropy_news) +
                               len(searches_by_category.get('philanthropy') or [])),
             'movers':    (len(movers.get('breakout') or []) +

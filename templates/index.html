@@ -42755,7 +42755,7 @@
         // Google Trends, GDELT, major news RSS feeds, Reddit, YouTube,
         // and retailer bestseller pages. Every tab renders its own card
         // grid.
-        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'searches', activeSocial: 'reddit', activeRetailer: 'amazon', activeLibby: 'ebook', headlinesView: 'top', inFlight: null };
+        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'searches', activeSocial: 'reddit', activeRetailer: 'amazon', headlinesView: 'top', inFlight: null };
 
         function _trendsIQHideAllOtherViews() {
             var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
@@ -42908,13 +42908,16 @@
             var f = _miqCurrentFilters();
             // Peacock keeps its own defaults for the fields that don't
             // live in the unified bar (sort, audience_cut) - they're
-            // filled in with sensible defaults on the backend.
+            // filled in with sensible defaults on the backend. top_n
+            // is the "Show" filter and now applies to Peacock too so
+            // the filter bar is identical across every tab.
             var body = {
                 sort:         'view_28d',
                 audience_cut: 'all',
                 window_days:  f.window_days || 28,
                 start_date:   f.start_date,
                 end_date:     f.end_date,
+                top_n:        f.top_n || 20,
                 genre:        f.genre,
             };
             try {
@@ -43324,12 +43327,14 @@
                 if (p.getAttribute('data-panel') === panel) p.classList.add('active');
                 else p.classList.remove('active');
             });
-            // "Show" (Top N) only applies when a per-platform chart is
-            // being ranked; hide it on Peacock (which displays the full
-            // catalog).
+            // "Show" (Top N) applies to every tab now, including
+            // Peacock - the backend caps the sorted title list at N so
+            // the filter grammar is identical across tabs. Kept the
+            // wrap lookup in case a future tab (e.g. cross-platform)
+            // needs to opt out again.
             var topWrap = document.getElementById('microdramasIQTopNWrap');
             if (topWrap) {
-                topWrap.style.display = (_MIQ_COMPETITOR_PANELS.indexOf(panel) >= 0) ? '' : 'none';
+                topWrap.style.display = '';
             }
             // Lazy-load competitor data the first time any competitor
             // tab is opened.
@@ -43687,9 +43692,7 @@
                 { key: 'podcasts',  label: 'Podcasts',         count: counts.podcasts  || 0, icon: '🎙️',
                   tip: 'Podcasts: Trending shows on Apple Podcasts, Spotify, Amazon Music, and Audible.' },
                 { key: 'books',     label: 'Books',            count: counts.books     || 0, icon: '📚',
-                  tip: 'Books: Best-selling and trending titles across Amazon, Apple Books, and Audible.' },
-                { key: 'libby',     label: 'Libby',            count: counts.libby     || 0, icon: '🏛️',
-                  tip: 'Libby popular: The most-borrowed titles from LA County Library right now, split by eBook, audiobook, and magazine.' },
+                  tip: 'Books: Best-selling and trending titles across Amazon, Apple Books, Audible, Spotify Audiobooks, and Libby (LA County Library eBooks, audiobooks, and magazines).' },
                 { key: 'social',    label: 'Social',           count: 0,                     icon: '💬',
                   tip: 'Social: Trending posts, videos, and tweets on Reddit, YouTube, TikTok, Instagram, and X. Real content, not hashtag lists.' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
@@ -43725,8 +43728,7 @@
                                               renderTIQPeople(cards.trending_people || [])) +
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
                 _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
-                _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {})) +
-                _renderTIQPanel('libby',     renderTIQLibby(cards.libby_trending || {})) +
+                _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
@@ -43746,6 +43748,12 @@
             if (window.__trendsIQ.activeTab === 'philanthropy') {
                 window.__trendsIQ.activeTab = 'headlines';
                 window.__trendsIQ.headlinesView = 'philanthropy';
+            }
+            // Libby used to be a top-level tab. Now it's part of the
+            // Books tab (as three sibling cards). Redirect returning
+            // users so they don't land on a ghost panel.
+            if (window.__trendsIQ.activeTab === 'libby') {
+                window.__trendsIQ.activeTab = 'books';
             }
             setTrendsIQTab(window.__trendsIQ.activeTab || 'searches');
 
@@ -43818,10 +43826,10 @@
             'Apple Books Top 100 (US)':          'Apple Books: The top-paid chart in the Apple Books store.',
             'Audible Best-Sellers':              'Audible Best-Sellers: The top-selling audiobooks on Audible right now.',
             'Spotify Audiobooks':                'Spotify Audiobooks: Top audiobooks available on Spotify. Included with Spotify Premium.',
-            // ---------- Libby ----------
-            'Popular eBooks':                    'Popular eBooks: The most-borrowed eBooks on Libby (LA County Library) right now.',
-            'Popular Audiobooks':                'Popular Audiobooks: The most-borrowed audiobooks on Libby (LA County Library) right now.',
-            'Popular Magazines':                 'Popular Magazines: The most-read magazines on Libby (LA County Library) right now.',
+            // ---------- Libby (folded into the Books tab as three sibling cards) ----------
+            'Libby: Popular eBooks':             'Libby: Popular eBooks: The most-borrowed eBooks on Libby (LA County Library) right now.',
+            'Libby: Popular Audiobooks':         'Libby: Popular Audiobooks: The most-borrowed audiobooks on Libby (LA County Library) right now.',
+            'Libby: Popular Magazines':          'Libby: Popular Magazines: The most-read magazines on Libby (LA County Library) right now.',
             // ---------- Social ----------
             'Reddit - trending in the USA':      'Reddit: Top posts today across the US.',
             'YouTube - trending in the USA':     'YouTube: Videos trending in the US right now.',
@@ -43896,10 +43904,6 @@
             'Spotify':      'Spotify: US mass-streaming top chart.',
             'Apple Music':  'Apple Music: Top chart from the Apple subscriber base.',
             'Shazam':       'Shazam: US discovery signal. What people are identifying right now.',
-            // Libby media-type sub-tabs
-            '📖 eBooks':     'eBooks: Most-borrowed eBooks on Libby right now.',
-            '🎧 Audiobooks': 'Audiobooks: Most-borrowed audiobooks on Libby right now.',
-            '📰 Magazines':  'Magazines: Most-read magazines on Libby right now.',
             // Retailer sub-tabs
             'Amazon':       'Amazon Movers & Shakers: Biggest 24-hour rank jumps.',
             'Target':       'Target Best Sellers.',
@@ -45056,143 +45060,97 @@
             return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' + cards + '</div>';
         }
 
-        function renderTIQBooks(sources) {
+        function renderTIQBooks(sources, libbySources) {
             // Order: Amazon Best-Sellers (biggest scale) -> Apple Books
             // top-paid -> Audible (audiobook flagship) -> Spotify
-            // audiobooks (newer surface, expanding fast).
-            var keys = ['amazon', 'apple', 'audible', 'spotify'];
-            var present = keys.filter(function(k) { return sources[k]; });
-            if (!present.length) {
+            // audiobooks (newer surface, expanding fast) -> Libby eBooks,
+            // Audiobooks, Magazines (LA County Library borrows).
+            var storeKeys = ['amazon', 'apple', 'audible', 'spotify'];
+            var storePresent = storeKeys.filter(function(k) { return sources[k]; });
+            var libbyKeys = ['ebook', 'audiobook', 'magazine'];
+            var libby = libbySources || {};
+            var libbyPresent = libbyKeys.filter(function(k) { return libby[k]; });
+            if (!storePresent.length && !libbyPresent.length) {
                 return '<div class="tiq-empty">Book charts are warming up. Check back later.</div>';
             }
-            var cards = present.map(function(k) {
-                var s = sources[k] || {};
+
+            // Shared row renderer. Libby rows carry extra metadata
+            // (holds, availability, subjects) that store rows never
+            // have; `sourceKind` gates whether we render them.
+            function rowsFor(items, sourceKind, sourceSlug) {
+                return items.map(function(it, i) {
+                    var img = _tiqPosterCell(it.image);
+                    var titleLine = it.url
+                        ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
+                        : _tiqEsc(it.title);
+                    var rowKey = it.title + ' - ' + (it.artist || sourceSlug);
+                    var meta = '';
+                    if (it.artist) meta += '<span>' + _tiqEsc(it.artist) + '</span>';
+                    if (sourceKind === 'store') {
+                        if (it.price) meta += '<span class="tiq-badge">' + _tiqEsc(it.price) + '</span>';
+                    } else {
+                        // Libby row extras
+                        if (it.availability) {
+                            meta += '<span class="tiq-badge">' + _tiqEsc(it.availability) + '</span>';
+                        }
+                        if (typeof it.holds === 'number' && it.holds > 0) {
+                            meta += '<span>' + _tiqNum(it.holds) + ' holds</span>';
+                        }
+                        if (it.subjects && it.subjects.length) {
+                            meta += '<span style="opacity:0.75;">' + _tiqEsc(it.subjects.slice(0, 2).join(', ')) + '</span>';
+                        }
+                    }
+                    return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                           '<div class="tiq-row-body">' +
+                           '<div class="tiq-row-title">' + titleLine +
+                           _tiqCrossPlatformBadge(it) +
+                           _tiqActions('book', sourceSlug, rowKey, rowKey, 'National') +
+                           '</div>' +
+                           (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
+                           '</div></div>';
+                }).join('');
+            }
+
+            function cardFor(s, sourceKind, sourceSlug, labelOverride) {
                 var items = s.items || [];
+                var label = labelOverride || s.label || sourceSlug;
                 var body;
                 if (!s.available || !items.length) {
                     body = '<div class="tiq-placeholder">' +
-                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
+                           '<div class="tiq-placeholder-title">' + _tiqEsc(label) + '</div>' +
                            '<div>' + _tiqEsc(s.sub || 'Warming up.') + '</div>' +
                            '</div>';
                 } else {
                     body = '<div class="tiq-card-sub">' + _tiqEsc(s.sub || '') + '</div>' +
                            '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
-                           items.map(function(it, i) {
-                               // Books use portrait cover tiles; reuse
-                               // the streaming poster helper since book
-                               // jackets and film posters share the
-                               // same 2:3-ish aspect ratio + CROSSWALK
-                               // fallback tile.
-                               var img = _tiqPosterCell(it.image);
-                               var titleLine = it.url
-                                   ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
-                                   : _tiqEsc(it.title);
-                               var bookKey = it.title + ' - ' + (it.artist || '');
-                               var meta = '';
-                               if (it.artist) meta += '<span>' + _tiqEsc(it.artist) + '</span>';
-                               if (it.price) meta += '<span class="tiq-badge">' + _tiqEsc(it.price) + '</span>';
-                               return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
-                                      '<div class="tiq-row-body">' +
-                                      '<div class="tiq-row-title">' + titleLine +
-                                      _tiqCrossPlatformBadge(it) +
-                                      _tiqActions('book', k, bookKey, bookKey, 'National') +
-                                      '</div>' +
-                                      (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
-                                      '</div></div>';
-                           }).join('') +
+                           rowsFor(items, sourceKind, sourceSlug) +
                            '</div>';
                 }
                 return '<div class="tiq-card">' +
-                       '<h4>' + _tiqEsc(s.label || k) + '</h4>' +
+                       '<h4>' + _tiqEsc(label) + '</h4>' +
                        body +
                        '</div>';
-            }).join('');
-            return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' + cards + '</div>';
-        }
-
-        function renderTIQLibby(sources) {
-            // Libby ships one card per media type: eBook / Audiobook /
-            // Magazine. Render as a sub-tab strip (like Streaming) so
-            // one type is in focus at a time and the shelf stays
-            // readable.
-            var keys = ['ebook', 'audiobook', 'magazine'];
-            var present = keys.filter(function(k) { return sources[k]; });
-            if (!present.length) {
-                return '<div class="tiq-empty">Libby popular is warming up. Check back later.</div>';
             }
-            var iconMap  = { ebook: '📖', audiobook: '🎧', magazine: '📰' };
-            var labelMap = { ebook: 'eBooks', audiobook: 'Audiobooks', magazine: 'Magazines' };
-            var active = window.__trendsIQ.activeLibby;
-            if (!active || present.indexOf(active) === -1) active = present[0];
-            var tabs = present.map(function(k) {
-                var s = sources[k] || {};
-                var cls = (k === active) ? ' active' : '';
-                var unavail = !s.available ? ' unavailable' : '';
-                return '<div class="tiq-social-tab' + cls + unavail + '" data-tiq-libby="' + k + '" onclick="setTrendsIQLibby(\'' + k + '\')">' +
-                       (iconMap[k] || '') + ' ' + _tiqEsc(labelMap[k] || s.label || k) +
-                       '</div>';
-            }).join('');
-            var panels = present.map(function(k) {
-                var s = sources[k] || {};
-                var items = s.items || [];
-                var cls = (k === active) ? ' active' : '';
-                var body;
-                if (!s.available || !items.length) {
-                    body = '<div class="tiq-placeholder">' +
-                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
-                           '<div>' + _tiqEsc(s.sub || 'Warming up.') + '</div>' +
-                           '</div>';
-                } else {
-                    body = '<div class="tiq-cards-grid" style="grid-template-columns: 1fr;">' +
-                           '<div class="tiq-card"><h4>' + _tiqEsc(s.label || k) + '</h4>' +
-                           '<div class="tiq-card-sub" style="margin-bottom:8px;">' + _tiqEsc(s.sub || '') + '</div>' +
-                           '<div class="tiq-headline-list">' +
-                           items.map(function(it, i) {
-                               // Same portrait cover treatment as Books;
-                               // magazines happen to be square but the
-                               // container crop handles both cleanly.
-                               var img = _tiqPosterCell(it.image);
-                               var titleLine = it.url
-                                   ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
-                                   : _tiqEsc(it.title);
-                               var libbyKey = it.title + ' - ' + (it.artist || k);
-                               var meta = '';
-                               if (it.artist) meta += '<span>' + _tiqEsc(it.artist) + '</span>';
-                               if (it.availability) {
-                                   var availCls = (it.availability === 'Available') ? 'tiq-badge' : 'tiq-badge';
-                                   meta += '<span class="' + availCls + '">' + _tiqEsc(it.availability) + '</span>';
-                               }
-                               if (typeof it.holds === 'number' && it.holds > 0) {
-                                   meta += '<span>' + _tiqNum(it.holds) + ' holds</span>';
-                               }
-                               if (it.subjects && it.subjects.length) {
-                                   meta += '<span style="opacity:0.75;">' + _tiqEsc(it.subjects.slice(0, 2).join(', ')) + '</span>';
-                               }
-                               return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
-                                      '<div class="tiq-row-body">' +
-                                      '<div class="tiq-row-title">' + titleLine +
-                                      _tiqCrossPlatformBadge(it) +
-                                      _tiqActions('libby', k, libbyKey, libbyKey, 'National') +
-                                      '</div>' +
-                                      (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
-                                      '</div></div>';
-                           }).join('') +
-                           '</div></div></div>';
-                }
-                return '<div class="tiq-social-panel' + cls + '" data-tiq-libby-panel="' + k + '">' + body + '</div>';
-            }).join('');
-            return '<div class="tiq-social-tabs">' + tabs + '</div>' + panels;
-        }
 
-        window.setTrendsIQLibby = function(key) {
-            window.__trendsIQ.activeLibby = key;
-            document.querySelectorAll('#trendsIQPanels .tiq-social-tab[data-tiq-libby]').forEach(function(el) {
-                el.classList.toggle('active', el.getAttribute('data-tiq-libby') === key);
-            });
-            document.querySelectorAll('#trendsIQPanels [data-tiq-libby-panel]').forEach(function(el) {
-                el.classList.toggle('active', el.getAttribute('data-tiq-libby-panel') === key);
-            });
-        };
+            var storeCards = storePresent.map(function(k) {
+                return cardFor(sources[k] || {}, 'store', k, null);
+            }).join('');
+
+            // Libby folds in as three additional cards. Prefix the label
+            // with "Libby:" so it reads clearly next to the store cards.
+            var libbyLabelMap = {
+                ebook:     'Libby: Popular eBooks',
+                audiobook: 'Libby: Popular Audiobooks',
+                magazine:  'Libby: Popular Magazines',
+            };
+            var libbyCards = libbyPresent.map(function(k) {
+                return cardFor(libby[k] || {}, 'libby', 'libby-' + k, libbyLabelMap[k]);
+            }).join('');
+
+            return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' +
+                   storeCards + libbyCards +
+                   '</div>';
+        }
 
         // Shorten "Thu, 10 Jul 2026 09:34:11 GMT" -> "10 Jul". Used in
         // the philanthropy news feed to keep the meta line tight.
@@ -45649,8 +45607,7 @@
                                               renderTIQPeople(cards.trending_people || [])) +
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
                 _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
-                _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {})) +
-                _renderTIQPanel('libby',     renderTIQLibby(cards.libby_trending || {})) +
+                _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
