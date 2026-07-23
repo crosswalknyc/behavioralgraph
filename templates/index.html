@@ -43050,6 +43050,25 @@
             var wd = isNaN(dt.getTime()) ? '' : WD[dt.getUTCDay()];
             return (wd ? wd + ' ' : '') + md;
         }
+        // Latest calendar date we should plot: today minus the data lag.
+        // Peacock's curve is launch-relative and spans a fixed 28-day
+        // window, so a recently launched title projects dates into the
+        // FUTURE (carry-forward estimates). Clip the plotted curve here so
+        // it never runs past the real data date.
+        function _miqCutoffDate() {
+            var now = new Date();
+            now.setDate(now.getDate() - _MIQ_DATA_LAG_DAYS);
+            var y = now.getFullYear();
+            var m = String(now.getMonth() + 1).padStart(2, '0');
+            var d = String(now.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + d;
+        }
+        function _miqPeacockCurve(t) {
+            var cutoff = _miqCutoffDate();
+            return (t.view_daily_curve || []).filter(function(c) {
+                return !c.date || c.date <= cutoff;
+            });
+        }
 
         // Hover tooltip: spells out each observed day (weekday + date) and
         // its view count so the sparkline is never a mystery.
@@ -43058,7 +43077,7 @@
             // no lag shift); competitors plot the per-date total-reads
             // ("views") series with the one-day data-lag correction.
             if (platform === 'Peacock') {
-                var curve = t.view_daily_curve || [];
+                var curve = _miqPeacockCurve(t);
                 if (curve.length) {
                     return 'Daily views:\n' + curve.map(function(c) {
                         return _miqDayLabel(c.date) + ': ' + _miqFormatNumber(c.views || 0);
@@ -43255,7 +43274,9 @@
         // daily view curve. Normalizes to the max in-window value so
         // the shape of the curve is what matters, not absolute height.
         function _miqViewSparkline(t) {
-            var curve = t.view_daily_curve || [];
+            // Clip future carry-forward days so the launch-relative window
+            // never plots past the current data date.
+            var curve = _miqPeacockCurve(t);
             if (!curve.length) return '';
             var vals = curve.map(function(c) { return Number(c.views) || 0; });
             var mx = Math.max.apply(null, vals) || 1;
