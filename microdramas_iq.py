@@ -1010,6 +1010,37 @@ def _serialize_title(entry: dict, *, window_days: int) -> dict:
             surface_rank_current = r
             break
 
+    # Per-day rank timeline (Peacock analog to the ReelShort/DramaBox
+    # ranks_by_date + observed_dates the competitor tabs render). This
+    # is what lets the shared rank sparkline (_miqRankSparkline in JS)
+    # draw for Peacock cards too. Only surface the window slice so the
+    # sparkline width matches the current filter.
+    _by_date: dict[str, int] = {}
+    for o in obs:
+        d = o.get('observed_date')
+        r = o.get('rank')
+        if d and isinstance(r, int):
+            # Multiple rails can observe the same title on the same
+            # day; keep the BEST (lowest) rank we saw that day so the
+            # sparkline reflects best surface placement.
+            prior = _by_date.get(d)
+            if prior is None or r < prior:
+                _by_date[d] = r
+    observed_dates_all = sorted(_by_date.keys())
+    if observed_dates_all:
+        # Clip to the last `window_days` observations so the sparkline
+        # covers the active filter window.
+        observed_dates_win = observed_dates_all[-window_days:]
+    else:
+        observed_dates_win = []
+    ranks_by_date_win = {d: _by_date[d] for d in observed_dates_win}
+    # previous_rank = the rank one observation before the current one,
+    # in the window. Mirrors the competitor payload so _miqTrendLine's
+    # "climbed / slipped / steady" branch works for Peacock too.
+    previous_rank = None
+    if len(observed_dates_win) >= 2:
+        previous_rank = ranks_by_date_win.get(observed_dates_win[-2])
+
     first_iso = entry.get('first_observed_date') or ''
     days_since = 0
     if first_iso:
@@ -1036,6 +1067,17 @@ def _serialize_title(entry: dict, *, window_days: int) -> dict:
         'surface_rank_current': surface_rank_current,
         'surface_rank_best':    surface_rank_best,
         'surface_rank_avg':     surface_rank_avg,
+        # Rank timeline for the shared sparkline (see comment above).
+        'observed_dates':      observed_dates_win,
+        'ranks_by_date':       ranks_by_date_win,
+        'previous_rank':       previous_rank,
+        # days_in_window drives the "Peak #N (held Xd)" trend copy the
+        # competitor tabs use. Count how many days the title held its
+        # best rank during the window.
+        'days_in_window':      sum(
+            1 for _r in ranks_by_date_win.values()
+            if _r == surface_rank_best
+        ) if surface_rank_best is not None else 0,
         'view_daily_curve':    curve_win,
         'view_window_estimate': view_win,
         'view_28d_estimate':   total_28,

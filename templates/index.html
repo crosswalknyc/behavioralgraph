@@ -42968,7 +42968,7 @@
         function _miqCardHTML(t, platform, curveBars, primaryMetric) {
             // primaryMetric = { label, value } - defaults vary per platform
             var pm = primaryMetric || {
-                label: 'Reads',
+                label: 'Views',
                 value: t.read_count_display || _miqFormatNumber(t.read_count) || '-',
             };
             // Series/rail descriptor line intentionally removed - the
@@ -43015,16 +43015,11 @@
         }
 
         // Hover tooltip: spells out each observed day so the user
-        // never has to guess what the sparkline is plotting.
+        // never has to guess what the sparkline is plotting. Every tab
+        // (Peacock included) now uses the same rank-based sparkline
+        // and therefore the same tooltip copy.
         function _miqSparkTooltip(t, platform) {
-            if (platform === 'Peacock') {
-                var curve = t.view_daily_curve || [];
-                if (!curve.length) return '';
-                return 'Daily views over window:\n' + curve.map(function(c) {
-                    return (c.date || '') + ': ' + _miqFormatNumber(c.views || 0);
-                }).join('\n');
-            }
-            var dates = t.__observedDates || [];
+            var dates = t.__observedDates || t.observed_dates || [];
             var ranks = t.ranks_by_date || {};
             if (!dates.length) return '';
             return 'Daily chart rank (higher = better, top of line = #1):\n' + dates.map(function(d) {
@@ -43150,27 +43145,15 @@
         // but does have a view curve) we compare first-half vs
         // second-half of the window and say growing / cooling / steady.
         function _miqTrendLine(t) {
-            // Peacock branch: view curve trend
-            if (t.view_daily_curve && t.view_daily_curve.length >= 2) {
-                var curve = t.view_daily_curve;
-                var mid = Math.floor(curve.length / 2);
-                var early = 0, late = 0;
-                for (var i = 0; i < curve.length; i++) {
-                    var v = Number(curve[i].views) || 0;
-                    if (i < mid) early += v; else late += v;
-                }
-                if (early > 0) {
-                    var pct = Math.round(((late - early) / early) * 100);
-                    if (pct >= 10)  return '▲ Growing (+' + pct + '% vs early week)';
-                    if (pct <= -10) return '▼ Cooling (' + pct + '% vs early week)';
-                    return 'Steady week over week';
-                }
-                if (late > 0) return 'New viewership this week';
-                return '';
-            }
-            // Competitor branch: rank movement
-            var cur = (t.current_rank != null) ? t.current_rank : t.surface_rank_current;
-            var best = (t.best_rank != null) ? t.best_rank : t.surface_rank_best;
+            // Unified rank-movement trend line - Peacock and every
+            // competitor tab now speak the same editorial grammar
+            // ("Peak #N (held Xd)", "▲ Climbed 2 spots", "Steady at #4",
+            // "Off chart (peak #N)"). Rank is the universal signal
+            // across microdrama platforms; view-curve deltas were
+            // Peacock-only and read differently, which broke visual
+            // parity across tabs.
+            var cur  = (t.current_rank != null) ? t.current_rank : t.surface_rank_current;
+            var best = (t.best_rank != null)    ? t.best_rank    : t.surface_rank_best;
             var prev = t.previous_rank;
             var days = t.days_in_window;
             if (t.status === 'new') return 'New on chart';
@@ -43198,17 +43181,20 @@
             titles.forEach(function(t) {
                 var card = document.createElement('div');
                 card.className = 'miq-title-card';
-                var spark = _miqViewSparkline(t);
+                // Peacock cards now mirror the competitor tabs exactly:
+                // rank-based sparkline (drawn from ranks_by_date +
+                // observed_dates that the backend now emits) and a
+                // primary "Views" metric that tracks the active look-
+                // back window. Same visual grammar across every tab.
+                t.__observedDates = t.observed_dates || [];
+                var spark = _miqRankSparkline(t, t.observed_dates || []);
                 var wd = window.__microdramasIQ.currentWindowDays || 28;
-                // Prefer the current-window estimate when a non-28d
-                // window is active so the number tracks the Look back
-                // filter; fall back to the 28d estimate otherwise.
-                var reachVal = (wd === 28)
+                var viewsVal = (wd === 28)
                     ? t.view_28d_estimate
                     : (t.view_window_estimate != null ? t.view_window_estimate : t.view_28d_estimate);
                 var primary = {
-                    label: wd + 'd reach',
-                    value: _miqFormatNumber(reachVal),
+                    label: 'Views',
+                    value: _miqFormatNumber(viewsVal),
                 };
                 card.innerHTML = _miqCardHTML(t, 'Peacock', spark, primary);
                 card.addEventListener('click', function() {
@@ -43225,7 +43211,7 @@
 
         // Render one competitor platform's titles as a card grid. Same
         // visual grammar as Peacock; primary metric switches per
-        // platform (Reads for ReelShort/DramaBox/GoodShort, Rank for
+        // platform (Views for ReelShort/DramaBox/GoodShort, Rank for
         // NetShort since NetShort doesn't publish view counts).
         function renderMicrodramasIQPlatformGrid(platformSource, platform) {
             var gridId = 'microdramasIQ' + platform.label.replace(/[^A-Za-z]/g, '') + 'Grid';
@@ -43252,9 +43238,10 @@
                 // the title record itself, not the API payload.
                 t.__observedDates = platform.observed_dates || [];
                 var spark = _miqRankSparkline(t, platform.observed_dates);
-                // Primary metric: NetShort doesn't publish read counts,
+                // Primary metric: NetShort doesn't publish view counts,
                 // so surface Rank as the top-left metric there. Others
-                // show Reads.
+                // show Views (formerly labeled "Reads" - "Views" reads
+                // better against Peacock, which shows the same metric).
                 var primary;
                 if (platformSource === 'netshort' || t.read_count == null) {
                     primary = {
@@ -43263,7 +43250,7 @@
                     };
                 } else {
                     primary = {
-                        label: 'Reads',
+                        label: 'Views',
                         value: t.read_count_display || _miqFormatNumber(t.read_count),
                     };
                 }
@@ -43830,6 +43817,7 @@
             'Amazon Best-Sellers (Books)':       'Amazon Best-Sellers: The top-selling books on Amazon right now.',
             'Apple Books Top 100 (US)':          'Apple Books: The top-paid chart in the Apple Books store.',
             'Audible Best-Sellers':              'Audible Best-Sellers: The top-selling audiobooks on Audible right now.',
+            'Spotify Audiobooks':                'Spotify Audiobooks: Top audiobooks available on Spotify. Included with Spotify Premium.',
             // ---------- Libby ----------
             'Popular eBooks':                    'Popular eBooks: The most-borrowed eBooks on Libby (LA County Library) right now.',
             'Popular Audiobooks':                'Popular Audiobooks: The most-borrowed audiobooks on Libby (LA County Library) right now.',
@@ -45069,7 +45057,10 @@
         }
 
         function renderTIQBooks(sources) {
-            var keys = ['amazon', 'apple', 'audible'];
+            // Order: Amazon Best-Sellers (biggest scale) -> Apple Books
+            // top-paid -> Audible (audiobook flagship) -> Spotify
+            // audiobooks (newer surface, expanding fast).
+            var keys = ['amazon', 'apple', 'audible', 'spotify'];
             var present = keys.filter(function(k) { return sources[k]; });
             if (!present.length) {
                 return '<div class="tiq-empty">Book charts are warming up. Check back later.</div>';
