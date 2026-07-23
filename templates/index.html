@@ -17888,10 +17888,11 @@
                             {% endif %}
                             <option value="shareOfTimeIQ" disabled>⏱️ Share of Time (Coming Soon)</option>
                             <option value="workspace" {% if not has_workspace_access %}disabled{% endif %}>🗂️ Workspace</option>
-                            <!-- Impact IQ + Ticket Sales Tracker hidden 2026-06-16 per user
-                                 request. View divs, handlers, /api routes, and admin
-                                 access controls left intact so they can be re-enabled
-                                 later by uncommenting these <option> rows. -->
+                            <!-- Impact IQ restored 2026-07-23 (was accidentally
+                                 stripped by the Jul 10 rollback). Ticket Sales Tracker
+                                 still hidden per 2026-06-16 request; its handler +
+                                 /api routes + admin access controls remain intact so
+                                 it can be re-enabled by adding a new <option> row. -->
                             {# Talent Fit IQ hidden from dropdown 2026-06-16 per user
                                request. View div (talentFitIQView), form, handlers,
                                /api/talent-fit/* routes, sidebar, and Analysis IQ
@@ -34077,6 +34078,1504 @@
             </div>
         </div><!-- End journeyIQView -->
 
+
+        <!-- ================================================================
+             IMPACT IQ VIEW
+             ================================================================
+             Cross-property audience-flow measurement. Given a trigger event
+             (e.g. a festival) and a subject (e.g. an artist), quantify what
+             percent of the trigger cohort flowed through each stage of the
+             subject's ecosystem:
+                Stage 1: Trigger event attendance
+                Stage 2: Online interaction with subject after the trigger
+                Stage 3: Purchase of subject's products / merch
+                Stage 4: Streaming of subject's catalog across platforms
+                Stage 5: Streaming of subject's just-released title
+                Stage 6: Watch-through on subject's owned long-form content
+
+             The view is journey-scoped: a dropdown at the top selects a
+             journey; each journey ships as a self-contained payload keyed
+             by slug in IMPACT_IQ_JOURNEYS below. To add a new journey,
+             add another entry to that object.
+
+             Every journey ships THREE cohorts for causal read:
+                - Control:    matched panel, zero Coachella digital touchpoint
+                - Livestream: streamed the official YouTube livestream
+                - Ticket:     bought a physical ticket
+             And a matching pre-trigger window on the treated cohort for the
+             within-cohort pre/post lift read.
+
+             Journey 1 (seeded 2026-07-01):
+                Coachella 2026 -> Justin Bieber -> SWAG LIVE (Jun 26 drop)
+                -> merch -> catalog streaming -> Never Say Never (2011).
+             ================================================================ -->
+        <style>
+            #impactIQView {
+                display: none;
+                flex-direction: column;
+                flex: 1 1 0%;
+                min-height: 0;
+                overflow: auto;
+                padding: 1.25rem 1.5rem 3rem 1.5rem;
+                gap: 1rem;
+            }
+            #impactIQView .iiq2-header { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.35rem; }
+            #impactIQView .iiq2-title { font-size: 1.45rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+            #impactIQView .iiq2-subtitle { font-size: 0.83rem; color: var(--text-secondary); margin: 0; max-width: 900px; line-height: 1.45; }
+            #impactIQView .iiq2-selector-bar {
+                display: flex; gap: 0.75rem; align-items: end; flex-wrap: wrap;
+                background: rgba(255,255,255,0.02);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 10px;
+                padding: 0.7rem 0.85rem;
+                margin-bottom: 0.35rem;
+            }
+            #impactIQView .iiq2-selector-bar label { font-size: 0.68rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.2rem; display: block; }
+            #impactIQView .iiq2-selector-bar select {
+                background: rgba(0,0,0,0.35); color: var(--text-primary);
+                border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+                padding: 0.45rem 0.6rem; font-size: 0.86rem; min-width: 260px;
+            }
+            #impactIQView .iiq2-meta-chip {
+                margin-left: auto; padding: 0.3rem 0.7rem;
+                background: linear-gradient(135deg, rgba(56,189,248,0.15), rgba(139,92,246,0.15));
+                border: 1px solid rgba(139,92,246,0.35); border-radius: 999px;
+                font-size: 0.72rem; color: #c4b5fd; font-weight: 600;
+                display: flex; align-items: center; gap: 0.4rem;
+            }
+            #impactIQView .iiq2-hero-grid {
+                display: grid;
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+                gap: 0.6rem;
+            }
+            #impactIQView .iiq2-kpi {
+                background: rgba(255,255,255,0.03);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 10px;
+                padding: 0.75rem 0.85rem;
+                position: relative;
+                overflow: hidden;
+            }
+            #impactIQView .iiq2-kpi::before {
+                content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+                background: linear-gradient(180deg, var(--kpi-a, #38bdf8), var(--kpi-b, #8b5cf6));
+                opacity: 0.9;
+            }
+            #impactIQView .iiq2-kpi .lbl { font-size: 0.68rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.35rem; }
+            #impactIQView .iiq2-kpi .val { font-size: 1.35rem; font-weight: 700; color: var(--text-primary); line-height: 1.1; }
+            #impactIQView .iiq2-kpi .sub { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.3rem; }
+            #impactIQView .iiq2-two-col { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1rem; }
+            #impactIQView .iiq2-card {
+                background: rgba(255,255,255,0.03);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 12px;
+                padding: 1rem 1.15rem;
+            }
+            #impactIQView .iiq2-card h3 { margin: 0 0 0.15rem; font-size: 1rem; font-weight: 700; }
+            #impactIQView .iiq2-card .card-note { font-size: 0.72rem; color: var(--text-secondary); margin: 0 0 0.85rem; }
+            #impactIQView .iiq2-funnel { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.4rem; }
+            #impactIQView .iiq2-stage {
+                position: relative;
+                padding: 0.85rem 1rem;
+                border-radius: 10px;
+                border: 1px solid rgba(255,255,255,0.09);
+                background: linear-gradient(90deg, rgba(56,189,248,0.14), rgba(56,189,248,0.03));
+                overflow: hidden;
+            }
+            #impactIQView .iiq2-stage[data-idx="0"] { background: linear-gradient(90deg, rgba(139,92,246,0.22), rgba(139,92,246,0.05)); }
+            #impactIQView .iiq2-stage[data-idx="1"] { background: linear-gradient(90deg, rgba(251,146,60,0.22), rgba(251,146,60,0.05)); }
+            #impactIQView .iiq2-stage[data-idx="2"] { background: linear-gradient(90deg, rgba(34,211,238,0.22), rgba(34,211,238,0.05)); }
+            #impactIQView .iiq2-stage[data-idx="3"] { background: linear-gradient(90deg, rgba(236,72,153,0.22), rgba(236,72,153,0.05)); }
+            #impactIQView .iiq2-stage[data-idx="4"] { background: linear-gradient(90deg, rgba(74,222,128,0.22), rgba(74,222,128,0.05)); }
+            #impactIQView .iiq2-stage-hdr { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; }
+            #impactIQView .iiq2-stage-name { font-size: 0.95rem; font-weight: 700; letter-spacing: -0.005em; }
+            #impactIQView .iiq2-stage-desc { font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.15rem; }
+            #impactIQView .iiq2-stage-nums { display: flex; gap: 0.9rem; align-items: baseline; }
+            #impactIQView .iiq2-stage-num { font-size: 1.35rem; font-weight: 700; }
+            #impactIQView .iiq2-stage-pct { font-size: 0.75rem; color: #cbd5e1; font-weight: 600; }
+            #impactIQView .iiq2-stage-drop { font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.3rem; }
+            #impactIQView .iiq2-stage-bar {
+                position: relative; height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; margin-top: 0.55rem; overflow: hidden;
+            }
+            #impactIQView .iiq2-stage-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #38bdf8, #a78bfa); border-radius: 3px; }
+            #impactIQView .iiq2-hbar-row { display: grid; grid-template-columns: 130px 1fr 90px; align-items: center; gap: 0.55rem; margin-bottom: 0.4rem; }
+            #impactIQView .iiq2-hbar-label { font-size: 0.78rem; color: var(--text-primary); }
+            #impactIQView .iiq2-hbar-track { position: relative; height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden; }
+            #impactIQView .iiq2-hbar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; }
+            #impactIQView .iiq2-hbar-fill.a { background: linear-gradient(90deg, #38bdf8, #6366f1); }
+            #impactIQView .iiq2-hbar-fill.b { background: linear-gradient(90deg, #a78bfa, #ec4899); }
+            #impactIQView .iiq2-hbar-fill.c { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+            #impactIQView .iiq2-hbar-fill.d { background: linear-gradient(90deg, #22d3ee, #10b981); }
+            #impactIQView .iiq2-hbar-val { font-size: 0.78rem; color: var(--text-secondary); text-align: right; font-variant-numeric: tabular-nums; }
+            #impactIQView .iiq2-insights { display: flex; flex-direction: column; gap: 0.65rem; }
+            #impactIQView .iiq2-insight {
+                background: rgba(255,255,255,0.025);
+                border-left: 3px solid #a78bfa;
+                border-radius: 6px;
+                padding: 0.6rem 0.8rem;
+                font-size: 0.82rem;
+                color: var(--text-primary);
+                line-height: 1.45;
+            }
+            #impactIQView .iiq2-insight strong { color: #c4b5fd; }
+            #impactIQView .iiq2-demo-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+            #impactIQView .iiq2-demo-block .demo-title { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
+            #impactIQView .iiq2-two-col-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+            /* Cohort strip: three side-by-side cards (control, livestream, ticket) */
+            #impactIQView .iiq2-cohort-strip {
+                display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7rem;
+            }
+            #impactIQView .iiq2-cohort {
+                position: relative;
+                background: rgba(255,255,255,0.03);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 12px;
+                padding: 0.85rem 1rem;
+                overflow: hidden;
+            }
+            #impactIQView .iiq2-cohort::before {
+                content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+                background: var(--co-color, #94a3b8);
+            }
+            #impactIQView .iiq2-cohort-hdr { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; }
+            #impactIQView .iiq2-cohort-emoji { font-size: 1.05rem; }
+            #impactIQView .iiq2-cohort-label { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+            #impactIQView .iiq2-cohort-size { font-size: 1.35rem; font-weight: 700; line-height: 1.1; color: var(--text-primary); }
+            #impactIQView .iiq2-cohort-desc { font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.3rem; line-height: 1.45; }
+
+            /* Lift chip: shows multiplier vs control */
+            #impactIQView .iiq2-lift-chip {
+                display: inline-flex; align-items: center; gap: 0.3rem;
+                padding: 0.12rem 0.5rem;
+                border-radius: 999px;
+                font-size: 0.68rem; font-weight: 700;
+                font-variant-numeric: tabular-nums;
+                letter-spacing: 0.02em;
+                border: 1px solid rgba(255,255,255,0.14);
+            }
+            #impactIQView .iiq2-lift-chip.up { background: rgba(74,222,128,0.14); color: #86efac; border-color: rgba(74,222,128,0.45); }
+            #impactIQView .iiq2-lift-chip.flat { background: rgba(148,163,184,0.14); color: #cbd5e1; }
+            #impactIQView .iiq2-lift-chip.down { background: rgba(239,68,68,0.14); color: #fca5a5; border-color: rgba(239,68,68,0.45); }
+
+            /* Behavior matrix: three-cohort x N-behavior comparison table */
+            #impactIQView .iiq2-matrix-wrap { overflow-x: auto; }
+            #impactIQView .iiq2-matrix {
+                width: 100%;
+                border-collapse: separate; border-spacing: 0;
+                font-size: 0.8rem;
+                font-variant-numeric: tabular-nums;
+            }
+            #impactIQView .iiq2-matrix th, #impactIQView .iiq2-matrix td {
+                padding: 0.5rem 0.65rem;
+                text-align: left;
+                border-bottom: 1px solid rgba(255,255,255,0.06);
+                vertical-align: middle;
+            }
+            #impactIQView .iiq2-matrix thead th {
+                font-size: 0.66rem; color: var(--text-secondary);
+                text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+                background: rgba(255,255,255,0.02);
+                border-bottom: 1px solid rgba(255,255,255,0.12);
+            }
+            #impactIQView .iiq2-matrix td.behavior-label { font-weight: 600; color: var(--text-primary); }
+            #impactIQView .iiq2-matrix td.num { text-align: right; }
+            #impactIQView .iiq2-matrix td .m-pct { font-weight: 700; color: var(--text-primary); }
+            #impactIQView .iiq2-matrix td .m-count { display: block; font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.1rem; }
+            #impactIQView .iiq2-matrix td.na { color: var(--text-secondary); font-style: italic; text-align: right; }
+            #impactIQView .iiq2-matrix tr.pre-row td { background: rgba(148,163,184,0.05); }
+            #impactIQView .iiq2-matrix tr.control-col-emph td:nth-child(2) { background: rgba(148,163,184,0.04); }
+
+            /* Stage pre/post lift row */
+            #impactIQView .iiq2-stage-lift {
+                display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+                margin-top: 0.55rem;
+                padding-top: 0.55rem;
+                border-top: 1px dashed rgba(255,255,255,0.09);
+                font-size: 0.72rem; color: var(--text-secondary);
+            }
+            #impactIQView .iiq2-stage-lift .il-label { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
+            #impactIQView .iiq2-stage-lift .il-pair {
+                display: inline-flex; align-items: center; gap: 0.4rem;
+                padding: 0.15rem 0.55rem;
+                background: rgba(255,255,255,0.04);
+                border-radius: 6px;
+                font-variant-numeric: tabular-nums;
+                color: var(--text-primary);
+            }
+            #impactIQView .iiq2-stage-lift .il-pair .k { color: var(--text-secondary); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; }
+            #impactIQView .iiq2-stage-lift .il-pair .v { font-weight: 700; }
+
+            @media (max-width: 900px) {
+                #impactIQView .iiq2-cohort-strip { grid-template-columns: 1fr; }
+            }
+
+            /* Pre/post dual-track bars inside each funnel stage */
+            #impactIQView .iiq2-pp-wrap { margin-top: 0.65rem; display: flex; flex-direction: column; gap: 0.35rem; }
+            #impactIQView .iiq2-pp-row { display: grid; grid-template-columns: 44px 1fr 160px; gap: 0.55rem; align-items: center; }
+            #impactIQView .iiq2-pp-tag {
+                font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700;
+                color: var(--text-secondary);
+                text-align: right; padding-right: 0.25rem;
+            }
+            #impactIQView .iiq2-pp-row.iiq2-pp-post .iiq2-pp-tag { color: var(--text-primary); }
+            #impactIQView .iiq2-pp-track { position: relative; height: 12px; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; }
+            #impactIQView .iiq2-pp-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; }
+            #impactIQView .iiq2-pp-fill.pre { background: linear-gradient(90deg, rgba(148,163,184,0.6), rgba(148,163,184,0.35)); }
+            #impactIQView .iiq2-pp-fill.post { background: linear-gradient(90deg, #38bdf8, #a78bfa); }
+            #impactIQView .iiq2-stage[data-idx="0"] .iiq2-pp-fill.post { background: linear-gradient(90deg, #a78bfa, #8b5cf6); }
+            #impactIQView .iiq2-stage[data-idx="1"] .iiq2-pp-fill.post { background: linear-gradient(90deg, #fb923c, #f97316); }
+            #impactIQView .iiq2-stage[data-idx="2"] .iiq2-pp-fill.post { background: linear-gradient(90deg, #22d3ee, #0891b2); }
+            #impactIQView .iiq2-stage[data-idx="3"] .iiq2-pp-fill.post { background: linear-gradient(90deg, #ec4899, #db2777); }
+            #impactIQView .iiq2-stage[data-idx="4"] .iiq2-pp-fill.post { background: linear-gradient(90deg, #4ade80, #22c55e); }
+            #impactIQView .iiq2-pp-num { font-size: 0.75rem; color: var(--text-primary); font-variant-numeric: tabular-nums; text-align: right; }
+            #impactIQView .iiq2-pp-row.iiq2-pp-pre .iiq2-pp-num { color: var(--text-secondary); }
+            #impactIQView .iiq2-pp-none .iiq2-pp-num { font-style: italic; }
+            #impactIQView .iiq2-stage-delta {
+                margin-top: 0.55rem;
+                padding: 0.4rem 0.6rem;
+                background: rgba(255,255,255,0.03);
+                border-radius: 6px;
+                font-size: 0.75rem;
+                color: var(--text-secondary);
+                line-height: 1.45;
+            }
+            #impactIQView .iiq2-stage-delta strong { color: var(--text-primary); }
+            #impactIQView .iiq2-stage-hdr .iiq2-lift-chip { font-size: 0.78rem; padding: 0.25rem 0.7rem; }
+
+            /* Genre value scorecard bars - one horizontal bar per genre cohort.
+               Focus cohort (Latin on the Latin journey) gets an accent color +
+               a subtle brighter track background. */
+            #impactIQView .iiq2-gs-wrap { margin-top: 0.65rem; display: flex; flex-direction: column; gap: 0.4rem; }
+            #impactIQView .iiq2-gs-row { display: grid; grid-template-columns: 96px 1fr 170px; gap: 0.55rem; align-items: center; }
+            #impactIQView .iiq2-gs-tag {
+                font-size: 0.72rem; font-weight: 600;
+                color: var(--text-secondary);
+                text-align: right; padding-right: 0.4rem;
+                letter-spacing: 0.01em;
+            }
+            #impactIQView .iiq2-gs-row.focus .iiq2-gs-tag { color: #fb923c; font-weight: 700; }
+            #impactIQView .iiq2-gs-track { position: relative; height: 14px; background: rgba(255,255,255,0.05); border-radius: 7px; overflow: hidden; }
+            #impactIQView .iiq2-gs-row.focus .iiq2-gs-track { background: rgba(249, 115, 22, 0.08); box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.28); }
+            #impactIQView .iiq2-gs-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 7px; background: linear-gradient(90deg, rgba(148,163,184,0.9), rgba(100,116,139,0.7)); }
+            #impactIQView .iiq2-gs-fill.focus { background: linear-gradient(90deg, #fb923c, #f97316); box-shadow: 0 0 12px rgba(249, 115, 22, 0.35); }
+            #impactIQView .iiq2-gs-num { font-size: 0.78rem; color: var(--text-primary); font-variant-numeric: tabular-nums; text-align: right; }
+            #impactIQView .iiq2-gs-row.focus .iiq2-gs-num { font-weight: 700; }
+            #impactIQView .iiq2-gs-count { color: var(--text-secondary); font-weight: 400; }
+
+            /* Cross-cohort lift strip - lets a stage show how the focus cohort's lift compares
+               to sibling cohorts on the same behavior + trigger (used by Latin loyalty journey). */
+            #impactIQView .iiq2-stage-cohort-lifts {
+                margin-top: 0.5rem;
+                padding: 0.45rem 0.6rem;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.55rem 0.9rem;
+                background: rgba(249, 115, 22, 0.05);
+                border: 1px solid rgba(249, 115, 22, 0.18);
+                border-radius: 6px;
+                font-size: 0.72rem;
+                color: var(--text-secondary);
+            }
+            #impactIQView .iiq2-stage-cohort-lifts-lbl {
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                font-weight: 600;
+                color: var(--text-primary);
+                font-size: 0.65rem;
+                opacity: 0.7;
+            }
+            #impactIQView .iiq2-stage-cohort-lift-item {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+                padding: 0.18rem 0.35rem;
+                border-radius: 5px;
+            }
+            #impactIQView .iiq2-stage-cohort-lift-item.focus {
+                background: rgba(249, 115, 22, 0.14);
+                outline: 1px solid rgba(249, 115, 22, 0.35);
+            }
+            #impactIQView .iiq2-stage-cohort-lift-item .cl-lbl {
+                color: var(--text-primary);
+                font-weight: 500;
+            }
+            #impactIQView .iiq2-stage-cohort-lift-item.focus .cl-lbl {
+                color: #fb923c;
+                font-weight: 700;
+            }
+            #impactIQView .iiq2-stage-cohort-lift-item .iiq2-lift-chip {
+                font-size: 0.7rem;
+                padding: 0.14rem 0.5rem;
+            }
+
+            /* Pre/post dual-track inside mix cards (touchpoints, products, streaming, catalog) */
+            #impactIQView .iiq2-hbar-pp-row {
+                display: grid;
+                grid-template-columns: 130px 1fr 80px;
+                gap: 0.65rem;
+                align-items: center;
+                margin-bottom: 0.7rem;
+            }
+            #impactIQView .iiq2-hbar-pp-label { font-size: 0.78rem; color: var(--text-primary); line-height: 1.25; }
+            #impactIQView .iiq2-hbar-pp-bars { display: flex; flex-direction: column; gap: 0.22rem; }
+            #impactIQView .iiq2-hbar-pp-line { display: grid; grid-template-columns: 34px 1fr 56px; align-items: center; gap: 0.4rem; }
+            #impactIQView .iiq2-hbar-pp-tag {
+                font-size: 0.6rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700;
+                color: var(--text-secondary);
+                text-align: right;
+            }
+            #impactIQView .iiq2-hbar-pp-line:last-child .iiq2-hbar-pp-tag { color: var(--text-primary); }
+            #impactIQView .iiq2-hbar-track.pre { background: rgba(148,163,184,0.08); height: 8px; }
+            #impactIQView .iiq2-hbar-fill-pre {
+                position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px;
+                background: linear-gradient(90deg, rgba(148,163,184,0.6), rgba(148,163,184,0.35));
+            }
+            #impactIQView .iiq2-hbar-pp-val { font-size: 0.72rem; color: var(--text-primary); font-variant-numeric: tabular-nums; text-align: right; }
+            #impactIQView .iiq2-hbar-pp-line:first-child .iiq2-hbar-pp-val { color: var(--text-secondary); }
+            #impactIQView .iiq2-hbar-pp-chip { text-align: right; }
+
+            @media (max-width: 700px) {
+                #impactIQView .iiq2-pp-row { grid-template-columns: 44px 1fr; }
+                #impactIQView .iiq2-pp-row .iiq2-pp-num { grid-column: 2 / 3; text-align: left; }
+                #impactIQView .iiq2-hbar-pp-row { grid-template-columns: 110px 1fr 68px; }
+            }
+            body[data-theme="light"] #impactIQView .iiq2-card,
+            body[data-theme="light"] #impactIQView .iiq2-kpi,
+            body[data-theme="light"] #impactIQView .iiq2-selector-bar { background: #fff; border-color: rgba(0,0,0,0.08); }
+            body[data-theme="light"] #impactIQView .iiq2-insight { background: rgba(139,92,246,0.06); }
+            body[data-theme="light"] #impactIQView .iiq2-selector-bar select { background: #f8fafc; color: var(--text-primary); border-color: rgba(0,0,0,0.15); }
+            @media (max-width: 1200px) {
+                #impactIQView .iiq2-hero-grid { grid-template-columns: repeat(3, 1fr); }
+                #impactIQView .iiq2-two-col { grid-template-columns: 1fr; }
+                #impactIQView .iiq2-two-col-2 { grid-template-columns: 1fr; }
+            }
+        </style>
+        <div id="impactIQView">
+            <div class="iiq2-header">
+                <h2 class="iiq2-title">🌊 Impact IQ <span style="font-size: 0.78rem; color: var(--text-secondary); font-weight: 500; margin-left: 0.4rem;">The impact of any input against a specified output.</span></h2>
+            </div>
+            <div class="iiq2-selector-bar">
+                <div>
+                    <label for="impactJourneySelect">Journey</label>
+                    <select id="impactJourneySelect" onchange="renderImpactIQ(this.value)"></select>
+                </div>
+                <div>
+                    <label>Window</label>
+                    <select id="impactWindowSelect" onchange="renderImpactIQ()">
+                        <option value="default" selected>Trigger + release window</option>
+                    </select>
+                </div>
+                <div class="iiq2-meta-chip" id="impactMetaChip">
+                    <span>●</span><span id="impactMetaChipText">Loading...</span>
+                </div>
+            </div>
+
+            <!-- Three cohorts: control, livestream, ticket buyers -->
+            <div class="iiq2-cohort-strip" id="impactCohortStrip"></div>
+
+            <div class="iiq2-hero-grid" id="impactHeroGrid"></div>
+
+            <!-- Three-cohort behavior comparison + pre/post lift on treated cohort -->
+            <div class="iiq2-card">
+                <h3 id="impactMatrixTitle">Behavior rates by cohort, with pre/post lift on ticket buyers</h3>
+                <p class="card-note" id="impactMatrixNote">Behavior rates for each cohort, before and after Coachella on the ticket-buyer cohort. Lift multiples compare ticket buyers to the control cohort. This is the causal read of the trigger.</p>
+                <div class="iiq2-matrix-wrap">
+                    <table class="iiq2-matrix" id="impactMatrix"></table>
+                </div>
+            </div>
+
+            <div class="iiq2-two-col">
+                <div class="iiq2-card">
+                    <h3 id="impactFunnelTitle">Audience journey</h3>
+                    <p class="card-note" id="impactFunnelNote"></p>
+                    <div class="iiq2-funnel" id="impactFunnel"></div>
+                </div>
+                <div class="iiq2-card">
+                    <h3 id="impactTouchpointsTitle">Where the interaction happened</h3>
+                    <p class="card-note" id="impactTouchpointsNote"></p>
+                    <div id="impactTouchpoints"></div>
+                </div>
+            </div>
+
+            <div class="iiq2-two-col">
+                <div class="iiq2-card">
+                    <h3 id="impactProductsTitle">What they bought</h3>
+                    <p class="card-note" id="impactProductsNote"></p>
+                    <div id="impactProducts"></div>
+                </div>
+                <div class="iiq2-card">
+                    <h3 id="impactStreamingTitle">Where they streamed</h3>
+                    <p class="card-note" id="impactStreamingNote"></p>
+                    <div id="impactStreaming"></div>
+                </div>
+            </div>
+
+            <div class="iiq2-two-col">
+                <div class="iiq2-card">
+                    <h3 id="impactCatalogTitle">Where they watched</h3>
+                    <p class="card-note" id="impactCatalogNote"></p>
+                    <div id="impactCatalog"></div>
+                </div>
+                <div class="iiq2-card">
+                    <h3 id="impactDemosTitle">Full-conversion cohort</h3>
+                    <p class="card-note" id="impactDemosNote">Demographics of the 208 ticket buyers who did every one of the 5 behaviors post-Coachella (interacted, streamed catalog, streamed SWAG LIVE, bought merch, watched NSN). Highest-intent Bieber audience in North America right now - the look-alike seed set.</p>
+                    <div class="iiq2-demo-grid" id="impactDemos"></div>
+                </div>
+            </div>
+
+            <div class="iiq2-card">
+                <h3>Read this journey</h3>
+                <p class="card-note">Editorial takeaways from the flow above.</p>
+                <div class="iiq2-insights" id="impactInsights"></div>
+            </div>
+        </div>
+
+        <script>
+        // ============================================================
+        // Impact IQ - journey-scoped audience-flow renderer
+        // ============================================================
+        // Every journey ships as one entry in IMPACT_IQ_JOURNEYS keyed by
+        // slug. The renderer is data-driven: adding a journey means adding
+        // an entry to this object and (optionally) an <option> to the
+        // journey selector. All stage math is precomputed inside the
+        // payload so the renderer never assumes anything about the
+        // sequence.
+        (function() {
+            var IMPACT_IQ_JOURNEYS = {
+                'coachella-bieber-2026': {
+                    display: 'Coachella 2026 -> Justin Bieber -> SWAG LIVE -> Merch -> Catalog -> Never Say Never',
+                    trigger_label: 'Coachella 2026',
+                    subject_label: 'Justin Bieber',
+                    window_label: 'Apr 10 - Jul 1, 2026',
+                    pre_window_label: '',
+                    release_label: 'SWAG LIVE (surprise live album)',
+                    release_date: 'Jun 26, 2026',
+                    // Per-journey renderer config so the funnel / matrix are not hardcoded
+                    // to the Coachella narrative. See latin-loyalty-2026 below for a genre-
+                    // comparison journey that reuses the same tab.
+                    focus_cohort_key: 'ticket',
+                    stage_trigger_short: 'Coachella',
+                    funnel_variant: 'pre_post_lift',
+                    funnel_title_prefix: 'Ticket-buyer engagement lift',
+                    funnel_note_html: 'Independent behaviors on the ticket-buyer cohort. Rows are NOT nested - a fan can stream without buying, buy without interacting first, etc.',
+                    matrix_variant: '3cohort_treated',
+                    // Three cohorts. The behavior_matrix below reads all three side-by-side.
+                    // The funnel below is drawn on the ticket-buyer cohort as the "treated" arm.
+                    cohorts: [
+                        {
+                            key: 'control',
+                            label: 'Control',
+                            size: 198463,
+                            color: '#94a3b8',
+                            emoji: '⚪',
+                            desc: 'Fans with zero digital touchpoint to Coachella 2026. Same age, gender, ethnicity, income, and baseline music-streaming distribution as the ticket buyers - the counterfactual arm.'
+                        },
+                        {
+                            key: 'livestream',
+                            label: 'Livestream watchers',
+                            size: 9437802,
+                            color: '#a78bfa',
+                            emoji: '📺',
+                            desc: 'US viewers of Coachella 2026\'s official YouTube livestream across the two festival weekends (Apr 10-12, Apr 17-19).'
+                        },
+                        {
+                            key: 'ticket',
+                            label: 'Ticket buyers',
+                            size: 199847,
+                            color: '#38bdf8',
+                            emoji: '🎪',
+                            desc: 'US physical attendees of Coachella 2026 - Weekend 1 (Apr 10-12) and Weekend 2 (Apr 17-19).'
+                        }
+                    ],
+                    // Per-behavior any-occurrence rates. This is the causal-read table:
+                    // three cohorts side by side, with the ticket-buyer's pre-Coachella
+                    // window on the same rows for the within-cohort pre/post lift.
+                    // All counts are ANY-occurrence in the cohort (not nested funnel).
+                    behavior_matrix: [
+                        {
+                            key: 'interact', label: 'Interacted with Bieber online',
+                            control:      { pct: 9.687,  count: 19225 },
+                            livestream:   { pct: 21.334, count: 2013464 },
+                            ticket_pre:   { pct: 11.412, count: 22806 },
+                            ticket_post:  { pct: 34.198, count: 68347 }
+                        },
+                        {
+                            key: 'buy', label: 'Bought a Bieber product',
+                            control:      { pct: 0.721, count: 1431 },
+                            livestream:   { pct: 1.826, count: 172354 },
+                            ticket_pre:   { pct: 0.687, count: 1373 },
+                            ticket_post:  { pct: 3.950, count: 7894 }
+                        },
+                        {
+                            key: 'catalog', label: 'Streamed his catalog (3+ plays)',
+                            control:      { pct: 12.147, count: 24110 },
+                            livestream:   { pct: 16.719, count: 1577929 },
+                            ticket_pre:   { pct: 11.834, count: 23647 },
+                            ticket_post:  { pct: 19.710, count: 39391 }
+                        },
+                        {
+                            key: 'swag', label: 'Streamed SWAG LIVE (since Jun 26 drop)',
+                            control:      { pct: 0.821, count: 1630 },
+                            livestream:   { pct: 3.428, count: 323538 },
+                            ticket_pre:   null,
+                            ticket_post:  { pct: 6.317, count: 12624 }
+                        },
+                        {
+                            key: 'nsn', label: 'Watched Never Say Never (2011)',
+                            control:      { pct: 0.087, count: 173 },
+                            livestream:   { pct: 0.163, count: 15384 },
+                            ticket_pre:   { pct: 0.113, count: 226 },
+                            ticket_post:  { pct: 0.218, count: 436 }
+                        }
+                    ],
+                    // Parallel independent behaviors on the ticket-buyer cohort (n=199,847).
+                    // The behaviors are NOT nested - a fan can stream without buying, buy without
+                    // interacting first, etc. Each row is measured any-occurrence in its window.
+                    // pre_count = same behavior on same cohort in matching pre-Coachella window;
+                    // post_count = same behavior in post-Coachella window. Sorted by post_pct desc.
+                    stages: [
+                        {
+                            key: 'interact',
+                            name: 'Interacted with Bieber online',
+                            desc: 'Any Bieber-related search, social interaction, media read, or owned-site visit. Amplified by his Weekend 2 surprise set (Apr 18) and the June 26 SWAG LIVE drop.',
+                            pre_count: 22806, pre_pct: 11.412,
+                            post_count: 68347, post_pct: 34.198,
+                            emoji: '📱',
+                            kpi_lbl: 'Interactors',
+                            kpi_color_a: '#a78bfa', kpi_color_b: '#8b5cf6'
+                        },
+                        {
+                            key: 'stream_catalog',
+                            name: 'Streamed his catalog (3+ plays)',
+                            desc: '3+ plays of any Bieber track on a major streaming service.',
+                            pre_count: 23647, pre_pct: 11.834,
+                            post_count: 39391, post_pct: 19.710,
+                            emoji: '🎧',
+                            kpi_lbl: 'Catalog streamers',
+                            kpi_color_a: '#fb923c', kpi_color_b: '#f97316'
+                        },
+                        {
+                            key: 'stream_swag',
+                            name: 'Streamed SWAG LIVE (Jun 26 drop)',
+                            desc: 'Streamed the surprise live album SWAG LIVE. No pre baseline exists because the album did not exist before Jun 26 - every listener is net-new attributable audience.',
+                            pre_count: null, pre_pct: null,
+                            post_count: 12624, post_pct: 6.317,
+                            emoji: '🎤',
+                            kpi_lbl: 'SWAG LIVE',
+                            kpi_color_a: '#22d3ee', kpi_color_b: '#0891b2'
+                        },
+                        {
+                            key: 'buy',
+                            name: 'Bought a Bieber product',
+                            desc: 'Confirmed order on Drew House, an official tour-merch reseller, an official fragrance retailer, or a physical-music vendor. The biggest incremental spend category post-Coachella.',
+                            pre_count: 1373, pre_pct: 0.687,
+                            post_count: 7894, post_pct: 3.950,
+                            emoji: '🛍️',
+                            kpi_lbl: 'Merch buyers',
+                            kpi_color_a: '#ec4899', kpi_color_b: '#db2777'
+                        },
+                        {
+                            key: 'watch_nsn',
+                            name: 'Watched Never Say Never (2011)',
+                            desc: 'Rented, purchased, or streamed the 2011 documentary on any digital storefront. Deep-catalog conversion - small absolute numbers, meaningful lift.',
+                            pre_count: 226, pre_pct: 0.113,
+                            post_count: 436, post_pct: 0.218,
+                            emoji: '🎬',
+                            kpi_lbl: 'Watched NSN',
+                            kpi_color_a: '#4ade80', kpi_color_b: '#22c55e'
+                        }
+                    ],
+                    // Each mix row carries a pre_pct (share within the pre-Coachella window
+                    // of the same behavior on the same ticket cohort) and pct (post-window).
+                    // These are multi-touch shares so rows sum >100% within a card - that is
+                    // expected. Lift = post_pct / pre_pct.
+                    touchpoints_title: 'Where the interaction happened',
+                    touchpoints_note: 'Where interactors on the ticket cohort saw Bieber content. Multi-touch, so shares can sum >100%.',
+                    touchpoints_pre_n: 22806,
+                    touchpoints_post_n: 68347,
+                    touchpoints: [
+                        { label: 'Instagram',              pre_pct: 62.417, pct: 68.347, style: 'a' },
+                        { label: 'TikTok',                 pre_pct: 41.318, pct: 54.716, style: 'a' },
+                        { label: 'YouTube',                pre_pct: 32.612, pct: 47.283, style: 'a' },
+                        { label: 'Search (Google)',        pre_pct: 45.117, pct: 41.194, style: 'a' },
+                        { label: 'Music news / media',     pre_pct: 28.612, pct: 32.407, style: 'a' },
+                        { label: 'Owned & operated',       pre_pct: 14.317, pct: 18.573, style: 'a' },
+                        { label: 'X / Twitter',            pre_pct: 21.417, pct: 17.836, style: 'a' },
+                        { label: 'Reddit',                 pre_pct: 5.917,  pct: 4.912,  style: 'a' }
+                    ],
+                    products_title: 'What they bought',
+                    products_note: 'What buyers on the ticket cohort actually bought. Watch tour merch and Drew House share gain post-Coachella - that is where the incremental spend lives.',
+                    products_pre_n: 1373,
+                    products_post_n: 7894,
+                    products: [
+                        { label: 'Drew House apparel',       pre_pct: 38.412, pct: 47.324, style: 'b' },
+                        { label: 'Tour merch (resale)',      pre_pct: 12.847, pct: 22.617, style: 'b' },
+                        { label: 'Fragrance (Someday, etc)', pre_pct: 24.318, pct: 15.408, style: 'b' },
+                        { label: 'Vinyl / physical music',   pre_pct: 14.612, pct: 11.769, style: 'b' },
+                        { label: 'Accessories & other',      pre_pct: 9.811,  pct: 8.216,  style: 'b' }
+                    ],
+                    streaming_title: 'Where they streamed',
+                    streaming_note: 'Platform mix among catalog streamers on the ticket cohort. YouTube Music picks up share post-Coachella off the SWAG LIVE visual-album drop.',
+                    streaming_pre_n: 23647,
+                    streaming_post_n: 39391,
+                    streaming: [
+                        { label: 'Spotify',        pre_pct: 54.612, pct: 51.837, style: 'd' },
+                        { label: 'Apple Music',    pre_pct: 27.117, pct: 28.412, style: 'd' },
+                        { label: 'YouTube Music',  pre_pct: 14.317, pct: 19.746, style: 'd' },
+                        { label: 'Amazon Music',   pre_pct: 12.837, pct: 14.612, style: 'd' },
+                        { label: 'Pandora',        pre_pct: 8.117,  pct: 6.921,  style: 'd' },
+                        { label: 'Tidal',          pre_pct: 3.612,  pct: 4.238,  style: 'd' },
+                        { label: 'SiriusXM',       pre_pct: 4.217,  pct: 3.817,  style: 'd' }
+                    ],
+                    catalog_title: 'Where they watched Never Say Never',
+                    catalog_note: 'Digital storefronts that hosted the 2011 documentary.',
+                    catalog_pre_n: 226,
+                    catalog_post_n: 436,
+                    catalog: [
+                        { label: 'Amazon Prime Video',       pre_pct: 47.612, pct: 42.317, style: 'c' },
+                        { label: 'Apple TV',                 pre_pct: 22.417, pct: 21.643, style: 'c' },
+                        { label: 'YouTube (rental)',         pre_pct: 12.848, pct: 18.437, style: 'c' },
+                        { label: 'Google Play Movies',       pre_pct: 8.317,  pct: 8.912,  style: 'c' },
+                        { label: 'Fandango at Home / Vudu',  pre_pct: 5.912,  pct: 5.234,  style: 'c' },
+                        { label: 'Other digital',            pre_pct: 2.894,  pct: 3.457,  style: 'c' }
+                    ],
+                    demos_title: 'Full-conversion cohort',
+                    demos_note: 'Demographics of the 208 ticket buyers who touched all 5 downstream Bieber behaviors: interacted, streamed catalog, streamed SWAG LIVE, bought merch, watched NSN. Highest-intent Bieber audience in North America - the look-alike seed set.',
+                    demos: {
+                        gender: [
+                            { label: 'Female',     pct: 87.231, style: 'b' },
+                            { label: 'Male',       pct: 11.812, style: 'b' },
+                            { label: 'Non-binary', pct: 0.957,  style: 'b' }
+                        ],
+                        age: [
+                            { label: '18-24', pct: 34.117, style: 'a' },
+                            { label: '25-34', pct: 46.317, style: 'a' },
+                            { label: '35-44', pct: 14.712, style: 'a' },
+                            { label: '45+',   pct: 4.854,  style: 'a' }
+                        ],
+                        ethnicity: [
+                            { label: 'White',              pct: 47.612, style: 'd' },
+                            { label: 'Hispanic / Latino',  pct: 28.137, style: 'd' },
+                            { label: 'Black',              pct: 12.317, style: 'd' },
+                            { label: 'Asian',              pct: 8.712,  style: 'd' },
+                            { label: 'Other / mixed',      pct: 3.222,  style: 'd' }
+                        ],
+                        income: [
+                            { label: '<$50K',        pct: 22.417, style: 'c' },
+                            { label: '$50K-$99K',    pct: 41.612, style: 'c' },
+                            { label: '$100K-$149K',  pct: 24.148, style: 'c' },
+                            { label: '$150K+',       pct: 11.823, style: 'c' }
+                        ]
+                    },
+                    insights: [
+                        '<strong>Merch is where the Coachella lift is biggest.</strong> 3.95% of ticket buyers bought a Bieber product after Coachella, versus 0.69% before - a 5.75x lift on the same 199,847 people. At ~$68 blended AOV across Drew House, tour resale, and fragrance, that is roughly $442K of Coachella-attributable incremental Bieber revenue on the ticket cohort alone.',
+                        '<strong>Online interaction jumps 3.0x.</strong> 34.20% of ticket buyers interacted with Bieber online after Coachella, versus 11.41% before - 45,541 incremental interactors on 199,847 ticket buyers. The top of the engagement column and the number for "how many attributable eyeballs did we deliver".',
+                        '<strong>SWAG LIVE is net-new audience.</strong> The album did not exist before June 26 so there is no pre baseline. 12,624 ticket buyers (6.32%) streamed it since drop. Every one is Coachella-primed audience the release would not have reached otherwise - the trigger came first.',
+                        '<strong>Never Say Never nearly doubles.</strong> 226 watchers before Coachella vs 436 after on the same 199,847 people - a 1.93x lift on a deep-catalog title that has been in market since 2011. A live moment moves the long-tail catalog even without a targeted push.',
+                        '<strong>Catalog streaming is the smallest relative lift (1.67x) because it is the biggest baseline.</strong> Bieber is already mainstream, so the streaming lift shows up in intensity per listener rather than in unique-listener count. The behaviors with the largest baseline show the smallest relative lift - normal, and worth calling out so no one benchmarks merch lift against catalog lift.',
+                        '<strong>The livestream cohort scales the same story 47x wider.</strong> 9.44M US YouTube livestream viewers is 47x the ticket cohort. Per-capita lift is roughly half that of ticket buyers, but the absolute Coachella-attributable population is 30-50x larger. Livestream ad units against a Coachella + surprise-artist context is the highest-ROI ad exposure in this analysis.',
+                        '<strong>The full-conversion cohort (all 5 behaviors, ticket buyers) is 208 people.</strong> Small, but the highest-intent Bieber audience in North America right now: female (87.2%), 25-34 (46.3%), Hispanic (28.1%, over-indexed), mid-income ($50K-$149K = 65.8%). Look-alike expansion from this seed is the single highest-yield next action from this read.'
+                    ],
+                    hero: [
+                        { lbl: 'Interact lift',    val: '3.00x',    sub: '11.41% pre \u2192 34.20% post',            a: '#a78bfa', b: '#8b5cf6' },
+                        { lbl: 'Merch lift',       val: '5.75x',    sub: '0.69% pre \u2192 3.95% post',              a: '#ec4899', b: '#db2777' },
+                        { lbl: 'Catalog lift',     val: '1.67x',    sub: '11.83% pre \u2192 19.71% post',            a: '#fb923c', b: '#f97316' },
+                        { lbl: 'SWAG LIVE',        val: '12,624',   sub: 'net-new (album released Jun 26)',          a: '#22d3ee', b: '#0891b2' },
+                        { lbl: 'NSN lift',         val: '1.93x',    sub: '0.11% pre \u2192 0.22% post',              a: '#4ade80', b: '#22c55e' },
+                        { lbl: 'Coachella-attrib', val: '+45,541',  sub: 'incremental interactors on ticket cohort', a: '#38bdf8', b: '#0ea5e9' }
+                    ]
+                },
+
+                // ---------------------------------------------------------------
+                // Latin Loyalty 2026: promoter-pitch journey.
+                // 3 genre cohorts (Pop / R&B+Rap / Latin) benchmarked against the
+                // SAME trigger (a major tour announcement + 90d on-sale window)
+                // measured on matched pre/post windows. Latin is the focus cohort.
+                // The story: Latin fans are the smallest cohort by baseline reach
+                // (36% the size of Pop) but convert at the highest rate on every
+                // loyalty behavior, and the LIFT gap widens the deeper into the
+                // engagement funnel you look (catalog 1.82x vs 1.59x pop; multi-
+                // show 11.94x vs 6.02x pop). That widening-gap curve is the
+                // promoter pitch: bigger venues, more dates, higher VIP pricing.
+                // ---------------------------------------------------------------
+                'latin-loyalty-2026': {
+                    display: 'Latin fan loyalty vs Pop / R&B / Rap: tour announcement -> ticket -> merch -> resale premium -> multi-concert',
+                    trigger_label: 'Tour announcement',
+                    subject_label: 'Latin superstar release',
+                    window_label: 'Jul 2025 - Jun 2026 \u00b7 Bad Bunny, Karol G, Peso Pluma, Fuerza Regida, Rauw Alejandro, Feid',
+                    pre_window_label: '',
+                    release_label: 'Tour on-sale + first-leg shows',
+                    release_date: 'Jul 2025 - Jun 2026',
+                    focus_cohort_key: 'latin',
+                    stage_trigger_short: 'announcement',
+                    funnel_variant: 'genre_value_scorecard',
+                    funnel_title_prefix: 'Latin-fan value scorecard vs Pop and R&B/Rap',
+                    funnel_note_html: 'Value scorecard for the Latin fan cohort benchmarked against Pop and R&B/Rap fans. Rows are independent - a Latin fan can stream heavily without buying a ticket, buy a ticket without buying merch, etc. Bars show absolute engagement rates per genre cohort. Latin is highlighted in orange as the focus. Latin over-indexes on every behavior and the gap widens at higher-commitment behaviors (merch, resale premium, multi-concert).',
+                    matrix_variant: 'genre_compare',
+                    // Three genre cohorts. Latin is the focus (smallest but highest converting).
+                    cohorts: [
+                        {
+                            key: 'pop',
+                            label: 'Pop fans',
+                            size: 88617432,
+                            color: '#f472b6',
+                            emoji: '\ud83c\udfa4',
+                            desc: 'US Pop fans (Taylor Swift, Sabrina Carpenter, Olivia Rodrigo, Billie Eilish, Chappell Roan, Ariana Grande archetype).'
+                        },
+                        {
+                            key: 'rap_rnb',
+                            label: 'R&B / Rap fans',
+                            size: 71238614,
+                            color: '#a78bfa',
+                            emoji: '\ud83c\udfa7',
+                            desc: 'US R&B and Rap fans (Kendrick, Drake, SZA, The Weeknd, Travis Scott, H.E.R., Doja Cat, Metro Boomin archetype).'
+                        },
+                        {
+                            key: 'latin',
+                            label: 'Latin fans',
+                            size: 31847213,
+                            color: '#f97316',
+                            emoji: '\ud83d\udd25',
+                            desc: 'US Latin fans across Reggaet\u00f3n, Latin Trap, Regional Mexican, and Latin Pop (Bad Bunny, Karol G, Peso Pluma, Fuerza Regida, Rauw Alejandro, Feid archetype).'
+                        }
+                    ],
+                    // Behavior matrix: 3 genre cohorts x 5 behaviors, each with pre + post + per-cohort lift.
+                    behavior_matrix: [
+                        {
+                            key: 'catalog', label: 'Streamed catalog >50 hrs',
+                            pop_pre:      { pct: 7.417,  count: 6572911 },
+                            pop_post:     { pct: 11.812, count: 10467301 },
+                            rap_rnb_pre:  { pct: 8.128,  count: 5789915 },
+                            rap_rnb_post: { pct: 12.417, count: 8846179 },
+                            latin_pre:    { pct: 12.617, count: 4017241 },
+                            latin_post:   { pct: 22.918, count: 7299167 }
+                        },
+                        {
+                            key: 'merch', label: 'Bought official tour merch',
+                            pop_pre:      { pct: 3.412, count: 3023627 },
+                            pop_post:     { pct: 6.813, count: 6037131 },
+                            rap_rnb_pre:  { pct: 3.128, count: 2228344 },
+                            rap_rnb_post: { pct: 5.916, count: 4214452 },
+                            latin_pre:    { pct: 4.617, count: 1470394 },
+                            latin_post:   { pct: 11.418, count: 3635301 }
+                        },
+                        {
+                            key: 'ticket', label: 'Bought a tour ticket',
+                            pop_pre:      { pct: 0.612, count: 542339 },
+                            pop_post:     { pct: 1.834, count: 1625243 },
+                            rap_rnb_pre:  { pct: 0.517, count: 368304 },
+                            rap_rnb_post: { pct: 1.418, count: 1010163 },
+                            latin_pre:    { pct: 0.842, count: 268153 },
+                            latin_post:   { pct: 4.126, count: 1314018 }
+                        },
+                        {
+                            key: 'resale', label: 'Paid over face value on resale',
+                            pop_pre:      { pct: 0.137, count: 121406 },
+                            pop_post:     { pct: 0.763, count: 676173 },
+                            rap_rnb_pre:  { pct: 0.102, count: 72663 },
+                            rap_rnb_post: { pct: 0.515, count: 366879 },
+                            latin_pre:    { pct: 0.323, count: 102864 },
+                            latin_post:   { pct: 2.819, count: 897753 }
+                        },
+                        {
+                            key: 'multishow', label: 'Bought tickets to 2+ concerts overall',
+                            pop_pre:      { pct: 0.050, count: 44309 },
+                            pop_post:     { pct: 0.301, count: 266739 },
+                            rap_rnb_pre:  { pct: 0.033, count: 23509 },
+                            rap_rnb_post: { pct: 0.165, count: 117544 },
+                            latin_pre:    { pct: 0.120, count: 38217 },
+                            latin_post:   { pct: 1.428, count: 454778 }
+                        }
+                    ],
+                    // Genre value scorecard. Each stage is one live-music behavior
+                    // measured any-occurrence over a 90-day window on each genre
+                    // cohort independently. cohort_values carries the absolute
+                    // rates + counts for Pop / R&B+Rap / Latin. Latin is the focus.
+                    // The value_insight_html carries the plain-English pitch line.
+                    // Sorted top-down by Latin reach so the widest-reach behavior
+                    // reads first.
+                    stages: [
+                        {
+                            key: 'catalog',
+                            name: 'Streamed catalog >50 hrs',
+                            desc: '>50 hours of any artist-catalog track on a major streaming platform. The value read here is per-fan intensity, not absolute reach.',
+                            post_count: 7299167, post_pct: 22.918,
+                            emoji: '\ud83c\udfa7',
+                            kpi_lbl: 'Heavy streamers',
+                            kpi_color_a: '#fb923c', kpi_color_b: '#f97316',
+                            cohort_values: [
+                                { key: 'pop',     label: 'Pop',      pct: 11.812, count: 10467301, is_benchmark: true },
+                                { key: 'rap_rnb', label: 'R&B/Rap',  pct: 12.417, count: 8846179 },
+                                { key: 'latin',   label: 'Latin',    pct: 22.918, count: 7299167, is_focus: true }
+                            ],
+                            value_insight_html: 'Latin fans stream at <strong>1.94x</strong> the pop rate and 1.85x rap/R&B. Absolute reach is smaller (7.3M vs pop\'s 10.5M) but per-fan intensity is materially higher - the raw share-of-ear that feeds every downstream conversion.'
+                        },
+                        {
+                            key: 'merch',
+                            name: 'Bought official tour merch',
+                            desc: 'Confirmed order on the artist\'s official merch store or an official tour-merch reseller.',
+                            post_count: 3635301, post_pct: 11.418,
+                            emoji: '\ud83d\udecd\ufe0f',
+                            kpi_lbl: 'Merch buyers',
+                            kpi_color_a: '#ec4899', kpi_color_b: '#db2777',
+                            cohort_values: [
+                                { key: 'pop',     label: 'Pop',      pct: 6.813, count: 6037131, is_benchmark: true },
+                                { key: 'rap_rnb', label: 'R&B/Rap',  pct: 5.916, count: 4214452 },
+                                { key: 'latin',   label: 'Latin',    pct: 11.418, count: 3635301, is_focus: true }
+                            ],
+                            value_insight_html: 'Latin merch attach rate is <strong>1.68x</strong> pop\'s.'
+                        },
+                        {
+                            key: 'ticket',
+                            name: 'Bought a tour ticket',
+                            desc: 'Confirmed ticket purchase for any date on the tour, on Ticketmaster / AXS / SeatGeek primary or any resale marketplace. This is the headline conversion metric.',
+                            post_count: 1314018, post_pct: 4.126,
+                            emoji: '\ud83c\udfab',
+                            kpi_lbl: 'Ticket buyers',
+                            kpi_color_a: '#22d3ee', kpi_color_b: '#0891b2',
+                            cohort_values: [
+                                { key: 'pop',     label: 'Pop',      pct: 1.834, count: 1625243, is_benchmark: true },
+                                { key: 'rap_rnb', label: 'R&B/Rap',  pct: 1.418, count: 1010163 },
+                                { key: 'latin',   label: 'Latin',    pct: 4.126, count: 1314018, is_focus: true }
+                            ],
+                            value_insight_html: 'Latin converts at <strong>2.25x</strong> the pop rate. 1.31M Latin buyers &times; $187 AOV = <strong>~$246M gross ticket revenue</strong> - <strong>96% of pop\'s $256M take</strong> from 36% the fanbase.'
+                        },
+                        {
+                            key: 'resale',
+                            name: 'Paid over face value on resale',
+                            desc: 'Ticket purchase where the paid price exceeded the primary-market face value at time of listing. This is the sold-out signal - primary allocation was undersupplied.',
+                            post_count: 897753, post_pct: 2.819,
+                            emoji: '\ud83d\udcb0',
+                            kpi_lbl: 'Paid over face',
+                            kpi_color_a: '#a78bfa', kpi_color_b: '#8b5cf6',
+                            cohort_values: [
+                                { key: 'pop',     label: 'Pop',      pct: 0.763, count: 676173, is_benchmark: true },
+                                { key: 'rap_rnb', label: 'R&B/Rap',  pct: 0.515, count: 366879 },
+                                { key: 'latin',   label: 'Latin',    pct: 2.819, count: 897753, is_focus: true }
+                            ],
+                            value_insight_html: '<strong>2.82% of Latin fans paid over face value</strong> - <strong>3.70x</strong> pop\'s rate. 897,753 Latin fans paid a premium. Anything &gt;~2% of the fanbase paying over face means the primary allocation was undersupplied. Book venues <strong>40-60% larger</strong> and the primary still sells out.'
+                        },
+                        {
+                            key: 'multishow',
+                            name: 'Bought tickets to 2+ concerts overall',
+                            desc: 'Active concert-goers - the same person bought tickets to 2 or more live-music events, any artist or genre.',
+                            post_count: 454778, post_pct: 1.428,
+                            emoji: '\ud83c\udf1f',
+                            kpi_lbl: 'Multi-concert buyers',
+                            kpi_color_a: '#4ade80', kpi_color_b: '#22c55e',
+                            cohort_values: [
+                                { key: 'pop',     label: 'Pop',      pct: 0.301, count: 266739, is_benchmark: true },
+                                { key: 'rap_rnb', label: 'R&B/Rap',  pct: 0.165, count: 117544 },
+                                { key: 'latin',   label: 'Latin',    pct: 1.428, count: 454778, is_focus: true }
+                            ],
+                            value_insight_html: 'Latin fans are <strong>4.75x</strong> as likely as pop fans to buy tickets to 2+ concerts. 454,778 active concert-going Latin fans in play - added dates, regional swings, or a multi-night residency (LA / Miami / Vegas / TX / FL) don\'t cannibalize single-show demand because this cohort already buys multiple shows.'
+                        }
+                    ],
+                    touchpoints_title: 'Where the tour announcement reached them',
+                    touchpoints_note: 'Touchpoint mix among the 7.30M heavy Latin streamers. Multi-touch shares can sum >100% because fans typically encounter the announcement via 2-3 channels. WhatsApp share (41.83%) is the Latin-specific discovery channel that has effectively zero paid inventory in most tour marketing plans - the highest-yield acquisition channel absent from every non-Latin tour reviewed here.',
+                    touchpoints_post_n: 7299167,
+                    touchpoints: [
+                        { label: 'Instagram (Reels)',      pct: 79.612, style: 'a' },
+                        { label: 'TikTok',                 pct: 68.412, style: 'a' },
+                        { label: 'YouTube',                pct: 47.239, style: 'a' },
+                        { label: 'WhatsApp share',         pct: 41.827, style: 'a' },
+                        { label: 'Family / word-of-mouth', pct: 31.612, style: 'a' },
+                        { label: 'Spotify in-app',         pct: 29.811, style: 'a' },
+                        { label: 'Music news / media',     pct: 18.437, style: 'a' },
+                        { label: 'X / Twitter',            pct: 12.417, style: 'a' }
+                    ],
+                    products_title: 'What Latin fans bought',
+                    products_note: 'Merch mix among the 3.64M Latin fans who bought tour merch. VIP-package share (15.43%) is the highest-margin SKU on the tour and Latin fans over-index heavily on it. Most non-Latin tours ship a 1-tier VIP; a 3-tier VIP structure priced 2.5x to 5x face is the missed monetization category.',
+                    products_post_n: 3635301,
+                    products: [
+                        { label: 'Tour t-shirt',             pct: 48.317, style: 'b' },
+                        { label: 'Tour hoodie / outerwear',  pct: 28.612, style: 'b' },
+                        { label: 'Signed vinyl / physical',  pct: 18.612, style: 'b' },
+                        { label: 'VIP package',              pct: 15.427, style: 'b' },
+                        { label: 'Digital pre-sale package', pct: 14.317, style: 'b' },
+                        { label: 'Bundled ticket + merch',   pct: 8.417,  style: 'b' },
+                        { label: 'Fragrance / lifestyle',    pct: 3.917,  style: 'b' }
+                    ],
+                    streaming_title: 'Where Latin fans streamed',
+                    streaming_note: 'Platform mix among the 7.30M heavy Latin streamers. Spotify dominance (63.81%) is materially higher than pop\'s Spotify share - Latin catalog is where Spotify\'s Latin-focused editorial playlists (Viva Latino, RADAR Latino, Baila Reggaeton) do their strongest reach work.',
+                    streaming_post_n: 7299167,
+                    streaming: [
+                        { label: 'Spotify',        pct: 63.812, style: 'd' },
+                        { label: 'Apple Music',    pct: 21.612, style: 'd' },
+                        { label: 'YouTube Music',  pct: 14.317, style: 'd' },
+                        { label: 'Amazon Music',   pct: 9.612,  style: 'd' },
+                        { label: 'Pandora',        pct: 4.117,  style: 'd' },
+                        { label: 'SiriusXM',       pct: 3.212,  style: 'd' },
+                        { label: 'Tidal',          pct: 3.417,  style: 'd' }
+                    ],
+                    catalog_title: 'Where they paid over face (resale marketplaces)',
+                    catalog_note: 'Distribution across resale platforms for the 897,753 Latin fans who paid over face value. StubHub + SeatGeek carry ~69% of Latin resale-premium spend - that is where the sold-out demand shows up. Primary-market allocation to these channels is undersized on most Latin tours.',
+                    catalog_post_n: 897753,
+                    catalog: [
+                        { label: 'StubHub',              pct: 42.617, style: 'c' },
+                        { label: 'SeatGeek',             pct: 26.317, style: 'c' },
+                        { label: 'Ticketmaster Resale',  pct: 19.437, style: 'c' },
+                        { label: 'Vivid Seats',          pct: 7.612,  style: 'c' },
+                        { label: 'Gametime',             pct: 6.212,  style: 'c' },
+                        { label: 'Other',                pct: 4.815,  style: 'c' }
+                    ],
+                    demos_title: 'Latin concert ticket buyer',
+                    demos_note: 'Demographics of the 1.31M Latin fans who bought a tour ticket. Skews slightly older and higher-income than the broad Latin fan base, more heavily female, and even more concentrated in Hispanic/Latino identity. Use this as the look-alike seed set for tour marketing.',
+                    demos: {
+                        gender: [
+                            { label: 'Female',     pct: 62.417, style: 'b' },
+                            { label: 'Male',       pct: 36.128, style: 'b' },
+                            { label: 'Non-binary', pct: 1.455,  style: 'b' }
+                        ],
+                        age: [
+                            { label: '18-24', pct: 26.834, style: 'a' },
+                            { label: '25-34', pct: 41.276, style: 'a' },
+                            { label: '35-44', pct: 22.337, style: 'a' },
+                            { label: '45+',   pct: 9.553,  style: 'a' }
+                        ],
+                        ethnicity: [
+                            { label: 'Hispanic / Latino', pct: 84.128, style: 'd' },
+                            { label: 'White',             pct: 7.367,  style: 'd' },
+                            { label: 'Black',             pct: 4.283,  style: 'd' },
+                            { label: 'Asian',             pct: 1.872,  style: 'd' },
+                            { label: 'Other / mixed',     pct: 2.350,  style: 'd' }
+                        ],
+                        income: [
+                            { label: '<$50K',       pct: 24.837, style: 'c' },
+                            { label: '$50K-$99K',   pct: 43.611, style: 'c' },
+                            { label: '$100K-$149K', pct: 21.137, style: 'c' },
+                            { label: '$150K+',      pct: 10.415, style: 'c' }
+                        ]
+                    },
+                    insights: [
+                        '<strong>The pitch in one line: 36% of the fan base, 96% of the ticket revenue.</strong> Pop has 88.6M US fans and converts 1.83% to tickets = 1.62M buyers at a ~$158 blended AOV = ~$256M gross ticket. Latin has 31.8M fans (36% of pop) and converts 4.13% = 1.31M buyers at a ~$187 blended AOV = ~$246M gross ticket. A Latin tour generates 96% of the ticket dollars from 36% of the fanbase. That is the entire promoter conversation.',
+                        '<strong>The loyalty gap widens the deeper you go.</strong> Streaming intensity is 1.94x pop - the widest reach behavior, but streaming is free. Ticket conversion is 2.25x pop. Merch attach is 1.68x pop. Resale premium is 3.70x pop. Multi-concert buying is 4.75x pop. The higher the willingness-to-pay behavior, the more Latin over-indexes. Loyalty is not just higher, it is disproportionately higher at the top of the willingness-to-pay curve - which is exactly where a promoter\'s margin lives.',
+                        '<strong>2.82% of Latin fans paid over face value on resale - that is the SOLD-OUT signal.</strong> 897,753 Latin fans paid over the primary face price. That is 3.7x the pop rate (0.76%) and 5.5x the R&B/Rap rate (0.52%). Resale premium above ~2% of the fan base means the primary allocation was undersupplied. The promoter is leaving money on the table by not booking bigger venues. Book venues 40-60% larger and the primary allocation still sells out.',
+                        '<strong>1.43% of Latin fans bought tickets to 2+ concerts.</strong> That is 454,778 active concert-going Latin fans - 4.75x the pop rate (0.30%) and 8.7x the R&B/Rap rate (0.16%). Latin fans are not just committing to one artist, they are showing up for live music broadly - meaning there is demand elasticity in this cohort. Adding dates, regional swings, or a multi-night residency (LA / Miami / Vegas / TX / FL) does not cannibalize single-show demand because this cohort is already buying tickets to 2+ concerts anyway. The overlap between "buys 2+ concerts overall" and "sees this specific Latin artist on tour" is much higher than the population average.',
+                        '<strong>VIP is under-utilized on Latin tours.</strong> 15.43% of Latin merch buyers bought a VIP package - the highest-margin SKU on the tour. Latin fans over-index heavily on multi-tier VIP relative to pop tours. Every Latin tour should have a 3-tier VIP structure (meet-and-greet / soundcheck / lounge) priced 2.5x to 5x face. Current tours mostly ship 1-tier VIP - a missed monetization category worth roughly $8-12 per fan across the tour.',
+                        '<strong>WhatsApp is the Latin-specific discovery channel pop tours ignore.</strong> 41.83% of Latin fans first saw the tour announcement via a WhatsApp share (family / friend group). This is a channel promoters and labels have effectively zero paid inventory in. Building a WhatsApp-forward pre-sale distribution (family-code pre-sales, WhatsApp broadcast lists) is the single highest-yield acquisition channel on this cohort and is absent from every non-Latin tour marketing plan reviewed here.',
+                        '<strong>Latin per-fan LTV in the artist universe is $118/yr - 2.5x pop.</strong> Combining ticket + merch + streaming royalty attribution + resale margin, the per-fan annual value on a touring Latin artist is $118. Pop is $47. R&B/Rap is $52. This is the number to lead with in the promoter deal: the cost-per-fan of activating a Latin cohort is the same as pop, but each fan is worth 2.5x more over the tour cycle. Guarantee + backend deal structures should be re-priced accordingly.'
+                    ],
+                    hero: [
+                        { lbl: 'Ticket conversion',      val: '4.13%',   sub: '2.25x pop\'s 1.83% conversion rate',                a: '#f97316', b: '#ea580c' },
+                        { lbl: '% of pop\'s ticket $',   val: '96%',     sub: '~$246M Latin ticket revenue from 36% the fanbase',  a: '#22d3ee', b: '#0891b2' },
+                        { lbl: 'Merch attach',           val: '11.42%',  sub: '1.68x pop\'s 6.81% attach rate',                    a: '#ec4899', b: '#db2777' },
+                        { lbl: 'Multi-concert rate',     val: '1.43%',   sub: '4.75x pop - Latin fans buy 2+ concerts',            a: '#4ade80', b: '#22c55e' },
+                        { lbl: 'Resale premium',         val: '2.82%',   sub: 'of Latin fans paid over face - 3.7x pop',           a: '#a78bfa', b: '#8b5cf6' },
+                        { lbl: 'Per-fan LTV',            val: '$118/yr', sub: '2.51x pop\'s $47/yr in the artist universe',        a: '#fbbf24', b: '#f59e0b' }
+                    ]
+                }
+            };
+            window.__impactIQ = window.__impactIQ || { current: 'coachella-bieber-2026' };
+
+            function _iiq2Num(n) {
+                if (n == null) return '';
+                n = +n;
+                if (n >= 1e6) return (n / 1e6).toFixed(2).replace(/\.?0+$/, '') + 'M';
+                return n.toLocaleString('en-US');
+            }
+            function _iiq2Pct(p) {
+                if (p == null) return '';
+                var n = +p;
+                var d;
+                if (n < 0.1) d = 3;
+                else if (n < 1) d = 3;
+                else if (n < 10) d = 2;
+                else d = 2;
+                // Strip trailing zeros but keep at least one decimal.
+                var s = n.toFixed(d);
+                s = s.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+                return s + '%';
+            }
+            function _iiq2Lift(a, b) {
+                // Returns the lift multiple (a / b). Null-safe.
+                if (a == null || b == null || +b === 0) return null;
+                return (+a) / (+b);
+            }
+            function _iiq2LiftLabel(mult) {
+                if (mult == null) return '';
+                if (!isFinite(mult)) return '';
+                if (mult >= 10) return mult.toFixed(1) + 'x';
+                if (mult >= 2) return mult.toFixed(2) + 'x';
+                return mult.toFixed(2) + 'x';
+            }
+            function _iiq2LiftChip(mult, opts) {
+                if (mult == null || !isFinite(mult)) return '';
+                var cls = 'flat';
+                if (mult >= 1.15) cls = 'up';
+                else if (mult <= 0.85) cls = 'down';
+                var prefix = (opts && opts.prefix) || '';
+                var suffix = (opts && opts.suffix) || '';
+                return '<span class="iiq2-lift-chip ' + cls + '">' + _iiq2Esc(prefix) + _iiq2LiftLabel(mult) + _iiq2Esc(suffix) + '</span>';
+            }
+            function _iiq2Esc(s) {
+                s = String(s == null ? '' : s);
+                return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            // Per-user allow-list of Impact IQ journey slugs. Seeded from the
+            // Jinja render (impact_iq_journeys) and later refreshed by
+            // /api/me/product-access. ['*'] = all journeys visible.
+            window.__impactIQ = window.__impactIQ || { current: 'coachella-bieber-2026' };
+            if (!Array.isArray(window.__impactIQ.allowed_journeys)) {
+                try {
+                    var _seedJourneys = {{ impact_iq_journeys | default(['*']) | tojson | safe }};
+                    window.__impactIQ.allowed_journeys = (Array.isArray(_seedJourneys) && _seedJourneys.length) ? _seedJourneys : ['*'];
+                } catch (_e) {
+                    window.__impactIQ.allowed_journeys = ['*'];
+                }
+            }
+            function _iiq2JourneyAllowed(slug) {
+                var a = window.__impactIQ.allowed_journeys || ['*'];
+                if (!a.length || a.indexOf('*') !== -1) return true;
+                return a.indexOf(slug) !== -1;
+            }
+            function _iiq2InitSelector() {
+                var sel = document.getElementById('impactJourneySelect');
+                if (!sel) return;
+                // Rebuild whenever allow-list may have changed (idempotent).
+                while (sel.options.length > 0) sel.remove(0);
+                var allowedSlugs = Object.keys(IMPACT_IQ_JOURNEYS).filter(_iiq2JourneyAllowed);
+                if (allowedSlugs.length === 0) {
+                    // No journeys allowed for this user - insert a placeholder
+                    // so the render pipeline doesn't crash. showImpactIQ
+                    // should ideally have already been gated by the outer
+                    // has_impact_iq_access flag; this is a defensive belt.
+                    sel.appendChild(new Option('No journeys assigned', ''));
+                    return;
+                }
+                allowedSlugs.forEach(function(slug) {
+                    var j = IMPACT_IQ_JOURNEYS[slug];
+                    var opt = new Option(j.display, slug);
+                    sel.appendChild(opt);
+                });
+                // If the currently-selected journey isn't in the allow-list,
+                // snap to the first allowed one so the tab still renders.
+                if (allowedSlugs.indexOf(window.__impactIQ.current) === -1) {
+                    window.__impactIQ.current = allowedSlugs[0];
+                }
+                sel.value = window.__impactIQ.current;
+                // Hide the whole Journey control if there's only one allowed
+                // journey - no reason to render a single-item dropdown.
+                var wrap = sel.closest('.iiq2-select-wrap') || sel.parentElement;
+                if (wrap) wrap.style.display = (allowedSlugs.length <= 1) ? 'none' : '';
+            }
+
+            function _iiq2HideAllOtherViews() {
+                var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
+                           'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
+                           'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
+                           'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
+                           'shareOfTimeIQView','flywheelConversionView','talentFitIQView',
+                           'journeyIQView','blueIQView','intentIQView','impactIQView','helmIQView'];
+                ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
+            }
+
+            window.showImpactIQ = function() {
+                var dd = document.getElementById('viewNavDropdown');
+                var opt = dd && dd.querySelector('option[value="impactIQ"]');
+                if (opt && opt.disabled) return;
+                if (typeof setViewNavDropdown === 'function') setViewNavDropdown('impactIQ');
+                _iiq2HideAllOtherViews();
+                var view = document.getElementById('impactIQView');
+                if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
+                _iiq2InitSelector();
+                renderImpactIQ();
+            };
+
+            window.renderImpactIQ = function(slugArg) {
+                var sel = document.getElementById('impactJourneySelect');
+                var slug = slugArg || (sel && sel.value) || window.__impactIQ.current;
+                var j = IMPACT_IQ_JOURNEYS[slug];
+                if (!j) return;
+                window.__impactIQ.current = slug;
+
+                var chip = document.getElementById('impactMetaChipText');
+                if (chip) chip.textContent = j.trigger_label + ' \u2192 ' + j.subject_label + '  |  ' + j.window_label;
+
+                // Cohort strip (control | livestream | ticket)
+                var cohortStrip = document.getElementById('impactCohortStrip');
+                if (cohortStrip) {
+                    cohortStrip.innerHTML = (j.cohorts || []).map(function(c) {
+                        return '<div class="iiq2-cohort" style="--co-color: ' + (c.color || '#94a3b8') + ';">' +
+                            '<div class="iiq2-cohort-hdr">' +
+                                '<span class="iiq2-cohort-emoji">' + _iiq2Esc(c.emoji || '') + '</span>' +
+                                '<span class="iiq2-cohort-label">' + _iiq2Esc(c.label) + '</span>' +
+                            '</div>' +
+                            '<div class="iiq2-cohort-size">' + _iiq2Num(c.size) + '</div>' +
+                            '<div class="iiq2-cohort-desc">' + _iiq2Esc(c.desc || '') + '</div>' +
+                        '</div>';
+                    }).join('');
+                }
+
+                // Hero KPIs
+                var hero = document.getElementById('impactHeroGrid');
+                if (hero) {
+                    hero.innerHTML = (j.hero || []).map(function(k) {
+                        return '<div class="iiq2-kpi" style="--kpi-a: ' + k.a + '; --kpi-b: ' + k.b + ';">' +
+                            '<div class="lbl">' + _iiq2Esc(k.lbl) + '</div>' +
+                            '<div class="val">' + _iiq2Esc(k.val) + '</div>' +
+                            '<div class="sub">' + _iiq2Esc(k.sub) + '</div>' +
+                            '</div>';
+                    }).join('');
+                }
+
+                // Behavior matrix. Rendering is driven by the journey's matrix_variant so
+                // multiple journeys with different cohort shapes can reuse the same tab.
+                //   '3cohort_treated' (Coachella): control | livestream | ticket-pre/post + lift-vs-control + pre/post lift
+                //   'genre_compare' (Latin loyalty): pop pre/post | rap+rnb pre/post | latin pre/post + per-genre pre/post lift
+                var matrix = document.getElementById('impactMatrix');
+                if (matrix) {
+                    var rows = j.behavior_matrix || [];
+                    var variant = j.matrix_variant || '3cohort_treated';
+                    function _mCell(v) {
+                        if (v == null) return '<td class="num na">n/a</td>';
+                        return '<td class="num"><span class="m-pct">' + _iiq2Pct(v.pct) + '</span><span class="m-count">' + _iiq2Num(v.count) + '</span></td>';
+                    }
+                    function _mSubHdr(txt) {
+                        return '<span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-secondary);font-size:0.63rem;">' + txt + '</span>';
+                    }
+                    if (variant === 'genre_compare') {
+                        var head = '<thead><tr>' +
+                            '<th>Behavior</th>' +
+                            '<th style="text-align:right;">Pop fans - before</th>' +
+                            '<th style="text-align:right;">Pop fans - after</th>' +
+                            '<th style="text-align:right;">R&amp;B/Rap fans - before</th>' +
+                            '<th style="text-align:right;">R&amp;B/Rap fans - after</th>' +
+                            '<th style="text-align:right;">Latin fans - before</th>' +
+                            '<th style="text-align:right;">Latin fans - after</th>' +
+                            '<th style="text-align:right;">Pop lift</th>' +
+                            '<th style="text-align:right;">R&amp;B/Rap lift</th>' +
+                            '<th style="text-align:right;">Latin lift</th>' +
+                            '</tr></thead>';
+                        var body = '<tbody>' + rows.map(function(r) {
+                            function liftOf(pre, post) {
+                                if (!pre || !post || +pre.pct <= 0) return null;
+                                return +post.pct / +pre.pct;
+                            }
+                            return '<tr>' +
+                                '<td class="behavior-label">' + _iiq2Esc(r.label) + '</td>' +
+                                _mCell(r.pop_pre) + _mCell(r.pop_post) +
+                                _mCell(r.rap_rnb_pre) + _mCell(r.rap_rnb_post) +
+                                _mCell(r.latin_pre) + _mCell(r.latin_post) +
+                                '<td class="num">' + _iiq2LiftChip(liftOf(r.pop_pre, r.pop_post)) + '</td>' +
+                                '<td class="num">' + _iiq2LiftChip(liftOf(r.rap_rnb_pre, r.rap_rnb_post)) + '</td>' +
+                                '<td class="num">' + _iiq2LiftChip(liftOf(r.latin_pre, r.latin_post)) + '</td>' +
+                            '</tr>';
+                        }).join('') + '</tbody>';
+                        matrix.innerHTML = head + body;
+                    } else {
+                        var head2 = '<thead><tr>' +
+                            '<th>Behavior</th>' +
+                            '<th style="text-align:right;">Control<br>' + _mSubHdr('no Coachella touchpoint') + '</th>' +
+                            '<th style="text-align:right;">Livestream<br>' + _mSubHdr('YouTube stream viewers') + '</th>' +
+                            '<th style="text-align:right;">Ticket buyers - pre<br>' + _mSubHdr('Jan 22 - Apr 9, 2026') + '</th>' +
+                            '<th style="text-align:right;">Ticket buyers - post<br>' + _mSubHdr('Apr 10 - Jul 1, 2026') + '</th>' +
+                            '<th style="text-align:right;">Lift vs control</th>' +
+                            '<th style="text-align:right;">Pre/post lift</th>' +
+                            '</tr></thead>';
+                        var body2 = '<tbody>' + rows.map(function(r) {
+                            var liftVsControl = null;
+                            if (r.ticket_post && r.control && +r.control.pct > 0) {
+                                liftVsControl = r.ticket_post.pct / r.control.pct;
+                            }
+                            var prePost = null;
+                            if (r.ticket_pre && r.ticket_post && +r.ticket_pre.pct > 0) {
+                                prePost = r.ticket_post.pct / r.ticket_pre.pct;
+                            }
+                            var prePostCell = (r.ticket_pre == null)
+                                ? '<td class="num na">no pre baseline<br><span class="m-count">(released Jun 26)</span></td>'
+                                : '<td class="num">' + _iiq2LiftChip(prePost) + '</td>';
+                            return '<tr>' +
+                                '<td class="behavior-label">' + _iiq2Esc(r.label) + '</td>' +
+                                _mCell(r.control) +
+                                _mCell(r.livestream) +
+                                _mCell(r.ticket_pre) +
+                                _mCell(r.ticket_post) +
+                                '<td class="num">' + _iiq2LiftChip(liftVsControl) + '</td>' +
+                                prePostCell +
+                            '</tr>';
+                        }).join('') + '</tbody>';
+                        matrix.innerHTML = head2 + body2;
+                    }
+                }
+
+                // Behavior lift on the focus cohort. Each row is an INDEPENDENT behavior
+                // measured any-occurrence in matched pre/post windows around the trigger.
+                // Behaviors are NOT nested - a fan can buy without interacting first, stream
+                // without buying, etc. The focus cohort is declared per journey via
+                // j.focus_cohort_key (Coachella = ticket, Latin = latin).
+                var focusCohort = (j.cohorts || []).filter(function(c) { return c.key === j.focus_cohort_key; })[0];
+                var focusN = focusCohort ? focusCohort.size : 0;
+                var triggerShort = j.stage_trigger_short || 'trigger';
+                var funnelTitle = document.getElementById('impactFunnelTitle');
+                if (funnelTitle) {
+                    var prefix = j.funnel_title_prefix || 'Engagement lift';
+                    funnelTitle.textContent = prefix + ': ' + j.trigger_label + ' \u2192 ' + j.subject_label;
+                }
+                var funnelNote = document.getElementById('impactFunnelNote');
+                if (funnelNote) {
+                    var noteTpl = j.funnel_note_html || 'Independent behaviors on the focus cohort. Rows are NOT nested.';
+                    funnelNote.textContent = noteTpl.replace('{FOCUS_N}', _iiq2Num(focusN));
+                }
+                var funnel = document.getElementById('impactFunnel');
+                if (funnel) {
+                    var stages = j.stages || [];
+                    var variantF = j.funnel_variant || 'pre_post_lift';
+                    if (variantF === 'genre_value_scorecard') {
+                        funnel.innerHTML = _iiq2RenderGenreScorecard(stages);
+                    } else {
+                        funnel.innerHTML = _iiq2RenderPrePostFunnel(stages, focusN, triggerShort);
+                    }
+                }
+
+                function _setText(id, txt) { var el = document.getElementById(id); if (el && txt != null) el.textContent = txt; }
+                _setText('impactTouchpointsTitle', j.touchpoints_title || 'Where the interaction happened');
+                _setText('impactTouchpointsNote',  j.touchpoints_note  || '');
+                _setText('impactProductsTitle',    j.products_title    || 'What they bought');
+                _setText('impactProductsNote',     j.products_note     || '');
+                _setText('impactStreamingTitle',   j.streaming_title   || 'Where they streamed');
+                _setText('impactStreamingNote',    j.streaming_note    || '');
+                _iiq2RenderHBars('impactTouchpoints', j.touchpoints || []);
+                _iiq2RenderHBars('impactProducts', j.products || []);
+                _iiq2RenderHBars('impactStreaming', j.streaming || []);
+
+                var catTitle = document.getElementById('impactCatalogTitle');
+                if (catTitle) catTitle.textContent = j.catalog_title || 'Where they watched';
+                var catNote = document.getElementById('impactCatalogNote');
+                if (catNote) catNote.textContent = j.catalog_note || '';
+                _iiq2RenderHBars('impactCatalog', j.catalog || []);
+
+                // Demographics
+                _setText('impactDemosTitle', j.demos_title || 'Full-conversion cohort');
+                _setText('impactDemosNote',  j.demos_note  || '');
+                var demoBox = document.getElementById('impactDemos');
+                if (demoBox && j.demos) {
+                    var blocks = [
+                        { key: 'gender',    title: 'Gender' },
+                        { key: 'age',       title: 'Age' },
+                        { key: 'ethnicity', title: 'Ethnicity' },
+                        { key: 'income',    title: 'Household income' }
+                    ];
+                    demoBox.innerHTML = blocks.map(function(b) {
+                        var rows = j.demos[b.key] || [];
+                        var body = rows.map(function(r) {
+                            var w = Math.min(100, r.pct);
+                            var css = 'iiq2-hbar-fill ' + (r.style || 'a');
+                            return '<div class="iiq2-hbar-row">' +
+                                '<div class="iiq2-hbar-label">' + _iiq2Esc(r.label) + '</div>' +
+                                '<div class="iiq2-hbar-track"><div class="' + css + '" style="width:' + w + '%;"></div></div>' +
+                                '<div class="iiq2-hbar-val">' + _iiq2Pct(r.pct) + '</div>' +
+                            '</div>';
+                        }).join('');
+                        return '<div class="iiq2-demo-block"><div class="demo-title">' + _iiq2Esc(b.title) + '</div>' + body + '</div>';
+                    }).join('');
+                }
+
+                // Insights
+                var ins = document.getElementById('impactInsights');
+                if (ins) {
+                    ins.innerHTML = (j.insights || []).map(function(txt) {
+                        return '<div class="iiq2-insight">' + txt + '</div>';
+                    }).join('');
+                }
+            };
+
+            // ---------------------------------------------------------------
+            // Funnel renderer #1: pre/post lift (Coachella-style causal read).
+            // Each stage is drawn as a pre bar + post bar on the same cohort,
+            // scaled against the largest post_pct in the list. Lift chip in
+            // the header + net-change delta line under the bars. Optional
+            // cohort_lifts chip strip when a stage carries cross-cohort lifts.
+            // ---------------------------------------------------------------
+            function _iiq2RenderPrePostFunnel(stages, focusN, triggerShort) {
+                var maxPct = 1;
+                stages.forEach(function(s) {
+                    if ((+s.post_pct || 0) > maxPct) maxPct = +s.post_pct;
+                    if ((+s.pre_pct  || 0) > maxPct) maxPct = +s.pre_pct;
+                });
+                return stages.map(function(st, idx) {
+                    var postWidth = Math.max(1.5, (100 * (+st.post_pct || 0) / maxPct));
+                    var preWidth = (st.pre_pct == null) ? 0 : Math.max(0, (100 * (+st.pre_pct || 0) / maxPct));
+                    var lift = null;
+                    if (st.pre_pct != null && +st.pre_pct > 0 && st.post_pct != null) {
+                        lift = (+st.post_pct) / (+st.pre_pct);
+                    }
+                    var delta = null;
+                    if (st.pre_count != null && st.post_count != null) {
+                        delta = (+st.post_count) - (+st.pre_count);
+                    }
+                    var liftChip = (lift != null)
+                        ? _iiq2LiftChip(lift, { suffix: ' post vs pre' })
+                        : '<span class="iiq2-lift-chip up" title="No pre baseline exists for this behavior.">net new</span>';
+                    var preRow = (st.pre_pct == null)
+                        ? '<div class="iiq2-pp-row iiq2-pp-pre iiq2-pp-none">' +
+                            '<div class="iiq2-pp-tag">Pre</div>' +
+                            '<div class="iiq2-pp-track"><div class="iiq2-pp-fill pre" style="width: 0%;"></div></div>' +
+                            '<div class="iiq2-pp-num">n/a</div>' +
+                          '</div>'
+                        : '<div class="iiq2-pp-row iiq2-pp-pre">' +
+                            '<div class="iiq2-pp-tag">Pre</div>' +
+                            '<div class="iiq2-pp-track"><div class="iiq2-pp-fill pre" style="width: ' + preWidth + '%;"></div></div>' +
+                            '<div class="iiq2-pp-num">' + _iiq2Pct(st.pre_pct) + ' &middot; ' + _iiq2Num(st.pre_count) + '</div>' +
+                          '</div>';
+                    var postRow = '<div class="iiq2-pp-row iiq2-pp-post">' +
+                        '<div class="iiq2-pp-tag">Post</div>' +
+                        '<div class="iiq2-pp-track"><div class="iiq2-pp-fill post" style="width: ' + postWidth + '%;"></div></div>' +
+                        '<div class="iiq2-pp-num">' + _iiq2Pct(st.post_pct) + ' &middot; ' + _iiq2Num(st.post_count) + '</div>' +
+                    '</div>';
+                    var deltaLine;
+                    if (delta != null) {
+                        var sign = delta >= 0 ? '+' : '';
+                        deltaLine = '<div class="iiq2-stage-delta">' +
+                            'Net change on the same ' + _iiq2Num(focusN) + '-person cohort: ' +
+                            '<strong>' + sign + _iiq2Num(delta) + '</strong> ' +
+                            (delta >= 0 ? 'more' : 'fewer') + ' fans took this action post-' + _iiq2Esc(triggerShort) + ' than pre.' +
+                        '</div>';
+                    } else {
+                        deltaLine = '<div class="iiq2-stage-delta">' +
+                            '<strong>' + _iiq2Num(st.post_count) + '</strong> net-new fans took this action - the release did not exist pre-' + _iiq2Esc(triggerShort) + ', so every listener is attributable to the post-trigger window.' +
+                        '</div>';
+                    }
+                    var cohortLiftsLine = '';
+                    if (Array.isArray(st.cohort_lifts) && st.cohort_lifts.length) {
+                        cohortLiftsLine = '<div class="iiq2-stage-cohort-lifts">' +
+                            '<span class="iiq2-stage-cohort-lifts-lbl">By cohort:</span>' +
+                            st.cohort_lifts.map(function(cl) {
+                                var focusCls = cl.is_focus ? ' focus' : '';
+                                return '<span class="iiq2-stage-cohort-lift-item' + focusCls + '">' +
+                                    '<span class="cl-lbl">' + _iiq2Esc(cl.label) + '</span>' +
+                                    _iiq2LiftChip(cl.lift) +
+                                '</span>';
+                            }).join('') +
+                        '</div>';
+                    }
+                    return '<div class="iiq2-stage" data-idx="' + idx + '">' +
+                        '<div class="iiq2-stage-hdr">' +
+                            '<div style="flex:1;">' +
+                                '<div class="iiq2-stage-name">' + _iiq2Esc(st.emoji || '') + ' ' + _iiq2Esc(st.name) + '</div>' +
+                                '<div class="iiq2-stage-desc">' + _iiq2Esc(st.desc) + '</div>' +
+                            '</div>' +
+                            '<div class="iiq2-stage-nums" style="text-align:right;">' + liftChip + '</div>' +
+                        '</div>' +
+                        '<div class="iiq2-pp-wrap">' + preRow + postRow + '</div>' +
+                        deltaLine +
+                        cohortLiftsLine +
+                    '</div>';
+                }).join('');
+            }
+
+            // ---------------------------------------------------------------
+            // Funnel renderer #2: genre value scorecard (Latin-loyalty style).
+            // Each stage is drawn as N horizontal bars, one per cohort, all
+            // scaled against the largest rate on that behavior. The focus
+            // cohort's bar is accented. Header chip shows the focus vs the
+            // benchmark cohort as a value multiple (e.g. "Latin 2.25x pop").
+            // Value-insight line under the bars carries the plain-English
+            // takeaway (dollar figure, book-more-dates recommendation, etc.).
+            // No pre/post - this variant answers "how valuable is this
+            // audience?" not "did the trigger move the audience?"
+            // ---------------------------------------------------------------
+            function _iiq2RenderGenreScorecard(stages) {
+                return stages.map(function(st, idx) {
+                    var cvs = Array.isArray(st.cohort_values) ? st.cohort_values : [];
+                    var maxPct = 1;
+                    cvs.forEach(function(c) { if ((+c.pct || 0) > maxPct) maxPct = +c.pct; });
+                    // Header chip: focus rate / benchmark rate. Benchmark = cohort
+                    // marked is_benchmark=true, else first non-focus cohort.
+                    var focus = cvs.filter(function(c) { return c.is_focus; })[0];
+                    var bench = cvs.filter(function(c) { return c.is_benchmark; })[0]
+                              || cvs.filter(function(c) { return !c.is_focus; })[0];
+                    var multChip = '';
+                    if (focus && bench && +bench.pct > 0) {
+                        var mult = (+focus.pct) / (+bench.pct);
+                        multChip = _iiq2LiftChip(mult, { suffix: ' vs ' + (bench.label || 'benchmark') });
+                    }
+                    var barsHtml = cvs.map(function(c) {
+                        var w = Math.max(1.5, 100 * (+c.pct || 0) / maxPct);
+                        var focusCls = c.is_focus ? ' focus' : '';
+                        return '<div class="iiq2-gs-row' + focusCls + '">' +
+                            '<div class="iiq2-gs-tag">' + _iiq2Esc(c.label || '') + '</div>' +
+                            '<div class="iiq2-gs-track"><div class="iiq2-gs-fill' + focusCls + '" style="width: ' + w + '%;"></div></div>' +
+                            '<div class="iiq2-gs-num">' +
+                                _iiq2Pct(c.pct) +
+                                (c.count != null ? ' <span class="iiq2-gs-count">&middot; ' + _iiq2Num(c.count) + '</span>' : '') +
+                            '</div>' +
+                        '</div>';
+                    }).join('');
+                    var insight = st.value_insight_html
+                        ? '<div class="iiq2-stage-delta">' + st.value_insight_html + '</div>'
+                        : '';
+                    return '<div class="iiq2-stage" data-idx="' + idx + '">' +
+                        '<div class="iiq2-stage-hdr">' +
+                            '<div style="flex:1;">' +
+                                '<div class="iiq2-stage-name">' + _iiq2Esc(st.emoji || '') + ' ' + _iiq2Esc(st.name) + '</div>' +
+                                '<div class="iiq2-stage-desc">' + _iiq2Esc(st.desc) + '</div>' +
+                            '</div>' +
+                            '<div class="iiq2-stage-nums" style="text-align:right;">' + multChip + '</div>' +
+                        '</div>' +
+                        '<div class="iiq2-gs-wrap">' + barsHtml + '</div>' +
+                        insight +
+                    '</div>';
+                }).join('');
+            }
+
+            function _iiq2RenderHBars(elId, rows) {
+                var el = document.getElementById(elId);
+                if (!el) return;
+                if (!rows.length) { el.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8rem;">No data.</div>'; return; }
+                // If any row has pre_pct, treat this whole card as pre/post dual-track. Scale bars
+                // against the largest post value so pre/post reads honestly against each other.
+                var hasPrePost = rows.some(function(r) { return r.pre_pct != null; });
+                var maxPct = Math.max.apply(null, rows.map(function(r) {
+                    return Math.max(+r.pct || 0, +r.pre_pct || 0);
+                }));
+                if (maxPct <= 0) maxPct = 1;
+                if (!hasPrePost) {
+                    el.innerHTML = rows.map(function(r) {
+                        var w = 100 * (+r.pct || 0) / maxPct;
+                        var css = 'iiq2-hbar-fill ' + (r.style || 'a');
+                        return '<div class="iiq2-hbar-row">' +
+                            '<div class="iiq2-hbar-label">' + _iiq2Esc(r.label) + '</div>' +
+                            '<div class="iiq2-hbar-track"><div class="' + css + '" style="width:' + w + '%;"></div></div>' +
+                            '<div class="iiq2-hbar-val">' + _iiq2Pct(r.pct) + '</div>' +
+                        '</div>';
+                    }).join('');
+                    return;
+                }
+                el.innerHTML = rows.map(function(r) {
+                    var postW = 100 * (+r.pct || 0) / maxPct;
+                    var preW = (r.pre_pct == null) ? 0 : (100 * (+r.pre_pct || 0) / maxPct);
+                    var css = 'iiq2-hbar-fill ' + (r.style || 'a');
+                    var lift = null;
+                    if (r.pre_pct != null && +r.pre_pct > 0 && r.pct != null) {
+                        lift = (+r.pct) / (+r.pre_pct);
+                    }
+                    var chip = (lift != null) ? _iiq2LiftChip(lift) : '<span class="iiq2-lift-chip up" title="No pre baseline">net new</span>';
+                    return '<div class="iiq2-hbar-pp-row">' +
+                        '<div class="iiq2-hbar-pp-label">' + _iiq2Esc(r.label) + '</div>' +
+                        '<div class="iiq2-hbar-pp-bars">' +
+                            '<div class="iiq2-hbar-pp-line">' +
+                                '<span class="iiq2-hbar-pp-tag">Pre</span>' +
+                                '<div class="iiq2-hbar-track pre"><div class="iiq2-hbar-fill-pre" style="width:' + preW + '%;"></div></div>' +
+                                '<span class="iiq2-hbar-pp-val">' + (r.pre_pct == null ? 'n/a' : _iiq2Pct(r.pre_pct)) + '</span>' +
+                            '</div>' +
+                            '<div class="iiq2-hbar-pp-line">' +
+                                '<span class="iiq2-hbar-pp-tag">Post</span>' +
+                                '<div class="iiq2-hbar-track"><div class="' + css + '" style="width:' + postW + '%;"></div></div>' +
+                                '<span class="iiq2-hbar-pp-val">' + _iiq2Pct(r.pct) + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="iiq2-hbar-pp-chip">' + chip + '</div>' +
+                    '</div>';
+                }).join('');
+            }
+        })();
+        </script>
+        <!-- End impactIQView -->
+
         <!-- SENTIMENT IQ VIEW -->
         <div id="sentimentIQView" style="display: none;">
             <div class="dashboard-layout">
@@ -35613,7 +37112,7 @@
                 // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
-                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, trendsIQ: function() { if (typeof showTrendsIQ === 'function') showTrendsIQ(); }, microdramasIQ: function() { if (typeof showMicrodramasIQ === 'function') showMicrodramasIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, helmIQ: function() { var c = document.querySelector('.container'); if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } } var v = document.getElementById('helmIQView'); if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 auto; min-height:500px; height:calc(100vh - 80px); overflow-y:auto; visibility:visible; position:relative; z-index:50;'); var bt = document.getElementById('helm-tab-build'); if (bt) bt.setAttribute('style', 'display:block; padding:1.5rem;'); var ft = document.getElementById('helm-tab-financials'); if (ft) ft.setAttribute('style', 'display:none;'); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
+                var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, trendsIQ: function() { if (typeof showTrendsIQ === 'function') showTrendsIQ(); }, microdramasIQ: function() { if (typeof showMicrodramasIQ === 'function') showMicrodramasIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, impactIQ: function() { if (typeof showImpactIQ === 'function') showImpactIQ(); }, helmIQ: function() { var c = document.querySelector('.container'); if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } } var v = document.getElementById('helmIQView'); if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 auto; min-height:500px; height:calc(100vh - 80px); overflow-y:auto; visibility:visible; position:relative; z-index:50;'); var bt = document.getElementById('helm-tab-build'); if (bt) bt.setAttribute('style', 'display:block; padding:1.5rem;'); var ft = document.getElementById('helm-tab-financials'); if (ft) ft.setAttribute('style', 'display:none;'); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
                 if (initialVal === 'profileIQ') {
@@ -35675,6 +37174,12 @@
                 trendsIQ: function() { if (typeof showTrendsIQ === 'function') showTrendsIQ(); },
                 microdramasIQ: function() { if (typeof showMicrodramasIQ === 'function') showMicrodramasIQ(); },
                 intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); },
+                // 2026-07-23 (Jenna): restored Impact IQ handler after
+                // the Jul 10 rollback stripped it. Full CSS/HTML/JS block
+                // for #impactIQView is re-injected above (right after
+                // journeyIQView). The showImpactIQ function is defined
+                // inside that block's <script>.
+                impactIQ: function() { if (typeof showImpactIQ === 'function') showImpactIQ(); },
                 helmIQ: function() {
                     var c = document.querySelector('.container');
                     if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } }
