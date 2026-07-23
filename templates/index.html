@@ -23509,8 +23509,9 @@
             #trendsIQView .tiq-search-news-img .tiq-ph-label > span:last-child { font-size: 5px; letter-spacing: 0.5px; }
             /* Music tracks: square 48x48 thumbnail with a music-note fallback for the ~25% of Shazam discovery tracks that neither iTunes nor Deezer indexed yet. */
             #trendsIQView .tiq-music-image { flex: 0 0 48px; width: 48px; height: 48px; background-size: cover; background-position: center; border-radius: 4px; background-color: #1e293b; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' preserveAspectRatio='xMidYMid slice'%3E%3Crect width='24' height='24' fill='%231e293b'/%3E%3Cpath d='M9 17V5l10-2v12' stroke='%237c3aed' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='7' cy='17' r='2' fill='%237c3aed'/%3E%3Ccircle cx='17' cy='15' r='2' fill='%237c3aed'/%3E%3C/svg%3E"); }
-            /* Streaming poster: portrait 40x56 tile (2:2.8 aspect - close to standard poster ratio) with a lime CROSSWALK ///-mark fallback for titles iTunes Search doesn't have artwork for. Cover-fits so square iTunes artwork or true portrait posters both render cleanly. */
-            #trendsIQView .tiq-poster-image { flex: 0 0 40px; width: 40px; height: 56px; background-size: cover; background-position: center; border-radius: 4px; background-color: #c4f542; background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA0MCA1NicgcHJlc2VydmVBc3BlY3RSYXRpbz0neE1pZFlNaWQgc2xpY2UnPjxyZWN0IHdpZHRoPSc0MCcgaGVpZ2h0PSc1NicgZmlsbD0nI2M0ZjU0MicvPjxnIHRyYW5zZm9ybT0ndHJhbnNsYXRlKDYuNSAxNi40KSBzY2FsZSgwLjczKScgZmlsbD0nIzBmMTExNSc+PHBhdGggZD0nTTIgNSBMMTEgMyBMMTMgMjcgTDQgMjkgWicvPjxwYXRoIGQ9J00xMyA1IEwyMiAzIEwyNCAyNyBMMTUgMjkgWicvPjxwYXRoIGQ9J00yNCA1IEwzMyAzIEwzNSAyNyBMMjYgMjkgWicvPjwvZz48L3N2Zz4="); }
+            /* Streaming poster: portrait 40x56 tile (2:2.8 aspect - close to standard poster ratio). Titles iTunes Search has no artwork for show a lime tile with the real CROSSWALK ///-mark (cropped straight from the logo, recolored dark via brightness(0)) centered on top; real posters cover it via .tiq-ph-img. */
+            #trendsIQView .tiq-poster-image { flex: 0 0 40px; width: 40px; height: 56px; border-radius: 4px; background-color: #c4f542; }
+            #trendsIQView .tiq-poster-mark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 58%; height: auto; z-index: 0; filter: brightness(0); pointer-events: none; }
             #trendsIQView .tiq-source-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 0.35rem; margin-bottom: 0.35rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
             #trendsIQView .tiq-source-name { font-weight: 600; font-size: 0.9rem; }
             #trendsIQView .tiq-source-domain { font-size: 0.72rem; color: var(--text-secondary); }
@@ -41883,21 +41884,20 @@
                 .replace(/>/g,  "%3E");
             return "background-image: url('" + u + "');";
         }
-        // Lime CROSSWALK ///-mark placeholder for the streaming poster tiles
-        // (portrait 40x56). SVG *shapes* (not <text>), base64-encoded so the
-        // data-URI has no quotes/spaces/parens that could break out of the
-        // single-quoted url() inside the double-quoted style="" attribute. Layered
-        // UNDER the real iTunes poster so titles with no artwork - or whose poster
-        // URL 404s / is paywalled - fall through to the lime mark automatically.
-        var _TIQ_POSTER_PLACEHOLDER_URL = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA0MCA1NicgcHJlc2VydmVBc3BlY3RSYXRpbz0neE1pZFlNaWQgc2xpY2UnPjxyZWN0IHdpZHRoPSc0MCcgaGVpZ2h0PSc1NicgZmlsbD0nI2M0ZjU0MicvPjxnIHRyYW5zZm9ybT0ndHJhbnNsYXRlKDYuNSAxNi40KSBzY2FsZSgwLjczKScgZmlsbD0nIzBmMTExNSc+PHBhdGggZD0nTTIgNSBMMTEgMyBMMTMgMjcgTDQgMjkgWicvPjxwYXRoIGQ9J00xMyA1IEwyMiAzIEwyNCAyNyBMMTUgMjkgWicvPjxwYXRoIGQ9J00yNCA1IEwzMyAzIEwzNSAyNyBMMjYgMjkgWicvPjwvZz48L3N2Zz4=";
-        function _tiqPosterImgStyle(url) {
-            if (!url) return "background-image: url('" + _TIQ_POSTER_PLACEHOLDER_URL + "');";
-            var u = String(url)
-                .replace(/'/g,  "%27")
-                .replace(/"/g,  "%22")
-                .replace(/</g,  "%3C")
-                .replace(/>/g,  "%3E");
-            return "background-image: url('" + u + "'), url('" + _TIQ_POSTER_PLACEHOLDER_URL + "');";
+        // Streaming poster placeholder: the real CROSSWALK ///-mark, cropped
+        // straight from the logo art (static/crosswalk-slashes.png, white on
+        // transparent) and recolored dark via CSS brightness(0), centered on a
+        // lime tile. Rendered as real <img> elements (not an SVG background) so
+        // it's pixel-accurate and robust. The real iTunes poster layers on top
+        // via .tiq-ph-img; titles with no artwork - or whose poster URL 404s /
+        // is paywalled (onerror removes it) - fall through to the lime mark.
+        var _TIQ_POSTER_MARK_SRC = "{{ url_for('static', filename='crosswalk-slashes.png') }}";
+        function _tiqPosterCell(url) {
+            var mark = '<img class="tiq-poster-mark" src="' + _TIQ_POSTER_MARK_SRC + '" alt="" aria-hidden="true">';
+            var img = url
+                ? '<img class="tiq-ph-img" src="' + _tiqEsc(url) + '" loading="lazy" alt="" onerror="this.remove()">'
+                : '';
+            return '<div class="tiq-poster-image tiq-ph">' + mark + img + '</div>';
         }
         function _tiqNum(n) {
             n = Number(n);
@@ -43463,8 +43463,7 @@
                             // ESPN+ live shows and niche Prime originals)
                             // still render the placeholder so the row's
                             // vertical rhythm matches the ones with art.
-                            var img = '<div class="tiq-poster-image" style="' +
-                                      _tiqPosterImgStyle(it.image) + '"></div>';
+                            var img = _tiqPosterCell(it.image);
                             return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
                                    img +
                                    '<div class="tiq-row-body">' +
