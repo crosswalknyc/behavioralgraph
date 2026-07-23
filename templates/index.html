@@ -86887,69 +86887,19 @@
             }
         }
 
-        function parseAllData(csvData) {
-            let sampleSize = 0;
-            let projectedUS = 0;
-            let medianAge = 0;
-            const demographics = {
-                gender: {},
-                age: {},
-                ethnicity: {},
-                income: {}
-            };
-            const genPop = {
-                gender: {},
-                age: {},
-                ethnicity: {},
-                income: {}
-            };
+        // 2026-07-23: DELETED the dead duplicate parseAllData() that lived
+        // here (63 lines, minimal shape returning only sampleSize /
+        // projectedUS / medianAge / demographics / genPop). The 2nd
+        // parseAllData() defined ~800 lines below is the real one -
+        // it carries rawLocations, market, isNonUsMarket, behavioral,
+        // interests, and everything the modern dashboard consumes. Even
+        // though JS hoisting made the 2nd definition win in practice,
+        // keeping a stale duplicate around is a landmine: any tooling
+        // that walks the source (bundler, minifier, source-map indexer,
+        // grep-based patch script) can silently pick the wrong one.
+        // The duplicate was introduced by the Jul 10 rollback commit
+        // (7c8946b8) which merged old and new code without deduping.
 
-            let currentSection = '';
-            csvData.forEach(row => {
-                const col = (row['Column'] || row[0] || '').toString().trim().toUpperCase();
-                const val = row['Value'] || row[1] || '';
-                const brandPen = parseFloat(row['Brand Penetration (Row)'] || row[2] || 0);
-                const catShare = parseFloat(row['Category Share'] || row[3] || 0);
-                const rawNum = parseFloat(row['Original Raw Numbers'] || row[4] || 0);
-                const usPop = parseFloat(String(row['US Gen Pop Projection'] || row['Gen Pop Projection'] || row[5] || '0').replace(/,/g, '')) || 0;
-
-                if (col === 'SAMPLE SIZE') {
-                    sampleSize = catShare || rawNum || brandPen || 0;
-                    // If crosswalk respondents under 1000, use E3 (Original Raw Numbers) instead
-                    if (sampleSize > 0 && sampleSize < 1000 && rawNum > 0)
-                        sampleSize = rawNum;
-                }
-                // Projected US is in column F (US Gen Pop Projection) on BRAND INPUT row
-                if (col === 'BRAND INPUT' && usPop > 0) projectedUS = usPop;
-
-                if (col === 'MEDIAN AGE' || col.includes('MEDIAN') && col.includes('AGE')) {
-                    // Never fall back to Category Share - only Brand Penetration is displayed.
-                    medianAge = brandPen || parseFloat(val) || 0;
-                }
-
-                if (col.includes('GENDER')) currentSection = 'gender';
-                else if (col.includes('AGE') && !col.includes('MEDIAN')) currentSection = 'age';
-                else if (col.includes('ETHNIC')) currentSection = 'ethnicity';
-                else if (col.includes('INCOME')) currentSection = 'income';
-
-                if (val && currentSection && !col.includes('SECTION')) {
-                    // Never fall back to Category Share - only Brand Penetration is displayed.
-                    const pct = brandPen || 0;
-                    if (pct > 0 && pct < 100) {
-                        demographics[currentSection][val] = pct;
-                    }
-                    // Store gen pop data (column 5 usually)
-                    const genPopPct = usPop || 0;
-                    if (genPopPct > 0 && genPopPct < 100) {
-                        genPop[currentSection][val] = genPopPct;
-                    }
-                }
-
-                // (projectedUS from BRAND INPUT row handled above)
-            });
-
-            return { sampleSize, projectedUS, medianAge, demographics, genPop };
-        }
 
         function toggleCollapsible(header) {
             const content = header.nextElementSibling;
@@ -87754,7 +87704,19 @@
                 categories: {},
                 locations: [],
                 rawLocations: [], // ALL LOCATION rows as-is (used for non-US / foreign city files)
-                interests: {} // For interests data
+                interests: {}, // For interests data
+                // 2026-07-23: MARKET metadata carried on the SAMPLE SIZE row
+                // (e.g. "MARKET: UNITED KINGDOM" for BEST OF THE BEST, "MARKET:
+                // GERMANY" for Prizeo Germany). US profiles have no MARKET field
+                // at all. This is the DETERMINISTIC signal that a profile is
+                // foreign - much more reliable than the old heuristic of "no
+                // New York / Los Angeles anchor in LOCATION rows" (which
+                // silently failed for BOTB UK because London / Birmingham /
+                // Manchester fuzzy-matched to Birmingham AL / London KY / etc.
+                // in matchCanonicalDMA, so the US-DMA render path picked them
+                // up and displayed them as US markets).
+                market: '',
+                isNonUsMarket: false
             };
 
             const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'];
@@ -88346,6 +88308,35 @@
                     if (chosen > 0 && chosen < 1000 && rawNum > 0)
                         chosen = rawNum;
                     if (chosen > 0) result.sampleSize = chosen;
+
+                    // 2026-07-23: extract MARKET: metadata from the SAMPLE
+                    // SIZE Value string. Foreign profiles carry a pipe-
+                    // delimited "MARKET: <COUNTRY>" segment (e.g. "MARKET:
+                    // UNITED KINGDOM", "MARKET: GERMANY"); US profiles have
+                    // no MARKET field. When present and non-US, this forces
+                    // the LOCATION tab into foreign-mode regardless of
+                    // whether any UK/DE city happens to fuzzy-match a US
+                    // DMA in matchCanonicalDMA(). See isForeignLocationData
+                    // for how this gets consumed.
+                    try {
+                        const marketMatch = String(value || '').match(/MARKET\s*:\s*([^|]+?)(?:\s*\||\s*$)/i);
+                        if (marketMatch && marketMatch[1]) {
+                            const marketRaw = marketMatch[1].trim();
+                            result.market = marketRaw;
+                            const marketUpper = marketRaw.toUpperCase();
+                            // Treat anything OTHER than US / USA / UNITED STATES
+                            // as a non-US market. If MARKET is absent entirely
+                            // (US profiles), isNonUsMarket stays false.
+                            result.isNonUsMarket = !!marketUpper && !(
+                                marketUpper === 'US' ||
+                                marketUpper === 'USA' ||
+                                marketUpper === 'U.S.' ||
+                                marketUpper === 'U.S.A.' ||
+                                marketUpper === 'UNITED STATES' ||
+                                marketUpper === 'UNITED STATES OF AMERICA'
+                            );
+                        }
+                    } catch (_e) { /* leave market blank on parse errors */ }
                 }
                 // Projected sample size: column F (US Gen Pop Projection) on BRAND INPUT row (row 4 = F4)
                 if (category === 'BRAND INPUT') {
@@ -101916,11 +101907,28 @@
         // temporarily replacing it for a non-US (foreign) location file.
         let _origAllLocationsHeaderHTML = null;
 
-        // A location file is treated as non-US ("foreign") when it has LOCATION rows but
-        // none of them are the anchor US markets New York or Los Angeles. These files
-        // (e.g. Prizeo Germany and other sweepstakes brands) carry local cities that do
-        // not map to our US Gen Pop DMA index, so we only list city + percentage.
+        // A location file is treated as non-US ("foreign") when either
+        //   (a) the parsed SAMPLE SIZE row carries an explicit "MARKET: <non-US>"
+        //       tag - the deterministic signal set by parseAllData, OR
+        //   (b) LOCATION rows exist but none contain the anchor US markets
+        //       New York or Los Angeles (legacy heuristic, kept as a fallback
+        //       for older files that predate the MARKET metadata).
+        // The market check catches foreign profiles like BOTB UK, whose cities
+        // (LONDON, BIRMINGHAM, MANCHESTER, LEEDS, GLASGOW) all fuzzy-match a
+        // US DMA in matchCanonicalDMA() and would otherwise silently pass the
+        // "no NY/LA" heuristic AND get displayed as US markets on the LOCATION
+        // tab. See parseAllData's SAMPLE SIZE branch for how MARKET is
+        // extracted from the pipe-delimited Value string.
         function isForeignLocationData(rawLocs) {
+            // Deterministic market metadata trumps everything else. Populated by
+            // parseAllData from the SAMPLE SIZE row's "MARKET: <country>" tag.
+            try {
+                if (typeof currentDashboardData !== 'undefined' &&
+                    currentDashboardData && currentDashboardData.isNonUsMarket) {
+                    return true;
+                }
+            } catch (_e) { /* fall through to heuristic */ }
+
             if (!Array.isArray(rawLocs) || rawLocs.length === 0) return false;
             const hasUsAnchor = rawLocs.some(function(l) {
                 const n = (l && l.name != null ? String(l.name) : '').toLowerCase();
