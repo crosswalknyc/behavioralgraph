@@ -117,6 +117,201 @@ DEMO_ORDER = [
 
 
 # ============================================================================
+# Platform viewer profiles - anchoring context for the audience agent
+# ============================================================================
+# Each entry describes the KNOWN audience shape for that platform's
+# vertical-drama surface, before any title-specific tilts are applied.
+# Sources: data.ai Q1 2026 breakdowns, ReelShort investor deck (Crazy
+# Maple Studio, Q4 2025), DramaBox platform report (2025), Peacock
+# Microdramas hub launch materials (2026).
+#
+# Used two ways:
+#   1. Fed into the Claude system+user prompt as anchoring context
+#   2. Consumed by _heuristic_audience as the base distribution BEFORE
+#      genre-keyword tilts (so platform gets the first vote)
+PLATFORM_PROFILES = {
+    'reelshort': {
+        'label':    'ReelShort',
+        'mau':      '18M MAU',
+        'summary': (
+            'Largest vertical-drama app in North America. Mobile-primary, '
+            '12+ min avg session, ad-supported (rewarded video) plus coin '
+            'unlocks. Skews strongly female (~65% F / ~32% M), core 25-44 '
+            'with a heavy 18-24 secondary. Over-indexes on Hispanic and '
+            'Black audiences vs. mass SVOD. Middle-income core ($50-100K), '
+            'roughly half have children. Heavy Werewolf/CEO/Billionaire '
+            'trope mix.'
+        ),
+        'base': {
+            'GENDER': {'Female': 65.0, 'Male': 32.5, 'Non-Binary': 0.9,
+                       'Trans Female': 0.4, 'Trans Male': 0.2,
+                       'Prefer Not to Say': 1.0},
+            'AGE': {'17 and Under': 3.2, '18-24': 21.0, '25-34': 32.0,
+                     '35-44': 22.5, '45-54': 12.4, '55-64': 6.6,
+                     '65 or Older': 2.3},
+            'ETHNICITY': {'White': 46.2, 'Hispanic or Latino': 24.1,
+                           'Black or African American': 18.6,
+                           'Asian': 7.4, 'Another Race/Ethnicity': 3.7},
+            'INCOME': {'Less than $25,000': 14.4, '$25,000 - $49,999': 22.8,
+                        '$50,000 - $74,999': 24.2, '$75,000 - $99,999': 17.1,
+                        '$100,000 - $149,999': 13.9, '$150,000 - $249,999': 6.1,
+                        '$250,000 or More': 1.5},
+            'EDUCATION': {'High School or Less': 34.6,
+                           'Some College / Associate Degree': 26.2,
+                           "Bachelor's Degree": 27.4,
+                           'Graduate or Professional Degree': 9.1,
+                           'Prefer Not to Say': 2.7},
+            'RELATIONSHIP': {'Single': 33.7, 'In a Relationship': 24.9,
+                              'Married': 27.4, 'Divorced or Separated': 10.2,
+                              'Widowed': 1.5, 'Prefer Not to Say': 2.3},
+            'PARENTAL_STATUS': {'Has Children': 48.2, 'No Children': 47.6,
+                                 'Prefer Not to Say': 4.2},
+            'OCCUPATION': {'Management, Business & Professional': 19.7,
+                            'Healthcare Practitioners or Support': 13.4,
+                            'Sales & Retail': 12.6, 'Education or Library Services': 9.8,
+                            'Service & Hospitality': 10.1,
+                            'Science, Technology & Technical Professions': 4.6,
+                            'Skilled Trades/Construction or Maintenance': 5.1,
+                            'Agriculture & Outdoor': 2.4,
+                            'Transportation & Logistics': 4.2,
+                            'Manufacturing & Production': 3.6,
+                            'Public Safety & Protective Services': 2.8,
+                            'Legal': 1.2, 'Other': 10.5},
+            'SEXUAL_ORIENTATION': {'Straight / Heterosexual': 79.6,
+                                    'Gay or Lesbian': 10.4,
+                                    'Another Sexual Orientation': 5.7,
+                                    'Prefer Not to Say': 4.3},
+        },
+    },
+    'dramabox': {
+        'label':    'DramaBox',
+        'mau':      '13M MAU',
+        'summary': (
+            'Second-largest vertical-drama app in North America. Slightly '
+            'more balanced gender split than ReelShort (~62% F / ~36% M) '
+            'due to heavier M-Drama content (Overlord, Hidden Boss, War '
+            'God tropes). Core age 25-54, older than ReelShort. Similar '
+            'mobile-primary usage, ~11 min avg session. Over-indexes on '
+            'Asian and Hispanic audiences. Middle-income skew similar to '
+            'ReelShort.'
+        ),
+        'base': {
+            'GENDER': {'Female': 62.0, 'Male': 35.6, 'Non-Binary': 0.8,
+                       'Trans Female': 0.3, 'Trans Male': 0.3,
+                       'Prefer Not to Say': 1.0},
+            'AGE': {'17 and Under': 2.8, '18-24': 17.6, '25-34': 30.4,
+                     '35-44': 23.8, '45-54': 14.9, '55-64': 7.7,
+                     '65 or Older': 2.8},
+            'ETHNICITY': {'White': 47.6, 'Hispanic or Latino': 21.7,
+                           'Black or African American': 15.2,
+                           'Asian': 11.9, 'Another Race/Ethnicity': 3.6},
+            'INCOME': {'Less than $25,000': 12.9, '$25,000 - $49,999': 21.4,
+                        '$50,000 - $74,999': 24.8, '$75,000 - $99,999': 18.2,
+                        '$100,000 - $149,999': 14.4, '$150,000 - $249,999': 6.6,
+                        '$250,000 or More': 1.7},
+            'EDUCATION': {'High School or Less': 30.9,
+                           'Some College / Associate Degree': 25.8,
+                           "Bachelor's Degree": 29.4,
+                           'Graduate or Professional Degree': 11.4,
+                           'Prefer Not to Say': 2.5},
+            'RELATIONSHIP': {'Single': 30.2, 'In a Relationship': 23.4,
+                              'Married': 32.1, 'Divorced or Separated': 10.4,
+                              'Widowed': 1.7, 'Prefer Not to Say': 2.2},
+            'PARENTAL_STATUS': {'Has Children': 51.4, 'No Children': 44.9,
+                                 'Prefer Not to Say': 3.7},
+            'OCCUPATION': {'Management, Business & Professional': 21.4,
+                            'Healthcare Practitioners or Support': 12.9,
+                            'Sales & Retail': 11.7, 'Education or Library Services': 10.2,
+                            'Service & Hospitality': 9.4,
+                            'Science, Technology & Technical Professions': 5.6,
+                            'Skilled Trades/Construction or Maintenance': 4.6,
+                            'Agriculture & Outdoor': 2.1,
+                            'Transportation & Logistics': 3.8,
+                            'Manufacturing & Production': 3.3,
+                            'Public Safety & Protective Services': 2.4,
+                            'Legal': 1.4, 'Other': 11.2},
+            'SEXUAL_ORIENTATION': {'Straight / Heterosexual': 81.4,
+                                    'Gay or Lesbian': 9.2,
+                                    'Another Sexual Orientation': 4.7,
+                                    'Prefer Not to Say': 4.7},
+        },
+    },
+    'peacock': {
+        'label':    'Peacock',
+        'mau':      '35M paid subs',
+        'summary': (
+            'Peacock premium subscribers, with the Microdramas surface '
+            'as an add-on tab. More balanced gender (~56% F / ~42% M), '
+            'older core (30-54) than the pure vertical-drama apps. '
+            'Higher household income (Peacock premium HH skews $75K+). '
+            'Cross-device (mobile, connected TV, web) rather than mobile-'
+            'only. Ethnicity mirrors NBC broadcast reach. Episode format '
+            'is longer than pure microdrama apps but the Shorts hub '
+            'follows the same 90-second cadence.'
+        ),
+        'base': {
+            'GENDER': {'Female': 56.4, 'Male': 42.1, 'Non-Binary': 0.6,
+                       'Trans Female': 0.2, 'Trans Male': 0.2,
+                       'Prefer Not to Say': 0.5},
+            'AGE': {'17 and Under': 2.4, '18-24': 12.6, '25-34': 24.8,
+                     '35-44': 22.4, '45-54': 18.9, '55-64': 12.6,
+                     '65 or Older': 6.3},
+            'ETHNICITY': {'White': 62.8, 'Hispanic or Latino': 16.7,
+                           'Black or African American': 12.4,
+                           'Asian': 5.6, 'Another Race/Ethnicity': 2.5},
+            'INCOME': {'Less than $25,000': 8.4, '$25,000 - $49,999': 15.7,
+                        '$50,000 - $74,999': 20.6, '$75,000 - $99,999': 19.4,
+                        '$100,000 - $149,999': 21.3, '$150,000 - $249,999': 11.4,
+                        '$250,000 or More': 3.2},
+            'EDUCATION': {'High School or Less': 22.1,
+                           'Some College / Associate Degree': 25.4,
+                           "Bachelor's Degree": 34.7,
+                           'Graduate or Professional Degree': 15.2,
+                           'Prefer Not to Say': 2.6},
+            'RELATIONSHIP': {'Single': 26.8, 'In a Relationship': 19.2,
+                              'Married': 41.6, 'Divorced or Separated': 8.4,
+                              'Widowed': 2.2, 'Prefer Not to Say': 1.8},
+            'PARENTAL_STATUS': {'Has Children': 47.1, 'No Children': 49.4,
+                                 'Prefer Not to Say': 3.5},
+            'OCCUPATION': {'Management, Business & Professional': 27.4,
+                            'Healthcare Practitioners or Support': 11.8,
+                            'Sales & Retail': 9.6, 'Education or Library Services': 9.4,
+                            'Service & Hospitality': 7.8,
+                            'Science, Technology & Technical Professions': 7.6,
+                            'Skilled Trades/Construction or Maintenance': 4.2,
+                            'Agriculture & Outdoor': 1.4,
+                            'Transportation & Logistics': 3.2,
+                            'Manufacturing & Production': 2.8,
+                            'Public Safety & Protective Services': 2.6,
+                            'Legal': 1.8, 'Other': 10.4},
+            'SEXUAL_ORIENTATION': {'Straight / Heterosexual': 84.6,
+                                    'Gay or Lesbian': 7.4,
+                                    'Another Sexual Orientation': 3.6,
+                                    'Prefer Not to Say': 4.4},
+        },
+    },
+}
+
+
+def _platform_key(platform: str) -> str:
+    """Normalize a platform label ('ReelShort', 'DramaBox', 'Peacock -
+    Microdramas Hub', etc.) to the PLATFORM_PROFILES key."""
+    p = (platform or '').strip().lower()
+    if 'reelshort' in p or 'reel short' in p:
+        return 'reelshort'
+    if 'dramabox' in p or 'drama box' in p:
+        return 'dramabox'
+    if 'peacock' in p:
+        return 'peacock'
+    return ''
+
+
+def _platform_profile(platform: str) -> Optional[dict]:
+    key = _platform_key(platform)
+    return PLATFORM_PROFILES.get(key)
+
+
+# ============================================================================
 # Claude client shim - reuse migration/claude_client if available
 # ============================================================================
 def _load_claude_client():
@@ -197,21 +392,39 @@ def _write_cache(key: str, payload: dict) -> None:
 _SYSTEM_PROMPT = (
     "You are a senior audience-research analyst specializing in mobile-first "
     "vertical drama (\"microdrama\") content. You research the audience for a "
-    "single microdrama title and return one valid JSON object matching the "
-    "user's schema.\n\n"
+    "single microdrama title on a specific platform and return one valid JSON "
+    "object matching the user's schema.\n\n"
     "For every microdrama title you analyze:\n"
-    "- Reason about the title's genre, tropes, and typical viewer archetype\n"
-    "- Anchor demographics to the published vertical-drama audience shape "
-    "(ReelShort 18M MAU, DramaBox 13M MAU, Peacock Shorts hub launch data), "
-    "then tilt for the specific title's tropes (werewolf/mafia titles skew "
-    "younger; billionaire romance skews wider age; sports/revenge titles pull "
-    "more men)\n"
-    "- Every demographic category must sum to exactly 100%\n"
-    "- Use ONLY the canonical bucket labels provided in the user prompt\n"
-    "- Never invent new buckets\n"
-    "- Include a 3-5 sentence audience_summary and 5-8 interests with an "
-    "index vs Gen Pop (100 = matches Gen Pop, 150 = 1.5x more likely)\n\n"
-    "Return ONLY the JSON object, no markdown fences, no commentary before or after."
+    "1. START from the PLATFORM anchor provided (each platform has its own "
+    "distinct viewer shape: ReelShort skews younger + more female + Hispanic/"
+    "Black-heavy; DramaBox skews slightly older + more Asian + more M-Drama "
+    "content; Peacock is more mainstream + older + higher income + cross-"
+    "device). The platform anchor is the starting distribution, NOT the "
+    "answer.\n"
+    "2. LAYER title-specific tilts on top of the platform anchor:\n"
+    "   - Werewolf / vampire / shifter tropes skew even younger (18-34) and "
+    "even more female\n"
+    "   - Billionaire / CEO / office romance widens the age band toward 35-54 "
+    "and lifts income tiers\n"
+    "   - Mafia / hidden-identity / son-in-law / overlord (M-Drama) pulls "
+    "more men, ages up slightly, drops the female skew by 5-8 pts\n"
+    "   - Revenge / rebirth / all-too-late tropes skew 25-44, higher divorced "
+    "share, more parents\n"
+    "   - Second chance / love-after-marriage / pregnancy tropes concentrate "
+    "35-54, married, has-children\n"
+    "3. Every demographic category MUST sum to exactly 100%\n"
+    "4. Use ONLY the canonical bucket labels provided\n"
+    "5. Never invent new buckets\n"
+    "6. Include a 3-5 sentence audience_summary that names BOTH the platform "
+    "context AND the title-specific tilt (e.g. 'ReelShort's Werewolf tail "
+    "concentrated on the female 18-34 core, over-indexed vs. even the "
+    "platform's baseline...')\n"
+    "7. 5-8 interests with an index vs Gen Pop (100 = matches Gen Pop, "
+    "150 = 1.5x more likely). Anchor these to platform reality (vertical-"
+    "drama viewers over-index on BookTok, reality dating, beauty, TikTok, "
+    "romance novels; not on prestige-TV or hard news).\n\n"
+    "Return ONLY the JSON object, no markdown fences, no commentary before "
+    "or after."
 )
 
 
@@ -225,6 +438,24 @@ def _build_user_prompt(title: str, series: str, genre: str, platform: str) -> st
     if platform:
         lines.append(f'Platform: {platform}')
     lines.append('')
+
+    # Inject the platform anchor context so Claude reasons from a
+    # known starting distribution, not from a generic "microdrama" mean.
+    profile = _platform_profile(platform)
+    if profile:
+        lines.append(f'PLATFORM ANCHOR - {profile["label"]} ({profile["mau"]}):')
+        lines.append(profile['summary'])
+        lines.append('')
+        lines.append('Platform-level demographic starting distribution '
+                     '(percentages by canonical bucket - use as your ANCHOR, '
+                     'then apply title-specific tilts):')
+        for cat in DEMO_ORDER:
+            base = profile['base'].get(cat) or {}
+            parts = [f'{b}: {round(base.get(b, 0.0), 1)}%'
+                     for b in DEMO_BUCKETS[cat]]
+            lines.append(f'  {cat}: {{{", ".join(parts)}}}')
+        lines.append('')
+
     lines.append('Research the audience for this microdrama title.')
     lines.append('')
     lines.append('Canonical demographic bucket labels (use these EXACTLY, sum each to 100):')
@@ -234,7 +465,7 @@ def _build_user_prompt(title: str, series: str, genre: str, platform: str) -> st
     lines.append('')
     lines.append('Return JSON in this exact shape:')
     lines.append('{')
-    lines.append('  "audience_summary": "<3-5 sentences about who watches this title>",')
+    lines.append('  "audience_summary": "<3-5 sentences about who watches this title on THIS platform, calling out both the platform anchor and the title-specific tilt>",')
     lines.append('  "demographics": {')
     lines.append('    "GENDER": {"Female": 62.4, "Male": 34.8, ...},')
     lines.append('    "AGE": {"17 and Under": 3.2, "18-24": 22.1, ...},')
@@ -456,11 +687,18 @@ def _heuristic_audience(title: str, series: str, genre: str, platform: str) -> d
             for k, v in delta.items():
                 tilts[k] = tilts.get(k, 0) + v
 
+    # Platform anchor: start from the platform's known distribution
+    # rather than the cross-platform average. This is the first
+    # ingredient the Claude prompt uses, so the heuristic path
+    # produces the same directional shape when Claude is unavailable.
+    profile = _platform_profile(platform)
+    base_dist = (profile or {}).get('base') or _BASE_DISTRIBUTION
+
     # Return uppercase-keyed demographics so _shape_agent_payload's
     # normalization path handles heuristic + Claude identically.
     demographics: dict[str, dict] = {}
     for cat in DEMO_ORDER:
-        vals = dict(_BASE_DISTRIBUTION[cat])
+        vals = dict(base_dist.get(cat) or _BASE_DISTRIBUTION[cat])
         for k, v in tilts.items():
             if not k.startswith(cat + '.'):
                 continue
@@ -469,18 +707,24 @@ def _heuristic_audience(title: str, series: str, genre: str, platform: str) -> d
                 vals[label] = max(0.0, vals[label] + v)
         demographics[cat] = vals
 
-    # Interest tilt: bump BookTok/dating/beauty for female-skew titles, sports/UFC-like for male
+    # Interest tilt: bump BookTok/dating/beauty for female-skew titles,
+    # sports/UFC-like for male-skew titles.
     interests = [dict(x) for x in _BASE_INTERESTS]
     if any(k.startswith('GENDER.Male') and v > 0 for k, v in tilts.items()):
         interests.append({'label': 'Sports betting', 'index': 148})
         interests.append({'label': 'Combat sports / MMA', 'index': 156})
 
+    # Build a summary that names both the platform anchor AND the tilt
+    plat_label = (profile or {}).get('label') or 'the vertical-drama platform'
+    tilt_phrase = (f' The {genre} tropes tilt this cut '
+                   f'{"younger and more female" if any(k.startswith(("AGE.18-24","GENDER.Female")) and v>0 for k,v in tilts.items()) else "toward the core viewer"}.'
+                   if genre else '')
+
     return {
         'audience_summary': (
-            f'{title} draws the core vertical-drama audience: female-skewing, '
-            f'concentrated 18-34, high mobile-first consumption. '
-            + (f'The {genre} genre tilt pulls this cut toward the top of that curve.'
-                if genre else '')
+            f'{title} on {plat_label} draws the platform core: mobile-'
+            f'primary vertical-drama audience anchored to '
+            f'{plat_label}\'s known viewer shape.' + tilt_phrase
         ).strip(),
         'demographics':         demographics,
         'interests':            interests[:8],
