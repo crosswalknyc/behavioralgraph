@@ -23856,7 +23856,6 @@
                 <h2 class="miq-title">📱 Microdramas <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Peacock mobile-first audience insights</span></h2>
                 <p class="miq-subtitle">Titles catalog, 28-day audience windows from first-observed date, and audience profile for Peacock's mobile-first microdrama slate. Ranked by observed hub surface position and first-window reach.</p>
             </div>
-            <div class="miq-kpi-row" id="microdramasIQKpiRow"></div>
             <div class="miq-filter-bar">
                 <div>
                     <label for="microdramasIQSort">Sort by</label>
@@ -42880,18 +42879,8 @@
         }
 
         function renderMicrodramasIQ(d) {
-            var kpi = document.getElementById('microdramasIQKpiRow');
             var meta = document.getElementById('microdramasIQMeta');
             var cov = d.coverage || {};
-            var totalAudience = (d.audience_overall || {}).panel_users_reached || 0;
-            var usReach = (d.audience_overall || {}).us_projected_reach || 0;
-            if (kpi) {
-                kpi.innerHTML =
-                    '<div class="miq-kpi"><div class="miq-kpi-label">Titles observed</div><div class="miq-kpi-value">' + (cov.titles_observed || 0) + '</div></div>' +
-                    '<div class="miq-kpi"><div class="miq-kpi-label">Days of history</div><div class="miq-kpi-value">' + (cov.days_of_history || 0) + '</div></div>' +
-                    '<div class="miq-kpi"><div class="miq-kpi-label">Overall audience (panel)</div><div class="miq-kpi-value">' + _miqFormatNumber(totalAudience) + '</div></div>' +
-                    '<div class="miq-kpi"><div class="miq-kpi-label">US Gen Pop reach</div><div class="miq-kpi-value">' + _miqFormatNumber(usReach) + '</div></div>';
-            }
             if (meta) {
                 var upd = cov.last_updated ? new Date(cov.last_updated).toLocaleString() : '';
                 meta.textContent = 'Showing ' + (d.titles || []).length + ' of ' + (cov.titles_observed || 0) + ' titles.' + (upd ? ' Catalog updated ' + upd + '.' : '');
