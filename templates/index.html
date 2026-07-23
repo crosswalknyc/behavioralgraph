@@ -17252,26 +17252,20 @@
             gap: 0.65rem;
             margin-bottom: 1.25rem;
         }
-        .app-boot-brand-mark {
-            width: 34px;
-            height: 34px;
-            border-radius: 8px;
-            background: linear-gradient(135deg, #5a9ad9 0%, #66d9ef 100%);
-            display: flex;
+        /* Lime CROSSWALK logo lockup, matching the sign-in card: white ///Crosswalk
+           wordmark inverted to black over a lime-green gradient chip. */
+        .app-boot-logo-wrap {
+            display: inline-flex;
             align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            color: #05080f;
-            font-weight: 800;
+            background: linear-gradient(135deg, #c8e600, #a0d911);
+            padding: 0.5rem 0.75rem;
+            border-radius: 10px;
         }
-        .app-boot-brand-name {
-            font-size: 0.78rem;
-            letter-spacing: 0.22em;
-            font-weight: 700;
-            color: #66d9ef;
-            text-transform: uppercase;
+        .app-boot-logo {
+            height: 20px;
+            width: auto;
+            display: block;
         }
-        body[data-theme="light"] .app-boot-brand-name { color: #1e40af; }
         .app-boot-title {
             font-size: 1.25rem;
             font-weight: 600;
@@ -17382,8 +17376,9 @@
     <div id="appBootOverlay" class="app-boot-overlay" role="status" aria-live="polite" aria-label="Loading dashboard">
         <div class="app-boot-card">
             <div class="app-boot-brand">
-                <div class="app-boot-brand-mark">C</div>
-                <div class="app-boot-brand-name">Crosswalk</div>
+                <div class="app-boot-logo-wrap">
+                    <img src="{{ url_for('static', filename='crosswalk-logo-white-hires.png') }}" alt="Crosswalk" class="app-boot-logo" onerror="this.style.display='none'" style="filter: invert(1); mix-blend-mode: multiply;">
+                </div>
             </div>
             <div class="app-boot-title" id="appBootTitle">Loading your dashboard</div>
             <div class="app-boot-sub" id="appBootSub">Waking up the server&hellip;</div>
