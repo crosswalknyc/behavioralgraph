@@ -97,6 +97,12 @@ COMPETITOR_SOURCES = [
     {'source': 'dramabox',  'label': 'DramaBox',
      'mau_millions': 13.0,
      'note': 'Second-largest by MAU. Heavy overlap with ReelShort audience.'},
+    {'source': 'goodshort', 'label': 'GoodShort',
+     'mau_millions':  6.0,
+     'note': 'NewTV-owned. #3-#4 in NA. Coin-economy model identical to ReelShort/DramaBox.'},
+    {'source': 'netshort',  'label': 'NetShort',
+     'mau_millions':  3.0,
+     'note': 'Aggressive-growth NA entrant. Claims 45,000+ short dramas in-catalog.'},
 ]
 
 

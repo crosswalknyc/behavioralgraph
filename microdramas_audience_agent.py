@@ -236,6 +236,115 @@ PLATFORM_PROFILES = {
                                     'Prefer Not to Say': 4.7},
         },
     },
+    'goodshort': {
+        'label':    'GoodShort',
+        'mau':      '~6M MAU',
+        'summary': (
+            'NewTV-owned #3-#4 vertical-drama app in NA. Coin-economy '
+            'identical to ReelShort/DramaBox. Skews similar to ReelShort '
+            'but with a slightly higher share of English-dubbed Chinese '
+            'content (see their "[ENG DUB]" title prefixes). Audience is '
+            'female-heavy (~64% F), 25-44 core, mobile-primary. Over-'
+            'indexes on Hispanic and Asian audiences vs. mass SVOD. '
+            'Heavy Romance/Billionaire/CEO trope mix; the ENG DUB rail '
+            'skews slightly older.'
+        ),
+        'base': {
+            'GENDER': {'Female': 64.0, 'Male': 33.4, 'Non-Binary': 0.8,
+                       'Trans Female': 0.4, 'Trans Male': 0.2,
+                       'Prefer Not to Say': 1.2},
+            'AGE': {'17 and Under': 2.9, '18-24': 19.8, '25-34': 31.6,
+                     '35-44': 23.2, '45-54': 13.4, '55-64': 6.8,
+                     '65 or Older': 2.3},
+            'ETHNICITY': {'White': 45.4, 'Hispanic or Latino': 22.8,
+                           'Black or African American': 16.8,
+                           'Asian': 11.2, 'Another Race/Ethnicity': 3.8},
+            'INCOME': {'Less than $25,000': 13.4, '$25,000 - $49,999': 22.2,
+                        '$50,000 - $74,999': 24.6, '$75,000 - $99,999': 17.6,
+                        '$100,000 - $149,999': 14.4, '$150,000 - $249,999': 6.2,
+                        '$250,000 or More': 1.6},
+            'EDUCATION': {'High School or Less': 33.2,
+                           'Some College / Associate Degree': 25.8,
+                           "Bachelor's Degree": 28.4,
+                           'Graduate or Professional Degree': 10.1,
+                           'Prefer Not to Say': 2.5},
+            'RELATIONSHIP': {'Single': 32.4, 'In a Relationship': 24.6,
+                              'Married': 28.4, 'Divorced or Separated': 10.6,
+                              'Widowed': 1.6, 'Prefer Not to Say': 2.4},
+            'PARENTAL_STATUS': {'Has Children': 49.6, 'No Children': 46.2,
+                                 'Prefer Not to Say': 4.2},
+            'OCCUPATION': {'Management, Business & Professional': 20.4,
+                            'Healthcare Practitioners or Support': 13.1,
+                            'Sales & Retail': 12.4, 'Education or Library Services': 9.6,
+                            'Service & Hospitality': 9.8,
+                            'Science, Technology & Technical Professions': 5.2,
+                            'Skilled Trades/Construction or Maintenance': 4.8,
+                            'Agriculture & Outdoor': 2.2,
+                            'Transportation & Logistics': 4.0,
+                            'Manufacturing & Production': 3.4,
+                            'Public Safety & Protective Services': 2.6,
+                            'Legal': 1.3, 'Other': 11.2},
+            'SEXUAL_ORIENTATION': {'Straight / Heterosexual': 80.4,
+                                    'Gay or Lesbian': 10.1,
+                                    'Another Sexual Orientation': 5.2,
+                                    'Prefer Not to Say': 4.3},
+        },
+    },
+    'netshort': {
+        'label':    'NetShort',
+        'mau':      '~3M MAU',
+        'summary': (
+            'Rapid-growth NA vertical-drama entrant (aggressive Meta ad '
+            'spend visible Q2 2026). Catalog is broad ("45,000+ viral '
+            'short dramas" per their own tagline) and leans harder on '
+            'horror, thriller, and revenge tropes than the female-'
+            'romance-heavy ReelShort/DramaBox mix. Audience is more '
+            'gender-balanced (~58% F / ~40% M) because of that content '
+            'tilt, slightly younger (18-34 dominant), and heavier on '
+            'Hispanic and Black viewers. Newer platform means shorter '
+            'session times.'
+        ),
+        'base': {
+            'GENDER': {'Female': 58.0, 'Male': 39.6, 'Non-Binary': 0.9,
+                       'Trans Female': 0.4, 'Trans Male': 0.3,
+                       'Prefer Not to Say': 0.8},
+            'AGE': {'17 and Under': 4.6, '18-24': 24.4, '25-34': 30.8,
+                     '35-44': 20.2, '45-54': 11.8, '55-64': 6.0,
+                     '65 or Older': 2.2},
+            'ETHNICITY': {'White': 44.6, 'Hispanic or Latino': 25.4,
+                           'Black or African American': 18.4,
+                           'Asian': 7.9, 'Another Race/Ethnicity': 3.7},
+            'INCOME': {'Less than $25,000': 15.2, '$25,000 - $49,999': 23.4,
+                        '$50,000 - $74,999': 23.6, '$75,000 - $99,999': 16.4,
+                        '$100,000 - $149,999': 13.4, '$150,000 - $249,999': 6.4,
+                        '$250,000 or More': 1.6},
+            'EDUCATION': {'High School or Less': 36.2,
+                           'Some College / Associate Degree': 26.8,
+                           "Bachelor's Degree": 25.6,
+                           'Graduate or Professional Degree': 8.6,
+                           'Prefer Not to Say': 2.8},
+            'RELATIONSHIP': {'Single': 36.8, 'In a Relationship': 25.4,
+                              'Married': 24.6, 'Divorced or Separated': 9.4,
+                              'Widowed': 1.4, 'Prefer Not to Say': 2.4},
+            'PARENTAL_STATUS': {'Has Children': 44.6, 'No Children': 51.0,
+                                 'Prefer Not to Say': 4.4},
+            'OCCUPATION': {'Management, Business & Professional': 18.4,
+                            'Healthcare Practitioners or Support': 12.6,
+                            'Sales & Retail': 12.4, 'Education or Library Services': 9.2,
+                            'Service & Hospitality': 11.4,
+                            'Science, Technology & Technical Professions': 4.8,
+                            'Skilled Trades/Construction or Maintenance': 5.2,
+                            'Agriculture & Outdoor': 2.4,
+                            'Transportation & Logistics': 4.4,
+                            'Manufacturing & Production': 3.8,
+                            'Public Safety & Protective Services': 2.6,
+                            'Legal': 1.2, 'Other': 11.6},
+            'SEXUAL_ORIENTATION': {'Straight / Heterosexual': 78.6,
+                                    'Gay or Lesbian': 11.4,
+                                    'Another Sexual Orientation': 5.6,
+                                    'Prefer Not to Say': 4.4},
+        },
+    },
     'peacock': {
         'label':    'Peacock',
         'mau':      '35M paid subs',
@@ -294,13 +403,18 @@ PLATFORM_PROFILES = {
 
 
 def _platform_key(platform: str) -> str:
-    """Normalize a platform label ('ReelShort', 'DramaBox', 'Peacock -
-    Microdramas Hub', etc.) to the PLATFORM_PROFILES key."""
+    """Normalize a platform label ('ReelShort', 'DramaBox', 'GoodShort',
+    'NetShort', 'Peacock - Microdramas Hub', etc.) to the
+    PLATFORM_PROFILES key."""
     p = (platform or '').strip().lower()
     if 'reelshort' in p or 'reel short' in p:
         return 'reelshort'
     if 'dramabox' in p or 'drama box' in p:
         return 'dramabox'
+    if 'goodshort' in p or 'good short' in p:
+        return 'goodshort'
+    if 'netshort' in p or 'net short' in p:
+        return 'netshort'
     if 'peacock' in p:
         return 'peacock'
     return ''

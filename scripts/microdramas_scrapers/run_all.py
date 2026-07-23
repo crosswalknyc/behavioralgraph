@@ -30,6 +30,8 @@ SCRAPERS = [
     ('peacock',   'scripts.microdramas_scrapers.peacock',   'Peacock'),
     ('reelshort', 'scripts.microdramas_scrapers.reelshort', 'ReelShort'),
     ('dramabox',  'scripts.microdramas_scrapers.dramabox',  'DramaBox'),
+    ('goodshort', 'scripts.microdramas_scrapers.goodshort', 'GoodShort'),
+    ('netshort',  'scripts.microdramas_scrapers.netshort',  'NetShort'),
 ]
 
 
