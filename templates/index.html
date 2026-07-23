@@ -42936,22 +42936,24 @@
             } else if (t.rail) {
                 seriesLine = '<div class="miq-title-series">' + _miqEscape(t.rail) + '</div>';
             }
-            // Second metric: platforms with a "first observed" (Peacock)
-            // get that; competitors get their genre or the number of
-            // episodes (whichever is more informative).
+            // Second metric: episode count is the most useful "what
+            // does this title contain" signal across every platform, so
+            // Peacock now mirrors the competitor tabs and surfaces
+            // Episodes. Falls back to Genre / First seen when episode
+            // count isn't published for a given source.
             var secondaryMetric;
-            if (platform === 'Peacock') {
-                secondaryMetric = {
-                    label: 'First observed',
-                    value: t.first_observed_date || '-',
-                };
-            } else if (t.episodes_count != null) {
+            if (t.episodes_count != null) {
                 secondaryMetric = {
                     label: 'Episodes',
                     value: String(t.episodes_count),
                 };
             } else if (t.genre) {
                 secondaryMetric = { label: 'Genre', value: t.genre };
+            } else if (platform === 'Peacock') {
+                secondaryMetric = {
+                    label: 'First observed',
+                    value: t.first_observed_date || '-',
+                };
             } else {
                 secondaryMetric = { label: 'First seen', value: t.earliest_date || '-' };
             }
