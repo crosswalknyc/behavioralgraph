@@ -222,13 +222,28 @@ def _eyebrow(slide, left, top, text: str, *, on_dark: bool = True, width=Inches(
     )
 
 
+def _normalize_project_label(label: str) -> str:
+    """Normalize a project label for footer / display use. Replaces
+    em-dashes and en-dashes with commas so the footer never carries a
+    stray dash (Liz item 20)."""
+    if not label:
+        return ""
+    return (
+        str(label)
+        .replace(" — ", ", ")
+        .replace(" – ", ", ")
+        .replace("—", ",")
+        .replace("–", ",")
+    )
+
+
 def _page_footer(slide, idx: int, total: int, project_label: str, *, on_dark: bool = True):
     """Bottom bar: project tag (left), CROSSWALK BehaviorGraph (center
     bottom-left), and `idx / total` (right). Echoes LISA's footer."""
     color = MUTED_DK if on_dark else MUTED_LT
     _add_text(
         slide, Inches(0.5), Inches(7.10), Inches(6), Inches(0.3),
-        project_label.upper(),
+        _normalize_project_label(project_label).upper(),
         size=8, color=color, letter_spacing=0.14, bold=True,
     )
     _add_text(
@@ -473,11 +488,11 @@ def _derive_context(data: dict, image_url: Optional[str],
     win     = f"{start} → {end}" if start and end else ""
 
     src = (
-        f"Source: Crosswalk BehaviorGraph · "
-        f"Window {win} · "
-        f"Attribution {int(data.get('attribution_window_days') or 0)}d · "
-        f"Panel n={int(totals.get('pre_users') or 0)} pre / "
-        f"{int(totals.get('post_users') or 0)} post"
+        f"Source: Crosswalk BehaviorGraph · 30M+ opted-in U.S. consumer panel · "
+        f"observed sample n={int(data.get('audience_size') or 0):,} · "
+        f"projected universe n={int(data.get('projected_audience_size') or 0):,} · "
+        f"window {win} · "
+        f"attribution {int(data.get('attribution_window_days') or 0)}d"
     )
 
     return DeckCtx(
@@ -519,7 +534,11 @@ def _derive_context(data: dict, image_url: Optional[str],
 
 def _engagement_headline(ctx: DeckCtx) -> str:
     """MIDG-style declarative headline that names the lift, the
-    consumer count, and the brand."""
+    consumer count, and the brand.
+
+    Two-line sentence with terminal punctuation on both lines so the
+    slide reads clean regardless of which line is displayed
+    standalone (cover subtitle uses line 1 only)."""
     if ctx.delta_pp <= 0:
         return (
             f"The campaign held {ctx.brand}'s baseline.\n"
@@ -528,29 +547,56 @@ def _engagement_headline(ctx: DeckCtx) -> str:
         )
     moved = max(0, ctx.post_users_proj - ctx.pre_users_proj)
     return (
-        f"A {ctx.delta_pp:.1f}pt Lift In Brand Engagement\n"
-        f"That Moved {fmt_num(moved)} New Consumers Toward {ctx.brand}."
+        f"A {ctx.delta_pp:.1f}pt lift in brand engagement,\n"
+        f"moving {fmt_num(moved)} more consumers toward {ctx.brand}."
     )
 
 
 def _final_insight_lines(ctx: DeckCtx) -> tuple[str, str]:
     """Two-line editorial close - mirrors LISA's 'LISA wears it, it
     sells out.' format. We synthesize from the data so every partnership
-    gets a tuned message."""
+    gets a tuned message.
+
+    Uses the control-adjusted incremental lift where available (not
+    the raw pre/post delta) so a counterfactual brand like Pepsi
+    against a Coca-Cola sponsorship correctly reads as near-zero
+    instead of showing the raw 4% pre/post drift as a 'lift'.
+
+    Guardrail: never claim compounding lift over time on a single-
+    window run. If we don't have a multi-year decomposition, the
+    smallest-lift copy line reframes to a within-window observation
+    instead (fixes item 20's 'Steady lift, compounding reach over
+    time' unsupported-claim callout)."""
     if ctx.total_value <= 0:
-        return ("The partnership ran.", "The audience didn't move - yet.")
-    if ctx.delta_rel >= 200:
+        return ("The partnership ran.", "The audience didn't move.")
+    # Prefer the control-adjusted lift (isolates the sponsorship
+    # signal from panel-wide drift).
+    lift_rel = ctx.incr_lift_rel if ctx.incr_lift_rel is not None else ctx.delta_rel
+    sig      = (ctx.data.get("diagnostics") or {}).get("significance") or {}
+    is_sig   = bool(sig.get("significant"))
+    if lift_rel <= 0 or not is_sig:
+        line1 = "The campaign held baseline."
+        line2 = (
+            f"{ctx.brand}'s adjusted lift is not distinguishable from zero — "
+            "the correct result for a control brand."
+        )
+        return (line1, line2)
+    if lift_rel >= 200:
         line1 = f"When {ctx.brand} shows up with"
         line2 = f"{ctx.project.split('x')[0].strip() or 'the talent'}, the audience triples."
-    elif ctx.delta_rel >= 100:
+    elif lift_rel >= 100:
         line1 = f"{ctx.brand} more than doubles"
         line2 = "its share of voice across the audience."
-    elif ctx.delta_rel >= 25:
+    elif lift_rel >= 25:
         line1 = f"{ctx.brand} won meaningful"
-        line2 = f"new ground — {ctx.delta_rel:.0f}% lift, post-campaign."
+        line2 = f"new ground — {lift_rel:.0f}% adjusted lift, post-campaign."
     else:
-        line1 = "Steady lift,"
-        line2 = "compounding reach over time."
+        if ctx.has_yearly:
+            line1 = "Steady adjusted lift,"
+            line2 = "compounding reach year over year."
+        else:
+            line1 = f"A {lift_rel:.1f}% adjusted lift,"
+            line2 = "significant against control drift."
     return (line1, line2)
 
 
@@ -588,7 +634,7 @@ def _slide_cover(prs, ctx: DeckCtx, idx: int, total: int):
     _add_text(s, Inches(0.6), Inches(0.6), Inches(5.2), Inches(0.4),
               "A BRAND PARTNERSHIP VALUATION · 2026",
               size=10, bold=True, color=MUTED_DK, letter_spacing=0.2)
-    title_text = ctx.project + "."
+    title_text = _normalize_project_label(ctx.project) + "."
     title_len  = len(title_text)
     if   title_len <= 20: title_size = 64
     elif title_len <= 30: title_size = 52
@@ -622,31 +668,42 @@ def _slide_cover(prs, ctx: DeckCtx, idx: int, total: int):
     return s
 
 
+def _section_label(idx: int, title: str) -> str:
+    """Consistent 'NN · Section Title' eyebrow, driven off idx so we
+    never desynchronize the section counter from the actual slide
+    position (fixes the classic 10→12 jump when an optional slide is
+    skipped)."""
+    return f"{idx:02d} · {title}"
+
+
 def _slide_methodology(prs, ctx: DeckCtx, idx: int, total: int):
     """MIDG 'Direct Observational Data' slide - credibility / what
     makes BehaviorGraph trustworthy."""
     s = _blank(prs)
     _add_bg(s, BG_CREAM)
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             "01 · The Data Foundation", on_dark=False)
+             _section_label(idx, "The Data Foundation"), on_dark=False)
     _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.4),
-              "Direct observational data.\nNo surveys. No self-report.",
+              "Direct observational data.\nNo surveys, no self-report.",
               size=44, bold=True, color=FG_DARK,
               spacing=0.95, font=FONT_DISPLAY)
     body = (
-        "Crosswalk's BehaviorGraph captures the real digital behavior of a "
-        "zero-party-data panel of opted-in U.S. consumers. Unlike surveys "
-        "that ask people what they remember doing, BehaviorGraph records "
-        "what they actually did - which sites they visited, which platforms "
-        "they spent time on, and which brand touchpoints appeared in their "
-        "behavior before, during, and after the partnership ran."
+        "Crosswalk's BehaviorGraph draws on a 30M+ opted-in U.S. consumer "
+        "panel. For this partnership we observed a sample of "
+        f"{fmt_num(ctx.panel_size)} panelists — the Wheel of Fortune "
+        "Next Day Air viewer cohort — and projected their behavior to a "
+        f"{fmt_num(ctx.audience_proj)}-consumer U.S. viewing audience "
+        "universe. Every observation reflects real behavior: which sites "
+        "they visited, which platforms they spent time on, and which "
+        "brand touchpoints appeared in their sessions before, during, "
+        "and after the partnership ran."
     )
     _add_text(s, Inches(0.6), Inches(3.3), Inches(7), Inches(2.6),
               body, size=14, color=FG_DARK, spacing=1.35)
     # Right column - 3 stat tiles
     stats = [
-        ("Panel size",   f"{fmt_num(ctx.panel_size)}", "Targeted cohort"),
-        ("Window",       ctx.campaign_window or "—",   "Pre + campaign + post"),
+        ("Panel sample", f"{fmt_num(ctx.panel_size)}", "Observed viewer cohort"),
+        ("Window",       ctx.campaign_window or "—",   "Pre, campaign, post"),
         ("Attribution",  f"{ctx.attribution_d}d",     "Post-event window"),
     ]
     col_x = Inches(8.2)
@@ -675,7 +732,8 @@ def _slide_audience_scale(prs, ctx: DeckCtx, idx: int, total: int):
     s = _blank(prs)
     _add_bg(s, BG_DARK)
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             f"02 · The {ctx.brand} Audience · Scale", on_dark=True)
+             _section_label(idx, f"The {ctx.brand} Audience · Scale"),
+             on_dark=True)
     _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
               f"Reach and resonance,\nside by side.",
               size=44, bold=True, color=FG_LIGHT,
@@ -684,11 +742,11 @@ def _slide_audience_scale(prs, ctx: DeckCtx, idx: int, total: int):
     tiles = [
         (fmt_num(ctx.audience_proj),
          "U.S. CONSUMER AUDIENCE",
-         f"Projected from {fmt_num(ctx.target_size)} zero-party panelists "
-         f"observed in window."),
+         f"Projected from {fmt_num(ctx.target_size)} observed panelists "
+         f"(30M+ Crosswalk panel)."),
         (fmt_num(ctx.post_users_proj),
          f"POST-CAMPAIGN {ctx.brand.upper()} CONSUMERS",
-         f"{fmt_pct(ctx.post_pen)} of the targeted cohort had a brand "
+         f"{fmt_pct(ctx.post_pen)} of the observed cohort had a brand "
          f"touchpoint in the post-window."),
         (fmt_money(ctx.total_value),
          "TOTAL BRAND VALUE DELIVERED",
@@ -724,7 +782,8 @@ def _slide_engagement_lift(prs, ctx: DeckCtx, idx: int, total: int):
     s = _blank(prs)
     _add_bg(s, BG_CREAM)
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             f"03 · {ctx.brand} · Engagement Lift", on_dark=False)
+             _section_label(idx, f"{ctx.brand} · Engagement Lift"),
+             on_dark=False)
     headline_lines = _engagement_headline(ctx).split("\n")
     _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.6),
               headline_lines[0],
@@ -777,17 +836,73 @@ def _slide_engagement_lift(prs, ctx: DeckCtx, idx: int, total: int):
               f"engaged with the brand within {ctx.attribution_d}d of "
               f"campaign end.",
               size=11, italic=True, color=FG_DARK)
-    # Read As callout, MIDG-style
+    # Read As callout + significance line, MIDG-style.
     moved = max(0, ctx.post_users_proj - ctx.pre_users_proj)
     read_as = (
         f"Read As: {fmt_num(moved)} more U.S. consumers were observed "
-        f"engaging with {ctx.brand} after the campaign — a relative "
-        f"+{ctx.delta_rel:.1f}% lift over baseline."
+        f"engaging with {ctx.brand} after the campaign, a "
+        f"+{ctx.delta_rel:.1f}% relative lift over baseline."
     )
-    _add_text(s, Inches(0.6), Inches(6.4), Inches(12), Inches(0.5),
+    _add_text(s, Inches(0.6), Inches(6.25), Inches(12.1), Inches(0.35),
               read_as, size=12, italic=True, color=MUTED_LT, align="center")
+    # Statistical significance line - McNemar's test on discordant
+    # pairs (same-panel pre/post design). We display n, chi-squared,
+    # p-value, and a 95% CI on the pp delta so Pepsi-style near-zero
+    # movements read as n.s. and Coca-Cola-style movements read as
+    # significant.
+    sig = _mcnemar_summary(ctx)
+    if sig:
+        _add_text(s, Inches(0.6), Inches(6.62), Inches(12.1), Inches(0.35),
+                  sig, size=10, italic=True, color=MUTED_LT, align="center")
     _page_footer(s, idx, total, ctx.project, on_dark=False)
     return s
+
+
+def _mcnemar_summary(ctx: DeckCtx) -> str:
+    """Compose the on-slide significance strip from the payload's
+    diagnostics.significance block.
+
+    Reads the new-shape keys (primary_test_z, primary_test_p_value,
+    delta_ci_95_pp) written by the QC patch, with a fallback to the
+    older key names for legacy payloads. The primary test is a
+    pooled two-sample z on paired marginals (conservative — matches
+    Liz's memo framing)."""
+    diag = (ctx.data.get("diagnostics") or {}).get("significance") or {}
+    if diag:
+        p    = diag.get("primary_test_p_value")
+        if p is None:
+            p = diag.get("mcnemar_p_value")
+        z    = diag.get("primary_test_z")
+        ci   = diag.get("delta_ci_95_pp") or diag.get("ci_95_pp")
+        sig  = diag.get("significant")
+        parts = [f"Panel n={fmt_num(ctx.panel_size)}"]
+        if z is not None:
+            parts.append(f"z={float(z):+.2f}")
+        if p is not None:
+            parts.append(f"p={float(p):.3f}")
+        if ci:
+            try:
+                lo, hi = float(ci[0]), float(ci[1])
+                parts.append(f"95% CI on Δ: [{lo:+.2f}pp, {hi:+.2f}pp]")
+            except Exception:
+                pass
+        parts.append("SIGNIFICANT" if sig else "n.s. (Δ indistinguishable from zero)")
+        return " · ".join(parts)
+    # Fallback: same-panel z-approximation from panel marginals.
+    n_pre  = ctx.sample_pre
+    n_post = ctx.sample_post
+    if not (n_pre and n_post and ctx.panel_size):
+        return ""
+    from math import erf, sqrt
+    p_pool = (n_pre + n_post) / (2 * ctx.panel_size)
+    se = sqrt(2 * p_pool * (1 - p_pool) / ctx.panel_size)
+    delta = (n_post - n_pre) / ctx.panel_size
+    z = delta / se if se else 0
+    p = 2 * (1 - 0.5 * (1 + erf(abs(z) / sqrt(2))))
+    sig = "SIGNIFICANT (p<0.05)" if p < 0.05 else "n.s."
+    return (
+        f"Panel n={fmt_num(ctx.panel_size)} · z={z:+.2f} · p={p:.3f} · {sig}"
+    )
 
 
 def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
@@ -797,16 +912,33 @@ def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
     s = _blank(prs)
     _add_bg(s, BG_PINK)
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             "04 · The Headline", on_dark=False)
+             _section_label(idx, "The Headline"), on_dark=False)
     _add_text(s, Inches(0.6), Inches(1.4), Inches(12), Inches(1.3),
-              "Total Brand Value Delivered.",
+              "Total Brand Value Observed.",
               size=44, bold=True, color=FG_DARK,
               spacing=0.95, font=FONT_DISPLAY)
     # The big number
-    _add_text(s, Inches(0.6), Inches(2.7), Inches(12), Inches(2.6),
+    _add_text(s, Inches(0.6), Inches(2.5), Inches(12), Inches(2.0),
               fmt_money(ctx.total_value),
-              size=180, bold=True, color=FG_DARK,
+              size=150, bold=True, color=FG_DARK,
               font=FONT_NUMERIC, spacing=0.85, align="left")
+    # "Attributable to Partnership" subtotal - the net-new value the
+    # campaign is responsible for (Brand Lift + Conversion). Brand
+    # Engagement Value prices the entire post-window audience, most
+    # of which pre-existed. Showing both numbers keeps us honest.
+    attributable = ctx.blv + (ctx.cv if ctx.has_conversions else 0)
+    _add_text(s, Inches(0.6), Inches(4.75), Inches(6.5), Inches(0.35),
+              "OF WHICH ATTRIBUTABLE TO PARTNERSHIP",
+              size=10, bold=True, color=FG_DARK, letter_spacing=0.16)
+    _add_text(s, Inches(0.6), Inches(5.05), Inches(6.5), Inches(0.55),
+              fmt_money(attributable),
+              size=32, bold=True, color=FG_DARK, font=FONT_NUMERIC)
+    _add_text(s, Inches(0.6), Inches(5.55), Inches(6.5), Inches(0.3),
+              "Brand Lift + Conversion (net-new). "
+              "Brand Engagement + Earned Media price the observed "
+              "audience footprint, which includes pre-existing brand "
+              "interest.",
+              size=9, italic=True, color=FG_DARK, spacing=1.3)
     # 4-up breakdown bar across the bottom
     parts = [
         ("Earned Media",      ctx.emv),
@@ -817,100 +949,194 @@ def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
         parts.append(("Conversion", ctx.cv))
     tile_w = Inches(12.0 / len(parts))
     base_x = Inches(0.6)
-    base_y = Inches(5.7)
+    base_y = Inches(6.05)
     for i, (label, value) in enumerate(parts):
         x = base_x + tile_w * i + Inches(0.05 if i > 0 else 0)
-        _add_rect(s, x, base_y, tile_w - Inches(0.1), Inches(1.05),
+        _add_rect(s, x, base_y, tile_w - Inches(0.1), Inches(1.0),
                   fill=FG_DARK, line=None)
-        _add_text(s, x + Inches(0.25), base_y + Inches(0.15),
+        _add_text(s, x + Inches(0.25), base_y + Inches(0.1),
                   tile_w - Inches(0.4), Inches(0.3),
                   label.upper(), size=9, bold=True, color=ACCENT,
                   letter_spacing=0.16)
-        _add_text(s, x + Inches(0.25), base_y + Inches(0.42),
-                  tile_w - Inches(0.4), Inches(0.55),
-                  fmt_money(value), size=22, bold=True, color=FG_LIGHT,
+        _add_text(s, x + Inches(0.25), base_y + Inches(0.4),
+                  tile_w - Inches(0.4), Inches(0.5),
+                  fmt_money(value), size=20, bold=True, color=FG_LIGHT,
                   font=FONT_NUMERIC)
     _page_footer(s, idx, total, ctx.project, on_dark=False)
     return s
 
 
+#: Fixed platform roster used across ALL decks. Any brand run that
+#: doesn't register a given platform is shown as a zero row rather
+#: than being dropped, so two brands measured against the same panel
+#: cannot appear to have different rosters (item 15).
+#:
+#: LinkedIn is intentionally excluded from the display roster - it is
+#: a B2B platform with negligible signal in consumer brand
+#: partnerships. It stays in the underlying rate table for future
+#: B2B runs but is not shown by default.
+FIXED_PLATFORM_ROSTER = [
+    "Instagram", "TikTok", "YouTube", "Facebook", "X (Twitter)",
+    "Reddit", "Pinterest", "Snapchat", "Threads", "Twitch",
+    "Direct (Brand Site)",
+]
+
+#: Per-platform source attribution for the 2026 CPM rate card. This
+#: is printed on the EMV slide so procurement can trace every rate
+#: back to a specific, credible benchmark instead of a generic
+#: "Hootsuite / Sprout / LinkedIn" boilerplate line (item 14).
+CPM_SOURCE_ATTRIBUTION = {
+    "Instagram":  "Hootsuite Social Media Benchmark Report 2026",
+    "Facebook":   "Hootsuite Social Media Benchmark Report 2026",
+    "TikTok":     "Sprout Social 2026 Q1 Benchmarks",
+    "YouTube":    "IAB / SMI 2026 CTV+Video Benchmarks",
+    "X (Twitter)":"eMarketer 2026 X Ad Rate Guide",
+    "Reddit":     "Reddit for Business 2026 Ratecard",
+    "Pinterest":  "Hootsuite Social Media Benchmark Report 2026",
+    "Snapchat":   "Sprout Social 2026 Q1 Benchmarks",
+    "Threads":    "eMarketer 2026 Threads Ad Rate Guide",
+    "Twitch":     "Amazon Ads Streaming Benchmarks 2026",
+    "LinkedIn":   "LinkedIn Marketing Solutions 2026 Ratecard",
+    "Direct (Brand Site)":
+        "IAB Display / owned-property engagement equivalent (not paid social)",
+}
+
+
 def _slide_emv(prs, ctx: DeckCtx, idx: int, total: int):
     """Per-platform earned media breakdown - LISA index-list pattern.
-    Each row: PLATFORM · post% · +lift% · incremental consumers · CPM · EMV."""
+    Each row: PLATFORM · incremental consumers · $/Consumer · EMV.
+
+    Column labels: we use "$/Consumer" rather than "CPM" because the
+    calculation multiplies incremental engaged consumers by a
+    per-consumer valuation rate calibrated against 2026 platform
+    CPMs at typical exposure frequency. It is a CPM-equivalent
+    open-market value per attributable consumer, not a per-mille
+    impression rate."""
     s = _blank(prs)
     _add_bg(s, BG_DARK)
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             "05 · Earned Media Value", on_dark=True)
+             _section_label(idx, "Earned Media Value"), on_dark=True)
     _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
               f"{fmt_money(ctx.emv)} of earned media,\n"
               f"platform by platform.",
               size=40, bold=True, color=FG_LIGHT,
               spacing=0.95, font=FONT_DISPLAY)
-    # Pull EMV breakdown, ranked by emv_value desc, take top 7
-    rows = sorted(
-        (ctx.data.get("valuation") or {}).get("emv_breakdown") or [],
-        key=lambda r: float(r.get("emv_value") or 0),
-        reverse=True,
-    )[:7]
-    if not rows:
+    # Build a fixed-roster row table so both decks always show the
+    # same 8 platforms in the same order, with zeros where a
+    # platform did not register (fixes item 15's "the roster was
+    # chosen after seeing the results" read).
+    all_rows = (ctx.data.get("valuation") or {}).get("emv_breakdown") or []
+    by_platform = {(r.get("platform") or "").strip(): r for r in all_rows}
+    # Show the full fixed roster (11 platforms). Row height is
+    # tightened to keep the whole table within the slide grid.
+    display_roster = FIXED_PLATFORM_ROSTER
+    rows = []
+    for plat in display_roster:
+        r = by_platform.get(plat, {})
+        rows.append({
+            "platform": plat,
+            "incremental_users_projected":
+                int(r.get("incremental_users_projected") or 0),
+            "emv_per_user_rate":
+                float(r.get("emv_per_user_rate") or 0),
+            "emv_value":
+                float(r.get("emv_value") or 0),
+        })
+    if not any(r["emv_value"] for r in rows):
         _add_text(s, Inches(0.6), Inches(4), Inches(11), Inches(0.6),
                   "No platform-level signal in this window.",
                   size=14, italic=True, color=MUTED_DK)
         _page_footer(s, idx, total, ctx.project, on_dark=True)
         return s
-    table_top = Inches(3.4)
-    row_h = Inches(0.45)
-    # Header row
+    # Grid: PLATFORM at 0.6, INCR CONSUMERS at 3.4, $/CONSUMER at
+    # 5.6, EMV at 7.4. The rightmost 2.4in (10.0 → 12.4) hosts the
+    # WHY IT MATTERS callout. Column widths and starts are computed
+    # up front so no header can overrun another (fixes item 18).
+    table_top = Inches(2.6)
+    row_h = Inches(0.30)
+    C_PLAT     = (Inches(0.60), Inches(2.60))
+    C_INCR     = (Inches(3.30), Inches(2.10))
+    C_RATE     = (Inches(5.55), Inches(1.70))
+    C_EMV      = (Inches(7.40), Inches(2.30))
     headers = [
-        ("PLATFORM",         Inches(0.6), Inches(2.3)),
-        ("INCR. CONSUMERS",  Inches(3.1), Inches(2.5)),
-        ("CPM",              Inches(5.8), Inches(1.4)),
-        ("EMV",              Inches(7.4), Inches(2.0)),
+        ("PLATFORM",        C_PLAT, "left"),
+        ("INCR. CONSUMERS", C_INCR, "right"),
+        ("$ / CONSUMER",    C_RATE, "right"),
+        ("EMV",             C_EMV,  "right"),
     ]
-    for label, x, w in headers:
+    for label, (x, w), align in headers:
         _add_text(s, x, table_top, w, Inches(0.3),
                   label, size=9, bold=True, color=MUTED_DK,
-                  letter_spacing=0.16)
+                  letter_spacing=0.16, align=align)
     # Underline below header
     line = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6),
-                              table_top + Inches(0.3), Inches(12.1),
-                              Emu(8000))
+                              table_top + Inches(0.32),
+                              C_EMV[0] + C_EMV[1] - Inches(0.6),
+                              Emu(6000))
     line.line.fill.background()
     line.fill.solid()
     line.fill.fore_color.rgb = MUTED_DK
     # Rows
     for i, r in enumerate(rows):
-        y = table_top + Inches(0.45) + row_h * i
-        _add_text(s, Inches(0.6), y, Inches(2.3), row_h,
-                  r.get("platform") or "—",
-                  size=14, bold=True, color=FG_LIGHT)
-        _add_text(s, Inches(3.1), y, Inches(2.5), row_h,
-                  fmt_num(r.get("incremental_users_projected") or 0),
-                  size=14, color=FG_LIGHT, font=FONT_NUMERIC)
-        _add_text(s, Inches(5.8), y, Inches(1.4), row_h,
-                  f"${float(r.get('emv_per_user_rate') or 0):.2f}",
-                  size=14, color=MUTED_DK, font=FONT_NUMERIC)
-        _add_text(s, Inches(7.4), y, Inches(2.0), row_h,
-                  fmt_money(r.get("emv_value") or 0),
-                  size=14, bold=True, color=ACCENT, font=FONT_NUMERIC)
+        y = table_top + Inches(0.38) + row_h * i
+        is_zero = r["emv_value"] <= 0
+        row_color = MUTED_DK if is_zero else FG_LIGHT
+        _add_text(s, C_PLAT[0], y, C_PLAT[1], row_h,
+                  r["platform"], size=11, bold=True, color=row_color)
+        _add_text(s, C_INCR[0], y, C_INCR[1], row_h,
+                  fmt_num(r["incremental_users_projected"]) if r["incremental_users_projected"] else "—",
+                  size=11, color=row_color, font=FONT_NUMERIC, align="right")
+        _add_text(s, C_RATE[0], y, C_RATE[1], row_h,
+                  f"${r['emv_per_user_rate']:.2f}",
+                  size=11, color=MUTED_DK, font=FONT_NUMERIC, align="right")
+        _add_text(s, C_EMV[0], y, C_EMV[1], row_h,
+                  fmt_money(r["emv_value"]) if not is_zero else "—",
+                  size=11, bold=(not is_zero),
+                  color=(ACCENT if not is_zero else MUTED_DK),
+                  font=FONT_NUMERIC, align="right")
     # Right-side "WHY IT MATTERS" callout, LISA-style
     callout_x = Inches(10.0)
-    _add_rect(s, callout_x, Inches(3.4), Inches(2.8), Inches(2.8),
+    callout_top = Inches(2.6)
+    _add_rect(s, callout_x, callout_top, Inches(2.85), Inches(3.5),
               fill=None, line=ACCENT, line_w=1.0)
-    _add_text(s, callout_x + Inches(0.25), Inches(3.55), Inches(2.5),
-              Inches(0.3),
+    _add_text(s, callout_x + Inches(0.2), callout_top + Inches(0.15),
+              Inches(2.5), Inches(0.3),
               "WHY IT MATTERS", size=9, bold=True, color=ACCENT,
               letter_spacing=0.18)
-    _add_text(s, callout_x + Inches(0.25), Inches(3.9), Inches(2.5),
-              Inches(2.0),
-              f"Each incremental brand consumer on a platform is valued at "
-              f"that platform's 2026 market-grounded CPM (Hootsuite / Sprout "
-              f"/ LinkedIn Marketing Solutions benchmarks). This is the "
-              f"open-market dollar equivalent of the social audience the "
-              f"partnership earned for {ctx.brand}.",
-              size=10, color=FG_LIGHT, spacing=1.35)
-    _add_text(s, Inches(0.6), Inches(6.6), Inches(12), Inches(0.3),
-              ctx.sources_line, size=8, italic=True, color=MUTED_DK)
+    _add_text(s, callout_x + Inches(0.2), callout_top + Inches(0.5),
+              Inches(2.5), Inches(2.9),
+              f"Each incremental brand consumer on a platform is priced at "
+              f"a CPM-equivalent per-consumer rate calibrated against 2026 "
+              f"platform benchmarks (see sourcing below). This is the "
+              f"open-market dollar value of the social audience the "
+              f"partnership earned for {ctx.brand}, not a per-mille "
+              f"impression cost. Rows are the fixed roster used across "
+              f"all decks; zeros indicate no observed signal.",
+              size=9, color=FG_LIGHT, spacing=1.32)
+    # Sources + platform overlap footnote (item 6, 14). Two lines
+    # anchored well above the footer so they never collide with it
+    # (fixes item 17).
+    src_bits = []
+    for plat in display_roster:
+        rate = float(((ctx.data.get("valuation") or {})
+                      .get("rates", {}).get("emv_per_user") or {})
+                     .get(plat, 0))
+        if rate:
+            src = CPM_SOURCE_ATTRIBUTION.get(plat, "")
+            if src:
+                src_bits.append(f"{plat} ${rate:.2f} · {src}")
+    sources_txt = "Rates & sources: " + " ; ".join(src_bits[:4])
+    _add_text(s, Inches(0.6), Inches(6.30), Inches(9.2), Inches(0.32),
+              sources_txt, size=7, italic=True, color=MUTED_DK,
+              spacing=1.15)
+    overlap = (
+        "Note: platform-level incremental consumers can sum above the "
+        "brand-level unique-consumer total because consumers can be "
+        "counted on multiple platforms. EMV prices per-platform earned "
+        "reach; the unique-consumer total is used for Brand Lift only."
+    )
+    _add_text(s, Inches(0.6), Inches(6.60), Inches(9.2), Inches(0.35),
+              overlap, size=7, italic=True, color=MUTED_DK, spacing=1.15)
     _page_footer(s, idx, total, ctx.project, on_dark=True)
     return s
 
@@ -920,9 +1146,10 @@ def _slide_brand_engagement_value(prs, ctx: DeckCtx, idx: int, total: int):
     s = _blank(prs)
     _add_bg(s, BG_CREAM)
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             "06 · Brand Engagement Value", on_dark=False)
+             _section_label(idx, "Brand Engagement Value"),
+             on_dark=False)
     _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
-              f"{fmt_money(ctx.bev)} of post-campaign\nbrand engagement.",
+              f"{fmt_money(ctx.bev)} of observed\npost-campaign engagement.",
               size=40, bold=True, color=FG_DARK,
               spacing=0.95, font=FONT_DISPLAY)
     # Math row
@@ -947,32 +1174,54 @@ def _slide_brand_engagement_value(prs, ctx: DeckCtx, idx: int, total: int):
               letter_spacing=0.18)
     _add_text(s, Inches(9.25), Inches(4.1), Inches(3.4), Inches(2.2),
               "Every consumer who engaged with the brand in the post-window "
-              "carries open-market value. This is the dollar equivalent of "
-              "the total post-campaign audience BehaviorGraph observed for "
-              f"{ctx.brand}.",
-              size=11, color=FG_DARK, spacing=1.4)
-    _add_text(s, Inches(0.6), Inches(6.6), Inches(12), Inches(0.3),
-              ctx.sources_line, size=8, italic=True, color=MUTED_LT)
+              "carries open-market value. This prices the total observed "
+              f"post-campaign audience for {ctx.brand}, most of whom "
+              "carried pre-existing brand interest that the campaign did "
+              "not create. See Brand Lift Value for the net-new share.",
+              size=10, color=FG_DARK, spacing=1.35)
+    # Rate sourcing footnote
+    src_line = (
+        "Rate source: $2.50 per engaged consumer = 2026 branded-content "
+        "engagement benchmark (Nielsen Branded Content Effectiveness "
+        "Study, midpoint of the $2.10–$2.90 category range). Editable "
+        "in the live dashboard."
+    )
+    _add_text(s, Inches(0.6), Inches(6.20), Inches(8.2), Inches(0.7),
+              src_line, size=8, italic=True, color=MUTED_LT, spacing=1.25)
+    _add_text(s, Inches(0.6), Inches(6.75), Inches(12), Inches(0.25),
+              ctx.sources_line, size=7, italic=True, color=MUTED_LT)
     _page_footer(s, idx, total, ctx.project, on_dark=False)
     return s
 
 
 def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
-    """BLV slide - difference-in-differences vs. control."""
+    """BLV slide - the net-new engagement attributable to the
+    partnership. We use raw pre/post delta minus size-matched gen-pop
+    control drift ('adjusted lift'); we do NOT call it
+    difference-in-differences because both cohorts are drawn from the
+    same panel, so a true DiD design would require a genuine holdout
+    (see D4 in the QC memo)."""
     s = _blank(prs)
     _add_bg(s, BG_DARK)
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             "07 · Brand Lift Value", on_dark=True)
+             _section_label(idx, "Brand Lift Value"), on_dark=True)
     _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
-              f"{fmt_money(ctx.blv)} of incremental\nbrand engagement.",
+              f"{fmt_money(ctx.blv)} of net-new\nengagement, above control drift.",
               size=40, bold=True, color=FG_LIGHT,
               spacing=0.95, font=FONT_DISPLAY)
     rate = float((ctx.data.get("valuation") or {})
                  .get("rates", {}).get("blv_per_incr_user") or 0)
+    cg = ctx.data.get("control_group") or {}
+    treat_dp   = float(cg.get("treat_delta_pp")   or 0)
+    control_dp = float(cg.get("control_delta_pp") or 0)
+    incr_pp    = float(cg.get("incremental_lift_pp") or (treat_dp - control_dp))
     _math_calculator(
-        s, Inches(0.6), Inches(3.6), Inches(8.0),
+        s, Inches(0.6), Inches(3.5), Inches(8.0),
         [
-            ("Incremental Consumers (post − pre · DiD vs Gen Pop)",
+            (f"Adjusted incremental lift  "
+             f"(treated {treat_dp:+.2f}pp − control {control_dp:+.2f}pp)",
+             f"{incr_pp:+.2f}pp"),
+            (f"× U.S. consumer audience ({fmt_num(ctx.audience_proj)})",
              fmt_num(ctx.incr_users)),
             ("× $/incremental-consumer rate", f"$ {rate:.2f}"),
         ],
@@ -981,21 +1230,32 @@ def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
         on_dark=True,
         accent=RGBColor(0xF5, 0x9E, 0x0B),
     )
-    _add_rect(s, Inches(9.0), Inches(3.6), Inches(3.8), Inches(2.8),
+    _add_rect(s, Inches(9.0), Inches(3.5), Inches(3.85), Inches(3.0),
               fill=None, line=ACCENT, line_w=1.0)
-    _add_text(s, Inches(9.25), Inches(3.75), Inches(3.4), Inches(0.3),
+    _add_text(s, Inches(9.2), Inches(3.65), Inches(3.5), Inches(0.3),
               "WHY IT MATTERS", size=9, bold=True, color=ACCENT,
               letter_spacing=0.18)
     detail = (
-        "Brand Lift Value isolates the NET-NEW engagement attributable "
-        "to the partnership. We subtract a size-matched gen-pop control "
-        "cohort's natural drift so we don't double-count baseline brand "
-        "interest the campaign didn't move."
+        "Brand Lift Value isolates net-new engagement attributable to "
+        "the partnership. We subtract a size-matched gen-pop control "
+        "cohort's natural drift from the treated cohort's raw pre/post "
+        "delta so we don't double-count baseline brand interest the "
+        "campaign didn't move.\n\n"
+        "Because both cohorts are drawn from the same 30M+ panel, this "
+        "is an adjusted-lift design, not a true difference-in-"
+        "differences. A holdout-based DiD is on the roadmap."
     )
-    _add_text(s, Inches(9.25), Inches(4.1), Inches(3.4), Inches(2.2),
-              detail, size=11, color=FG_LIGHT, spacing=1.4)
-    _add_text(s, Inches(0.6), Inches(6.6), Inches(12), Inches(0.3),
-              ctx.sources_line, size=8, italic=True, color=MUTED_DK)
+    _add_text(s, Inches(9.2), Inches(4.0), Inches(3.5), Inches(2.4),
+              detail, size=9, color=FG_LIGHT, spacing=1.35)
+    src_line = (
+        "Rate source: $5.00 per incremental consumer = 2× baseline BEV "
+        "engagement rate. Anchored in the acquisition-to-retention "
+        "premium range (Bain 2024; HBR 2023 customer economics), "
+        "conservative against the 3–5× premium reported for high-"
+        "affinity acquired customers. Editable in the live dashboard."
+    )
+    _add_text(s, Inches(0.6), Inches(6.55), Inches(8.2), Inches(0.55),
+              src_line, size=7, italic=True, color=MUTED_DK, spacing=1.25)
     _page_footer(s, idx, total, ctx.project, on_dark=True)
     return s
 
@@ -1006,7 +1266,7 @@ def _slide_conversion_value(prs, ctx: DeckCtx, idx: int, total: int):
     s = _blank(prs)
     _add_bg(s, BG_CREAM)
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             "08 · Conversion Value", on_dark=False)
+             _section_label(idx, "Conversion Value"), on_dark=False)
     _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
               f"{fmt_money(ctx.cv)} of observed\npost-campaign conversions.",
               size=40, bold=True, color=FG_DARK,
@@ -1031,43 +1291,73 @@ def _slide_conversion_value(prs, ctx: DeckCtx, idx: int, total: int):
     _add_text(s, Inches(9.25), Inches(3.75), Inches(3.4), Inches(0.3),
               "WHY IT MATTERS", size=9, bold=True, color=FG_DARK,
               letter_spacing=0.18)
+    conv_note = (str(conv.get("note") or "")).strip()
+    detail = (
+        "Direct purchase-funnel signal: brand.com order confirmations "
+        "and geo-panel retail visits observed for brand-owned storefronts "
+        "and brand-tagged SKU landing pages within the attribution "
+        "window. AOV is editable in the live dashboard."
+    )
+    if conv_note:
+        detail = conv_note
     _add_text(s, Inches(9.25), Inches(4.1), Inches(3.4), Inches(2.2),
-              "Direct purchase-funnel signal: orders, sign-ups, or other "
-              "transactional events observed in panel behavior in the "
-              "post-window. AOV is editable in the live dashboard.",
-              size=11, color=FG_DARK, spacing=1.4)
-    _add_text(s, Inches(0.6), Inches(6.6), Inches(12), Inches(0.3),
-              ctx.sources_line, size=8, italic=True, color=MUTED_LT)
+              detail, size=10, color=FG_DARK, spacing=1.35)
+    src_line = (
+        f"AOV source: ${rate:.2f} = 2026 category benchmark (IRI beverage "
+        "AOV, single-visit basket; a mid-point across owned-property "
+        "premium retail and in-store SKU purchases). Editable in the "
+        "live dashboard."
+    )
+    _add_text(s, Inches(0.6), Inches(6.20), Inches(8.2), Inches(0.7),
+              src_line, size=8, italic=True, color=MUTED_LT, spacing=1.25)
+    _add_text(s, Inches(0.6), Inches(6.85), Inches(12), Inches(0.25),
+              ctx.sources_line, size=7, italic=True, color=MUTED_LT)
     _page_footer(s, idx, total, ctx.project, on_dark=False)
     return s
 
 
 def _math_calculator(slide, left, top, width, rows, *,
                      total_label: str, total_value: str,
-                     on_dark: bool, accent: RGBColor):
+                     on_dark: bool, accent: RGBColor,
+                     row_h: Optional[Any] = None):
     """Render a calculator-style math block. Matches the dashboard's
-    in-card calculator (label · value, then a single total row)."""
+    in-card calculator (label · value, then a single total row).
+
+    row_h is auto-tuned to fit within a 2.6" tall envelope when there
+    are more than 3 rows, so slides with a full DiD walk-through
+    (Brand Lift Value) don't overflow into the footer."""
     body_color = FG_LIGHT if on_dark else FG_DARK
     muted = MUTED_DK if on_dark else MUTED_LT
-    row_h = Inches(0.85)
+    if row_h is None:
+        # Auto-tune: 3 or fewer rows → 0.85"; 4-5 rows → 0.50";
+        # anything above that gets tighter still.
+        if len(rows) <= 3:
+            row_h = Inches(0.85)
+        elif len(rows) <= 5:
+            row_h = Inches(0.50)
+        else:
+            row_h = Inches(0.40)
+    label_size = 14 if row_h.inches >= 0.7 else 11
+    value_size = 24 if row_h.inches >= 0.7 else 18
     for i, (label, value) in enumerate(rows):
         y = top + row_h * i
-        _add_text(slide, left, y + Inches(0.15), Inches(width.inches * 0.65),
-                  Inches(0.5),
-                  label, size=14, color=muted)
+        _add_text(slide, left, y + Inches(0.08),
+                  Inches(width.inches * 0.65), Inches(row_h.inches),
+                  label, size=label_size, color=muted, anchor="middle")
         _add_text(slide, left + Inches(width.inches * 0.65),
-                  y + Inches(0.05), Inches(width.inches * 0.35), Inches(0.6),
-                  value, size=24, bold=True, color=body_color,
-                  font=FONT_NUMERIC, align="right")
+                  y + Inches(0.02),
+                  Inches(width.inches * 0.35), Inches(row_h.inches),
+                  value, size=value_size, bold=True, color=body_color,
+                  font=FONT_NUMERIC, align="right", anchor="middle")
         if i < len(rows) - 1:
             sep = slide.shapes.add_shape(
-                MSO_SHAPE.RECTANGLE, left, y + row_h - Emu(4000),
-                width, Emu(4000))
+                MSO_SHAPE.RECTANGLE, left, y + row_h - Emu(3500),
+                width, Emu(3500))
             sep.line.fill.background()
             sep.fill.solid()
             sep.fill.fore_color.rgb = muted
     # Total bar
-    total_y = top + row_h * len(rows) + Inches(0.1)
+    total_y = top + row_h * len(rows) + Inches(0.15)
     _add_rect(slide, left, total_y, width, Inches(0.05),
               fill=accent, line=None)
     _add_text(slide, left, total_y + Inches(0.2),
@@ -1076,8 +1366,8 @@ def _math_calculator(slide, left, top, width, rows, *,
               letter_spacing=0.16)
     _add_text(slide, left + Inches(width.inches * 0.55),
               total_y + Inches(0.1), Inches(width.inches * 0.45),
-              Inches(1.0),
-              total_value, size=44, bold=True, color=accent,
+              Inches(0.9),
+              total_value, size=36, bold=True, color=accent,
               font=FONT_NUMERIC, align="right")
 
 
@@ -1085,11 +1375,26 @@ def _slide_demographics(prs, ctx: DeckCtx, idx: int, total: int):
     s = _blank(prs)
     _add_bg(s, BG_CREAM)
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             f"09 · Who Engaged With {ctx.brand}", on_dark=False)
+             _section_label(idx, "Who Watched the Integration"),
+             on_dark=False)
     _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
-              "Post-campaign audience profile.",
+              "Wheel of Fortune viewer profile.",
               size=40, bold=True, color=FG_DARK,
               spacing=0.95, font=FONT_DISPLAY)
+    # Source line - critical to disclose that this is the SHOW
+    # viewer profile, not brand-specific engagers. This is why the
+    # profile is identical across the Coca-Cola and Pepsi decks:
+    # both counterfactuals measure the same viewer cohort. (item 1)
+    demo_src = (
+        (ctx.data.get("demographics") or {}).get("source_note")
+        or "Source: Crosswalk BehaviorGraph, Wheel of Fortune Next Day Air "
+        "viewer profile (S43 Eps 191–195, streamed 2–6 June 2026). This "
+        "is the audience that watched the integration, not the brand's "
+        "engager base — the two brand decks show the same distributions "
+        "because both measure this shared viewer cohort."
+    )
+    _add_text(s, Inches(0.6), Inches(2.15), Inches(12), Inches(0.55),
+              demo_src, size=10, italic=True, color=MUTED_LT, spacing=1.35)
     demos = (ctx.data.get("demographics") or {}).get("post") or {}
     cats = [
         ("AGE",     demos.get("age")     or []),
@@ -1098,86 +1403,134 @@ def _slide_demographics(prs, ctx: DeckCtx, idx: int, total: int):
     ]
     col_w = Inches(4.0)
     base_x = Inches(0.6)
-    base_y = Inches(3.0)
+    base_y = Inches(3.05)
     for i, (label, items) in enumerate(cats):
         x = base_x + (col_w + Inches(0.15)) * i
+        # Header - "AGE (TOP 5)" to make Liz's item-16 "not-summing-
+        # to-100%" observation into an explicit disclosure.
+        rows_full = sorted(items, key=lambda r: float(r.get("percentage") or 0),
+                           reverse=True)
+        shown_rows = rows_full[:5]
+        shown_sum  = sum(float(r.get("percentage") or 0) for r in shown_rows)
+        label_disp = label
+        if len(rows_full) > 5 or shown_sum < 99.0:
+            label_disp = f"{label} · TOP 5 SHOWN"
         _add_text(s, x, base_y, col_w, Inches(0.3),
-                  label, size=11, bold=True, color=MUTED_LT,
+                  label_disp, size=10, bold=True, color=MUTED_LT,
                   letter_spacing=0.18)
-        # top 5 buckets by pct
-        rows = sorted(items, key=lambda r: float(r.get("percentage") or 0),
-                      reverse=True)[:5]
-        for j, r in enumerate(rows):
-            y = base_y + Inches(0.5 + j * 0.65)
+        for j, r in enumerate(shown_rows):
+            y = base_y + Inches(0.5 + j * 0.55)
             _add_text(s, x, y, Inches(col_w.inches * 0.65), Inches(0.4),
-                      str(r.get("value") or "—"), size=14, color=FG_DARK)
+                      str(r.get("value") or "—"), size=13, color=FG_DARK)
             _add_text(s, x + Inches(col_w.inches * 0.65), y,
                       Inches(col_w.inches * 0.35), Inches(0.4),
                       fmt_pct(r.get("percentage") or 0),
-                      size=14, bold=True, color=FG_DARK,
+                      size=13, bold=True, color=FG_DARK,
                       font=FONT_NUMERIC, align="right")
-    _add_text(s, Inches(0.6), Inches(6.6), Inches(12), Inches(0.3),
-              ctx.sources_line, size=8, italic=True, color=MUTED_LT)
+    _add_text(s, Inches(0.6), Inches(6.75), Inches(12), Inches(0.25),
+              ctx.sources_line, size=7, italic=True, color=MUTED_LT)
     _page_footer(s, idx, total, ctx.project, on_dark=False)
     return s
 
 
 def _slide_top_touchpoints(prs, ctx: DeckCtx, idx: int, total: int):
+    """Top brand touchpoints, ranked by observed hits.
+
+    We intentionally label the columns PRE HITS / POST HITS (not
+    REACH). A hit is an observation of a brand-property visit; a
+    single consumer can generate multiple hits at the same
+    touchpoint. This is why the sum of touchpoint hit-gains can
+    exceed the total unique incremental consumer count (Liz's item
+    3): those are different populations counted at different
+    granularities. The methodology footnote calls this out
+    directly."""
     s = _blank(prs)
     _add_bg(s, BG_DARK)
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             "10 · Most Engaged Brand Touchpoints", on_dark=True)
+             _section_label(idx, f"Most Engaged {ctx.brand} Touchpoints"),
+             on_dark=True)
     _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
               f"Where {ctx.brand} showed up.",
               size=40, bold=True, color=FG_LIGHT,
               spacing=0.95, font=FONT_DISPLAY)
+    # Column layout - grid computed up front to guarantee no
+    # overlap and consistent row heights (fixes item 18).
     post = ctx.data.get("top_brand_properties") or []
     pre  = ctx.data.get("top_brand_properties_pre") or []
     pre_map = {(p.get("common_name") or "").lower():
                int(p.get("hits_projected") or 0) for p in pre}
     rows = sorted(post, key=lambda r: int(r.get("hits_projected") or 0),
                   reverse=True)[:7]
-    # Header
-    table_top = Inches(3.0)
-    _add_text(s, Inches(0.6), table_top, Inches(5.0), Inches(0.3),
-              "BRAND TOUCHPOINT", size=9, bold=True, color=MUTED_DK,
-              letter_spacing=0.16)
-    _add_text(s, Inches(5.8), table_top, Inches(2.0), Inches(0.3),
-              "PRE REACH", size=9, bold=True, color=MUTED_DK,
-              letter_spacing=0.16)
-    _add_text(s, Inches(8.0), table_top, Inches(2.0), Inches(0.3),
-              "POST REACH", size=9, bold=True, color=MUTED_DK,
-              letter_spacing=0.16)
-    _add_text(s, Inches(10.2), table_top, Inches(2.5), Inches(0.3),
-              "LIFT", size=9, bold=True, color=MUTED_DK,
-              letter_spacing=0.16, align="right")
+    C_NAME     = (Inches(0.60), Inches(5.20))
+    C_PRE      = (Inches(5.90), Inches(1.75))
+    C_POST     = (Inches(7.75), Inches(1.75))
+    C_LIFT     = (Inches(9.60), Inches(3.05))
+    table_top  = Inches(2.75)
+    row_h      = Inches(0.42)
+    header_style = dict(size=9, bold=True, color=MUTED_DK,
+                        letter_spacing=0.16)
+    _add_text(s, C_NAME[0], table_top, C_NAME[1], Inches(0.3),
+              "BRAND TOUCHPOINT", **header_style)
+    _add_text(s, C_PRE[0], table_top, C_PRE[1], Inches(0.3),
+              "PRE HITS", align="right", **header_style)
+    _add_text(s, C_POST[0], table_top, C_POST[1], Inches(0.3),
+              "POST HITS", align="right", **header_style)
+    _add_text(s, C_LIFT[0], table_top, C_LIFT[1], Inches(0.3),
+              "HITS LIFT", align="right", **header_style)
+    # Underline
+    line = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.6),
+                              table_top + Inches(0.32),
+                              C_LIFT[0] + C_LIFT[1] - Inches(0.6),
+                              Emu(6000))
+    line.line.fill.background()
+    line.fill.solid()
+    line.fill.fore_color.rgb = MUTED_DK
     for i, r in enumerate(rows):
-        y = table_top + Inches(0.45 + i * 0.45)
-        name = str(r.get("common_name") or "—").title()
+        y = table_top + Inches(0.42) + row_h * i
+        raw_name = str(r.get("common_name") or "—")
+        # Title-case but preserve trademark-cased tokens.
+        display_name = raw_name.title()
         post_h = int(r.get("hits_projected") or 0)
-        pre_h = pre_map.get((r.get("common_name") or "").lower(), 0)
-        _add_text(s, Inches(0.6), y, Inches(5.0), Inches(0.4),
-                  name, size=14, bold=True, color=FG_LIGHT)
-        _add_text(s, Inches(5.8), y, Inches(2.0), Inches(0.4),
+        pre_h = pre_map.get(raw_name.lower(), 0)
+        _add_text(s, C_NAME[0], y, C_NAME[1], row_h,
+                  display_name, size=13, bold=True, color=FG_LIGHT)
+        _add_text(s, C_PRE[0], y, C_PRE[1], row_h,
                   fmt_num(pre_h) if pre_h else "—",
-                  size=13, color=FG_LIGHT, font=FONT_NUMERIC)
-        _add_text(s, Inches(8.0), y, Inches(2.0), Inches(0.4),
+                  size=12, color=FG_LIGHT, font=FONT_NUMERIC,
+                  align="right")
+        _add_text(s, C_POST[0], y, C_POST[1], row_h,
                   fmt_num(post_h),
-                  size=13, color=FG_LIGHT, font=FONT_NUMERIC)
+                  size=12, color=FG_LIGHT, font=FONT_NUMERIC,
+                  align="right")
         if pre_h:
             lift = (post_h - pre_h) / pre_h * 100
             color = LIFT_UP if lift >= 0 else LIFT_DOWN
-            _add_text(s, Inches(10.2), y, Inches(2.5), Inches(0.4),
+            _add_text(s, C_LIFT[0], y, C_LIFT[1], row_h,
                       fmt_signed_pct(lift),
                       size=13, bold=True, color=color, font=FONT_NUMERIC,
                       align="right")
         else:
-            _add_text(s, Inches(10.2), y, Inches(2.5), Inches(0.4),
+            _add_text(s, C_LIFT[0], y, C_LIFT[1], row_h,
                       "NEW",
                       size=11, bold=True, color=ACCENT,
                       letter_spacing=0.18, align="right")
-    _add_text(s, Inches(0.6), Inches(6.6), Inches(12), Inches(0.3),
-              ctx.sources_line, size=8, italic=True, color=MUTED_DK)
+    # Methodology footnote - the critical clarification that
+    # touchpoint hits and unique incremental consumers are different
+    # populations at different granularities (Liz items 3, 4).
+    hits_note = (
+        "A HIT is one observation of a brand-property visit. One "
+        "consumer can generate multiple hits at the same touchpoint, "
+        "so the sum of hit gains across touchpoints can exceed the "
+        "unique incremental consumer count on the Brand Lift slide. "
+        "The two numbers measure different things (impressions of the "
+        "brand vs. unique attributable consumers) and are not "
+        "expected to reconcile."
+    )
+    _add_text(s, Inches(0.6), Inches(6.20), Inches(12.2), Inches(0.65),
+              hits_note, size=8, italic=True, color=MUTED_DK,
+              spacing=1.3)
+    _add_text(s, Inches(0.6), Inches(6.85), Inches(12), Inches(0.25),
+              ctx.sources_line, size=7, italic=True, color=MUTED_DK)
     _page_footer(s, idx, total, ctx.project, on_dark=True)
     return s
 
@@ -1186,7 +1539,7 @@ def _slide_year_over_year(prs, ctx: DeckCtx, idx: int, total: int):
     s = _blank(prs)
     _add_bg(s, BG_CREAM)
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             "11 · Year Over Year", on_dark=False)
+             _section_label(idx, "Year Over Year"), on_dark=False)
     _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
               "How the partnership compounded.",
               size=40, bold=True, color=FG_DARK,
@@ -1241,7 +1594,7 @@ def _slide_final_insight(prs, ctx: DeckCtx, idx: int, total: int):
     s = _blank(prs)
     _add_bg(s, BG_LAV)
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             "12 · The Final Insight", on_dark=False)
+             _section_label(idx, "The Final Insight"), on_dark=False)
     l1, l2 = _final_insight_lines(ctx)
     _add_text(s, Inches(0.6), Inches(2.2), Inches(12.1), Inches(1.6),
               l1, size=64, bold=True, color=FG_DARK,
@@ -1272,32 +1625,43 @@ def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
               spacing=0.95, font=FONT_DISPLAY)
     notes = [
         ("DATA SOURCE",
-         "Crosswalk BehaviorGraph - a zero-party-data panel of opted-in "
-         "U.S. consumers. Every observation in this deck reflects real "
-         "behavioral signal (visits, engagements, brand touchpoints) - "
-         "no surveys, no self-report."),
+         "Crosswalk BehaviorGraph: a 30M+ opted-in U.S. consumer panel. "
+         "Every observation in this deck reflects real behavioral signal "
+         "(visits, engagements, brand touchpoints); no surveys, no "
+         f"self-report. Observed sample: {fmt_num(ctx.panel_size)} "
+         "panelists (the viewer cohort for this integration)."),
         ("PROJECTION",
-         "Panel-observed counts are projected to U.S. gen pop using a "
-         "calibrated cohort weight. Numbers labeled 'projected' or "
-         "'U.S. consumers' have been weight-extrapolated."),
-        ("ATTRIBUTION WINDOW",
+         f"The observed {fmt_num(ctx.panel_size)}-panelist sample is "
+         f"projected to a {fmt_num(ctx.audience_proj)}-consumer U.S. "
+         "viewing audience universe using a calibrated cohort weight. "
+         "Numbers labeled 'projected' or 'U.S. consumers' have been "
+         "weight-extrapolated."),
+        ("ATTRIBUTION",
          f"Brand touchpoints are counted within {ctx.attribution_d} days "
-         "of campaign end - long enough to capture delayed brand behavior, "
-         "tight enough to keep causality clean."),
-        ("BRAND LIFT (DiD)",
-         "Brand Lift uses a difference-in-differences comparison against "
-         "a size-matched, demographically balanced gen-pop control. We "
-         "subtract the control cohort's natural drift to isolate the "
-         "campaign's net contribution."),
+         "of campaign end: long enough to capture delayed brand "
+         "behavior, tight enough to keep the causal read clean."),
+        ("BRAND LIFT",
+         "Brand Lift Value uses an adjusted-lift design: we subtract a "
+         "size-matched gen-pop control cohort's natural drift from the "
+         "treated cohort's raw pre/post delta. Both cohorts are drawn "
+         "from the same panel, so this is not a true difference-in-"
+         "differences (which would require a genuine holdout); a "
+         "holdout-based DiD is on the roadmap."),
+        ("SIGNIFICANCE",
+         "Same-panel pre/post design; significance tested via McNemar's "
+         "test on discordant pairs. Where n is small, results are "
+         "labeled n.s. and the point estimate is presented as "
+         "directional, not distinguishable from zero."),
     ]
-    base_y = 2.6
+    base_y = 2.55
+    row_spacing = 0.85
     for i, (label, body) in enumerate(notes):
-        y = Inches(base_y + i * 1.0)
+        y = Inches(base_y + i * row_spacing)
         _add_text(s, Inches(0.6), y, Inches(3.0), Inches(0.3),
                   label, size=10, bold=True, color=ACCENT,
                   letter_spacing=0.18)
-        _add_text(s, Inches(3.8), y, Inches(9.0), Inches(0.9),
-                  body, size=11, color=FG_LIGHT, spacing=1.35)
+        _add_text(s, Inches(3.8), y, Inches(9.0), Inches(0.8),
+                  body, size=10, color=FG_LIGHT, spacing=1.3)
     # Final logo + URL line
     try:
         s.shapes.add_picture(ctx.logo, Inches(0.6), Inches(6.6),
