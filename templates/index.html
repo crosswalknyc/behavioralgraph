@@ -87785,24 +87785,25 @@
             // Load profile selector in sidebar (instead of categories)
             loadDashboardProfiles();
             
-            renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
-            renderBehavioralCards(parsed.behavioral);
-            renderLocationTable(parsed.locations);
-            
-            // Render demographic insights
-            renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
-            
-            // Update profile methodology tooltip
-            updateProfileTooltip(tooltipTitle, parsed.brandCategory, parsed.behavioral);
-            
-            // Render behavioral insights
-            renderBehavioralInsights(parsed.behavioral, parsed);
-            
-            // Render top insights for this profile
-            renderTopInsights(parsed);
-
-            // Populate audience-share boxes (Social/Search/Owned/Retail/Media)
-            try { _renderAudienceShareBoxes(parsed, brandName); } catch (e) { console.warn('[audience-share] render failed', e); }
+            // 2026-07-23: EVERY downstream renderer is wrapped in its own
+            // try/catch so a single throwing renderer can't cascade-blank
+            // the rest of the dashboard. Prior symptom (foreign profiles
+            // like BEST OF THE BEST UK): renderCharts ran, then something
+            // after it threw, and every tab below Demographics stayed
+            // empty. Now each failure logs a labeled stack trace to the
+            // console instead of aborting the whole sequence.
+            const _safeRender = (label, fn) => {
+                try { fn(); }
+                catch (e) { console.error('[renderDashboard] ' + label + ' threw:', e && e.stack ? e.stack : e); }
+            };
+            _safeRender('renderCharts',               () => renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop));
+            _safeRender('renderBehavioralCards',      () => renderBehavioralCards(parsed.behavioral));
+            _safeRender('renderLocationTable',        () => renderLocationTable(parsed.locations));
+            _safeRender('renderDemoInsights',         () => renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop));
+            _safeRender('updateProfileTooltip',       () => updateProfileTooltip(tooltipTitle, parsed.brandCategory, parsed.behavioral));
+            _safeRender('renderBehavioralInsights',   () => renderBehavioralInsights(parsed.behavioral, parsed));
+            _safeRender('renderTopInsights',          () => renderTopInsights(parsed));
+            _safeRender('_renderAudienceShareBoxes',  () => _renderAudienceShareBoxes(parsed, brandName));
         }
 
         function parseAllData(csvData) {
@@ -93951,26 +93952,22 @@
             if (emptyState) emptyState.style.display = 'none';
             if (dashContent) dashContent.style.display = 'block';
             
-            // Render charts and data
-            renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
-            renderBehavioralCards(parsed.behavioral);
-            renderLocationTable(parsed.locations);
-            
-            // Render demographic insights
-            renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
-            
-            // Update profile methodology tooltip
-            updateProfileTooltip(tooltipTitle, parsed.brandCategory, parsed.behavioral);
-            
-            // Render behavioral insights
-            renderBehavioralInsights(parsed.behavioral);
-            
-            // Render top insights
-            renderTopInsights(parsed);
-            
-            // Render interests
+            // 2026-07-23: every downstream renderer is isolated so one
+            // throw can't blank the rest of the dashboard. See the
+            // matching block inside renderDashboard() above.
+            const _safeRender2 = (label, fn) => {
+                try { fn(); }
+                catch (e) { console.error('[showDashboard] ' + label + ' threw:', e && e.stack ? e.stack : e); }
+            };
+            _safeRender2('renderCharts',             () => renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop));
+            _safeRender2('renderBehavioralCards',    () => renderBehavioralCards(parsed.behavioral));
+            _safeRender2('renderLocationTable',      () => renderLocationTable(parsed.locations));
+            _safeRender2('renderDemoInsights',       () => renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop));
+            _safeRender2('updateProfileTooltip',     () => updateProfileTooltip(tooltipTitle, parsed.brandCategory, parsed.behavioral));
+            _safeRender2('renderBehavioralInsights', () => renderBehavioralInsights(parsed.behavioral));
+            _safeRender2('renderTopInsights',        () => renderTopInsights(parsed));
             if (parsed.interests) {
-                renderInterests(parsed.interests);
+                _safeRender2('renderInterests',      () => renderInterests(parsed.interests));
             }
 
             // 2026-06-24: ensure every page (behavioral / interests /
