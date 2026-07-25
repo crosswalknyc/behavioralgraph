@@ -574,13 +574,26 @@ def _final_insight_lines(ctx: DeckCtx) -> tuple[str, str]:
     lift_rel = ctx.incr_lift_rel if ctx.incr_lift_rel is not None else ctx.delta_rel
     sig      = (ctx.data.get("diagnostics") or {}).get("significance") or {}
     is_sig   = bool(sig.get("significant"))
-    if lift_rel <= 0 or not is_sig:
-        line1 = "The campaign held baseline."
-        line2 = (
-            f"{ctx.brand}'s adjusted lift is not distinguishable from zero — "
-            "the correct result for a control brand."
+    # Three distinct null-result flavors so we don't mislabel a
+    # treated brand as a control:
+    #   1. Adjusted lift below zero  -> the campaign held baseline;
+    #      correct result for a control brand.
+    #   2. Positive lift but not statistically distinguishable ->
+    #      directional signal only; too small vs sample size.
+    #   3. Positive and significant -> the branches below.
+    if lift_rel <= 0:
+        return (
+            "The campaign held baseline.",
+            f"{ctx.brand}'s adjusted lift falls at or below control "
+            "drift — the correct result for a counterfactual brand.",
         )
-        return (line1, line2)
+    if not is_sig:
+        return (
+            f"A directional {lift_rel:.1f}% adjusted lift,",
+            "not statistically distinguishable from zero at this sample "
+            "size. Signal is consistent with a genuine but small "
+            "sponsorship effect.",
+        )
     if lift_rel >= 200:
         line1 = f"When {ctx.brand} shows up with"
         line2 = f"{ctx.project.split('x')[0].strip() or 'the talent'}, the audience triples."
