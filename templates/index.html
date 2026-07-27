@@ -23040,7 +23040,16 @@
                 #blueIQView .bq-day-grid { grid-template-columns: 1fr 1fr; }
                 #blueIQView .bq-day-controls { flex-direction: column; align-items: flex-start; }
             }
-            #blueIQView .blue-iq-card-articles { grid-column: span 4; min-height: 320px; }
+            /* Articles ships alongside Search / Social on the same row.
+             * All three are span-4 so CSS grid stretches every card to
+             * the tallest sibling. Capping articles at 440px pulls the
+             * whole row down to a compact height; the body scrolls
+             * internally so the full article list is still reachable. */
+            #blueIQView .blue-iq-card-articles { grid-column: span 4; height: 440px; }
+            #blueIQView .blue-iq-card-articles .blue-iq-card-body {
+                overflow-y: auto;
+                padding-right: 4px;
+            }
             #blueIQView .blue-iq-card-demo     { grid-column: span 6; }
             #blueIQView .blue-iq-card-compare  { grid-column: span 6; }
             #blueIQView .blue-iq-card-title { font-size: 0.92rem; font-weight: 600; margin: 0 0 0.4rem 0; color: var(--text-primary); display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
