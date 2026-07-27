@@ -23318,6 +23318,165 @@
             #blueIQView .blue-iq-loading-overlay { position: relative; min-height: 240px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 0.6rem; padding: 2rem; color: var(--text-secondary); font-size: 0.9rem; }
             #blueIQView .blue-iq-spinner { width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-primary, #4f8cff); border-radius: 50%; animation: blueIQSpin 0.9s linear infinite; }
             @keyframes blueIQSpin { to { transform: rotate(360deg); } }
+            /* ── Rich loading state ──────────────────────────────────
+             * District cuts can take 60-180s (live panel query + agent
+             * synth calls for search / social / top_searches). Static
+             * "Fetching data..." text feels frozen. This block: hero
+             * with spinner + rotating phase text + elapsed timer, a
+             * 5-step progress trail below, a rotating "did you know"
+             * hint, and skeleton preview cards showing where each
+             * real card will land. */
+            #blueIQView .bq-loading-shell {
+                display: flex;
+                flex-direction: column;
+                gap: 1rem;
+                padding: 1.4rem;
+                background: linear-gradient(180deg, rgba(79,140,255,0.06) 0%, transparent 55%);
+                border: 1px solid rgba(79,140,255,0.14);
+                border-radius: 12px;
+                margin-top: 0.5rem;
+                min-height: 480px;
+            }
+            #blueIQView .bq-loading-hero {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+                padding: 0.5rem 0.2rem 0.9rem 0.2rem;
+                border-bottom: 1px solid rgba(255,255,255,0.06);
+            }
+            #blueIQView .bq-loading-spinner {
+                width: 42px; height: 42px;
+                border: 3px solid rgba(79,140,255,0.18);
+                border-top-color: var(--accent-primary, #4f8cff);
+                border-radius: 50%;
+                animation: blueIQSpin 0.9s linear infinite;
+                flex: 0 0 auto;
+            }
+            #blueIQView .bq-loading-hero-text { flex: 1 1 auto; min-width: 0; }
+            #blueIQView .bq-loading-title {
+                font-size: 1.02rem;
+                font-weight: 600;
+                color: var(--text-primary);
+                margin-bottom: 0.15rem;
+            }
+            #blueIQView .bq-loading-sub {
+                font-size: 0.82rem;
+                color: var(--text-secondary);
+                transition: opacity 220ms ease;
+            }
+            #blueIQView .bq-loading-timer {
+                flex: 0 0 auto;
+                font-variant-numeric: tabular-nums;
+                font-size: 0.78rem;
+                color: var(--text-secondary);
+                background: rgba(255,255,255,0.04);
+                border: 1px solid rgba(255,255,255,0.08);
+                padding: 0.28rem 0.55rem;
+                border-radius: 999px;
+                min-width: 52px;
+                text-align: center;
+            }
+            #blueIQView .bq-loading-steps {
+                display: flex;
+                gap: 0.4rem;
+                flex-wrap: wrap;
+                padding: 0.1rem 0.2rem;
+            }
+            #blueIQView .bq-loading-step {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4rem;
+                font-size: 0.72rem;
+                color: var(--text-secondary);
+                padding: 0.28rem 0.6rem;
+                border-radius: 999px;
+                background: rgba(255,255,255,0.03);
+                border: 1px solid rgba(255,255,255,0.06);
+                transition: color 220ms ease, background 220ms ease, border-color 220ms ease;
+            }
+            #blueIQView .bq-loading-step.active {
+                color: #dbeafe;
+                background: rgba(79,140,255,0.16);
+                border-color: rgba(79,140,255,0.4);
+            }
+            #blueIQView .bq-loading-step.done {
+                color: #a7f3d0;
+                background: rgba(16,185,129,0.10);
+                border-color: rgba(16,185,129,0.30);
+            }
+            #blueIQView .bq-loading-step-dot {
+                width: 7px; height: 7px; border-radius: 50%;
+                background: rgba(255,255,255,0.18);
+                transition: background 220ms ease, box-shadow 220ms ease;
+                flex: 0 0 auto;
+            }
+            #blueIQView .bq-loading-step.active .bq-loading-step-dot {
+                background: #4f8cff;
+                box-shadow: 0 0 0 3px rgba(79,140,255,0.28);
+                animation: bqStepPulse 1.4s ease-in-out infinite;
+            }
+            #blueIQView .bq-loading-step.done .bq-loading-step-dot {
+                background: #10b981;
+            }
+            @keyframes bqStepPulse {
+                0%, 100% { box-shadow: 0 0 0 3px rgba(79,140,255,0.28); }
+                50%      { box-shadow: 0 0 0 6px rgba(79,140,255,0.12); }
+            }
+            #blueIQView .bq-loading-hint {
+                font-size: 0.75rem;
+                color: var(--text-secondary);
+                padding: 0.55rem 0.75rem;
+                background: rgba(255,255,255,0.025);
+                border: 1px solid rgba(255,255,255,0.05);
+                border-left: 2px solid rgba(79,140,255,0.55);
+                border-radius: 4px;
+                line-height: 1.5;
+                transition: opacity 220ms ease;
+            }
+            #blueIQView .bq-loading-hint b { color: var(--text-primary); font-weight: 600; }
+            #blueIQView .bq-loading-skeletons {
+                display: grid;
+                grid-template-columns: repeat(12, 1fr);
+                gap: 0.85rem;
+                margin-top: 0.25rem;
+            }
+            #blueIQView .bq-skeleton-card {
+                background: rgba(255,255,255,0.02);
+                border: 1px solid rgba(255,255,255,0.05);
+                border-radius: 8px;
+                padding: 0.85rem 1rem;
+                display: flex;
+                flex-direction: column;
+                gap: 0.55rem;
+                min-height: 160px;
+            }
+            #blueIQView .bq-skel-lg { grid-column: span 6; }
+            #blueIQView .bq-skel-sm { grid-column: span 4; }
+            #blueIQView .bq-skeleton-title {
+                font-size: 0.85rem;
+                font-weight: 600;
+                color: var(--text-secondary);
+                margin-bottom: 0.35rem;
+            }
+            #blueIQView .bq-skeleton-row {
+                height: 12px;
+                border-radius: 4px;
+                background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 45%, rgba(255,255,255,0.04) 100%);
+                background-size: 200% 100%;
+                animation: bqShimmer 1.6s ease-in-out infinite;
+            }
+            #blueIQView .bq-skeleton-row.bq-skel-short { width: 55%; }
+            #blueIQView .bq-skeleton-row:nth-child(3) { animation-delay: 120ms; }
+            #blueIQView .bq-skeleton-row:nth-child(4) { animation-delay: 240ms; }
+            #blueIQView .bq-skeleton-row:nth-child(5) { animation-delay: 360ms; }
+            @keyframes bqShimmer {
+                0%   { background-position: 100% 0; }
+                100% { background-position: -100% 0; }
+            }
+            @media (max-width: 900px) {
+                #blueIQView .bq-skel-lg,
+                #blueIQView .bq-skel-sm { grid-column: span 12; }
+            }
             #blueIQView .blue-iq-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 10070; align-items: center; justify-content: center; padding: 2rem; }
             #blueIQView .blue-iq-modal.open { display: flex; }
             #blueIQView .blue-iq-modal-inner { background: var(--bg-secondary, #1e1e2e); border: 1px solid var(--border-color, #2c2c3e); border-radius: 12px; max-width: 720px; width: 100%; max-height: 80vh; overflow: auto; padding: 1.25rem 1.5rem; }
@@ -23496,9 +23655,51 @@
             </div>
             <div id="blueIQSuppressedMsg" class="blue-iq-suppressed" style="display: none;"></div>
             <div id="blueIQTabStrip" class="bq-tabstrip" style="display: none;"></div>
-            <div id="blueIQLoading" class="blue-iq-loading-overlay" style="display: none;">
-                <div class="blue-iq-spinner"></div>
-                <div>Crunching panel signal, search trends, and news coverage&hellip;</div>
+            <div id="blueIQLoading" class="bq-loading-shell" style="display: none;">
+                <div class="bq-loading-hero">
+                    <div class="bq-loading-spinner"></div>
+                    <div class="bq-loading-hero-text">
+                        <div class="bq-loading-title" id="blueIQLoadingTitle">Analyzing this slice&hellip;</div>
+                        <div class="bq-loading-sub"  id="blueIQLoadingPhase">Loading panel signal.</div>
+                    </div>
+                    <div class="bq-loading-timer" id="blueIQLoadingTimer">0s</div>
+                </div>
+                <div class="bq-loading-steps" id="blueIQLoadingSteps"></div>
+                <div class="bq-loading-hint" id="blueIQLoadingHint"></div>
+                <div class="bq-loading-skeletons">
+                    <div class="bq-skeleton-card bq-skel-lg">
+                        <div class="bq-skeleton-title">Political issue searches</div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row bq-skel-short"></div>
+                    </div>
+                    <div class="bq-skeleton-card bq-skel-lg">
+                        <div class="bq-skeleton-title">Top searches in this slice</div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row bq-skel-short"></div>
+                    </div>
+                    <div class="bq-skeleton-card bq-skel-sm">
+                        <div class="bq-skeleton-title">Search engines</div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                    </div>
+                    <div class="bq-skeleton-card bq-skel-sm">
+                        <div class="bq-skeleton-title">Social platforms</div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                    </div>
+                    <div class="bq-skeleton-card bq-skel-sm">
+                        <div class="bq-skeleton-title">Top political articles</div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                    </div>
+                </div>
             </div>
             <div id="blueIQCardsGrid" class="blue-iq-cards-grid"></div>
             <div id="blueIQDrillModal" class="blue-iq-modal" onclick="if(event.target===this) closeBlueIQDrillModal();">
@@ -39456,10 +39657,10 @@
                 document.getElementById('blueIQMeta').textContent = 'Pick a region or switch to National.';
                 return;
             }
-            document.getElementById('blueIQLoading').style.display = 'flex';
             document.getElementById('blueIQCardsGrid').innerHTML = '';
             document.getElementById('blueIQSuppressedMsg').style.display = 'none';
-            document.getElementById('blueIQMeta').textContent = 'Fetching data for ' + (filters.party || 'All') + ' \u2192 ' + (filters.geo_type === 'National' ? 'National' : filters.geo_value) + ' (last ' + filters.lookback_days + 'd)...';
+            _bqStartLoadingUI(filters);
+            document.getElementById('blueIQMeta').textContent = 'Fetching data for ' + (filters.geo_type === 'National' ? 'National' : filters.geo_value) + ' (last ' + filters.lookback_days + 'd)...';
             try {
                 if (window.__blueIQ.inFlight) {
                     try { window.__blueIQ.inFlight.abort(); } catch (e) {}
@@ -39493,8 +39694,153 @@
                 console.error('Blue IQ data error:', e);
                 document.getElementById('blueIQMeta').textContent = 'Error: ' + (e.message || e);
             } finally {
-                document.getElementById('blueIQLoading').style.display = 'none';
+                _bqStopLoadingUI();
                 window.__blueIQ.inFlight = null;
+            }
+        }
+
+        // ── Interactive loading state ─────────────────────────────
+        // The Blue IQ endpoint can take 60-180s for district cuts
+        // (live panel query + agent synth for search/social/top_searches).
+        // Static text feels frozen, so drive a phase + timer + hint
+        // rotation while the request is in flight. Each phase is
+        // time-based, not backend-signalled — good enough to give the
+        // user rhythm without a streaming API.
+        function _bqLoadingGeoLabel(f) {
+            if (!f) return 'this slice';
+            if (f.geo_type === 'National') return 'the country';
+            var v = f.geo_value || 'this slice';
+            if (f.geo_type === 'District') return v;
+            if (f.geo_type === 'State')    return v;
+            if (f.geo_type === 'DMA')      return v;
+            return v;
+        }
+
+        function _bqLoadingSteps(f) {
+            var geo = _bqLoadingGeoLabel(f);
+            var isDistrict = f && f.geo_type === 'District';
+            var steps = [
+                { key: 'panel',   label: 'Panel signal',       t: 0 },
+                { key: 'search',  label: 'Search queries',     t: isDistrict ? 8 : 3 },
+                { key: 'journey', label: 'Voter journey',      t: isDistrict ? 22 : 8 },
+                { key: 'trends',  label: 'Google Trends',      t: isDistrict ? 40 : 14 },
+                { key: 'agent',   label: 'Modeling political intent (agent)', t: isDistrict ? 60 : 22 },
+            ];
+            // Phase copy: shown on the hero sub-line. Reads like a
+            // status update, not a fixed label.
+            steps[0].sub = 'Loading behavioral panel for ' + geo + '.';
+            steps[1].sub = 'Extracting the raw search vocabulary from URLs.';
+            steps[2].sub = 'Following the voter journey — what people did next.';
+            steps[3].sub = 'Pulling live Google Trends signal.';
+            steps[4].sub = isDistrict
+                ? 'Web-searching for representatives, issues, and campaign context.'
+                : 'Modeling political intent and creative angles.';
+            return steps;
+        }
+
+        var _BQ_LOADING_HINTS = [
+            'This tool surfaces <b>what voters in each district are actually Googling</b> — so candidates can tailor messaging to real search intent, not assumptions.',
+            'A row flagged <b>political</b> means the term matches a politician name, civic keyword, or a policy issue like abortion, immigration, or the border.',
+            'Panel signal is the ground truth. When it\'s thin (small district, sparse lookback), an <b>agent web-searches</b> the trailing month to fill in — every synthetic row is stamped so you can tell.',
+            'The <b>voter journey</b> card shows where a voter went <i>after</i> hitting a political site — donate, search again, watch a video, or bounce.',
+            'For congressional districts we resolve panel members by ZIP → district, then re-run the aggregation live. That\'s why district cuts take a bit longer than National.',
+            'Every projection is scaled from the 10M panel up to the ~330M US adult population using the same weighting the dashboard uses everywhere else.',
+        ];
+
+        function _bqStartLoadingUI(filters) {
+            var host = document.getElementById('blueIQLoading');
+            if (!host) return;
+            host.style.display = 'flex';
+
+            var geo   = _bqLoadingGeoLabel(filters);
+            var steps = _bqLoadingSteps(filters);
+
+            var title = document.getElementById('blueIQLoadingTitle');
+            if (title) title.textContent = 'Analyzing ' + geo + '\u2026';
+
+            var phase = document.getElementById('blueIQLoadingPhase');
+            if (phase) phase.textContent = steps[0].sub;
+
+            var stepsHost = document.getElementById('blueIQLoadingSteps');
+            if (stepsHost) {
+                stepsHost.innerHTML = steps.map(function(s, i) {
+                    return '<span class="bq-loading-step' + (i === 0 ? ' active' : '') + '" data-step="' + s.key + '">'
+                         +   '<span class="bq-loading-step-dot"></span>'
+                         +   _bqEscape(s.label)
+                         + '</span>';
+                }).join('');
+            }
+
+            var timerEl = document.getElementById('blueIQLoadingTimer');
+            if (timerEl) timerEl.textContent = '0s';
+
+            var hintEl = document.getElementById('blueIQLoadingHint');
+            if (hintEl) hintEl.innerHTML = _BQ_LOADING_HINTS[0];
+
+            var t0 = Date.now();
+            var lastPhaseIdx = 0;
+            var lastHintIdx  = 0;
+
+            function tick() {
+                var elapsed = Math.floor((Date.now() - t0) / 1000);
+                if (timerEl) {
+                    timerEl.textContent = elapsed < 60
+                        ? elapsed + 's'
+                        : Math.floor(elapsed / 60) + 'm ' + (elapsed % 60) + 's';
+                }
+
+                var idx = 0;
+                for (var i = 0; i < steps.length; i++) {
+                    if (elapsed >= steps[i].t) idx = i;
+                }
+                if (elapsed > steps[steps.length - 1].t + 30) {
+                    // Long-tail state: keep the last step "active" but
+                    // tell the user we're still moving.
+                    if (phase) phase.textContent = 'Almost there — this cut takes a moment. Still working\u2026';
+                } else if (idx !== lastPhaseIdx) {
+                    if (phase) {
+                        phase.style.opacity = '0';
+                        setTimeout(function() {
+                            phase.textContent = steps[idx].sub;
+                            phase.style.opacity = '1';
+                        }, 200);
+                    }
+                    lastPhaseIdx = idx;
+                }
+
+                if (stepsHost) {
+                    var chips = stepsHost.querySelectorAll('.bq-loading-step');
+                    for (var k = 0; k < chips.length; k++) {
+                        chips[k].classList.remove('active', 'done');
+                        if (k < idx)      chips[k].classList.add('done');
+                        else if (k === idx) chips[k].classList.add('active');
+                    }
+                }
+            }
+            tick();
+            var timerId = setInterval(tick, 500);
+
+            var hintId = setInterval(function() {
+                if (!hintEl) return;
+                lastHintIdx = (lastHintIdx + 1) % _BQ_LOADING_HINTS.length;
+                hintEl.style.opacity = '0';
+                setTimeout(function() {
+                    hintEl.innerHTML = _BQ_LOADING_HINTS[lastHintIdx];
+                    hintEl.style.opacity = '1';
+                }, 220);
+            }, 6500);
+
+            window.__blueIQ._loadingTimers = { timerId: timerId, hintId: hintId };
+        }
+
+        function _bqStopLoadingUI() {
+            var host = document.getElementById('blueIQLoading');
+            if (host) host.style.display = 'none';
+            var lt = window.__blueIQ && window.__blueIQ._loadingTimers;
+            if (lt) {
+                try { clearInterval(lt.timerId); } catch (e) {}
+                try { clearInterval(lt.hintId);  } catch (e) {}
+                window.__blueIQ._loadingTimers = null;
             }
         }
 
