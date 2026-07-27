@@ -45103,17 +45103,28 @@
         // the backend has an entry for this row in the daily why_trending
         // snapshot (Claude-authored, refreshed once per day). Rendered
         // subtly so it doesn't compete with the rank + delta numbers.
-        function _tiqWhyLine(row) {
+        //
+        // `opts.strict = true` disables the bio fallback ladder - only
+        // renders when we have a real Claude-authored `why`. Used by the
+        // 🌐 Trending People (Wikipedia) card so a bio like "British
+        // actor (born 1993)" never masquerades as a reason for trending.
+        function _tiqWhyLine(row, opts) {
             if (!row) return '';
+            opts = opts || {};
             // Fallback ladder:
-            //   1. row.why          - Claude one-liner (Trending People
-            //                         fusion card writes this)
-            //   2. row.description  - Wikipedia short desc, e.g.
-            //                         "American Deaf actress"
-            //                         (wikipedia_trending scraper)
-            //   3. row.extract      - Wikipedia 1-2 sentence extract
-            //                         (wikipedia_trending scraper)
-            var text = row.why || row.description || row.extract || '';
+            //   1. row.why          - Claude one-liner (why is this
+            //                         person / topic trending)
+            //   2. row.description  - short bio / summary (Wikipedia:
+            //                         "American Deaf actress"). WHO,
+            //                         not WHY - only useful on non-
+            //                         person surfaces (news article
+            //                         summaries, etc).
+            //   3. row.extract      - Wikipedia 1-2 sentence extract.
+            //                         Also bio-first for people.
+            var text = row.why;
+            if (!text && !opts.strict) {
+                text = row.description || row.extract || '';
+            }
             if (!text) return '';
             // Wikipedia extracts can be long. Cap at ~180 chars so the
             // caption stays 1-2 lines in the row.
@@ -45282,7 +45293,12 @@
                         _tiqCrossPlatformBadge(r) +
                         _tiqActions('wikipedia', 'wikipedia', wikiKey, wikiKey, 'National') +
                         '</div>' +
-                        _tiqWhyLine(r) +
+                        // Strict mode: only render a caption when we have
+                        // a real Claude-authored WHY. The bio-first
+                        // Wikipedia description ("British actor born
+                        // 1993") describes WHO, not WHY, so we never
+                        // fall back to it on this card.
+                        _tiqWhyLine(r, { strict: true }) +
                         (views ? '<div class="tiq-row-meta">' + views + prior + '</div>' : '') +
                         '</div></div>';
             });
