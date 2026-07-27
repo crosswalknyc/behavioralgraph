@@ -515,3 +515,269 @@ def _scale_top_searches(rows: list[dict], panel_size: int) -> list[dict]:
             'source_note': str(r.get('reason') or '').strip(),
         })
     return out
+
+
+# ── Issue-share synthesizer ──────────────────────────────────────────
+#
+# "Political issue searches" card renders one row per issue-bucket
+# (Immigration, Foreign Policy, Housing & Rent, ...) with a % share of
+# the geography's political-issue attention. Buckets that have current
+# Google-Trends volume get a real share; buckets that show up only via
+# the nightly OpenAI-classified cube or via GDELT news mentions have
+# `external_only:True` and used to render an italic "trending only"
+# placeholder in place of a %.
+#
+# Jenna's directive 2026-07-27: "it's impossible there is no signal in
+# those categories across the entire US. go ahead and synth it from
+# external research as needed for district or national, etc."
+#
+# So when the caller has any `external_only:True` buckets remaining,
+# it passes the missing bucket names + the observed shares (anchors)
+# to `synthesize_issue_shares`, which asks an OpenAI web-search agent
+# for a plausible % share for each missing bucket in that geography,
+# grounded in Pew, YouGov, current news attention, and standard
+# political-issue distribution priors. The caller merges the shares
+# in, renormalizes the whole card to sum to 1.0, and un-flags
+# external_only so the frontend renders a real %.
+#
+# Cache: keyed on (geo_label, sorted(missing_buckets)) so the same
+# question hits cache. Result reused across all callers for that
+# combination.
+
+_ISSUE_SHARES_SYSTEM = """You are a political-issue attention researcher
+for a US audience-intelligence dashboard. When asked for the current
+share of political-issue attention in a specific US geography, produce
+a JSON object with a single `shares` object where each key is a
+bucket name (exactly as provided by the caller) and each value is a
+number 0.0..1.0 representing that bucket's share of political-issue
+attention in that geography.
+
+Ground rules:
+
+    - Return an entry for EVERY bucket name in the caller's list. Do
+      not drop or rename any. Use the exact strings.
+    - Values are 0..1 (NOT percent). E.g. 0.14 = 14%.
+    - Values should be plausible relative to the observed anchor
+      shares the caller provides. If Foreign Policy is observed at
+      23.7% and the caller asks for a plausible share for Housing &
+      Rent, DO NOT return 50% (that would exceed the observed
+      leader). Housing & Rent is typically 8-15% of political-issue
+      attention nationally, higher in high-rent metros (NYC, SF, LA,
+      DC), lower in low-cost regions.
+    - Reference points for US-wide baselines (adjust modestly for
+      geography, +/- 8 points):
+          Social Security & Medicare   12-20%
+          Economy & Inflation          14-22%
+          Immigration                   8-18%
+          Foreign Policy                6-14%
+          Housing & Rent                6-14%
+          Election Integrity & Voting   4-10%
+          Healthcare                    6-12%
+          Abortion & Reproductive       4-10%
+          Guns                          3-8%
+          Climate & Environment         3-8%
+          Education                     3-7%
+          Crime & Public Safety         4-10%
+          LGBTQ+ Rights                 2-6%
+          Race & Civil Rights           3-7%
+          Taxes                         5-12%
+          Other Policy                  4-10%
+      For a bucket not on this list, use best-effort based on Pew
+      2025 / YouGov / current news attention. Never return 0.
+    - Skew for the geography where obvious: border districts skew
+      Immigration up; rust-belt districts skew Economy up; coastal
+      urban districts skew Climate + LGBTQ+ up; agricultural
+      districts skew Trade + Immigration up; retirement-heavy
+      districts (FL, AZ) skew Social Security up.
+    - Do NOT return shares that would push the caller's implied
+      total (observed + your response) above 1.5. The caller will
+      renormalize to 1.0.
+    - Output ONLY the JSON object. No prose, no markdown fences.
+"""
+
+
+def _issue_shares_cache_key(geo_label: str, missing_buckets: list[str]) -> str:
+    """Cache key includes the sorted bucket list so different bucket
+    universes (which change as `issue_buckets_global` evolves) don't
+    return each other's answers. `_slug` keeps the path filesystem-
+    safe; the long bucket-list hash keeps different subsets separate.
+    """
+    import hashlib
+    fingerprint = ','.join(sorted((b or '').lower() for b in missing_buckets))
+    digest = hashlib.sha1(fingerprint.encode('utf-8')).hexdigest()[:12]
+    return f"{S3_PREFIX}issue_shares__{_slug(geo_label)}__{digest}.json"
+
+
+def _cache_get_shares(cache_key: str) -> Optional[dict]:
+    try:
+        resp = _s3().get_object(Bucket=S3_BUCKET, Key=cache_key)
+        last_mod = resp.get('LastModified')
+        if last_mod and (datetime.now(timezone.utc) - last_mod).total_seconds() > CACHE_TTL_S:
+            return None
+        payload = json.loads(resp['Body'].read().decode('utf-8'))
+        shares = payload.get('shares') if isinstance(payload, dict) else None
+        return shares if isinstance(shares, dict) else None
+    except Exception as e:
+        msg = str(e)
+        if 'NoSuchKey' not in msg and '404' not in msg:
+            logger.debug("issue_shares cache miss %s: %s", cache_key, msg)
+        return None
+
+
+def _cache_put_shares(cache_key: str, shares: dict, geo_label: str,
+                     missing_buckets: list[str]) -> None:
+    try:
+        _s3().put_object(
+            Bucket=S3_BUCKET,
+            Key=cache_key,
+            Body=json.dumps({
+                'card':            'issue_shares',
+                'geo_label':       geo_label,
+                'missing_buckets': list(missing_buckets),
+                'generated_at':    datetime.now(timezone.utc).isoformat(),
+                'shares':          shares,
+            }, separators=(',', ':')).encode('utf-8'),
+            ContentType='application/json',
+            CacheControl=f'max-age={CACHE_TTL_S}',
+        )
+    except Exception as e:
+        logger.warning("issue_shares cache write failed for %s: %s", cache_key, e)
+
+
+def _agent_issue_shares(geo_label: str,
+                        missing_buckets: list[str],
+                        observed_anchors: list[dict]) -> dict:
+    """Call the agent and return {bucket_name -> share (0..1)}."""
+    client = _openai_client()
+    if client is None:
+        logger.info("synth[issue_shares]: no OpenAI client; skipping")
+        return {}
+
+    anchor_lines = '\n'.join(
+        f"  - {a.get('bucket')!r}: {float(a.get('share') or 0):.4f}"
+        for a in observed_anchors if a and a.get('bucket')
+    ) or '  (no observed anchors — treat as fully cold)'
+    missing_lines = '\n'.join(f"  - {b!r}" for b in missing_buckets if b)
+
+    user_prompt = (
+        f"Geography: {geo_label}\n"
+        f"Observed political-issue attention shares (anchor, 0..1 scale):\n"
+        f"{anchor_lines}\n\n"
+        f"Missing buckets — return a plausible 0..1 share for each based on\n"
+        f"external research + the anchor context above:\n"
+        f"{missing_lines}\n\n"
+        "Return the JSON object per the system instructions."
+    )
+    t0 = time.time()
+    text = ''
+    try:
+        resp = client.responses.create(
+            model=AGENT_MODEL,
+            tools=[{'type': 'web_search_preview'}],
+            input=[
+                {'role': 'system', 'content': _ISSUE_SHARES_SYSTEM},
+                {'role': 'user',   'content': user_prompt},
+            ],
+            max_output_tokens=2500,
+        )
+        text = getattr(resp, 'output_text', '') or ''
+        logger.info("synth[issue_shares|ws] %s (%d missing) -> %d chars (%.1fs)",
+                    geo_label, len(missing_buckets), len(text), time.time() - t0)
+    except Exception as e:
+        logger.info("synth[issue_shares] web_search failed (%s); trying chat",
+                    str(e)[:200])
+        try:
+            chat = client.chat.completions.create(
+                model=AGENT_MODEL,
+                messages=[
+                    {'role': 'system', 'content': _ISSUE_SHARES_SYSTEM},
+                    {'role': 'user',   'content': user_prompt},
+                ],
+                response_format={'type': 'json_object'},
+                temperature=0.2,
+                max_tokens=1500,
+            )
+            text = chat.choices[0].message.content or ''
+        except Exception as e2:
+            logger.warning("synth[issue_shares] BOTH paths failed for %s: %s",
+                            geo_label, e2)
+            return {}
+    obj = _parse_agent_response(text)
+    if not isinstance(obj, dict):
+        return {}
+    shares_raw = obj.get('shares')
+    if not isinstance(shares_raw, dict):
+        return {}
+    out: dict = {}
+    wanted = {(b or ''): b for b in missing_buckets if b}
+    for key, val in shares_raw.items():
+        try:
+            s = float(val)
+        except Exception:
+            continue
+        if s <= 0:
+            continue
+        # Clamp any wildly-out-of-range values into a defensible band.
+        # Individual bucket share hardly ever exceeds 0.30 (30%) in
+        # real US political-issue distributions; anything above 0.45
+        # is agent hallucination and we defensively clamp it.
+        s = max(0.005, min(0.45, s))
+        # Case-insensitive match on the caller's exact bucket names.
+        # Agents occasionally roundtrip capitalization; snap back.
+        canonical = wanted.get(key) or wanted.get((key or '').strip())
+        if not canonical:
+            # Fuzzy match: iterate wanted keys, compare lower.
+            key_l = (key or '').strip().lower()
+            for k_want, v_want in wanted.items():
+                if (k_want or '').strip().lower() == key_l:
+                    canonical = v_want
+                    break
+        if not canonical:
+            continue
+        out[canonical] = round(s, 4)
+    return out
+
+
+def synthesize_issue_shares(geo_label: str,
+                            missing_buckets: list[str],
+                            observed_anchors: list[dict]) -> dict:
+    """Return `{bucket_name -> share (0..1)}` for the missing buckets.
+
+    `geo_label`     human-readable geography label (e.g.
+                    "California 12th Congressional District (San
+                    Francisco)"). Passed to the agent so it can skew
+                    modestly for local demographics.
+    `missing_buckets` list of bucket names the caller wants shares
+                    for. Every entry gets an answer (or the whole
+                    call returns {} on failure).
+    `observed_anchors` list of `{bucket, share}` (share 0..1) for the
+                    caller's ALREADY-populated buckets. Passed to the
+                    agent as anchor context so its answers stay in
+                    the same scale.
+
+    Fail-open: returns `{}` on any error. Caller keeps its existing
+    `external_only:True` rows.
+    """
+    if not geo_label:
+        geo_label = 'United States'
+    missing = [b for b in (missing_buckets or []) if b]
+    if not missing:
+        return {}
+    observed = [
+        {'bucket': str(a.get('bucket') or ''), 'share': float(a.get('share') or 0)}
+        for a in (observed_anchors or [])
+        if isinstance(a, dict) and a.get('bucket')
+    ]
+
+    cache_key = _issue_shares_cache_key(geo_label, missing)
+    cached = _cache_get_shares(cache_key)
+    if cached:
+        # Cache may have shares for a superset of buckets; return only
+        # the ones the caller currently wants.
+        return {b: cached[b] for b in missing if b in cached}
+
+    shares = _agent_issue_shares(geo_label, missing, observed)
+    if not shares:
+        return {}
+    _cache_put_shares(cache_key, shares, geo_label, missing)
+    return shares

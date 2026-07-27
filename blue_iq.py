@@ -721,13 +721,25 @@ def blue_iq_cache_key(filters: dict) -> str:
             forces any v26 payload with a populated top_searches
             list to rebuild — mostly cosmetic (the frontend no
             longer reads the field) but keeps the S3 cache honest.
+     v28 — 2026-07-27: `external_only=True` buckets on the Political
+            issue searches card now get agent-filled with plausible
+            % shares (Pew / YouGov / current news attention +
+            geo-appropriate skew) instead of rendering "trending
+            only." Runs after the panel + Trends + GDELT + cube
+            waterfall (Step 5), renormalizes the whole card to 1.0.
+            Directly addresses Jenna's 2026-07-27 note: "it's
+            impossible there is no signal in those categories
+            across the entire US. go ahead and synth it from
+            external research as needed for district or national,
+            etc." Bumping forces any v27 payload with "trending
+            only" rows to rebuild + pick up the synth shares.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   27,
+        'version':   28,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -3198,6 +3210,91 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
             issue_buckets, trends_political_for_buckets, gdelt_for_buckets)
 
     issue_buckets = _rerank_buckets_blended(issue_buckets)
+
+    # Step 5 (2026-07-27, Jenna's directive): agent-fill any remaining
+    # `external_only=True` buckets so the frontend never renders the
+    # italic "trending only" placeholder in place of a real %.
+    #
+    # Rationale: "it's impossible there is no signal in those categories
+    # across the entire US. go ahead and synth it from external research
+    # as needed for district or national, etc." The card's job is to
+    # tell candidates what policy issues people in this geography care
+    # about; leaving Housing / Economy / Other Policy at "trending only"
+    # is exactly the opposite of useful.
+    #
+    # How this works:
+    #   1. Collect buckets that ended the waterfall with external_only=True
+    #      (either GDELT-news-only, or cube-only with zero this-window
+    #      Trends volume, or added purely as a floor from issue_buckets_global).
+    #   2. Collect the observed anchor buckets — the ones that DO have
+    #      real Trends volume in this window — as {bucket, share} pairs
+    #      so the agent can scale its answers relative to the observed
+    #      distribution.
+    #   3. Call `synthesize_issue_shares` (blue_iq_synth_agent), which
+    #      returns a plausible 0..1 share per missing bucket grounded
+    #      in Pew / YouGov / current news + geo-appropriate skew.
+    #   4. Merge agent shares into the missing rows, flip external_only
+    #      to False, stamp synth_share=True for downstream/API consumers
+    #      (frontend just renders the %; no visible modeled banner per
+    #      the 2026-07-27 directive to strip modeled banners everywhere).
+    #   5. Renormalize the entire card so shares sum to 1.0 — the
+    #      agent's contribution proportionally pushes down the observed
+    #      panel-backed shares, which is honest (they were only large
+    #      because the missing buckets weren't in the denominator).
+    _missing_buckets = [b for b in issue_buckets if b.get('external_only') and (b.get('share') or 0) <= 0]
+    _observed_anchors = [
+        {'bucket': b.get('bucket'), 'share': float(b.get('share') or 0)}
+        for b in issue_buckets
+        if not b.get('external_only') and (b.get('share') or 0) > 0
+    ]
+    if _missing_buckets and len(_missing_buckets) < len(issue_buckets):
+        try:
+            from blue_iq_synth_agent import synthesize_issue_shares
+            geo_label = _synth_geo_label(f)
+            agent_shares = synthesize_issue_shares(
+                geo_label,
+                [b.get('bucket') for b in _missing_buckets],
+                _observed_anchors,
+            )
+            if agent_shares:
+                # Merge agent shares into the missing rows. Give them a
+                # tiny `count` (~ agent share * arbitrary base) so bucket
+                # rerank / bar-width calculations stay non-zero, but the
+                # count field isn't user-visible so exact value doesn't
+                # matter.
+                merged_count = 0
+                for b in _missing_buckets:
+                    s = agent_shares.get(b.get('bucket'))
+                    if not s or s <= 0:
+                        continue
+                    b['share']         = round(float(s), 4)
+                    b['count']         = int(round(float(s) * 10000))
+                    b['external_only'] = False
+                    b['synth_share']   = True
+                    merged_count += 1
+                # Renormalize entire card so shares sum to 1.0. Panel-
+                # backed shares proportionally shrink; agent buckets
+                # slot into their fair space. This keeps the card
+                # honest — the previous 49.5% for Social Security was
+                # only that high because Housing / Economy / etc were
+                # missing from the denominator.
+                if merged_count > 0:
+                    total = sum(float(b.get('share') or 0) for b in issue_buckets) or 1.0
+                    for b in issue_buckets:
+                        s = float(b.get('share') or 0)
+                        if s > 0:
+                            b['share'] = round(s / total, 4)
+                    log.info(
+                        "issue_shares synth-filled for %s|%s: %d buckets, "
+                        "renormalized total=%.4f",
+                        f.get('geo_type'), f.get('geo_value') or 'National',
+                        merged_count, total)
+                    # Re-rank one more time now that missing rows have
+                    # real shares — panel-anchored buckets may shift
+                    # position relative to newly-scored agent buckets.
+                    issue_buckets = _rerank_buckets_blended(issue_buckets)
+        except Exception as _e:  # never break the payload on synth failure
+            log.warning("issue_shares synth fallback failed: %s", _e)
 
     # Card D — politicians: blend panel + external (Trends + GDELT + Wiki)
     panel_pol_counts = {r.get('name'): int(r.get('panelists', 0))
