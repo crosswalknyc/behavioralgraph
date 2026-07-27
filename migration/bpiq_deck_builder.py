@@ -222,6 +222,37 @@ def _eyebrow(slide, left, top, text: str, *, on_dark: bool = True, width=Inches(
     )
 
 
+#: Small prepositions / articles / conjunctions that should NOT be
+#: capitalized inside a display name (e.g., "World of Coca-Cola",
+#: not "World Of Coca-Cola"). Fixes C12.
+_TITLE_LOWERCASE_TOKENS = {
+    "a", "an", "and", "as", "at", "but", "by", "for", "if", "in", "of",
+    "on", "or", "the", "to", "vs", "vs.", "via", "with",
+}
+
+
+def _touchpoint_display_name(name: str) -> str:
+    """Render a brand-property name for the touchpoint table. If the
+    source string already contains any uppercase letters, treat it as
+    author-cased and preserve it verbatim (payloads now provide
+    exact-case names). Otherwise apply a title-case that lowercases
+    small prepositions."""
+    if not name:
+        return ""
+    s = str(name).strip()
+    if any(c.isupper() for c in s):
+        return s
+    words = s.split()
+    out = []
+    for i, w in enumerate(words):
+        wl = w.lower()
+        if i > 0 and wl in _TITLE_LOWERCASE_TOKENS:
+            out.append(wl)
+        else:
+            out.append(w[:1].upper() + w[1:].lower())
+    return " ".join(out)
+
+
 def _normalize_project_label(label: str) -> str:
     """Normalize a project label for footer / display use. Replaces
     em-dashes and en-dashes with commas so the footer never carries a
@@ -532,24 +563,97 @@ def _derive_context(data: dict, image_url: Optional[str],
     )
 
 
+_MONTHS_SHORT = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+]
+
+
+def _fmt_date(iso: str) -> str:
+    """YYYY-MM-DD → 'DD Mon YYYY' for slide copy. Returns the input
+    unchanged if parsing fails."""
+    if not iso or not isinstance(iso, str):
+        return ""
+    parts = iso.split("-")
+    if len(parts) != 3:
+        return iso
+    try:
+        yyyy, mm, dd = int(parts[0]), int(parts[1]), int(parts[2])
+        return f"{dd:02d} {_MONTHS_SHORT[mm-1]} {yyyy}"
+    except Exception:
+        return iso
+
+
+def _period_label(period: dict, fallback: str = "") -> str:
+    """Human-readable window label from a {start, end, days} block.
+    'from DD Mon YYYY to DD Mon YYYY (N days)'. Used on the
+    engagement-lift slide to avoid the C2 mislabel (calling a 15-day
+    window 'the year before campaign launch')."""
+    if not isinstance(period, dict):
+        return fallback
+    start = _fmt_date(str(period.get("start") or ""))
+    end   = _fmt_date(str(period.get("end")   or ""))
+    days  = period.get("days")
+    if start and end:
+        base = f"from {start} to {end}"
+        if isinstance(days, (int, float)) and days > 0:
+            base += f" ({int(days)}-day window)"
+        return base
+    return fallback
+
+
 def _engagement_headline(ctx: DeckCtx) -> str:
     """MIDG-style declarative headline that names the lift, the
     consumer count, and the brand.
 
-    Two-line sentence with terminal punctuation on both lines so the
-    slide reads clean regardless of which line is displayed
-    standalone (cover subtitle uses line 1 only)."""
+    Uses adaptive precision on the pp delta (C9): sub-percent deltas
+    display with 2 decimals so a +0.15pp lift never renders as
+    "0.1pt" while the pre/post percentages show 0.2pp apart. Two-line
+    sentence with terminal punctuation on both lines."""
     if ctx.delta_pp <= 0:
         return (
             f"The campaign held {ctx.brand}'s baseline.\n"
             f"{fmt_num(ctx.post_users_proj)} consumers engaged with the brand "
             f"in the post-window."
         )
+    # Adaptive precision: below 1pp shows 2 decimals; at/above 1pp
+    # shows 1 decimal. Guarantees the headline delta never contradicts
+    # the pre/post display precision (fixes C9).
+    if abs(ctx.delta_pp) < 1.0:
+        delta_str = f"{ctx.delta_pp:.2f}pt"
+    else:
+        delta_str = f"{ctx.delta_pp:.1f}pt"
     moved = max(0, ctx.post_users_proj - ctx.pre_users_proj)
     return (
-        f"A {ctx.delta_pp:.1f}pt lift in brand engagement,\n"
+        f"A {delta_str} lift in brand engagement,\n"
         f"moving {fmt_num(moved)} more consumers toward {ctx.brand}."
     )
+
+
+def _cover_subtitle(ctx: DeckCtx) -> str:
+    """Purpose-written cover subtitle. Two lines: category + a
+    declarative summary describing what this deck measures. Always
+    ends with terminal punctuation so it never renders as a truncated
+    fragment (fixes C7)."""
+    diag = ctx.data.get("diagnostics") or {}
+    is_counterfactual = "counterfactual" in (ctx.project or "").lower()
+    label = ctx.category_label or "Brand Partnership"
+    if is_counterfactual:
+        line1 = f"{label} · Counterfactual read."
+        line2 = (
+            f"Isolates the sponsorship signal by measuring {ctx.brand} "
+            f"against the same audience and window as the treated brand."
+        )
+    else:
+        # Standard partnership read - lead with the total value we
+        # observed so the cover has a hook, without leaning on the
+        # slide-4 headline which uses a comma-ended fragment.
+        line1 = f"{label} · Total observed value: {fmt_money(ctx.total_value)}."
+        line2 = (
+            f"An analysis of {ctx.brand}'s consumer engagement across "
+            f"the campaign window."
+        )
+    return f"{line1}\n{line2}"
 
 
 def _final_insight_lines(ctx: DeckCtx) -> tuple[str, str]:
@@ -585,7 +689,7 @@ def _final_insight_lines(ctx: DeckCtx) -> tuple[str, str]:
         return (
             "The campaign held baseline.",
             f"{ctx.brand}'s adjusted lift falls at or below control "
-            "drift — the correct result for a counterfactual brand.",
+            "drift, the correct result for a counterfactual brand.",
         )
     if not is_sig:
         return (
@@ -602,7 +706,7 @@ def _final_insight_lines(ctx: DeckCtx) -> tuple[str, str]:
         line2 = "its share of voice across the audience."
     elif lift_rel >= 25:
         line1 = f"{ctx.brand} won meaningful"
-        line2 = f"new ground — {lift_rel:.0f}% adjusted lift, post-campaign."
+        line2 = f"new ground: {lift_rel:.0f}% adjusted lift, post-campaign."
     else:
         if ctx.has_yearly:
             line1 = "Steady adjusted lift,"
@@ -657,14 +761,27 @@ def _slide_cover(prs, ctx: DeckCtx, idx: int, total: int):
               title_text,
               size=title_size, bold=True, color=FG_LIGHT,
               spacing=0.95, font=FONT_DISPLAY)
-    # Subtitle - MIDG-style tagline pulled from headline narrative.
-    # Anchored to bottom of left column so it doesn't depend on
-    # exactly where the title block ends.
-    subtitle = _engagement_headline(ctx).split("\n")[0]
-    _add_text(s, Inches(0.6), Inches(5.6), Inches(5.0), Inches(1.0),
+    # Subtitle - purpose-written, not derived from slide 4's split
+    # headline (fixes C7: previously the subtitle pulled the first
+    # line of the two-line engagement headline which ended on a
+    # comma, so the cover subtitle rendered as a truncated fragment).
+    # Two-line format: category + declarative one-line summary; the
+    # summary carries terminal punctuation so it reads as a complete
+    # thought at any font size.
+    subtitle = _cover_subtitle(ctx)
+    _add_text(s, Inches(0.6), Inches(5.4), Inches(5.0), Inches(1.2),
               subtitle,
-              size=16, color=FG_LIGHT, spacing=1.2, font=FONT_BODY,
+              size=15, color=FG_LIGHT, spacing=1.25, font=FONT_BODY,
               anchor="bottom")
+    # DRAFT date stamp - explicitly names the analysis build date so
+    # a reader can tell whether they're holding an old draft or the
+    # July 27 v2 rebuild (C7 mentions the DRAFT date line went
+    # missing from the rerun cover; restored here).
+    created = str(ctx.data.get("created_at") or "")[:10]
+    if created:
+        _add_text(s, Inches(0.6), Inches(6.5), Inches(5.0), Inches(0.25),
+                  f"DRAFT · {created}",
+                  size=9, bold=True, color=MUTED_DK, letter_spacing=0.2)
     # CONFIDENTIAL stamp top right
     _add_text(s, Inches(11.4), Inches(0.6), Inches(1.4), Inches(0.3),
               "CONFIDENTIAL",
@@ -700,24 +817,44 @@ def _slide_methodology(prs, ctx: DeckCtx, idx: int, total: int):
               "Direct observational data.\nNo surveys, no self-report.",
               size=44, bold=True, color=FG_DARK,
               spacing=0.95, font=FONT_DISPLAY)
+    # Dashes in the body copy get normalized to commas so they don't
+    # regress the item-20 dash cleanup (C11).
     body = (
         "Crosswalk's BehaviorGraph draws on a 30M+ opted-in U.S. consumer "
         "panel. For this partnership we observed a sample of "
-        f"{fmt_num(ctx.panel_size)} panelists — the Wheel of Fortune "
-        "Next Day Air viewer cohort — and projected their behavior to a "
+        f"{fmt_num(ctx.panel_size)} panelists, the Wheel of Fortune "
+        "Next Day Air viewer cohort, and projected their behavior to a "
         f"{fmt_num(ctx.audience_proj)}-consumer U.S. viewing audience "
         "universe. Every observation reflects real behavior: which sites "
         "they visited, which platforms they spent time on, and which "
         "brand touchpoints appeared in their sessions before, during, "
         "and after the partnership ran."
     )
-    _add_text(s, Inches(0.6), Inches(3.3), Inches(7), Inches(2.6),
-              body, size=14, color=FG_DARK, spacing=1.35)
-    # Right column - 3 stat tiles
+    _add_text(s, Inches(0.6), Inches(3.0), Inches(7), Inches(2.2),
+              body, size=13, color=FG_DARK, spacing=1.32)
+    # Study-context clarifier line - C3 fix. When the payload
+    # carries a diagnostics.study_context field (rerun analyses,
+    # counterfactuals, etc.), print it as an italic footnote so no
+    # reader can misread this as the first-flight deck.
+    study_ctx = ((ctx.data.get("diagnostics") or {})
+                 .get("study_context"))
+    if study_ctx:
+        _add_text(s, Inches(0.6), Inches(5.35), Inches(7), Inches(1.35),
+                  str(study_ctx), size=10, italic=True,
+                  color=MUTED_LT, spacing=1.3)
+    # Right column - 3 stat tiles. Window tile uses the actual pre /
+    # event / post dates so slide 2 never claims a window it doesn't
+    # cover (C2 + C3 defensive coverage).
+    pre_p  = ctx.data.get("pre_period")   or {}
+    post_p = ctx.data.get("post_period")  or {}
+    window_val = (
+        f"{_fmt_date(pre_p.get('start') or '')} to "
+        f"{_fmt_date(post_p.get('end')   or '')}"
+    ) if pre_p and post_p else (ctx.campaign_window or "0")
     stats = [
         ("Panel sample", f"{fmt_num(ctx.panel_size)}", "Observed viewer cohort"),
-        ("Window",       ctx.campaign_window or "—",   "Pre, campaign, post"),
-        ("Attribution",  f"{ctx.attribution_d}d",     "Post-event window"),
+        ("Window",       window_val,                    "Pre, event, post windows"),
+        ("Attribution",  f"{ctx.attribution_d}d",       "Post-event window"),
     ]
     col_x = Inches(8.2)
     col_w = Inches(4.6)
@@ -820,13 +957,20 @@ def _slide_engagement_lift(prs, ctx: DeckCtx, idx: int, total: int):
               Inches(1.3),
               fmt_pct(ctx.pre_pen), size=70, bold=True, color=FG_LIGHT,
               font=FONT_NUMERIC, spacing=0.95)
+    # Pre-plate sub-label = the actual pre-window from the payload
+    # (fixes C2: prior copy said "in the year before campaign launch"
+    # which mislabels the trailing pre-period as a 12-month window).
+    pre_p  = ctx.data.get("pre_period")  or {}
+    post_p = ctx.data.get("post_period") or {}
+    pre_label = _period_label(pre_p, fallback="in the pre-window")
+    post_label = _period_label(post_p, fallback=f"in the {ctx.attribution_d}-day post-window")
     _add_text(s, Inches(0.9), plate_y + Inches(1.9), plate_w - Inches(0.5),
               Inches(0.4),
               f"{fmt_num(ctx.pre_users_proj)} U.S. consumers",
               size=14, color=FG_LIGHT)
     _add_text(s, Inches(0.9), plate_y + Inches(2.25), plate_w - Inches(0.5),
               Inches(0.4),
-              "engaged with the brand in the year before campaign launch.",
+              f"engaged with the brand {pre_label}.",
               size=11, italic=True, color=MUTED_DK)
     # Post plate
     post_x = Inches(7.2)
@@ -846,8 +990,7 @@ def _slide_engagement_lift(prs, ctx: DeckCtx, idx: int, total: int):
               size=14, color=FG_DARK)
     _add_text(s, post_x + Inches(0.3), plate_y + Inches(2.25),
               plate_w - Inches(0.5), Inches(0.4),
-              f"engaged with the brand within {ctx.attribution_d}d of "
-              f"campaign end.",
+              f"engaged with the brand {post_label}.",
               size=11, italic=True, color=FG_DARK)
     # Read As callout + significance line, MIDG-style.
     moved = max(0, ctx.post_users_proj - ctx.pre_users_proj)
@@ -875,47 +1018,74 @@ def _mcnemar_summary(ctx: DeckCtx) -> str:
     """Compose the on-slide significance strip from the payload's
     diagnostics.significance block.
 
-    Reads the new-shape keys (primary_test_z, primary_test_p_value,
-    delta_ci_95_pp) written by the QC patch, with a fallback to the
-    older key names for legacy payloads. The primary test is a
-    pooled two-sample z on paired marginals (conservative — matches
-    Liz's memo framing)."""
-    diag = (ctx.data.get("diagnostics") or {}).get("significance") or {}
-    if diag:
-        p    = diag.get("primary_test_p_value")
-        if p is None:
-            p = diag.get("mcnemar_p_value")
-        z    = diag.get("primary_test_z")
-        ci   = diag.get("delta_ci_95_pp") or diag.get("ci_95_pp")
-        sig  = diag.get("significant")
-        parts = [f"Panel n={fmt_num(ctx.panel_size)}"]
-        if z is not None:
-            parts.append(f"z={float(z):+.2f}")
-        if p is not None:
-            parts.append(f"p={float(p):.3f}")
-        if ci:
-            try:
-                lo, hi = float(ci[0]), float(ci[1])
-                parts.append(f"95% CI on Δ: [{lo:+.2f}pp, {hi:+.2f}pp]")
-            except Exception:
-                pass
-        parts.append("SIGNIFICANT" if sig else "n.s. (Δ indistinguishable from zero)")
-        return " · ".join(parts)
-    # Fallback: same-panel z-approximation from panel marginals.
+    Per July 27 QC memo (C6): at large panel n the p-value carries
+    no information (any Δ above ~0.04pp clears p=0.05), so on
+    n>=1e6 panels we drop the p-value entirely and report point
+    estimate, z, and the 95% CI. On smaller panels we keep p for
+    readers who want it.
+
+    Recomputes z and CI from panel size + observed pre/post counts
+    when possible, so a stale-denominator payload still renders the
+    right numbers on the corrected panel base."""
+    from math import erf, sqrt
+
+    diag  = (ctx.data.get("diagnostics") or {}).get("significance") or {}
     n_pre  = ctx.sample_pre
     n_post = ctx.sample_post
-    if not (n_pre and n_post and ctx.panel_size):
-        return ""
-    from math import erf, sqrt
-    p_pool = (n_pre + n_post) / (2 * ctx.panel_size)
-    se = sqrt(2 * p_pool * (1 - p_pool) / ctx.panel_size)
-    delta = (n_post - n_pre) / ctx.panel_size
-    z = delta / se if se else 0
-    p = 2 * (1 - 0.5 * (1 + erf(abs(z) / sqrt(2))))
-    sig = "SIGNIFICANT (p<0.05)" if p < 0.05 else "n.s."
-    return (
-        f"Panel n={fmt_num(ctx.panel_size)} · z={z:+.2f} · p={p:.3f} · {sig}"
-    )
+    n_panel = ctx.panel_size
+
+    # Recompute on the panel base actually declared in the payload,
+    # rather than trusting a possibly-stale precomputed z/CI written
+    # against a different denominator.
+    z_calc, se_pp_calc, delta_pp_calc = None, None, None
+    if n_pre and n_post and n_panel:
+        p_pool = (n_pre + n_post) / (2 * n_panel)
+        se = sqrt(2 * p_pool * (1 - p_pool) / n_panel)
+        delta = (n_post - n_pre) / n_panel
+        z_calc = delta / se if se else 0
+        se_pp_calc = se * 100
+        delta_pp_calc = delta * 100
+
+    # Prefer recomputed z/CI/Δ. Fall back to payload numbers only if
+    # the recompute fails.
+    if delta_pp_calc is not None:
+        delta_pp = delta_pp_calc
+        z        = z_calc
+        ci       = [delta_pp - 1.96 * se_pp_calc, delta_pp + 1.96 * se_pp_calc]
+    else:
+        delta_pp = diag.get("delta_pp_point")
+        z        = diag.get("primary_test_z")
+        ci       = diag.get("delta_ci_95_pp") or diag.get("ci_95_pp")
+
+    # Significance flag: recomputed z if available, else the payload
+    # flag (which is only correct on the payload's declared base).
+    if z is not None:
+        sig = abs(z) >= 1.96
+    else:
+        sig = bool(diag.get("significant"))
+
+    parts = [f"Panel n={fmt_num(n_panel)}"]
+    if delta_pp is not None:
+        parts.append(f"Δ={float(delta_pp):+.2f}pp")
+    if z is not None:
+        parts.append(f"z={float(z):+.2f}")
+    # Drop p when n is large enough that p becomes uninformative
+    # (item C6: detection floor at n=1e7 is ~0.04pp; p is not a
+    # useful column on a client-facing slide at this scale).
+    if n_panel < 1_000_000:
+        p = diag.get("primary_test_p_value")
+        if p is None and z is not None:
+            p = 2 * (1 - 0.5 * (1 + erf(abs(z) / sqrt(2))))
+        if p is not None:
+            parts.append(f"p={float(p):.3f}")
+    if ci:
+        try:
+            lo, hi = float(ci[0]), float(ci[1])
+            parts.append(f"95% CI on Δ: [{lo:+.2f}pp, {hi:+.2f}pp]")
+        except Exception:
+            pass
+    parts.append("SIGNIFICANT" if sig else "not distinguishable from zero")
+    return " · ".join(parts)
 
 
 def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
@@ -935,22 +1105,29 @@ def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
               fmt_money(ctx.total_value),
               size=150, bold=True, color=FG_DARK,
               font=FONT_NUMERIC, spacing=0.85, align="left")
-    # "Attributable to Partnership" subtotal - the net-new value the
-    # campaign is responsible for (Brand Lift + Conversion). Brand
-    # Engagement Value prices the entire post-window audience, most
-    # of which pre-existed. Showing both numbers keeps us honest.
-    attributable = ctx.blv + (ctx.cv if ctx.has_conversions else 0)
+    # "Attributable to Partnership" subtotal, C5-strict version.
+    # Reads from the payload's precomputed strict-attributable
+    # figure (Brand Lift + adjusted-lift-share of Conversion Value)
+    # so we don't double-count total observed conversions as if the
+    # entire post-window audience were incremental. Falls back to
+    # BLV + full CV only if the payload doesn't carry the strict
+    # figure (legacy payloads).
+    val = ctx.data.get("valuation") or {}
+    attributable = val.get("attributable_to_partnership")
+    if attributable is None:
+        attributable = ctx.blv + (ctx.cv if ctx.has_conversions else 0)
+    attributable = float(attributable)
     _add_text(s, Inches(0.6), Inches(4.75), Inches(6.5), Inches(0.35),
               "OF WHICH ATTRIBUTABLE TO PARTNERSHIP",
               size=10, bold=True, color=FG_DARK, letter_spacing=0.16)
     _add_text(s, Inches(0.6), Inches(5.05), Inches(6.5), Inches(0.55),
               fmt_money(attributable),
               size=32, bold=True, color=FG_DARK, font=FONT_NUMERIC)
-    _add_text(s, Inches(0.6), Inches(5.55), Inches(6.5), Inches(0.3),
-              "Brand Lift + Conversion (net-new). "
-              "Brand Engagement + Earned Media price the observed "
-              "audience footprint, which includes pre-existing brand "
-              "interest.",
+    _add_text(s, Inches(0.6), Inches(5.55), Inches(6.5), Inches(0.55),
+              "Brand Lift plus the adjusted-lift share of Conversion "
+              "Value (strictly incremental). Brand Engagement and "
+              "Earned Media price the observed audience footprint, "
+              "which includes pre-existing brand interest.",
               size=9, italic=True, color=FG_DARK, spacing=1.3)
     # 4-up breakdown bar across the bottom
     parts = [
@@ -1096,14 +1273,17 @@ def _slide_emv(prs, ctx: DeckCtx, idx: int, total: int):
         row_color = MUTED_DK if is_zero else FG_LIGHT
         _add_text(s, C_PLAT[0], y, C_PLAT[1], row_h,
                   r["platform"], size=11, bold=True, color=row_color)
+        # C11: use literal 0 (not em-dash) for platforms with no
+        # observed signal, matching the slide's own note that zero
+        # rows indicate absence of signal.
         _add_text(s, C_INCR[0], y, C_INCR[1], row_h,
-                  fmt_num(r["incremental_users_projected"]) if r["incremental_users_projected"] else "—",
+                  fmt_num(r["incremental_users_projected"]) if r["incremental_users_projected"] else "0",
                   size=11, color=row_color, font=FONT_NUMERIC, align="right")
         _add_text(s, C_RATE[0], y, C_RATE[1], row_h,
                   f"${r['emv_per_user_rate']:.2f}",
                   size=11, color=MUTED_DK, font=FONT_NUMERIC, align="right")
         _add_text(s, C_EMV[0], y, C_EMV[1], row_h,
-                  fmt_money(r["emv_value"]) if not is_zero else "—",
+                  fmt_money(r["emv_value"]) if not is_zero else "$0",
                   size=11, bold=(not is_zero),
                   color=(ACCENT if not is_zero else MUTED_DK),
                   font=FONT_NUMERIC, align="right")
@@ -1126,36 +1306,64 @@ def _slide_emv(prs, ctx: DeckCtx, idx: int, total: int):
               f"impression cost. Rows are the fixed roster used across "
               f"all decks; zeros indicate no observed signal.",
               size=9, color=FG_LIGHT, spacing=1.32)
-    # Sources + platform overlap footnote (item 6, 14). Two lines
-    # anchored well above the footer so they never collide with it
-    # (fixes item 17).
-    src_bits = []
+    # C13: source line now reads from the payload's rate_sources so
+    # the source text can be updated without a code push. Covers
+    # every platform in the fixed roster (not just the first 4)
+    # since all 11 platforms need to be sourced explicitly per
+    # Liz's C13.
+    payload_srcs = ((ctx.data.get("valuation") or {})
+                    .get("rate_sources", {})
+                    .get("emv_per_user")) or {}
+    # If every platform's rate source is the same string (as under
+    # the Crosswalk internal-convention relabel), collapse to a
+    # single sentence rather than repeating 11 times.
+    unique_srcs = set()
     for plat in display_roster:
         rate = float(((ctx.data.get("valuation") or {})
                       .get("rates", {}).get("emv_per_user") or {})
                      .get(plat, 0))
         if rate:
-            src = CPM_SOURCE_ATTRIBUTION.get(plat, "")
+            src = payload_srcs.get(plat) or CPM_SOURCE_ATTRIBUTION.get(plat, "")
             if src:
-                src_bits.append(f"{plat} ${rate:.2f} · {src}")
-    sources_txt = "Rates & sources: " + " ; ".join(src_bits[:4])
-    _add_text(s, Inches(0.6), Inches(6.30), Inches(9.2), Inches(0.32),
+                unique_srcs.add(src)
+    if len(unique_srcs) == 1:
+        single = unique_srcs.pop().rstrip(". ")
+        sources_txt = f"All platform rates: {single}. Editable in the live dashboard."
+    else:
+        bits = []
+        for plat in display_roster:
+            rate = float(((ctx.data.get("valuation") or {})
+                          .get("rates", {}).get("emv_per_user") or {})
+                         .get(plat, 0))
+            if rate:
+                src = payload_srcs.get(plat) or CPM_SOURCE_ATTRIBUTION.get(plat, "")
+                if src:
+                    bits.append(f"{plat} ${rate:.2f}: {src}")
+        sources_txt = "Rates and sources: " + "; ".join(bits)
+    # C8: anchored higher and given more vertical room so the source
+    # line and the overlap note never collide with the page footer.
+    _add_text(s, Inches(0.6), Inches(6.20), Inches(12.1), Inches(0.34),
               sources_txt, size=7, italic=True, color=MUTED_DK,
               spacing=1.15)
     overlap = (
-        "Note: platform-level incremental consumers can sum above the "
-        "brand-level unique-consumer total because consumers can be "
-        "counted on multiple platforms. EMV prices per-platform earned "
-        "reach; the unique-consumer total is used for Brand Lift only."
+        "Note: platform-level incremental consumers can sum above "
+        "the brand-level unique-consumer total because consumers can "
+        "be counted on multiple platforms. EMV prices per-platform "
+        "earned reach; the unique-consumer total is used for Brand "
+        "Lift only."
     )
-    _add_text(s, Inches(0.6), Inches(6.60), Inches(9.2), Inches(0.35),
+    _add_text(s, Inches(0.6), Inches(6.55), Inches(12.1), Inches(0.42),
               overlap, size=7, italic=True, color=MUTED_DK, spacing=1.15)
     _page_footer(s, idx, total, ctx.project, on_dark=True)
     return s
 
 
 def _slide_brand_engagement_value(prs, ctx: DeckCtx, idx: int, total: int):
-    """BEV calculator slide. Cream bg, LISA stat-tile rhythm."""
+    """BEV calculator slide. Cream bg, LISA stat-tile rhythm.
+
+    Calculator starts higher on the slide (y=3.0) than the earlier
+    build so the total bar clears the source-line row at y=6.05 and
+    the source footer at y=6.65 without collision (fixes C8)."""
     s = _blank(prs)
     _add_bg(s, BG_CREAM)
     _eyebrow(s, Inches(0.6), Inches(0.6),
@@ -1165,11 +1373,11 @@ def _slide_brand_engagement_value(prs, ctx: DeckCtx, idx: int, total: int):
               f"{fmt_money(ctx.bev)} of observed\npost-campaign engagement.",
               size=40, bold=True, color=FG_DARK,
               spacing=0.95, font=FONT_DISPLAY)
-    # Math row
+    # Math row - raised to y=3.0 to leave clean margin below.
     rate = float((ctx.data.get("valuation") or {})
                  .get("rates", {}).get("bev_per_user") or 0)
     _math_calculator(
-        s, Inches(0.6), Inches(3.6), Inches(8.0),
+        s, Inches(0.6), Inches(3.0), Inches(8.0),
         [
             ("Post-Campaign Engaged Consumers", fmt_num(ctx.post_users_proj)),
             ("× $/consumer rate",               f"$ {rate:.2f}"),
@@ -1179,29 +1387,34 @@ def _slide_brand_engagement_value(prs, ctx: DeckCtx, idx: int, total: int):
         on_dark=False,
         accent=RGBColor(0x63, 0x66, 0xF1),
     )
-    # Why-it-matters
-    _add_rect(s, Inches(9.0), Inches(3.6), Inches(3.8), Inches(2.8),
+    # Why-it-matters, matched to calculator's new top.
+    _add_rect(s, Inches(9.0), Inches(3.0), Inches(3.8), Inches(2.8),
               fill=None, line=FG_DARK, line_w=0.75)
-    _add_text(s, Inches(9.25), Inches(3.75), Inches(3.4), Inches(0.3),
+    _add_text(s, Inches(9.25), Inches(3.15), Inches(3.4), Inches(0.3),
               "WHY IT MATTERS", size=9, bold=True, color=FG_DARK,
               letter_spacing=0.18)
-    _add_text(s, Inches(9.25), Inches(4.1), Inches(3.4), Inches(2.2),
+    _add_text(s, Inches(9.25), Inches(3.5), Inches(3.4), Inches(2.2),
               "Every consumer who engaged with the brand in the post-window "
               "carries open-market value. This prices the total observed "
               f"post-campaign audience for {ctx.brand}, most of whom "
               "carried pre-existing brand interest that the campaign did "
               "not create. See Brand Lift Value for the net-new share.",
               size=10, color=FG_DARK, spacing=1.35)
-    # Rate sourcing footnote
+    # Rate sourcing footnote. Reads from the payload's
+    # valuation.rate_sources.bev_per_user rather than a hardcoded
+    # citation, so relabeling the source (C4) doesn't require a code
+    # push. Vertically anchored high enough that it doesn't collide
+    # with either the math total bar OR the page footer (fixes C8).
     src_line = (
-        "Rate source: $2.50 per engaged consumer = 2026 branded-content "
-        "engagement benchmark (Nielsen Branded Content Effectiveness "
-        "Study, midpoint of the $2.10–$2.90 category range). Editable "
-        "in the live dashboard."
+        (ctx.data.get("valuation") or {})
+        .get("rate_sources", {})
+        .get("bev_per_user")
+        or "Rate: Crosswalk internal valuation convention (2026). "
+           "Editable in the live dashboard."
     )
-    _add_text(s, Inches(0.6), Inches(6.20), Inches(8.2), Inches(0.7),
+    _add_text(s, Inches(0.6), Inches(6.05), Inches(12.1), Inches(0.55),
               src_line, size=8, italic=True, color=MUTED_LT, spacing=1.25)
-    _add_text(s, Inches(0.6), Inches(6.75), Inches(12), Inches(0.25),
+    _add_text(s, Inches(0.6), Inches(6.65), Inches(12), Inches(0.25),
               ctx.sources_line, size=7, italic=True, color=MUTED_LT)
     _page_footer(s, idx, total, ctx.project, on_dark=False)
     return s
@@ -1228,24 +1441,29 @@ def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
     treat_dp   = float(cg.get("treat_delta_pp")   or 0)
     control_dp = float(cg.get("control_delta_pp") or 0)
     incr_pp    = float(cg.get("incremental_lift_pp") or (treat_dp - control_dp))
+    # Calculator raised to y=2.85 AND row height tightened to 0.60"
+    # so the 3-row math block + total bar clears the source line
+    # anchored at y=6.30 (fixes C8). row_h=0.65 uses the calculator's
+    # smaller label/value fonts, which still read cleanly.
     _math_calculator(
-        s, Inches(0.6), Inches(3.5), Inches(8.0),
+        s, Inches(0.6), Inches(2.85), Inches(8.0),
         [
             (f"Adjusted incremental lift  "
-             f"(treated {treat_dp:+.2f}pp − control {control_dp:+.2f}pp)",
+             f"(treated {treat_dp:+.2f}pp minus control {control_dp:+.2f}pp)",
              f"{incr_pp:+.2f}pp"),
-            (f"× U.S. consumer audience ({fmt_num(ctx.audience_proj)})",
+            (f"x U.S. consumer audience ({fmt_num(ctx.audience_proj)})",
              fmt_num(ctx.incr_users)),
-            ("× $/incremental-consumer rate", f"$ {rate:.2f}"),
+            ("x $/incremental-consumer rate", f"$ {rate:.2f}"),
         ],
         total_label="Brand Lift Value",
         total_value=fmt_money(ctx.blv),
         on_dark=True,
         accent=RGBColor(0xF5, 0x9E, 0x0B),
+        row_h=Inches(0.65),
     )
-    _add_rect(s, Inches(9.0), Inches(3.5), Inches(3.85), Inches(3.0),
+    _add_rect(s, Inches(9.0), Inches(2.85), Inches(3.85), Inches(3.0),
               fill=None, line=ACCENT, line_w=1.0)
-    _add_text(s, Inches(9.2), Inches(3.65), Inches(3.5), Inches(0.3),
+    _add_text(s, Inches(9.2), Inches(3.00), Inches(3.5), Inches(0.3),
               "WHY IT MATTERS", size=9, bold=True, color=ACCENT,
               letter_spacing=0.18)
     detail = (
@@ -1258,24 +1476,34 @@ def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
         "is an adjusted-lift design, not a true difference-in-"
         "differences. A holdout-based DiD is on the roadmap."
     )
-    _add_text(s, Inches(9.2), Inches(4.0), Inches(3.5), Inches(2.4),
+    _add_text(s, Inches(9.2), Inches(3.35), Inches(3.5), Inches(2.4),
               detail, size=9, color=FG_LIGHT, spacing=1.35)
+    # C4: read the rate source from the payload rather than hardcoding.
+    # C8: raised the vertical anchor to keep this line clear of the
+    # $/incremental-consumer total bar and the page footer.
     src_line = (
-        "Rate source: $5.00 per incremental consumer = 2× baseline BEV "
-        "engagement rate. Anchored in the acquisition-to-retention "
-        "premium range (Bain 2024; HBR 2023 customer economics), "
-        "conservative against the 3–5× premium reported for high-"
-        "affinity acquired customers. Editable in the live dashboard."
+        (ctx.data.get("valuation") or {})
+        .get("rate_sources", {})
+        .get("blv_per_incr_user")
+        or "Rate: Crosswalk internal valuation convention (2026). "
+           "Editable in the live dashboard."
     )
-    _add_text(s, Inches(0.6), Inches(6.55), Inches(8.2), Inches(0.55),
+    _add_text(s, Inches(0.6), Inches(6.30), Inches(12.1), Inches(0.55),
               src_line, size=7, italic=True, color=MUTED_DK, spacing=1.25)
+    # C8: source footer was missing on slide 8 (only BLV slide). Add
+    # the Source: Crosswalk BehaviorGraph line explicitly.
+    _add_text(s, Inches(0.6), Inches(6.75), Inches(12), Inches(0.25),
+              ctx.sources_line, size=7, italic=True, color=MUTED_DK)
     _page_footer(s, idx, total, ctx.project, on_dark=True)
     return s
 
 
 def _slide_conversion_value(prs, ctx: DeckCtx, idx: int, total: int):
     """CV slide - only shown when conversions are enabled and signal
-    is good (skipped for automotive partnerships per .cursor/rules)."""
+    is good (skipped for automotive partnerships per .cursor/rules).
+
+    Calculator raised to y=3.0 to match BEV slide 7 and clear the
+    source line at the bottom (fixes C8)."""
     s = _blank(prs)
     _add_bg(s, BG_CREAM)
     _eyebrow(s, Inches(0.6), Inches(0.6),
@@ -1288,20 +1516,20 @@ def _slide_conversion_value(prs, ctx: DeckCtx, idx: int, total: int):
     rate = float((ctx.data.get("valuation") or {})
                  .get("rates", {}).get("conv_value_per_user") or 0)
     _math_calculator(
-        s, Inches(0.6), Inches(3.6), Inches(8.0),
+        s, Inches(0.6), Inches(3.0), Inches(8.0),
         [
             ("Post-Campaign Conversions",
              fmt_num(conv.get("post_users_projected") or 0)),
-            ("× Average Order Value (AOV)", f"$ {rate:.2f}"),
+            ("x Average Order Value (AOV)", f"$ {rate:.2f}"),
         ],
         total_label="Conversion Value",
         total_value=fmt_money(ctx.cv),
         on_dark=False,
         accent=RGBColor(0xEF, 0x44, 0x44),
     )
-    _add_rect(s, Inches(9.0), Inches(3.6), Inches(3.8), Inches(2.8),
+    _add_rect(s, Inches(9.0), Inches(3.0), Inches(3.8), Inches(2.8),
               fill=None, line=FG_DARK, line_w=0.75)
-    _add_text(s, Inches(9.25), Inches(3.75), Inches(3.4), Inches(0.3),
+    _add_text(s, Inches(9.25), Inches(3.15), Inches(3.4), Inches(0.3),
               "WHY IT MATTERS", size=9, bold=True, color=FG_DARK,
               letter_spacing=0.18)
     conv_note = (str(conv.get("note") or "")).strip()
@@ -1313,17 +1541,22 @@ def _slide_conversion_value(prs, ctx: DeckCtx, idx: int, total: int):
     )
     if conv_note:
         detail = conv_note
-    _add_text(s, Inches(9.25), Inches(4.1), Inches(3.4), Inches(2.2),
+    _add_text(s, Inches(9.25), Inches(3.5), Inches(3.4), Inches(2.2),
               detail, size=10, color=FG_DARK, spacing=1.35)
+    # C4: read the AOV source from the payload so the internal-
+    # convention relabel takes effect without code changes.
+    # C8: vertical positioning aligned with slides 7 and 8 so the
+    # three value slides read as a consistent set.
     src_line = (
-        f"AOV source: ${rate:.2f} = 2026 category benchmark (IRI beverage "
-        "AOV, single-visit basket; a mid-point across owned-property "
-        "premium retail and in-store SKU purchases). Editable in the "
-        "live dashboard."
+        (ctx.data.get("valuation") or {})
+        .get("rate_sources", {})
+        .get("conv_value_per_user")
+        or f"AOV: ${rate:.2f} = Crosswalk internal valuation convention "
+           "(2026). Editable in the live dashboard."
     )
-    _add_text(s, Inches(0.6), Inches(6.20), Inches(8.2), Inches(0.7),
+    _add_text(s, Inches(0.6), Inches(6.05), Inches(12.1), Inches(0.55),
               src_line, size=8, italic=True, color=MUTED_LT, spacing=1.25)
-    _add_text(s, Inches(0.6), Inches(6.85), Inches(12), Inches(0.25),
+    _add_text(s, Inches(0.6), Inches(6.65), Inches(12), Inches(0.25),
               ctx.sources_line, size=7, italic=True, color=MUTED_LT)
     _page_footer(s, idx, total, ctx.project, on_dark=False)
     return s
@@ -1401,10 +1634,10 @@ def _slide_demographics(prs, ctx: DeckCtx, idx: int, total: int):
     demo_src = (
         (ctx.data.get("demographics") or {}).get("source_note")
         or "Source: Crosswalk BehaviorGraph, Wheel of Fortune Next Day Air "
-        "viewer profile (S43 Eps 191–195, streamed 2–6 June 2026). This "
-        "is the audience that watched the integration, not the brand's "
-        "engager base — the two brand decks show the same distributions "
-        "because both measure this shared viewer cohort."
+        "viewer profile (S43 Eps 191 to 195, streamed 2 to 6 June 2026). "
+        "This is the audience that watched the integration, not the "
+        "brand's engager base; the two brand decks show the same "
+        "distributions because both measure this shared viewer cohort."
     )
     _add_text(s, Inches(0.6), Inches(2.15), Inches(12), Inches(0.55),
               demo_src, size=10, italic=True, color=MUTED_LT, spacing=1.35)
@@ -1434,7 +1667,7 @@ def _slide_demographics(prs, ctx: DeckCtx, idx: int, total: int):
         for j, r in enumerate(shown_rows):
             y = base_y + Inches(0.5 + j * 0.55)
             _add_text(s, x, y, Inches(col_w.inches * 0.65), Inches(0.4),
-                      str(r.get("value") or "—"), size=13, color=FG_DARK)
+                      str(r.get("value") or "n/a"), size=13, color=FG_DARK)
             _add_text(s, x + Inches(col_w.inches * 0.65), y,
                       Inches(col_w.inches * 0.35), Inches(0.4),
                       fmt_pct(r.get("percentage") or 0),
@@ -1500,15 +1733,19 @@ def _slide_top_touchpoints(prs, ctx: DeckCtx, idx: int, total: int):
     line.fill.fore_color.rgb = MUTED_DK
     for i, r in enumerate(rows):
         y = table_top + Inches(0.42) + row_h * i
-        raw_name = str(r.get("common_name") or "—")
-        # Title-case but preserve trademark-cased tokens.
-        display_name = raw_name.title()
+        raw_name = str(r.get("common_name") or "n/a")
+        # C12: preserve source display casing rather than force
+        # title() (which capitalizes small prepositions like "Of"
+        # in "World of Coca-Cola"). Payloads now provide brand-
+        # property display names in the exact case they should
+        # render.
+        display_name = _touchpoint_display_name(raw_name)
         post_h = int(r.get("hits_projected") or 0)
         pre_h = pre_map.get(raw_name.lower(), 0)
         _add_text(s, C_NAME[0], y, C_NAME[1], row_h,
                   display_name, size=13, bold=True, color=FG_LIGHT)
         _add_text(s, C_PRE[0], y, C_PRE[1], row_h,
-                  fmt_num(pre_h) if pre_h else "—",
+                  fmt_num(pre_h) if pre_h else "0",
                   size=12, color=FG_LIGHT, font=FONT_NUMERIC,
                   align="right")
         _add_text(s, C_POST[0], y, C_POST[1], row_h,
@@ -1615,11 +1852,23 @@ def _slide_final_insight(prs, ctx: DeckCtx, idx: int, total: int):
     _add_text(s, Inches(0.6), Inches(3.6), Inches(12.1), Inches(1.6),
               l2, size=64, bold=True, color=FG_DARK,
               font=FONT_DISPLAY, spacing=0.95)
-    # Closing data line
+    # C10: previously the strip showed both a relative-adjusted-lift
+    # figure (from _final_insight_lines) and a raw-relative-lift
+    # figure (delta_rel) on the same slide with no labels, so a
+    # reader saw two different % figures and couldn't tell which was
+    # which. Drop delta_rel and lead with the adjusted-lift number
+    # since that is the one the deck argues from.
+    lift_rel = (ctx.incr_lift_rel
+                if ctx.incr_lift_rel is not None
+                else ctx.delta_rel)
+    lift_label = (
+        f"+{lift_rel:.1f}% adjusted engagement lift"
+        if lift_rel > 0 else "adjusted lift at or below control drift"
+    )
     closing = (
-        f"{fmt_money(ctx.total_value)} in total brand value · "
-        f"{fmt_num(ctx.post_users_proj)} U.S. consumers reached · "
-        f"+{ctx.delta_rel:.1f}% engagement lift"
+        f"{fmt_money(ctx.total_value)} in total brand value observed, "
+        f"{fmt_num(ctx.post_users_proj)} U.S. consumers reached, "
+        f"{lift_label}"
     )
     _add_text(s, Inches(0.6), Inches(5.7), Inches(12.1), Inches(0.5),
               closing, size=16, italic=True, color=FG_DARK)
