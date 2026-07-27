@@ -1007,9 +1007,8 @@ def fetch() -> dict[str, Any]:
                 'available': bool(shazam_items),
             },
             'amazon': {
-                'label':     'Amazon Music: All Hits (US)',
-                'sub':       (amz_sub or "Amazon Music's editorial flagship hits "
-                                        "playlist - their answer to Today's Top Hits."),
+                'label':     'Amazon Music',
+                'sub':       (amz_sub or 'What Amazon Music subscribers are playing.'),
                 'items':     amz_items,
                 'available': bool(amz_items),
             },
