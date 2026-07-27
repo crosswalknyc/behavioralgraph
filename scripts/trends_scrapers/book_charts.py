@@ -299,8 +299,13 @@ def _fetch_apple_books(limit: int = 100, tier: str = 'free') -> list[dict]:
 #     <img alt="{Title} By {Author} cover art" />
 #     <img src="https://m.media-amazon.com/images/I/{...}_SL500_.jpg" />
 # Absolute rank = (page - 1) * 20 + data-position.
+# `ipRedirectOverride=true` tells Audible's CDN to skip its IP-based
+# geo-redirect to audible.de. Donated cookies alone are NOT enough - the
+# redirect happens BEFORE cookies are read (verified 2026-07-27 from
+# Hetzner).
 _AUDIBLE_CHART_URL = 'https://www.audible.com/charts/best'
 _AUDIBLE_CHART_PAGES = 5     # 5 x 20 = 100
+_AUDIBLE_CHART_OVERRIDE = 'ipRedirectOverride=true'
 
 _AUDIBLE_CHART_ITEM_RE = re.compile(
     r'<div\s+class="adbl-asin-impression\s*"[^>]*?'
@@ -345,7 +350,7 @@ def _fetch_audible_books(limit: int = 100) -> tuple[list[dict], str]:
     for page in range(1, _AUDIBLE_CHART_PAGES + 1):
         try:
             r = requests.get(
-                f'{_AUDIBLE_CHART_URL}?page={page}',
+                f'{_AUDIBLE_CHART_URL}?page={page}&{_AUDIBLE_CHART_OVERRIDE}',
                 headers={
                     'User-Agent':      _UA,
                     'Accept':          ('text/html,application/xhtml+xml,'
