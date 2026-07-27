@@ -323,6 +323,11 @@ def _load_district_ref() -> dict:
     district_to_zips: dict[str, set[str]] = {}
     district_to_state: dict[str, str] = {}
     district_names: dict[str, str] = {}
+    # For each district, tally land-area coverage by DMA so we can pick
+    # the DOMINANT DMA (used for Google-Trends DMA-level geo in the
+    # "Trending political searches" card). Structure while building:
+    #   district_dma_areas[code][dma_code] = (total_land_m2, dma_name)
+    district_dma_areas: dict[str, dict[str, tuple[float, str]]] = {}
 
     csv_text = _read_district_csv_text()
     if csv_text:
@@ -353,8 +358,38 @@ def _load_district_ref() -> dict:
                 # a single canonical district lookup.
                 if (row.get('primary_district') or '').strip().upper() == 'TRUE':
                     zip_to_district[z5] = code
+                # DMA coverage per district. `dma_code` is the Nielsen
+                # code (e.g. '686' for Mobile-Pensacola). Google Trends
+                # accepts `geo=US-<dma_code>`. Skip rows without a DMA
+                # (dma_match_type='none' or blank).
+                dma_code = (row.get('dma_code') or '').strip()
+                dma_name = (row.get('dma_name') or '').strip()
+                if dma_code and dma_code.isdigit():
+                    try:
+                        area = float(row.get('land_area_m2') or 0)
+                    except (TypeError, ValueError):
+                        area = 0.0
+                    if area <= 0:
+                        area = 1.0  # treat as unit weight if area missing
+                    slot = district_dma_areas.setdefault(code, {})
+                    prev_area, prev_name = slot.get(dma_code, (0.0, dma_name))
+                    slot[dma_code] = (prev_area + area, prev_name or dma_name)
         except Exception as e:
             logger.warning("Failed to parse district reference: %s", e)
+
+    # Reduce district_dma_areas -> district_to_primary_dma: dominant DMA
+    # per district (largest land-area weight). Format:
+    #   {'AL-01': {'code': '686', 'name': 'Mobile-Pensacola'}}
+    district_to_primary_dma: dict[str, dict[str, str]] = {}
+    for code, dma_map in district_dma_areas.items():
+        if not dma_map:
+            continue
+        best_dma, (best_area, best_name) = max(
+            dma_map.items(), key=lambda kv: kv[1][0])
+        district_to_primary_dma[code] = {
+            'code': best_dma,
+            'name': best_name,
+        }
 
     # Sort district codes state-first, then by numeric district (AL-0 through
     # WY-1). District 0 (at-large) sorts before 1 within its state.
@@ -366,11 +401,12 @@ def _load_district_ref() -> dict:
             return (c, 0)
 
     _DISTRICT_REF = {
-        'zip_to_district':   zip_to_district,
-        'district_to_zips':  {k: frozenset(v) for k, v in district_to_zips.items()},
-        'district_to_state': district_to_state,
-        'district_names':    district_names,
-        'all_districts':     sorted(district_to_zips.keys(), key=_sort_key),
+        'zip_to_district':          zip_to_district,
+        'district_to_zips':         {k: frozenset(v) for k, v in district_to_zips.items()},
+        'district_to_state':        district_to_state,
+        'district_names':           district_names,
+        'all_districts':            sorted(district_to_zips.keys(), key=_sort_key),
+        'district_to_primary_dma':  district_to_primary_dma,
     }
     if district_to_zips:
         logger.info("Loaded %d congressional districts covering %d zips",
@@ -662,13 +698,21 @@ def blue_iq_cache_key(filters: dict) -> str:
             'ice cream' (matched 'ice '). Bumps v24 caches that
             have those false positives baked into the `political`
             field of every top_searches row.
+     v26 — 2026-07-27: District geo now pulls DMA-level Google Trends
+            (one level finer than the parent state) via
+            `district_to_primary_dma` in the district reference. The
+            trending-card heading label changes from "Alabama" to
+            "Alabama AL-01" for districts, and the "→ state-level
+            Trends for X" fineprint is gone. v25 caches have both
+            the old label and the state-level Trends payload baked
+            in — bump forces a rebuild.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   25,
+        'version':   26,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -2943,33 +2987,51 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
             continue
         _seen.add(name)
         politicians_for_external.append(name)
-    # Resolve which state to pass to Google Trends. Trends only exposes
-    # state-level regional data, so a DMA filter (e.g. "Los Angeles")
-    # gets resolved to its primary state ("California") so the user sees
-    # state-local trending terms instead of US-wide.
+    # Resolve which geo to pass to Google Trends.
+    #
+    # Google Trends' RSS endpoint supports three geo scopes:
+    #   - `US`         → National
+    #   - `US-<USPS>`  → State (e.g. `US-CA` California)
+    #   - `US-<NNN>`   → Nielsen DMA (e.g. `US-686` Mobile-Pensacola)
+    #
+    # Congressional district isn't a native scope, but every district
+    # sits inside one dominant DMA (per zip_to_congressional_district_119
+    # land-area weighting). For District filters we resolve to that
+    # dominant DMA — one level finer than the parent state.
     trends_state: Optional[str] = None
+    trends_geo_override: Optional[str] = None
+    trends_dma_name: Optional[str] = None
+    trends_dma_code: Optional[str] = None
     if f['geo_type'] == 'State':
         trends_state = f['geo_value']
     elif f['geo_type'] == 'DMA' and f['geo_value']:
         trends_state = DMA_TO_STATE.get(f['geo_value'])
     elif f['geo_type'] == 'District' and f['geo_value']:
-        # District (2026-07-27): Google Trends only exposes state-level
-        # regional data via geo=US-XX. Resolve district to its parent
-        # state so the user sees the trending searches for the state
-        # containing this district. Downstream we could layer principal-
-        # city Trends via a DMA hop, but state-level is the honest cut.
-        _usps = _load_district_ref()['district_to_state'].get(
-            (f['geo_value'] or '').strip().upper())
+        # District (2026-07-27, refined): pull DMA-level trends when we
+        # can resolve the district's dominant DMA. Fall back to state-
+        # level otherwise. Also keep `trends_state` populated so GDELT /
+        # Wikipedia (which don't understand DMA codes) still work.
+        _dref = _load_district_ref()
+        _dcode = (f['geo_value'] or '').strip().upper()
+        _usps = _dref['district_to_state'].get(_dcode)
         if _usps:
             try:
                 from external_signals import _USPS_TO_NAME  # type: ignore
                 trends_state = _USPS_TO_NAME.get(_usps, _usps)
             except Exception:
                 trends_state = _usps
+        _dma = _dref.get('district_to_primary_dma', {}).get(_dcode)
+        if _dma and _dma.get('code'):
+            trends_dma_code = str(_dma['code'])
+            trends_dma_name = str(_dma.get('name') or '')
+            trends_geo_override = f"US-{trends_dma_code}"
+            log.info("blue_iq: district %s -> DMA %s (%s), trends geo=%s",
+                     _dcode, trends_dma_code, trends_dma_name, trends_geo_override)
     external = fetch_all_external(
         state=trends_state,
         lookback_days=f['lookback_days'],
         politician_names=politicians_for_external,
+        trends_geo_override=trends_geo_override,
     )
 
     # 4. Build cards from cube (panel-side) + external (Trends/GDELT/Wiki).
@@ -3274,7 +3336,18 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     # to political). Geographically scoped via trends_state above; falls back to
     # US-wide when the geo is National or the DMA isn't in our lookup. Surfaces
     # things the panel won't catch yet (e.g. a hot local mayoral race).
-    trends_state_label = trends_state or 'United States'
+    # Human label for the trending card heading.
+    #   - National → 'United States'
+    #   - State    → state name
+    #   - DMA      → parent state (DMA name lives in fineprint)
+    #   - District → '<state> <district-code>' (e.g. 'Alabama AL-01')
+    #                so the operator can see EXACTLY which district
+    #                without needing a parenthetical.
+    if f['geo_type'] == 'District' and f['geo_value']:
+        trends_state_label = f"{trends_state or ''} {f['geo_value']}".strip() \
+            if trends_state else f['geo_value']
+    else:
+        trends_state_label = trends_state or 'United States'
     raw_trends = (external or {}).get('google_trends_top') or []
     pol_set = set(_load_politicians())
     trending_political = _filter_trends_to_political(raw_trends, pol_set)[:25]
@@ -3308,6 +3381,13 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         'is_state_local':         trends_state is not None,
         'dma_resolved_via':       (DMA_TO_STATE.get(f['geo_value']) if f['geo_type'] == 'DMA' else None),
         'district_resolved_via':  (trends_state if f['geo_type'] == 'District' else None),
+        # DMA-level trends metadata for the District branch. Frontend
+        # can use these to render a tiny "· via <DMA name>" suffix, or
+        # not — the card heading already carries the district code.
+        'trends_dma_code':        trends_dma_code,
+        'trends_dma_name':        trends_dma_name,
+        'trends_scope':           ('dma' if trends_geo_override else
+                                    ('state' if trends_state else 'national')),
     }
 
     # Overall (unfiltered) top trending searches for this geo. Same
@@ -3326,6 +3406,10 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         'is_state_local':        trends_state is not None,
         'dma_resolved_via':      (DMA_TO_STATE.get(f['geo_value']) if f['geo_type'] == 'DMA' else None),
         'district_resolved_via': (trends_state if f['geo_type'] == 'District' else None),
+        'trends_dma_code':       trends_dma_code,
+        'trends_dma_name':       trends_dma_name,
+        'trends_scope':          ('dma' if trends_geo_override else
+                                   ('state' if trends_state else 'national')),
     }
 
     # Turnout

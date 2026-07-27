@@ -41411,19 +41411,12 @@
             // highlighted.
             _bqPopulateTrendingDmaPicker(meta || {});
 
-            var fineprint = '';
-            if (meta && meta.geo_type === 'DMA' && meta.dma_resolved_via) {
-                fineprint = ' <span style="font-size:0.7rem; color:var(--text-secondary);">(' + _bqEscape(meta.geo_value) + ' DMA \u2192 state-level Trends for ' + _bqEscape(meta.dma_resolved_via) + ')</span>';
-            } else if (meta && meta.geo_type === 'DMA' && meta.geo_value && !meta.dma_resolved_via) {
-                fineprint = ' <span style="font-size:0.7rem; color:var(--text-secondary);">(' + _bqEscape(meta.geo_value) + ' DMA not in lookup \u2014 showing US-wide Trends)</span>';
-            } else if (meta && meta.geo_type === 'District' && meta.district_resolved_via) {
-                fineprint = ' <span style="font-size:0.7rem; color:var(--text-secondary);">(' + _bqEscape(meta.geo_value) + ' \u2192 state-level Trends for ' + _bqEscape(meta.district_resolved_via) + ')</span>';
-            } else if (meta && meta.geo_type === 'District' && meta.geo_value) {
-                fineprint = ' <span style="font-size:0.7rem; color:var(--text-secondary);">(' + _bqEscape(meta.geo_value) + ' \u2014 state-level Trends)</span>';
-            }
-            if (labelEl && fineprint) {
-                labelEl.insertAdjacentHTML('afterend', fineprint);
-            }
+            // No fineprint parenthetical (removed 2026-07-27 at Jenna's
+            // request). The heading label already carries the geo — for
+            // districts it's now "<state> <district-code>" (e.g.
+            // "Alabama AL-01") and the underlying Trends pull uses the
+            // district's dominant DMA. Everything else the operator
+            // needs is implicit in the label.
 
             if (!rows || !rows.length) {
                 // Backend now falls back to raw Google Trends when the
