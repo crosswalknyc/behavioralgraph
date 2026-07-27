@@ -399,7 +399,13 @@ def _fetch_amazon_podcasts(limit: int = 100) -> tuple[list[dict], str]:
 # first-seen order (section-major then in-carousel position). Each row
 # carries `category` for context; the frontend renders it in the row
 # meta line under the publisher.
-_AUDIBLE_PODCASTS_URL = 'https://www.audible.com/ep/podcasts'
+# `?ipRedirectOverride=true` tells the Audible CDN to skip its IP-based
+# geo-redirect. Without it, requests from a Hetzner datacenter IP get
+# 302-forwarded to audible.de with the German storefront - the donated
+# US-Chrome cookies alone are NOT enough to bypass the redirect, only
+# the query flag is (verified 2026-07-27).
+_AUDIBLE_PODCASTS_URL = ('https://www.audible.com/ep/podcasts'
+                         '?ipRedirectOverride=true')
 
 # Section order = the order we want the flattened list to reflect.
 # "Popular Podcasts" is Audible's own editorial top list -> row 1.
