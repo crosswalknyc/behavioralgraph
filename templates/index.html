@@ -47392,6 +47392,60 @@
             }
         }
 
+        // 2026-07-27: canonical top-level product view list. Every
+        // window.show*IQ() handler should call _iqHideAllViewsExcept()
+        // with its own view id BEFORE showing itself, so switching from
+        // one product to another cleanly hides the outgoing view even
+        // when new products get added later. Prior bug: showRankerIQ
+        // (Talent Ranker) hand-rolled a hide list that missed newer
+        // views (trendsIQView, microdramasIQView, blueIQView, etc.), so
+        // switching from Trends -> Talent Ranker left Trends stacked
+        // on top of the Ranker.
+        //
+        // ORDER matters for readability only; the whole list is walked.
+        // When adding a new top-level product view, append its id here
+        // and every existing handler picks it up for free.
+        window._iqTopLevelViewIds = [
+            'dashboardView',
+            'subscriberIQView',
+            'sfConversionView',
+            'rankerIQView',
+            'ticketSalesIQView',
+            'ticketSalesTrackerView',
+            'hedgeFundIQView',
+            'talentSearchIQView',
+            'talentTheaterIQView',
+            'formView',
+            'customAnalysisView',
+            'roasIQView',
+            'ecommerceIQView',
+            'sentimentIQView',
+            'llmoIQView',
+            'shareOfTimeIQView',
+            'flywheelConversionView',
+            'talentFitIQView',
+            'journeyIQView',
+            'intentIQView',
+            'impactIQView',
+            'blueIQView',
+            'helmIQView',
+            'trendsIQView',
+            'microdramasIQView'
+        ];
+        window._iqHideAllViewsExcept = function(exceptId) {
+            (window._iqTopLevelViewIds || []).forEach(function(id) {
+                if (id === exceptId) return;
+                var el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+            // hideLLMOIQView does extra cleanup (event listeners, chart
+            // instances) beyond just setting display:none, so still call
+            // it when llmoIQView isn't the target.
+            if (exceptId !== 'llmoIQView' && typeof hideLLMOIQView === 'function') {
+                try { hideLLMOIQView(); } catch (_) {}
+            }
+        };
+
         window.showRankerIQ = function() {
             const dd = document.getElementById('viewNavDropdown');
             // Support being called directly or from Talent/Content wrappers
@@ -47400,40 +47454,14 @@
                 if (opt?.disabled) return;
                 if (typeof setViewNavDropdown === 'function') setViewNavDropdown('cultureRankerIQ');
             }
-            
-            // Show/hide views
-            document.getElementById('dashboardView').style.display = 'none';
-            document.getElementById('subscriberIQView').style.display = 'none';
-            const sfConvView = document.getElementById('sfConversionView');
-            if (sfConvView) sfConvView.style.display = 'none';
+
+            _iqHideAllViewsExcept('rankerIQView');
             const rankerIQView = document.getElementById('rankerIQView');
             if (rankerIQView) rankerIQView.style.display = 'flex';
-            const ticketSalesView = document.getElementById('ticketSalesIQView');
-            if (ticketSalesView) ticketSalesView.style.display = 'none';
-            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
-            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
-            const hedgeFundView = document.getElementById('hedgeFundIQView');
-            if (hedgeFundView) hedgeFundView.style.display = 'none';
-            const talentSearchView = document.getElementById('talentSearchIQView');
-            if (talentSearchView) talentSearchView.style.display = 'none';
-            const talentTheaterView = document.getElementById('talentTheaterIQView');
-            if (talentTheaterView) talentTheaterView.style.display = 'none';
-            const formView = document.getElementById('formView');
-            if (formView) formView.style.display = 'none';
-            
+
             // Ranker IQ now exposes only Talent + Brands. The legacy Netflix /
             // GoodShort / ShortTV / ReelShort tabs (and their access-control
             // gating) were removed.
-            const customAnalysisView = document.getElementById('customAnalysisView');
-            if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const roasIQViewEl = document.getElementById('roasIQView');
-            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
-            const ecomIQViewEl = document.getElementById('ecommerceIQView');
-            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
-            const sentimentIQViewEl = document.getElementById('sentimentIQView');
-            if (sentimentIQViewEl) sentimentIQViewEl.style.display = 'none';
-            hideLLMOIQView();
-
             // Open Talent by default - initIQRanker populates from
             // /api/iq-rankers/leaderboard.
             if (typeof showRankerIQPlatform === 'function') showRankerIQPlatform('talent');
