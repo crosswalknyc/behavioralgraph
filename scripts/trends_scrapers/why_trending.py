@@ -48,10 +48,13 @@ import logging
 import os
 import re
 import sys
+import time
+import urllib.parse
 from datetime import date, timedelta
 from typing import Any, Optional
 
 import boto3
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +198,129 @@ def _flatten_headline_pool(*snaps: Optional[dict]) -> list[str]:
     return out[:400]
 
 
+# ---------------------------------------------------------------------------
+# GDELT DocAPI per-name search fallback
+# ---------------------------------------------------------------------------
+# When neither the NER-attributed people index nor the pooled headline
+# scan turn up a hit for a trending name (e.g. Wikipedia has "David
+# Jonsson" trending because of a specific press cycle, but the pooled
+# gdelt/reddit/youtube snapshots don't mention him), fall through to
+# GDELT's public DOC 2.1 API and query for that exact name directly.
+#
+# GDELT indexes ~100M+ news articles across 100+ languages in near real
+# time; the DocAPI is free, keyless, and returns JSON. Docs:
+# https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/
+#
+# We restrict to English + a 3-day timespan so the results are always
+# fresh enough to explain a WHY. Called only for rows without local
+# signal, in parallel, so the per-run cost stays bounded.
+_GDELT_DOC_URL = 'https://api.gdeltproject.org/api/v2/doc/doc'
+_GDELT_TIMEOUT = 12
+_GDELT_UA      = 'BG-Trends/1.0 (jenna@crosswalknyc.com)'
+# GDELT rate-limits at "one request every 5 seconds" per IP across the
+# entire DocAPI endpoint. Anything faster returns a plain-text HTTP 200
+# with a "Please limit requests..." message instead of JSON. 5.5s adds
+# a safety margin so occasional network jitter doesn't push us over.
+_GDELT_MIN_INTERVAL = 5.5
+# Domains that publish trend-piece SEO fluff with the query verbatim
+# ("David Jonsson net worth 2025", "Everything you need to know about
+# Kobe McDonald") - they mention the name but don't describe an event.
+_GDELT_DOMAIN_DENY = (
+    'celebnetworth', 'famousbirthdays', 'quora', 'wikitia',
+    'astrocharts', 'ranker.com',
+)
+
+
+def _gdelt_search_headlines(display_name: str, max_records: int = 5,
+                             timespan_days: int = 3) -> list[str]:
+    """Query GDELT DocAPI for recent English news articles that mention
+    `display_name` verbatim. Returns up to `max_records` deduped
+    headlines. Silent on any failure so a single miss never blocks the
+    batch."""
+    name = (display_name or '').strip()
+    if len(name) < 3:
+        return []
+    params = {
+        'query':      f'"{name}" sourcelang:eng',
+        'mode':       'artlist',
+        'maxrecords': str(max_records * 3),  # oversample; we filter+dedupe below
+        'format':     'json',
+        'sort':       'hybridrel',
+        'timespan':   f'{timespan_days}d',
+    }
+    url = _GDELT_DOC_URL + '?' + urllib.parse.urlencode(params)
+    try:
+        r = requests.get(url, headers={'User-Agent': _GDELT_UA},
+                         timeout=_GDELT_TIMEOUT)
+    except Exception as e:
+        logger.debug("gdelt search %r: %s", name, e)
+        return []
+    if not r.ok:
+        logger.debug("gdelt search %r: http %s", name, r.status_code)
+        return []
+    # If we're throttled, GDELT returns HTTP 200 with a plain-text
+    # message instead of JSON. Guard so the JSON parse doesn't spam
+    # WARNINGs and we still return [] cleanly.
+    body = (r.text or '').lstrip()
+    if not body.startswith('{'):
+        if 'limit requests' in body.lower():
+            logger.warning("gdelt search %r: rate-limited (interval too tight)", name)
+        return []
+    try:
+        data = r.json()
+    except Exception:
+        return []
+    seen: set[str] = set()
+    out:  list[str] = []
+    for a in (data.get('articles') or []):
+        title = (a.get('title') or '').strip()
+        if not title or title in seen:
+            continue
+        # Filter SEO/bio-fluff domains.
+        domain = (a.get('domain') or '').lower()
+        if any(d in domain for d in _GDELT_DOMAIN_DENY):
+            continue
+        # Skip pure-list headlines that are just "N celebrity facts"
+        # style - those are bio fluff, not event signal.
+        if re.match(r'^\d+\s+(things|facts|reasons)\b', title, re.IGNORECASE):
+            continue
+        seen.add(title)
+        out.append(title)
+        if len(out) >= max_records:
+            break
+    return out
+
+
+def _gdelt_search_many(names: list[str]) -> dict[str, list[str]]:
+    """Run GDELT DocAPI searches for `names` SERIALLY, respecting the
+    5s/IP rate limit. Returns `{display_name: [headlines]}`. Names with
+    no hits get an empty list.
+
+    Because GDELT throttles at one request per 5 seconds, parallel calls
+    all get plain-text throttle responses instead of JSON. We space
+    calls at `_GDELT_MIN_INTERVAL` seconds; 30 names -> ~2.75 minutes,
+    which is well within the daily cron budget.
+    """
+    if not names:
+        return {}
+    out: dict[str, list[str]] = {}
+    last = 0.0
+    for i, n in enumerate(names):
+        elapsed = time.monotonic() - last
+        if last and elapsed < _GDELT_MIN_INTERVAL:
+            time.sleep(_GDELT_MIN_INTERVAL - elapsed)
+        try:
+            hits = _gdelt_search_headlines(n)
+        except Exception as e:
+            logger.debug("gdelt search %r: %s", n, e)
+            hits = []
+        out[n] = hits
+        last = time.monotonic()
+        logger.info("gdelt search %2d/%d %r -> %d hits",
+                    i + 1, len(names), n, len(hits))
+    return out
+
+
 def _lookup_headlines_for(
     display_name: str,
     name_index: dict[str, list[str]],
@@ -272,10 +398,61 @@ def _collect_items() -> list[dict]:
         headlines_snap, reddit_snap, philanthropy_snap, youtube_snap, x_snap,
     )
 
+    # Pre-compute which names have NO local headline hit and batch-fetch
+    # GDELT DocAPI searches for them in parallel. This is what turns
+    # rows like "David Jonsson", "Kobe McDonald", "Janet Street-Porter"
+    # from bio-only into "the WHY they're trending" - if we can't find
+    # a signal locally, we ask the world's news index directly.
+    wiki_top    = list((wiki_snap or {}).get('national', []))[:_MAX_WIKI_ITEMS]
+    people_top  = list((people_snap or {}).get('national', []))[:_MAX_PEOPLE_ITEMS]
+    search_pool = (google_snap or {}).get('national') or (google_snap or {}).get('items') or []
+    search_top  = list(search_pool)[:_MAX_SEARCH_ITEMS]
+
+    _misses: list[str] = []
+    for w in wiki_top:
+        title = (w.get('title') or '').strip()
+        if title and not _lookup_headlines_for(title, name_index, headline_pool):
+            _misses.append(title)
+    for p in people_top:
+        name = (p.get('name') or '').strip()
+        if name and not (p.get('context') or []) and \
+           not _lookup_headlines_for(name, name_index, headline_pool):
+            _misses.append(name)
+    for s in search_top:
+        term = ((s.get('term') or s.get('query') or '') if isinstance(s, dict)
+                else '').strip()
+        if term and not (s.get('news_articles') or []) and \
+           not _lookup_headlines_for(term, name_index, headline_pool):
+            _misses.append(term)
+
+    # Dedupe (a name may appear in multiple sources) and cap at 30 so
+    # a full serial pass fits inside a ~3 min budget at 5.5s/query.
+    _seen_miss: set[str] = set()
+    _uniq_miss: list[str] = []
+    for n in _misses:
+        k = _cp_normalize(n)
+        if k in _seen_miss:
+            continue
+        _seen_miss.add(k)
+        _uniq_miss.append(n)
+    _uniq_miss = _uniq_miss[:30]
+    gdelt_hits = _gdelt_search_many(_uniq_miss) if _uniq_miss else {}
+    if gdelt_hits:
+        logger.info("why_trending: GDELT search filled %d/%d misses with hits",
+                    sum(1 for h in gdelt_hits.values() if h), len(gdelt_hits))
+
+    def _headlines_for(name: str) -> list[str]:
+        """Wrapper that adds the GDELT search result to the local
+        headline lookup, so downstream callers just see one merged list."""
+        local = _lookup_headlines_for(name, name_index, headline_pool)
+        if local:
+            return local[:4]
+        return (gdelt_hits.get(name) or [])[:4]
+
     # Wikipedia FIRST so it takes the dedup priority - this is the
     # surface where the bio-fallback problem was most visible, so we
     # want maximum coverage here.
-    for w in (wiki_snap or {}).get('national', [])[:_MAX_WIKI_ITEMS]:
+    for w in wiki_top:
         title    = w.get('title') or ''
         pct      = w.get('delta_pct')
         views_t  = w.get('views_today') or 0
@@ -292,10 +469,11 @@ def _collect_items() -> list[dict]:
         else:
             clues.append(f'{views_t:,} Wikipedia pageviews yesterday.')
 
-        # Cross-reference against the pooled news headlines. This is
-        # the whole point - without headlines Claude has no event to
-        # explain and will (correctly) return an empty string.
-        headlines = _lookup_headlines_for(title, name_index, headline_pool)
+        # Cross-reference against the pooled news headlines PLUS a
+        # per-name GDELT DocAPI fallback for names the local pool
+        # didn't cover. Without any headline signal Claude has no event
+        # to explain and correctly returns an empty string.
+        headlines = _headlines_for(title)
         if headlines:
             hl_str = ' | '.join(f'"{h}"' for h in headlines)
             clues.append(f'News headlines mentioning {title}: {hl_str}')
@@ -314,22 +492,24 @@ def _collect_items() -> list[dict]:
         _push(title, 'wikipedia', ' '.join(clues))
 
     # People (GDELT). Reuse the context headlines that came with each
-    # person entry.
-    for p in (people_snap or {}).get('national', [])[:_MAX_PEOPLE_ITEMS]:
+    # person entry, then top up from GDELT DocAPI if the row didn't
+    # ship any (rare - most people rows are already headline-enriched).
+    for p in people_top:
         name = p.get('name') or ''
         m    = p.get('mentions')
         clues: list[str] = []
         if m:
             clues.append(f'Mentioned in {m} top-news articles this cycle.')
         headlines = [h for h in (p.get('context') or [])[:4] if h]
+        if not headlines:
+            headlines = _headlines_for(name)
         if headlines:
             hl_str = ' | '.join(f'"{h}"' for h in headlines)
             clues.append(f'Headlines: {hl_str}')
         _push(name, 'people', ' '.join(clues))
 
     # Google Trends (search). Volume + related queries are the hints.
-    searches = (google_snap or {}).get('national') or (google_snap or {}).get('items') or []
-    for s in searches[:_MAX_SEARCH_ITEMS]:
+    for s in search_top:
         term        = s.get('term') or s.get('query') or ''
         vol         = s.get('volume') or s.get('score') or 0
         related_qs  = (s.get('trend_keywords') or s.get('related_queries')
@@ -344,9 +524,9 @@ def _collect_items() -> list[dict]:
             t = (a or {}).get('title') if isinstance(a, dict) else str(a)
             if t:
                 clues.append(f'Headline: "{t}"')
-        # Also cross-reference the search term against the pooled
-        # headlines (reddit / gdelt / youtube / philanthropy / x).
-        for h in _lookup_headlines_for(term, name_index, headline_pool):
+        # Cross-reference the search term against pooled headlines + a
+        # per-term GDELT search (populated in the fallback pass above).
+        for h in _headlines_for(term):
             clues.append(f'Related headline: "{h}"')
         _push(term, 'search', ' '.join(clues))
 
