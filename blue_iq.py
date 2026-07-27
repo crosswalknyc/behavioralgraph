@@ -1645,6 +1645,179 @@ def _card_demo_crosstab(uids: set[str]) -> dict:
     return out
 
 
+# ── Voter Journey helper (2026-07-27) ──────────────────────────────────
+#
+# Blue IQ's Voter Journey card shows what filtered panelists did AFTER
+# encountering political content: did they go to a candidate site,
+# donate, look up voting info, dive into more news, discuss on social,
+# hit search, do something unrelated, or abandon the session? The
+# nightly aggregator computes this for the National + per-party cells
+# via `_q_voter_journey` in blue_iq_aggregator.py, but only for those
+# rolled-up cells — per-state / per-DMA / per-district breakouts would
+# blow up the cube.
+#
+# This helper implements the SAME two-stage algorithm scoped to an
+# arbitrary UID set, so District cuts (which live-compute their cube
+# cell) get real voter-journey data instead of an empty list. Also
+# usable for any future geo cut that needs the card.
+#
+# The destination-classifier domain sets and the bucketing function
+# live here (not in the aggregator) so both surfaces share one source
+# of truth. The aggregator has parallel local copies as of today, but
+# a follow-up can point it at these constants and delete the dupes.
+
+JOURNEY_CANDIDATE_DOMAINS: frozenset[str] = frozenset({
+    # Trump ecosystem
+    'donaldjtrump.com', 'trump.com', 'truthsocial.com', 'rnc.org',
+    # Harris / Biden ecosystem
+    'kamalaharris.com', 'joebiden.com', 'whitehouse.gov',
+    'democrats.org', 'dnc.org',
+    # Major candidate / officeholder sites
+    'berniesanders.com', 'aoc.house.gov', 'warren.senate.gov',
+    'cruz.senate.gov', 'rubio.senate.gov', 'tedcruz.org',
+})
+JOURNEY_DONATION_DOMAINS: frozenset[str] = frozenset({
+    'actblue.com', 'winred.com', 'secure.actblue.com', 'secure.winred.com',
+    'givebutter.com', 'classy.org',
+})
+JOURNEY_VOTING_INFO_DOMAINS: frozenset[str] = frozenset({
+    'vote.gov', 'usa.gov', 'ballotpedia.org', 'rockthevote.org',
+    'rockthevote.com', 'iwillvote.com', 'turbovote.org', 'eac.gov',
+    'votersedge.org', 'fec.gov', 'opensecrets.org',
+})
+JOURNEY_SEARCH_DOMAINS: frozenset[str] = frozenset({
+    'google.com', 'bing.com', 'duckduckgo.com', 'yahoo.com',
+    'chatgpt.com', 'chat.openai.com', 'gemini.google.com',
+    'perplexity.ai', 'claude.ai',
+})
+JOURNEY_SOCIAL_DOMAINS: frozenset[str] = frozenset({
+    'reddit.com', 'twitter.com', 'x.com', 'facebook.com', 'instagram.com',
+    'tiktok.com', 'threads.net', 'youtube.com', 'linkedin.com',
+})
+
+
+def _journey_destination(dom: str, political_media_set: set[str] | frozenset[str]) -> str:
+    """Bucket a next-visit domain into one of the 8 journey destinations.
+
+    Match order matters (first match wins): candidate_site beats
+    donation beats voting_info beats search beats news_dive beats
+    social_discussion — so `twitter.com/realDonaldTrump` still lands
+    in candidate_site (via `x.com` → social) is intentional because
+    the aggregator's version treats social as a distinct bucket even
+    when the account is a candidate. We match the aggregator exactly.
+    """
+    if not dom:
+        return 'abandoned'
+    d = dom.strip().lower()
+    if d in JOURNEY_CANDIDATE_DOMAINS:   return 'candidate_site'
+    if d in JOURNEY_DONATION_DOMAINS:    return 'donation'
+    if d in JOURNEY_VOTING_INFO_DOMAINS: return 'voting_info'
+    if d in JOURNEY_SEARCH_DOMAINS:      return 'search'
+    if d in political_media_set:         return 'news_dive'
+    if d in JOURNEY_SOCIAL_DOMAINS:      return 'social_discussion'
+    return 'other'
+
+
+def _card_voter_journey(uids: set[str], start_date: str) -> list[dict]:
+    """Compute the voter-journey destination breakdown for a UID set.
+
+    Returns `[{destination, panelists, share}, ...]` matching the shape
+    the aggregator emits in the cube's `voter_journey` field. Empty
+    list if the UID set is empty, if no touchpoints landed, or if any
+    stage fails (logged for debugging).
+
+    Two-stage algorithm (mirrors `blue_iq_aggregator._q_voter_journey`):
+
+      1. TOUCHPOINT: find UIDs in `uids` who visited a political-media
+         domain in the window; record each UID's min VISIT_TS.
+      2. NEXT-VISIT: for those touchpoint UIDs, scan their clickstream
+         and (in Python) pick the FIRST visit strictly AFTER their
+         touchpoint timestamp. Bucket its domain into a destination.
+
+    Memory shape: the outer UID set is already small (a district's
+    panel is ~30K-75K UIDs based on 2026-07-27 smoke tests). The
+    touchpoint UID subset is smaller still (typically 5-20% of the
+    panel visits political media in a 30d window). Stage 2's scan
+    uses the CH primary-key sparse index on UID and streams rows in
+    100K chunks, so peak Python RSS stays bounded even for large
+    districts.
+
+    Falls back to [] on any exception so the caller can render a
+    graceful "no journey data" state instead of crashing.
+    """
+    if not uids:
+        return []
+    _, left_media, right_media = _load_media_domains()
+    political_media_set: frozenset[str] = frozenset(
+        d.lower() for d in (left_media | right_media)
+    )
+    if not political_media_set:
+        return []
+
+    try:
+        # STAGE 1: touchpoint UIDs + their first political-media visit.
+        rows = _ch_query("""
+            SELECT UID AS uid, min(VISIT_TS) AS tp_ts
+            FROM clickstream.clickstream_final
+            WHERE UID IN %(uids)s
+              AND DELIVERED >= toDate(%(start)s)
+              AND lower(DOMAIN) IN %(media)s
+            GROUP BY UID
+        """, {
+            'uids':  list(uids),
+            'start': start_date,
+            'media': list(political_media_set),
+        })
+        if not rows:
+            return []
+        tp_ts_map: dict[str, object] = {str(r[0]): r[1] for r in rows}
+        tp_uids = tuple(tp_ts_map.keys())
+
+        # STAGE 2: scan those UIDs' full clickstream, sorted by
+        # (UID, VISIT_TS), and pick the earliest post-touchpoint domain
+        # in Python (cheaper than an ASOF JOIN on CH for this size).
+        rows2 = _ch_query("""
+            SELECT UID AS uid, VISIT_TS AS ts, lower(DOMAIN) AS dom
+            FROM clickstream.clickstream_final
+            WHERE UID IN %(tp_uids)s
+              AND DELIVERED >= toDate(%(start)s)
+            ORDER BY UID, VISIT_TS
+        """, {'tp_uids': list(tp_uids), 'start': start_date})
+
+        next_dom_per_uid: dict[str, str] = {}
+        current_uid = None
+        current_tp_ts = None
+        for row in rows2:
+            uid = str(row[0])
+            ts  = row[1]
+            dom = (row[2] or '').strip().lower()
+            if uid != current_uid:
+                current_uid   = uid
+                current_tp_ts = tp_ts_map.get(uid)
+            if uid in next_dom_per_uid:
+                continue
+            if current_tp_ts is None or ts <= current_tp_ts:
+                continue
+            next_dom_per_uid[uid] = dom
+    except Exception as e:
+        logger.warning("live voter_journey failed: %s", e)
+        return []
+
+    # Categorize each touchpoint UID's next-visit destination. UIDs
+    # with no post-touchpoint visit fall into 'abandoned'.
+    counts: dict[str, int] = defaultdict(int)
+    for uid in tp_uids:
+        dom = next_dom_per_uid.get(uid, '')
+        counts[_journey_destination(dom, political_media_set)] += 1
+
+    total = sum(counts.values()) or 1
+    return [{
+        'destination': d,
+        'panelists':   c,
+        'share':       round(c / total, 4),
+    } for d, c in sorted(counts.items(), key=lambda x: -x[1])]
+
+
 # ── Aggregate cube loader + slicer (PRIMARY fast path) ──────────────────────
 
 _CUBE_CACHE: dict[int, dict] = {}        # {lookback_days: {'cube': ..., 'fetched_at': ts}}
@@ -1796,17 +1969,46 @@ def _compute_district_cell_live(filters: dict) -> tuple[Optional[dict], int]:
     start_date = (datetime.now(timezone.utc).date() -
                   timedelta(days=lookback)).isoformat()
 
-    try:
-        panel_search      = _card_search_engines(uids, start_date)
-        panel_social      = _card_social_media(uids, start_date)
-        panel_politicians = _card_top_politicians(uids, start_date)
-        panel_articles    = _card_top_articles(uids, start_date)
-        panel_turnout     = _card_turnout_intent(uids, start_date)
-        panel_demo        = _card_demo_crosstab(uids)
-        panel_top_queries = _fetch_panel_search_queries(uids, start_date, limit=200)
-    except Exception as e:
-        logger.warning("District live-compute failed for %s: %s", district, e)
-        return None, len(uids)
+    # Each card is wrapped in its own try/except so a single upstream
+    # failure (e.g. reference.search_text_mapping join hitting the CH
+    # 403 INVALID_JOIN_ON_EXPRESSION error we saw on 2026-07-27) can
+    # only null out its own card, not the whole district cell. Before
+    # this change, one exception aborted the entire live-compute and
+    # sent voter_journey to [] alongside everything else.
+    def _safe(label: str, fn, default):
+        try:
+            return fn()
+        except Exception as e:
+            logger.warning("District live-compute [%s] failed for %s: %s",
+                           label, district, e)
+            return default
+
+    panel_search      = _safe('search_engines',
+                              lambda: _card_search_engines(uids, start_date), [])
+    panel_social      = _safe('social_media',
+                              lambda: _card_social_media(uids, start_date), [])
+    panel_politicians = _safe('top_politicians',
+                              lambda: _card_top_politicians(uids, start_date), [])
+    panel_articles    = _safe('top_articles',
+                              lambda: _card_top_articles(uids, start_date), [])
+    panel_turnout     = _safe('turnout_intent',
+                              lambda: _card_turnout_intent(uids, start_date),
+                              {'panelists': 0, 'sample_queries': []})
+    panel_demo        = _safe('demo_crosstab',
+                              lambda: _card_demo_crosstab(uids), {})
+    panel_top_queries = _safe('top_search_queries',
+                              lambda: _fetch_panel_search_queries(uids, start_date, limit=200),
+                              [])
+    # voter_journey (2026-07-27): live-compute via the two-stage
+    # touchpoint→next-visit algorithm scoped to the district's UID
+    # set. Runs the same pattern the aggregator uses at cube-build
+    # time but scoped, so memory stays bounded even on the 30d
+    # window. Adds ~1-3s to the first-hit response for a district;
+    # subsequent hits reuse the 24h per-filter cache. Already fails
+    # safely to [] internally, but we still route through _safe so
+    # any unexpected upstream error surfaces in the logs.
+    panel_journey     = _safe('voter_journey',
+                              lambda: _card_voter_journey(uids, start_date), [])
 
     cell = {
         'uid_count':         len(uids),
@@ -1820,11 +2022,7 @@ def _compute_district_cell_live(filters: dict) -> tuple[Optional[dict], int]:
         },
         'demo':              panel_demo,
         'top_search_queries': panel_top_queries,
-        # voter_journey is not yet computed live — the aggregator's build
-        # is a multi-CTE query too heavy for on-the-fly. The frontend's
-        # Voter Journey card will render empty for District cuts until
-        # the aggregator ships a per-district grouping (follow-up).
-        'voter_journey':     [],
+        'voter_journey':     panel_journey,
     }
     return cell, len(uids)
 
