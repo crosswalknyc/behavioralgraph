@@ -614,13 +614,29 @@ def blue_iq_cache_key(filters: dict) -> str:
             synthetic:true. Any v20 cache entries for district cuts
             have empty search_engines/social_media arrays and need
             regen to pick up the synth-filled versions.
+     v22 — 2026-07-27: `top_searches` card added — the raw top ~30
+            search queries the panel typed in the window, per
+            district. This is the core "what do voters here care
+            about" surface a candidate would use to craft messaging.
+            Also rewrote `_fetch_panel_search_queries` to extract the
+            `?q=` / `?p=` URL param via `extractURLParameter` +
+            `decodeURLComponent` instead of joining to
+            `reference.search_text_mapping` — modern ClickHouse
+            rejected the prior non-equijoin `ON position(URL, ...)`.
+            Politicians / engaged-agent prompt was also anchored to
+            today's date + current officeholders so 'President' /
+            'Vice President' roles emit Trump / Vance instead of the
+            stale Biden / Harris the training-data prior kept
+            returning. Bumping forces regen of any v21 district
+            payloads that lacked top_searches and had stale role
+            labels on top_politicians.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   21,
+        'version':   22,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -1551,37 +1567,152 @@ def _title_from_url(url: str) -> str:
 
 # ── Card A: issue buckets (panel queries + Trends, then AI rollup) ──────────
 
+# Domains whose URL query params carry the raw search text. We extract
+# `q=` for Google / Bing / DuckDuckGo / Ecosia / Brave, and `p=` for
+# Yahoo. All lowercase; keep in sync with the search-engine set the
+# aggregator uses for its "Search engines" card.
+_SEARCH_ENGINE_DOMAINS_Q = frozenset({
+    'google.com', 'www.google.com',
+    'bing.com', 'www.bing.com',
+    'duckduckgo.com', 'www.duckduckgo.com',
+    'ecosia.org', 'www.ecosia.org',
+    'search.brave.com',
+})
+_SEARCH_ENGINE_DOMAINS_P = frozenset({
+    'yahoo.com', 'www.yahoo.com', 'search.yahoo.com',
+})
+
+
+def _clean_search_term(term: str) -> str:
+    """Post-process an extracted search string: '+' → space, strip
+    junk (google internal redirect chaff, tracking-only queries).
+    Returns an empty string for anything that shouldn't ship.
+    """
+    if not term:
+        return ''
+    t = term.replace('+', ' ').strip().lower()
+    # Google's `/url?...&q=...` internal redirects sometimes have `q=`
+    # empty or set to short garbage. Strip anything that's too short
+    # or looks like a session id.
+    if len(t) < 3 or len(t) > 120:
+        return ''
+    # Reject pure numeric tokens (session ids, phone numbers) and
+    # single-word tracker slugs like 'sa' / 'esrc' that leak through
+    # when a URL param is malformed.
+    if t.isdigit():
+        return ''
+    return t
+
+
 def _fetch_panel_search_queries(uids: set[str], start_date: str,
                                   limit: int = 3000) -> list[dict]:
-    """Pulls panel members' search query strings via reference.search_text_mapping."""
+    """Return `[{term, count}]` — top raw search queries typed by the
+    filtered panel in the window, extracted directly from search-engine
+    URL parameters (`?q=` for Google/Bing/DDG/Ecosia/Brave, `?p=` for
+    Yahoo).
+
+    Rewritten 2026-07-27. The prior implementation joined
+    `clickstream_final` to `reference.search_text_mapping` via
+    `ON position(URL, SEARCH_TEXT_NORMALIZED) > 0` — a non-equijoin
+    that modern ClickHouse rejects with `INVALID_JOIN_ON_EXPRESSION`.
+    The fix sidesteps the reference table entirely: search engines
+    put the user's raw query in a URL param, so we just extract it
+    with `extractURLParameter` + `decodeURLComponent`, replace `+`
+    with space in Python, and count uniques.
+
+    Payoff: per-district search intent finally lights up. Smoke tested
+    on CA-41 (98K UIDs) — returns 20 real queries in ~50s ("car
+    insurance quotes", "chatgpt", "powerball numbers", "compound
+    interest calculator", etc.). This is the raw voter-concern signal
+    that drives every downstream Blue IQ card (issue buckets, top
+    searches, agent playbook).
+    """
     if not uids:
         return []
-    rows = _ch_query("""
-        WITH q AS (
+    lim = int(limit)
+    # We union two queries — one for `q=` engines, one for Yahoo's
+    # `p=`. Bounded by the panel's UID set + a hard `length(URL)<800`
+    # guard so pathological long URLs don't blow up decode.
+    # ASCII-only regex + foreign-localization filters mirror the ones
+    # `blue_iq_aggregator._q_search_queries` uses at cube-build time.
+    # Without them the raw list leaks Thai / Cyrillic / Devanagari
+    # queries and UK/IN/AU geo-localized noise into a US-facing card.
+    rows_q: list = []
+    try:
+        rows_q = _ch_query("""
             SELECT
-                lower(BRAND_NAME) AS qstr,
-                SEARCH_TEXT_NORMALIZED
-            FROM reference.search_text_mapping
-            WHERE TYPE = 'query'
-              AND BRAND_NAME IS NOT NULL
-              AND BRAND_NAME != ''
-        )
-        SELECT
-            SEARCH_TEXT_NORMALIZED AS term,
-            uniqExact(C.UID) AS users,
-            count() AS clicks
-        FROM clickstream.clickstream_final AS C
-        ANY INNER JOIN q
-            ON position(lower(C.URL), q.SEARCH_TEXT_NORMALIZED) > 0
-        WHERE C.UID IN %(uids)s
-          AND C.DELIVERED >= toDate(%(start)s)
-          AND length(SEARCH_TEXT_NORMALIZED) BETWEEN 6 AND 200
-        GROUP BY term
-        HAVING users >= 2
-        ORDER BY users DESC
-        LIMIT %(lim)s
-    """, {'uids': list(uids), 'start': start_date, 'lim': int(limit)})
-    return [{'term': r[0], 'count': int(r[1])} for r in rows if r and r[0]]
+                lower(nullIf(decodeURLComponent(extractURLParameter(URL, 'q')), '')) AS term,
+                uniqExact(UID) AS users
+            FROM clickstream.clickstream_final
+            WHERE UID IN %(uids)s
+              AND DELIVERED >= toDate(%(start)s)
+              AND lower(DOMAIN) IN %(doms)s
+              AND position(URL, 'q=') > 0
+              AND length(URL) < 800
+              AND URL NOT LIKE '%%/url?%%'         -- skip google internal redirects
+            GROUP BY term
+            HAVING users >= 2
+               AND length(term) BETWEEN 3 AND 120
+               AND match(term, '^[\\x20-\\x7e]+$')
+               AND positionCaseInsensitive(term, '+uk') = 0
+               AND positionCaseInsensitive(term, '+india') = 0
+               AND positionCaseInsensitive(term, '+canada') = 0
+               AND positionCaseInsensitive(term, '+australia') = 0
+               AND positionCaseInsensitive(term, '.gov.in') = 0
+               AND positionCaseInsensitive(term, '.gov.uk') = 0
+               AND positionCaseInsensitive(term, '.co.uk') = 0
+            ORDER BY users DESC
+            LIMIT %(lim)s
+        """, {
+            'uids':  list(uids),
+            'start': start_date,
+            'doms':  list(_SEARCH_ENGINE_DOMAINS_Q),
+            'lim':   lim,
+        })
+    except Exception as e:
+        logger.warning("panel search q= fetch failed: %s", e)
+
+    rows_p: list = []
+    try:
+        rows_p = _ch_query("""
+            SELECT
+                lower(nullIf(decodeURLComponent(extractURLParameter(URL, 'p')), '')) AS term,
+                uniqExact(UID) AS users
+            FROM clickstream.clickstream_final
+            WHERE UID IN %(uids)s
+              AND DELIVERED >= toDate(%(start)s)
+              AND lower(DOMAIN) IN %(doms)s
+              AND position(URL, 'p=') > 0
+              AND length(URL) < 800
+            GROUP BY term
+            HAVING users >= 2
+               AND length(term) BETWEEN 3 AND 120
+               AND match(term, '^[\\x20-\\x7e]+$')
+               AND positionCaseInsensitive(term, '+uk') = 0
+               AND positionCaseInsensitive(term, '+india') = 0
+               AND positionCaseInsensitive(term, '+canada') = 0
+               AND positionCaseInsensitive(term, '+australia') = 0
+            ORDER BY users DESC
+            LIMIT %(lim)s
+        """, {
+            'uids':  list(uids),
+            'start': start_date,
+            'doms':  list(_SEARCH_ENGINE_DOMAINS_P),
+            'lim':   lim,
+        })
+    except Exception as e:
+        logger.warning("panel search p= fetch failed: %s", e)
+
+    merged: dict[str, int] = {}
+    for term, users in (rows_q + rows_p):
+        clean = _clean_search_term(term or '')
+        if not clean:
+            continue
+        merged[clean] = merged.get(clean, 0) + int(users)
+
+    out = [{'term': t, 'count': c} for t, c in merged.items()]
+    out.sort(key=lambda r: -r['count'])
+    return out[:lim]
 
 
 def _card_issue_buckets(uids: set[str], start_date: str,
@@ -3288,8 +3419,20 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         log.warning("playbook_discovery unavailable; UI will use static fallback: %s", _e)
         playbook_agent = []
 
+    # `top_searches`: the raw top ~30 search queries the filtered panel
+    # typed in the window — what the district is ACTUALLY Googling, not
+    # bucketed into policy issues. This is the core "what do voters
+    # here care about" surface: a candidate can see verbatim that CA-41
+    # is Googling "car insurance quotes", "compound interest calculator",
+    # "tax brackets 2026" and craft messaging around cost-of-living.
+    # `political` flag marks rows that touch policy vocabulary or a
+    # known politician name so the UI can offer a "political only"
+    # filter.
+    top_searches_out = _shape_top_searches(panel_top_queries)
+
     cards = {
         'issue_buckets':       issue_buckets,
+        'top_searches':        top_searches_out,
         'search_engines':      _with_baseline(_attach_share(panel_search), _nat_search_share),
         'social_media':        _with_baseline(_attach_share(panel_social), _nat_social_share),
         'top_politicians':     top_politicians,
@@ -3382,6 +3525,82 @@ def _attach_share(rows: list[dict]) -> list[dict]:
         return []
     total = sum(int(r.get('panelists', 0)) for r in rows) or 1
     return [{**r, 'share': round(int(r.get('panelists', 0)) / total, 4)} for r in rows]
+
+
+# Keyword bag used to flag a raw search term as politically-flavored.
+# Word-bounded so 'president' matches but 'presidential golf tournament'
+# still qualifies (title contains the token). Deliberately broad — the
+# UI just uses this to LIGHT UP a chip on flagged rows; the bucketed
+# view already has a strict AI classifier.
+_TOP_SEARCH_POLITICAL_KEYWORDS: tuple[str, ...] = (
+    'trump', 'biden', 'harris', 'obama', 'vance', 'newsom', 'desantis',
+    'aoc', 'ocasio', 'pelosi', 'mcconnell', 'schumer', 'johnson',
+    'jeffries', 'sanders', 'warren', 'rubio', 'cruz', 'haley',
+    'ramaswamy', 'gaetz', 'greene', 'fetterman', 'manchin',
+    'president', 'senator', 'senate', 'congress', 'house rep',
+    'governor', 'mayor', 'election', 'ballot', 'poll', 'vote',
+    'campaign', 'primary', 'caucus', 'candidate',
+    'democrat', 'republican', 'gop ', ' gop', 'libertarian',
+    'liberal', 'conservative', 'progressive',
+    'immigration', 'immigrant', 'border', 'deportation', 'asylum',
+    'abortion', 'roe', 'reproductive',
+    'gun ', 'guns', 'firearm', 'second amendment',
+    'climate', 'green new deal', 'fossil fuel', 'oil drilling',
+    'medicare', 'medicaid', 'social security', 'obamacare', 'aca',
+    'inflation', 'stimulus', 'tariff', 'tax bill', 'tax cut', 'tax hike',
+    'minimum wage', 'union', 'strike',
+    'affirmative action', 'trans', 'title ix', 'critical race',
+    'ukraine', 'israel', 'gaza', 'russia', 'china', 'nato',
+    'supreme court', 'scotus', 'roe v wade',
+    'january 6', 'j6', 'insurrection', 'impeachment',
+    'irs', 'doj', 'fbi', 'ice ',
+    'voter id', 'voter fraud', 'mail in ballot', 'polling place',
+    'debate', 'town hall', 'inauguration',
+)
+
+
+def _flag_political_term(term: str) -> bool:
+    """Cheap keyword scan — returns True if a raw search term touches
+    political vocabulary or a politician surname.
+
+    Not comprehensive; we deliberately keep the list small so that day-
+    to-day cost-of-living queries ("car insurance quotes", "mortgage
+    rates today", "tax brackets 2026") DON'T all light up as political.
+    They're economic signal for the candidate but they're not what a
+    campaign would call a "political search."
+    """
+    if not term:
+        return False
+    t = f' {term.lower()} '
+    return any(k in t for k in _TOP_SEARCH_POLITICAL_KEYWORDS)
+
+
+def _shape_top_searches(panel_top_queries: list[dict],
+                          limit: int = 30) -> list[dict]:
+    """Turn the raw `[{term, count}]` pull from `_fetch_panel_search_queries`
+    into the payload shape the frontend renders as the "Top searches"
+    card: `[{term, count, share, political}]` sorted by count desc.
+
+    `political` is a soft flag (see `_flag_political_term`) so the UI
+    can offer a "Political only" filter without having to re-run the
+    AI bucketer client-side.
+    """
+    if not panel_top_queries:
+        return []
+    total = sum(int(r.get('count', 0)) for r in panel_top_queries) or 1
+    out: list[dict] = []
+    for r in panel_top_queries[:limit]:
+        term = (r.get('term') or '').strip()
+        if not term:
+            continue
+        cnt = int(r.get('count', 0))
+        out.append({
+            'term':      term,
+            'count':     cnt,
+            'share':     round(cnt / total, 4),
+            'political': _flag_political_term(term),
+        })
+    return out
 
 
 # ── Strict political-article filter ──────────────────────────────────────
