@@ -45668,8 +45668,10 @@
                            '<div>' + _tiqEsc(s.sub || 'Warming up.') + '</div>' +
                            '</div>';
                 } else {
-                    body = '<div class="tiq-card-sub">' + _tiqEsc(s.sub || '') + '</div>' +
-                           '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                    // Sub-copy under the card title was removed 2026-07-27
+                    // per Jenna - the podcast tab now shows title + row
+                    // list only, matching how the Music tab reads.
+                    body = '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
                            items.map(function(it, i) {
                                // Podcast covers are square. Reuse the
                                // music-image class so styling stays in
@@ -45760,8 +45762,10 @@
                            '<div>' + _tiqEsc(s.sub || 'Warming up.') + '</div>' +
                            '</div>';
                 } else {
-                    body = '<div class="tiq-card-sub">' + _tiqEsc(s.sub || '') + '</div>' +
-                           '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                    // Sub-copy under the card title was removed 2026-07-27
+                    // per Jenna - the books tab now shows title + row
+                    // list only, matching the podcast tab.
+                    body = '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
                            rowsFor(items, sourceKind, sourceSlug) +
                            '</div>';
                 }
