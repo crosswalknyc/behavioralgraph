@@ -22881,6 +22881,50 @@
                 text-transform: uppercase;
                 letter-spacing: 0.05em;
             }
+            #blueIQView .bq-topsearches-synth-row-pill {
+                display: inline-block;
+                font-size: 0.62rem;
+                padding: 0.08rem 0.4rem;
+                border-radius: 8px;
+                background: rgba(168,85,247,0.15);
+                color: #d8b4fe;
+                border: 1px solid rgba(168,85,247,0.35);
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                cursor: help;
+            }
+            #blueIQView .bq-topsearches-row-synth {
+                background: linear-gradient(90deg, rgba(168,85,247,0.045) 0%, transparent 55%);
+            }
+            #blueIQView .bq-topsearches-synth-banner {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                font-size: 0.72rem;
+                color: var(--text-secondary);
+                background: rgba(168,85,247,0.08);
+                border: 1px solid rgba(168,85,247,0.22);
+                border-radius: 6px;
+                padding: 0.4rem 0.6rem;
+                margin: 0 0 0.55rem 0;
+                line-height: 1.35;
+            }
+            #blueIQView .bq-topsearches-synth-banner-mixed {
+                background: rgba(168,85,247,0.05);
+                border-color: rgba(168,85,247,0.18);
+            }
+            #blueIQView .bq-topsearches-synth-pill {
+                flex: 0 0 auto;
+                font-size: 0.6rem;
+                padding: 0.12rem 0.45rem;
+                border-radius: 8px;
+                background: rgba(168,85,247,0.28);
+                color: #f3e8ff;
+                border: 1px solid rgba(168,85,247,0.5);
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                font-weight: 700;
+            }
             #blueIQView .blue-iq-card-search   { grid-column: span 4; }
             #blueIQView .blue-iq-card-social   { grid-column: span 4; }
             #blueIQView .blue-iq-card-turnout  { grid-column: span 4; }
@@ -22890,7 +22934,6 @@
              * content exceeds the fixed card height. */
             #blueIQView .blue-iq-card-pols     { grid-column: span 6; height: 560px; }
             #blueIQView .blue-iq-card-cands    { grid-column: span 6; height: 560px; }
-            #blueIQView .blue-iq-card-geo      { grid-column: span 12; min-height: 540px; }
             #blueIQView .blue-iq-card-trending { grid-column: span 12; min-height: 280px; }
             #blueIQView .bq-trending-dma-picker { display: inline-flex; align-items: center; }
             #blueIQView .bq-trending-dma-picker select { background: rgba(255,255,255,0.06); color: var(--text-primary); padding: 0.3rem 0.55rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); font-size: 0.8rem; min-width: 200px; cursor: pointer; }
@@ -22934,30 +22977,8 @@
             #blueIQView .bq-tab-close:hover { background: rgba(255,255,255,0.12); opacity: 1; }
             #blueIQView .bq-tab-loading { display: inline-block; width: 10px; height: 10px; border: 2px solid rgba(255,255,255,0.18); border-top-color: #4f8cff; border-radius: 50%; animation: bq-tab-spin 0.6s linear infinite; }
             @keyframes bq-tab-spin { to { transform: rotate(360deg); } }
-            #blueIQView .bq-geo-controls { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.7rem; }
-            #blueIQView .bq-geo-label { font-size: 0.78rem; color: var(--text-secondary); }
-            #blueIQView .bq-geo-select { background: rgba(255,255,255,0.06); color: var(--text-primary); padding: 0.32rem 0.55rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); font-size: 0.82rem; min-width: 240px; }
-            #blueIQView .bq-geo-legend { display: inline-flex; gap: 0.2rem; align-items: center; margin-left: auto; }
-            /* Hover lift without transform-scale - scaling a <g> with a
-             * translate() attribute caused jitter in some browsers
-             * (transform-box: fill-box is inconsistently supported on
-             * group elements, so the hex would snap to the SVG origin
-             * mid-hover). We get the same visual lift via brightness +
-             * a glowing drop-shadow + a bright stroke ring on the
-             * polygon, all of which leave layout untouched.
-             */
-            #blueIQView .bq-geo-hex { cursor: pointer; transition: filter 0.12s ease; }
-            #blueIQView .bq-geo-hex polygon { transition: stroke 0.12s ease, stroke-width 0.12s ease; }
-            #blueIQView .bq-geo-hex:hover { filter: brightness(1.2) drop-shadow(0 0 6px rgba(96,165,250,0.7)); }
-            #blueIQView .bq-geo-hex:hover polygon { stroke: rgba(255,255,255,0.9); stroke-width: 2; }
-            #blueIQView .bq-geo-toplist { margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid rgba(255,255,255,0.05); }
-            #blueIQView .bq-geo-toplist-title { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.4rem; }
-            #blueIQView .bq-geo-toplist-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.18rem 0; font-size: 0.82rem; }
-            #blueIQView .bq-geo-toplist-rank { flex: 0 0 22px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-            #blueIQView .bq-geo-toplist-name { flex: 0 0 180px; }
-            #blueIQView .bq-geo-toplist-bar-wrap { flex: 1 1 50%; height: 6px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; }
-            #blueIQView .bq-geo-toplist-bar { display: block; height: 100%; border-radius: 4px; }
-            #blueIQView .bq-geo-toplist-val { flex: 0 0 70px; text-align: right; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+            /* Issue × Geo heatmap CSS (.bq-geo-*) removed 2026-07-27
+             * along with the CARD G HTML + JS. */
             #blueIQView .bq-playbook-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.85rem; }
             #blueIQView .bq-playbook-card { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 0.85rem; display: flex; flex-direction: column; gap: 0.6rem; transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease; }
             #blueIQView .bq-playbook-card:hover { transform: translateY(-2px); border-color: rgba(79,140,255,0.25); box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
@@ -23019,7 +23040,16 @@
                 #blueIQView .bq-day-grid { grid-template-columns: 1fr 1fr; }
                 #blueIQView .bq-day-controls { flex-direction: column; align-items: flex-start; }
             }
-            #blueIQView .blue-iq-card-articles { grid-column: span 4; min-height: 320px; }
+            /* Articles ships alongside Search / Social on the same row.
+             * All three are span-4 so CSS grid stretches every card to
+             * the tallest sibling. Capping articles at 440px pulls the
+             * whole row down to a compact height; the body scrolls
+             * internally so the full article list is still reachable. */
+            #blueIQView .blue-iq-card-articles { grid-column: span 4; height: 440px; }
+            #blueIQView .blue-iq-card-articles .blue-iq-card-body {
+                overflow-y: auto;
+                padding-right: 4px;
+            }
             #blueIQView .blue-iq-card-demo     { grid-column: span 6; }
             #blueIQView .blue-iq-card-compare  { grid-column: span 6; }
             #blueIQView .blue-iq-card-title { font-size: 0.92rem; font-weight: 600; margin: 0 0 0.4rem 0; color: var(--text-primary); display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
@@ -23288,6 +23318,165 @@
             #blueIQView .blue-iq-loading-overlay { position: relative; min-height: 240px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 0.6rem; padding: 2rem; color: var(--text-secondary); font-size: 0.9rem; }
             #blueIQView .blue-iq-spinner { width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent-primary, #4f8cff); border-radius: 50%; animation: blueIQSpin 0.9s linear infinite; }
             @keyframes blueIQSpin { to { transform: rotate(360deg); } }
+            /* ── Rich loading state ──────────────────────────────────
+             * District cuts can take 60-180s (live panel query + agent
+             * synth calls for search / social / top_searches). Static
+             * "Fetching data..." text feels frozen. This block: hero
+             * with spinner + rotating phase text + elapsed timer, a
+             * 5-step progress trail below, a rotating "did you know"
+             * hint, and skeleton preview cards showing where each
+             * real card will land. */
+            #blueIQView .bq-loading-shell {
+                display: flex;
+                flex-direction: column;
+                gap: 1rem;
+                padding: 1.4rem;
+                background: linear-gradient(180deg, rgba(79,140,255,0.06) 0%, transparent 55%);
+                border: 1px solid rgba(79,140,255,0.14);
+                border-radius: 12px;
+                margin-top: 0.5rem;
+                min-height: 480px;
+            }
+            #blueIQView .bq-loading-hero {
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+                padding: 0.5rem 0.2rem 0.9rem 0.2rem;
+                border-bottom: 1px solid rgba(255,255,255,0.06);
+            }
+            #blueIQView .bq-loading-spinner {
+                width: 42px; height: 42px;
+                border: 3px solid rgba(79,140,255,0.18);
+                border-top-color: var(--accent-primary, #4f8cff);
+                border-radius: 50%;
+                animation: blueIQSpin 0.9s linear infinite;
+                flex: 0 0 auto;
+            }
+            #blueIQView .bq-loading-hero-text { flex: 1 1 auto; min-width: 0; }
+            #blueIQView .bq-loading-title {
+                font-size: 1.02rem;
+                font-weight: 600;
+                color: var(--text-primary);
+                margin-bottom: 0.15rem;
+            }
+            #blueIQView .bq-loading-sub {
+                font-size: 0.82rem;
+                color: var(--text-secondary);
+                transition: opacity 220ms ease;
+            }
+            #blueIQView .bq-loading-timer {
+                flex: 0 0 auto;
+                font-variant-numeric: tabular-nums;
+                font-size: 0.78rem;
+                color: var(--text-secondary);
+                background: rgba(255,255,255,0.04);
+                border: 1px solid rgba(255,255,255,0.08);
+                padding: 0.28rem 0.55rem;
+                border-radius: 999px;
+                min-width: 52px;
+                text-align: center;
+            }
+            #blueIQView .bq-loading-steps {
+                display: flex;
+                gap: 0.4rem;
+                flex-wrap: wrap;
+                padding: 0.1rem 0.2rem;
+            }
+            #blueIQView .bq-loading-step {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4rem;
+                font-size: 0.72rem;
+                color: var(--text-secondary);
+                padding: 0.28rem 0.6rem;
+                border-radius: 999px;
+                background: rgba(255,255,255,0.03);
+                border: 1px solid rgba(255,255,255,0.06);
+                transition: color 220ms ease, background 220ms ease, border-color 220ms ease;
+            }
+            #blueIQView .bq-loading-step.active {
+                color: #dbeafe;
+                background: rgba(79,140,255,0.16);
+                border-color: rgba(79,140,255,0.4);
+            }
+            #blueIQView .bq-loading-step.done {
+                color: #a7f3d0;
+                background: rgba(16,185,129,0.10);
+                border-color: rgba(16,185,129,0.30);
+            }
+            #blueIQView .bq-loading-step-dot {
+                width: 7px; height: 7px; border-radius: 50%;
+                background: rgba(255,255,255,0.18);
+                transition: background 220ms ease, box-shadow 220ms ease;
+                flex: 0 0 auto;
+            }
+            #blueIQView .bq-loading-step.active .bq-loading-step-dot {
+                background: #4f8cff;
+                box-shadow: 0 0 0 3px rgba(79,140,255,0.28);
+                animation: bqStepPulse 1.4s ease-in-out infinite;
+            }
+            #blueIQView .bq-loading-step.done .bq-loading-step-dot {
+                background: #10b981;
+            }
+            @keyframes bqStepPulse {
+                0%, 100% { box-shadow: 0 0 0 3px rgba(79,140,255,0.28); }
+                50%      { box-shadow: 0 0 0 6px rgba(79,140,255,0.12); }
+            }
+            #blueIQView .bq-loading-hint {
+                font-size: 0.75rem;
+                color: var(--text-secondary);
+                padding: 0.55rem 0.75rem;
+                background: rgba(255,255,255,0.025);
+                border: 1px solid rgba(255,255,255,0.05);
+                border-left: 2px solid rgba(79,140,255,0.55);
+                border-radius: 4px;
+                line-height: 1.5;
+                transition: opacity 220ms ease;
+            }
+            #blueIQView .bq-loading-hint b { color: var(--text-primary); font-weight: 600; }
+            #blueIQView .bq-loading-skeletons {
+                display: grid;
+                grid-template-columns: repeat(12, 1fr);
+                gap: 0.85rem;
+                margin-top: 0.25rem;
+            }
+            #blueIQView .bq-skeleton-card {
+                background: rgba(255,255,255,0.02);
+                border: 1px solid rgba(255,255,255,0.05);
+                border-radius: 8px;
+                padding: 0.85rem 1rem;
+                display: flex;
+                flex-direction: column;
+                gap: 0.55rem;
+                min-height: 160px;
+            }
+            #blueIQView .bq-skel-lg { grid-column: span 6; }
+            #blueIQView .bq-skel-sm { grid-column: span 4; }
+            #blueIQView .bq-skeleton-title {
+                font-size: 0.85rem;
+                font-weight: 600;
+                color: var(--text-secondary);
+                margin-bottom: 0.35rem;
+            }
+            #blueIQView .bq-skeleton-row {
+                height: 12px;
+                border-radius: 4px;
+                background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 45%, rgba(255,255,255,0.04) 100%);
+                background-size: 200% 100%;
+                animation: bqShimmer 1.6s ease-in-out infinite;
+            }
+            #blueIQView .bq-skeleton-row.bq-skel-short { width: 55%; }
+            #blueIQView .bq-skeleton-row:nth-child(3) { animation-delay: 120ms; }
+            #blueIQView .bq-skeleton-row:nth-child(4) { animation-delay: 240ms; }
+            #blueIQView .bq-skeleton-row:nth-child(5) { animation-delay: 360ms; }
+            @keyframes bqShimmer {
+                0%   { background-position: 100% 0; }
+                100% { background-position: -100% 0; }
+            }
+            @media (max-width: 900px) {
+                #blueIQView .bq-skel-lg,
+                #blueIQView .bq-skel-sm { grid-column: span 12; }
+            }
             #blueIQView .blue-iq-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 10070; align-items: center; justify-content: center; padding: 2rem; }
             #blueIQView .blue-iq-modal.open { display: flex; }
             #blueIQView .blue-iq-modal-inner { background: var(--bg-secondary, #1e1e2e); border: 1px solid var(--border-color, #2c2c3e); border-radius: 12px; max-width: 720px; width: 100%; max-height: 80vh; overflow: auto; padding: 1.25rem 1.5rem; }
@@ -23421,7 +23610,6 @@
                 #blueIQView .blue-iq-card-turnout,
                 #blueIQView .blue-iq-card-pols,
                 #blueIQView .blue-iq-card-cands,
-                #blueIQView .blue-iq-card-geo,
                 #blueIQView .blue-iq-card-trending,
                 #blueIQView .blue-iq-card-playbook,
                 #blueIQView .blue-iq-card-articles,
@@ -23467,9 +23655,51 @@
             </div>
             <div id="blueIQSuppressedMsg" class="blue-iq-suppressed" style="display: none;"></div>
             <div id="blueIQTabStrip" class="bq-tabstrip" style="display: none;"></div>
-            <div id="blueIQLoading" class="blue-iq-loading-overlay" style="display: none;">
-                <div class="blue-iq-spinner"></div>
-                <div>Crunching panel signal, search trends, and news coverage&hellip;</div>
+            <div id="blueIQLoading" class="bq-loading-shell" style="display: none;">
+                <div class="bq-loading-hero">
+                    <div class="bq-loading-spinner"></div>
+                    <div class="bq-loading-hero-text">
+                        <div class="bq-loading-title" id="blueIQLoadingTitle">Analyzing this slice&hellip;</div>
+                        <div class="bq-loading-sub"  id="blueIQLoadingPhase">Loading panel signal.</div>
+                    </div>
+                    <div class="bq-loading-timer" id="blueIQLoadingTimer">0s</div>
+                </div>
+                <div class="bq-loading-steps" id="blueIQLoadingSteps"></div>
+                <div class="bq-loading-hint" id="blueIQLoadingHint"></div>
+                <div class="bq-loading-skeletons">
+                    <div class="bq-skeleton-card bq-skel-lg">
+                        <div class="bq-skeleton-title">Political issue searches</div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row bq-skel-short"></div>
+                    </div>
+                    <div class="bq-skeleton-card bq-skel-lg">
+                        <div class="bq-skeleton-title">Top searches in this slice</div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row bq-skel-short"></div>
+                    </div>
+                    <div class="bq-skeleton-card bq-skel-sm">
+                        <div class="bq-skeleton-title">Search engines</div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                    </div>
+                    <div class="bq-skeleton-card bq-skel-sm">
+                        <div class="bq-skeleton-title">Social platforms</div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                    </div>
+                    <div class="bq-skeleton-card bq-skel-sm">
+                        <div class="bq-skeleton-title">Top political articles</div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                        <div class="bq-skeleton-row"></div>
+                    </div>
+                </div>
             </div>
             <div id="blueIQCardsGrid" class="blue-iq-cards-grid"></div>
             <div id="blueIQDrillModal" class="blue-iq-modal" onclick="if(event.target===this) closeBlueIQDrillModal();">
@@ -23599,6 +23829,8 @@
             #trendsIQView .tiq-search-news-img .tiq-ph-label > span:last-child { font-size: 5px; letter-spacing: 0.5px; }
             /* Music tracks: square 48x48 thumbnail with a music-note fallback for the ~25% of Shazam discovery tracks that neither iTunes nor Deezer indexed yet. */
             #trendsIQView .tiq-music-image { flex: 0 0 48px; width: 48px; height: 48px; background-size: cover; background-position: center; border-radius: 4px; background-color: #1e293b; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' preserveAspectRatio='xMidYMid slice'%3E%3Crect width='24' height='24' fill='%231e293b'/%3E%3Cpath d='M9 17V5l10-2v12' stroke='%237c3aed' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='7' cy='17' r='2' fill='%237c3aed'/%3E%3Ccircle cx='17' cy='15' r='2' fill='%237c3aed'/%3E%3C/svg%3E"); }
+            /* Trending People: square 44x44 headshot from Wikipedia's REST summary API. Falls back to a person-silhouette SVG for the ~15% of pages Wikipedia doesn't expose a thumbnail for (usually events / places / brands, not people). */
+            #trendsIQView .tiq-people-image { flex: 0 0 44px; width: 44px; height: 44px; background-size: cover; background-position: center top; border-radius: 50%; background-color: #1e293b; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' preserveAspectRatio='xMidYMid slice'%3E%3Crect width='24' height='24' fill='%231e293b'/%3E%3Cpath d='M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-3.3 0-8 1.7-8 5v3h16v-3c0-3.3-4.7-5-8-5z' fill='%237c3aed'/%3E%3C/svg%3E"); }
             /* Streaming poster: portrait 40x56 tile (2:2.8 aspect - close to standard poster ratio). Titles iTunes Search has no artwork for show a lime tile with the real CROSSWALK ///-mark (cropped straight from the logo, recolored dark via brightness(0)) centered on top; real posters cover it via .tiq-ph-img. */
             #trendsIQView .tiq-poster-image { flex: 0 0 40px; width: 40px; height: 56px; border-radius: 4px; background-color: #c4f542; }
             #trendsIQView .tiq-poster-mark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 58%; height: auto; z-index: 0; filter: brightness(0); pointer-events: none; }
@@ -39425,10 +39657,10 @@
                 document.getElementById('blueIQMeta').textContent = 'Pick a region or switch to National.';
                 return;
             }
-            document.getElementById('blueIQLoading').style.display = 'flex';
             document.getElementById('blueIQCardsGrid').innerHTML = '';
             document.getElementById('blueIQSuppressedMsg').style.display = 'none';
-            document.getElementById('blueIQMeta').textContent = 'Fetching data for ' + (filters.party || 'All') + ' \u2192 ' + (filters.geo_type === 'National' ? 'National' : filters.geo_value) + ' (last ' + filters.lookback_days + 'd)...';
+            _bqStartLoadingUI(filters);
+            document.getElementById('blueIQMeta').textContent = 'Fetching data for ' + (filters.geo_type === 'National' ? 'National' : filters.geo_value) + ' (last ' + filters.lookback_days + 'd)...';
             try {
                 if (window.__blueIQ.inFlight) {
                     try { window.__blueIQ.inFlight.abort(); } catch (e) {}
@@ -39462,8 +39694,153 @@
                 console.error('Blue IQ data error:', e);
                 document.getElementById('blueIQMeta').textContent = 'Error: ' + (e.message || e);
             } finally {
-                document.getElementById('blueIQLoading').style.display = 'none';
+                _bqStopLoadingUI();
                 window.__blueIQ.inFlight = null;
+            }
+        }
+
+        // ── Interactive loading state ─────────────────────────────
+        // The Blue IQ endpoint can take 60-180s for district cuts
+        // (live panel query + agent synth for search/social/top_searches).
+        // Static text feels frozen, so drive a phase + timer + hint
+        // rotation while the request is in flight. Each phase is
+        // time-based, not backend-signalled — good enough to give the
+        // user rhythm without a streaming API.
+        function _bqLoadingGeoLabel(f) {
+            if (!f) return 'this slice';
+            if (f.geo_type === 'National') return 'the country';
+            var v = f.geo_value || 'this slice';
+            if (f.geo_type === 'District') return v;
+            if (f.geo_type === 'State')    return v;
+            if (f.geo_type === 'DMA')      return v;
+            return v;
+        }
+
+        function _bqLoadingSteps(f) {
+            var geo = _bqLoadingGeoLabel(f);
+            var isDistrict = f && f.geo_type === 'District';
+            var steps = [
+                { key: 'panel',   label: 'Panel signal',       t: 0 },
+                { key: 'search',  label: 'Search queries',     t: isDistrict ? 8 : 3 },
+                { key: 'journey', label: 'Voter journey',      t: isDistrict ? 22 : 8 },
+                { key: 'trends',  label: 'Google Trends',      t: isDistrict ? 40 : 14 },
+                { key: 'agent',   label: 'Modeling political intent (agent)', t: isDistrict ? 60 : 22 },
+            ];
+            // Phase copy: shown on the hero sub-line. Reads like a
+            // status update, not a fixed label.
+            steps[0].sub = 'Loading behavioral panel for ' + geo + '.';
+            steps[1].sub = 'Extracting the raw search vocabulary from URLs.';
+            steps[2].sub = 'Following the voter journey — what people did next.';
+            steps[3].sub = 'Pulling live Google Trends signal.';
+            steps[4].sub = isDistrict
+                ? 'Web-searching for representatives, issues, and campaign context.'
+                : 'Modeling political intent and creative angles.';
+            return steps;
+        }
+
+        var _BQ_LOADING_HINTS = [
+            'This tool surfaces <b>what voters in each district are actually Googling</b> — so candidates can tailor messaging to real search intent, not assumptions.',
+            'A row flagged <b>political</b> means the term matches a politician name, civic keyword, or a policy issue like abortion, immigration, or the border.',
+            'Panel signal is the ground truth. When it\'s thin (small district, sparse lookback), an <b>agent web-searches</b> the trailing month to fill in — every synthetic row is stamped so you can tell.',
+            'The <b>voter journey</b> card shows where a voter went <i>after</i> hitting a political site — donate, search again, watch a video, or bounce.',
+            'For congressional districts we resolve panel members by ZIP → district, then re-run the aggregation live. That\'s why district cuts take a bit longer than National.',
+            'Every projection is scaled from the 10M panel up to the ~330M US adult population using the same weighting the dashboard uses everywhere else.',
+        ];
+
+        function _bqStartLoadingUI(filters) {
+            var host = document.getElementById('blueIQLoading');
+            if (!host) return;
+            host.style.display = 'flex';
+
+            var geo   = _bqLoadingGeoLabel(filters);
+            var steps = _bqLoadingSteps(filters);
+
+            var title = document.getElementById('blueIQLoadingTitle');
+            if (title) title.textContent = 'Analyzing ' + geo + '\u2026';
+
+            var phase = document.getElementById('blueIQLoadingPhase');
+            if (phase) phase.textContent = steps[0].sub;
+
+            var stepsHost = document.getElementById('blueIQLoadingSteps');
+            if (stepsHost) {
+                stepsHost.innerHTML = steps.map(function(s, i) {
+                    return '<span class="bq-loading-step' + (i === 0 ? ' active' : '') + '" data-step="' + s.key + '">'
+                         +   '<span class="bq-loading-step-dot"></span>'
+                         +   _bqEscape(s.label)
+                         + '</span>';
+                }).join('');
+            }
+
+            var timerEl = document.getElementById('blueIQLoadingTimer');
+            if (timerEl) timerEl.textContent = '0s';
+
+            var hintEl = document.getElementById('blueIQLoadingHint');
+            if (hintEl) hintEl.innerHTML = _BQ_LOADING_HINTS[0];
+
+            var t0 = Date.now();
+            var lastPhaseIdx = 0;
+            var lastHintIdx  = 0;
+
+            function tick() {
+                var elapsed = Math.floor((Date.now() - t0) / 1000);
+                if (timerEl) {
+                    timerEl.textContent = elapsed < 60
+                        ? elapsed + 's'
+                        : Math.floor(elapsed / 60) + 'm ' + (elapsed % 60) + 's';
+                }
+
+                var idx = 0;
+                for (var i = 0; i < steps.length; i++) {
+                    if (elapsed >= steps[i].t) idx = i;
+                }
+                if (elapsed > steps[steps.length - 1].t + 30) {
+                    // Long-tail state: keep the last step "active" but
+                    // tell the user we're still moving.
+                    if (phase) phase.textContent = 'Almost there — this cut takes a moment. Still working\u2026';
+                } else if (idx !== lastPhaseIdx) {
+                    if (phase) {
+                        phase.style.opacity = '0';
+                        setTimeout(function() {
+                            phase.textContent = steps[idx].sub;
+                            phase.style.opacity = '1';
+                        }, 200);
+                    }
+                    lastPhaseIdx = idx;
+                }
+
+                if (stepsHost) {
+                    var chips = stepsHost.querySelectorAll('.bq-loading-step');
+                    for (var k = 0; k < chips.length; k++) {
+                        chips[k].classList.remove('active', 'done');
+                        if (k < idx)      chips[k].classList.add('done');
+                        else if (k === idx) chips[k].classList.add('active');
+                    }
+                }
+            }
+            tick();
+            var timerId = setInterval(tick, 500);
+
+            var hintId = setInterval(function() {
+                if (!hintEl) return;
+                lastHintIdx = (lastHintIdx + 1) % _BQ_LOADING_HINTS.length;
+                hintEl.style.opacity = '0';
+                setTimeout(function() {
+                    hintEl.innerHTML = _BQ_LOADING_HINTS[lastHintIdx];
+                    hintEl.style.opacity = '1';
+                }, 220);
+            }, 6500);
+
+            window.__blueIQ._loadingTimers = { timerId: timerId, hintId: hintId };
+        }
+
+        function _bqStopLoadingUI() {
+            var host = document.getElementById('blueIQLoading');
+            if (host) host.style.display = 'none';
+            var lt = window.__blueIQ && window.__blueIQ._loadingTimers;
+            if (lt) {
+                try { clearInterval(lt.timerId); } catch (e) {}
+                try { clearInterval(lt.hintId);  } catch (e) {}
+                window.__blueIQ._loadingTimers = null;
             }
         }
 
@@ -40551,23 +40928,14 @@
                   + '<div class="blue-iq-card-body" id="blueIQTrendingOverallBody"></div>'
                   + '</div>';
 
-            // CARD G: Issue × Geo heatmap - US state-hex choropleth showing
-            // where each issue is hot. Issue selector dropdown lets the user
-            // pivot the map by issue. Click a state to drill into that slice.
-            html += '<div class="blue-iq-card blue-iq-card-geo" style="grid-column: span 12;">'
-                  + '<h3 class="blue-iq-card-title">Issue \u00d7 Geo heatmap'
-                  +   '<span class="blue-iq-card-subtitle">where each policy issue is hot, by state. Click a state to drill into that slice.</span>'
-                  + '</h3>'
-                  + '<div class="blue-iq-card-body">'
-                  +   '<div class="bq-geo-controls">'
-                  +     '<label class="bq-geo-label">Pivot map by issue:</label>'
-                  +     '<select id="blueIQGeoIssueSelect" class="bq-geo-select"></select>'
-                  +     '<span class="bq-geo-legend" id="blueIQGeoLegend"></span>'
-                  +   '</div>'
-                  +   '<div id="blueIQGeoMap"></div>'
-                  +   '<div class="bq-geo-toplist" id="blueIQGeoTopList"></div>'
-                  + '</div>'
-                  + '</div>';
+            // CARD G (Issue × Geo heatmap) removed 2026-07-27 per Jenna:
+            // the state-hex map didn't add signal that the per-slice pair
+            // (Political issue searches + Top searches in this slice)
+            // doesn't already carry, and it took up screen real estate
+            // above the creative-playbook / voter-journey cards that
+            // actually drive campaign action. Backend still computes
+            // `issue_geo` for downstream consumers; the frontend just
+            // no longer renders it.
 
             // CARD V: Voter's day online (generation × gender × daypart)
             // ──────────────────────────────────────────────────────────
@@ -40690,7 +41058,6 @@
             _bqRenderPartyFiltered('top_candidates', 'All');
             _bqRenderTrendingLocal(cards.trending_local || [], cards.trending_meta || {});
             _bqRenderTrendingOverall(cards.trending_overall || [], cards.trending_overall_meta || {});
-            _bqRenderIssueGeo(cards.issue_geo || [], cards.issue_buckets || []);
             _bqRenderDayInLife(cards.issue_buckets || []);
             _bqRenderCreativePlaybook(cards.issue_buckets || [],
                                        cards.issue_journey_cross || [],
@@ -40698,204 +41065,13 @@
                                        cards.playbook_agent || []);
         }
 
-        // ──────────────────────────────────────────────────────────────────
-        // CARD G: Issue × Geo heatmap
-        // ──────────────────────────────────────────────────────────────────
-        // Hex-grid layout of the 50 states + DC. Each entry: [row, col, abbr].
-        // Approximates US geography (NPR/Bloomberg-style tilegram). Used for
-        // both visual rendering and click handling.
-        var BLUE_IQ_STATE_HEX = {
-            'AK': [0, 0],  'ME': [0, 11],
-            'VT': [1, 10], 'NH': [1, 11],
-            'WA': [2, 1],  'ID': [2, 2],  'MT': [2, 3],  'ND': [2, 4],
-            'MN': [2, 5],  'IL': [2, 6],  'WI': [2, 7],  'MI': [2, 8],
-            'NY': [2, 9],  'MA': [2, 10], 'RI': [2, 11],
-            'OR': [3, 1],  'NV': [3, 2],  'WY': [3, 3],  'SD': [3, 4],
-            'IA': [3, 5],  'IN': [3, 6],  'OH': [3, 7],  'PA': [3, 8],
-            'NJ': [3, 9],  'CT': [3, 10],
-            'CA': [4, 1],  'UT': [4, 2],  'CO': [4, 3],  'NE': [4, 4],
-            'MO': [4, 5],  'KY': [4, 6],  'WV': [4, 7],  'VA': [4, 8],
-            'MD': [4, 9],  'DE': [4, 10],
-            'AZ': [5, 2],  'NM': [5, 3],  'KS': [5, 4],  'AR': [5, 5],
-            'TN': [5, 6],  'NC': [5, 7],  'SC': [5, 8],  'DC': [5, 9],
-            'HI': [6, 0],  'OK': [6, 4],  'LA': [6, 5],  'MS': [6, 6],
-            'AL': [6, 7],  'GA': [6, 8],
-            'TX': [7, 4],  'FL': [7, 8]
-        };
-        // Full state names ↔ USPS codes (the cube payload uses full names).
-        var BLUE_IQ_STATE_NAME_TO_USPS = {
-            'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
-            'Colorado':'CO','Connecticut':'CT','Delaware':'DE','District of Columbia':'DC','Florida':'FL',
-            'Georgia':'GA','Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA',
-            'Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD','Massachusetts':'MA',
-            'Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO','Montana':'MT',
-            'Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ','New Mexico':'NM',
-            'New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH','Oklahoma':'OK',
-            'Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC','South Dakota':'SD',
-            'Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT','Virginia':'VA','Washington':'WA',
-            'West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY'
-        };
-
-        function _bqRenderIssueGeo(geoRows, issueBuckets) {
-            var mapEl  = document.getElementById('blueIQGeoMap');
-            var topEl  = document.getElementById('blueIQGeoTopList');
-            var sel    = document.getElementById('blueIQGeoIssueSelect');
-            var legEl  = document.getElementById('blueIQGeoLegend');
-            if (!mapEl || !sel) return;
-            if (!geoRows || !geoRows.length) {
-                // Two real reasons this lands empty:
-                //   1. The cube hasn't been rebuilt since this card was
-                //      added - old cached payloads don't carry issue_geo.
-                //      Bumping the cache version (blue_iq.py
-                //      blue_iq_cache_key) fixes this within minutes.
-                //   2. The active party slice is so narrow that no
-                //      per-state cell cleared MIN_CELL_SIZE. Try
-                //      switching to "All" / "Democrats" to widen.
-                mapEl.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 2rem 0; text-align:center; line-height: 1.6;">'
-                    + 'Building per-state heatmap...'
-                    + '<br><span style="font-size: 0.72rem; opacity: 0.85;">'
-                    + 'If this persists, try widening to <b>All parties</b> or refresh the page \u2014 '
-                    + 'the cube refreshes nightly and stale caches expire within 24h.'
-                    + '</span></div>';
-                if (topEl) topEl.innerHTML = '';
-                if (legEl) legEl.innerHTML = '';
-                if (sel) sel.innerHTML = '<option value="">-</option>';
-                return;
-            }
-            // Build issue list (deduped, sorted by total panelists desc).
-            var issueTotals = {};
-            geoRows.forEach(function(r) {
-                issueTotals[r.issue] = (issueTotals[r.issue] || 0) + (+r.panelists || 0);
-            });
-            var issuesSorted = Object.keys(issueTotals).sort(function(a, b) {
-                return issueTotals[b] - issueTotals[a];
-            });
-            // Populate the issue selector. Default to the top issue in this slice.
-            // Label shows each issue's share of total policy-search volume
-            // across all states (so the dropdown is a quick read of which
-            // issues dominate this geo slice).
-            var grandTotal = issuesSorted.reduce(function(acc, b) { return acc + (issueTotals[b] || 0); }, 0) || 1;
-            sel.innerHTML = issuesSorted.map(function(b) {
-                var share = (issueTotals[b] || 0) / grandTotal;
-                return '<option value="' + _bqEscape(b) + '">'
-                     + _bqEscape(b) + ' (' + _bqPct(share) + ' of searches)</option>';
-            }).join('');
-            // Avoid double-binding on re-render.
-            sel.onchange = function() { renderForIssue(sel.value); };
-
-            function renderForIssue(issue) {
-                // Build per-state value map for the chosen issue.
-                var byState = {};  // USPS → {state_name, panelists, share}
-                geoRows.forEach(function(r) {
-                    if (r.issue !== issue) return;
-                    var usps = BLUE_IQ_STATE_NAME_TO_USPS[r.state] || r.state.toUpperCase();
-                    byState[usps] = {
-                        name: r.state,
-                        panelists: +r.panelists || 0,
-                        share: +r.share || 0,
-                    };
-                });
-                var values = Object.keys(byState).map(function(k) { return byState[k].panelists; });
-                var maxV = Math.max.apply(null, values.concat([1]));
-                // Sequential color scale: light → dark blue.
-                function tint(v) {
-                    if (v <= 0) return 'rgba(255,255,255,0.04)';
-                    var t = Math.sqrt(v / maxV);  // sqrt to compress high outliers
-                    var r = Math.round(30 + (59  - 30 ) * t);
-                    var g = Math.round(58 + (130 - 58 ) * t);
-                    var b = Math.round(96 + (246 - 96 ) * t);
-                    return 'rgb(' + r + ',' + g + ',' + b + ')';
-                }
-                // 8 rows, 12 cols grid. Hex shape via clip-path.
-                var maxRow = 7, maxCol = 11;
-                var hexW = 56, hexH = 48;
-                var svgW = (maxCol + 2) * hexW;
-                var svgH = (maxRow + 2) * hexH;
-                var hexHtml = '';
-                Object.keys(BLUE_IQ_STATE_HEX).forEach(function(usps) {
-                    var pos = BLUE_IQ_STATE_HEX[usps];
-                    var row = pos[0], col = pos[1];
-                    var offsetX = (row % 2) * (hexW / 2);
-                    var x = col * hexW + offsetX + 8;
-                    var y = row * (hexH * 0.85) + 8;
-                    var s = byState[usps] || {panelists: 0, share: 0};
-                    var fill = tint(s.panelists);
-                    var stroke = s.panelists > 0 ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.05)';
-                    var labelColor = s.panelists / maxV > 0.55 ? '#fff' : 'var(--text-secondary)';
-                    var tip = (s.name || usps) + ': '
-                        + _bqNum(s.panelists) + ' panelists \u00b7 '
-                        + _bqPct(s.share) + ' of state cohort searched ' + issue;
-                    hexHtml += '<g class="bq-geo-hex" data-state="' + usps + '" transform="translate(' + x + ',' + y + ')">'
-                            +   '<title>' + _bqEscape(tip) + '</title>'
-                            +   '<polygon points="14,0 42,0 56,24 42,48 14,48 0,24" '
-                            +     'fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.2"/>'
-                            +   '<text x="28" y="28" text-anchor="middle" font-size="11" font-weight="600" '
-                            +     'fill="' + labelColor + '" pointer-events="none">' + usps + '</text>'
-                            + '</g>';
-                });
-                mapEl.innerHTML = '<svg viewBox="0 0 ' + svgW + ' ' + svgH + '" '
-                                + 'preserveAspectRatio="xMidYMid meet" '
-                                + 'style="width:100%; max-width:760px; height:auto; display:block; margin:0 auto;">'
-                                + hexHtml + '</svg>';
-                // Legend ramp.
-                if (legEl) {
-                    var stops = [0, 0.25, 0.5, 0.75, 1].map(function(t) {
-                        return '<span style="background:' + tint(maxV * t * t) + '; width:24px; height:10px; display:inline-block; border-radius:2px;"></span>';
-                    }).join('');
-                    legEl.innerHTML = '<span style="font-size:0.7rem; color:var(--text-secondary);">low</span>'
-                                    + stops
-                                    + '<span style="font-size:0.7rem; color:var(--text-secondary);">high</span>';
-                }
-                // Top-states list under the map.
-                if (topEl) {
-                    var ranked = Object.keys(byState)
-                        .map(function(k) { return {usps: k, name: byState[k].name, n: byState[k].panelists, share: byState[k].share}; })
-                        .sort(function(a, b) { return b.n - a.n; })
-                        .slice(0, 10);
-                    topEl.innerHTML = '<div class="bq-geo-toplist-title">Top 10 states for <strong>' + _bqEscape(issue) + '</strong></div>'
-                                    + ranked.map(function(r, i) {
-                                        return '<div class="bq-geo-toplist-row">'
-                                             + '<span class="bq-geo-toplist-rank">' + (i + 1) + '</span>'
-                                             + '<span class="bq-geo-toplist-name">' + _bqEscape(r.name) + '</span>'
-                                             + '<span class="bq-geo-toplist-bar-wrap"><span class="bq-geo-toplist-bar" style="width:' + Math.round((r.n / ranked[0].n) * 100) + '%; background:' + tint(r.n) + ';"></span></span>'
-                                             + '<span class="bq-geo-toplist-val">' + _bqNum(r.n) + '</span>'
-                                             + '</div>';
-                                    }).join('');
-                }
-            }
-
-            // Hex-click → open that state as a NEW tab within the
-            // dashboard, so the user can switch back to whatever they
-            // were previously viewing. The active tab's filters (party
-            // + lookback) carry over; only geography changes.
-            mapEl.onclick = function(ev) {
-                var g = ev.target && ev.target.closest && ev.target.closest('.bq-geo-hex');
-                if (!g) return;
-                var usps = g.getAttribute('data-state');
-                if (!usps) return;
-                var stateName = Object.keys(BLUE_IQ_STATE_NAME_TO_USPS).find(function(n) {
-                    return BLUE_IQ_STATE_NAME_TO_USPS[n] === usps;
-                });
-                if (!stateName) return;
-                // Inherit non-geo filters (party, lookback) from the
-                // current view so the comparison tab keeps everything
-                // else constant.
-                var cur = _bqGetActiveTab();
-                var base = (cur && cur.filters) ? cur.filters : {
-                    party:         document.getElementById('blueIQParty')   && document.getElementById('blueIQParty').value   || 'All',
-                    lookback_days: parseInt(document.getElementById('blueIQLookback') && document.getElementById('blueIQLookback').value || '30', 10),
-                };
-                var newFilters = {
-                    party:         base.party || 'All',
-                    geo_type:      'State',
-                    geo_value:     stateName,
-                    lookback_days: parseInt(base.lookback_days, 10) || 30,
-                };
-                _bqAddOrSwitchTab(newFilters, stateName);
-            };
-
-            renderForIssue(issuesSorted[0]);
-        }
+        // CARD G (Issue × Geo heatmap) removed 2026-07-27 per Jenna.
+        // The state-hex renderer, BLUE_IQ_STATE_HEX / BLUE_IQ_STATE_NAME_TO_USPS
+        // maps, and _bqRenderIssueGeo function that used to live here have
+        // been deleted (~200 lines). Backend still emits cards.issue_geo
+        // for any downstream consumer; the frontend just no longer renders
+        // it. If a future dashboard wants it back, grep the commit history
+        // for "Issue × Geo heatmap".
 
         // ──────────────────────────────────────────────────────────────────
         // CARD P: Creative playbook
@@ -41413,9 +41589,25 @@
                 rows = rows.filter(function(r) { return r && r.political; });
             }
             if (!rows.length) {
-                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">'
+                // Build a geo-appropriate label for the empty-state copy
+                // so the message doesn't say "this district" when the
+                // user is looking at the national roll-up. Uses the same
+                // filter shape the meta-line at the top uses.
+                var lastD = (window.__blueIQ && window.__blueIQ.lastData) || {};
+                var lastF = lastD.filters || {};
+                var geoLabel;
+                switch (lastF.geo_type) {
+                    case 'District': geoLabel = lastF.geo_value ? (lastF.geo_value + ' voters') : 'this district'; break;
+                    case 'State':    geoLabel = lastF.geo_value ? (lastF.geo_value + ' voters')    : 'this state'; break;
+                    case 'DMA':      geoLabel = lastF.geo_value ? ('the ' + lastF.geo_value + ' DMA') : 'this DMA'; break;
+                    case 'National': /* fallthrough */
+                    default:         geoLabel = 'the country as a whole'; break;
+                }
+                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0; line-height: 1.5;">'
                     + (mode === 'political'
-                        ? 'No political-flavored terms surfaced in the top 30 raw searches for this slice. That itself is signal: this district is Googling cost-of-living, health, and everyday concerns more than partisan topics right now.'
+                        ? ('No political-flavored terms surfaced in the top 30 raw searches for this slice. '
+                            + 'That itself is signal: ' + _bqEscape(geoLabel) + ' is Googling cost-of-living, health, and everyday concerns more than partisan topics in this window. '
+                            + 'For the policy-issue view, see the <em>Political issue searches</em> card next to this one (that card is grounded in Google Trends and always surfaces political intent per-geo).')
                         : 'No panel search terms available for this slice yet.')
                     + '</div>';
                 return;
@@ -41424,16 +41616,39 @@
             rows.forEach(function(r) { if ((+r.count || 0) > max) max = +r.count; });
             max = max || 1;
             var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
-            body.innerHTML = rows.slice(0, 30).map(function(r) {
+            // Detect synthetic rows (panel-thin slice → agent-filled).
+            // Show a small "Modeled" banner at the top when ALL rows are
+            // synthetic (rare — usually happens only for very thin
+            // districts or Live-mode 1-day windows), and a per-row pill
+            // when SOME rows are synthetic (typical merged panel+synth).
+            var synthCount   = rows.filter(function(r) { return r && r.synthetic; }).length;
+            var allSynth     = rows.length > 0 && synthCount === rows.length;
+            var partialSynth = synthCount > 0 && !allSynth;
+            var synthBanner  = '';
+            if (allSynth) {
+                synthBanner = '<div class="bq-topsearches-synth-banner" title="Panel signal was thin for this slice; the list was modeled by an OpenAI web-search agent from Pew, Google Trends, and local news signals.">'
+                            + '<span class="bq-topsearches-synth-pill">Modeled</span>'
+                            + 'Panel signal was thin for this slice \u2014 list modeled from external research.'
+                            + '</div>';
+            } else if (partialSynth) {
+                synthBanner = '<div class="bq-topsearches-synth-banner bq-topsearches-synth-banner-mixed" title="' + synthCount + ' of the ' + rows.length + ' rows below were modeled by an agent (marked ‘modeled’ pill).">'
+                            + '<span class="bq-topsearches-synth-pill">Modeled</span>'
+                            + 'Panel signal was thin \u2014 ' + synthCount + ' of ' + rows.length + ' rows below were modeled from external research to fill the tail.'
+                            + '</div>';
+            }
+            body.innerHTML = synthBanner + rows.slice(0, 30).map(function(r) {
                 var pct = Math.round(((+r.count || 0) / max) * 100);
                 var proj = Math.round((+r.count || 0) * factor);
                 var polChip = r.political
                     ? '<span class="bq-topsearches-flag" title="Touches political vocabulary or a politician name">political</span>'
                     : '';
-                return '<div class="blue-iq-topsearch-row">'
+                var synthChip = r.synthetic
+                    ? '<span class="bq-topsearches-synth-row-pill" title="' + _bqEscape(r.source_note || 'Modeled from external research') + '">modeled</span>'
+                    : '';
+                return '<div class="blue-iq-topsearch-row' + (r.synthetic ? ' bq-topsearches-row-synth' : '') + '">'
                      +   '<div class="blue-iq-topsearch-head">'
                      +     '<strong>' + _bqEscape(r.term || '') + '</strong>'
-                     +     ' ' + polChip
+                     +     ' ' + polChip + ' ' + synthChip
                      +     '<span style="flex:1 1 auto;"></span>'
                      +     '<span style="color: var(--text-secondary); font-variant-numeric: tabular-nums; font-size: 0.75rem;" title="Panelists who typed this query \u2192 projected to US adults">'
                      +       formatNumber(proj) + ' US adults'
@@ -45517,7 +45732,16 @@
                 var views = typeof r.views_today === 'number' ? _tiqNum(r.views_today) + ' views' : '';
                 var prior = (r.views_prior && !r.is_new) ? ' (was ' + _tiqNum(r.views_prior) + ')' : '';
                 var wikiKey = r.title || '';
+                // Wikipedia REST summary API returns a thumbnail for
+                // ~85% of top-1000 pages (missing on some events,
+                // places, brands). When present, render a small
+                // rounded headshot next to the rank; when absent,
+                // the person-silhouette fallback in .tiq-people-image
+                // holds the slot so alignment stays clean.
+                var thumb = '<div class="tiq-people-image" style="' +
+                            _tiqMusicImgStyle(r.thumbnail || '') + '"></div>';
                 html += '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
+                        thumb +
                         '<div class="tiq-row-body">' +
                         '<div class="tiq-row-title">' +
                         '<a href="' + _tiqEsc(r.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(r.title) + '</a>' +

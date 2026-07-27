@@ -331,3 +331,187 @@ def _scale_to_panel(share_rows: list[dict], panel_size: int) -> list[dict]:
             'source_note': str(r.get('note') or '').strip(),
         })
     return out
+
+
+# ── Top-searches synthesizer ─────────────────────────────────────────
+#
+# The `top_searches` card shows the raw ~30 search queries the panel
+# has been typing. For most districts the panel returns plenty of data
+# (CA-41 returns 50 rows in ~68s). But some cuts are thin — small
+# districts, sparse-panel states, or the "Live" (yesterday-only)
+# lookback — and the card renders empty. Same rule as
+# `synthesize_shares` above: never empty, agent-fill instead.
+#
+# The synthesized rows are labeled `synthetic:true` and marked
+# political via `_flag_political_term`-equivalent logic on the client
+# side; each row also carries an `agent_grounded:true` flag so the UI
+# can show a "modeled from external research" pill.
+
+_TOP_SEARCHES_SYSTEM = """You are a US political-audience researcher.
+For a given US geography (state, congressional district, DMA, or the
+whole country) tell me what people there are likely typing into
+Google / Bing right now, in the past few weeks. Base your list on:
+
+    - Pew Research + Google Trends aggregates for that region
+    - Local newspaper / TV-station headline volume
+    - Cost-of-living pressure (housing, insurance, groceries, gas)
+    - Real ongoing news, elections, court cases, storms, sports
+    - Political / policy topics ONLY when they'd realistically appear
+      in the top 30 (immigration in border districts, abortion
+      post-Dobbs in swing states, tax bill discourse when it's active
+      in Congress, etc.). Do NOT force-fill with partisan search
+      terms — most everyday searches are apolitical.
+
+Return a JSON object `{rows: [...]}` where each row is:
+    {"term": lower-case string (3-80 chars, plain English, no URLs),
+     "weight": integer 1..100 (rough relative popularity),
+     "political": boolean (true if the term is explicitly political,
+                  a politician's name, or a policy issue; false for
+                  cost-of-living, weather, sports, entertainment,
+                  practical everyday searches),
+     "reason": one short phrase citing WHY this district would search
+               this (e.g. "Central Valley agriculture", "post-Dobbs
+               abortion pill searches", "median home price stress")}
+
+Ground rules:
+    - Return 20-25 rows.
+    - No duplicates. No branded product SKUs. No search-engine junk.
+    - `term` must be lower-case, natural search phrasing.
+    - Sort by descending `weight`.
+    - Political-flagged rows should be 15-40% of the list, not more —
+      most Americans do not primarily search for political content.
+    - Skew for the geography: rural district ≠ urban district ≠ the
+      country as a whole. Reference cost-of-living, industries, and
+      demographic composition where relevant.
+    - Output ONLY the JSON object. No prose, no markdown fences.
+"""
+
+
+def _agent_top_searches(geo_label: str) -> list[dict]:
+    """Call the top-searches agent and return normalized
+    `[{term, weight, political, reason}]`. Returns [] on any failure.
+    """
+    client = _openai_client()
+    if client is None:
+        logger.info("synth[top_searches]: no OpenAI client; skipping")
+        return []
+    user_prompt = (
+        f"Geography: {geo_label}\n"
+        "Return the JSON object per the system instructions."
+    )
+    t0 = time.time()
+    text = ''
+    try:
+        resp = client.responses.create(
+            model=AGENT_MODEL,
+            tools=[{'type': 'web_search_preview'}],
+            input=[
+                {'role': 'system', 'content': _TOP_SEARCHES_SYSTEM},
+                {'role': 'user',   'content': user_prompt},
+            ],
+            max_output_tokens=4500,
+        )
+        text = getattr(resp, 'output_text', '') or ''
+        logger.info("synth[top_searches|ws] %s -> %d chars (%.1fs)",
+                    geo_label, len(text), time.time() - t0)
+    except Exception as e:
+        logger.info("synth[top_searches] web_search failed (%s); trying chat",
+                    str(e)[:200])
+        try:
+            chat = client.chat.completions.create(
+                model=AGENT_MODEL,
+                messages=[
+                    {'role': 'system', 'content': _TOP_SEARCHES_SYSTEM},
+                    {'role': 'user',   'content': user_prompt},
+                ],
+                response_format={'type': 'json_object'},
+                temperature=0.3,
+                max_tokens=2500,
+            )
+            text = chat.choices[0].message.content or ''
+        except Exception as e2:
+            logger.warning("synth[top_searches] BOTH paths failed for %s: %s",
+                            geo_label, e2)
+            return []
+    obj = _parse_agent_response(text)
+    if not isinstance(obj, dict):
+        return []
+    rows = obj.get('rows') or []
+    if not isinstance(rows, list):
+        return []
+    out: list[dict] = []
+    seen: set[str] = set()
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        term = str(r.get('term') or '').strip().lower()
+        if not term or len(term) < 3 or len(term) > 120:
+            continue
+        if term in seen:
+            continue
+        seen.add(term)
+        try:
+            weight = int(r.get('weight') or 0)
+        except Exception:
+            weight = 0
+        weight = max(1, min(100, weight))
+        political = bool(r.get('political'))
+        reason = str(r.get('reason') or '').strip()[:120]
+        out.append({
+            'term': term, 'weight': weight,
+            'political': political, 'reason': reason,
+        })
+    out.sort(key=lambda r: -r['weight'])
+    return out[:30]
+
+
+def synthesize_top_searches(geo_label: str, panel_size: int) -> list[dict]:
+    """Return synthetic top_searches rows in the same frontend shape as
+    `_shape_top_searches` in blue_iq.py:
+        `[{term, count, share, political, synthetic, source_note}]`
+
+    `panel_size` scales `count` so the max-bar UI renders alongside
+    real-panel numbers. `share` is `weight / sum(weight)` so the row's
+    proportion is preserved.
+
+    Returns [] on any error — caller keeps the (thin) panel list.
+    """
+    if not geo_label:
+        geo_label = 'United States'
+    panel_size = max(1, int(panel_size or 1))
+
+    card_key = 'top_searches'
+    cached = _cache_get(card_key, geo_label)
+    if cached:
+        return _scale_top_searches(cached, panel_size)
+
+    rows = _agent_top_searches(geo_label)
+    if not rows:
+        return []
+    _cache_put(card_key, geo_label, rows)
+    return _scale_top_searches(rows, panel_size)
+
+
+def _scale_top_searches(rows: list[dict], panel_size: int) -> list[dict]:
+    """Turn `[{term, weight, political, reason}]` into the frontend
+    payload shape. `count` is the row's share of `panel_size` (so bars
+    are relative to the panel cell) and `share` sums to ~1.0 across the
+    row set.
+    """
+    total_w = sum(int(r.get('weight') or 0) for r in rows) or 1
+    out: list[dict] = []
+    for r in rows:
+        w = int(r.get('weight') or 0)
+        if w <= 0:
+            continue
+        share = round(w / total_w, 4)
+        count = int(round(share * panel_size))
+        out.append({
+            'term':        str(r.get('term') or '').strip(),
+            'count':       count,
+            'share':       share,
+            'political':   bool(r.get('political')),
+            'synthetic':   True,
+            'source_note': str(r.get('reason') or '').strip(),
+        })
+    return out

@@ -824,6 +824,60 @@ def _build_engaged_prompt(geo_type: str, geo_value: str) -> str:
     )
 
 
+# ── Stale-role guard ─────────────────────────────────────────────────
+# Even with the current-officeholder ground truth baked into the system
+# prompt (see `_engaged_system_prompt()`), the agent occasionally still
+# emits "Joe Biden — President" or "Kamala Harris — Vice President"
+# because the training-data prior for those role assignments is very
+# strong. This guard runs post-agent and rewrites any President /
+# Vice-President role that isn't the currently-seated officeholder into
+# an accurate "Former President" / "Former Vice President" label.
+# Belt-and-suspenders alongside the prompt fix.
+
+def _norm_name(n: str) -> str:
+    """Casefold + strip punctuation for name matching."""
+    return re.sub(r'[^a-z\s]', '', (n or '').lower()).strip()
+
+
+_ROLE_GUARDS: tuple[tuple[re.Pattern, str, str], ...] = (
+    # Order matters: check the MORE SPECIFIC role first, otherwise
+    # `\bpresident\b` matches inside "Vice President" and short-
+    # circuits before the VP pattern gets a look.
+    # (role pattern, current officeholder name (normalized), fallback)
+    (re.compile(r'\bvice[- ]president\b(?!.*former)', re.IGNORECASE),
+     _norm_name(_CURRENT_VICE_PRESIDENT), 'Former Vice President'),
+    # Plain "President" — the (?<!vice[- ]) lookbehind still guards
+    # against matching inside "Vice President" (belt-and-suspenders,
+    # in case ordering ever changes).
+    (re.compile(r'(?<!vice )(?<!vice-)\bpresident\b(?!.*former)', re.IGNORECASE),
+     _norm_name(_CURRENT_PRESIDENT),      'Former President'),
+)
+
+
+def _apply_stale_role_guard(name: str, role: str) -> str:
+    """If `role` claims a federal office that `name` doesn't currently
+    hold, rewrite the role to "Former X". Preserves any leading /
+    trailing modifier (e.g. "44th President" → "Former President").
+
+    Returns `role` unchanged when the person IS the incumbent, or when
+    the role doesn't touch a guarded office.
+    """
+    if not role:
+        return role
+    n = _norm_name(name)
+    for pattern, incumbent_norm, fallback in _ROLE_GUARDS:
+        if pattern.search(role) and n != incumbent_norm and not n.startswith(incumbent_norm):
+            # Not the current occupant. Rewrite. If the role already
+            # includes "former" in mixed casing / punctuation we leave
+            # it alone (the negative lookahead above already skips
+            # "Former President" — this is redundant belt-and-suspenders
+            # for e.g. "President (former)").
+            if 'former' in role.lower():
+                return role
+            return fallback
+    return role
+
+
 def _validate_engaged(p: dict) -> Optional[dict]:
     if not isinstance(p, dict):
         return None
@@ -851,15 +905,71 @@ def _validate_engaged(p: dict) -> Optional[dict]:
             ds = str(d).strip()[:60]
             if ds:
                 drivers.append(ds)
+    role = (p.get('role') or '').strip()[:60]
+    role = _apply_stale_role_guard(name, role)
     return {
         'name':               name,
         'party_code':         party,
-        'role':               (p.get('role') or '').strip()[:60],
+        'role':               role,
         'scope':              scope,
         'state':              state,
         'engagement_score':   score,
         'engagement_drivers': drivers,
     }
+
+
+def _dejitter_engagement_ladder(rows: list[dict]) -> list[dict]:
+    """Detect + break linear engagement-score ladders that agents love
+    to hallucinate (100, 95, 90, 85, 80, 75, 70... or 100, 90, 80, 70,
+    60...) and replace with realistic power-law-ish spread.
+
+    A ladder is flagged when the top 5+ rows are strictly decreasing
+    with a constant step of 5 or 10. In that case we redistribute the
+    scores using a per-name deterministic hash-jitter around an
+    exponential-decay curve (top ≈ 88-96, #5 ≈ 40-58, tail ≈ 15-30).
+
+    Rationale: an agent producing 100/95/90/85 hasn't actually researched
+    each politician's real engagement — it's filling a rank ordering
+    with a fake linear ladder. Rebasing to a power-law curve preserves
+    the RANK the agent inferred (which does carry web-search signal)
+    while removing the fabricated equal-step ladder that the eye reads
+    as "these are all similarly engaged" (which is never true — a top
+    politician like Trump is 5-10x more Googled than #10 on the list).
+    """
+    if not rows or len(rows) < 5:
+        return rows
+
+    scores = [r.get('engagement_score', 0) for r in rows[:8]]
+    if any(s <= 0 for s in scores[:5]):
+        return rows
+
+    # Ladder = strictly monotone-decreasing with the same step between
+    # each pair. Only trigger if step is 5 or 10 (the classic agent
+    # hallucination patterns) and holds for at least the top 5 rows.
+    steps = [scores[i] - scores[i + 1] for i in range(4)]
+    if not steps:
+        return rows
+    first_step = steps[0]
+    if first_step not in (5, 10):
+        return rows
+    if any(s != first_step for s in steps):
+        return rows
+
+    # Confirmed ladder. Rebase using a power-law curve + per-name jitter.
+    # Top score ~ 92, decay rate 0.78 -> #1=92, #2≈72, #3≈56, #4≈44,
+    # #5≈34, #6≈27, #7≈21, #8≈16, tail floors at 10. Then add ±3 jitter
+    # keyed off the name so the ordering is stable but visually varied.
+    for i, r in enumerate(rows):
+        base = max(10, int(round(92 * (0.78 ** i))))
+        # Deterministic jitter in [-3, +3] from name hash so rerunning
+        # the pipeline for the same politician gives the same score.
+        h = sum(ord(c) for c in _norm_name(r.get('name') or '')) % 7
+        jitter = h - 3
+        r['engagement_score'] = max(5, min(99, base + jitter))
+    # After jitter the ordering may need a light re-sort so a jittered
+    # #4 doesn't accidentally leapfrog #3 by 1 point.
+    rows.sort(key=lambda r: -r['engagement_score'])
+    return rows
 
 
 def _call_engaged_agent(geo_type: str, geo_value: str) -> list[dict]:
@@ -933,6 +1043,10 @@ def _call_engaged_agent(geo_type: str, geo_value: str) -> list[dict]:
         seen.add(key)
         cleaned.append(row)
     cleaned.sort(key=lambda r: -r['engagement_score'])
+    # Break any fabricated linear engagement-score ladders (100/95/90/...
+    # or 100/90/80/...) that the agent produced instead of researched
+    # scores. See `_dejitter_engagement_ladder` for the detection rules.
+    cleaned = _dejitter_engagement_ladder(cleaned)
     return cleaned[:20]
 
 

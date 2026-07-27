@@ -630,13 +630,36 @@ def blue_iq_cache_key(filters: dict) -> str:
             returning. Bumping forces regen of any v21 district
             payloads that lacked top_searches and had stale role
             labels on top_politicians.
+     v23 — 2026-07-27: `top_searches` gets an agent synth fallback
+            when the panel returns fewer than 8 rows (thin district /
+            sparse-panel state / Live-mode 1-day lookback). The
+            fallback fires `blue_iq_synth_agent.synthesize_top_searches`
+            with the district's pretty label so the OpenAI web-search
+            agent can research plausible top queries. Also adds a
+            validator-side stale-role guard (Biden/Harris/Obama →
+            "Former President" when the agent still emits current
+            role) plus linear engagement-score ladder detection +
+            per-name jitter that rewrites 100/95/90/85 ladders into
+            a power-law spread. Frontend removes the Issue × Geo
+            heatmap (~200 lines of state-hex JS + CSS). Bumping
+            invalidates any v22 payload that has stale role labels
+            or a fabricated ladder.
+     v24 — 2026-07-27: `top_searches` synth top-off now also fires
+            when the panel has plenty of rows but <5 political-flagged
+            ones (typical at National + State scale, where
+            cost-of-living dominates raw query volume and political
+            terms get buried below the top 30). Merges ONLY the
+            agent's political rows in that case, dampened to the
+            panel's 25th-percentile count so they don't unfairly
+            rank above real panel rows. Also fixes the empty-state
+            copy that said "this district" at National scale.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   22,
+        'version':   24,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -2145,6 +2168,25 @@ def _district_synth_label(district: str) -> str:
     return label
 
 
+def _synth_geo_label(f: dict) -> str:
+    """Build a human-readable geo label for any Blue IQ synth call.
+    National → "United States", State → the state name, DMA → the DMA
+    name, District → the pretty district label from _district_synth_label.
+    """
+    geo_type  = (f.get('geo_type')  or 'National').strip()
+    geo_value = (f.get('geo_value') or '').strip()
+    if geo_type == 'National' or not geo_value:
+        return 'United States'
+    if geo_type == 'District':
+        return _district_synth_label(geo_value)
+    if geo_type == 'State':
+        # State names are already human-friendly ("California", "Texas").
+        return geo_value
+    if geo_type == 'DMA':
+        return f"{geo_value} DMA"
+    return geo_value
+
+
 def _compute_district_cell_live(filters: dict) -> tuple[Optional[dict], int]:
     """Live-compute a cube-cell-shaped payload for a District cut.
 
@@ -3429,6 +3471,107 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     # known politician name so the UI can offer a "political only"
     # filter.
     top_searches_out = _shape_top_searches(panel_top_queries)
+
+    # Synth top-off: two triggers can fire the agent-fill path.
+    #
+    #   1. Thin panel (total < 8 rows): small district, sparse-panel
+    #      state, or Live-mode 1-day window. Merge ALL agent rows so
+    #      the card is never empty.
+    #
+    #   2. Political drought (political count < 5): typical at
+    #      National + State scale, where cost-of-living / commerce
+    #      queries ("walmart", "chatgpt", "car insurance quotes")
+    #      dominate raw volume and political terms get buried below
+    #      the top 30. Without this top-off, the "Political-flavored
+    #      only" chip lands on an empty view even though political
+    #      search intent obviously exists — it's just deeper in the
+    #      long tail than the top 30 reaches. When this fires we
+    #      merge in ONLY the political-flagged agent rows (leaving
+    #      the real panel-derived cost-of-living rows intact for the
+    #      default "All searches" view).
+    #
+    # Every synth row carries `synthetic: True` + `source_note` so
+    # the UI shows a "modeled" pill for transparency.
+    panel_row_count       = len(top_searches_out)
+    panel_political_count = sum(1 for r in top_searches_out if r.get('political'))
+    need_thin_topoff      = panel_row_count < 8
+    need_political_topoff = panel_political_count < 5
+
+    if need_thin_topoff or need_political_topoff:
+        try:
+            from blue_iq_synth_agent import synthesize_top_searches
+            geo_label  = _synth_geo_label(f)
+            synth_size = max(1000, int(panel_size or 0))  # min 1K so shares scale reasonably
+            synth_rows = synthesize_top_searches(geo_label, synth_size)
+            if synth_rows:
+                have = {(r.get('term') or '').lower() for r in top_searches_out}
+                # Thin-panel case: merge everything. Political-drought
+                # case: merge only political rows so we don't crowd
+                # out the panel's real cost-of-living signal.
+                if need_thin_topoff:
+                    candidates = synth_rows
+                else:
+                    candidates = [r for r in synth_rows if r.get('political')]
+
+                # Dampen synth `count` so agent-modeled rows can't
+                # unfairly rank above real panel rows in the merged
+                # view. Rationale: synth `count` is `share * panel_size`
+                # where share reflects the AGENT'S "share of political
+                # conversation" — not the search's share of all
+                # queries. If a real panel row has 4M panelists on
+                # "walmart" and a synth row lands at share=0.20 * 33M
+                # panel = 6.6M, the synth would rank above walmart,
+                # which massively overstates the political term's
+                # actual query volume relative to everyday commerce.
+                # Anchor synth counts to the panel distribution's
+                # LOWER quartile so they surface in the tail of the
+                # "All searches" view but always show when the user
+                # switches to "Political-flavored only".
+                if candidates and top_searches_out:
+                    panel_counts = sorted(int(r.get('count') or 0) for r in top_searches_out)
+                    if panel_counts:
+                        # 25th percentile of the panel distribution
+                        p25 = panel_counts[len(panel_counts) // 4]
+                        # Rescale each synth row's count so the max
+                        # synth row lands right at p25 and lower-weight
+                        # synth rows scale proportionally below it.
+                        max_synth_count = max(int(r.get('count') or 0) for r in candidates) or 1
+                        for r in candidates:
+                            raw = int(r.get('count') or 0)
+                            r['count'] = max(1, int(round(raw / max_synth_count * p25)))
+
+                # Merge cap: leave headroom past 30 so we don't exclude
+                # ALL synth rows just because the panel already returned
+                # 30. Frontend applies `.slice(0, 30)` to the "All
+                # searches" view (some synth rows will make the top 30
+                # by count and some won't — dampened to p25, they'll
+                # land in positions 15-25 of the merged sort). The
+                # "Political-flavored only" chip runs `.filter` BEFORE
+                # `.slice(0, 30)` so every synth row is visible there.
+                MERGE_CAP = 35
+                for r in candidates:
+                    key = (r.get('term') or '').lower()
+                    if key and key not in have:
+                        have.add(key)
+                        top_searches_out.append(r)
+                        if len(top_searches_out) >= MERGE_CAP:
+                            break
+                # Re-sort so the merged list is still count-descending.
+                # Panel rows keep their real counts; synth rows now sit
+                # in the lower quartile of the panel distribution,
+                # which is the visually-honest position: agent-modeled
+                # political intent is smaller volume than the top
+                # cost-of-living queries.
+                top_searches_out.sort(key=lambda r: -int(r.get('count') or 0))
+                logger.info(
+                    "top_searches synth-filled for %s|%s: %d panel + %d synth = %d total (thin=%s political_drought=%s)",
+                    f['geo_type'], f['geo_value'] or 'National',
+                    panel_row_count,
+                    len([r for r in top_searches_out if r.get('synthetic')]),
+                    len(top_searches_out),
+                    need_thin_topoff, need_political_topoff)
+        except Exception as e:  # never break the payload on synth failure
+            logger.warning("top_searches synth fallback failed: %s", e)
 
     cards = {
         'issue_buckets':       issue_buckets,
