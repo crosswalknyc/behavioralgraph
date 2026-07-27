@@ -37230,9 +37230,32 @@
                 showHedgeFundIQ();
             } else {
                 loadDashboardProfiles();
-                // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load
+                // Explicitly apply the selected product view (Profile IQ = dashboard) so the correct view is visible on load.
+                //
+                // 2026-07-27: prefer the last product the user was viewing
+                // (persisted per-browser in localStorage['bg_last_product']
+                // by the dropdown change handler below) over the server's
+                // default so log-in / log-out returns you to where you
+                // were instead of always dumping you back on Profile IQ.
+                // Falls back to the server default (Profile IQ, or Fin IQ
+                // for Fin-only users - handled by the outer branch) when:
+                //   * no last-product is stored (first visit)
+                //   * the stored key is unknown / not in initialHandlers
+                //   * the corresponding dropdown option is disabled (user
+                //     lost access since their last visit)
+                //   * localStorage is unavailable (private mode, quota)
                 var viewDropdownEl = document.getElementById('viewNavDropdown');
                 var initialVal = (viewDropdownEl && viewDropdownEl.value) ? viewDropdownEl.value : 'profileIQ';
+                try {
+                    var _lastProduct = localStorage.getItem('bg_last_product');
+                    if (_lastProduct && viewDropdownEl) {
+                        var _lastOpt = viewDropdownEl.querySelector('option[value="' + _lastProduct + '"]');
+                        if (_lastOpt && !_lastOpt.disabled) {
+                            initialVal = _lastProduct;
+                            viewDropdownEl.value = _lastProduct;
+                        }
+                    }
+                } catch (_) { /* localStorage disabled - keep server default */ }
                 var initialHandlers = { profileIQ: showProfileIQ, subscriberIQ: showSubscriberIQ, sfConversion: showSFConversion, llmoIQ: showLLMOIQ, rankerIQ: showRankerIQ, ticketSalesIQ: showTicketSalesIQ, ticketSalesTracker: showTicketSalesTracker, hedgeFundIQ: showHedgeFundIQ, roasIQ: showRoasIQ, ecommerceIQ: showEcommerceIQ, brandPartnershipIQ: function() { showEcommerceIQ(); setTimeout(function() { if (typeof setEcomIQMode === 'function') setEcomIQMode('brand_partnership'); if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandPartnershipIQ'); }, 200); }, journeyIQ: function() { if (typeof showJourneyIQ === 'function') showJourneyIQ(); }, shareOfTimeIQ: showShareOfTimeIQ, customAnalysis: showCustomAnalysis, talentFitIQ: showTalentFitIQ, flywheelConversion: showFlywheelConversionDashboard, blueIQ: function() { if (typeof showBlueIQ === 'function') showBlueIQ(); }, trendsIQ: function() { if (typeof showTrendsIQ === 'function') showTrendsIQ(); }, microdramasIQ: function() { if (typeof showMicrodramasIQ === 'function') showMicrodramasIQ(); }, intentIQ: function() { if (typeof showIntentIQ === 'function') showIntentIQ(); }, impactIQ: function() { if (typeof showImpactIQ === 'function') showImpactIQ(); }, helmIQ: function() { var c = document.querySelector('.container'); if (c) { for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (k.id !== 'helmIQView' && k.tagName !== 'HEADER') k.style.display = 'none'; } } var v = document.getElementById('helmIQView'); if (v) v.setAttribute('style', 'display:flex; flex-direction:column; flex:1 1 auto; min-height:500px; height:calc(100vh - 80px); overflow-y:auto; visibility:visible; position:relative; z-index:50;'); var bt = document.getElementById('helm-tab-build'); if (bt) bt.setAttribute('style', 'display:block; padding:1.5rem;'); var ft = document.getElementById('helm-tab-financials'); if (ft) ft.setAttribute('style', 'display:none;'); }, workspace: function() { if (typeof showProfileIQ === 'function') showProfileIQ(); if (typeof showTab === 'function') setTimeout(function() { showTab('collaboration'); }, 50); } };
                 if (typeof initialHandlers[initialVal] === 'function') initialHandlers[initialVal]();
                 // Ensure dashboard view is visible when Profile IQ is selected (guard against layout/override issues)
@@ -37335,6 +37358,16 @@
                     } catch (e) {
                         console.error('View switch error:', e);
                     }
+                    // 2026-07-27: remember the selection per-browser so
+                    // log-in / log-out returns the user to where they
+                    // were. Skip admin / purgatory (they navigate to a
+                    // different URL entirely, so restoring them on next
+                    // login would be surprising).
+                    try {
+                        if (val && val !== 'admin' && val !== 'purgatory') {
+                            localStorage.setItem('bg_last_product', val);
+                        }
+                    } catch (_) { /* localStorage disabled - no persist */ }
                     // Ensure selected view is visible (guard against handler not running or layout issues)
                     var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', helmIQ: 'helmIQView' };
                     var activeId = viewIds[val];
