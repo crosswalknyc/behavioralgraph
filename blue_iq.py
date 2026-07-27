@@ -234,24 +234,28 @@ def _load_media_domains() -> tuple[set[str], set[str], set[str]]:
 # Blue IQ's sub-national geo cut is congressional district (119th Congress),
 # replacing DMA. Districts are politically meaningful (they map 1:1 to House
 # seats and campaign targeting), have a canonical 435-item universe, and are
-# stable across cycles until reapportionment. Source file lives at
-# `reference/zip_to_congressional_district_119.csv` and contains one row per
-# zip-to-district mapping (a single ZIP can span multiple districts when
-# the ZIP is split; the primary_district=TRUE row is the dominant one).
+# stable across cycles until reapportionment.
+#
+# CANONICAL SOURCE: `s3://dashboard-inputs/reference/zip_to_congressional_district_119.csv`
+# (uploaded 2026-07-27, ~3.3 MB, one row per zip-to-district mapping).
+# Also committed to `bg-webapp/reference/` in git so a git-tracked local
+# copy is available on every deploy — the loader prefers the local copy
+# (zero-latency read) and falls back to S3 only if the local file is
+# missing (e.g. an environment where the submodule wasn't cloned).
 #
 # CSV columns:
 #   zip, state, district, district_name, state_district_code,
 #   land_area_m2, primary_district, dma_code, dma_name, dma_match_type
 #
 # We build (and lazily cache) a normalized bundle:
-#   - zip_to_district:   '{zip5}' -> '{STATE-N}'  (primary district only,
+#   - zip_to_district:   '{zip5}' -> '{STATE-NN}'  (primary district only,
 #                        so every ZIP maps to a single canonical district)
-#   - district_to_zips:  '{STATE-N}' -> frozenset('{zip5}', ...)
+#   - district_to_zips:  '{STATE-NN}' -> frozenset('{zip5}', ...)
 #                        (all zips, primary and secondary, so the panel
 #                        filter captures every zip that touches the district)
-#   - district_to_state: '{STATE-N}' -> '{STATE 2-letter}' (for Google Trends
+#   - district_to_state: '{STATE-NN}' -> '{STATE 2-letter}' (for Google Trends
 #                        fallback to geo=US-XX)
-#   - district_names:    '{STATE-N}' -> pretty label (e.g. 'CA-12 (Alameda)')
+#   - district_names:    '{STATE-NN}' -> pretty label
 #   - all_districts:     sorted list of district codes for dropdown
 #
 # US-only (drops PR/GU/VI/AS/MP territorial "at-large" pseudo-districts).
@@ -259,28 +263,73 @@ def _load_media_domains() -> tuple[set[str], set[str], set[str]]:
 
 _DISTRICT_REF: Optional[dict] = None
 _NON_STATE_DISTRICTS = frozenset({'PR', 'GU', 'VI', 'AS', 'MP'})
+_DISTRICT_CSV_FILENAME = 'zip_to_congressional_district_119.csv'
+_DISTRICT_S3_BUCKET    = os.environ.get('BLUE_IQ_REF_BUCKET', 'dashboard-inputs')
+_DISTRICT_S3_KEY       = f'reference/{_DISTRICT_CSV_FILENAME}'
+
+
+def _read_district_csv_text() -> Optional[str]:
+    """Return the district CSV text from the fastest available source.
+
+    Precedence:
+      1. Local git-tracked copy at `reference/<filename>` (zero-latency, no
+         network — always tried first).
+      2. S3 canonical at `s3://<BLUE_IQ_REF_BUCKET>/reference/<filename>`
+         (fallback for environments where the submodule wasn't fetched or
+         the file was ejected by a .gitignore misconfiguration).
+
+    Returns None if neither source is reachable (loader will then emit an
+    empty bundle and the frontend will show "no districts available",
+    which surfaces the failure loudly instead of crashing).
+    """
+    # 1. Git-tracked local file (canonical when deployed via git).
+    path = _ref_path(_DISTRICT_CSV_FILENAME)
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            return fh.read()
+    except FileNotFoundError:
+        logger.info(
+            "district CSV not found at %s; falling back to s3://%s/%s",
+            path, _DISTRICT_S3_BUCKET, _DISTRICT_S3_KEY,
+        )
+    except Exception as e:
+        logger.warning("district CSV local read failed at %s: %s", path, e)
+
+    # 2. S3 canonical (works from any deployment with S3 credentials).
+    try:
+        s3 = _s3()
+        obj = s3.get_object(Bucket=_DISTRICT_S3_BUCKET, Key=_DISTRICT_S3_KEY)
+        body = obj['Body'].read().decode('utf-8')
+        logger.info("Loaded district CSV from s3://%s/%s (%d bytes)",
+                    _DISTRICT_S3_BUCKET, _DISTRICT_S3_KEY, len(body))
+        return body
+    except Exception as e:
+        logger.warning("district CSV S3 fetch failed for s3://%s/%s: %s",
+                       _DISTRICT_S3_BUCKET, _DISTRICT_S3_KEY, e)
+        return None
 
 
 def _load_district_ref() -> dict:
     """Return the cached district reference bundle. See section header.
 
     Returns an empty bundle (all keys present, all values empty) if the CSV
-    is missing so callers can still iterate without crashing.
+    is unreachable so callers can still iterate without crashing.
     """
     global _DISTRICT_REF
     if _DISTRICT_REF is not None:
         return _DISTRICT_REF
 
-    path = _ref_path('zip_to_congressional_district_119.csv')
     zip_to_district: dict[str, str] = {}
     district_to_zips: dict[str, set[str]] = {}
     district_to_state: dict[str, str] = {}
     district_names: dict[str, str] = {}
 
-    try:
-        import csv as _csv
-        with open(path, 'r', encoding='utf-8', newline='') as fh:
-            reader = _csv.DictReader(fh)
+    csv_text = _read_district_csv_text()
+    if csv_text:
+        try:
+            import csv as _csv
+            import io as _io
+            reader = _csv.DictReader(_io.StringIO(csv_text))
             for row in reader:
                 state = (row.get('state') or '').strip().upper()
                 if not state or state in _NON_STATE_DISTRICTS:
@@ -304,10 +353,8 @@ def _load_district_ref() -> dict:
                 # a single canonical district lookup.
                 if (row.get('primary_district') or '').strip().upper() == 'TRUE':
                     zip_to_district[z5] = code
-    except FileNotFoundError:
-        logger.warning("zip_to_congressional_district_119.csv not found at %s", path)
-    except Exception as e:
-        logger.warning("Failed to load district reference: %s", e)
+        except Exception as e:
+            logger.warning("Failed to parse district reference: %s", e)
 
     # Sort district codes state-first, then by numeric district (AL-0 through
     # WY-1). District 0 (at-large) sorts before 1 within its state.
