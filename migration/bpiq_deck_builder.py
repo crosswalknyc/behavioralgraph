@@ -1658,13 +1658,19 @@ def _slide_demographics(prs, ctx: DeckCtx, idx: int, total: int):
               demo_src, size=10, italic=True, color=MUTED_LT, spacing=1.35)
     demos = (ctx.data.get("demographics") or {}).get("post") or {}
     cats = [
-        ("AGE",     demos.get("age")     or []),
-        ("GENDER",  demos.get("gender")  or []),
-        ("INCOME",  demos.get("income")  or []),
+        ("AGE",       demos.get("age")       or []),
+        ("GENDER",    demos.get("gender")    or []),
+        ("ETHNICITY", demos.get("ethnicity") or []),
+        ("INCOME",    demos.get("income")    or []),
     ]
-    col_w = Inches(4.0)
+    # Drop any category with no data so the slide keeps a tight grid.
+    cats = [(lab, items) for lab, items in cats if items]
+    n = max(1, len(cats))
     base_x = Inches(0.6)
     base_y = Inches(3.05)
+    gap = 0.15
+    avail_w = 13.333 - 2 * base_x.inches   # 12.13"
+    col_w = Inches((avail_w - gap * (n - 1)) / n)
     # Fixed row height chosen so the tallest category (income has
     # up to 8 buckets: <$25K, $25-35K, $35-50K, $50-75K, $75-100K,
     # $100-150K, $150-250K, $250K+) fits inside the slide without
@@ -1675,7 +1681,7 @@ def _slide_demographics(prs, ctx: DeckCtx, idx: int, total: int):
     # bucket also closes the "not summing to 100%" observation.
     row_h = 0.46
     for i, (label, items) in enumerate(cats):
-        x = base_x + (col_w + Inches(0.15)) * i
+        x = base_x + (col_w + Inches(gap)) * i
         rows_full = sorted(items, key=lambda r: float(r.get("percentage") or 0),
                            reverse=True)
         _add_text(s, x, base_y, col_w, Inches(0.3),
