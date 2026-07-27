@@ -1665,28 +1665,30 @@ def _slide_demographics(prs, ctx: DeckCtx, idx: int, total: int):
     col_w = Inches(4.0)
     base_x = Inches(0.6)
     base_y = Inches(3.05)
+    # Fixed row height chosen so the tallest category (income has
+    # up to 8 buckets: <$25K, $25-35K, $35-50K, $50-75K, $75-100K,
+    # $100-150K, $150-250K, $250K+) fits inside the slide without
+    # overflowing the source footer at y=6.75. All buckets are
+    # shown - Liz's "we didn't have any $150K+ viewers?" callout
+    # was caused by a top-5 truncation that hid the two upper
+    # income buckets ($150K-$249K and $250K+). Showing every
+    # bucket also closes the "not summing to 100%" observation.
+    row_h = 0.46
     for i, (label, items) in enumerate(cats):
         x = base_x + (col_w + Inches(0.15)) * i
-        # Header - "AGE (TOP 5)" to make Liz's item-16 "not-summing-
-        # to-100%" observation into an explicit disclosure.
         rows_full = sorted(items, key=lambda r: float(r.get("percentage") or 0),
                            reverse=True)
-        shown_rows = rows_full[:5]
-        shown_sum  = sum(float(r.get("percentage") or 0) for r in shown_rows)
-        label_disp = label
-        if len(rows_full) > 5 or shown_sum < 99.0:
-            label_disp = f"{label} · TOP 5 SHOWN"
         _add_text(s, x, base_y, col_w, Inches(0.3),
-                  label_disp, size=10, bold=True, color=MUTED_LT,
+                  label, size=10, bold=True, color=MUTED_LT,
                   letter_spacing=0.18)
-        for j, r in enumerate(shown_rows):
-            y = base_y + Inches(0.5 + j * 0.55)
-            _add_text(s, x, y, Inches(col_w.inches * 0.65), Inches(0.4),
-                      str(r.get("value") or "n/a"), size=13, color=FG_DARK)
+        for j, r in enumerate(rows_full):
+            y = base_y + Inches(0.42 + j * row_h)
+            _add_text(s, x, y, Inches(col_w.inches * 0.65), Inches(row_h - 0.02),
+                      str(r.get("value") or "n/a"), size=12, color=FG_DARK)
             _add_text(s, x + Inches(col_w.inches * 0.65), y,
-                      Inches(col_w.inches * 0.35), Inches(0.4),
+                      Inches(col_w.inches * 0.35), Inches(row_h - 0.02),
                       fmt_pct(r.get("percentage") or 0),
-                      size=13, bold=True, color=FG_DARK,
+                      size=12, bold=True, color=FG_DARK,
                       font=FONT_NUMERIC, align="right")
     _add_text(s, Inches(0.6), Inches(6.75), Inches(12), Inches(0.25),
               ctx.sources_line, size=7, italic=True, color=MUTED_LT)
