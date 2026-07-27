@@ -22814,7 +22814,73 @@
                 flex-direction: column;
                 overflow: hidden;
             }
-            #blueIQView .blue-iq-card-issues   { grid-column: span 12; min-height: 320px; }
+            /* Issue buckets (bucketed policy signal) and Top searches
+             * (raw voter vocabulary) pair together. The pair is the
+             * "what do voters here care about" surface — a candidate
+             * scans one to see the policy frame and the other to see
+             * the actual words people are typing. Same height so they
+             * line up cleanly. */
+            #blueIQView .blue-iq-card-issues       { grid-column: span 6; height: 520px; }
+            #blueIQView .blue-iq-card-topsearches  { grid-column: span 6; height: 520px; }
+            #blueIQView .blue-iq-card-topsearches .blue-iq-card-body {
+                overflow-y: auto;
+                padding-right: 4px;
+            }
+            #blueIQView .blue-iq-topsearches-filter {
+                display: flex;
+                gap: 0.4rem;
+                margin: 0.25rem 0 0.5rem 0;
+                flex-wrap: wrap;
+            }
+            #blueIQView .bq-topsearches-chip {
+                font-size: 0.72rem;
+                padding: 0.22rem 0.55rem;
+                border-radius: 12px;
+                background: rgba(255,255,255,0.06);
+                color: var(--text-secondary);
+                border: 1px solid rgba(255,255,255,0.08);
+                cursor: pointer;
+                user-select: none;
+                transition: background 140ms ease, color 140ms ease;
+            }
+            #blueIQView .bq-topsearches-chip:hover {
+                background: rgba(79,140,255,0.14);
+                color: var(--text-primary);
+            }
+            #blueIQView .bq-topsearches-chip-active {
+                background: rgba(79,140,255,0.22);
+                color: var(--text-primary);
+                border-color: rgba(79,140,255,0.4);
+            }
+            #blueIQView .blue-iq-topsearch-row {
+                display: flex;
+                flex-direction: column;
+                gap: 0.2rem;
+                padding: 0.4rem 0.4rem;
+                border-radius: 6px;
+                border-bottom: 1px solid rgba(255,255,255,0.04);
+                transition: background 140ms ease;
+            }
+            #blueIQView .blue-iq-topsearch-row:hover {
+                background: rgba(79,140,255,0.06);
+            }
+            #blueIQView .blue-iq-topsearch-head {
+                display: flex;
+                align-items: baseline;
+                gap: 0.4rem;
+                font-size: 0.85rem;
+            }
+            #blueIQView .bq-topsearches-flag {
+                display: inline-block;
+                font-size: 0.62rem;
+                padding: 0.08rem 0.4rem;
+                border-radius: 8px;
+                background: rgba(59,130,246,0.18);
+                color: #93c5fd;
+                border: 1px solid rgba(59,130,246,0.35);
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
             #blueIQView .blue-iq-card-search   { grid-column: span 4; }
             #blueIQView .blue-iq-card-social   { grid-column: span 4; }
             #blueIQView .blue-iq-card-turnout  { grid-column: span 4; }
@@ -40289,6 +40355,25 @@
                   + '<div class="blue-iq-card-body" id="blueIQCardIssuesBody"></div>'
                   + '</div>';
 
+            // CARD A2: Top searches — RAW top ~30 search queries the
+            // filtered panel typed in the window. This is what the
+            // district is ACTUALLY Googling (cost-of-living, health,
+            // family, everyday concerns). Pair-card to Issue buckets:
+            // Issue buckets tell a candidate the POLICY frame, Top
+            // searches tell them the actual VOCABULARY people use.
+            // Political-flavored rows carry a chip so a candidate can
+            // filter to the explicit-political subset.
+            html += '<div class="blue-iq-card blue-iq-card-topsearches">'
+                  + '<h3 class="blue-iq-card-title">Top searches in this slice'
+                  +   '<span class="blue-iq-card-subtitle">raw voter concerns \u00b7 click chip to filter</span>'
+                  + '</h3>'
+                  + '<div class="blue-iq-topsearches-filter" id="blueIQTopSearchesFilter">'
+                  +   '<span class="bq-topsearches-chip bq-topsearches-chip-active" data-mode="all">All searches</span>'
+                  +   '<span class="bq-topsearches-chip" data-mode="political">Political-flavored only</span>'
+                  + '</div>'
+                  + '<div class="blue-iq-card-body" id="blueIQCardTopSearchesBody"></div>'
+                  + '</div>';
+
             // CARD B: Search engines
             // Subtitle hints at the interactivity: click to pin, tick on the
             // bar = national average.
@@ -40567,6 +40652,7 @@
 
             grid.innerHTML = html;
             _renderBlueIQIssueBuckets(cards.issue_buckets || []);
+            _bqRenderTopSearches(cards.top_searches || []);
             _bqRenderPartyFiltered('top_politicians', 'All');
             _bqRenderPartyFiltered('top_candidates', 'All');
             _bqRenderTrendingLocal(cards.trending_local || [], cards.trending_meta || {});
@@ -41248,6 +41334,81 @@
                      +   '</div>'
                      +   barHtml
                      +   sampleHtml
+                     + '</div>';
+            }).join('');
+        }
+
+        // ──────────────────────────────────────────────────────────────
+        // Top searches — raw top ~30 search terms the panel typed.
+        // Renders next to the "Political issue searches" card so a
+        // candidate can compare bucketed policy signal vs verbatim
+        // voter vocabulary side by side. Filter chips toggle between
+        // ALL searches and POLITICAL-FLAVORED only (server-flagged).
+        // ──────────────────────────────────────────────────────────────
+        window.__blueIQTopSearches = [];
+        window.__blueIQTopSearchesMode = 'all';
+
+        function _bqRenderTopSearches(rows) {
+            window.__blueIQTopSearches = Array.isArray(rows) ? rows : [];
+            _bqPaintTopSearches();
+            _bqBindTopSearchesFilter();
+        }
+
+        function _bqBindTopSearchesFilter() {
+            var bar = document.getElementById('blueIQTopSearchesFilter');
+            if (!bar || bar.__wired) return;
+            bar.__wired = true;
+            bar.querySelectorAll('.bq-topsearches-chip').forEach(function(chip) {
+                chip.addEventListener('click', function() {
+                    var mode = chip.getAttribute('data-mode') || 'all';
+                    window.__blueIQTopSearchesMode = mode;
+                    bar.querySelectorAll('.bq-topsearches-chip').forEach(function(c) {
+                        c.classList.toggle('bq-topsearches-chip-active',
+                            c.getAttribute('data-mode') === mode);
+                    });
+                    _bqPaintTopSearches();
+                });
+            });
+        }
+
+        function _bqPaintTopSearches() {
+            var body = document.getElementById('blueIQCardTopSearchesBody');
+            if (!body) return;
+            var mode = window.__blueIQTopSearchesMode || 'all';
+            var rows = window.__blueIQTopSearches || [];
+            if (mode === 'political') {
+                rows = rows.filter(function(r) { return r && r.political; });
+            }
+            if (!rows.length) {
+                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">'
+                    + (mode === 'political'
+                        ? 'No political-flavored terms surfaced in the top 30 raw searches for this slice. That itself is signal: this district is Googling cost-of-living, health, and everyday concerns more than partisan topics right now.'
+                        : 'No panel search terms available for this slice yet.')
+                    + '</div>';
+                return;
+            }
+            var max = 0;
+            rows.forEach(function(r) { if ((+r.count || 0) > max) max = +r.count; });
+            max = max || 1;
+            var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
+            body.innerHTML = rows.slice(0, 30).map(function(r) {
+                var pct = Math.round(((+r.count || 0) / max) * 100);
+                var proj = Math.round((+r.count || 0) * factor);
+                var polChip = r.political
+                    ? '<span class="bq-topsearches-flag" title="Touches political vocabulary or a politician name">political</span>'
+                    : '';
+                return '<div class="blue-iq-topsearch-row">'
+                     +   '<div class="blue-iq-topsearch-head">'
+                     +     '<strong>' + _bqEscape(r.term || '') + '</strong>'
+                     +     ' ' + polChip
+                     +     '<span style="flex:1 1 auto;"></span>'
+                     +     '<span style="color: var(--text-secondary); font-variant-numeric: tabular-nums; font-size: 0.75rem;" title="Panelists who typed this query \u2192 projected to US adults">'
+                     +       formatNumber(proj) + ' US adults'
+                     +     '</span>'
+                     +   '</div>'
+                     +   '<div class="blue-iq-row-bar-wrap" style="margin: 0;">'
+                     +     '<span class="blue-iq-row-bar" style="width: ' + pct + '%;"></span>'
+                     +   '</div>'
                      + '</div>';
             }).join('');
         }
@@ -44275,7 +44436,7 @@
             'Spotify':                           'Spotify: US mass-streaming Top 200. Where mainstream listening is right now.',
             'Apple Music':                       'Apple Music: US Top 100. Skews slightly older and more premium than Spotify.',
             'Shazam':                            'Shazam: US Top 200 song IDs. Discovery signal - what people heard somewhere and looked up. Leading indicator for breakout tracks.',
-            'Amazon Music: All Hits (US)':       "Amazon Music All Hits: Amazon's own editorial flagship hits playlist. Their answer to Spotify's Today's Top Hits.",
+            'Amazon Music':                      'Amazon Music: What Amazon Music subscribers are playing.',
             // ---------- Podcasts ----------
             'Apple Podcasts Top 100 (US)':       'Apple Podcasts: The Apple chart of top-listened shows in the US right now.',
             'Spotify Podcast Charts (US)':       'Spotify Podcast Charts: Top listened-to podcasts on Spotify in the US.',
