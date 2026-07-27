@@ -23660,7 +23660,7 @@
                     <div class="bq-loading-spinner"></div>
                     <div class="bq-loading-hero-text">
                         <div class="bq-loading-title" id="blueIQLoadingTitle">Analyzing this slice&hellip;</div>
-                        <div class="bq-loading-sub"  id="blueIQLoadingPhase">Loading panel signal.</div>
+                        <div class="bq-loading-sub"  id="blueIQLoadingPhase">Loading data.</div>
                     </div>
                     <div class="bq-loading-timer" id="blueIQLoadingTimer">0s</div>
                 </div>
@@ -39728,23 +39728,22 @@
             ];
             // Phase copy: shown on the hero sub-line. Reads like a
             // status update, not a fixed label.
-            steps[0].sub = 'Loading behavioral panel for ' + geo + '.';
-            steps[1].sub = 'Extracting the raw search vocabulary from URLs.';
-            steps[2].sub = 'Following the voter journey — what people did next.';
-            steps[3].sub = 'Pulling live Google Trends signal.';
+            steps[0].sub = 'Loading data for ' + geo + '.';
+            steps[1].sub = 'Analyzing the raw search vocabulary.';
+            steps[2].sub = 'Building the voter journey — what people did next.';
+            steps[3].sub = 'Pulling live Google Trends.';
             steps[4].sub = isDistrict
-                ? 'Web-searching for representatives, issues, and campaign context.'
-                : 'Modeling political intent and creative angles.';
+                ? 'Compiling representatives, issues, and campaign context.'
+                : 'Compiling political intent and creative angles.';
             return steps;
         }
 
         var _BQ_LOADING_HINTS = [
             'This tool surfaces <b>what voters in each district are actually Googling</b> — so candidates can tailor messaging to real search intent, not assumptions.',
             'A row flagged <b>political</b> means the term matches a politician name, civic keyword, or a policy issue like abortion, immigration, or the border.',
-            'Panel signal is the ground truth. When it\'s thin (small district, sparse lookback), an <b>agent web-searches</b> the trailing month to fill in — every synthetic row is stamped so you can tell.',
             'The <b>voter journey</b> card shows where a voter went <i>after</i> hitting a political site — donate, search again, watch a video, or bounce.',
-            'For congressional districts we resolve panel members by ZIP → district, then re-run the aggregation live. That\'s why district cuts take a bit longer than National.',
-            'Every projection is scaled from the 10M panel up to the ~330M US adult population using the same weighting the dashboard uses everywhere else.',
+            'For congressional districts we resolve voters by ZIP → district, then re-run the aggregation live. That\'s why district cuts take a bit longer than National.',
+            'Every projection is scaled up to the ~330M US adult population using the same weighting the dashboard uses everywhere else.',
         ];
 
         function _bqStartLoadingUI(filters) {
