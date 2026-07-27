@@ -23664,7 +23664,6 @@
                     </div>
                     <div class="bq-loading-timer" id="blueIQLoadingTimer">0s</div>
                 </div>
-                <div class="bq-loading-steps" id="blueIQLoadingSteps"></div>
                 <div class="bq-loading-hint" id="blueIQLoadingHint"></div>
                 <div class="bq-loading-skeletons">
                     <div class="bq-skeleton-card bq-skel-lg">
@@ -39762,16 +39761,6 @@
             var phase = document.getElementById('blueIQLoadingPhase');
             if (phase) phase.textContent = steps[0].sub;
 
-            var stepsHost = document.getElementById('blueIQLoadingSteps');
-            if (stepsHost) {
-                stepsHost.innerHTML = steps.map(function(s, i) {
-                    return '<span class="bq-loading-step' + (i === 0 ? ' active' : '') + '" data-step="' + s.key + '">'
-                         +   '<span class="bq-loading-step-dot"></span>'
-                         +   _bqEscape(s.label)
-                         + '</span>';
-                }).join('');
-            }
-
             var timerEl = document.getElementById('blueIQLoadingTimer');
             if (timerEl) timerEl.textContent = '0s';
 
@@ -39807,15 +39796,6 @@
                         }, 200);
                     }
                     lastPhaseIdx = idx;
-                }
-
-                if (stepsHost) {
-                    var chips = stepsHost.querySelectorAll('.bq-loading-step');
-                    for (var k = 0; k < chips.length; k++) {
-                        chips[k].classList.remove('active', 'done');
-                        if (k < idx)      chips[k].classList.add('done');
-                        else if (k === idx) chips[k].classList.add('active');
-                    }
                 }
             }
             tick();
