@@ -579,82 +579,146 @@ def discover_candidates(geo_type: str, geo_value: str,
 #
 # Same agent + cache scaffolding, different prompt + cache prefix.
 
-S3_ENGAGED_PREFIX = 'blue_iq/engaged/v1/'
+S3_ENGAGED_PREFIX = 'blue_iq/engaged/v2/'  # v2: date-anchored + District branch (2026-07-27)
 
-_ENGAGED_SYSTEM = (
-    "You are a U.S. political-engagement research assistant for a\n"
-    "Democratic campaign analytics dashboard. Given a geography, return\n"
-    "the politicians an audience in that area is MOST ACTIVELY ENGAGING\n"
-    "WITH RIGHT NOW — measured by news mentions, social-media discourse,\n"
-    "and Google-search interest in the last ~30 days.\n"
-    "\n"
-    "INCLUDE\n"
-    "  - The sitting U.S. President + Vice President (always relevant)\n"
-    "  - U.S. Senators representing this geography\n"
-    "  - Current Governor of this state (or all states for National view)\n"
-    "  - High-profile U.S. House members from this geography (committee\n"
-    "    chairs, party leadership, viral / breakout figures)\n"
-    "  - Mayor of the principal city in this geography\n"
-    "  - Recent presidents / VPs still active in the discourse\n"
-    "  - National figures (Trump, Biden, Obama, Harris, Vance, Pelosi,\n"
-    "    AOC, etc.) when they're driving conversation in this geography\n"
-    "  - Locally hot political figures (DAs, AGs, secretaries of state)\n"
-    "    if news / social engagement is meaningful\n"
-    "\n"
-    "EXCLUDE\n"
-    "  - Foreign politicians, dead politicians (unless very recent and\n"
-    "    actively shaping discourse, e.g. an obituary cycle)\n"
-    "  - Pure 2026 candidates with no current office and no current\n"
-    "    engagement — those belong in the candidates card, not here\n"
-    "  - Local figures with < ~5% local news share\n"
-    "\n"
-    "Use web search to verify CURRENT engagement levels. Don't just list\n"
-    "famous people — verify each name is actually moving the needle in\n"
-    "news / social right now.\n"
-    "\n"
-    "Return ONLY a JSON object matching this exact schema. No markdown\n"
-    "fences, no commentary, no citation footnotes outside the JSON:\n"
-    "\n"
-    "{\n"
-    '  "politicians": [\n'
-    "    {\n"
-    '      "name":             "Full Name",\n'
-    '      "party_code":       "D" | "R" | "I" | "L" | "G" | "?",\n'
-    '      "role":             "President" | "Vice President" | '
-    '"U.S. Senator (CA)" | "Governor of California" | '
-    '"U.S. Rep (CA-30)" | "Mayor of Los Angeles" | "Former President" | '
-    '"State AG (CA)" | "Other",\n'
-    '      "scope":            "national" | "state" | "local",\n'
-    '      "state":            "Two-letter USPS code or empty",\n'
-    '      "engagement_score": 0-100 integer (your estimate of CURRENT '
-    'engagement intensity in this geography; 100 = top-of-mind for almost '
-    'every politically-aware resident),\n'
-    '      "engagement_drivers": ["Short reason phrase", ...]  // 1-3 '
-    'phrases like "viral hearings clip", "tariff announcement", '
-    '"state-of-the-state speech"\n'
-    "    }\n"
-    "  ]\n"
-    "}\n"
-    "\n"
-    "Hard cap: 20 politicians per response (compactness > completeness).\n"
-    "Sort by engagement_score descending.\n"
-    "\n"
-    "BANNED TERMS — do not mention, allude to, or paraphrase the phrase\n"
-    "'government shutdown' (or any variant: federal government shutdown,\n"
-    "gov shutdown, shutdown of the federal government) in ANY field\n"
-    "(engagement_drivers, role, headline). If a politician's engagement\n"
-    "is genuinely driven by budget / appropriations / agency-funding\n"
-    "fights, describe it via that underlying policy WITHOUT using the\n"
-    "banned phrase.\n"
-    "\n"
-    "TERM RELABELS — never prefix 'impeachment inquiry' with a personal\n"
-    "name in ANY field. Write 'impeachment inquiry' (not 'Biden\n"
-    "impeachment inquiry', not 'Trump impeachment inquiry').\n"
-    "\n"
-    "OUTPUT FORMAT REMINDER:\n"
-    "  - First character of your response must be `{`. Last `}`.\n"
-    "  - Keep each entry's strings under 60 chars so the full JSON fits."
-)
+
+def _engaged_system_prompt() -> str:
+    """Build the engaged-politicians agent system prompt.
+
+    Rebuilt per-call so the CURRENT-DATE anchor and the sitting
+    officeholders are always fresh. Prior version (v1) had no date
+    anchor and no ground-truth officeholder list, so the agent
+    defaulted to its training-data prior and returned Biden as
+    President / Harris as VP on every response even though both left
+    office Jan 2025. That produced obviously-stale "Joe Biden 100 /
+    Kamala Harris 95" outputs at the top of every district card.
+
+    2026-07-27 anchor: 119th Congress (Jan 2025 - Jan 2027) in
+    session; Trump admin. Update the seed block below whenever the
+    White House / Speaker / Senate Majority Leader changes.
+    """
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+    return (
+        "You are a U.S. political-engagement research assistant for a\n"
+        "Democratic campaign analytics dashboard. Given a geography, return\n"
+        "the politicians an audience in that area is MOST ACTIVELY ENGAGING\n"
+        "WITH RIGHT NOW — measured by news mentions, social-media discourse,\n"
+        "and Google-search interest in the last ~30 days.\n"
+        "\n"
+        f"TODAY IS {today_iso}. USE THIS as your reference date for who\n"
+        "currently holds each office. DO NOT rely on training-data\n"
+        "priors — verify EVERY role assignment via web search before\n"
+        "emitting it.\n"
+        "\n"
+        "CURRENT U.S. FEDERAL OFFICEHOLDERS (as of the 119th Congress,\n"
+        "which runs Jan 2025 - Jan 2027 — verify via web search if you\n"
+        "think this is out of date):\n"
+        "  - President:                Donald Trump  (R, 47th President)\n"
+        "  - Vice President:           JD Vance      (R)\n"
+        "  - Speaker of the House:     Mike Johnson  (R, LA-4)\n"
+        "  - House Minority Leader:    Hakeem Jeffries (D, NY-8)\n"
+        "  - Senate Majority Leader:   John Thune    (R, SD)\n"
+        "  - Senate Minority Leader:   Chuck Schumer (D, NY)\n"
+        "Former officeholders (Joe Biden, Kamala Harris, Barack Obama,\n"
+        "Mike Pence, etc.) may STILL be relevant if actively driving\n"
+        "discourse — but their `role` MUST be 'Former President',\n"
+        "'Former Vice President', 'Former Speaker', etc. — NEVER the\n"
+        "current-office label. This is non-negotiable.\n"
+        "\n"
+        "INCLUDE\n"
+        "  - The sitting U.S. President + Vice President (from the seed\n"
+        "    above; verify)\n"
+        "  - U.S. Senators representing this geography\n"
+        "  - Current Governor of this state (or all states for National view)\n"
+        "  - High-profile U.S. House members from this geography (committee\n"
+        "    chairs, party leadership, viral / breakout figures)\n"
+        "  - Mayor of the principal city in this geography\n"
+        "  - Recent former presidents / VPs (Biden, Harris, Obama, Pence)\n"
+        "    IF they're actively shaping current discourse — with the\n"
+        "    'Former' role label\n"
+        "  - Locally hot political figures (DAs, AGs, secretaries of state)\n"
+        "    if news / social engagement is meaningful\n"
+        "\n"
+        "EXCLUDE\n"
+        "  - Foreign politicians, dead politicians (unless very recent and\n"
+        "    actively shaping discourse, e.g. an obituary cycle)\n"
+        "  - Pure 2026 candidates with no current office and no current\n"
+        "    engagement — those belong in the candidates card, not here\n"
+        "  - Local figures with < ~5% local news share\n"
+        "\n"
+        "DISTRICT / SUB-STATE GEOGRAPHIES: When the geography is a\n"
+        "specific U.S. House congressional district (e.g. 'CA-41'), you\n"
+        "MUST web-search 'who currently represents [state] [Nth]\n"
+        "congressional district' and put THAT incumbent — with their\n"
+        "correct name, party, and district code — as one of the top\n"
+        "results. Do NOT guess. Do NOT invent a rep from an adjacent\n"
+        "district. If unsure of the district's incumbent after a search,\n"
+        "omit any 'U.S. Rep' entry rather than fabricate one.\n"
+        "\n"
+        "Use web search to verify CURRENT engagement levels. Don't just list\n"
+        "famous people — verify each name is actually moving the needle in\n"
+        "news / social right now.\n"
+        "\n"
+        "Return ONLY a JSON object matching this exact schema. No markdown\n"
+        "fences, no commentary, no citation footnotes outside the JSON:\n"
+        "\n"
+        "{\n"
+        '  "politicians": [\n'
+        "    {\n"
+        '      "name":             "Full Name",\n'
+        '      "party_code":       "D" | "R" | "I" | "L" | "G" | "?",\n'
+        '      "role":             "President" | "Vice President" | '
+        '"U.S. Senator (CA)" | "Governor of California" | '
+        '"U.S. Rep (CA-41)" | "Mayor of Los Angeles" | "Former President" | '
+        '"Former Vice President" | "State AG (CA)" | "House Minority Leader" | '
+        '"Other",\n'
+        '      "scope":            "national" | "state" | "local",\n'
+        '      "state":            "Two-letter USPS code or empty",\n'
+        '      "engagement_score": 0-100 integer (your estimate of CURRENT '
+        'engagement intensity in this geography; 100 = top-of-mind for '
+        'almost every politically-aware resident),\n'
+        '      "engagement_drivers": ["Short reason phrase", ...]  // 1-3 '
+        'phrases like "viral hearings clip", "tariff announcement", '
+        '"state-of-the-state speech"\n'
+        "    }\n"
+        "  ]\n"
+        "}\n"
+        "\n"
+        "SCORING — the engagement_score field must reflect REAL engagement\n"
+        "intensity, not an ordinal rank. Do NOT emit a linear ladder like\n"
+        "100 / 95 / 90 / 85 / 80 — that pattern is a tell you're guessing.\n"
+        "Real engagement decays sharply: the top figure sits around 85-100\n"
+        "and the #5-#10 slot typically sits in the 25-55 range. Aim for a\n"
+        "distribution that looks like a plausible power-law, not a\n"
+        "straight line.\n"
+        "\n"
+        "Hard cap: 20 politicians per response (compactness > completeness).\n"
+        "Sort by engagement_score descending.\n"
+        "\n"
+        "BANNED TERMS — do not mention, allude to, or paraphrase the phrase\n"
+        "'government shutdown' (or any variant: federal government shutdown,\n"
+        "gov shutdown, shutdown of the federal government) in ANY field\n"
+        "(engagement_drivers, role, headline). If a politician's engagement\n"
+        "is genuinely driven by budget / appropriations / agency-funding\n"
+        "fights, describe it via that underlying policy WITHOUT using the\n"
+        "banned phrase.\n"
+        "\n"
+        "TERM RELABELS — never prefix 'impeachment inquiry' with a personal\n"
+        "name in ANY field. Write 'impeachment inquiry' (not 'Biden\n"
+        "impeachment inquiry', not 'Trump impeachment inquiry').\n"
+        "\n"
+        "OUTPUT FORMAT REMINDER:\n"
+        "  - First character of your response must be `{`. Last `}`.\n"
+        "  - Keep each entry's strings under 60 chars so the full JSON fits."
+    )
+
+
+# Static current-officeholder ground truth used by the post-agent
+# validator to catch any lingering training-data drift (agent still
+# emits Biden with role='President', etc.). Update whenever the White
+# House / VP changes.
+_CURRENT_PRESIDENT      = 'Donald Trump'
+_CURRENT_VICE_PRESIDENT = 'JD Vance'
 
 
 def _build_engaged_prompt(geo_type: str, geo_value: str) -> str:
@@ -706,6 +770,52 @@ def _build_engaged_prompt(geo_type: str, geo_value: str) -> str:
             "\n"
             "Rank by local engagement intensity. The Mayor of the\n"
             "principal city is almost always top-3 in DMA views."
+        )
+    if geo_type == 'District':
+        # geo_value is a code like "CA-41", "TX-01". We convert to a
+        # human ordinal ("41st") so the agent's web search is easier
+        # ("who represents California's 41st congressional district")
+        # and we require it to WEB-SEARCH the incumbent before writing
+        # any 'U.S. Rep' row — this closes the loophole that produced
+        # "Linda Sánchez, U.S. Rep (CA-41)" in July 2026 (she's
+        # actually CA-38's rep; CA-41 is Ken Calvert).
+        state_code, _, num_raw = geo_value.partition('-')
+        num = (num_raw or '').lstrip('0') or '0'
+        suffix_map = {'1': 'st', '2': 'nd', '3': 'rd'}
+        last_two = num[-2:] if len(num) >= 2 else num
+        ord_suffix = 'th' if last_two in ('11', '12', '13') else suffix_map.get(num[-1:], 'th')
+        state_name = state_code  # agent will resolve full name via web search
+        return (
+            f"GEOGRAPHY: U.S. House Congressional District {geo_value}\n"
+            f"  → {state_name}'s {num}{ord_suffix} congressional district\n"
+            "\n"
+            "REQUIRED FIRST STEP — web search:\n"
+            f'  "Who currently represents {state_name} {num}{ord_suffix} '
+            'congressional district"\n'
+            "and take the result as ground truth for the incumbent's name,\n"
+            "party, and role. Do NOT guess. Do NOT default to a\n"
+            "similarly-named nearby district. If the web search is\n"
+            "ambiguous or returns conflicting results, OMIT the 'U.S. Rep'\n"
+            "entry entirely rather than inventing one.\n"
+            "\n"
+            "List the ~15 politicians residents of THIS DISTRICT are most\n"
+            "actively engaging with right now. Required slots:\n"
+            f"  - The verified U.S. House Rep for {geo_value} (from the\n"
+            "    web search above) — role must read exactly\n"
+            f"    'U.S. Rep ({geo_value})' with the incumbent's real name.\n"
+            f"  - Both U.S. Senators from {state_code}\n"
+            f"  - Current Governor of {state_code}\n"
+            "  - Sitting U.S. President + Vice President (Trump / Vance —\n"
+            "    verify)\n"
+            "  - Speaker of the House and House Minority Leader (both\n"
+            "    always relevant to any single-district view)\n"
+            "  - Mayor of the principal city inside this district if any\n"
+            "  - National figures driving conversation locally\n"
+            "\n"
+            "Skew engagement_score by district demographics: an urban\n"
+            "young district may over-index on AOC / progressive figures;\n"
+            "a rural district may over-index on Trump / regional GOP\n"
+            "leaders. Do not just paste the national ranking."
         )
     return (
         f"GEOGRAPHY: {geo_type} = {geo_value}\n\n"
