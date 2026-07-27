@@ -41707,27 +41707,12 @@
             rows.forEach(function(r) { if ((+r.count || 0) > max) max = +r.count; });
             max = max || 1;
             var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
-            // Detect synthetic rows (panel-thin slice → agent-filled).
-            // Show a small "Modeled" banner at the top when ALL rows are
-            // synthetic (rare — usually happens only for very thin
-            // districts or Live-mode 1-day windows), and a per-row pill
-            // when SOME rows are synthetic (typical merged panel+synth).
-            var synthCount   = rows.filter(function(r) { return r && r.synthetic; }).length;
-            var allSynth     = rows.length > 0 && synthCount === rows.length;
-            var partialSynth = synthCount > 0 && !allSynth;
-            var synthBanner  = '';
-            if (allSynth) {
-                synthBanner = '<div class="bq-topsearches-synth-banner" title="Panel signal was thin for this slice; the list was modeled by an OpenAI web-search agent from Pew, Google Trends, and local news signals.">'
-                            + '<span class="bq-topsearches-synth-pill">Modeled</span>'
-                            + 'Panel signal was thin for this slice \u2014 list modeled from external research.'
-                            + '</div>';
-            } else if (partialSynth) {
-                synthBanner = '<div class="bq-topsearches-synth-banner bq-topsearches-synth-banner-mixed" title="' + synthCount + ' of the ' + rows.length + ' rows below were modeled by an agent (marked ‘modeled’ pill).">'
-                            + '<span class="bq-topsearches-synth-pill">Modeled</span>'
-                            + 'Panel signal was thin \u2014 ' + synthCount + ' of ' + rows.length + ' rows below were modeled from external research to fill the tail.'
-                            + '</div>';
-            }
-            body.innerHTML = synthBanner + rows.slice(0, 30).map(function(r) {
+            // "Modeled" banner removed 2026-07-27 at Jenna's request.
+            // Individual synthetic rows still carry a small inline
+            // "modeled" pill next to the term (visible on inspection)
+            // and a subtle purple row-background tint, but no
+            // interstitial explanation at the top of the card.
+            body.innerHTML = rows.slice(0, 30).map(function(r) {
                 var pct = Math.round(((+r.count || 0) / max) * 100);
                 var proj = Math.round((+r.count || 0) * factor);
                 var polChip = r.political
