@@ -661,35 +661,35 @@ def _final_insight_lines(ctx: DeckCtx) -> tuple[str, str]:
     sells out.' format. We synthesize from the data so every partnership
     gets a tuned message.
 
-    Uses the control-adjusted incremental lift where available (not
-    the raw pre/post delta) so a counterfactual brand like Pepsi
-    against a Coca-Cola sponsorship correctly reads as near-zero
-    instead of showing the raw 4% pre/post drift as a 'lift'.
+    Counterfactual brands (project name contains 'counterfactual')
+    always route to the control-brand copy regardless of adjusted-
+    lift sign. Small positive drift on a control brand is category
+    noise, not a sponsorship effect (Liz's July 27 v2 inversion
+    callout: Pepsi F1 was mislabeled 'consistent with a genuine
+    but small sponsorship effect' when Pepsi was not sponsored).
 
     Guardrail: never claim compounding lift over time on a single-
-    window run. If we don't have a multi-year decomposition, the
-    smallest-lift copy line reframes to a within-window observation
-    instead (fixes item 20's 'Steady lift, compounding reach over
-    time' unsupported-claim callout)."""
+    window run."""
     if ctx.total_value <= 0:
         return ("The partnership ran.", "The audience didn't move.")
-    # Prefer the control-adjusted lift (isolates the sponsorship
-    # signal from panel-wide drift).
     lift_rel = ctx.incr_lift_rel if ctx.incr_lift_rel is not None else ctx.delta_rel
     sig      = (ctx.data.get("diagnostics") or {}).get("significance") or {}
     is_sig   = bool(sig.get("significant"))
-    # Three distinct null-result flavors so we don't mislabel a
-    # treated brand as a control:
-    #   1. Adjusted lift below zero  -> the campaign held baseline;
-    #      correct result for a control brand.
-    #   2. Positive lift but not statistically distinguishable ->
-    #      directional signal only; too small vs sample size.
-    #   3. Positive and significant -> the branches below.
+    is_counterfactual = "counterfactual" in (ctx.project or "").lower()
+    # Counterfactual brands always read as controls, regardless of
+    # sign or significance of the tiny residual drift.
+    if is_counterfactual:
+        return (
+            "The campaign held baseline.",
+            f"{ctx.brand} was not in the show, and moved with control "
+            "drift. Any residual is category-wide noise, not "
+            "sponsorship-attributable.",
+        )
     if lift_rel <= 0:
         return (
             "The campaign held baseline.",
             f"{ctx.brand}'s adjusted lift falls at or below control "
-            "drift, the correct result for a counterfactual brand.",
+            "drift.",
         )
     if not is_sig:
         return (
@@ -960,18 +960,31 @@ def _slide_engagement_lift(prs, ctx: DeckCtx, idx: int, total: int):
     # Pre-plate sub-label = the actual pre-window from the payload
     # (fixes C2: prior copy said "in the year before campaign launch"
     # which mislabels the trailing pre-period as a 12-month window).
+    #
+    # Additionally shows the RAW INCIDENCE line ("2.4M of 10.0M
+    # panelists") directly under the projected-consumer count so
+    # the numerator and denominator behind the pre/post % are
+    # visible on the slide, not reverse-engineered. Answers Liz's
+    # July 27 v2 C1 disclosure ask and the standing "supply the
+    # raw engager counts" request.
     pre_p  = ctx.data.get("pre_period")  or {}
     post_p = ctx.data.get("post_period") or {}
     pre_label = _period_label(pre_p, fallback="in the pre-window")
     post_label = _period_label(post_p, fallback=f"in the {ctx.attribution_d}-day post-window")
-    _add_text(s, Inches(0.9), plate_y + Inches(1.9), plate_w - Inches(0.5),
-              Inches(0.4),
-              f"{fmt_num(ctx.pre_users_proj)} U.S. consumers",
-              size=14, color=FG_LIGHT)
-    _add_text(s, Inches(0.9), plate_y + Inches(2.25), plate_w - Inches(0.5),
-              Inches(0.4),
+    pre_incidence  = f"{fmt_num(ctx.pre_users)} of {fmt_num(ctx.panel_size)} panelists (incidence rate)"
+    post_incidence = f"{fmt_num(ctx.post_users)} of {fmt_num(ctx.panel_size)} panelists (incidence rate)"
+    _add_text(s, Inches(0.9), plate_y + Inches(1.85), plate_w - Inches(0.5),
+              Inches(0.35),
+              f"{fmt_num(ctx.pre_users_proj)} U.S. consumers projected",
+              size=13, color=FG_LIGHT)
+    _add_text(s, Inches(0.9), plate_y + Inches(2.15), plate_w - Inches(0.5),
+              Inches(0.30),
+              pre_incidence,
+              size=10, italic=True, color=MUTED_DK)
+    _add_text(s, Inches(0.9), plate_y + Inches(2.42), plate_w - Inches(0.5),
+              Inches(0.35),
               f"engaged with the brand {pre_label}.",
-              size=11, italic=True, color=MUTED_DK)
+              size=10, italic=True, color=MUTED_DK)
     # Post plate
     post_x = Inches(7.2)
     _add_rect(s, post_x, plate_y, plate_w, plate_h,
@@ -984,14 +997,18 @@ def _slide_engagement_lift(prs, ctx: DeckCtx, idx: int, total: int):
               plate_w - Inches(0.5), Inches(1.3),
               fmt_pct(ctx.post_pen), size=70, bold=True, color=FG_DARK,
               font=FONT_NUMERIC, spacing=0.95)
-    _add_text(s, post_x + Inches(0.3), plate_y + Inches(1.9),
-              plate_w - Inches(0.5), Inches(0.4),
-              f"{fmt_num(ctx.post_users_proj)} U.S. consumers",
-              size=14, color=FG_DARK)
-    _add_text(s, post_x + Inches(0.3), plate_y + Inches(2.25),
-              plate_w - Inches(0.5), Inches(0.4),
+    _add_text(s, post_x + Inches(0.3), plate_y + Inches(1.85),
+              plate_w - Inches(0.5), Inches(0.35),
+              f"{fmt_num(ctx.post_users_proj)} U.S. consumers projected",
+              size=13, color=FG_DARK)
+    _add_text(s, post_x + Inches(0.3), plate_y + Inches(2.15),
+              plate_w - Inches(0.5), Inches(0.30),
+              post_incidence,
+              size=10, italic=True, color=FG_DARK)
+    _add_text(s, post_x + Inches(0.3), plate_y + Inches(2.42),
+              plate_w - Inches(0.5), Inches(0.35),
               f"engaged with the brand {post_label}.",
-              size=11, italic=True, color=FG_DARK)
+              size=10, italic=True, color=FG_DARK)
     # Read As callout + significance line, MIDG-style.
     moved = max(0, ctx.post_users_proj - ctx.pre_users_proj)
     read_as = (
@@ -1001,11 +1018,9 @@ def _slide_engagement_lift(prs, ctx: DeckCtx, idx: int, total: int):
     )
     _add_text(s, Inches(0.6), Inches(6.25), Inches(12.1), Inches(0.35),
               read_as, size=12, italic=True, color=MUTED_LT, align="center")
-    # Statistical significance line - McNemar's test on discordant
-    # pairs (same-panel pre/post design). We display n, chi-squared,
-    # p-value, and a 95% CI on the pp delta so Pepsi-style near-zero
-    # movements read as n.s. and Coca-Cola-style movements read as
-    # significant.
+    # Statistical significance line - pooled two-sample z on paired
+    # marginals (same-panel pre/post design). We display n, delta,
+    # z, and a 95% CI on the pp delta. See methodology slide.
     sig = _mcnemar_summary(ctx)
     if sig:
         _add_text(s, Inches(0.6), Inches(6.62), Inches(12.1), Inches(0.35),
@@ -1892,6 +1907,12 @@ def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
          "(visits, engagements, brand touchpoints); no surveys, no "
          f"self-report. Observed sample: {fmt_num(ctx.panel_size)} "
          "panelists (the viewer cohort for this integration)."),
+        ("INCIDENCE RATES",
+         "All pre and post penetration percentages are incidence rates: "
+         "the count of unique brand engagers observed in the window "
+         f"divided by the {fmt_num(ctx.panel_size)}-panelist sample. "
+         "Raw numerator and denominator are printed on slide 4 alongside "
+         "each percentage so the rate can be audited directly."),
         ("PROJECTION",
          f"The observed {fmt_num(ctx.panel_size)}-panelist sample is "
          f"projected to a {fmt_num(ctx.audience_proj)}-consumer U.S. "
@@ -1903,20 +1924,25 @@ def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
          "of campaign end: long enough to capture delayed brand "
          "behavior, tight enough to keep the causal read clean."),
         ("BRAND LIFT",
-         "Brand Lift Value uses an adjusted-lift design: we subtract a "
-         "size-matched gen-pop control cohort's natural drift from the "
-         "treated cohort's raw pre/post delta. Both cohorts are drawn "
-         "from the same panel, so this is not a true difference-in-"
-         "differences (which would require a genuine holdout); a "
-         "holdout-based DiD is on the roadmap."),
+         "Brand Lift Value uses an adjusted-lift design: the size-"
+         "matched gen-pop control cohort's natural drift is subtracted "
+         "from the treated cohort's raw pre/post delta. Both cohorts "
+         "are drawn from the same panel, so this is a within-panel "
+         "adjusted-lift read, not a true difference-in-differences "
+         "(which would require a genuine holdout); a holdout-based "
+         "DiD is on the roadmap."),
         ("SIGNIFICANCE",
-         "Same-panel pre/post design; significance tested via McNemar's "
-         "test on discordant pairs. Where n is small, results are "
-         "labeled n.s. and the point estimate is presented as "
-         "directional, not distinguishable from zero."),
+         "Same-panel pre/post design. Primary test: pooled two-sample "
+         "z on the paired marginals (conservative for a within-panel "
+         "read). We report the point estimate, the z-score, and a 95% "
+         "confidence interval derived from the same variance. At n=10M "
+         "the detection floor is roughly a tenth of a percentage point; "
+         "p-values are omitted on client-facing slides because they "
+         "collapse to zero for anything above the floor and add no "
+         "decision-relevant information."),
     ]
-    base_y = 2.55
-    row_spacing = 0.85
+    base_y = 2.35
+    row_spacing = 0.75
     for i, (label, body) in enumerate(notes):
         y = Inches(base_y + i * row_spacing)
         _add_text(s, Inches(0.6), y, Inches(3.0), Inches(0.3),
