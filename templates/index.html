@@ -23422,8 +23422,14 @@
             #trendsIQView .tiq-title { font-size: 1.45rem; font-weight: 600; margin: 0; }
             #trendsIQView .tiq-subtitle { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
             #trendsIQView .tiq-filter-bar {
+                /* Geography + Region controls were removed 2026-07-27
+                   (Trends IQ is now always National); layout collapses
+                   to the two remaining controls (Window + Apply) at
+                   their natural sizes rather than stretching across
+                   the whole bar. */
                 display: grid;
-                grid-template-columns: 0.9fr 1.6fr 0.7fr 0.6fr;
+                grid-template-columns: minmax(160px, 220px) minmax(100px, 140px);
+                justify-content: start;
                 gap: 0.6rem;
                 align-items: end;
                 padding: 0.9rem 1rem;
@@ -23716,18 +23722,13 @@
                 </div>
             </div>
             <div class="tiq-filter-bar">
-                <div>
-                    <label for="trendsIQGeoType">Geography</label>
-                    <select id="trendsIQGeoType">
-                        <option value="National" selected>National</option>
-                        <option value="State">State</option>
-                        <option value="DMA">DMA</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="trendsIQGeoValue">Region</label>
-                    <select id="trendsIQGeoValue" disabled><option value="">(National)</option></select>
-                </div>
+                <!-- Geography + Region controls removed 2026-07-27:
+                     Trends IQ is now always National. The hidden inputs
+                     below preserve the downstream JS contract (every
+                     read of trendsIQGeoType.value / trendsIQGeoValue.value
+                     still works and always returns 'National' / ''). -->
+                <input type="hidden" id="trendsIQGeoType"  value="National">
+                <input type="hidden" id="trendsIQGeoValue" value="">
                 <div>
                     <label for="trendsIQLookback">Window</label>
                     <select id="trendsIQLookback">
@@ -39599,6 +39600,25 @@
             var rows = items.slice(0, 10);
             var totalPanel = rows.reduce(function(a, r) { return a + (+r.panelists || 0); }, 0);
 
+            // Synthetic-fill note: when the panel-side query returns
+            // too few rows for a live-computed district cell, the
+            // backend calls an OpenAI web-search agent to synthesize
+            // a market-share breakdown and every synthesized row is
+            // stamped `synthetic:true`. Surface that as a small chip
+            // so the reader can distinguish modeled market share from
+            // panel-observed engagement.
+            var synthCount = rows.reduce(function(a, r) { return a + (r && r.synthetic ? 1 : 0); }, 0);
+            var syntheticNote = '';
+            if (synthCount === rows.length && rows.length) {
+                // Prefer the first row's source note ("StatCounter May
+                // 2026", "Pew 2025") if all rows are synthetic.
+                var srcNote = (rows[0] && rows[0].source_note) ? rows[0].source_note : 'external market-share research';
+                syntheticNote = '<div style="font-size: 0.68rem; color: var(--text-secondary); padding: 0.25rem 0 0.5rem 0; display: flex; align-items: center; gap: 0.4rem;">'
+                              +   '<span style="display: inline-block; padding: 0.1rem 0.45rem; border-radius: 999px; background: rgba(168, 85, 247, 0.12); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.35); font-weight: 600; letter-spacing: 0.02em;">Modeled</span>'
+                              +   '<span>Panel signal was thin for this slice; shares modeled from ' + _bqEscape(srcNote) + '.</span>'
+                              + '</div>';
+            }
+
             // Donut: top 3 share + "Other"
             var top3 = rows.slice(0, 3);
             var top3Share = top3.reduce(function(a, r) { return a + (+r.share || 0); }, 0);
@@ -39703,6 +39723,7 @@
             }
 
             return ''
+                + syntheticNote
                 + '<div class="bq-eng-head">'
                 +   '<div class="bq-eng-donut">' + donutSvg
                 +     '<div class="bq-eng-donut-center">Top&nbsp;3<br>' + _bqPct(top3Share) + '</div>'
@@ -43981,6 +44002,11 @@
             var typeEl = document.getElementById('trendsIQGeoType');
             var valEl  = document.getElementById('trendsIQGeoValue');
             if (!typeEl || !valEl) return;
+            // Trends IQ is always National as of 2026-07-27 - the
+            // geo controls are hidden inputs, not <select>s. Nothing
+            // to populate; the .value getters below always return
+            // 'National' and '' respectively.
+            if (valEl.tagName === 'INPUT') return;
             var t = typeEl.value;
             valEl.innerHTML = '';
             if (t === 'National') {
