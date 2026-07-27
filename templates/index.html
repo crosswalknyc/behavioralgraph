@@ -22818,8 +22818,20 @@
              * bq-topsearches-* utilities removed 2026-07-27 per Jenna.
              * Issue-buckets now spans the full row (set inline in the
              * HTML template above). */
-            #blueIQView .blue-iq-card-search   { grid-column: span 4; }
-            #blueIQView .blue-iq-card-social   { grid-column: span 4; }
+            /* Search + Social + Articles all sit on the same 3-up
+             * row (each span-4). Lock them to a shared height so the
+             * row lines up cleanly regardless of which card has the
+             * most content. Each card body scrolls internally when
+             * content exceeds the cap. Height picked so Search /
+             * Social's ~10-row lists render in full without scroll,
+             * while Articles scrolls its longer list. */
+            #blueIQView .blue-iq-card-search   { grid-column: span 4; height: 520px; }
+            #blueIQView .blue-iq-card-social   { grid-column: span 4; height: 520px; }
+            #blueIQView .blue-iq-card-search .blue-iq-card-body,
+            #blueIQView .blue-iq-card-social .blue-iq-card-body {
+                overflow-y: auto;
+                padding-right: 4px;
+            }
             #blueIQView .blue-iq-card-turnout  { grid-column: span 4; }
             /* Pols + Cands cards are paired side-by-side. Lock to identical
              * height so they always line up; .blue-iq-card-body already has
@@ -22933,12 +22945,11 @@
                 #blueIQView .bq-day-grid { grid-template-columns: 1fr 1fr; }
                 #blueIQView .bq-day-controls { flex-direction: column; align-items: flex-start; }
             }
-            /* Articles ships alongside Search / Social on the same row.
-             * All three are span-4 so CSS grid stretches every card to
-             * the tallest sibling. Capping articles at 440px pulls the
-             * whole row down to a compact height; the body scrolls
-             * internally so the full article list is still reachable. */
-            #blueIQView .blue-iq-card-articles { grid-column: span 4; height: 440px; }
+            /* Articles ships alongside Search / Social on the same
+             * row. Height matches its siblings (see the Search /
+             * Social block above) so the 3-up row lines up cleanly;
+             * body scrolls internally when the article list is long. */
+            #blueIQView .blue-iq-card-articles { grid-column: span 4; height: 520px; }
             #blueIQView .blue-iq-card-articles .blue-iq-card-body {
                 overflow-y: auto;
                 padding-right: 4px;
