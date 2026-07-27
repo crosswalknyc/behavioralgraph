@@ -372,7 +372,8 @@ def _trends_fetch_today(geo: str) -> list[dict]:
     return sorted(by_term.values(), key=lambda x: -x['score'])
 
 
-def trends_top_issues(state: Optional[str] = None, lookback_days: int = 7) -> list[dict]:
+def trends_top_issues(state: Optional[str] = None, lookback_days: int = 7,
+                       geo_override: Optional[str] = None) -> list[dict]:
     """Top trending search topics in the geo over the past `lookback_days`,
     filtered downstream to political.
 
@@ -382,6 +383,11 @@ def trends_top_issues(state: Optional[str] = None, lookback_days: int = 7) -> li
     Empty list on total failure.
 
     state=None -> US-wide trends (geo=US). state='California' -> geo=US-CA.
+    geo_override='US-686' -> DMA-level trends for Mobile-Pensacola. Used
+    by the District branch of Blue IQ, where we resolve a congressional
+    district to its dominant DMA (via zip_to_congressional_district_119)
+    so Trends can go one level finer than the parent state. Google's
+    RSS endpoint accepts any US-<n> code that maps to a Nielsen DMA.
 
     NOTE: Google's RSS daily-trends endpoint only returns the past ~24h
     of trends per call. To present a multi-day window we snapshot the
@@ -404,8 +410,11 @@ def trends_top_issues(state: Optional[str] = None, lookback_days: int = 7) -> li
     S3 is unavailable, falls back gracefully to live-RSS-only (the
     pre-2026-06-29 behavior).
     """
-    name = normalize_state(state)
-    geo = US_STATE_TO_ISO.get(name) if name else 'US'
+    if geo_override:
+        geo = geo_override.strip()
+    else:
+        name = normalize_state(state)
+        geo = US_STATE_TO_ISO.get(name) if name else 'US'
 
     # 1. Today's snapshot — try cache first, fetch live and persist on miss.
     today = datetime.now(timezone.utc).date()
@@ -516,17 +525,24 @@ def _parse_traffic(s: str) -> int:
         return 0
 
 
-def trends_politician_interest(names: list[str], state: Optional[str] = None) -> dict[str, int]:
+def trends_politician_interest(names: list[str], state: Optional[str] = None,
+                                 geo_override: Optional[str] = None) -> dict[str, int]:
     """Per-politician relative search-interest score over the last 7 days.
 
     Returns `{name: 0..100}`. Empty dict on failure.
 
     Uses the comparison endpoint to score up to 5 names at a time.
+
+    `geo_override` (e.g. 'US-686') bypasses the state-name path so
+    callers can request DMA-level (or otherwise pre-formed) geo codes.
     """
     if not names:
         return {}
-    name = normalize_state(state)
-    geo = US_STATE_TO_ISO.get(name) if name else 'US'
+    if geo_override:
+        geo = geo_override.strip()
+    else:
+        name = normalize_state(state)
+        geo = US_STATE_TO_ISO.get(name) if name else 'US'
     out: dict[str, int] = {}
     # Trends comparison caps at 5 terms. Batch.
     for i in range(0, len(names), 5):
@@ -737,7 +753,8 @@ _EXT_MAX_POLS       = int(os.environ.get('BLUE_IQ_EXT_MAX_POLS', '12'))  # cap p
 
 
 def fetch_all_external(state: Optional[str], lookback_days: int,
-                        politician_names: Iterable[str]) -> dict:
+                        politician_names: Iterable[str],
+                        trends_geo_override: Optional[str] = None) -> dict:
     """Pull every external source IN PARALLEL via a small ThreadPoolExecutor.
 
     Returns a dict of partial results. Missing keys mean that source failed.
@@ -747,13 +764,21 @@ def fetch_all_external(state: Optional[str], lookback_days: int,
     that doesn't finish in time gets canceled and returns its default empty
     value. We use `cancel_futures=True` on shutdown so the executor doesn't
     block on stragglers (which was the prior 3-minute hang).
+
+    `trends_geo_override` (e.g. 'US-686') applies ONLY to the two Google
+    Trends calls — it lets Blue IQ pull DMA-scoped trends for a
+    congressional district (which is finer than state, the coarsest
+    Google Trends supports natively). GDELT / Wikipedia continue to use
+    the state name because they don't have DMA-native geo filters.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FutTimeoutError
     politician_names = list(politician_names or [])[:_EXT_MAX_POLS]  # cap fan-out
 
     tasks = {
-        'google_trends_top':         lambda: trends_top_issues(state=state, lookback_days=lookback_days),
-        'google_trends_politicians': lambda: trends_politician_interest(politician_names, state=state),
+        'google_trends_top':         lambda: trends_top_issues(state=state, lookback_days=lookback_days,
+                                                                 geo_override=trends_geo_override),
+        'google_trends_politicians': lambda: trends_politician_interest(politician_names, state=state,
+                                                                          geo_override=trends_geo_override),
         'gdelt_articles':            lambda: gdelt_political_articles(state=state, lookback_days=lookback_days),
         'gdelt_politician_mentions': lambda: gdelt_politician_mentions(politician_names, state=state, lookback_days=lookback_days),
         'wiki_pageviews':            lambda: wikipedia_pageviews(politician_names, lookback_days=lookback_days),

@@ -323,6 +323,11 @@ def _load_district_ref() -> dict:
     district_to_zips: dict[str, set[str]] = {}
     district_to_state: dict[str, str] = {}
     district_names: dict[str, str] = {}
+    # For each district, tally land-area coverage by DMA so we can pick
+    # the DOMINANT DMA (used for Google-Trends DMA-level geo in the
+    # "Trending political searches" card). Structure while building:
+    #   district_dma_areas[code][dma_code] = (total_land_m2, dma_name)
+    district_dma_areas: dict[str, dict[str, tuple[float, str]]] = {}
 
     csv_text = _read_district_csv_text()
     if csv_text:
@@ -353,8 +358,38 @@ def _load_district_ref() -> dict:
                 # a single canonical district lookup.
                 if (row.get('primary_district') or '').strip().upper() == 'TRUE':
                     zip_to_district[z5] = code
+                # DMA coverage per district. `dma_code` is the Nielsen
+                # code (e.g. '686' for Mobile-Pensacola). Google Trends
+                # accepts `geo=US-<dma_code>`. Skip rows without a DMA
+                # (dma_match_type='none' or blank).
+                dma_code = (row.get('dma_code') or '').strip()
+                dma_name = (row.get('dma_name') or '').strip()
+                if dma_code and dma_code.isdigit():
+                    try:
+                        area = float(row.get('land_area_m2') or 0)
+                    except (TypeError, ValueError):
+                        area = 0.0
+                    if area <= 0:
+                        area = 1.0  # treat as unit weight if area missing
+                    slot = district_dma_areas.setdefault(code, {})
+                    prev_area, prev_name = slot.get(dma_code, (0.0, dma_name))
+                    slot[dma_code] = (prev_area + area, prev_name or dma_name)
         except Exception as e:
             logger.warning("Failed to parse district reference: %s", e)
+
+    # Reduce district_dma_areas -> district_to_primary_dma: dominant DMA
+    # per district (largest land-area weight). Format:
+    #   {'AL-01': {'code': '686', 'name': 'Mobile-Pensacola'}}
+    district_to_primary_dma: dict[str, dict[str, str]] = {}
+    for code, dma_map in district_dma_areas.items():
+        if not dma_map:
+            continue
+        best_dma, (best_area, best_name) = max(
+            dma_map.items(), key=lambda kv: kv[1][0])
+        district_to_primary_dma[code] = {
+            'code': best_dma,
+            'name': best_name,
+        }
 
     # Sort district codes state-first, then by numeric district (AL-0 through
     # WY-1). District 0 (at-large) sorts before 1 within its state.
@@ -366,11 +401,12 @@ def _load_district_ref() -> dict:
             return (c, 0)
 
     _DISTRICT_REF = {
-        'zip_to_district':   zip_to_district,
-        'district_to_zips':  {k: frozenset(v) for k, v in district_to_zips.items()},
-        'district_to_state': district_to_state,
-        'district_names':    district_names,
-        'all_districts':     sorted(district_to_zips.keys(), key=_sort_key),
+        'zip_to_district':          zip_to_district,
+        'district_to_zips':         {k: frozenset(v) for k, v in district_to_zips.items()},
+        'district_to_state':        district_to_state,
+        'district_names':           district_names,
+        'all_districts':            sorted(district_to_zips.keys(), key=_sort_key),
+        'district_to_primary_dma':  district_to_primary_dma,
     }
     if district_to_zips:
         logger.info("Loaded %d congressional districts covering %d zips",
@@ -653,13 +689,30 @@ def blue_iq_cache_key(filters: dict) -> str:
             panel's 25th-percentile count so they don't unfairly
             rank above real panel rows. Also fixes the empty-state
             copy that said "this district" at National scale.
+     v25 — 2026-07-27: `_flag_political_term` rewritten from naive
+            substring match to word-bounded regex. The old scan
+            false-flagged 'ps5 pro price' (matched 'ice ' inside
+            'price '), 'vacation packages' (matched 'aca'), 'gopro
+            hero' (matched ' gop'), 'union pacific' (matched
+            'union'), 'transportation jobs' (matched 'trans'), and
+            'ice cream' (matched 'ice '). Bumps v24 caches that
+            have those false positives baked into the `political`
+            field of every top_searches row.
+     v26 — 2026-07-27: District geo now pulls DMA-level Google Trends
+            (one level finer than the parent state) via
+            `district_to_primary_dma` in the district reference. The
+            trending-card heading label changes from "Alabama" to
+            "Alabama AL-01" for districts, and the "→ state-level
+            Trends for X" fineprint is gone. v25 caches have both
+            the old label and the state-level Trends payload baked
+            in — bump forces a rebuild.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   24,
+        'version':   26,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -2934,33 +2987,51 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
             continue
         _seen.add(name)
         politicians_for_external.append(name)
-    # Resolve which state to pass to Google Trends. Trends only exposes
-    # state-level regional data, so a DMA filter (e.g. "Los Angeles")
-    # gets resolved to its primary state ("California") so the user sees
-    # state-local trending terms instead of US-wide.
+    # Resolve which geo to pass to Google Trends.
+    #
+    # Google Trends' RSS endpoint supports three geo scopes:
+    #   - `US`         → National
+    #   - `US-<USPS>`  → State (e.g. `US-CA` California)
+    #   - `US-<NNN>`   → Nielsen DMA (e.g. `US-686` Mobile-Pensacola)
+    #
+    # Congressional district isn't a native scope, but every district
+    # sits inside one dominant DMA (per zip_to_congressional_district_119
+    # land-area weighting). For District filters we resolve to that
+    # dominant DMA — one level finer than the parent state.
     trends_state: Optional[str] = None
+    trends_geo_override: Optional[str] = None
+    trends_dma_name: Optional[str] = None
+    trends_dma_code: Optional[str] = None
     if f['geo_type'] == 'State':
         trends_state = f['geo_value']
     elif f['geo_type'] == 'DMA' and f['geo_value']:
         trends_state = DMA_TO_STATE.get(f['geo_value'])
     elif f['geo_type'] == 'District' and f['geo_value']:
-        # District (2026-07-27): Google Trends only exposes state-level
-        # regional data via geo=US-XX. Resolve district to its parent
-        # state so the user sees the trending searches for the state
-        # containing this district. Downstream we could layer principal-
-        # city Trends via a DMA hop, but state-level is the honest cut.
-        _usps = _load_district_ref()['district_to_state'].get(
-            (f['geo_value'] or '').strip().upper())
+        # District (2026-07-27, refined): pull DMA-level trends when we
+        # can resolve the district's dominant DMA. Fall back to state-
+        # level otherwise. Also keep `trends_state` populated so GDELT /
+        # Wikipedia (which don't understand DMA codes) still work.
+        _dref = _load_district_ref()
+        _dcode = (f['geo_value'] or '').strip().upper()
+        _usps = _dref['district_to_state'].get(_dcode)
         if _usps:
             try:
                 from external_signals import _USPS_TO_NAME  # type: ignore
                 trends_state = _USPS_TO_NAME.get(_usps, _usps)
             except Exception:
                 trends_state = _usps
+        _dma = _dref.get('district_to_primary_dma', {}).get(_dcode)
+        if _dma and _dma.get('code'):
+            trends_dma_code = str(_dma['code'])
+            trends_dma_name = str(_dma.get('name') or '')
+            trends_geo_override = f"US-{trends_dma_code}"
+            log.info("blue_iq: district %s -> DMA %s (%s), trends geo=%s",
+                     _dcode, trends_dma_code, trends_dma_name, trends_geo_override)
     external = fetch_all_external(
         state=trends_state,
         lookback_days=f['lookback_days'],
         politician_names=politicians_for_external,
+        trends_geo_override=trends_geo_override,
     )
 
     # 4. Build cards from cube (panel-side) + external (Trends/GDELT/Wiki).
@@ -3265,7 +3336,18 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     # to political). Geographically scoped via trends_state above; falls back to
     # US-wide when the geo is National or the DMA isn't in our lookup. Surfaces
     # things the panel won't catch yet (e.g. a hot local mayoral race).
-    trends_state_label = trends_state or 'United States'
+    # Human label for the trending card heading.
+    #   - National → 'United States'
+    #   - State    → state name
+    #   - DMA      → parent state (DMA name lives in fineprint)
+    #   - District → '<state> <district-code>' (e.g. 'Alabama AL-01')
+    #                so the operator can see EXACTLY which district
+    #                without needing a parenthetical.
+    if f['geo_type'] == 'District' and f['geo_value']:
+        trends_state_label = f"{trends_state or ''} {f['geo_value']}".strip() \
+            if trends_state else f['geo_value']
+    else:
+        trends_state_label = trends_state or 'United States'
     raw_trends = (external or {}).get('google_trends_top') or []
     pol_set = set(_load_politicians())
     trending_political = _filter_trends_to_political(raw_trends, pol_set)[:25]
@@ -3299,6 +3381,13 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         'is_state_local':         trends_state is not None,
         'dma_resolved_via':       (DMA_TO_STATE.get(f['geo_value']) if f['geo_type'] == 'DMA' else None),
         'district_resolved_via':  (trends_state if f['geo_type'] == 'District' else None),
+        # DMA-level trends metadata for the District branch. Frontend
+        # can use these to render a tiny "· via <DMA name>" suffix, or
+        # not — the card heading already carries the district code.
+        'trends_dma_code':        trends_dma_code,
+        'trends_dma_name':        trends_dma_name,
+        'trends_scope':           ('dma' if trends_geo_override else
+                                    ('state' if trends_state else 'national')),
     }
 
     # Overall (unfiltered) top trending searches for this geo. Same
@@ -3317,6 +3406,10 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         'is_state_local':        trends_state is not None,
         'dma_resolved_via':      (DMA_TO_STATE.get(f['geo_value']) if f['geo_type'] == 'DMA' else None),
         'district_resolved_via': (trends_state if f['geo_type'] == 'District' else None),
+        'trends_dma_code':       trends_dma_code,
+        'trends_dma_name':       trends_dma_name,
+        'trends_scope':          ('dma' if trends_geo_override else
+                                   ('state' if trends_state else 'national')),
     }
 
     # Turnout
@@ -3658,7 +3751,26 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
             'External signals shown where available.'
         )
 
-    _cache_put(f, payload)
+    # Don't cache a payload that came back empty on the two
+    # agent-dependent cards. If `top_politicians` or `top_candidates`
+    # ended up as [], one of two things happened: the agent hit its
+    # 45s wall-clock timeout mid-run, or the OpenAI call errored.
+    # Either way the S3 candidate/engaged cache probably DID fill in
+    # the trailing seconds — writing this half-empty payload to the
+    # outer Blue IQ cache would freeze that empty state for
+    # CACHE_TTL_S (~24h) and the frontend's polling loop would keep
+    # getting the same empty response. Skip the write; the next
+    # request will recompute, hit the now-warm S3 caches, and
+    # populate. (2026-07-27)
+    outer_cards = payload.get('cards') or {}
+    if outer_cards.get('top_politicians') and outer_cards.get('top_candidates'):
+        _cache_put(f, payload)
+    else:
+        log.info("blue_iq: skipping outer cache write for %s|%s (politicians=%d, "
+                 "candidates=%d) so next request retries the agent path.",
+                 f.get('geo_type'), f.get('geo_value'),
+                 len(outer_cards.get('top_politicians') or []),
+                 len(outer_cards.get('top_candidates') or []))
     return payload
 
 
@@ -3670,52 +3782,112 @@ def _attach_share(rows: list[dict]) -> list[dict]:
     return [{**r, 'share': round(int(r.get('panelists', 0)) / total, 4)} for r in rows]
 
 
-# Keyword bag used to flag a raw search term as politically-flavored.
-# Word-bounded so 'president' matches but 'presidential golf tournament'
-# still qualifies (title contains the token). Deliberately broad — the
-# UI just uses this to LIGHT UP a chip on flagged rows; the bucketed
-# view already has a strict AI classifier.
-_TOP_SEARCH_POLITICAL_KEYWORDS: tuple[str, ...] = (
-    'trump', 'biden', 'harris', 'obama', 'vance', 'newsom', 'desantis',
-    'aoc', 'ocasio', 'pelosi', 'mcconnell', 'schumer', 'johnson',
-    'jeffries', 'sanders', 'warren', 'rubio', 'cruz', 'haley',
-    'ramaswamy', 'gaetz', 'greene', 'fetterman', 'manchin',
-    'president', 'senator', 'senate', 'congress', 'house rep',
-    'governor', 'mayor', 'election', 'ballot', 'poll', 'vote',
-    'campaign', 'primary', 'caucus', 'candidate',
-    'democrat', 'republican', 'gop ', ' gop', 'libertarian',
-    'liberal', 'conservative', 'progressive',
-    'immigration', 'immigrant', 'border', 'deportation', 'asylum',
-    'abortion', 'roe', 'reproductive',
-    'gun ', 'guns', 'firearm', 'second amendment',
-    'climate', 'green new deal', 'fossil fuel', 'oil drilling',
-    'medicare', 'medicaid', 'social security', 'obamacare', 'aca',
-    'inflation', 'stimulus', 'tariff', 'tax bill', 'tax cut', 'tax hike',
-    'minimum wage', 'union', 'strike',
-    'affirmative action', 'trans', 'title ix', 'critical race',
-    'ukraine', 'israel', 'gaza', 'russia', 'china', 'nato',
-    'supreme court', 'scotus', 'roe v wade',
-    'january 6', 'j6', 'insurrection', 'impeachment',
-    'irs', 'doj', 'fbi', 'ice ',
-    'voter id', 'voter fraud', 'mail in ballot', 'polling place',
-    'debate', 'town hall', 'inauguration',
+# Political-flavor detection for raw search terms.
+#
+# Bug we're fixing (2026-07-27): the previous implementation used naive
+# substring matching, which false-flagged "ps5 pro price" as political
+# because 'ice ' (meant to catch ICE agents) appears inside 'pr**ice **'.
+# Same class of bug for 'aca' matching 'vacation', 'trans' matching
+# 'transportation', 'union' matching 'union pacific', ' gop' matching
+# 'gopro', etc.
+#
+# Fix: use word-bounded regex and be conservative on any token that's
+# ambiguous outside a political phrase. Multi-word phrases are safer
+# than short tokens (we prefer 'labor union' over bare 'union', 'ice
+# raid' over bare 'ice', 'gun control' over bare 'gun').
+_TOP_SEARCH_POLITICAL_PATTERNS: tuple[str, ...] = (
+    # Politicians (surnames + short aliases)
+    r'trump', r'biden', r'harris', r'obama', r'vance', r'newsom',
+    r'desantis', r'aoc', r'ocasio[- ]cortez', r'pelosi', r'mcconnell',
+    r'schumer', r'jeffries', r'sanders', r'warren', r'rubio', r'cruz',
+    r'haley', r'ramaswamy', r'gaetz', r'greene', r'fetterman',
+    r'manchin', r'mike johnson', r'speaker johnson', r'kamala',
+    # Offices & elections
+    r'president', r'vice president', r'senator', r'senators', r'senate',
+    r'congress', r'congressman', r'congresswoman', r'congressional',
+    r'governor', r'mayor', r'election', r'elections', r'ballot',
+    r'ballots', r'vote', r'votes', r'voter', r'voters', r'voting',
+    r'campaign', r'campaigns', r'caucus', r'candidate', r'candidates',
+    r'primary election', r'presidential primary', r'midterms?',
+    # Parties & ideologies
+    r'democrat', r'democrats', r'democratic party', r'republican',
+    r'republicans', r'gop', r'libertarian', r'liberal', r'conservative',
+    r'progressive', r'maga',
+    # Immigration
+    r'immigration', r'immigrant', r'immigrants', r'border',
+    r'deportation', r'deport', r'asylum', r'ice raid', r'ice agents',
+    r'ice arrests?', r'sanctuary city', r'sanctuary cities',
+    # Abortion / reproductive
+    r'abortion', r'roe v(?:\.|ersus)? wade', r'reproductive rights',
+    r'pro[- ]choice', r'pro[- ]life', r'planned parenthood',
+    r'abortion pill', r'dobbs decision',
+    # Guns
+    r'gun control', r'gun rights', r'gun laws?', r'firearm',
+    r'firearms', r'second amendment', r'2nd amendment', r'assault weapon',
+    r'assault rifle',
+    # Climate
+    r'climate change', r'climate policy', r'green new deal',
+    r'fossil fuel', r'fossil fuels', r'oil drilling', r'paris accord',
+    # Entitlements / healthcare policy
+    r'medicare', r'medicaid', r'social security', r'obamacare',
+    r'affordable care act',
+    # Economic policy
+    r'inflation', r'stimulus check', r'stimulus checks', r'tariff',
+    r'tariffs', r'tax bill', r'tax cut', r'tax cuts', r'tax hike',
+    r'tax hikes', r'tax reform', r'minimum wage',
+    # Labor
+    r'labor union', r'labor unions', r'union strike', r'strike vote',
+    r'right to work',
+    # Culture / education
+    r'affirmative action', r'transgender', r'trans rights',
+    r'trans athletes?', r'title ix', r'critical race theory',
+    r'book ban', r'book bans', r'school choice',
+    # Foreign policy
+    r'ukraine (?:war|aid|invasion)', r'israel[- ]gaza', r'israel[- ]hamas',
+    r'gaza', r'russia sanctions', r'china tariffs', r'nato',
+    r'foreign aid',
+    # Judicial
+    r'supreme court', r'scotus', r'chief justice',
+    # Jan 6 / impeachment
+    r'january 6', r'jan\.? 6', r'j6 committee', r'insurrection',
+    r'impeachment', r'impeach',
+    # Agencies (only when there's political-flavor context;
+    # bare 'irs'/'doj'/'fbi' can appear in tax-help searches, so
+    # require a modifier)
+    r'irs audit', r'doj investigation', r'fbi raid', r'fbi investigation',
+    # Voting mechanics
+    r'voter id', r'voter fraud', r'voter suppression',
+    r'mail[- ]in ballot', r'mail[- ]in ballots', r'polling place',
+    r'polling places', r'early voting', r'absentee ballot',
+    r'absentee ballots',
+    # Debates / civic events
+    r'presidential debate', r'vp debate', r'town hall meeting',
+    r'inauguration', r'inaugural',
+)
+
+
+_POLITICAL_TERM_RE = re.compile(
+    r'\b(?:' + '|'.join(_TOP_SEARCH_POLITICAL_PATTERNS) + r')\b',
+    flags=re.IGNORECASE,
 )
 
 
 def _flag_political_term(term: str) -> bool:
-    """Cheap keyword scan — returns True if a raw search term touches
-    political vocabulary or a politician surname.
+    """Word-bounded regex scan — returns True iff `term` contains an
+    unambiguously political token or phrase.
 
-    Not comprehensive; we deliberately keep the list small so that day-
-    to-day cost-of-living queries ("car insurance quotes", "mortgage
-    rates today", "tax brackets 2026") DON'T all light up as political.
-    They're economic signal for the candidate but they're not what a
-    campaign would call a "political search."
+    Non-political cost-of-living searches ('car insurance quotes',
+    'mortgage rates', 'gas prices near me', 'ps5 pro price') MUST NOT
+    light up. Those are economic signal for the campaign, but they're
+    not what an operative would call a "political search."
+
+    The chip on the UI is aggressive-looking (blue "POLITICAL" pill), so
+    a false-positive here is louder than a false-negative. When in
+    doubt, err toward NOT flagging.
     """
     if not term:
         return False
-    t = f' {term.lower()} '
-    return any(k in t for k in _TOP_SEARCH_POLITICAL_KEYWORDS)
+    return bool(_POLITICAL_TERM_RE.search(term))
 
 
 def _shape_top_searches(panel_top_queries: list[dict],
