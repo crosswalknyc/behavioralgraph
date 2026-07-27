@@ -3667,7 +3667,26 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
             'External signals shown where available.'
         )
 
-    _cache_put(f, payload)
+    # Don't cache a payload that came back empty on the two
+    # agent-dependent cards. If `top_politicians` or `top_candidates`
+    # ended up as [], one of two things happened: the agent hit its
+    # 45s wall-clock timeout mid-run, or the OpenAI call errored.
+    # Either way the S3 candidate/engaged cache probably DID fill in
+    # the trailing seconds — writing this half-empty payload to the
+    # outer Blue IQ cache would freeze that empty state for
+    # CACHE_TTL_S (~24h) and the frontend's polling loop would keep
+    # getting the same empty response. Skip the write; the next
+    # request will recompute, hit the now-warm S3 caches, and
+    # populate. (2026-07-27)
+    outer_cards = payload.get('cards') or {}
+    if outer_cards.get('top_politicians') and outer_cards.get('top_candidates'):
+        _cache_put(f, payload)
+    else:
+        log.info("blue_iq: skipping outer cache write for %s|%s (politicians=%d, "
+                 "candidates=%d) so next request retries the agent path.",
+                 f.get('geo_type'), f.get('geo_value'),
+                 len(outer_cards.get('top_politicians') or []),
+                 len(outer_cards.get('top_candidates') or []))
     return payload
 
 

@@ -39659,6 +39659,7 @@
             }
             document.getElementById('blueIQCardsGrid').innerHTML = '';
             document.getElementById('blueIQSuppressedMsg').style.display = 'none';
+            _bqCancelAgentPolls();
             _bqStartLoadingUI(filters);
             document.getElementById('blueIQMeta').textContent = 'Fetching data for ' + (filters.geo_type === 'National' ? 'National' : filters.geo_value) + ' (last ' + filters.lookback_days + 'd)...';
             try {
@@ -40236,8 +40237,8 @@
             if (!items || !items.length) {
                 return '<div class="bq-eng-loading">'
                     + '<div class="bq-eng-spinner"></div>'
-                    + '<div class="bq-eng-loading-msg">Agent is discovering who this area is engaging with...</div>'
-                    + '<div class="bq-eng-loading-sub">First load per geography takes 10-15s; subsequent loads are instant.</div>'
+                    + '<div class="bq-eng-loading-msg">Discovering who this area is engaging with\u2026</div>'
+                    + '<div class="bq-eng-loading-sub">Building the list from live sources.</div>'
                     + '</div>';
             }
             var rows = items.slice(0, 15);
@@ -40384,8 +40385,8 @@
             if (!items || !items.length) {
                 return '<div class="bq-eng-loading">'
                     + '<div class="bq-eng-spinner"></div>'
-                    + '<div class="bq-eng-loading-msg">Agent is discovering 2026-cycle candidates for this area...</div>'
-                    + '<div class="bq-eng-loading-sub">First load per geography takes 10-15s; subsequent loads are instant.</div>'
+                    + '<div class="bq-eng-loading-msg">Discovering 2026-cycle candidates\u2026</div>'
+                    + '<div class="bq-eng-loading-sub">Building the list from live sources.</div>'
                     + '</div>';
             }
             var rows = items.slice(0, 15);
@@ -40648,8 +40649,10 @@
                 rows = rows.filter(function(r) { return (r.race_type || 'other') === activeRace; });
             }
 
-            // Empty state - distinguishes "no candidates known" from
-            // "filtered out by current chips" so the user knows what to do.
+            // Empty state - distinguishes "no candidates match the current
+            // party/race filters" (data exists, user filtered it away)
+            // from "the underlying list is empty" (delegate to the card
+            // renderer which shows a spinner + starts a background poll).
             if (!rows.length) {
                 var hasAny = ((data.cards || {})[targetKey] || []).length > 0;
                 if (hasAny) {
@@ -40658,12 +40661,20 @@
                         + '<span style="cursor:pointer;text-decoration:underline;" '
                         +   'onclick="window._bqClearCandidateFilters(\'' + targetKey + '\')">Clear filters</span>'
                         + '</div>';
-                } else {
-                    body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.8rem 0;">'
-                        + 'Candidate list still loading for this geography '
-                        + '(agent web-search runs once per area per day). Try again in ~15s.'
-                        + '</div>';
+                    return;
                 }
+                // Underlying list is empty: agent hasn't finished for
+                // this geo yet. Render the spinner-based loading state
+                // from the card's own renderer and kick off a
+                // background poll that re-fetches every ~12s until the
+                // agent populates the S3 cache. When it does, we swap
+                // the payload in-place and re-render just this card.
+                if (targetKey === 'top_candidates') {
+                    body.innerHTML = _bqRenderCandidatesCard([]);
+                } else {
+                    body.innerHTML = _bqRenderPoliticianCard([]);
+                }
+                _bqStartAgentPoll(targetKey);
                 return;
             }
             // Top politicians card gets the engagement-card visual
@@ -40686,6 +40697,113 @@
             });
         }
         window._bqRenderPartyFiltered = _bqRenderPartyFiltered;
+
+        // Background poll for the two agent-dependent cards
+        // (top_politicians, top_candidates). If the API came back
+        // with an empty list for a card, the agent is still working
+        // out this geography. Because the backend now SKIPS the outer
+        // Blue IQ cache write when either list is empty (see
+        // `_cache_put` guard in blue_iq.py), a re-fetch will
+        // recompute, hit the (freshly-warm) S3 agent cache, and
+        // populate. We keep polling every 12s for up to ~2 minutes,
+        // silently swap the payload in place, and re-render just the
+        // affected card. No user-facing "try again in 15s" copy.
+        function _bqStartAgentPoll(targetKey) {
+            window.__blueIQ = window.__blueIQ || {};
+            window.__blueIQ._agentPolls = window.__blueIQ._agentPolls || {};
+            // Guard: only one poll per card at a time. If we're
+            // already polling this key, bail.
+            if (window.__blueIQ._agentPolls[targetKey]) return;
+
+            var startedAt = Date.now();
+            var MAX_MS    = 2 * 60 * 1000;  // 2 min hard cap
+            var INTERVAL  = 12 * 1000;      // 12s between polls
+            // Snapshot the filters that kicked off this poll so a
+            // user changing filters mid-poll doesn't overwrite the
+            // new payload with a stale one.
+            var pollFilters = window.__blueIQ.lastData && window.__blueIQ.lastData.filters
+                ? Object.assign({}, window.__blueIQ.lastData.filters)
+                : null;
+            if (!pollFilters) return;
+
+            async function tick() {
+                if (Date.now() - startedAt > MAX_MS) {
+                    delete window.__blueIQ._agentPolls[targetKey];
+                    return;
+                }
+                // Bail if the user has since applied a different set
+                // of filters; the active poll no longer describes
+                // the visible card.
+                var live = window.__blueIQ.lastData && window.__blueIQ.lastData.filters;
+                if (!live
+                    || live.geo_type  !== pollFilters.geo_type
+                    || live.geo_value !== pollFilters.geo_value
+                    || live.lookback_days !== pollFilters.lookback_days) {
+                    delete window.__blueIQ._agentPolls[targetKey];
+                    return;
+                }
+                try {
+                    var resp = await fetch('/api/blue-iq/data', {
+                        method:  'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body:    JSON.stringify({
+                            party:         'All',
+                            geo_type:      pollFilters.geo_type,
+                            geo_value:     pollFilters.geo_value,
+                            lookback_days: pollFilters.lookback_days,
+                        }),
+                    });
+                    var data = await resp.json();
+                    if (data && data.success && data.cards) {
+                        var newRows = data.cards[targetKey] || [];
+                        if (newRows.length > 0) {
+                            // Merge just this card's rows into the
+                            // live payload so other cards' state (drill
+                            // modals, filter chips, etc.) survives.
+                            var live2 = window.__blueIQ.lastData;
+                            if (live2 && live2.cards) {
+                                live2.cards[targetKey] = newRows;
+                                // Also refresh the companion card if
+                                // this poll happens to have caught
+                                // the other one on the same request.
+                                var companion = targetKey === 'top_politicians'
+                                    ? 'top_candidates' : 'top_politicians';
+                                var companionRows = data.cards[companion] || [];
+                                if (companionRows.length > 0 && !(live2.cards[companion] || []).length) {
+                                    live2.cards[companion] = companionRows;
+                                    _bqRenderPartyFiltered(companion);
+                                    delete window.__blueIQ._agentPolls[companion];
+                                }
+                                _bqRenderPartyFiltered(targetKey);
+                            }
+                            delete window.__blueIQ._agentPolls[targetKey];
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    // Swallow: next tick will retry.
+                }
+                var next = setTimeout(tick, INTERVAL);
+                window.__blueIQ._agentPolls[targetKey] = next;
+            }
+            // First tick after INTERVAL so the initial request has
+            // time to unblock the S3 cache.
+            var firstId = setTimeout(tick, INTERVAL);
+            window.__blueIQ._agentPolls[targetKey] = firstId;
+        }
+        window._bqStartAgentPoll = _bqStartAgentPoll;
+
+        // Cancel any outstanding polls when a new Apply lands.
+        function _bqCancelAgentPolls() {
+            var polls = window.__blueIQ && window.__blueIQ._agentPolls;
+            if (!polls) return;
+            Object.keys(polls).forEach(function(k) {
+                try { clearTimeout(polls[k]); } catch (e) {}
+                delete polls[k];
+            });
+        }
+        window._bqCancelAgentPolls = _bqCancelAgentPolls;
 
         // Helper for the empty-state "Clear filters" link.
         window._bqClearCandidateFilters = function(targetKey) {
