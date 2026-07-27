@@ -46,6 +46,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Iterable, Optional
 
 logger = logging.getLogger(__name__)
+# Short alias — several callsites in this module (both mine and pre-
+# existing) reach for `log.info(...)` / `log.warning(...)`. Rather than
+# hunt them all down and risk more latent NameErrors, expose the same
+# object under both names. Pre-existing (unfired) callsites: 3210,
+# 3321, 3451, 3501, 3554. New ones (2026-07-27): 3028, 3769.
+log = logger
 
 # ── Config ──────────────────────────────────────────────────────────────────
 # These mirror app.py constants exactly so we don't drift.

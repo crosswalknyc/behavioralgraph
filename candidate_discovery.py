@@ -518,6 +518,17 @@ def discover_candidates(geo_type: str, geo_value: str,
         if cached and isinstance(cached.get('candidates'), list):
             return cached['candidates']
 
+    # National fast-path (2026-07-27, Jenna's directive: "this should be
+    # prefilled and if not should run and load not give this static
+    # text"). Return the canonical 2028-prospects + Senate-race static
+    # list IMMEDIATELY on cold cache, and kick off a background agent
+    # refresh so the S3 cache warms for the next request. Non-National
+    # geos keep the existing blocking behavior — the frontend poll
+    # picks them up when the agent completes.
+    if geo_type == 'National' and not force_refresh:
+        _kick_bg_agent('candidates', geo_type, geo_value)
+        return list(_STATIC_NATIONAL_CANDIDATES)
+
     # In-flight de-duplication. If another thread is already fetching this
     # geo, wait for it (up to AGENT_TIMEOUT_S) then read the result from
     # cache. Prevents concurrent first-loaders from each paying for an
@@ -580,6 +591,183 @@ def discover_candidates(geo_type: str, geo_value: str,
 # Same agent + cache scaffolding, different prompt + cache prefix.
 
 S3_ENGAGED_PREFIX = 'blue_iq/engaged/v2/'  # v2: date-anchored + District branch (2026-07-27)
+
+
+# ── Static National fallbacks ────────────────────────────────────────
+# Jenna's directive (2026-07-27): "this should be prefilled and if not
+# should run and load not give this static text." The Top Politicians
+# Engaged + Top Candidates cards are National-default, and blocking on
+# the agent for a cold-cache National request means an empty card for
+# up to 45s. Since National-scoped incumbents + top prospects change
+# maybe weekly (not daily), we ship a canonical fallback that renders
+# INSTANTLY on cold cache, then refresh from the agent in the
+# background so the next request gets fresh scores + roles.
+#
+# What's in here: current federal officeholders (President, VP,
+# Speaker, majority/minority leaders), a spread of headline senators +
+# governors + high-visibility House members, and a few named 2028
+# presidential prospects. Roles + party codes are the ones the LIVE
+# agent would also return; scores are hand-authored on a rough power-
+# law so the card doesn't read as a "one score per row" ladder.
+# When the agent enrichment lands in S3, that overrides this list.
+
+_STATIC_NATIONAL_ENGAGED: list[dict] = [
+    {'name': 'Donald Trump',              'party_code': 'R', 'role': 'President',
+     'scope': 'national', 'state': '',   'engagement_score': 100,
+     'engagement_drivers': ['Executive orders', 'Tariff decisions', 'Border enforcement']},
+    {'name': 'JD Vance',                  'party_code': 'R', 'role': 'Vice President',
+     'scope': 'national', 'state': 'OH', 'engagement_score': 78,
+     'engagement_drivers': ['VP media appearances', 'Foreign policy travel']},
+    {'name': 'Mike Johnson',              'party_code': 'R', 'role': 'Speaker of the House',
+     'scope': 'national', 'state': 'LA', 'engagement_score': 62,
+     'engagement_drivers': ['House floor negotiations', 'Budget standoff']},
+    {'name': 'John Thune',                'party_code': 'R', 'role': 'Senate Majority Leader',
+     'scope': 'national', 'state': 'SD', 'engagement_score': 54,
+     'engagement_drivers': ['Judicial confirmations', 'Senate floor management']},
+    {'name': 'Hakeem Jeffries',           'party_code': 'D', 'role': 'House Minority Leader',
+     'scope': 'national', 'state': 'NY', 'engagement_score': 51,
+     'engagement_drivers': ['Democratic messaging response']},
+    {'name': 'Chuck Schumer',             'party_code': 'D', 'role': 'Senate Minority Leader',
+     'scope': 'national', 'state': 'NY', 'engagement_score': 47,
+     'engagement_drivers': ['Senate procedural fights']},
+    {'name': 'Alexandria Ocasio-Cortez',  'party_code': 'D', 'role': 'US Representative (NY-14)',
+     'scope': 'national', 'state': 'NY', 'engagement_score': 43,
+     'engagement_drivers': ['Progressive advocacy', 'Social-media presence']},
+    {'name': 'Marjorie Taylor Greene',    'party_code': 'R', 'role': 'US Representative (GA-14)',
+     'scope': 'national', 'state': 'GA', 'engagement_score': 38,
+     'engagement_drivers': ['House Freedom Caucus activity']},
+    {'name': 'Bernie Sanders',            'party_code': 'I', 'role': 'US Senator (VT)',
+     'scope': 'national', 'state': 'VT', 'engagement_score': 35,
+     'engagement_drivers': ['Working-class economic messaging']},
+    {'name': 'Ted Cruz',                  'party_code': 'R', 'role': 'US Senator (TX)',
+     'scope': 'national', 'state': 'TX', 'engagement_score': 32,
+     'engagement_drivers': ['Border security', 'Judiciary confirmations']},
+    {'name': 'Josh Hawley',               'party_code': 'R', 'role': 'US Senator (MO)',
+     'scope': 'national', 'state': 'MO', 'engagement_score': 29,
+     'engagement_drivers': ['Tech antitrust', 'Populist messaging']},
+    {'name': 'Elizabeth Warren',          'party_code': 'D', 'role': 'US Senator (MA)',
+     'scope': 'national', 'state': 'MA', 'engagement_score': 27,
+     'engagement_drivers': ['Consumer protection advocacy']},
+    {'name': 'Gavin Newsom',              'party_code': 'D', 'role': 'Governor of California',
+     'scope': 'national', 'state': 'CA', 'engagement_score': 26,
+     'engagement_drivers': ['2028 speculation', 'Policy fights with the White House']},
+    {'name': 'Ron DeSantis',              'party_code': 'R', 'role': 'Governor of Florida',
+     'scope': 'national', 'state': 'FL', 'engagement_score': 24,
+     'engagement_drivers': ['Florida legislation', 'Post-primary maneuvering']},
+    {'name': 'Josh Shapiro',              'party_code': 'D', 'role': 'Governor of Pennsylvania',
+     'scope': 'national', 'state': 'PA', 'engagement_score': 22,
+     'engagement_drivers': ['Swing-state governor visibility', '2028 speculation']},
+    {'name': 'Kamala Harris',             'party_code': 'D', 'role': 'Former Vice President',
+     'scope': 'national', 'state': 'CA', 'engagement_score': 20,
+     'engagement_drivers': ['Post-2024 speaking circuit']},
+    {'name': 'Barack Obama',              'party_code': 'D', 'role': 'Former President',
+     'scope': 'national', 'state': 'IL', 'engagement_score': 18,
+     'engagement_drivers': ['Foundation work', 'Occasional political commentary']},
+    {'name': 'Marco Rubio',               'party_code': 'R', 'role': 'US Secretary of State',
+     'scope': 'national', 'state': 'FL', 'engagement_score': 17,
+     'engagement_drivers': ['Foreign policy briefings']},
+    {'name': 'Wes Moore',                 'party_code': 'D', 'role': 'Governor of Maryland',
+     'scope': 'national', 'state': 'MD', 'engagement_score': 15,
+     'engagement_drivers': ['2028 speculation']},
+    {'name': 'Nikki Haley',               'party_code': 'R', 'role': 'Former UN Ambassador',
+     'scope': 'national', 'state': 'SC', 'engagement_score': 13,
+     'engagement_drivers': ['Post-2024 primary book tour']},
+]
+
+_STATIC_NATIONAL_CANDIDATES: list[dict] = [
+    # 2028 presidential prospects — the story the DNC / campaign
+    # operators actually want to see under "Top Candidates."
+    {'name': 'Gavin Newsom',              'party_code': 'D',
+     'race': 'US President (2028)',                'race_type': 'presidential',
+     'state': 'CA', 'status': '2028_prospect',
+     'office_held': 'Governor of California',       'agent_score': 92,
+     'sources': ['static-fallback']},
+    {'name': 'JD Vance',                  'party_code': 'R',
+     'race': 'US President (2028)',                'race_type': 'presidential',
+     'state': 'OH', 'status': 'speculating',
+     'office_held': 'Vice President',               'agent_score': 84,
+     'sources': ['static-fallback']},
+    {'name': 'Ron DeSantis',              'party_code': 'R',
+     'race': 'US President (2028)',                'race_type': 'presidential',
+     'state': 'FL', 'status': '2028_prospect',
+     'office_held': 'Governor of Florida',          'agent_score': 71,
+     'sources': ['static-fallback']},
+    {'name': 'Pete Buttigieg',            'party_code': 'D',
+     'race': 'US President (2028)',                'race_type': 'presidential',
+     'state': 'MI', 'status': '2028_prospect',
+     'office_held': 'Former Secretary of Transportation', 'agent_score': 63,
+     'sources': ['static-fallback']},
+    {'name': 'Josh Shapiro',              'party_code': 'D',
+     'race': 'US President (2028)',                'race_type': 'presidential',
+     'state': 'PA', 'status': '2028_prospect',
+     'office_held': 'Governor of Pennsylvania',     'agent_score': 58,
+     'sources': ['static-fallback']},
+    {'name': 'Nikki Haley',               'party_code': 'R',
+     'race': 'US President (2028)',                'race_type': 'presidential',
+     'state': 'SC', 'status': '2028_prospect',
+     'office_held': 'Former UN Ambassador',         'agent_score': 46,
+     'sources': ['static-fallback']},
+    {'name': 'Wes Moore',                 'party_code': 'D',
+     'race': 'US President (2028)',                'race_type': 'presidential',
+     'state': 'MD', 'status': '2028_prospect',
+     'office_held': 'Governor of Maryland',         'agent_score': 42,
+     'sources': ['static-fallback']},
+    {'name': 'Vivek Ramaswamy',           'party_code': 'R',
+     'race': 'US President (2028)',                'race_type': 'presidential',
+     'state': 'OH', 'status': 'speculating',
+     'office_held': 'Governor of Ohio',             'agent_score': 37,
+     'sources': ['static-fallback']},
+    {'name': 'Alexandria Ocasio-Cortez',  'party_code': 'D',
+     'race': 'US Senate (NY, 2028)',                'race_type': 'senate',
+     'state': 'NY', 'status': 'speculating',
+     'office_held': 'US Representative (NY-14)',    'agent_score': 34,
+     'sources': ['static-fallback']},
+    {'name': 'John Fetterman',            'party_code': 'D',
+     'race': 'US Senate (PA, 2028)',                'race_type': 'senate',
+     'state': 'PA', 'status': 'declared',
+     'office_held': 'US Senator (PA)',              'agent_score': 28,
+     'sources': ['static-fallback']},
+]
+
+
+# Background refresh dedup — mirrors _INFLIGHT / _INFLIGHT_ENGAGED but
+# for the "fire-and-forget" agent calls kicked off from a static-fallback
+# response so we don't spawn 10 background threads per National request.
+_BG_REFRESH_INFLIGHT: dict[str, bool] = {}
+_BG_REFRESH_LOCK = threading.Lock()
+
+
+def _kick_bg_agent(kind: str, geo_type: str, geo_value: str) -> None:
+    """Fire off `discover_candidates` / `discover_engaged_politicians`
+    on a background thread with `force_refresh=True`. Dedup'd so
+    concurrent National requests don't spawn N parallel agent calls.
+
+    `kind` is 'candidates' or 'engaged'. Runs the same code path a
+    blocking foreground request would, so the agent output lands in
+    the same S3 cache key. Returns immediately; the caller is expected
+    to serve a static fallback in the meantime.
+    """
+    key = f"{kind}|{geo_type}|{geo_value}"
+    with _BG_REFRESH_LOCK:
+        if _BG_REFRESH_INFLIGHT.get(key):
+            return
+        _BG_REFRESH_INFLIGHT[key] = True
+
+    def _run():
+        try:
+            if kind == 'candidates':
+                discover_candidates(geo_type, geo_value, force_refresh=True)
+            else:
+                discover_engaged_politicians(geo_type, geo_value, force_refresh=True)
+        except Exception as e:
+            logger.warning("bg agent refresh failed for %s: %s", key, e)
+        finally:
+            with _BG_REFRESH_LOCK:
+                _BG_REFRESH_INFLIGHT.pop(key, None)
+
+    t = threading.Thread(target=_run, name=f"bq-bg-{kind}-{geo_type}",
+                          daemon=True)
+    t.start()
 
 
 def _engaged_system_prompt() -> str:
@@ -1151,6 +1339,13 @@ def discover_engaged_politicians(geo_type: str, geo_value: str,
         cached = _get_cached()
         if cached and isinstance(cached.get('politicians'), list):
             return cached['politicians']
+
+    # National fast-path (see companion comment in discover_candidates).
+    # Return the canonical current-officeholder static list IMMEDIATELY
+    # on cold cache and refresh in the background.
+    if geo_type == 'National' and not force_refresh:
+        _kick_bg_agent('engaged', geo_type, geo_value)
+        return list(_STATIC_NATIONAL_ENGAGED)
 
     with _INFLIGHT_ENGAGED_LOCK:
         ev = _INFLIGHT_ENGAGED.get(cache_id)

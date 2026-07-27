@@ -23660,11 +23660,10 @@
                     <div class="bq-loading-spinner"></div>
                     <div class="bq-loading-hero-text">
                         <div class="bq-loading-title" id="blueIQLoadingTitle">Analyzing this slice&hellip;</div>
-                        <div class="bq-loading-sub"  id="blueIQLoadingPhase">Loading panel signal.</div>
+                        <div class="bq-loading-sub"  id="blueIQLoadingPhase">Loading data.</div>
                     </div>
                     <div class="bq-loading-timer" id="blueIQLoadingTimer">0s</div>
                 </div>
-                <div class="bq-loading-steps" id="blueIQLoadingSteps"></div>
                 <div class="bq-loading-hint" id="blueIQLoadingHint"></div>
                 <div class="bq-loading-skeletons">
                     <div class="bq-skeleton-card bq-skel-lg">
@@ -39724,28 +39723,25 @@
                 { key: 'panel',   label: 'Panel signal',       t: 0 },
                 { key: 'search',  label: 'Search queries',     t: isDistrict ? 8 : 3 },
                 { key: 'journey', label: 'Voter journey',      t: isDistrict ? 22 : 8 },
-                { key: 'trends',  label: 'Google Trends',      t: isDistrict ? 40 : 14 },
-                { key: 'agent',   label: 'Modeling political intent (agent)', t: isDistrict ? 60 : 22 },
+                { key: 'agent',   label: 'Modeling political intent (agent)', t: isDistrict ? 40 : 14 },
             ];
             // Phase copy: shown on the hero sub-line. Reads like a
             // status update, not a fixed label.
-            steps[0].sub = 'Loading behavioral panel for ' + geo + '.';
-            steps[1].sub = 'Extracting the raw search vocabulary from URLs.';
-            steps[2].sub = 'Following the voter journey — what people did next.';
-            steps[3].sub = 'Pulling live Google Trends signal.';
-            steps[4].sub = isDistrict
-                ? 'Web-searching for representatives, issues, and campaign context.'
-                : 'Modeling political intent and creative angles.';
+            steps[0].sub = 'Loading data for ' + geo + '.';
+            steps[1].sub = 'Analyzing the raw search vocabulary.';
+            steps[2].sub = 'Building the voter journey — what people did next.';
+            steps[3].sub = isDistrict
+                ? 'Compiling representatives, issues, and campaign context.'
+                : 'Compiling political intent and creative angles.';
             return steps;
         }
 
         var _BQ_LOADING_HINTS = [
             'This tool surfaces <b>what voters in each district are actually Googling</b> — so candidates can tailor messaging to real search intent, not assumptions.',
             'A row flagged <b>political</b> means the term matches a politician name, civic keyword, or a policy issue like abortion, immigration, or the border.',
-            'Panel signal is the ground truth. When it\'s thin (small district, sparse lookback), an <b>agent web-searches</b> the trailing month to fill in — every synthetic row is stamped so you can tell.',
             'The <b>voter journey</b> card shows where a voter went <i>after</i> hitting a political site — donate, search again, watch a video, or bounce.',
-            'For congressional districts we resolve panel members by ZIP → district, then re-run the aggregation live. That\'s why district cuts take a bit longer than National.',
-            'Every projection is scaled from the 10M panel up to the ~330M US adult population using the same weighting the dashboard uses everywhere else.',
+            'For congressional districts we resolve voters by ZIP → district, then re-run the aggregation live. That\'s why district cuts take a bit longer than National.',
+            'Every projection is scaled up to the ~330M US adult population using the same weighting the dashboard uses everywhere else.',
         ];
 
         function _bqStartLoadingUI(filters) {
@@ -39761,16 +39757,6 @@
 
             var phase = document.getElementById('blueIQLoadingPhase');
             if (phase) phase.textContent = steps[0].sub;
-
-            var stepsHost = document.getElementById('blueIQLoadingSteps');
-            if (stepsHost) {
-                stepsHost.innerHTML = steps.map(function(s, i) {
-                    return '<span class="bq-loading-step' + (i === 0 ? ' active' : '') + '" data-step="' + s.key + '">'
-                         +   '<span class="bq-loading-step-dot"></span>'
-                         +   _bqEscape(s.label)
-                         + '</span>';
-                }).join('');
-            }
 
             var timerEl = document.getElementById('blueIQLoadingTimer');
             if (timerEl) timerEl.textContent = '0s';
@@ -39807,15 +39793,6 @@
                         }, 200);
                     }
                     lastPhaseIdx = idx;
-                }
-
-                if (stepsHost) {
-                    var chips = stepsHost.querySelectorAll('.bq-loading-step');
-                    for (var k = 0; k < chips.length; k++) {
-                        chips[k].classList.remove('active', 'done');
-                        if (k < idx)      chips[k].classList.add('done');
-                        else if (k === idx) chips[k].classList.add('active');
-                    }
                 }
             }
             tick();
@@ -41727,27 +41704,12 @@
             rows.forEach(function(r) { if ((+r.count || 0) > max) max = +r.count; });
             max = max || 1;
             var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
-            // Detect synthetic rows (panel-thin slice → agent-filled).
-            // Show a small "Modeled" banner at the top when ALL rows are
-            // synthetic (rare — usually happens only for very thin
-            // districts or Live-mode 1-day windows), and a per-row pill
-            // when SOME rows are synthetic (typical merged panel+synth).
-            var synthCount   = rows.filter(function(r) { return r && r.synthetic; }).length;
-            var allSynth     = rows.length > 0 && synthCount === rows.length;
-            var partialSynth = synthCount > 0 && !allSynth;
-            var synthBanner  = '';
-            if (allSynth) {
-                synthBanner = '<div class="bq-topsearches-synth-banner" title="Panel signal was thin for this slice; the list was modeled by an OpenAI web-search agent from Pew, Google Trends, and local news signals.">'
-                            + '<span class="bq-topsearches-synth-pill">Modeled</span>'
-                            + 'Panel signal was thin for this slice \u2014 list modeled from external research.'
-                            + '</div>';
-            } else if (partialSynth) {
-                synthBanner = '<div class="bq-topsearches-synth-banner bq-topsearches-synth-banner-mixed" title="' + synthCount + ' of the ' + rows.length + ' rows below were modeled by an agent (marked ‘modeled’ pill).">'
-                            + '<span class="bq-topsearches-synth-pill">Modeled</span>'
-                            + 'Panel signal was thin \u2014 ' + synthCount + ' of ' + rows.length + ' rows below were modeled from external research to fill the tail.'
-                            + '</div>';
-            }
-            body.innerHTML = synthBanner + rows.slice(0, 30).map(function(r) {
+            // "Modeled" banner removed 2026-07-27 at Jenna's request.
+            // Individual synthetic rows still carry a small inline
+            // "modeled" pill next to the term (visible on inspection)
+            // and a subtle purple row-background tint, but no
+            // interstitial explanation at the top of the card.
+            body.innerHTML = rows.slice(0, 30).map(function(r) {
                 var pct = Math.round(((+r.count || 0) / max) * 100);
                 var proj = Math.round((+r.count || 0) * factor);
                 var polChip = r.political
