@@ -13,16 +13,20 @@ Sources (2026-07):
     Apple Books Top 100         -> `rss.marketingtools.apple.com`, public
                                     JSON RSS. Two sub-flavors (top-free,
                                     top-paid).
-    Audible best-sellers        -> stub (audible.com/adblbestsellers renders
-                                    client-side; ships with an operator
-                                    instruction until cookies are donated).
-    Spotify audiobooks          -> stub (open.spotify.com/genre/audiobooks-web
-                                    is a ~6KB React shell; no public JSON
-                                    chart endpoint exists and the Spotify
-                                    Web API doesn't expose a "top audiobooks"
-                                    surface. Populates once open.spotify.com
-                                    cookies are donated - same session that
-                                    unlocks Spotify Podcast Charts.
+    Audible best-sellers        -> `audible.com/charts/best`, Audible's
+                                    Top 100 chart. Server-rendered but
+                                    geo-splits on client IP - needs
+                                    donated audible.com cookies to lock
+                                    the response to the US storefront.
+                                    Pulled across 5 paginated HTMLs
+                                    (20 titles per page).
+    Spotify audiobooks          -> stub (Premium-gated). Verified with
+                                    donated open.spotify.com cookies:
+                                    browse rails return `totalCount: 0`
+                                    for free-tier accounts and Spotify
+                                    does not publish a marketing charts
+                                    mirror. Audible Top 100 covers the
+                                    same audiobook signal.
 
 Snapshot shape (kind='book'):
 
@@ -279,37 +283,167 @@ def _fetch_apple_books(limit: int = 100, tier: str = 'free') -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Audible Best-Sellers  (stub - needs cookies)
+# Audible Top 100 chart  (audible.com/charts/best  -  5 paged HTMLs)
 # ---------------------------------------------------------------------------
+# `audible.com/adblbestsellers` redirects to `/charts/best`, which is
+# fully server-rendered but geo-splits on the client IP. A Hetzner
+# datacenter IP gets served the German (de-DE) storefront (~1MB, does
+# not match our regex); a donated US-Chrome session locks the response
+# to en-US and returns 20 top titles per page.
+#
+# The Top 100 is spread across pages 1..5 via `?page=N`. Each title
+# lives in an `adbl-asin-impression` block with:
+#     data-asin="B0..."
+#     data-position="N"     (1-20 within the page)
+#     data-url="/pd/{slug}/{ASIN}?..."
+#     <img alt="{Title} By {Author} cover art" />
+#     <img src="https://m.media-amazon.com/images/I/{...}_SL500_.jpg" />
+# Absolute rank = (page - 1) * 20 + data-position.
+_AUDIBLE_CHART_URL = 'https://www.audible.com/charts/best'
+_AUDIBLE_CHART_PAGES = 5     # 5 x 20 = 100
+
+_AUDIBLE_CHART_ITEM_RE = re.compile(
+    r'<div\s+class="adbl-asin-impression\s*"[^>]*?'
+    r'data-asin="(?P<asin>[A-Z0-9]{10})"[^>]*?'
+    r'data-position="(?P<pos>\d+)"'
+    r'[\s\S]*?'
+    r'data-url="(?P<url>/pd/[^"]{5,300})"'
+    r'[\s\S]*?'
+    r'<img[^>]+class="bc-pub-block[^"]*"[^>]+src="(?P<img>https://m\.media-amazon\.com/images/[^"]+_SL500_\.jpg)"'
+    r'[\s\S]{0,600}?'
+    r'alt="(?P<alt>[^"]{5,400})"'
+)
+
+_AUDIBLE_ALT_SPLIT_RE = re.compile(
+    r'^(?P<title>.+?)\s+By\s+(?P<author>[^\r\n]+?)\s+cover art\s*$',
+    re.IGNORECASE,
+)
+
+
 def _fetch_audible_books(limit: int = 100) -> tuple[list[dict], str]:
-    """Stub. audible.com/adblbestsellers ships a ~250KB React shell with
-    no inlined product data. Populates once audible.com cookies are
-    donated via `donate_cookies.py audible.com`.
+    """Scrape audible.com/charts/best (Audible's Top 100 audiobook
+    chart) across 5 paginated HTMLs. Returns `(items, sub)`.
     """
-    return [], 'Warming up.'
+    try:
+        from ._base import load_donated_cookies
+        cookies = load_donated_cookies('audible.com') or {}
+    except Exception:
+        cookies = {}
+    if not cookies:
+        logger.warning(
+            "audible books: no donated cookies for audible.com. "
+            "Run `python3 scripts/trends_scrapers/donate_cookies.py "
+            "audible.com` from a logged-in laptop."
+        )
+        return [], ('Log into Audible in your laptop Chrome, then '
+                    'run donate_cookies.py audible.com.')
+
+    from urllib.parse import unquote as _unq
+    items: list[dict] = []
+    seen: set[str] = set()
+
+    for page in range(1, _AUDIBLE_CHART_PAGES + 1):
+        try:
+            r = requests.get(
+                f'{_AUDIBLE_CHART_URL}?page={page}',
+                headers={
+                    'User-Agent':      _UA,
+                    'Accept':          ('text/html,application/xhtml+xml,'
+                                         'application/xml;q=0.9,*/*;q=0.8'),
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Referer':         'https://www.audible.com/',
+                },
+                cookies=cookies,
+                timeout=25,
+            )
+        except Exception as e:
+            logger.warning("audible books p%d: %s", page, e)
+            continue
+        if not r.ok:
+            logger.warning("audible books p%d: http %s", page, r.status_code)
+            continue
+        html = r.text or ''
+        if 'lang="de-DE"' in html[:2000] or 'lang="de"' in html[:2000]:
+            logger.warning("audible books: got de-DE storefront - cookies "
+                           "may be stale, re-donate")
+            return [], ('Log into Audible in your laptop Chrome, then '
+                        'run donate_cookies.py audible.com.')
+        if len(html) < 100_000:
+            logger.warning("audible books p%d: html too small (%d bytes)",
+                           page, len(html))
+            continue
+
+        for m in _AUDIBLE_CHART_ITEM_RE.finditer(html):
+            asin = m.group('asin')
+            if asin in seen:
+                continue
+            seen.add(asin)
+            pos_in_page = int(m.group('pos'))
+            abs_rank = (page - 1) * 20 + pos_in_page
+
+            alt = _html.unescape(m.group('alt').strip())
+            title, author = alt, ''
+            am = _AUDIBLE_ALT_SPLIT_RE.match(alt)
+            if am:
+                title  = am.group('title').strip()
+                author = am.group('author').strip()
+            # Every alt line ends with " Audiobook" because that's how
+            # Audible names its product pages; the "Audiobook" suffix
+            # is redundant on this card and clutters the row.
+            if title.endswith(' Audiobook'):
+                title = title[:-len(' Audiobook')].rstrip()
+
+            url = _html.unescape(m.group('url'))
+            # data-url ships with a huge tracking query string; keep only
+            # the path so the deep link stays stable across sessions.
+            url = url.split('?', 1)[0]
+            url = 'https://www.audible.com' + url
+
+            items.append({
+                'rank':   abs_rank,
+                'title':  title,
+                # Author fills the "artist" slot the frontend already
+                # renders under the row title.
+                'artist': author,
+                'url':    url,
+                'image':  m.group('img'),
+            })
+            if len(items) >= limit:
+                items.sort(key=lambda x: x['rank'])
+                for i, it in enumerate(items, start=1):
+                    it['rank'] = i
+                return items, ''
+
+    items.sort(key=lambda x: x['rank'])
+    for i, it in enumerate(items, start=1):
+        it['rank'] = i
+
+    if not items:
+        return [], 'Warming up.'
+    return items, ''
 
 
 # ---------------------------------------------------------------------------
-# Spotify Audiobooks  (stub - needs cookies + Playwright)
+# Spotify Audiobooks  (Premium-gated - keeps a stub sub-label)
 # ---------------------------------------------------------------------------
-# Spotify launched audiobooks as part of Premium in 2023 and the browse
-# lineup lives at `open.spotify.com/genre/audiobooks-web`. That URL
-# returns HTTP 200 to anonymous clients but ships only a ~6KB React
-# shell (no server-rendered content); the actual audiobook shelves are
-# fetched client-side after auth.
+# Spotify's audiobooks catalog lives at `open.spotify.com/genre/
+# audiobooks-web` but the browse rails are gated behind a Premium
+# subscription. Verified 2026-07-27 with a fresh open.spotify.com
+# cookie donation from a free-tier account: the pathfinder GraphQL
+# calls (`me { libraryV3 { items } }`) return `totalCount: 0` and the
+# DOM renders zero `a[href^="/audiobook/"]` tiles. Spotify does not
+# publish a marketing `audiobookcharts.byspotify.com` mirror equivalent
+# to the podcasts one, and the Web API `/audiobooks/{id}` endpoints
+# are per-title lookups only (no `top` or `popular` list).
 #
-# Unlike podcasts, Spotify does NOT expose an `audiobookcharts.byspotify
-# .com` marketing subdomain, and the Web API's `/audiobooks/{id}` and
-# `/audiobooks?ids=...` endpoints are per-title only (no `top` or
-# `popular` list). The only way to get a ranked audiobook lineup today
-# is a Playwright scrape of the browse page with a logged-in session.
-#
-# Populates automatically once open.spotify.com cookies are donated -
-# same session that unlocks Spotify Podcast Charts, so one cookie run
-# covers both tabs.
+# Audible Top 100 (already live in this file) covers the same signal
+# from the bigger audiobook platform, so this stays as an honest
+# placeholder rather than blocking on Premium.
 def _fetch_spotify_audiobooks(limit: int = 100) -> tuple[list[dict], str]:
-    """Stub. Returns ([], operator_sub)."""
-    return [], 'Warming up.'
+    """Stubbed. Spotify audiobook browse is Premium-only; falls through
+    to Audible Top 100 for audiobook signal in the Books tab."""
+    return [], ('Spotify audiobook browse is Premium-only. Audible Top 100 '
+                '(also on this tab) is our audiobook signal today.')
 
 
 def fetch() -> dict[str, Any]:
@@ -345,7 +479,9 @@ def fetch() -> dict[str, Any]:
             },
             'audible': {
                 'label':     'Audible Best-Sellers',
-                'sub':       aud_sub,
+                'sub':       (aud_sub or "Audible's Top 100 chart. What people "
+                                          'are listening to on the biggest '
+                                          'audiobook platform.'),
                 'items':     aud_items,
                 'available': bool(aud_items),
             },

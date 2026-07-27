@@ -240,20 +240,153 @@ def _fetch_spotify_podcasts(limit: int = 100) -> tuple[list[dict], str]:
 
 
 # ---------------------------------------------------------------------------
-# Amazon Music Podcasts  (stub - needs cookies + Playwright)
+# Amazon Music Podcasts  (Playwright + donated music.amazon.com cookies)
 # ---------------------------------------------------------------------------
+# music.amazon.com/podcasts is a client-side-rendered React SPA that
+# stays as a minimal shell until an authenticated `showBrowseWidgetPage`
+# GraphQL call hydrates ~10 podcast carousels. Same session as the
+# music-charts scraper (music.amazon.com cookies).
+#
+# Tiles use `<music-vertical-item>` custom elements with the podcast
+# title on `primary-text` and the internal `/podcasts/{uuid}/{slug}`
+# route on `primary-href`. We flatten every visible carousel, dedupe
+# by URL, and preserve first-seen order (which is roughly
+# Popular -> True Crime -> News -> Comedy -> ... - the same editorial
+# ordering visible in the Amazon Music UI).
+_AMAZON_MUSIC_PODCASTS_URL = 'https://music.amazon.com/podcasts'
+
+
 def _fetch_amazon_podcasts(limit: int = 100) -> tuple[list[dict], str]:
-    """Stub. music.amazon.com/podcasts is a full React SPA that fetches
-    its rails client-side after auth. Unlike Spotify (which has a
-    public byspotify.com marketing endpoint) and Audible (whose /ep/
-    podcasts page is server-rendered), Amazon Music has NO free-tier
-    public analog - podcasts.amazon.com is dead, podcasters.amazon.com
-    is the publisher portal, and music.amazon.com's internal GraphQL
-    requires an auth token. Populates once music.amazon.com cookies
-    are donated via `donate_cookies.py music.amazon.com` and a
-    Playwright DOM scrape ships.
+    """Scrape Amazon Music's `/podcasts` browse page via Playwright with
+    the donated music.amazon.com session. Returns `(items, sub)`.
     """
-    return [], 'Warming up.'
+    try:
+        from ._playwright import _lazy_playwright, _launch_browser, _try_stealth, UA
+        from ._base import load_donated_cookies_playwright
+    except Exception as e:
+        logger.info("amazon podcasts: playwright helpers unavailable: %s", e)
+        return [], 'Warming up.'
+
+    sp = _lazy_playwright()
+    if sp is None:
+        logger.warning("amazon podcasts: playwright not installed")
+        return [], 'Warming up.'
+
+    donated = load_donated_cookies_playwright('music.amazon.com')
+    if not donated:
+        logger.warning(
+            "amazon podcasts: no donated cookies for music.amazon.com. "
+            "Run `python3 scripts/trends_scrapers/donate_cookies.py "
+            "music.amazon.com` from a logged-in laptop."
+        )
+        return [], ('Log into Amazon Music once in your laptop Chrome, then '
+                    'run donate_cookies.py music.amazon.com.')
+
+    items: list[dict] = []
+    try:
+        with sp() as pw:
+            try:
+                browser, _c = _launch_browser(pw, prefer_chrome=True)
+            except Exception as e:
+                logger.warning("amazon podcasts: playwright launch: %s", e)
+                return [], 'Warming up.'
+
+            ctx = browser.new_context(
+                user_agent=UA,
+                viewport={'width': 1440, 'height': 900},
+                locale='en-US',
+                timezone_id='America/New_York',
+                extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
+            )
+            ctx.add_cookies(donated)
+            page = ctx.new_page()
+            _try_stealth(page)
+
+            # Warm homepage so the auth-context bootstrap fires (needed
+            # for the /podcasts page to receive the client token used
+            # by its subsequent showBrowseWidgetPage GraphQL fetch).
+            try:
+                page.goto('https://music.amazon.com/',
+                          wait_until='domcontentloaded', timeout=45000)
+                page.wait_for_timeout(3500)
+            except Exception as e:
+                logger.info("amazon podcasts: homepage warmup: %s", e)
+
+            page.goto(_AMAZON_MUSIC_PODCASTS_URL,
+                      wait_until='domcontentloaded', timeout=45000)
+            page.wait_for_timeout(6000)
+
+            # Wait for the first batch of tiles to hydrate. If they
+            # never do, cookies are dead - drop out with the operator
+            # instruction.
+            try:
+                page.wait_for_function(
+                    "() => document.querySelectorAll("
+                    "'music-vertical-item[primary-text]').length >= 10",
+                    timeout=25000,
+                )
+            except Exception:
+                logger.warning("amazon podcasts: tiles never hydrated - "
+                               "cookies likely expired, re-donate")
+                try:
+                    ctx.close(); browser.close()
+                except Exception:
+                    pass
+                return [], ('Log into Amazon Music once in your laptop Chrome, '
+                            'then run donate_cookies.py music.amazon.com.')
+
+            # Scroll to force lazy carousels below the fold to load.
+            for _ in range(8):
+                page.mouse.wheel(0, 2500)
+                page.wait_for_timeout(500)
+            page.wait_for_timeout(1500)
+
+            tiles = page.evaluate("""() => {
+                const out = [];
+                document.querySelectorAll('music-vertical-item').forEach((el) => {
+                    const p    = el.getAttribute('primary-text')     || el.primaryText     || '';
+                    const s1   = el.getAttribute('secondary-text-1') || el.secondaryText1  || '';
+                    const s2   = el.getAttribute('secondary-text-2') || el.secondaryText2  || '';
+                    const img  = el.getAttribute('image-src')        || '';
+                    const href = el.getAttribute('primary-href')     || '';
+                    if (p && href && href.startsWith('/podcasts/')) {
+                        out.push({title: p, sub1: s1, sub2: s2, image: img, href});
+                    }
+                });
+                return out;
+            }""")
+
+            try:
+                ctx.close(); browser.close()
+            except Exception:
+                pass
+
+            seen_urls: set[str] = set()
+            for t in tiles:
+                href = t.get('href') or ''
+                if not href:
+                    continue
+                if href in seen_urls:
+                    continue
+                seen_urls.add(href)
+                items.append({
+                    'rank':   len(items) + 1,
+                    'title':  (t.get('title') or '').strip(),
+                    # No publisher exposed on the tile - the frontend
+                    # already handles missing artist/publisher.
+                    'artist': (t.get('sub1') or '').strip(),
+                    'url':    'https://music.amazon.com' + href,
+                    'image':  t.get('image') or '',
+                })
+                if len(items) >= limit:
+                    break
+    except Exception as e:
+        logger.warning("amazon podcasts: playwright pass failed: %s", e)
+        return [], 'Warming up.'
+
+    if not items:
+        return [], 'Warming up.'
+    return items, ''
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +446,27 @@ def _fetch_audible_podcasts(limit: int = 100) -> tuple[list[dict], str]:
     """Parse audible.com/ep/podcasts into a normalized carousel-flattened
     list. Returns (items, sub) where `sub` is the operator-facing note
     used when items[] is empty (transient failure only).
+
+    Requires donated `audible.com` cookies. Without them Audible geo-
+    redirects our Hetzner datacenter IP to the German (de-DE) storefront
+    which returns a completely different HTML shape and lands 0 items.
+    The donated US-Chrome session includes an `ubid-main` + `session-id`
+    that locks the response to www.audible.com/en_US.
     """
+    try:
+        from ._base import load_donated_cookies
+        cookies = load_donated_cookies('audible.com') or {}
+    except Exception:
+        cookies = {}
+    if not cookies:
+        logger.warning(
+            "audible podcasts: no donated cookies for audible.com. "
+            "From your laptop: "
+            "`python3 scripts/trends_scrapers/donate_cookies.py audible.com`"
+        )
+        return [], ('Log into Audible in your laptop Chrome, then '
+                    'run donate_cookies.py audible.com.')
+
     try:
         r = requests.get(
             _AUDIBLE_PODCASTS_URL,
@@ -322,7 +475,11 @@ def _fetch_audible_podcasts(limit: int = 100) -> tuple[list[dict], str]:
                 'Accept':          ('text/html,application/xhtml+xml,'
                                      'application/xml;q=0.9,*/*;q=0.8'),
                 'Accept-Language': 'en-US,en;q=0.9',
+                # Hint the CDN to keep us on the US storefront even if
+                # something in the cookie jar drifts.
+                'Referer':         'https://www.audible.com/',
             },
+            cookies=cookies,
             timeout=25,
         )
     except Exception as e:
@@ -332,6 +489,13 @@ def _fetch_audible_podcasts(limit: int = 100) -> tuple[list[dict], str]:
         logger.warning("audible podcasts: http %s", r.status_code)
         return [], 'Warming up.'
     html = r.text or ''
+    # German shell also >50k bytes but has `lang="de-DE"` in <html>.
+    # Explicitly check we got the US storefront before parsing.
+    if 'lang="de-DE"' in html[:2000] or 'lang="de"' in html[:2000]:
+        logger.warning("audible podcasts: got de-DE storefront despite "
+                       "cookies - cookies may be stale, re-donate")
+        return [], ('Log into Audible in your laptop Chrome, then '
+                    'run donate_cookies.py audible.com.')
     if len(html) < 50_000:
         logger.warning("audible podcasts: html too small (%d bytes) - "
                        "likely served an anti-bot shell", len(html))
@@ -544,9 +708,12 @@ def _fetch_netflix_podcasts(limit: int = 60) -> tuple[list[dict], str]:
 
 
 def fetch() -> dict[str, Any]:
-    """Pull all five sources. Apple, Spotify, Netflix and Audible return
-    live data from public endpoints; Amazon Music remains stubbed
-    until music.amazon.com cookies + a Playwright DOM scrape ship.
+    """Pull all five sources. All are live:
+      - Apple, Spotify, Netflix ship server-rendered / public API data.
+      - Audible needs donated audible.com cookies to lock the US
+        storefront (datacenter IPs get geo-redirected to de-DE).
+      - Amazon Music needs donated music.amazon.com cookies driven
+        through Playwright (same session as the music-charts scraper).
     """
     apple_items = _fetch_apple_podcasts(limit=100)
     spot_items, spot_sub = _fetch_spotify_podcasts(limit=100)
@@ -580,7 +747,8 @@ def fetch() -> dict[str, Any]:
             },
             'amazon': {
                 'label':     'Amazon Music Podcasts (US)',
-                'sub':       amz_sub,
+                'sub':       (amz_sub or "Top-listened podcasts across Amazon "
+                                          "Music's editorial carousels."),
                 'items':     amz_items,
                 'available': bool(amz_items),
             },
