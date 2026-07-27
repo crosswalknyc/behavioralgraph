@@ -602,13 +602,25 @@ def blue_iq_cache_key(filters: dict) -> str:
             orphan them. Bumping version cleans that up: hashes for
             {party=Democrat, ...} and {party=All, ...} were identical
             in structure but v19 vs v20 differ, forcing cache regen.
+     v21 — 2026-07-27: district cells now synth-fill search_engines
+            and social_media when the panel-side query returns fewer
+            than 3 rows. Root cause: reference.host_mapping's
+            'Search Engine/AI' category is empty and 'Social Media'
+            rows don't cleanly join to clickstream.COMMON_NAME, so
+            the panel filter matches nothing for district cuts. The
+            OpenAI web-search agent (blue_iq_synth_agent) supplies
+            plausible market shares (Google 85%, YouTube 90%, etc.)
+            scaled to the district's panel size, stamped
+            synthetic:true. Any v20 cache entries for district cuts
+            have empty search_engines/social_media arrays and need
+            regen to pick up the synth-filled versions.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   20,
+        'version':   21,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -1959,6 +1971,49 @@ def _slice_cube(cube: dict, filters: dict) -> tuple[Optional[dict], int]:
     return None, 0
 
 
+def _district_synth_label(district: str) -> str:
+    """Build a human-readable geo label for the synth agent.
+
+    "CA-12" -> "California 12th Congressional District" (or with the
+    hostmap's pretty name appended if available). The label is what
+    the agent sees; giving it the pretty district name lets it skew
+    the synthesized shares slightly by demographic (urban vs rural,
+    younger vs older) instead of always returning the national mean.
+    """
+    if not district:
+        return 'United States'
+    dref = _load_district_ref()
+    pretty = (dref.get('district_names') or {}).get(district)
+    parts = district.split('-', 1)
+    if len(parts) != 2:
+        return pretty or district
+    state_code, num = parts[0], parts[1].lstrip('0') or '0'
+    try:
+        from external_signals import _USPS_TO_NAME               # type: ignore
+    except Exception:
+        _USPS_TO_NAME = {}
+    state_full = _USPS_TO_NAME.get(state_code, state_code)
+    suffix_map = {'1': 'st', '2': 'nd', '3': 'rd'}
+    last_two = num[-2:] if len(num) >= 2 else num
+    if last_two in ('11', '12', '13'):
+        suffix = 'th'
+    else:
+        suffix = suffix_map.get(num[-1:], 'th')
+    label = f"{state_full} {num}{suffix} Congressional District"
+    # The CSV's pretty name is formatted `<code> (<flavor>)`; strip the
+    # code prefix + parens to get just the flavor (e.g. "at Large",
+    # "Delegate District", "Resident Commissioner"). Only append that
+    # flavor if it adds information beyond "Congressional District N",
+    # so standard districts don't get a redundant tail.
+    if pretty:
+        flavor = re.sub(r'^\s*[A-Z]{2}-\d+\s*\(?', '', pretty).rstrip(') ').strip()
+        if flavor and 'congressional district' not in flavor.lower():
+            label = f"{label} ({flavor})"
+        elif flavor and 'at large' in flavor.lower():
+            label = f"{state_full} At-Large Congressional District"
+    return label
+
+
 def _compute_district_cell_live(filters: dict) -> tuple[Optional[dict], int]:
     """Live-compute a cube-cell-shaped payload for a District cut.
 
@@ -2007,6 +2062,44 @@ def _compute_district_cell_live(filters: dict) -> tuple[Optional[dict], int]:
                               lambda: _card_search_engines(uids, start_date), [])
     panel_social      = _safe('social_media',
                               lambda: _card_social_media(uids, start_date), [])
+
+    # Synthetic fallback (2026-07-27): if the panel-side query for
+    # search engines or social platforms comes back with <3 rows for
+    # a district cell, ask an agent for the current published-data
+    # market-share breakdown and scale it to the district's panel
+    # size. Root cause of the empty result today is that
+    # reference.host_mapping has zero rows tagged 'Search Engine/AI'
+    # and the 'Social Media' rows don't line up with clickstream's
+    # COMMON_NAME, so the panel query filter is effectively empty. A
+    # host_mapping fix is Jessie/Ana's job; in the meantime cards
+    # never render blank.
+    #
+    # We DON'T overwrite non-empty panel results — if the panel has
+    # even a handful of legit rows, those are more accurate than a
+    # web-search synthesis. Only fully-empty (or near-empty)
+    # responses trip the fallback. Every synthetic row is stamped
+    # `synthetic:true`; the frontend can surface that as a hint.
+    if len(panel_search) < 3 or len(panel_social) < 3:
+        try:
+            from blue_iq_synth_agent import synthesize_shares
+            geo_label = _district_synth_label(district)
+            if len(panel_search) < 3:
+                synth = _safe('synth_search_engines',
+                              lambda: synthesize_shares('search_engines',
+                                                        geo_label, len(uids)),
+                              [])
+                if synth:
+                    panel_search = synth
+            if len(panel_social) < 3:
+                synth = _safe('synth_social_media',
+                              lambda: synthesize_shares('social_media',
+                                                        geo_label, len(uids)),
+                              [])
+                if synth:
+                    panel_social = synth
+        except ImportError:
+            logger.debug("blue_iq_synth_agent not importable; skipping synth fallback")
+
     panel_politicians = _safe('top_politicians',
                               lambda: _card_top_politicians(uids, start_date), [])
     panel_articles    = _safe('top_articles',
