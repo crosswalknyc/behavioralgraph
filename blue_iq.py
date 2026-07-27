@@ -630,13 +630,27 @@ def blue_iq_cache_key(filters: dict) -> str:
             returning. Bumping forces regen of any v21 district
             payloads that lacked top_searches and had stale role
             labels on top_politicians.
+     v23 — 2026-07-27: `top_searches` gets an agent synth fallback
+            when the panel returns fewer than 8 rows (thin district /
+            sparse-panel state / Live-mode 1-day lookback). The
+            fallback fires `blue_iq_synth_agent.synthesize_top_searches`
+            with the district's pretty label so the OpenAI web-search
+            agent can research plausible top queries. Also adds a
+            validator-side stale-role guard (Biden/Harris/Obama →
+            "Former President" when the agent still emits current
+            role) plus linear engagement-score ladder detection +
+            per-name jitter that rewrites 100/95/90/85 ladders into
+            a power-law spread. Frontend removes the Issue × Geo
+            heatmap (~200 lines of state-hex JS + CSS). Bumping
+            invalidates any v22 payload that has stale role labels
+            or a fabricated ladder.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   22,
+        'version':   23,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -2145,6 +2159,25 @@ def _district_synth_label(district: str) -> str:
     return label
 
 
+def _synth_geo_label(f: dict) -> str:
+    """Build a human-readable geo label for any Blue IQ synth call.
+    National → "United States", State → the state name, DMA → the DMA
+    name, District → the pretty district label from _district_synth_label.
+    """
+    geo_type  = (f.get('geo_type')  or 'National').strip()
+    geo_value = (f.get('geo_value') or '').strip()
+    if geo_type == 'National' or not geo_value:
+        return 'United States'
+    if geo_type == 'District':
+        return _district_synth_label(geo_value)
+    if geo_type == 'State':
+        # State names are already human-friendly ("California", "Texas").
+        return geo_value
+    if geo_type == 'DMA':
+        return f"{geo_value} DMA"
+    return geo_value
+
+
 def _compute_district_cell_live(filters: dict) -> tuple[Optional[dict], int]:
     """Live-compute a cube-cell-shaped payload for a District cut.
 
@@ -3429,6 +3462,39 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     # known politician name so the UI can offer a "political only"
     # filter.
     top_searches_out = _shape_top_searches(panel_top_queries)
+
+    # Synth fallback: if the panel returned fewer than 8 rows (thin
+    # cell — small district, sparse-panel state, Live-mode 1-day
+    # lookback, etc.), invoke the OpenAI web-search agent to fill the
+    # card so it's never empty. Same "never blank a district card"
+    # principle we already apply to search_engines / social_media.
+    # Every synthesized row carries `synthetic: True` so the UI shows
+    # a "modeled" pill for transparency.
+    if len(top_searches_out) < 8:
+        try:
+            from blue_iq_synth_agent import synthesize_top_searches
+            geo_label = _synth_geo_label(f)
+            synth_size = max(1000, int(panel_size or 0))  # min 1K so shares scale reasonably
+            synth_rows = synthesize_top_searches(geo_label, synth_size)
+            if synth_rows:
+                # Merge: panel rows first (real signal), agent rows to
+                # fill the tail. Dedupe on term (case-insensitive).
+                have = {(r.get('term') or '').lower() for r in top_searches_out}
+                for r in synth_rows:
+                    key = (r.get('term') or '').lower()
+                    if key and key not in have:
+                        have.add(key)
+                        top_searches_out.append(r)
+                        if len(top_searches_out) >= 30:
+                            break
+                logger.info(
+                    "top_searches synth-filled for %s|%s: %d panel + %d synth = %d total",
+                    f['geo_type'], f['geo_value'] or 'National',
+                    len(panel_top_queries or []),
+                    len([r for r in top_searches_out if r.get('synthetic')]),
+                    len(top_searches_out))
+        except Exception as e:  # never break the payload on synth failure
+            logger.warning("top_searches synth fallback failed: %s", e)
 
     cards = {
         'issue_buckets':       issue_buckets,
