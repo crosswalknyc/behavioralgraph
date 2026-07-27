@@ -185,6 +185,33 @@ def main(argv: list[str] | None = None) -> int:
 
     _write_index(results)
 
+    # ------------------------------------------------------------------
+    # Warm the dashboard cache with the default (National, 7d) tuple.
+    # Every user's first Trends IQ visit hits this tuple; if it's cold
+    # the aggregator does 30+ S3 reads + cross-platform annotation +
+    # geo filtering and takes 3-5 seconds. Doing it once here, right
+    # after the fresh snapshots land, means every user hit tomorrow is
+    # an instant cache read. Best-effort - if it fails we log and move
+    # on; the first user request will just rebuild.
+    try:
+        # Late import so this file stays runnable standalone in envs
+        # where the Flask app module isn't installed (test boxes).
+        sys.path.insert(0, os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '..', '..')))
+        import trends_iq  # type: ignore
+        for lookback in (7, 30):
+            filters = {
+                'geo_type':      'National',
+                'geo_value':     '',
+                'lookback_days': lookback,
+            }
+            t0 = time.time()
+            trends_iq.compute_view(filters, force_refresh=True)
+            print(f"cache warm: National last-{lookback}d "
+                   f"rebuilt in {time.time() - t0:.1f}s")
+    except Exception as e:
+        logging.warning("run_all: dashboard cache warm failed: %s", e)
+
     total_elapsed = time.time() - started
     print(f"\ntrends scrapers complete in {total_elapsed:.1f}s")
     print(f"{'source':<12} {'kind':<9} {'count':>6}  {'elapsed':>8}  error")
