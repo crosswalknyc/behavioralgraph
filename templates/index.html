@@ -41234,9 +41234,25 @@
                 rows = rows.filter(function(r) { return r && r.political; });
             }
             if (!rows.length) {
-                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0;">'
+                // Build a geo-appropriate label for the empty-state copy
+                // so the message doesn't say "this district" when the
+                // user is looking at the national roll-up. Uses the same
+                // filter shape the meta-line at the top uses.
+                var lastD = (window.__blueIQ && window.__blueIQ.lastData) || {};
+                var lastF = lastD.filters || {};
+                var geoLabel;
+                switch (lastF.geo_type) {
+                    case 'District': geoLabel = lastF.geo_value ? (lastF.geo_value + ' voters') : 'this district'; break;
+                    case 'State':    geoLabel = lastF.geo_value ? (lastF.geo_value + ' voters')    : 'this state'; break;
+                    case 'DMA':      geoLabel = lastF.geo_value ? ('the ' + lastF.geo_value + ' DMA') : 'this DMA'; break;
+                    case 'National': /* fallthrough */
+                    default:         geoLabel = 'the country as a whole'; break;
+                }
+                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0; line-height: 1.5;">'
                     + (mode === 'political'
-                        ? 'No political-flavored terms surfaced in the top 30 raw searches for this slice. That itself is signal: this district is Googling cost-of-living, health, and everyday concerns more than partisan topics right now.'
+                        ? ('No political-flavored terms surfaced in the top 30 raw searches for this slice. '
+                            + 'That itself is signal: ' + _bqEscape(geoLabel) + ' is Googling cost-of-living, health, and everyday concerns more than partisan topics in this window. '
+                            + 'For the policy-issue view, see the <em>Political issue searches</em> card next to this one (that card is grounded in Google Trends and always surfaces political intent per-geo).')
                         : 'No panel search terms available for this slice yet.')
                     + '</div>';
                 return;
