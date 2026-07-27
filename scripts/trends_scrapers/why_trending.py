@@ -218,10 +218,11 @@ _GDELT_DOC_URL = 'https://api.gdeltproject.org/api/v2/doc/doc'
 _GDELT_TIMEOUT = 12
 _GDELT_UA      = 'BG-Trends/1.0 (jenna@crosswalknyc.com)'
 # GDELT rate-limits at "one request every 5 seconds" per IP across the
-# entire DocAPI endpoint. Anything faster returns a plain-text HTTP 200
-# with a "Please limit requests..." message instead of JSON. 5.5s adds
-# a safety margin so occasional network jitter doesn't push us over.
-_GDELT_MIN_INTERVAL = 5.5
+# entire DocAPI endpoint. Anything faster returns HTTP 429 (sometimes
+# as plain-text 200 with a "Please limit requests..." body). 7s gives
+# a comfortable safety margin so occasional network jitter doesn't
+# push us over the edge, and keeps 30 misses under 4 minutes.
+_GDELT_MIN_INTERVAL = 7.0
 # Domains that publish trend-piece SEO fluff with the query verbatim
 # ("David Jonsson net worth 2025", "Everything you need to know about
 # Kobe McDonald") - they mention the name but don't describe an event.
@@ -240,8 +241,13 @@ def _gdelt_search_headlines(display_name: str, max_records: int = 5,
     name = (display_name or '').strip()
     if len(name) < 3:
         return []
+    # Empirically (2026-07-27), adding `sourcelang:eng` to the query
+    # pushes every request into a stricter rate-limit bucket and
+    # returns HTTP 429 on almost every call. Dropping the filter gives
+    # us clean 200s + real articles; the DocAPI's default relevance
+    # ranking already surfaces English news for English names anyway.
     params = {
-        'query':      f'"{name}" sourcelang:eng',
+        'query':      f'"{name}"',
         'mode':       'artlist',
         'maxrecords': str(max_records * 3),  # oversample; we filter+dedupe below
         'format':     'json',
@@ -297,9 +303,9 @@ def _gdelt_search_many(names: list[str]) -> dict[str, list[str]]:
     no hits get an empty list.
 
     Because GDELT throttles at one request per 5 seconds, parallel calls
-    all get plain-text throttle responses instead of JSON. We space
-    calls at `_GDELT_MIN_INTERVAL` seconds; 30 names -> ~2.75 minutes,
-    which is well within the daily cron budget.
+    all get 429 or plain-text throttle responses instead of JSON. We
+    space calls at `_GDELT_MIN_INTERVAL` seconds; 30 names -> ~3.5
+    minutes, well within the daily cron budget.
     """
     if not names:
         return {}
