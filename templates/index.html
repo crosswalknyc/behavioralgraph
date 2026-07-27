@@ -23366,19 +23366,9 @@
         <div id="blueIQView">
             <div class="blue-iq-header">
                 <h2 class="blue-iq-title">🟦 Blue IQ <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Political-audience tracker</span></h2>
-                <p class="blue-iq-subtitle">Filter the panel by party affiliation (AI-imputed from behavior) and geography to see what constituents are searching, where they engage, and what political content reaches them.</p>
+                <p class="blue-iq-subtitle">Filter the panel by geography to see what constituents are searching, where they engage, and what political content reaches them.</p>
             </div>
             <div class="blue-iq-filter-bar">
-                <div>
-                    <label for="blueIQParty">Party</label>
-                    <select id="blueIQParty">
-                        <option value="All" selected>All</option>
-                        <option value="Democrat">Democrat</option>
-                        <option value="Republican">Republican</option>
-                        <option value="Independent">Independent</option>
-                        <option value="Undecided">Undecided</option>
-                    </select>
-                </div>
                 <div>
                     <label for="blueIQGeoType">Geography</label>
                     <select id="blueIQGeoType">
@@ -39322,7 +39312,11 @@
 
         async function applyBlueIQFilters() {
             var filters = {
-                party:         document.getElementById('blueIQParty').value || 'All',
+                // Party filter removed 2026-07-27 - hard-coded 'All' so
+                // stale JS/URL/tab state can't smuggle a party cut back
+                // into the backend. `_normalize_filters` on the server
+                // also enforces this, this is just belt-and-suspenders.
+                party:         'All',
                 geo_type:      document.getElementById('blueIQGeoType').value || 'National',
                 geo_value:     document.getElementById('blueIQGeoValue').value || '',
                 lookback_days: parseInt(document.getElementById('blueIQLookback').value || '30', 10),
@@ -40346,12 +40340,6 @@
                   + '<h3 class="blue-iq-card-title">Top politicians engaged'
                   +   '<span class="blue-iq-card-subtitle">who voters are driving conversation about ' + _bqEscape(polsGeoLbl) + ' \u00b7 click a row to pin</span>'
                   + '</h3>'
-                  + '<div class="bq-party-filter" data-target="top_politicians">'
-                  +   '<button class="bq-party-chip active" data-party="All">All</button>'
-                  +   '<button class="bq-party-chip" data-party="D">Democrats</button>'
-                  +   '<button class="bq-party-chip" data-party="R">Republicans</button>'
-                  +   '<button class="bq-party-chip" data-party="I">Independents</button>'
-                  + '</div>'
                   + '<div class="blue-iq-card-body" id="blueIQCardPoliticiansBody"></div>'
                   + '</div>';
 
@@ -40365,12 +40353,6 @@
                   + '<h3 class="blue-iq-card-title">Top candidates (2026 cycle)'
                   +   '<span class="blue-iq-card-subtitle">declared candidates ' + _bqEscape(candsGeoLbl) + ' \u00b7 click race type to drill in</span>'
                   + '</h3>'
-                  + '<div class="bq-party-filter" data-target="top_candidates">'
-                  +   '<button class="bq-party-chip active" data-party="All">All</button>'
-                  +   '<button class="bq-party-chip" data-party="D">Democrats</button>'
-                  +   '<button class="bq-party-chip" data-party="R">Republicans</button>'
-                  +   '<button class="bq-party-chip" data-party="I">Independents</button>'
-                  + '</div>'
                   + '<div class="bq-race-slicer" data-target="top_candidates">'
                   +   '<button class="bq-race-chip active" data-race="all">All races</button>'
                   +   '<button class="bq-race-chip" data-race="senate">Senate</button>'
