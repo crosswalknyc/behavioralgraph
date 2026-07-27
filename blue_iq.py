@@ -67,7 +67,10 @@ DEFAULT_LOOKBACK_DAYS = int(os.environ.get('BLUE_IQ_LOOKBACK_DAYS', '30'))
 OPENAI_MODEL       = os.environ.get('BLUE_IQ_OPENAI_MODEL', 'gpt-4o')
 
 VALID_PARTIES   = ['Democrat', 'Republican', 'Independent', 'Undecided', 'All']
-VALID_GEO_TYPES = ['National', 'State', 'DMA']
+# 2026-07-27: swapped 'DMA' for 'District' (congressional district, 119th
+# Congress). Districts are politically meaningful and cover the whole US
+# without foreign-city leakage. Reference: reference/zip_to_congressional_district_119.csv.
+VALID_GEO_TYPES = ['National', 'State', 'District']
 
 # Curated allowlists — load once, lazily.
 _POLITICIANS: list[str] | None = None
@@ -224,6 +227,114 @@ def _load_media_domains() -> tuple[set[str], set[str], set[str]]:
     _LEAN_LEFT_MEDIA = left
     _LEAN_RIGHT_MEDIA = right
     return _MEDIA_DOMAINS, _LEAN_LEFT_MEDIA, _LEAN_RIGHT_MEDIA
+
+
+# ── Congressional district reference (2026-07-27) ───────────────────────────
+#
+# Blue IQ's sub-national geo cut is congressional district (119th Congress),
+# replacing DMA. Districts are politically meaningful (they map 1:1 to House
+# seats and campaign targeting), have a canonical 435-item universe, and are
+# stable across cycles until reapportionment. Source file lives at
+# `reference/zip_to_congressional_district_119.csv` and contains one row per
+# zip-to-district mapping (a single ZIP can span multiple districts when
+# the ZIP is split; the primary_district=TRUE row is the dominant one).
+#
+# CSV columns:
+#   zip, state, district, district_name, state_district_code,
+#   land_area_m2, primary_district, dma_code, dma_name, dma_match_type
+#
+# We build (and lazily cache) a normalized bundle:
+#   - zip_to_district:   '{zip5}' -> '{STATE-N}'  (primary district only,
+#                        so every ZIP maps to a single canonical district)
+#   - district_to_zips:  '{STATE-N}' -> frozenset('{zip5}', ...)
+#                        (all zips, primary and secondary, so the panel
+#                        filter captures every zip that touches the district)
+#   - district_to_state: '{STATE-N}' -> '{STATE 2-letter}' (for Google Trends
+#                        fallback to geo=US-XX)
+#   - district_names:    '{STATE-N}' -> pretty label (e.g. 'CA-12 (Alameda)')
+#   - all_districts:     sorted list of district codes for dropdown
+#
+# US-only (drops PR/GU/VI/AS/MP territorial "at-large" pseudo-districts).
+# DC is kept (DC-98 is the at-large delegate district).
+
+_DISTRICT_REF: Optional[dict] = None
+_NON_STATE_DISTRICTS = frozenset({'PR', 'GU', 'VI', 'AS', 'MP'})
+
+
+def _load_district_ref() -> dict:
+    """Return the cached district reference bundle. See section header.
+
+    Returns an empty bundle (all keys present, all values empty) if the CSV
+    is missing so callers can still iterate without crashing.
+    """
+    global _DISTRICT_REF
+    if _DISTRICT_REF is not None:
+        return _DISTRICT_REF
+
+    path = _ref_path('zip_to_congressional_district_119.csv')
+    zip_to_district: dict[str, str] = {}
+    district_to_zips: dict[str, set[str]] = {}
+    district_to_state: dict[str, str] = {}
+    district_names: dict[str, str] = {}
+
+    try:
+        import csv as _csv
+        with open(path, 'r', encoding='utf-8', newline='') as fh:
+            reader = _csv.DictReader(fh)
+            for row in reader:
+                state = (row.get('state') or '').strip().upper()
+                if not state or state in _NON_STATE_DISTRICTS:
+                    continue
+                code = (row.get('state_district_code') or '').strip().upper()
+                if not code:
+                    continue
+                z = (row.get('zip') or '').strip()
+                if not z:
+                    continue
+                z5 = z.zfill(5)
+                district_to_zips.setdefault(code, set()).add(z5)
+                district_to_state[code] = state
+                name = (row.get('district_name') or '').strip()
+                if name and code not in district_names:
+                    district_names[code] = f"{code} ({name})" if name else code
+                elif code not in district_names:
+                    district_names[code] = code
+                # primary_district=TRUE identifies the dominant district for
+                # a split ZIP (largest land area). Use it to give every ZIP
+                # a single canonical district lookup.
+                if (row.get('primary_district') or '').strip().upper() == 'TRUE':
+                    zip_to_district[z5] = code
+    except FileNotFoundError:
+        logger.warning("zip_to_congressional_district_119.csv not found at %s", path)
+    except Exception as e:
+        logger.warning("Failed to load district reference: %s", e)
+
+    # Sort district codes state-first, then by numeric district (AL-0 through
+    # WY-1). District 0 (at-large) sorts before 1 within its state.
+    def _sort_key(c: str) -> tuple[str, int]:
+        try:
+            s, n = c.split('-', 1)
+            return (s, int(n))
+        except (ValueError, AttributeError):
+            return (c, 0)
+
+    _DISTRICT_REF = {
+        'zip_to_district':   zip_to_district,
+        'district_to_zips':  {k: frozenset(v) for k, v in district_to_zips.items()},
+        'district_to_state': district_to_state,
+        'district_names':    district_names,
+        'all_districts':     sorted(district_to_zips.keys(), key=_sort_key),
+    }
+    if district_to_zips:
+        logger.info("Loaded %d congressional districts covering %d zips",
+                    len(district_to_zips), len(zip_to_district))
+    return _DISTRICT_REF
+
+
+def _district_zips(district_code: str) -> frozenset[str]:
+    """Return the zip set for a district code, or empty frozenset if unknown."""
+    return _load_district_ref()['district_to_zips'].get(
+        (district_code or '').strip().upper(), frozenset())
 
 
 # ── ClickHouse connection (lazy + reused) ────────────────────────────────────
@@ -421,13 +532,26 @@ def blue_iq_cache_key(filters: dict) -> str:
             ordering (70% weight in rerank); panel-only buckets sit
             below Trends-lit ones. Fixes the "only 3 buckets showing
             at National" regression from v16.
+     v19 — 2026-07-27: geo_type='DMA' replaced with 'District'
+            (congressional district, 119th Congress). Filter values
+            are now district codes like 'CA-12', 'AL-3', 'DC-98'.
+            Backend resolves districts to their zip sets via
+            reference/zip_to_congressional_district_119.csv, filters
+            user_data_sanitized on ZIP IN, and live-computes the cube
+            cell (aggregator hasn't been rebuilt with a district
+            grouping set yet). Google Trends fallback resolves
+            district -> parent state -> geo=US-XX. Any bookmarked
+            DMA filter URLs will now produce empty results (the DMA
+            path is kept in _geo_filter_clause for graceful degradation
+            but the frontend no longer exposes it). Bump forces regen
+            of any v18 payloads that were keyed on DMA.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   18,
+        'version':   19,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -472,10 +596,24 @@ def _normalize_filters(filters: dict | None) -> dict:
         party = 'All'
     geo_type = (f.get('geo_type') or 'National').strip()
     if geo_type not in VALID_GEO_TYPES:
-        geo_type = 'National'
+        # 2026-07-27: DMA was removed from VALID_GEO_TYPES; a caller
+        # passing geo_type='DMA' (bookmarked URL, stale JS state)
+        # would collapse to National here. Keep DMA silently accepted
+        # so the backend can still resolve it via _geo_filter_clause
+        # for the grace-period deploy window.
+        if geo_type != 'DMA':
+            geo_type = 'National'
     geo_value = (f.get('geo_value') or '').strip()
     if geo_type == 'National':
         geo_value = ''
+    if geo_type == 'District' and geo_value:
+        # District codes from the CSV are zero-padded 2-digit
+        # (`AL-01`, `AK-00`). Accept either form from callers
+        # (bookmarked URL, external caller) and normalize.
+        geo_value = geo_value.upper().strip()
+        parts = geo_value.split('-', 1)
+        if len(parts) == 2 and parts[1].isdigit():
+            geo_value = f"{parts[0]}-{int(parts[1]):02d}"
     try:
         lookback_days = int(f.get('lookback_days') or DEFAULT_LOOKBACK_DAYS)
     except Exception:
@@ -602,30 +740,31 @@ def _is_valid_us_dma(name: str) -> bool:
 def get_filter_options() -> dict:
     """Returns the dropdown choices for the filter bar.
 
-    Fast path: read state/DMA list straight from the nightly cube
-    (`all_states` and `all_dmas` keys). Sub-millisecond, no CH hit.
+    Fast path: read state list straight from the nightly cube
+    (`all_states` key). Sub-millisecond, no CH hit.
 
-    Fallback: if cube is missing, run two small GROUP BY queries on
+    Fallback for states: if cube is missing, run a small GROUP BY on
     `userdata.user_data_sanitized` (still fast — that table is small).
-    BOTH paths filter DMAs through _is_valid_us_dma so non-US garbage
-    is silently dropped, and the fallback DMA query is gated on
-    _US_COUNTRY_FILTER for the same reason.
+
+    Districts (2026-07-27 replaced DMAs): sourced from the reference
+    CSV (`reference/zip_to_congressional_district_119.csv`). District
+    universe is canonical — 435 House districts + 8 at-large state
+    districts + DC. We ship the whole list and gate at query time on
+    whether the district's zips intersect our US panel.
     """
-    cache_key = '_filter_options_v4'  # bumped: US Nielsen DMA allowlist (was leaky substring denylist)
+    cache_key = '_filter_options_v5'  # bumped: District replaces DMA (2026-07-27)
     cached = _FILTER_OPTIONS_CACHE.get(cache_key)
     if cached and (time.time() - cached['ts'] < 3600):
         return cached['data']
 
     states: list[str] = []
-    dmas:   list[str] = []
 
-    # Filter dropdown reads from the 30d cube (it has the broadest geo
-    # coverage). The Live cube may have fewer states/DMAs if some panel
-    # cells fell below MIN_CELL_SIZE on a single-day window.
+    # Filter dropdown reads from the 30d cube for states (it has the
+    # broadest geo coverage). The Live cube may have fewer states if
+    # some panel cells fell below MIN_CELL_SIZE on a single-day window.
     cube = _load_cube(DEFAULT_LOOKBACK_DAYS)
     if cube:
         states = list(cube.get('all_states') or [])
-        dmas   = [d for d in (cube.get('all_dmas') or []) if _is_valid_us_dma(d)]
 
     if not states:
         try:
@@ -649,29 +788,29 @@ def get_filter_options() -> dict:
                               for r in rows if r and r[0]})
         except Exception as e:
             logger.warning("filter_options: state pull failed: %s", e)
-    if not dmas:
-        try:
-            rows = _ch_query(f"""
-                SELECT DMA, count() AS n
-                FROM userdata.user_data_sanitized
-                WHERE DMA IS NOT NULL AND DMA != ''
-                  AND {_US_COUNTRY_FILTER}
-                GROUP BY DMA
-                HAVING n >= %(floor)s
-                ORDER BY DMA
-            """, {'floor': MIN_CELL_SIZE})
-            dmas = [r[0] for r in rows if r and r[0] and _is_valid_us_dma(r[0])]
-        except Exception as e:
-            logger.warning("filter_options: dma pull failed: %s", e)
+
+    # Districts: canonical list from the reference file. We surface
+    # BOTH the code list (for filter payloads) and a pretty labels
+    # map (for the dropdown text), so the frontend can show
+    # "CA-12 (12th Congressional District of California)" while still
+    # submitting the compact "CA-12" code.
+    dref = _load_district_ref()
+    districts = list(dref.get('all_districts') or [])
+    district_labels = {c: dref['district_names'].get(c, c) for c in districts}
 
     data = {
-        'parties':       VALID_PARTIES,
-        'geo_types':     VALID_GEO_TYPES,
-        'states':        states,
-        'dmas':          dmas,
-        'min_cell_size': MIN_CELL_SIZE,
+        'parties':          VALID_PARTIES,
+        'geo_types':        VALID_GEO_TYPES,
+        'states':           states,
+        'districts':        districts,
+        'district_labels':  district_labels,
+        # Legacy `dmas` key kept as an empty list so any old frontend
+        # code that references `filterOptions.dmas` doesn't crash while
+        # the deploy propagates. Safe to remove after ~1 release cycle.
+        'dmas':             [],
+        'min_cell_size':    MIN_CELL_SIZE,
         'default_lookback_days': DEFAULT_LOOKBACK_DAYS,
-        'cube_built_at': (cube or {}).get('computed_at'),
+        'cube_built_at':    (cube or {}).get('computed_at'),
     }
     _FILTER_OPTIONS_CACHE[cache_key] = {'ts': time.time(), 'data': data}
     return data
@@ -1040,7 +1179,19 @@ def _geo_filter_clause(geo_type: str, geo_value: str) -> tuple[str, dict]:
             name_to_usps = {}
         usps = name_to_usps.get(geo_value, geo_value)
         return ("U.PROVINCE = %(geo_value)s", {'geo_value': usps})
+    if geo_type == 'District' and geo_value:
+        # Congressional district. Filter panelists whose ZIP is inside any
+        # ZIP that touches this district (primary + secondary). Empty zip
+        # set means the district code isn't in our reference; return a
+        # never-match clause so the caller gracefully surfaces an empty
+        # panel rather than falling through to national.
+        zips = list(_district_zips(geo_value))
+        if not zips:
+            return ("1=0", {})
+        return ("U.ZIP IN %(district_zips)s", {'district_zips': zips})
     if geo_type == 'DMA' and geo_value:
+        # Legacy path kept so any bookmarked filter URLs / cached calls
+        # from before the 2026-07-27 District swap still resolve.
         return ("U.DMA = %(geo_value)s", {'geo_value': geo_value})
     return ("1=1", {})
 
@@ -1454,11 +1605,34 @@ _CUBE_INPROC_TTL_S = 300                  # re-fetch each cube from S3 at most o
 
 
 def _cube_cell_key(party: str, geo_type: str, geo_value: str) -> str:
-    """Cube file uses '{party}|{state}|{dma}'. Empty for the dim we're not slicing."""
+    """Cube file uses '{party}|{state}|{dma}'. Empty for the dim we're not slicing.
+
+    District (2026-07-27) is NOT pre-aggregated in the cube — the
+    aggregator still emits (party, state) and (party, dma) grouping sets
+    only. District cells are computed live in `_compute_district_cell_live`
+    at request time (see `_slice_cube`). This function still returns the
+    parent-state cube key for District so the "national comparison"
+    baselines (which read `nat_cell` = All-party national cell) resolve
+    correctly.
+    """
     if geo_type == 'State':
         return f"{party}|{geo_value}|"
     if geo_type == 'DMA':
         return f"{party}||{geo_value}"
+    if geo_type == 'District':
+        # District uses live-compute; this key path only fires when a
+        # District cell is looked up as a cross-reference (rare). Return
+        # the parent state key so we still surface useful context.
+        state_code = _load_district_ref()['district_to_state'].get(
+            (geo_value or '').strip().upper(), '')
+        if not state_code:
+            return f"{party}||"
+        try:
+            from external_signals import _USPS_TO_NAME  # type: ignore
+        except Exception:
+            _USPS_TO_NAME = {}
+        state_name = _USPS_TO_NAME.get(state_code, state_code)
+        return f"{party}|{state_name}|"
     return f"{party}||"
 
 
@@ -1519,7 +1693,17 @@ def _load_cube(lookback_days: int = DEFAULT_LOOKBACK_DAYS) -> Optional[dict]:
 
 
 def _slice_cube(cube: dict, filters: dict) -> tuple[Optional[dict], int]:
-    """Look up the relevant cell in the cube. Returns (cell_payload_or_None, panel_size)."""
+    """Look up the relevant cell in the cube. Returns (cell_payload_or_None, panel_size).
+
+    For District (2026-07-27), the cube does not pre-aggregate district
+    cells — the aggregator's grouping sets are (party, state) and
+    (party, dma) only. District cells are computed on the fly by running
+    a small batch of CH queries scoped to the district's zips. First
+    hit is slower (~2-4s) but the payload is cached at the compute_panel_view
+    layer (24h TTL) so repeat views are instant.
+    """
+    if filters.get('geo_type') == 'District':
+        return _compute_district_cell_live(filters)
     if not cube:
         return None, 0
     cells = cube.get('cells') or {}
@@ -1533,6 +1717,69 @@ def _slice_cube(cube: dict, filters: dict) -> tuple[Optional[dict], int]:
         if alt:
             return alt, int(alt.get('uid_count', 0))
     return None, 0
+
+
+def _compute_district_cell_live(filters: dict) -> tuple[Optional[dict], int]:
+    """Live-compute a cube-cell-shaped payload for a District cut.
+
+    The blue_iq_aggregator's nightly cube emits (party, state) + (party, dma)
+    grouping sets only, so District queries take a live query path. This
+    function runs the same 7 sub-queries the aggregator runs, but scoped
+    to the district's zip set via _panel_uids(). Returns (cell, panel_size)
+    matching _slice_cube's contract, so downstream compute_panel_view code
+    is untouched.
+
+    Cost: ~2-4s for a small district on first hit; sub-second for cached
+    repeat views (compute_panel_view wraps this in a per-filter 24h cache).
+    Returns (None, 0) if the district's panel is below MIN_CELL_SIZE
+    (privacy suppression).
+    """
+    party = filters.get('party') or 'All'
+    district = (filters.get('geo_value') or '').strip().upper()
+    lookback = int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS)
+    if not district:
+        return None, 0
+
+    uids = _panel_uids(party, 'District', district)
+    if len(uids) < MIN_CELL_SIZE:
+        return None, len(uids)
+
+    # Start-date for card queries is `today - lookback`. Match the format
+    # the _card_* helpers expect (they call toDate on this string).
+    start_date = (datetime.now(timezone.utc).date() -
+                  timedelta(days=lookback)).isoformat()
+
+    try:
+        panel_search      = _card_search_engines(uids, start_date)
+        panel_social      = _card_social_media(uids, start_date)
+        panel_politicians = _card_top_politicians(uids, start_date)
+        panel_articles    = _card_top_articles(uids, start_date)
+        panel_turnout     = _card_turnout_intent(uids, start_date)
+        panel_demo        = _card_demo_crosstab(uids)
+        panel_top_queries = _fetch_panel_search_queries(uids, start_date, limit=200)
+    except Exception as e:
+        logger.warning("District live-compute failed for %s: %s", district, e)
+        return None, len(uids)
+
+    cell = {
+        'uid_count':         len(uids),
+        'search_engines':    panel_search,
+        'social_media':      panel_social,
+        'top_politicians':   panel_politicians,
+        'top_articles':      panel_articles,
+        'turnout':           {
+            'panelists':   int(panel_turnout.get('panelists', 0) or 0),
+            'sample_urls': list(panel_turnout.get('sample_queries', []) or []),
+        },
+        'demo':              panel_demo,
+        'top_search_queries': panel_top_queries,
+        # voter_journey is not yet computed live — the aggregator's build
+        # is a multi-CTE query too heavy for on-the-fly. The frontend's
+        # Voter Journey card will render empty for District cuts until
+        # the aggregator ships a per-district grouping (follow-up).
+        'voter_journey':     [],
+    }
+    return cell, len(uids)
 
 
 def _bucket_search_terms_via_global_map(top_search_queries: list[dict],
@@ -2124,8 +2371,16 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     # 2. Cube lookup (sub-second S3 GetObject, then in-process cache for 5 min).
     # Pick the cube file that matches the user's selected lookback window —
     # so "Live (1 day)" reads cube_1d.json and "30 days" reads cube_30d.json.
+    #
+    # District cuts (2026-07-27) bypass the cube and live-compute their
+    # cell from ClickHouse via `_slice_cube -> _compute_district_cell_live`.
+    # We still call `_load_cube` for District so `issue_buckets_global`
+    # and the National baseline (`nat_cell`) are available.
     cube = _load_cube(int(f.get('lookback_days') or DEFAULT_LOOKBACK_DAYS))
-    cell, panel_size = _slice_cube(cube, f) if cube else (None, 0)
+    if f.get('geo_type') == 'District':
+        cell, panel_size = _slice_cube(cube or {}, f)
+    else:
+        cell, panel_size = _slice_cube(cube, f) if cube else (None, 0)
     suppressed = panel_size < MIN_CELL_SIZE
     cube_missing = cube is None
 
@@ -2157,6 +2412,20 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
         trends_state = f['geo_value']
     elif f['geo_type'] == 'DMA' and f['geo_value']:
         trends_state = DMA_TO_STATE.get(f['geo_value'])
+    elif f['geo_type'] == 'District' and f['geo_value']:
+        # District (2026-07-27): Google Trends only exposes state-level
+        # regional data via geo=US-XX. Resolve district to its parent
+        # state so the user sees the trending searches for the state
+        # containing this district. Downstream we could layer principal-
+        # city Trends via a DMA hop, but state-level is the honest cut.
+        _usps = _load_district_ref()['district_to_state'].get(
+            (f['geo_value'] or '').strip().upper())
+        if _usps:
+            try:
+                from external_signals import _USPS_TO_NAME  # type: ignore
+                trends_state = _USPS_TO_NAME.get(_usps, _usps)
+            except Exception:
+                trends_state = _usps
     external = fetch_all_external(
         state=trends_state,
         lookback_days=f['lookback_days'],
@@ -2490,14 +2759,15 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     else:
         trending_local = []
     trending_meta = {
-        'geo_label':         trends_state_label,
-        'geo_type':          f['geo_type'],
-        'geo_value':         f['geo_value'],
-        'raw_trends_count':  len(raw_trends),
-        'kept_after_filter': len(trending_political),
-        'used_fallback':     used_fallback,
-        'is_state_local':    trends_state is not None,
-        'dma_resolved_via':  (DMA_TO_STATE.get(f['geo_value']) if f['geo_type'] == 'DMA' else None),
+        'geo_label':              trends_state_label,
+        'geo_type':               f['geo_type'],
+        'geo_value':              f['geo_value'],
+        'raw_trends_count':       len(raw_trends),
+        'kept_after_filter':      len(trending_political),
+        'used_fallback':          used_fallback,
+        'is_state_local':         trends_state is not None,
+        'dma_resolved_via':       (DMA_TO_STATE.get(f['geo_value']) if f['geo_type'] == 'DMA' else None),
+        'district_resolved_via':  (trends_state if f['geo_type'] == 'District' else None),
     }
 
     # Overall (unfiltered) top trending searches for this geo. Same
@@ -2508,13 +2778,14 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     # geo can still inform creative timing / placement). Capped at 10.
     trending_overall = raw_trends[:10] if raw_trends else []
     trending_overall_meta = {
-        'geo_label':        trends_state_label,
-        'geo_type':         f['geo_type'],
-        'geo_value':        f['geo_value'],
-        'raw_trends_count': len(raw_trends),
-        'shown':            len(trending_overall),
-        'is_state_local':   trends_state is not None,
-        'dma_resolved_via': (DMA_TO_STATE.get(f['geo_value']) if f['geo_type'] == 'DMA' else None),
+        'geo_label':             trends_state_label,
+        'geo_type':              f['geo_type'],
+        'geo_value':             f['geo_value'],
+        'raw_trends_count':      len(raw_trends),
+        'shown':                 len(trending_overall),
+        'is_state_local':        trends_state is not None,
+        'dma_resolved_via':      (DMA_TO_STATE.get(f['geo_value']) if f['geo_type'] == 'DMA' else None),
+        'district_resolved_via': (trends_state if f['geo_type'] == 'District' else None),
     }
 
     # Turnout
