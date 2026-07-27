@@ -429,26 +429,35 @@ def _fetch_audible_books(limit: int = 100) -> tuple[list[dict], str]:
 
 
 # ---------------------------------------------------------------------------
-# Spotify Audiobooks  (Premium-gated - keeps a stub sub-label)
+# Spotify Audiobooks  (bot-detected out - keeps a stub sub-label)
 # ---------------------------------------------------------------------------
 # Spotify's audiobooks catalog lives at `open.spotify.com/genre/
-# audiobooks-web` but the browse rails are gated behind a Premium
-# subscription. Verified 2026-07-27 with a fresh open.spotify.com
-# cookie donation from a free-tier account: the pathfinder GraphQL
-# calls (`me { libraryV3 { items } }`) return `totalCount: 0` and the
-# DOM renders zero `a[href^="/audiobook/"]` tiles. Spotify does not
-# publish a marketing `audiobookcharts.byspotify.com` mirror equivalent
-# to the podcasts one, and the Web API `/audiobooks/{id}` endpoints
-# are per-title lookups only (no `top` or `popular` list).
+# audiobooks-web`, but reaching it requires two things Playwright can't
+# reliably obtain right now:
+#   1. A valid `/get_access_token` bearer, which Spotify's Varnish edge
+#      returns 403 URL Blocked for on any request outside their web-app
+#      client-integrity flow.
+#   2. A `clienttoken.spotify.com`-issued client token, which their
+#      integrity service refuses to mint when the caller fingerprints
+#      as automation.
+# Verified 2026-07-27 with fresh open.spotify.com cookies from a
+# logged-in PREMIUM Chrome session, requested from both a laptop IP
+# and Hetzner's clean datacenter IP: the browse page returns HTTP 200
+# with a 13.7KB anonymous client-shell (zero `/audiobook/` hrefs, zero
+# `/playlist/`, zero `/show/`) and the client-side JS refuses to
+# hydrate under Playwright. This is Spotify's hardened anti-scrape
+# posture as of mid-2026; Premium cookies alone are not sufficient.
 #
-# Audible Top 100 (already live in this file) covers the same signal
-# from the bigger audiobook platform, so this stays as an honest
-# placeholder rather than blocking on Premium.
+# Audible Top 100 (already live in this file) covers the audiobook
+# signal from the biggest platform, so this stays as an honest
+# placeholder.
 def _fetch_spotify_audiobooks(limit: int = 100) -> tuple[list[dict], str]:
-    """Stubbed. Spotify audiobook browse is Premium-only; falls through
-    to Audible Top 100 for audiobook signal in the Books tab."""
-    return [], ('Spotify audiobook browse is Premium-only. Audible Top 100 '
-                '(also on this tab) is our audiobook signal today.')
+    """Stubbed. Spotify's audiobook browse won't hydrate under Playwright
+    even with Premium cookies (client-token gate + integrity checks).
+    Audible Top 100 on this tab is our audiobook signal today."""
+    return [], ('Spotify locks audiobook browse behind client-integrity '
+                'checks Playwright can\'t pass. Audible Top 100 (also on '
+                'this tab) is our audiobook signal.')
 
 
 def fetch() -> dict[str, Any]:
