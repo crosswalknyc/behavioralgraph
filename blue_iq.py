@@ -653,13 +653,22 @@ def blue_iq_cache_key(filters: dict) -> str:
             panel's 25th-percentile count so they don't unfairly
             rank above real panel rows. Also fixes the empty-state
             copy that said "this district" at National scale.
+     v25 — 2026-07-27: `_flag_political_term` rewritten from naive
+            substring match to word-bounded regex. The old scan
+            false-flagged 'ps5 pro price' (matched 'ice ' inside
+            'price '), 'vacation packages' (matched 'aca'), 'gopro
+            hero' (matched ' gop'), 'union pacific' (matched
+            'union'), 'transportation jobs' (matched 'trans'), and
+            'ice cream' (matched 'ice '). Bumps v24 caches that
+            have those false positives baked into the `political`
+            field of every top_searches row.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   24,
+        'version':   25,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -3670,52 +3679,112 @@ def _attach_share(rows: list[dict]) -> list[dict]:
     return [{**r, 'share': round(int(r.get('panelists', 0)) / total, 4)} for r in rows]
 
 
-# Keyword bag used to flag a raw search term as politically-flavored.
-# Word-bounded so 'president' matches but 'presidential golf tournament'
-# still qualifies (title contains the token). Deliberately broad — the
-# UI just uses this to LIGHT UP a chip on flagged rows; the bucketed
-# view already has a strict AI classifier.
-_TOP_SEARCH_POLITICAL_KEYWORDS: tuple[str, ...] = (
-    'trump', 'biden', 'harris', 'obama', 'vance', 'newsom', 'desantis',
-    'aoc', 'ocasio', 'pelosi', 'mcconnell', 'schumer', 'johnson',
-    'jeffries', 'sanders', 'warren', 'rubio', 'cruz', 'haley',
-    'ramaswamy', 'gaetz', 'greene', 'fetterman', 'manchin',
-    'president', 'senator', 'senate', 'congress', 'house rep',
-    'governor', 'mayor', 'election', 'ballot', 'poll', 'vote',
-    'campaign', 'primary', 'caucus', 'candidate',
-    'democrat', 'republican', 'gop ', ' gop', 'libertarian',
-    'liberal', 'conservative', 'progressive',
-    'immigration', 'immigrant', 'border', 'deportation', 'asylum',
-    'abortion', 'roe', 'reproductive',
-    'gun ', 'guns', 'firearm', 'second amendment',
-    'climate', 'green new deal', 'fossil fuel', 'oil drilling',
-    'medicare', 'medicaid', 'social security', 'obamacare', 'aca',
-    'inflation', 'stimulus', 'tariff', 'tax bill', 'tax cut', 'tax hike',
-    'minimum wage', 'union', 'strike',
-    'affirmative action', 'trans', 'title ix', 'critical race',
-    'ukraine', 'israel', 'gaza', 'russia', 'china', 'nato',
-    'supreme court', 'scotus', 'roe v wade',
-    'january 6', 'j6', 'insurrection', 'impeachment',
-    'irs', 'doj', 'fbi', 'ice ',
-    'voter id', 'voter fraud', 'mail in ballot', 'polling place',
-    'debate', 'town hall', 'inauguration',
+# Political-flavor detection for raw search terms.
+#
+# Bug we're fixing (2026-07-27): the previous implementation used naive
+# substring matching, which false-flagged "ps5 pro price" as political
+# because 'ice ' (meant to catch ICE agents) appears inside 'pr**ice **'.
+# Same class of bug for 'aca' matching 'vacation', 'trans' matching
+# 'transportation', 'union' matching 'union pacific', ' gop' matching
+# 'gopro', etc.
+#
+# Fix: use word-bounded regex and be conservative on any token that's
+# ambiguous outside a political phrase. Multi-word phrases are safer
+# than short tokens (we prefer 'labor union' over bare 'union', 'ice
+# raid' over bare 'ice', 'gun control' over bare 'gun').
+_TOP_SEARCH_POLITICAL_PATTERNS: tuple[str, ...] = (
+    # Politicians (surnames + short aliases)
+    r'trump', r'biden', r'harris', r'obama', r'vance', r'newsom',
+    r'desantis', r'aoc', r'ocasio[- ]cortez', r'pelosi', r'mcconnell',
+    r'schumer', r'jeffries', r'sanders', r'warren', r'rubio', r'cruz',
+    r'haley', r'ramaswamy', r'gaetz', r'greene', r'fetterman',
+    r'manchin', r'mike johnson', r'speaker johnson', r'kamala',
+    # Offices & elections
+    r'president', r'vice president', r'senator', r'senators', r'senate',
+    r'congress', r'congressman', r'congresswoman', r'congressional',
+    r'governor', r'mayor', r'election', r'elections', r'ballot',
+    r'ballots', r'vote', r'votes', r'voter', r'voters', r'voting',
+    r'campaign', r'campaigns', r'caucus', r'candidate', r'candidates',
+    r'primary election', r'presidential primary', r'midterms?',
+    # Parties & ideologies
+    r'democrat', r'democrats', r'democratic party', r'republican',
+    r'republicans', r'gop', r'libertarian', r'liberal', r'conservative',
+    r'progressive', r'maga',
+    # Immigration
+    r'immigration', r'immigrant', r'immigrants', r'border',
+    r'deportation', r'deport', r'asylum', r'ice raid', r'ice agents',
+    r'ice arrests?', r'sanctuary city', r'sanctuary cities',
+    # Abortion / reproductive
+    r'abortion', r'roe v(?:\.|ersus)? wade', r'reproductive rights',
+    r'pro[- ]choice', r'pro[- ]life', r'planned parenthood',
+    r'abortion pill', r'dobbs decision',
+    # Guns
+    r'gun control', r'gun rights', r'gun laws?', r'firearm',
+    r'firearms', r'second amendment', r'2nd amendment', r'assault weapon',
+    r'assault rifle',
+    # Climate
+    r'climate change', r'climate policy', r'green new deal',
+    r'fossil fuel', r'fossil fuels', r'oil drilling', r'paris accord',
+    # Entitlements / healthcare policy
+    r'medicare', r'medicaid', r'social security', r'obamacare',
+    r'affordable care act',
+    # Economic policy
+    r'inflation', r'stimulus check', r'stimulus checks', r'tariff',
+    r'tariffs', r'tax bill', r'tax cut', r'tax cuts', r'tax hike',
+    r'tax hikes', r'tax reform', r'minimum wage',
+    # Labor
+    r'labor union', r'labor unions', r'union strike', r'strike vote',
+    r'right to work',
+    # Culture / education
+    r'affirmative action', r'transgender', r'trans rights',
+    r'trans athletes?', r'title ix', r'critical race theory',
+    r'book ban', r'book bans', r'school choice',
+    # Foreign policy
+    r'ukraine (?:war|aid|invasion)', r'israel[- ]gaza', r'israel[- ]hamas',
+    r'gaza', r'russia sanctions', r'china tariffs', r'nato',
+    r'foreign aid',
+    # Judicial
+    r'supreme court', r'scotus', r'chief justice',
+    # Jan 6 / impeachment
+    r'january 6', r'jan\.? 6', r'j6 committee', r'insurrection',
+    r'impeachment', r'impeach',
+    # Agencies (only when there's political-flavor context;
+    # bare 'irs'/'doj'/'fbi' can appear in tax-help searches, so
+    # require a modifier)
+    r'irs audit', r'doj investigation', r'fbi raid', r'fbi investigation',
+    # Voting mechanics
+    r'voter id', r'voter fraud', r'voter suppression',
+    r'mail[- ]in ballot', r'mail[- ]in ballots', r'polling place',
+    r'polling places', r'early voting', r'absentee ballot',
+    r'absentee ballots',
+    # Debates / civic events
+    r'presidential debate', r'vp debate', r'town hall meeting',
+    r'inauguration', r'inaugural',
+)
+
+
+_POLITICAL_TERM_RE = re.compile(
+    r'\b(?:' + '|'.join(_TOP_SEARCH_POLITICAL_PATTERNS) + r')\b',
+    flags=re.IGNORECASE,
 )
 
 
 def _flag_political_term(term: str) -> bool:
-    """Cheap keyword scan — returns True if a raw search term touches
-    political vocabulary or a politician surname.
+    """Word-bounded regex scan — returns True iff `term` contains an
+    unambiguously political token or phrase.
 
-    Not comprehensive; we deliberately keep the list small so that day-
-    to-day cost-of-living queries ("car insurance quotes", "mortgage
-    rates today", "tax brackets 2026") DON'T all light up as political.
-    They're economic signal for the candidate but they're not what a
-    campaign would call a "political search."
+    Non-political cost-of-living searches ('car insurance quotes',
+    'mortgage rates', 'gas prices near me', 'ps5 pro price') MUST NOT
+    light up. Those are economic signal for the campaign, but they're
+    not what an operative would call a "political search."
+
+    The chip on the UI is aggressive-looking (blue "POLITICAL" pill), so
+    a false-positive here is louder than a false-negative. When in
+    doubt, err toward NOT flagging.
     """
     if not term:
         return False
-    t = f' {term.lower()} '
-    return any(k in t for k in _TOP_SEARCH_POLITICAL_KEYWORDS)
+    return bool(_POLITICAL_TERM_RE.search(term))
 
 
 def _shape_top_searches(panel_top_queries: list[dict],
