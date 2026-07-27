@@ -1,12 +1,16 @@
 """
-Music charts scraper - Shazam Top 200, Apple Music Top 100, TikTok Sounds.
+Music charts scraper - Spotify Top 200, Apple Music Top 100, Shazam
+Top 200, TikTok Sounds, and Amazon Music All Hits.
 
-Aggregates the three biggest free music trending signals into a single
-snapshot the dashboard renders as one tab:
+Aggregates the biggest free (and cookie-donated) music trending signals
+into a single snapshot the dashboard renders as one tab:
 
-    Shazam Top 200 US       -> what people are IDing right now (discovery)
-    Apple Music Top 100 US  -> what people are streaming right now
-    TikTok Trending Sounds  -> what's about to hit the charts (leading indicator)
+    Spotify Daily Top 200 US -> mainstream streaming (via kworb.net)
+    Apple Music Top 100 US   -> what Apple Music subscribers play
+    Shazam Top 200 US        -> what people are IDing right now (discovery)
+    TikTok Trending Sounds   -> what's about to hit the charts (leading)
+    Amazon Music All Hits    -> Amazon's editorial flagship hits
+                                playlist (needs music.amazon.com cookies)
 
 Snapshot shape (kind='music'):
 
@@ -16,9 +20,11 @@ Snapshot shape (kind='music'):
       "label":      "Music",
       "fetched_at": "...",
       "sources": {
-        "shazam":   {"label": "Shazam Top 200 (US)",   "items": [{...}]},
-        "apple":    {"label": "Apple Music Top 100 (US)","items": [{...}]},
-        "tiktok":   {"label": "TikTok Sounds",         "items": [{...}], "available": bool}
+        "spotify":  {"label": "Spotify Daily Top 200 (US)", "items": [{...}]},
+        "apple":    {"label": "Apple Music Top 100 (US)",   "items": [{...}]},
+        "shazam":   {"label": "Shazam Top 200 (US)",        "items": [{...}]},
+        "tiktok":   {"label": "TikTok Sounds",              "items": [{...}], "available": bool},
+        "amazon":   {"label": "Amazon Music: All Hits (US)", "items": [{...}], "available": bool}
       }
     }
 
@@ -735,17 +741,190 @@ def _enrich_with_itunes_artwork(items: list[dict],
 
 
 # ---------------------------------------------------------------------------
-# Amazon Music Top 200  (stub - needs cookies + Playwright)
+# Amazon Music "All Hits" playlist  (Playwright + donated cookies)
 # ---------------------------------------------------------------------------
-# music.amazon.com/genres/global-charts-top-100 renders fully client-
-# side (~11KB HTML shell, zero inlined chart data). The public browse
-# page also caps at 100; Amazon Music's own Web Player exposes 200 but
-# is auth-gated. Populates once amazon.com cookies unlock a Playwright
-# scrape (planned follow-up); until then the card ships as
-# available=False with an operator instruction.
-def _fetch_amazon_music(limit: int = 200) -> tuple[list[dict], str]:
-    """Stub. Returns ([], operator_sub)."""
-    return [], 'Warming up.'
+# Amazon Music retired their global "Top 100 Songs" chart in the 2025
+# product refresh and never replaced it with a public rank-ordered
+# equivalent. What DOES exist is a stable of editor-curated "hit"
+# playlists: `All Hits` (B01M11SBC8), `2026!` (B0DQRHRXMQ), and
+# `Hits Different` (B0CCZTRH1W). `All Hits` is Amazon Music's own answer
+# to Spotify's "Today's Top Hits" - the same mainstream flagship shape,
+# refreshed by Amazon's editorial team.
+#
+# The playlist page is a heavily-JavaScripted PWA. Anonymous callers
+# get a ~11KB shell with `<music-image-row>` skeletons stuck in
+# `loading=""`; the chart data only arrives after a POST to
+# `na.web.skill.music.a2z.com/api/showPlaylistPage` that requires the
+# `x-amzn-authentication` client token embedded in the logged-in
+# session. So we drive real Chrome via Playwright with a donated
+# `music.amazon.com` session, wait for hydration, scroll the virtualized
+# list to force lazy-load of every row, and read the populated custom
+# element attributes back out via `page.evaluate`.
+#
+# One-time operator setup (already done):
+#   1. Log in to https://music.amazon.com in your local Chrome
+#   2. `python3 scripts/trends_scrapers/donate_cookies.py music.amazon.com`
+#   3. Cookies auto-refresh via the launchd donation loop; if the
+#      Amazon Music card goes empty for 24h, re-run step 2.
+_AMAZON_MUSIC_ANCHOR_ASIN  = 'B01M11SBC8'  # All Hits (editorial flagship)
+_AMAZON_MUSIC_ANCHOR_LABEL = 'All Hits'
+_AMAZON_MUSIC_HOMEPAGE     = 'https://music.amazon.com/'
+_AMAZON_MUSIC_PLAYLIST_URL = f'https://music.amazon.com/playlists/{_AMAZON_MUSIC_ANCHOR_ASIN}'
+
+
+def _fetch_amazon_music(limit: int = 100) -> tuple[list[dict], str]:
+    """Scrape Amazon Music's `All Hits` playlist via Playwright + donated
+    cookies. Returns `(items, sub)` where `sub` is the operator-facing
+    note used when items[] is empty (missing cookies or Playwright).
+
+    Every item has: {rank, title, artist, url, image}. The playlist is
+    ~60 tracks (Amazon's editorial size), not 200 - the historical
+    "top 200" spec was based on a chart Amazon retired. Present for
+    parity with Spotify / Apple Music / Shazam surfaces.
+    """
+    try:
+        from ._playwright import _lazy_playwright, _launch_browser, _try_stealth, UA
+        from ._base import load_donated_cookies_playwright, cookie_donation_status
+    except Exception as e:
+        logger.info("amazon music: playwright helpers unavailable: %s", e)
+        return [], 'Warming up.'
+
+    sp = _lazy_playwright()
+    if sp is None:
+        logger.warning(
+            "amazon music: playwright not installed - install with "
+            "`pip3 install --break-system-packages playwright playwright-stealth`"
+        )
+        return [], 'Warming up.'
+
+    donated = load_donated_cookies_playwright('music.amazon.com')
+    if not donated:
+        status = cookie_donation_status('music.amazon.com')
+        logger.warning(
+            "amazon music: no donated cookies for music.amazon.com "
+            "(status=%s). Run `python3 scripts/trends_scrapers/"
+            "donate_cookies.py music.amazon.com` from a logged-in laptop.",
+            status,
+        )
+        return [], ('Log into Amazon Music once in your laptop Chrome, then '
+                    'run donate_cookies.py music.amazon.com.')
+
+    items: list[dict] = []
+    try:
+        with sp() as pw:
+            try:
+                browser, _channel = _launch_browser(pw, prefer_chrome=True)
+            except Exception as e:
+                logger.warning("amazon music: playwright launch failed: %s", e)
+                return [], 'Warming up.'
+
+            ctx = browser.new_context(
+                user_agent=UA,
+                viewport={'width': 1440, 'height': 900},
+                locale='en-US',
+                timezone_id='America/New_York',
+                extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
+            )
+            ctx.add_cookies(donated)
+            page = ctx.new_page()
+            _try_stealth(page)
+
+            # Warm homepage so the auth-context bootstrap fires (this is
+            # what surfaces the x-amzn-authentication token used by
+            # subsequent /api/ calls). Skipping this leaves later
+            # showPlaylistPage returning a "Service error" template.
+            try:
+                page.goto(_AMAZON_MUSIC_HOMEPAGE,
+                          wait_until='domcontentloaded', timeout=45000)
+                page.wait_for_timeout(3500)
+            except Exception as e:
+                logger.info("amazon music: homepage warmup: %s", e)
+
+            page.goto(_AMAZON_MUSIC_PLAYLIST_URL,
+                      wait_until='domcontentloaded', timeout=45000)
+            page.wait_for_timeout(6000)
+
+            # Wait for the first ~10 rows to hydrate. If they don't,
+            # the session is dead - drop out to the empty-sub path.
+            try:
+                page.wait_for_function(
+                    "() => document.querySelectorAll("
+                    "'music-image-row[primary-text]').length >= 10",
+                    timeout=25000,
+                )
+            except Exception:
+                logger.warning("amazon music: first-batch hydration timed "
+                               "out - cookies likely expired, re-donate")
+                try:
+                    ctx.close(); browser.close()
+                except Exception:
+                    pass
+                return [], ('Log into Amazon Music once in your laptop Chrome, '
+                            'then run donate_cookies.py music.amazon.com.')
+
+            # Virtualized list: repeatedly scroll the last row into view
+            # to fetch the next page. Bail out when the row count stops
+            # growing across 2 consecutive rounds or we've hit the cap.
+            prev_n = 0
+            steady = 0
+            for _ in range(30):
+                n = page.evaluate(
+                    "document.querySelectorAll('music-image-row[primary-text]').length"
+                )
+                if n == prev_n:
+                    steady += 1
+                    if steady >= 3:
+                        break
+                else:
+                    steady = 0
+                    prev_n = n
+                page.evaluate("""() => {
+                    const els = document.querySelectorAll('music-image-row');
+                    if (els.length) els[els.length - 1]
+                        .scrollIntoView({behavior:'instant', block:'end'});
+                }""")
+                page.wait_for_timeout(500)
+
+            rows = page.evaluate("""(limit) => {
+                const out = [];
+                document.querySelectorAll('music-image-row').forEach((el) => {
+                    const p  = el.getAttribute('primary-text')     || el.primaryText     || '';
+                    const s1 = el.getAttribute('secondary-text-1') || el.secondaryText1  || '';
+                    const s2 = el.getAttribute('secondary-text-2') || el.secondaryText2  || '';
+                    const img = el.getAttribute('image-src')       || '';
+                    const href = el.getAttribute('primary-href')   || '';
+                    if (p && p.length >= 1) {
+                        out.push({title: p, artist: s1, album: s2, image: img, href});
+                    }
+                });
+                return out.slice(0, limit);
+            }""", limit)
+
+            try:
+                ctx.close(); browser.close()
+            except Exception:
+                pass
+
+            for i, r in enumerate(rows, start=1):
+                href = r.get('href') or ''
+                url = ('https://music.amazon.com' + href) if href.startswith('/') else href
+                if not url:
+                    url = _AMAZON_MUSIC_PLAYLIST_URL
+                items.append({
+                    'rank':   i,
+                    'title':  (r.get('title')  or '').strip(),
+                    'artist': (r.get('artist') or '').strip(),
+                    'album':  (r.get('album')  or '').strip(),
+                    'url':    url,
+                    'image':  r.get('image') or '',
+                })
+    except Exception as e:
+        logger.warning("amazon music: playwright pass failed: %s", e)
+        return [], 'Warming up.'
+
+    if not items:
+        return [], 'Warming up.'
+    return items, ''
 
 
 def fetch() -> dict[str, Any]:
@@ -759,7 +938,7 @@ def fetch() -> dict[str, Any]:
     apple_items   = _fetch_apple(limit=100)
     shazam_items  = _fetch_shazam(limit=100)
     tt_items, tt_meta = _fetch_tiktok_sounds(limit=40)
-    amz_items, amz_sub = _fetch_amazon_music(limit=200)
+    amz_items, amz_sub = _fetch_amazon_music(limit=100)
 
     # Backfill artwork thumbnails from iTunes Search API for every
     # source that doesn't ship its own image field. Shared cache so a
@@ -828,8 +1007,9 @@ def fetch() -> dict[str, Any]:
                 'available': bool(shazam_items),
             },
             'amazon': {
-                'label':     'Amazon Music Top 200 (US)',
-                'sub':       amz_sub,
+                'label':     'Amazon Music: All Hits (US)',
+                'sub':       (amz_sub or "Amazon Music's editorial flagship hits "
+                                        "playlist - their answer to Today's Top Hits."),
                 'items':     amz_items,
                 'available': bool(amz_items),
             },

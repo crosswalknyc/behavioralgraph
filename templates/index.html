@@ -44267,7 +44267,7 @@
             'Spotify':                           'Spotify: US mass-streaming Top 200. Where mainstream listening is right now.',
             'Apple Music':                       'Apple Music: US Top 100. Skews slightly older and more premium than Spotify.',
             'Shazam':                            'Shazam: US Top 200 song IDs. Discovery signal - what people heard somewhere and looked up. Leading indicator for breakout tracks.',
-            'Amazon Music Top 200 (US)':         'Amazon Music: US Top 200 tracks.',
+            'Amazon Music: All Hits (US)':       "Amazon Music All Hits: Amazon's own editorial flagship hits playlist. Their answer to Spotify's Today's Top Hits.",
             // ---------- Podcasts ----------
             'Apple Podcasts Top 100 (US)':       'Apple Podcasts: The Apple chart of top-listened shows in the US right now.',
             'Spotify Podcast Charts (US)':       'Spotify Podcast Charts: Top listened-to podcasts on Spotify in the US.',
@@ -45408,9 +45408,11 @@
         //     shazam:  {...}
         //   }
         function renderTIQMusic(sources) {
-            // Amazon Music is stub-only today (needs cookies + Playwright);
-            // include it in the render order so the card slot exists and
-            // shows a "warming up" placeholder until data lands.
+            // Amazon Music is live as of 2026-07-27 (Playwright + donated
+            // music.amazon.com cookies scrape the "All Hits" editorial
+            // flagship playlist - ~57 tracks). If cookies expire the card
+            // gracefully falls back to a "warming up" placeholder with an
+            // operator instruction.
             var keys = ['spotify', 'apple', 'shazam', 'amazon'];
             var present = keys.filter(function(k) { return sources[k]; });
             if (!present.length) {
