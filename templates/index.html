@@ -23384,7 +23384,7 @@
                     <select id="blueIQGeoType">
                         <option value="National" selected>National</option>
                         <option value="State">State</option>
-                        <option value="DMA">DMA</option>
+                        <option value="District">District</option>
                     </select>
                 </div>
                 <div>
@@ -37308,7 +37308,7 @@
                 workspace: 'Workspace: Access saved work, collaboration, and shared projects.',
                 customAnalysis: 'Analysis IQ: Run custom analyses and pull your own profiles (5 credits per analysis).',
                 talentFitIQ: 'Talent Fit IQ: Analyze how well talents resonate with your brand audience using behavioral data and social metrics.',
-                blueIQ: 'Blue IQ: Political-audience tracker. Filter by party (AI-imputed) and state or DMA to see issue searches, search engines, social platforms, top politicians and articles.',
+                blueIQ: 'Blue IQ: Political-audience tracker. Filter by party (AI-imputed) and state or congressional district to see issue searches, search engines, social platforms, top politicians and articles.',
                 intentIQ: 'Intent IQ: Title-scoped marketing-intent measurement. Ingest a campaign URL map and report on phase performance, audiences-of-interest, paid vs organic interplay, talent halo, trailer viewership, and audience shift over campaign life.',
                 admin: 'Admin: Manage users, access, and system settings.',
                 purgatory: 'Purgatory: Review and release items pending admin approval.'
@@ -39294,15 +39294,29 @@
                 return;
             }
             valEl.disabled = false;
-            var list = (t === 'State') ? (fo.states || []) : (fo.dmas || []);
+            // 2026-07-27: District replaces DMA. Districts use pretty
+            // labels (e.g. 'CA-12 (12th Congressional District of
+            // California)') via filterOptions.district_labels while
+            // still submitting the compact code (CA-12) as the value.
+            var list;
+            var labels = {};
+            if (t === 'State') {
+                list = fo.states || [];
+            } else if (t === 'District') {
+                list = fo.districts || [];
+                labels = fo.district_labels || {};
+            } else {
+                list = fo.dmas || [];
+            }
             if (!list.length) {
                 valEl.appendChild(new Option('(no options)', ''));
                 valEl.disabled = true;
                 return;
             }
             valEl.appendChild(new Option('Select ' + t + '...', ''));
-            list.forEach(function(name) {
-                valEl.appendChild(new Option(name, name));
+            list.forEach(function(code) {
+                var display = labels[code] || code;
+                valEl.appendChild(new Option(display, code));
             });
         }
 
@@ -39313,7 +39327,7 @@
                 geo_value:     document.getElementById('blueIQGeoValue').value || '',
                 lookback_days: parseInt(document.getElementById('blueIQLookback').value || '30', 10),
             };
-            if ((filters.geo_type === 'State' || filters.geo_type === 'DMA') && !filters.geo_value) {
+            if ((filters.geo_type === 'State' || filters.geo_type === 'District' || filters.geo_type === 'DMA') && !filters.geo_value) {
                 document.getElementById('blueIQMeta').textContent = 'Pick a region or switch to National.';
                 return;
             }
@@ -40390,7 +40404,7 @@
                   +   '<span>Trending political searches \u2014 <span id="blueIQTrendingGeoLabel">United States</span></span>'
                   +   '<span style="flex:1 1 auto;"></span>'
                   +   '<span class="bq-trending-dma-picker">'
-                  +     '<label for="blueIQTrendingDma" style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em; margin-right:0.35rem;">Drill to DMA</label>'
+                  +     '<label for="blueIQTrendingDma" style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.04em; margin-right:0.35rem;">Drill to district</label>'
                   +     '<select id="blueIQTrendingDma" onchange="onBlueIQTrendingDmaChange(this.value)">'
                   +       '<option value="">(use current filter)</option>'
                   +     '</select>'
@@ -40914,45 +40928,58 @@
         // ──────────────────────────────────────────────────────────────────
         // CARD T: Trending in this area right now
         // ──────────────────────────────────────────────────────────────────
-        // Wire up the inline DMA picker on the Trending card. Reads the same
-        // DMA universe used by the top-level filter (window.__blueIQ.filterOptions.dmas).
-        // Picking a DMA here flips the global filter to DMA + that value and
-        // re-runs applyBlueIQFilters so every card scopes to that local market.
+        // Wire up the inline "Drill to district" picker on the Trending card
+        // (2026-07-27: replaced the DMA picker after the DMA -> Congressional
+        // District geo swap). Districts are grouped by state via <optgroup>
+        // so the 435-item universe stays scannable. Picking a district
+        // flips the top-level filter to District mode and re-runs
+        // applyBlueIQFilters so every card scopes to that district.
         function _bqPopulateTrendingDmaPicker(currentMeta) {
             var sel = document.getElementById('blueIQTrendingDma');
             if (!sel) return;
-            var dmas = ((window.__blueIQ || {}).filterOptions || {}).dmas || [];
-            // Preserve current selection across re-renders.
+            var fo = (window.__blueIQ || {}).filterOptions || {};
+            var codes  = fo.districts || [];
+            var labels = fo.district_labels || {};
             var preserved = sel.value;
             sel.innerHTML = '';
             sel.appendChild(new Option('(use current filter)', ''));
-            // Mark the active DMA when the top filter is on DMA mode.
-            var activeDma = (currentMeta && currentMeta.geo_type === 'DMA') ? (currentMeta.geo_value || '') : '';
-            dmas.forEach(function(name) {
-                var opt = new Option(name, name);
-                if (name === activeDma) opt.selected = true;
-                sel.appendChild(opt);
+            var activeCode = (currentMeta && currentMeta.geo_type === 'District') ? (currentMeta.geo_value || '') : '';
+            // Group by state (2-letter USPS prefix) into <optgroup>s so
+            // 435 districts don't render as a flat scroll.
+            var groups = {};
+            codes.forEach(function(code) {
+                var state = String(code || '').split('-')[0];
+                if (!groups[state]) groups[state] = [];
+                groups[state].push(code);
             });
-            if (preserved && !activeDma) {
-                // Restore prior in-card selection if the user picked one but
-                // hasn't applied it yet (shouldn't happen since we call apply
-                // on change, but defensive).
+            Object.keys(groups).sort().forEach(function(state) {
+                var og = document.createElement('optgroup');
+                og.label = state;
+                groups[state].forEach(function(code) {
+                    var opt = new Option(labels[code] || code, code);
+                    if (code === activeCode) opt.selected = true;
+                    og.appendChild(opt);
+                });
+                sel.appendChild(og);
+            });
+            if (preserved && !activeCode) {
                 try { sel.value = preserved; } catch(e) {}
             }
         }
 
-        function onBlueIQTrendingDmaChange(dmaName) {
-            if (!dmaName) return;  // (use current filter) - no-op
+        function onBlueIQTrendingDmaChange(districtCode) {
+            if (!districtCode) return;  // (use current filter) - no-op
             var typeEl = document.getElementById('blueIQGeoType');
             var valEl  = document.getElementById('blueIQGeoValue');
             if (!typeEl || !valEl) return;
-            // Flip the top filter to DMA mode and select the chosen DMA, then
-            // re-populate the dependent Region dropdown and refresh.
-            typeEl.value = 'DMA';
+            // Flip the top filter to District mode and select the chosen
+            // district, then re-populate the dependent Region dropdown
+            // and refresh.
+            typeEl.value = 'District';
             if (typeof _populateBlueIQGeoValue === 'function') {
                 _populateBlueIQGeoValue();
             }
-            valEl.value = dmaName;
+            valEl.value = districtCode;
             if (typeof applyBlueIQFilters === 'function') {
                 applyBlueIQFilters();
             }
@@ -40973,6 +41000,10 @@
                 fineprint = ' <span style="font-size:0.7rem; color:var(--text-secondary);">(' + _bqEscape(meta.geo_value) + ' DMA \u2192 state-level Trends for ' + _bqEscape(meta.dma_resolved_via) + ')</span>';
             } else if (meta && meta.geo_type === 'DMA' && meta.geo_value && !meta.dma_resolved_via) {
                 fineprint = ' <span style="font-size:0.7rem; color:var(--text-secondary);">(' + _bqEscape(meta.geo_value) + ' DMA not in lookup \u2014 showing US-wide Trends)</span>';
+            } else if (meta && meta.geo_type === 'District' && meta.district_resolved_via) {
+                fineprint = ' <span style="font-size:0.7rem; color:var(--text-secondary);">(' + _bqEscape(meta.geo_value) + ' \u2192 state-level Trends for ' + _bqEscape(meta.district_resolved_via) + ')</span>';
+            } else if (meta && meta.geo_type === 'District' && meta.geo_value) {
+                fineprint = ' <span style="font-size:0.7rem; color:var(--text-secondary);">(' + _bqEscape(meta.geo_value) + ' \u2014 state-level Trends)</span>';
             }
             if (labelEl && fineprint) {
                 labelEl.insertAdjacentHTML('afterend', fineprint);
