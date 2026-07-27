@@ -22814,117 +22814,10 @@
                 flex-direction: column;
                 overflow: hidden;
             }
-            /* Issue buckets (bucketed policy signal) and Top searches
-             * (raw voter vocabulary) pair together. The pair is the
-             * "what do voters here care about" surface — a candidate
-             * scans one to see the policy frame and the other to see
-             * the actual words people are typing. Same height so they
-             * line up cleanly. */
-            #blueIQView .blue-iq-card-issues       { grid-column: span 6; height: 520px; }
-            #blueIQView .blue-iq-card-topsearches  { grid-column: span 6; height: 520px; }
-            #blueIQView .blue-iq-card-topsearches .blue-iq-card-body {
-                overflow-y: auto;
-                padding-right: 4px;
-            }
-            #blueIQView .blue-iq-topsearches-filter {
-                display: flex;
-                gap: 0.4rem;
-                margin: 0.25rem 0 0.5rem 0;
-                flex-wrap: wrap;
-            }
-            #blueIQView .bq-topsearches-chip {
-                font-size: 0.72rem;
-                padding: 0.22rem 0.55rem;
-                border-radius: 12px;
-                background: rgba(255,255,255,0.06);
-                color: var(--text-secondary);
-                border: 1px solid rgba(255,255,255,0.08);
-                cursor: pointer;
-                user-select: none;
-                transition: background 140ms ease, color 140ms ease;
-            }
-            #blueIQView .bq-topsearches-chip:hover {
-                background: rgba(79,140,255,0.14);
-                color: var(--text-primary);
-            }
-            #blueIQView .bq-topsearches-chip-active {
-                background: rgba(79,140,255,0.22);
-                color: var(--text-primary);
-                border-color: rgba(79,140,255,0.4);
-            }
-            #blueIQView .blue-iq-topsearch-row {
-                display: flex;
-                flex-direction: column;
-                gap: 0.2rem;
-                padding: 0.4rem 0.4rem;
-                border-radius: 6px;
-                border-bottom: 1px solid rgba(255,255,255,0.04);
-                transition: background 140ms ease;
-            }
-            #blueIQView .blue-iq-topsearch-row:hover {
-                background: rgba(79,140,255,0.06);
-            }
-            #blueIQView .blue-iq-topsearch-head {
-                display: flex;
-                align-items: baseline;
-                gap: 0.4rem;
-                font-size: 0.85rem;
-            }
-            #blueIQView .bq-topsearches-flag {
-                display: inline-block;
-                font-size: 0.62rem;
-                padding: 0.08rem 0.4rem;
-                border-radius: 8px;
-                background: rgba(59,130,246,0.18);
-                color: #93c5fd;
-                border: 1px solid rgba(59,130,246,0.35);
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-            }
-            #blueIQView .bq-topsearches-synth-row-pill {
-                display: inline-block;
-                font-size: 0.62rem;
-                padding: 0.08rem 0.4rem;
-                border-radius: 8px;
-                background: rgba(168,85,247,0.15);
-                color: #d8b4fe;
-                border: 1px solid rgba(168,85,247,0.35);
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                cursor: help;
-            }
-            #blueIQView .bq-topsearches-row-synth {
-                background: linear-gradient(90deg, rgba(168,85,247,0.045) 0%, transparent 55%);
-            }
-            #blueIQView .bq-topsearches-synth-banner {
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-                font-size: 0.72rem;
-                color: var(--text-secondary);
-                background: rgba(168,85,247,0.08);
-                border: 1px solid rgba(168,85,247,0.22);
-                border-radius: 6px;
-                padding: 0.4rem 0.6rem;
-                margin: 0 0 0.55rem 0;
-                line-height: 1.35;
-            }
-            #blueIQView .bq-topsearches-synth-banner-mixed {
-                background: rgba(168,85,247,0.05);
-                border-color: rgba(168,85,247,0.18);
-            }
-            #blueIQView .bq-topsearches-synth-pill {
-                flex: 0 0 auto;
-                font-size: 0.6rem;
-                padding: 0.12rem 0.45rem;
-                border-radius: 8px;
-                background: rgba(168,85,247,0.28);
-                color: #f3e8ff;
-                border: 1px solid rgba(168,85,247,0.5);
-                text-transform: uppercase;
-                letter-spacing: 0.06em;
-                font-weight: 700;
-            }
+            /* "Top searches in this slice" card + all its
+             * bq-topsearches-* utilities removed 2026-07-27 per Jenna.
+             * Issue-buckets now spans the full row (set inline in the
+             * HTML template above). */
             #blueIQView .blue-iq-card-search   { grid-column: span 4; }
             #blueIQView .blue-iq-card-social   { grid-column: span 4; }
             #blueIQView .blue-iq-card-turnout  { grid-column: span 4; }
@@ -23668,13 +23561,6 @@
                 <div class="bq-loading-skeletons">
                     <div class="bq-skeleton-card bq-skel-lg">
                         <div class="bq-skeleton-title">Political issue searches</div>
-                        <div class="bq-skeleton-row"></div>
-                        <div class="bq-skeleton-row"></div>
-                        <div class="bq-skeleton-row"></div>
-                        <div class="bq-skeleton-row bq-skel-short"></div>
-                    </div>
-                    <div class="bq-skeleton-card bq-skel-lg">
-                        <div class="bq-skeleton-title">Top searches in this slice</div>
                         <div class="bq-skeleton-row"></div>
                         <div class="bq-skeleton-row"></div>
                         <div class="bq-skeleton-row"></div>
@@ -40854,29 +40740,15 @@
             var cards = data.cards || {};
             var html = '';
 
-            // CARD A: Issue buckets (drill-down on click)
-            html += '<div class="blue-iq-card blue-iq-card-issues">'
+            // CARD A: Issue buckets (drill-down on click). Takes the
+            // full 12-col row now that its former pair-card
+            // ("Top searches in this slice") was retired 2026-07-27
+            // per Jenna. The bucketed policy-issue view carries the
+            // signal a candidate actually needs; the raw-vocabulary
+            // card next to it was noisy and duplicative.
+            html += '<div class="blue-iq-card blue-iq-card-issues" style="grid-column: span 12;">'
                   + '<h3 class="blue-iq-card-title">Political issue searches <span class="blue-iq-badge">AI-bucketed</span></h3>'
                   + '<div class="blue-iq-card-body" id="blueIQCardIssuesBody"></div>'
-                  + '</div>';
-
-            // CARD A2: Top searches — RAW top ~30 search queries the
-            // filtered panel typed in the window. This is what the
-            // district is ACTUALLY Googling (cost-of-living, health,
-            // family, everyday concerns). Pair-card to Issue buckets:
-            // Issue buckets tell a candidate the POLICY frame, Top
-            // searches tell them the actual VOCABULARY people use.
-            // Political-flavored rows carry a chip so a candidate can
-            // filter to the explicit-political subset.
-            html += '<div class="blue-iq-card blue-iq-card-topsearches">'
-                  + '<h3 class="blue-iq-card-title">Top searches in this slice'
-                  +   '<span class="blue-iq-card-subtitle">raw voter concerns \u00b7 click chip to filter</span>'
-                  + '</h3>'
-                  + '<div class="blue-iq-topsearches-filter" id="blueIQTopSearchesFilter">'
-                  +   '<span class="bq-topsearches-chip bq-topsearches-chip-active" data-mode="all">All searches</span>'
-                  +   '<span class="bq-topsearches-chip" data-mode="political">Political-flavored only</span>'
-                  + '</div>'
-                  + '<div class="blue-iq-card-body" id="blueIQCardTopSearchesBody"></div>'
                   + '</div>';
 
             // CARD B: Search engines
@@ -41148,7 +41020,6 @@
 
             grid.innerHTML = html;
             _renderBlueIQIssueBuckets(cards.issue_buckets || []);
-            _bqRenderTopSearches(cards.top_searches || []);
             _bqRenderPartyFiltered('top_politicians', 'All');
             _bqRenderPartyFiltered('top_candidates', 'All');
             _bqRenderTrendingLocal(cards.trending_local || [], cards.trending_meta || {});
@@ -41635,104 +41506,13 @@
             }).join('');
         }
 
-        // ──────────────────────────────────────────────────────────────
-        // Top searches — raw top ~30 search terms the panel typed.
-        // Renders next to the "Political issue searches" card so a
-        // candidate can compare bucketed policy signal vs verbatim
-        // voter vocabulary side by side. Filter chips toggle between
-        // ALL searches and POLITICAL-FLAVORED only (server-flagged).
-        // ──────────────────────────────────────────────────────────────
-        window.__blueIQTopSearches = [];
-        window.__blueIQTopSearchesMode = 'all';
-
-        function _bqRenderTopSearches(rows) {
-            window.__blueIQTopSearches = Array.isArray(rows) ? rows : [];
-            _bqPaintTopSearches();
-            _bqBindTopSearchesFilter();
-        }
-
-        function _bqBindTopSearchesFilter() {
-            var bar = document.getElementById('blueIQTopSearchesFilter');
-            if (!bar || bar.__wired) return;
-            bar.__wired = true;
-            bar.querySelectorAll('.bq-topsearches-chip').forEach(function(chip) {
-                chip.addEventListener('click', function() {
-                    var mode = chip.getAttribute('data-mode') || 'all';
-                    window.__blueIQTopSearchesMode = mode;
-                    bar.querySelectorAll('.bq-topsearches-chip').forEach(function(c) {
-                        c.classList.toggle('bq-topsearches-chip-active',
-                            c.getAttribute('data-mode') === mode);
-                    });
-                    _bqPaintTopSearches();
-                });
-            });
-        }
-
-        function _bqPaintTopSearches() {
-            var body = document.getElementById('blueIQCardTopSearchesBody');
-            if (!body) return;
-            var mode = window.__blueIQTopSearchesMode || 'all';
-            var rows = window.__blueIQTopSearches || [];
-            if (mode === 'political') {
-                rows = rows.filter(function(r) { return r && r.political; });
-            }
-            if (!rows.length) {
-                // Build a geo-appropriate label for the empty-state copy
-                // so the message doesn't say "this district" when the
-                // user is looking at the national roll-up. Uses the same
-                // filter shape the meta-line at the top uses.
-                var lastD = (window.__blueIQ && window.__blueIQ.lastData) || {};
-                var lastF = lastD.filters || {};
-                var geoLabel;
-                switch (lastF.geo_type) {
-                    case 'District': geoLabel = lastF.geo_value ? (lastF.geo_value + ' voters') : 'this district'; break;
-                    case 'State':    geoLabel = lastF.geo_value ? (lastF.geo_value + ' voters')    : 'this state'; break;
-                    case 'DMA':      geoLabel = lastF.geo_value ? ('the ' + lastF.geo_value + ' DMA') : 'this DMA'; break;
-                    case 'National': /* fallthrough */
-                    default:         geoLabel = 'the country as a whole'; break;
-                }
-                body.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem 0; line-height: 1.5;">'
-                    + (mode === 'political'
-                        ? ('No political-flavored terms surfaced in the top 30 raw searches for this slice. '
-                            + 'That itself is signal: ' + _bqEscape(geoLabel) + ' is Googling cost-of-living, health, and everyday concerns more than partisan topics in this window. '
-                            + 'For the policy-issue view, see the <em>Political issue searches</em> card next to this one (that card is grounded in Google Trends and always surfaces political intent per-geo).')
-                        : 'No panel search terms available for this slice yet.')
-                    + '</div>';
-                return;
-            }
-            var max = 0;
-            rows.forEach(function(r) { if ((+r.count || 0) > max) max = +r.count; });
-            max = max || 1;
-            var factor = (window.__blueIQ && window.__blueIQ.genPopFactor) || 1.0;
-            // "Modeled" banner removed 2026-07-27 at Jenna's request.
-            // Individual synthetic rows still carry a small inline
-            // "modeled" pill next to the term (visible on inspection)
-            // and a subtle purple row-background tint, but no
-            // interstitial explanation at the top of the card.
-            body.innerHTML = rows.slice(0, 30).map(function(r) {
-                var pct = Math.round(((+r.count || 0) / max) * 100);
-                var proj = Math.round((+r.count || 0) * factor);
-                var polChip = r.political
-                    ? '<span class="bq-topsearches-flag" title="Touches political vocabulary or a politician name">political</span>'
-                    : '';
-                var synthChip = r.synthetic
-                    ? '<span class="bq-topsearches-synth-row-pill" title="' + _bqEscape(r.source_note || 'Modeled from external research') + '">modeled</span>'
-                    : '';
-                return '<div class="blue-iq-topsearch-row' + (r.synthetic ? ' bq-topsearches-row-synth' : '') + '">'
-                     +   '<div class="blue-iq-topsearch-head">'
-                     +     '<strong>' + _bqEscape(r.term || '') + '</strong>'
-                     +     ' ' + polChip + ' ' + synthChip
-                     +     '<span style="flex:1 1 auto;"></span>'
-                     +     '<span style="color: var(--text-secondary); font-variant-numeric: tabular-nums; font-size: 0.75rem;" title="Panelists who typed this query \u2192 projected to US adults">'
-                     +       formatNumber(proj) + ' US adults'
-                     +     '</span>'
-                     +   '</div>'
-                     +   '<div class="blue-iq-row-bar-wrap" style="margin: 0;">'
-                     +     '<span class="blue-iq-row-bar" style="width: ' + pct + '%;"></span>'
-                     +   '</div>'
-                     + '</div>';
-            }).join('');
-        }
+        // "Top searches in this slice" card removed 2026-07-27 per
+        // Jenna. The raw-vocabulary view didn't add signal over the
+        // AI-bucketed "Political issue searches" card that sat next
+        // to it, and its synthetic-fill / political-drought heuristics
+        // added surface area for confusion. Backend still computes
+        // `top_searches` (see blue_iq.py) for any downstream consumers;
+        // frontend just no longer renders it.
 
         // Map internal journey destination keys to human labels + brief copy.
         var BLUE_IQ_JOURNEY_LABELS = {
