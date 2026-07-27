@@ -592,13 +592,23 @@ def blue_iq_cache_key(filters: dict) -> str:
             path is kept in _geo_filter_clause for graceful degradation
             but the frontend no longer exposes it). Bump forces regen
             of any v18 payloads that were keyed on DMA.
+     v20 — 2026-07-27: party filter removed (Jenna: "remove party cuts
+            just make overall"). `_normalize_filters` now hard-forces
+            party='All' regardless of what the client sent, so every
+            payload keys on party='All'. Any v19 cache entries that
+            were keyed on Democrat/Republican/Independent/Undecided
+            would still be reachable via their old hash, but since the
+            normalizer no longer emits those values we effectively
+            orphan them. Bumping version cleans that up: hashes for
+            {party=Democrat, ...} and {party=All, ...} were identical
+            in structure but v19 vs v20 differ, forcing cache regen.
     """
     canonical = json.dumps({
         'party':     filters.get('party') or 'All',
         'geo_type':  filters.get('geo_type') or 'National',
         'geo_value': filters.get('geo_value') or '',
         'lookback':  int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
-        'version':   19,
+        'version':   20,
     }, sort_keys=True, separators=(',', ':'))
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
@@ -638,9 +648,14 @@ def _cache_put(filters: dict, payload: dict) -> None:
 
 def _normalize_filters(filters: dict | None) -> dict:
     f = dict(filters or {})
-    party = (f.get('party') or 'All').strip()
-    if party not in VALID_PARTIES:
-        party = 'All'
+    # Party filter DEPRECATED (2026-07-27). Blue IQ is now an
+    # "overall audience" view — Jenna's directive was "remove party
+    # cuts just make overall". Any incoming party value (stale
+    # bookmark, legacy client, direct API caller) collapses to 'All'.
+    # The cube's per-party cells are still built nightly (used by the
+    # backend `compare` field for API consumers), but every
+    # request-time slice reads the 'All' cell only.
+    party = 'All'
     geo_type = (f.get('geo_type') or 'National').strip()
     if geo_type not in VALID_GEO_TYPES:
         # 2026-07-27: DMA was removed from VALID_GEO_TYPES; a caller
@@ -846,7 +861,12 @@ def get_filter_options() -> dict:
     district_labels = {c: dref['district_names'].get(c, c) for c in districts}
 
     data = {
-        'parties':          VALID_PARTIES,
+        # Party filter was removed 2026-07-27 (Jenna: "remove party cuts
+        # just make overall"). The list is kept in the payload as a
+        # single-option ['All'] so old JS clients that iterate it don't
+        # blow up — they'll just render one option and the value is
+        # always 'All' after `_normalize_filters` runs on the backend.
+        'parties':          ['All'],
         'geo_types':        VALID_GEO_TYPES,
         'states':           states,
         'districts':        districts,
