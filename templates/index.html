@@ -17856,17 +17856,29 @@
                     <span class="view-nav-label">SELECT PRODUCT:</span>
                     <div class="view-nav-custom-wrap" id="viewNavCustomWrap">
                         <select id="viewNavDropdown" class="view-nav-dropdown" title="Select module to navigate" aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;min-width:0;">
-                            {# Display order 2026-07-22 (Content Ranker removed
-                               per Jenna):
+                            {# Display order 2026-07-27:
                                  Profile IQ, Subscriber IQ, Digital Journey IQ,
-                                 Trends (group: Trends dashboard + Talent Ranker),
-                                 Microdramas, Blue IQ, Fin IQ, LLMO IQ,
+                                 Trends (group: Trends dashboard + Talent Ranker
+                                   + Microdramas),
+                                 Blue IQ, Fin IQ, LLMO IQ,
                                  SF Conversion, Intent IQ, ROAS IQ,
                                  Brand Partnership, Flywheel Conversion,
                                  Analysis IQ, Share of Time, Workspace,
                                  then tail (Admin).
 
                                History:
+                                 * "Microdramas" (2026-07) moved from a
+                                   top-level dropdown entry to a nested
+                                   item inside the Trends group on
+                                   2026-07-27 (Jenna: "move the microdrama
+                                   tab into the trends bucket on the
+                                   dropdown"). Option value stays
+                                   `microdramasIQ` so backend access
+                                   flag, admin hide-list, and per-user
+                                   toggles are unchanged. Only the visual
+                                   nesting via data-group="Trends" moved.
+                                 * "Content Ranker" (2026-05 - 2026-07-22)
+                                   removed per Jenna 2026-07-22.
                                  * "Culture Ranker" (2026-05) -> "Talent
                                    Ranker" (2026-07-07) and moved from a
                                    top-level dropdown entry to a nested
@@ -17894,7 +17906,7 @@
                             <option value="journeyIQ" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
                             <option value="trendsIQ" data-group="Trends" {% if not has_trends_iq_access %}disabled{% endif %}>📈 Trends</option>
                             <option value="cultureRankerIQ" data-group="Trends" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Talent Ranker</option>
-                            <option value="microdramasIQ" {% if not has_microdramas_iq_access %}disabled{% endif %}>📱 Microdramas</option>
+                            <option value="microdramasIQ" data-group="Trends" {% if not has_microdramas_iq_access %}disabled{% endif %}>📱 Microdramas</option>
                             <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
@@ -23786,7 +23798,9 @@
             #microdramasIQView .miq-window-bar { display: flex; gap: 2px; height: 20px; margin-top: 0.3rem; align-items: end; }
             #microdramasIQView .miq-window-cell { flex: 1; background: linear-gradient(180deg, #ec4899, #8b5cf6); border-radius: 2px 2px 0 0; opacity: 0.7; }
             #microdramasIQView .miq-window-cell-empty { background: rgba(255,255,255,0.06); opacity: 0.5; }
-            #microdramasIQView .miq-spark-wrap { position: relative; margin-top: 0.4rem; padding: 0.15rem 0 0.1rem; border-top: 1px dashed rgba(255,255,255,0.06); }
+            #microdramasIQView .miq-spark-wrap { position: relative; margin-top: 0.4rem; padding: 0.15rem 0 0.1rem; border-top: 1px dashed rgba(255,255,255,0.06); cursor: pointer; border-radius: 6px; transition: background 120ms ease; }
+            #microdramasIQView .miq-spark-wrap:hover { background: rgba(139, 92, 246, 0.10); }
+            #microdramasIQView .miq-spark-wrap:focus-visible { outline: 2px solid rgba(236, 72, 153, 0.6); outline-offset: 2px; }
             #microdramasIQView .miq-sparkline { display: block; width: 100%; height: 36px; overflow: visible; }
             #microdramasIQView .miq-spark-dot { fill: #ec4899; }
             #microdramasIQView .miq-spark-dot-last { fill: #fbcfe8; stroke: #ec4899; stroke-width: 1; }
@@ -23835,6 +23849,16 @@
             body[data-theme="light"] #microdramasIQModal .miq-demo-card { background: #fafafa; border-color: rgba(0,0,0,0.08); }
             body[data-theme="light"] #microdramasIQModal .miq-demo-bar-track { background: rgba(0,0,0,0.06); }
             #microdramasIQModal .miq-modal-loading { display: flex; align-items: center; justify-content: center; gap: 0.6rem; padding: 3rem 1rem; color: var(--text-secondary); font-size: 0.88rem; }
+            /* Daily-views modal: bigger chart + tabular breakdown. */
+            #microdramasIQModal .miq-daily-chart { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0.85rem 0.9rem 0.75rem; margin-bottom: 1rem; }
+            body[data-theme="light"] #microdramasIQModal .miq-daily-chart { background: #fafafa; border-color: rgba(0,0,0,0.08); }
+            #microdramasIQModal .miq-daily-table-wrap { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; overflow: hidden; }
+            body[data-theme="light"] #microdramasIQModal .miq-daily-table-wrap { background: #fafafa; border-color: rgba(0,0,0,0.08); }
+            #microdramasIQModal .miq-daily-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+            #microdramasIQModal .miq-daily-table th { text-align: left; padding: 0.65rem 1rem; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); background: rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.08); }
+            #microdramasIQModal .miq-daily-table td { padding: 0.55rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+            #microdramasIQModal .miq-daily-table tr:last-child td { border-bottom: none; }
+            #microdramasIQModal .miq-daily-table tr:hover td { background: rgba(139, 92, 246, 0.06); }
             #microdramasIQView .miq-title-card { cursor: pointer; }
             #microdramasIQView .miq-comp-table tbody tr { cursor: pointer; }
 
@@ -43012,6 +43036,12 @@
             // bar strip. The sparkline still shows the shape of the
             // week; the trend line spells out the punchline.
             var trend = _miqTrendLine(t);
+            // Sparkline wrap gets data-miq-spark="1" so the card-level
+            // click handler can distinguish "user clicked the chart" from
+            // "user clicked the card body" - the chart opens the daily-
+            // views modal, the card body opens the audience research
+            // modal. Kept the native title= tooltip too so hover still
+            // shows the day-by-day quick read.
             return '<div class="miq-title-row">' + _miqEscape(t.title || '') + '</div>' +
                 '<div class="miq-title-metrics">' +
                     '<div><div class="miq-metric-label">' + pm.label + '</div><div class="miq-metric-value">' + pm.value + '</div></div>' +
@@ -43019,7 +43049,7 @@
                     '<div><div class="miq-metric-label">Current rank</div><div class="miq-metric-value">' + _miqCurrentRank(t) + '</div></div>' +
                     '<div><div class="miq-metric-label">Best rank</div><div class="miq-metric-value">' + _miqBestRank(t) + '</div></div>' +
                 '</div>' +
-                (curveBars ? '<div class="miq-spark-wrap" title="' + _miqEscape(_miqSparkTooltip(t, platform)) + '">' + curveBars + '</div>' : '') +
+                (curveBars ? '<div class="miq-spark-wrap" data-miq-spark="1" role="button" tabindex="0" aria-label="Show daily views" title="' + _miqEscape(_miqSparkTooltip(t, platform)) + ' &#10;&#10;Click to open the daily views breakdown">' + curveBars + '</div>' : '') +
                 (trend ? '<div class="miq-trend">' + _miqEscape(trend) + '</div>' : '');
         }
 
@@ -43342,7 +43372,14 @@
                     value: _miqFormatNumber(viewsVal),
                 };
                 card.innerHTML = _miqCardHTML(t, 'Peacock', spark, primary);
-                card.addEventListener('click', function() {
+                card.addEventListener('click', function(evt) {
+                    // Sparkline area opens the daily-views breakdown;
+                    // card body opens the audience research modal.
+                    if (evt.target.closest('[data-miq-spark="1"]')) {
+                        evt.stopPropagation();
+                        openMicrodramasIQDailyViewsModal(t, 'Peacock');
+                        return;
+                    }
                     openMicrodramasIQTitleModal({
                         title:    t.title,
                         series:   t.series,
@@ -43407,7 +43444,14 @@
                     };
                 }
                 card.innerHTML = _miqCardHTML(t, platform.label, spark, primary);
-                card.addEventListener('click', function() {
+                card.addEventListener('click', function(evt) {
+                    // Sparkline area opens the daily-views breakdown;
+                    // card body opens the audience research modal.
+                    if (evt.target.closest('[data-miq-spark="1"]')) {
+                        evt.stopPropagation();
+                        openMicrodramasIQDailyViewsModal(t, platform.label);
+                        return;
+                    }
                     openMicrodramasIQTitleModal({
                         title:    t.title,
                         series:   t.series || t.title,
@@ -43606,6 +43650,235 @@
             .catch(function(err) {
                 body.innerHTML = '<div class="miq-modal-loading" style="color:#f87171;">Network error: ' + _miqEscape(err && err.message || err) + '</div>';
             });
+        }
+
+        // Daily-views breakdown modal. Opened when the user clicks the
+        // sparkline area of a card. Reuses the same modal shell as the
+        // audience research modal for styling continuity, but the body
+        // is a self-contained daily table + larger view chart drawn
+        // from the data already on the title record - no fetch needed.
+        function openMicrodramasIQDailyViewsModal(t, platform) {
+            if (!t || !t.title) return;
+            var modal = document.getElementById('microdramasIQModal');
+            var titleEl = document.getElementById('microdramasIQModalTitle');
+            var sub     = document.getElementById('microdramasIQModalSub');
+            var body    = document.getElementById('microdramasIQModalContent');
+            if (!modal || !titleEl || !body) return;
+
+            titleEl.textContent = t.title;
+            var subLine = [
+                t.series && t.series !== t.title ? t.series : null,
+                t.genre,
+                platform,
+                'Daily views',
+            ].filter(function(x){ return x; }).join(' \u00B7 ');
+            if (sub) sub.textContent = subLine;
+
+            // Assemble a normalized [{date, views}] list.
+            // - Peacock: view_daily_curve is launch-relative; use as-is
+            //   (clipped by _miqPeacockCurve so it doesn't project past
+            //   the real data date).
+            // - Competitors: reads_by_date is snapshot-date-keyed; shift
+            //   each label by the one-day data lag (_miqLagDate) so the
+            //   dates the user sees match what the source actually
+            //   reported.
+            var rows;
+            if (platform === 'Peacock') {
+                rows = _miqPeacockCurve(t).map(function(c) {
+                    return {
+                        date:     c.date,
+                        display:  _miqDayLabel(c.date),
+                        views:    Number(c.views) || 0,
+                        estimated: false,
+                    };
+                });
+            } else {
+                var dates = t.__observedDates || t.observed_dates || [];
+                var reads = t.reads_by_date || {};
+                var hasAny = dates.some(function(d) { return Number.isFinite(Number(reads[d])); });
+                if (hasAny) {
+                    rows = dates.map(function(d) {
+                        var v = Number(reads[d]);
+                        return {
+                            date:     _miqLagDate(d),
+                            display:  _miqDayLabel(_miqLagDate(d)),
+                            views:    Number.isFinite(v) ? v : null,
+                            estimated: false,
+                        };
+                    });
+                } else {
+                    // No per-day observed reads (e.g. NetShort). Fall
+                    // back to the current view estimate spread across
+                    // the window as a flat line so the user still gets
+                    // context, but the "-" marker makes it clear the
+                    // number is a rank-derived estimate, not an observed
+                    // daily count.
+                    var est = Number(t.read_count) || 0;
+                    var perDay = dates.length ? Math.round(est / dates.length) : est;
+                    rows = dates.map(function(d) {
+                        return {
+                            date:     _miqLagDate(d),
+                            display:  _miqDayLabel(_miqLagDate(d)),
+                            views:    perDay || null,
+                            estimated: true,
+                        };
+                    });
+                }
+            }
+
+            // Rank overlay for the daily table (competitors only - Peacock's
+            // curve is launch-relative, not calendar-keyed).
+            var ranksByDate = t.ranks_by_date || {};
+
+            // Total across the visible window (for the summary chip).
+            var totalViews = rows.reduce(function(sum, r) {
+                return sum + (Number(r.views) || 0);
+            }, 0);
+            var anyEstimated = rows.some(function(r) { return r.estimated; });
+
+            // Build a larger SVG line chart for the modal body. Uses the
+            // same gradient stroke as the sparkline for continuity but at
+            // a readable size with a Y axis + explicit dot labels.
+            var chartSVG = _miqDailyViewsChart(rows);
+
+            // Build the table.
+            var tableRows = rows.map(function(r) {
+                var v = r.views;
+                var vStr = (v == null) ? '\u2014'
+                    : (_miqFormatNumber(v) + (r.estimated ? '<span style="color:#94a3b8; margin-left:0.35rem;">(est.)</span>' : ''));
+                var rk = ranksByDate[r.date != null ? r.date : ''];
+                // Try both the shifted (display) date and the unshifted
+                // snapshot date so competitor rank lookups still hit.
+                if (!Number.isFinite(rk) && t.__observedDates) {
+                    for (var i = 0; i < t.__observedDates.length; i++) {
+                        var od = t.__observedDates[i];
+                        if (_miqLagDate(od) === r.date) {
+                            rk = ranksByDate[od];
+                            break;
+                        }
+                    }
+                }
+                var rkStr = Number.isFinite(rk) ? '#' + rk : '\u2014';
+                return '<tr>' +
+                        '<td>' + _miqEscape(r.display || r.date || '') + '</td>' +
+                        '<td style="text-align:right; font-variant-numeric: tabular-nums;">' + vStr + '</td>' +
+                        '<td style="text-align:right; color:var(--text-secondary);">' + rkStr + '</td>' +
+                    '</tr>';
+            }).join('');
+
+            var totalLine = _miqFormatNumber(totalViews) + ' views across ' + rows.length + ' day' + (rows.length === 1 ? '' : 's');
+            if (anyEstimated) {
+                totalLine += ' \u00B7 estimated from chart position';
+            }
+
+            body.innerHTML =
+                '<div class="miq-modal-summary" style="margin-bottom:1rem;">' + totalLine + '</div>' +
+                (chartSVG ? '<div class="miq-daily-chart">' + chartSVG + '</div>' : '') +
+                '<div class="miq-daily-table-wrap">' +
+                    '<table class="miq-daily-table">' +
+                        '<thead><tr>' +
+                            '<th style="text-align:left;">Day</th>' +
+                            '<th style="text-align:right;">Views</th>' +
+                            '<th style="text-align:right;">Rank</th>' +
+                        '</tr></thead>' +
+                        '<tbody>' + tableRows + '</tbody>' +
+                    '</table>' +
+                '</div>';
+
+            modal.classList.add('active');
+        }
+
+        // Larger SVG line chart for the daily-views modal. Same visual
+        // vocab as _miqSparklineSVG (gradient stroke, area fill, end-
+        // point highlight) but sized for a modal and with a Y axis +
+        // point labels so the numbers are readable.
+        function _miqDailyViewsChart(rows) {
+            if (!rows || !rows.length) return '';
+            var vals = rows.map(function(r) { return Number(r.views); });
+            var finite = vals.filter(function(v) { return Number.isFinite(v); });
+            if (!finite.length) return '';
+            var mx = Math.max.apply(null, finite);
+            var mn = Math.min.apply(null, finite);
+            if (mx === mn) mx = mn + 1;
+            var w = 720, h = 220, padL = 56, padR = 20, padT = 18, padB = 32;
+            var innerW = w - padL - padR;
+            var innerH = h - padT - padB;
+            function xAt(i) {
+                if (rows.length === 1) return padL + innerW / 2;
+                return padL + i * innerW / (rows.length - 1);
+            }
+            function yAt(v) {
+                var vv = Math.max(mn, Math.min(mx, Number(v) || mn));
+                return padT + (1 - (vv - mn) / (mx - mn)) * innerH;
+            }
+            // Segments split on null so gaps break the line.
+            var segs = [], cur = null;
+            for (var i = 0; i < vals.length; i++) {
+                if (!Number.isFinite(vals[i])) {
+                    if (cur && cur.length) { segs.push(cur); cur = null; }
+                } else {
+                    if (!cur) cur = [];
+                    cur.push([xAt(i), yAt(vals[i])]);
+                }
+            }
+            if (cur && cur.length) segs.push(cur);
+            var pathD = segs.map(function(seg) {
+                return seg.map(function(p, k) {
+                    return (k === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1);
+                }).join(' ');
+            }).join(' ');
+            var areaD = '';
+            if (segs.length && segs[0].length > 1) {
+                var s = segs[0];
+                areaD = 'M' + s[0][0].toFixed(1) + ',' + (padT + innerH).toFixed(1) +
+                    s.map(function(p) { return ' L' + p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('') +
+                    ' L' + s[s.length - 1][0].toFixed(1) + ',' + (padT + innerH).toFixed(1) + ' Z';
+            }
+            // Y-axis ticks (3 values: max, mid, min).
+            function yTick(v) {
+                return '<g>' +
+                    '<line x1="' + padL + '" y1="' + yAt(v).toFixed(1) + '" x2="' + (padL + innerW) + '" y2="' + yAt(v).toFixed(1) + '" stroke="rgba(255,255,255,0.06)" stroke-dasharray="2 4"/>' +
+                    '<text x="' + (padL - 8) + '" y="' + (yAt(v) + 3.5).toFixed(1) + '" text-anchor="end" font-size="10" fill="rgba(255,255,255,0.55)">' + _miqFormatNumber(v) + '</text>' +
+                '</g>';
+            }
+            var mid = (mx + mn) / 2;
+            var axis = yTick(mx) + yTick(mid) + yTick(mn);
+            // Dots + x-axis labels (weekday + m/d).
+            var overlay = '';
+            for (var j = 0; j < rows.length; j++) {
+                var v = vals[j];
+                var xx = xAt(j);
+                if (Number.isFinite(v)) {
+                    var isLast = (j === rows.length - 1);
+                    overlay += '<circle cx="' + xx.toFixed(1) + '" cy="' + yAt(v).toFixed(1) + '" r="' + (isLast ? 4.2 : 3.0) + '" fill="' + (isLast ? '#ec4899' : '#c4b5fd') + '" stroke="rgba(15,23,42,0.9)" stroke-width="1.4"/>';
+                    // Number label above the dot on every point.
+                    overlay += '<text x="' + xx.toFixed(1) + '" y="' + (yAt(v) - 8).toFixed(1) + '" text-anchor="middle" font-size="10" fill="rgba(255,255,255,0.85)" font-weight="600">' + _miqFormatNumber(v) + '</text>';
+                }
+                // x-axis day label.
+                var lbl = (rows[j].display || rows[j].date || '').split(' ');
+                var wd  = lbl[0] || '';
+                var md  = lbl[1] || rows[j].date || '';
+                overlay += '<text x="' + xx.toFixed(1) + '" y="' + (padT + innerH + 14) + '" text-anchor="middle" font-size="10" fill="rgba(255,255,255,0.55)">' + _miqEscape(wd) + '</text>';
+                overlay += '<text x="' + xx.toFixed(1) + '" y="' + (padT + innerH + 26) + '" text-anchor="middle" font-size="10" fill="rgba(255,255,255,0.85)">' + _miqEscape(md) + '</text>';
+            }
+            var gid = 'mdv-grad-' + Math.random().toString(36).slice(2, 8);
+            var aid = 'mdv-area-' + Math.random().toString(36).slice(2, 8);
+            return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="display:block;">' +
+                '<defs>' +
+                    '<linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="0">' +
+                        '<stop offset="0%" stop-color="#ec4899"/>' +
+                        '<stop offset="100%" stop-color="#8b5cf6"/>' +
+                    '</linearGradient>' +
+                    '<linearGradient id="' + aid + '" x1="0" y1="0" x2="0" y2="1">' +
+                        '<stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.28"/>' +
+                        '<stop offset="100%" stop-color="#8b5cf6" stop-opacity="0"/>' +
+                    '</linearGradient>' +
+                '</defs>' +
+                axis +
+                (areaD ? '<path d="' + areaD + '" fill="url(#' + aid + ')" stroke="none"/>' : '') +
+                (pathD ? '<path d="' + pathD + '" fill="none" stroke="url(#' + gid + ')" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' : '') +
+                overlay +
+            '</svg>';
         }
 
         function closeMicrodramasIQModal() {
