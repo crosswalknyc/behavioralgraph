@@ -39723,16 +39723,14 @@
                 { key: 'panel',   label: 'Panel signal',       t: 0 },
                 { key: 'search',  label: 'Search queries',     t: isDistrict ? 8 : 3 },
                 { key: 'journey', label: 'Voter journey',      t: isDistrict ? 22 : 8 },
-                { key: 'trends',  label: 'Google Trends',      t: isDistrict ? 40 : 14 },
-                { key: 'agent',   label: 'Modeling political intent (agent)', t: isDistrict ? 60 : 22 },
+                { key: 'agent',   label: 'Modeling political intent (agent)', t: isDistrict ? 40 : 14 },
             ];
             // Phase copy: shown on the hero sub-line. Reads like a
             // status update, not a fixed label.
             steps[0].sub = 'Loading data for ' + geo + '.';
             steps[1].sub = 'Analyzing the raw search vocabulary.';
             steps[2].sub = 'Building the voter journey — what people did next.';
-            steps[3].sub = 'Pulling live Google Trends.';
-            steps[4].sub = isDistrict
+            steps[3].sub = isDistrict
                 ? 'Compiling representatives, issues, and campaign context.'
                 : 'Compiling political intent and creative angles.';
             return steps;
