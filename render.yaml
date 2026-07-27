@@ -164,7 +164,11 @@ services:
     startCommand: |
       python -c "import urllib.request,os; r=urllib.request.Request(os.environ['APP_URL'].rstrip('/')+'/api/cron/microdramas-scrapers?secret='+os.environ['CRON_SECRET'], method='POST'); print(urllib.request.urlopen(r, timeout=1800).read().decode())"
     envVars:
+      # Prod web service (behavioralgraph.onrender.com). The other host
+      # in this account, behavioral-graph.onrender.com, is a suspended
+      # duplicate and was the wrong target - pointing here means the
+      # cron actually reaches the running app.
       - key: APP_URL
-        value: "https://behavioral-graph.onrender.com"
+        value: "https://behavioralgraph.onrender.com"
       - key: CRON_SECRET
         value: "FLrVHDerM_oMlPikk-Gr6544GyGMCoY19ScpMySuwWA"
