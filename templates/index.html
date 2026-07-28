@@ -44435,6 +44435,8 @@
                   tip: 'Social: Trending posts and videos on Reddit, YouTube, and TikTok. Real content, not hashtag lists.' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
                   tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, Max, Prime Video, and ESPN+, split into Film and TV.' },
+                { key: 'films',     label: 'Films',            count: counts.films     || 0, icon: '🎬',
+                  tip: 'Films: Top titles in theaters right now across Fandango, Cinemark, AMC, Regal, and Atom Tickets. Ranking on each platform reflects that platform\'s own front-page merchandising and sales density.' },
                 { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★',
                   tip: 'Watchlist: The trends you have starred. Populates the daily digest email so you get pinged when anything on this list breaks out, drops off, or crosses a threshold you set.' },
             ];
@@ -44467,6 +44469,7 @@
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
+                _renderTIQPanel('films',     renderTIQFilms(cards.films_ticketing || {})) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
 
             // If the user had previously landed on the removed "sources"
@@ -44578,6 +44581,12 @@
             // ---------- Streaming (Film / TV split inside each platform sub-tab) ----------
             'Film':      'Film: Top movies on this platform right now.',
             'TV':        'TV: Top series on this platform right now.',
+            // ---------- Films (theatrical ticketing platforms) ----------
+            'Fandango':      'Fandango: What people are buying tickets to right now. Largest single ticketing platform in the US.',
+            'Cinemark':      'Cinemark: The Now Showing lineup at Cinemark, ordered by their front-page merchandising.',
+            'AMC Theatres':  'AMC Theatres: Now Playing at the largest theater chain in the US.',
+            'Regal Cinemas': 'Regal Cinemas: In-theaters lineup at the second-largest US chain.',
+            'Atom Tickets':  'Atom Tickets: The mobile-first ticketing platform with strong younger-audience reach.',
             // ---------- Products / Retailers ----------
             // Individual retailer panels render one card per category
             // ("Best Sellers - top 10", "Movers & Shakers - top 10",
@@ -45922,6 +45931,59 @@
                    '</div>';
         }
 
+        // ============================================================
+        // Films (ticketing platforms)
+        //
+        // One card per platform, mirrors the Books grammar. Ordering:
+        //   Fandango (biggest single reach in US) -> Cinemark ->
+        //   AMC -> Regal -> Atom.
+        // Fandango + Cinemark are the two live sources today; AMC /
+        // Regal / Atom render as "warming up" cards with cookie-donation
+        // guidance in the sub-copy until a signed-in session bypass
+        // lands. Same "keep the tab shape stable" pattern Amazon Music
+        // used before it went live.
+        // ============================================================
+        function renderTIQFilms(sources) {
+            var keys = ['fandango', 'cinemark', 'amc', 'regal', 'atom'];
+            var present = keys.filter(function(k) { return sources[k]; });
+            if (!present.length) {
+                return '<div class="tiq-empty">Film ticketing data is warming up. Check back later.</div>';
+            }
+            var cards = present.map(function(k) {
+                var s = sources[k] || {};
+                var items = s.items || [];
+                var body;
+                if (!s.available || !items.length) {
+                    body = '<div class="tiq-placeholder">' +
+                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
+                           '<div>' + _tiqEsc(s.sub || 'Warming up.') + '</div>' +
+                           '</div>';
+                } else {
+                    body = '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                           items.map(function(it, i) {
+                               var img = _tiqPosterCell(it.image);
+                               var titleLine = it.url
+                                   ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
+                                   : _tiqEsc(it.title);
+                               var filmKey = it.title;
+                               return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                                      '<div class="tiq-row-body">' +
+                                      '<div class="tiq-row-title">' + titleLine +
+                                      _tiqCrossPlatformBadge(it) +
+                                      _tiqActions('film', k, filmKey, filmKey, 'National') +
+                                      '</div>' +
+                                      '</div></div>';
+                           }).join('') +
+                           '</div>';
+                }
+                return '<div class="tiq-card">' +
+                       '<h4>' + _tiqEsc(s.label || k) + '</h4>' +
+                       body +
+                       '</div>';
+            }).join('');
+            return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' + cards + '</div>';
+        }
+
         // Shorten "Thu, 10 Jul 2026 09:34:11 GMT" -> "10 Jul". Used in
         // the philanthropy news feed to keep the meta line tight.
         function _tiqShortDate(s) {
@@ -46380,6 +46442,7 @@
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
+                _renderTIQPanel('films',     renderTIQFilms(cards.films_ticketing || {})) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
             setTrendsIQTab(window.__trendsIQ.activeTab || 'searches');
         }
@@ -46605,40 +46668,14 @@
             const opt = dd?.querySelector('option[value="sfConversion"]');
             if (opt?.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('sfConversion');
-            
-            // Hide all views
-            document.getElementById('dashboardView').style.display = 'none';
-            document.getElementById('subscriberIQView').style.display = 'none';
-            const rankerIQView = document.getElementById('rankerIQView');
-            if (rankerIQView) rankerIQView.style.display = 'none';
-            const ticketSalesView = document.getElementById('ticketSalesIQView');
-            if (ticketSalesView) ticketSalesView.style.display = 'none';
-            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
-            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
-            const hedgeFundView = document.getElementById('hedgeFundIQView');
-            if (hedgeFundView) hedgeFundView.style.display = 'none';
-            const talentSearchView = document.getElementById('talentSearchIQView');
-            if (talentSearchView) talentSearchView.style.display = 'none';
-            const talentTheaterView = document.getElementById('talentTheaterIQView');
-            if (talentTheaterView) talentTheaterView.style.display = 'none';
-            const formView = document.getElementById('formView');
-            if (formView) formView.style.display = 'none';
-            const customAnalysisView = document.getElementById('customAnalysisView');
-            if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const roasIQViewEl = document.getElementById('roasIQView');
-            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
-            const ecomIQViewEl = document.getElementById('ecommerceIQView');
-            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
-            const flywheelViewEl = document.getElementById('flywheelConversionView');
-            if (flywheelViewEl) flywheelViewEl.style.display = 'none';
-            const talentFitViewEl = document.getElementById('talentFitIQView');
-            if (talentFitViewEl) talentFitViewEl.style.display = 'none';
-            hideLLMOIQView();
-            
-            // Show SF Conversion view
-            document.getElementById('sfConversionView').style.display = 'flex';
-            
-            // Load profiles
+
+            // 2026-07-28: canonical hide + LLMO cleanup in one call.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('sfConversionView');
+            }
+            var sv = document.getElementById('sfConversionView');
+            if (sv) sv.style.display = 'flex';
+
             loadSFConvProfiles();
         }
         
@@ -47865,29 +47902,12 @@
             const opt = dd?.querySelector('option[value="ticketSalesIQ"]');
             if (opt?.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('ticketSalesIQ');
-            document.getElementById('dashboardView').style.display = 'none';
-            document.getElementById('subscriberIQView').style.display = 'none';
-            const rankerIQView = document.getElementById('rankerIQView');
-            if (rankerIQView) rankerIQView.style.display = 'none';
-            const ticketSalesView = document.getElementById('ticketSalesIQView');
-            if (ticketSalesView) ticketSalesView.style.display = 'flex';
-            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
-            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
-            const hedgeFundView = document.getElementById('hedgeFundIQView');
-            if (hedgeFundView) hedgeFundView.style.display = 'none';
-            const talentSearchView = document.getElementById('talentSearchIQView');
-            if (talentSearchView) talentSearchView.style.display = 'none';
-            const talentTheaterView = document.getElementById('talentTheaterIQView');
-            if (talentTheaterView) talentTheaterView.style.display = 'none';
-            const formView = document.getElementById('formView');
-            if (formView) formView.style.display = 'none';
-            const customAnalysisView = document.getElementById('customAnalysisView');
-            if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const roasIQViewEl = document.getElementById('roasIQView');
-            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
-            const ecomIQViewEl = document.getElementById('ecommerceIQView');
-            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
-            hideLLMOIQView();
+            // 2026-07-28: canonical hide + LLMO cleanup in one call.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('ticketSalesIQView');
+            }
+            var tv = document.getElementById('ticketSalesIQView');
+            if (tv) tv.style.display = 'flex';
             loadTicketSalesProfiles();
         }
         
@@ -53002,31 +53022,16 @@
             const opt = dd?.querySelector('option[value="talentFitIQ"]');
             if (opt?.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('talentFitIQ');
-            
-            // Hide all other views
-            document.getElementById('dashboardView').style.display = 'none';
-            document.getElementById('subscriberIQView').style.display = 'none';
-            const formView = document.getElementById('formView');
-            if (formView) formView.style.display = 'none';
-            const customAnalysisView = document.getElementById('customAnalysisView');
-            if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const talentSearchView = document.getElementById('talentSearchIQView');
-            if (talentSearchView) talentSearchView.style.display = 'none';
-            const talentTheaterView = document.getElementById('talentTheaterIQView');
-            if (talentTheaterView) talentTheaterView.style.display = 'none';
-            const roasIQViewEl = document.getElementById('roasIQView');
-            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
-            const ecomIQViewEl = document.getElementById('ecommerceIQView');
-            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
-            hideLLMOIQView();
-            
-            // Show Talent Fit IQ view
+
+            // 2026-07-28: canonical hide + LLMO cleanup in one call.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('talentFitIQView');
+            }
             const talentFitIQView = document.getElementById('talentFitIQView');
             if (talentFitIQView) {
                 talentFitIQView.style.display = 'flex';
             }
-            
-            // Load assessments into sidebar
+
             if (typeof refreshTalentFitResults === 'function') {
                 refreshTalentFitResults();
             }
