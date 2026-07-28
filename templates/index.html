@@ -34360,10 +34360,12 @@
                         <div id="jiqMusicInfluenceMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqMusicInfluenceSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;">
-                        Music exposure on TikTok + Instagram fused with Netflix viewership. Show tabs switch the show; platform pills switch the social surface.
+                        Music exposure on TikTok + Instagram fused with Netflix viewership. Journey stages across the top; show tabs and platform pills persist across stages.
                     </div>
-                    <div id="jiqMusicShowTabs" style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.65rem;"></div>
+                    <div id="jiqMusicStageTabs" style="display: flex; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.6rem; padding-bottom: 0.55rem; border-bottom: 1px solid rgba(255,255,255,0.08);"></div>
+                    <div id="jiqMusicShowTabs" style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.5rem;"></div>
                     <div id="jiqMusicPlatformTabs" style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem;"></div>
+                    <div id="jiqMusicStageSubtitle" style="font-size: 0.75rem; color: var(--text-secondary); font-style: italic; margin-bottom: 0.7rem; line-height: 1.5;"></div>
                     <div id="jiqMusicInfluenceBody"></div>
                 </div>
 
@@ -66092,7 +66094,139 @@
                         { title: 'Love on the Brain',                              artist: 'Rihanna',                  music_only_pct: 4.8, clips_only_pct: 3.1, music_and_clips_pct: 3.7, note: 'Music-heavy — pre-existing catalog audio already had a large TikTok footprint.' },
                         { title: 'Water the Flowers, Pray for a Garden',           artist: 'Valley',                   music_only_pct: 2.1, clips_only_pct: 3.9, music_and_clips_pct: 2.4, note: 'Clip-dominant; the finale montage sits upstream of most exposed viewers.' },
                         { title: 'You & I',                                        artist: 'LÉON',                     music_only_pct: 2.0, clips_only_pct: 2.7, music_and_clips_pct: 2.1, note: 'Steady long-tail reach on Reels.' }
-                    ]
+                    ],
+                    timeline: {
+                        label: 'Weekly cadence · sound-page traffic vs first-watch curve',
+                        subtitle: 'Index base 100 = week 1 (3/15). Matched-panel index — sound-page traffic on the licensed tracks, and first-time watches of the show, week by week.',
+                        weeks: [
+                            { week_label: '3/15–3/21', sound_index: 100, watch_index: 100, note: 'Baseline · pre-drop' },
+                            { week_label: '3/22–3/28', sound_index: 128, watch_index: 104, note: 'S2 trailer drops · sound page moves first' },
+                            { week_label: '3/29–4/04', sound_index: 187, watch_index: 141, note: 'S2 premieres 4/2 — sound lift precedes watch lift by 6d' },
+                            { week_label: '4/05–4/11', sound_index: 246, watch_index: 218, note: 'Week 2 · fan-edit peak' },
+                            { week_label: '4/12–4/18', sound_index: 271, watch_index: 254, note: 'Sound-page peak (Summer Girl 2.71x baseline)' },
+                            { week_label: '4/19–4/25', sound_index: 224, watch_index: 268, note: 'Watch peak lags sound peak by 1 week' },
+                            { week_label: '4/26–5/02', sound_index: 197, watch_index: 231, note: 'Steady state' },
+                            { week_label: '5/03–5/09', sound_index: 168, watch_index: 189, note: '' },
+                            { week_label: '5/10–5/16', sound_index: 152, watch_index: 162, note: '' },
+                            { week_label: '5/17–5/23', sound_index: 141, watch_index: 148, note: '' },
+                            { week_label: '5/24–5/30', sound_index: 133, watch_index: 137, note: '' },
+                            { week_label: '5/31–6/06', sound_index: 128, watch_index: 131, note: 'Long-tail flat · earned-media flywheel' }
+                        ],
+                        lag_summary: {
+                            median_lag_days: 6.0,
+                            headline: 'Sound-page traffic leads watch by 6 days at the median. Music is early-signal, not lagging indicator.',
+                            note: 'For every 100-point sound-page index gain, we observe a +73 point watch-index gain 6–8 days later. This is the "music leads watch" signature — the reverse pattern (watch leading sound) is what a soundtrack-driven show looks like.'
+                        }
+                    },
+                    sound_pages: {
+                        label: 'Sound page adoption · the audio-only surface',
+                        subtitle: 'For each licensed track: unique creators using the sound, peak week, and geographic hotspots.',
+                        songs: [
+                            { song: 'Summer Girl',                          artist: 'HAIM',                     creators_using_sound: 187400, peak_week: '4/12–4/18', peak_multiplier: '2.71x baseline', top_geos: ['NYC', 'LA', 'Austin'],       creator_note: 'Emotional-throughline sound; adopted heavily by lifestyle + relationship creators.' },
+                            { song: 'See Her Out (That\'s Just Life)',       artist: 'Francis and the Lights',   creators_using_sound: 74200,  peak_week: '4/19–4/25', peak_multiplier: '1.94x baseline', top_geos: ['LA', 'Portland', 'NYC'],     creator_note: 'Slow burn; adoption grew across S2 arc.' },
+                            { song: 'Love on the Brain',                    artist: 'Rihanna',                  creators_using_sound: 421800, peak_week: '4/05–4/11', peak_multiplier: '1.44x baseline', top_geos: ['Atlanta', 'LA', 'NYC'],      creator_note: 'Catalog track — massive existing base. Show usage added a +44% lift on top.' },
+                            { song: 'Water the Flowers, Pray for a Garden', artist: 'Valley',                   creators_using_sound: 38100,  peak_week: '4/26–5/02', peak_multiplier: '3.12x baseline', top_geos: ['LA', 'Nashville', 'Chicago'], creator_note: 'Finale montage — largest week-over-week lift of any song in the show.' },
+                            { song: 'You & I',                              artist: 'LÉON',                     creators_using_sound: 28900,  peak_week: '5/10–5/16', peak_multiplier: '2.08x baseline', top_geos: ['NYC', 'Toronto', 'LA'],      creator_note: 'Long-tail Reels usage — audio outpaced clips on this one.' }
+                        ],
+                        summary: '750,400 unique creators used one of the five licensed tracks in the study window. Peak week (4/12–4/18) saw 2.71x baseline for Summer Girl alone.'
+                    },
+                    fan_edits: {
+                        label: 'Fan-edit ecosystem · the clip-with-music surface',
+                        subtitle: 'For clips of the show scored to the licensed tracks: who made them, what type, and what tier of creator drove the reach.',
+                        total_edits_indexed: 84200,
+                        total_reach_hh: 4820000,
+                        edit_types: [
+                            { type: 'Ship / romance edits',    pct_of_edits: 44.2, pct_of_reach: 51.8, note: 'Noah + Joanne slow-mo cuts, hospital scene, apology montage. Highest-reach type.' },
+                            { type: 'Cast candid + fancam',    pct_of_edits: 21.7, pct_of_reach: 22.4, note: 'Adam Brody / Kristen Bell BTS clips scored to the licensed tracks.' },
+                            { type: 'Quote / dialogue edits',  pct_of_edits: 14.6, pct_of_reach: 10.2, note: 'One-liners layered over the Summer Girl chorus. High engagement, lower reach.' },
+                            { type: 'Comedic / roast edits',   pct_of_edits: 11.8, pct_of_reach: 8.7,  note: 'Rabbi bar scenes, family dinner absurdity. Long-tail evergreen.' },
+                            { type: 'Montage / recap edits',   pct_of_edits: 7.7,  pct_of_reach: 6.9,  note: 'Season summary edits at S2 finale.' }
+                        ],
+                        creator_tiers: [
+                            { tier: 'Celebrity (>10M)', edit_count: 41,     reach_share_pct: 18.4, note: '3 edits from cast + 12 from adjacent celebrity accounts.' },
+                            { tier: 'Macro (1M–10M)',   edit_count: 892,    reach_share_pct: 34.2, note: 'Where most of the reach concentrated.' },
+                            { tier: 'Mid (100K–1M)',    edit_count: 4180,   reach_share_pct: 27.6, note: 'The engagement backbone.' },
+                            { tier: 'Micro (10K–100K)', edit_count: 12400,  reach_share_pct: 12.8, note: 'The long-tail believers.' },
+                            { tier: 'Nano (<10K)',      edit_count: 66600,  reach_share_pct: 7.0,  note: 'Fan-first evangelism — reach small, sentiment high.' }
+                        ],
+                        top_edits: [
+                            { title: 'Joanne + Noah "Summer Girl" walking home',   creator: '@edits.by.june',     tier: 'Macro',     reach_hh: 486000, engagement_rate: '18.4%', note: 'Single largest-reach edit — reposted 400K+ times.' },
+                            { title: 'Rabbi bar cold-open · Love on the Brain',    creator: '@brodycore',         tier: 'Macro',     reach_hh: 312000, engagement_rate: '14.7%', note: 'Comedic reframe of a serious song. High saves.' },
+                            { title: 'S2 finale montage · Water the Flowers',      creator: '@nobodywants.edits', tier: 'Mid',       reach_hh: 214000, engagement_rate: '22.1%', note: 'Fan-run account; hit above its follower weight.' },
+                            { title: 'Kristen Bell BTS Reel · Summer Girl',        creator: '@kristenanniebell',  tier: 'Celebrity', reach_hh: 198000, engagement_rate: '11.3%', note: 'Cast-native. Talent-attributable reach.' },
+                            { title: 'Joanne dialogue compilation · See Her Out',  creator: '@joannecoded',       tier: 'Mid',       reach_hh: 174000, engagement_rate: '19.8%', note: 'Quote-edit format; strongest completion rate.' }
+                        ]
+                    },
+                    cross_platform_path: {
+                        label: 'Cross-platform path · the "Both" cohort\'s ordering',
+                        subtitle: 'For the 18.7% of viewers exposed to both audio-only AND clip-with-music content — which platform came first, and how far apart.',
+                        both_cohort_hh: 1200540,
+                        ordering_distribution: [
+                            { sequence: 'TikTok sound → TikTok clip → Netflix',          pct: 34.2, hh: 410585, note: 'Single-platform TikTok pipeline. Fastest lag (median 2.4 days).' },
+                            { sequence: 'TikTok sound → Instagram Reels clip → Netflix', pct: 21.7, hh: 260517, note: 'Classic cross-platform funnel — audio seeded on TikTok, clip closed on IG.' },
+                            { sequence: 'Simultaneous (within 48h)',                     pct: 18.4, hh: 220899, note: 'Cross-platform storm — sound trending on both surfaces at once.' },
+                            { sequence: 'Instagram Reel → TikTok → Netflix',             pct: 14.8, hh: 177680, note: 'IG-first users who discovered fan-edits on TikTok before watching.' },
+                            { sequence: 'TikTok clip → TikTok sound → Netflix',          pct: 6.7,  hh: 80436,  note: 'Clip came first, viewer sought out the audio, then watched.' },
+                            { sequence: 'Instagram sound → Instagram clip → Netflix',    pct: 4.2,  hh: 50423,  note: 'Single-platform Instagram pipeline. Rare but the highest-intent segment.' }
+                        ],
+                        median_lag_hours_first_touch_to_watch: 58.4,
+                        read: 'TikTok is the sound seeder in 62.6% of overlap paths. Cross-platform (TikTok → Instagram) is the second most common. Simultaneous exposure is the "storm" pattern — the sound trending across both surfaces at once, the highest-intent moment.'
+                    },
+                    time_to_watch: {
+                        label: 'Time-to-watch · from first exposure to first Netflix stream',
+                        subtitle: 'Distribution of hours between first music-linked touchpoint and first minute of show playback, per household.',
+                        overall_median_hours: 71.2,
+                        overall_p90_hours: 336.0,
+                        buckets: [
+                            { label: '<6 hrs',    cohort: 'Same-day watchers',        pct: 8.4,  note: 'Sound-page-to-Netflix in under a day. Highest-intent segment.' },
+                            { label: '6–24 hrs',  cohort: 'Next-day watchers',        pct: 18.2, note: '' },
+                            { label: '1–3 days',  cohort: 'Weekend watchers',         pct: 27.6, note: 'Modal bucket — median household lag.' },
+                            { label: '3–7 days',  cohort: 'Deferred watchers',        pct: 21.4, note: 'Saved-for-later cohort; heavy Reels-driven.' },
+                            { label: '7–14 days', cohort: 'Slow-burn watchers',       pct: 12.7, note: '' },
+                            { label: '14+ days',  cohort: 'Repeat-exposure watchers', pct: 11.7, note: 'Needed multiple touchpoints to convert. Where clip-only skews.' }
+                        ],
+                        cohort_medians: [
+                            { cohort: 'Music-only exposure', median_hours: 92.4, note: 'Slower — audio is discovery, not urgency.' },
+                            { cohort: 'Clips-only exposure', median_hours: 54.8, note: 'Faster — clips carry direct show references.' },
+                            { cohort: 'Both (overlap)',      median_hours: 41.2, note: 'Fastest — high-intent segment.' }
+                        ],
+                        platform_medians: { all: 71.2, tiktok: 62.4, instagram: 88.7 },
+                        read: 'The overlap cohort watches within ~40 hours of first exposure — nearly 2x faster than the music-only cohort. Clips carry urgency; music-only carries curiosity. Combined, they compound.'
+                    },
+                    post_watch_ripple: {
+                        label: 'Post-watch ripple · what happens AFTER they watch',
+                        subtitle: 'Do viewers go BACK to the music? DSP streaming lift, sound-page usage (viewers becoming creators), and downstream cultural signal.',
+                        dsp_lift: [
+                            { track: 'Summer Girl (HAIM)',                            spotify_lift_pct: 187.4, apple_lift_pct: 142.7, shazam_lift_pct: 412.8, peak_week: '4/12–4/18', note: 'Largest DSP lift of the study. Sound page 2.71x + DSP 2.87x — the flywheel closed on this track.' },
+                            { track: 'See Her Out (Francis and the Lights)',          spotify_lift_pct: 92.4,  apple_lift_pct: 68.7,  shazam_lift_pct: 284.1, peak_week: '4/19–4/25', note: 'Under-the-radar track; the show discovered it for a lot of casual listeners.' },
+                            { track: 'Love on the Brain (Rihanna)',                   spotify_lift_pct: 24.7,  apple_lift_pct: 18.2,  shazam_lift_pct: 47.4,  peak_week: '4/05–4/11', note: 'Catalog track; smaller relative lift because the base was massive.' },
+                            { track: 'Water the Flowers, Pray for a Garden (Valley)', spotify_lift_pct: 168.2, apple_lift_pct: 121.4, shazam_lift_pct: 387.9, peak_week: '4/26–5/02', note: 'Finale-driven; peak coincides with S2 finale week.' },
+                            { track: 'You & I (LÉON)',                                spotify_lift_pct: 74.6,  apple_lift_pct: 52.4,  shazam_lift_pct: 218.7, peak_week: '5/10–5/16', note: 'Slow-burn Reels-driven lift; long-tail continues past study window.' }
+                        ],
+                        viewers_becoming_creators: {
+                            count_hh: 481200,
+                            pct_of_viewers: 7.5,
+                            median_creator_edits_per_hh: 2.1,
+                            top_content_types: ['Sound-only Reels (relationship pov)', 'Show clip re-cuts', 'Show-inspired original content (cooking, fashion, dating)'],
+                            note: '481K viewer households produced their own content using one of the licensed tracks — 7.5% of the show\'s total viewer base became a creator downstream. The largest earned-media flywheel signal in the study.'
+                        },
+                        read: 'Music-licensing decisions extend past the watch. Summer Girl alone drove +187% Spotify streaming lift and 412% Shazam lift. The viewers-becoming-creators cohort is 481K HHs — the earned-media flywheel keeps compounding after the watch ends.'
+                    },
+                    licensing_roi: {
+                        label: 'Licensing ROI · the per-song incremental $ case',
+                        subtitle: 'Per licensed track: incremental HHs attributable to music-driven discovery (matched-control cohort model), retention lift, subscription-LTV multiplier, and deal-case dollar value.',
+                        panel_denominator_hh: 6420000,
+                        songs: [
+                            { song: 'Summer Girl (HAIM)',                            incremental_hh: 218400, retention_pp: 4.8, ltv_multiplier: 1.14, deck_value_usd: 4820000, deal_case: 'Anchor track. Sync fee paid for itself 6.4x on subscription-LTV alone. Renew + expand.' },
+                            { song: 'Water the Flowers (Valley)',                    incremental_hh: 128700, retention_pp: 3.2, ltv_multiplier: 1.09, deck_value_usd: 2140000, deal_case: 'Finale placement — high emotional cap. Extend to trailer + soundtrack.' },
+                            { song: 'Love on the Brain (Rihanna)',                   incremental_hh: 94100,  retention_pp: 1.4, ltv_multiplier: 1.03, deck_value_usd: 1180000, deal_case: 'Catalog track. Small relative lift but massive base. Keep as-is; do not upspend.' },
+                            { song: 'See Her Out (Francis and the Lights)',          incremental_hh: 61400,  retention_pp: 2.8, ltv_multiplier: 1.08, deck_value_usd: 928000,  deal_case: 'Under-the-radar discovery — the show introduced Francis to a new audience. Consider a follow-on placement.' },
+                            { song: 'You & I (LÉON)',                                incremental_hh: 42800,  retention_pp: 2.1, ltv_multiplier: 1.06, deck_value_usd: 618000,  deal_case: 'Long-tail Reels driver. Renew.' }
+                        ],
+                        total_incremental_hh: 545400,
+                        total_deck_value_usd: 9686000,
+                        read: '$9.69M in modeled deck value across five licensed tracks. Summer Girl is the anchor — a single track paid for itself 6.4x on subscription-LTV alone. The music-licensing budget is the highest-ROI marketing line the show has.'
+                    }
                 },
                 heated_rivalry: {
                     id: 'heated_rivalry',
@@ -66142,7 +66276,139 @@
                         { title: 'My Moon My Man',                                 artist: 'Feist',                    music_only_pct: 1.6, clips_only_pct: 3.6, music_and_clips_pct: 2.5, note: 'Music-only surface stayed quiet; the finale scene sits upstream of the clip cohort.' },
                         { title: 'I\'ll Believe in Anything',                       artist: 'Wolf Parade',              music_only_pct: 1.4, clips_only_pct: 3.7, music_and_clips_pct: 2.4, note: 'The emotional peak needle-drop — clip-dominant surface.' },
                         { title: 'Mangetout',                                      artist: 'Wet Leg',                  music_only_pct: 1.3, clips_only_pct: 2.7, music_and_clips_pct: 3.3, note: 'Overlap cohort is unusually high — the same fans engaged with the audio AND the show clips.' }
-                    ]
+                    ],
+                    timeline: {
+                        label: 'Weekly cadence · sound-page traffic vs first-watch curve',
+                        subtitle: 'Index base 100 = week 1 (3/15). Matched-panel index — sound-page traffic on the licensed tracks, and first-time watches of the show, week by week.',
+                        weeks: [
+                            { week_label: '3/15–3/21', sound_index: 100, watch_index: 100, note: 'Baseline · pre-drop' },
+                            { week_label: '3/22–3/28', sound_index: 118, watch_index: 100, note: 'BookTok chatter picks up as trailer drops' },
+                            { week_label: '3/29–4/04', sound_index: 142, watch_index: 100, note: 't.A.T.u. sound page +42% baseline · nostalgia moment' },
+                            { week_label: '4/05–4/11', sound_index: 189, watch_index: 100, note: 'Harrison cover releases · sound page 1.89x baseline' },
+                            { week_label: '4/12–4/18', sound_index: 234, watch_index: 100, note: 'Pre-drop hype · sound leads by 12+ days on this show' },
+                            { week_label: '4/19–4/25', sound_index: 287, watch_index: 141, note: 'S1 premieres 4/24 — sound was already 2.87x baseline' },
+                            { week_label: '4/26–5/02', sound_index: 321, watch_index: 248, note: 'Sound peak · Harrison cover 3.21x baseline' },
+                            { week_label: '5/03–5/09', sound_index: 298, watch_index: 271, note: 'Watch peak' },
+                            { week_label: '5/10–5/16', sound_index: 261, watch_index: 234, note: '' },
+                            { week_label: '5/17–5/23', sound_index: 224, watch_index: 198, note: '' },
+                            { week_label: '5/24–5/30', sound_index: 197, watch_index: 174, note: '' },
+                            { week_label: '5/31–6/06', sound_index: 178, watch_index: 158, note: 'Long-tail lift · sound page still 78% above baseline' }
+                        ],
+                        lag_summary: {
+                            median_lag_days: 12.4,
+                            headline: 'Sound-page traffic led watch by 12 days on this show — the largest lead in the panel. Music was doing pre-drop work.',
+                            note: 'For Heated Rivalry, the sound moved 12–14 days ahead of the watch curve. This is the "pre-drop discovery" signature — the sound was already trending before Netflix ever aired the show. The music-licensing decision was upstream marketing, not soundtrack.'
+                        }
+                    },
+                    sound_pages: {
+                        label: 'Sound page adoption · the audio-only surface',
+                        subtitle: 'For each licensed track: unique creators using the sound, peak week, and geographic hotspots.',
+                        songs: [
+                            { song: 'All the Things She Said',        artist: 't.A.T.u.',    creators_using_sound: 421700, peak_week: '4/26–5/02', peak_multiplier: '3.28x baseline', top_geos: ['NYC', 'LA', 'Chicago'],       creator_note: 'Cultural relaunch. Sound page 2xed historical baseline the week the show dropped — largest heritage-track resurgence in the panel this quarter.' },
+                            { song: 'All the Things She Said (cover)', artist: 'Harrison',   creators_using_sound: 187200, peak_week: '5/03–5/09', peak_multiplier: '4.14x baseline', top_geos: ['Toronto', 'NYC', 'LA'],       creator_note: 'The cover was made FOR this moment — new sound, immediate creator adoption. Highest peak multiplier in the study.' },
+                            { song: 'My Moon My Man',                 artist: 'Feist',       creators_using_sound: 84300,  peak_week: '5/10–5/16', peak_multiplier: '2.14x baseline', top_geos: ['Toronto', 'NYC', 'Portland'],   creator_note: 'Catalog track from 2007; Canadian indie-scene revival driven entirely by the show.' },
+                            { song: 'I\'ll Believe in Anything',       artist: 'Wolf Parade', creators_using_sound: 62100,  peak_week: '5/17–5/23', peak_multiplier: '2.87x baseline', top_geos: ['Montreal', 'NYC', 'LA'],      creator_note: 'The emotional-peak needle-drop. Adoption came 2–3 weeks after air as the scene circulated.' },
+                            { song: 'Mangetout',                      artist: 'Wet Leg',     creators_using_sound: 148700, peak_week: '5/03–5/09', peak_multiplier: '2.32x baseline', top_geos: ['LA', 'NYC', 'Austin'],        creator_note: 'Already had TikTok momentum pre-show; show usage compounded the existing audio wave.' }
+                        ],
+                        summary: '904,000 unique creators used one of the five licensed tracks in the study window. Peak week (4/26–5/02) saw t.A.T.u. sound-page 3.28x baseline — the largest heritage-track resurgence tied to a Netflix release this quarter.'
+                    },
+                    fan_edits: {
+                        label: 'Fan-edit ecosystem · the clip-with-music surface',
+                        subtitle: 'For clips of the show scored to the licensed tracks: who made them, what type, and what tier of creator drove the reach.',
+                        total_edits_indexed: 187400,
+                        total_reach_hh: 8140000,
+                        edit_types: [
+                            { type: 'Ship / romance edits',   pct_of_edits: 62.4, pct_of_reach: 71.2, note: 'Shane + Ilya slow-mo cuts, locker-room tension, hotel-scene edits. Dominant type — HR is a ship-edit-first show.' },
+                            { type: 'Cast candid + fancam',   pct_of_edits: 14.8, pct_of_reach: 12.4, note: 'Cast promo shots + press-tour candids scored to fan tracks.' },
+                            { type: 'Quote / dialogue edits', pct_of_edits: 10.2, pct_of_reach: 8.7,  note: 'Book-quote overlay on show scenes — book-fan crossover cohort.' },
+                            { type: 'Hockey / athletic edits', pct_of_edits: 8.4,  pct_of_reach: 5.2,  note: 'Game-scene cuts to t.A.T.u. — smaller reach but sports-fan crossover.' },
+                            { type: 'Montage / recap edits',  pct_of_edits: 4.2,  pct_of_reach: 2.5,  note: 'Season-summary edits post-finale.' }
+                        ],
+                        creator_tiers: [
+                            { tier: 'Celebrity (>10M)', edit_count: 22,     reach_share_pct: 12.1, note: 'Very few celebrity edits — fan-driven show.' },
+                            { tier: 'Macro (1M–10M)',   edit_count: 1120,   reach_share_pct: 38.4, note: 'BookTok crossover creators dominated.' },
+                            { tier: 'Mid (100K–1M)',    edit_count: 8420,   reach_share_pct: 31.2, note: 'Ship-edit specialists — the show\'s core creator layer.' },
+                            { tier: 'Micro (10K–100K)', edit_count: 42800,  reach_share_pct: 14.7, note: 'Where fan-first evangelism concentrated.' },
+                            { tier: 'Nano (<10K)',      edit_count: 135040, reach_share_pct: 3.6,  note: 'Long-tail — small individual reach, massive collective count.' }
+                        ],
+                        top_edits: [
+                            { title: 'Shane + Ilya "All the Things She Said" locker room', creator: '@rivalryedits',    tier: 'Macro',     reach_hh: 872000, engagement_rate: '24.6%', note: 'The definitive fan-edit — reposted 900K+ times, single largest reach edit in the panel.' },
+                            { title: 'Book-to-show comparison · Harrison cover',            creator: '@booktokcaptain',  tier: 'Macro',     reach_hh: 618000, engagement_rate: '21.4%', note: 'BookTok crossover — where the Rachel Reid audience met the show audience.' },
+                            { title: 'Ilya reaction montage · Mangetout',                   creator: '@hockeyromance.hq', tier: 'Macro',     reach_hh: 484000, engagement_rate: '19.8%', note: 'Cast fancam · high-engagement short-form.' },
+                            { title: 'Hotel scene edit · I\'ll Believe in Anything',        creator: '@ilyahollander',   tier: 'Mid',       reach_hh: 341000, engagement_rate: '31.2%', note: 'Highest engagement rate — emotional peak scene.' },
+                            { title: 'Book quotes over show scenes · My Moon My Man',       creator: '@rachelreidverse', tier: 'Mid',       reach_hh: 287000, engagement_rate: '22.4%', note: 'Book-quote overlay format — bridged the source-material fandom.' }
+                        ]
+                    },
+                    cross_platform_path: {
+                        label: 'Cross-platform path · the "Both" cohort\'s ordering',
+                        subtitle: 'For the 18.9% of viewers exposed to both audio-only AND clip-with-music content — which platform came first, and how far apart.',
+                        both_cohort_hh: 790020,
+                        ordering_distribution: [
+                            { sequence: 'TikTok sound → TikTok clip → Netflix',          pct: 41.8, hh: 330228, note: 'Single-platform TikTok pipeline. Dominant for this show.' },
+                            { sequence: 'Simultaneous (within 48h)',                     pct: 21.7, hh: 171434, note: 'Cross-platform storm — highest during weeks 4-5 as sound trended on both surfaces.' },
+                            { sequence: 'TikTok sound → Instagram Reels clip → Netflix', pct: 18.4, hh: 145364, note: 'Cross-platform funnel — audio seeded on TikTok, clip closed on IG.' },
+                            { sequence: 'BookTok → TikTok sound → Netflix',              pct: 8.4,  hh: 66362,  note: 'Unique to Heated Rivalry — book-fan discovery path. Source-material crossover.' },
+                            { sequence: 'Instagram Reel → TikTok → Netflix',             pct: 5.6,  hh: 44241,  note: 'IG-first users pulled toward TikTok fan-edits before watching.' },
+                            { sequence: 'Instagram sound → Instagram clip → Netflix',    pct: 4.1,  hh: 32391,  note: 'Single-platform Instagram pipeline. Small but high-intent.' }
+                        ],
+                        median_lag_hours_first_touch_to_watch: 42.6,
+                        read: 'TikTok is the sound seeder in 68.6% of overlap paths. BookTok is a Heated-Rivalry-specific 8.4% path — the source-material crossover. Simultaneous exposure (21.7%) is the largest single "storm" signal in the study — the cross-platform sound moment that both TikTok and Instagram were carrying at once.'
+                    },
+                    time_to_watch: {
+                        label: 'Time-to-watch · from first exposure to first Netflix stream',
+                        subtitle: 'Distribution of hours between first music-linked touchpoint and first minute of show playback, per household.',
+                        overall_median_hours: 58.4,
+                        overall_p90_hours: 288.0,
+                        buckets: [
+                            { label: '<6 hrs',    cohort: 'Same-day watchers',        pct: 11.2, note: 'Higher share than NWT — the sound-was-already-trending effect.' },
+                            { label: '6–24 hrs',  cohort: 'Next-day watchers',        pct: 22.4, note: '' },
+                            { label: '1–3 days',  cohort: 'Weekend watchers',         pct: 28.7, note: 'Modal bucket.' },
+                            { label: '3–7 days',  cohort: 'Deferred watchers',        pct: 18.4, note: '' },
+                            { label: '7–14 days', cohort: 'Slow-burn watchers',       pct: 10.2, note: '' },
+                            { label: '14+ days',  cohort: 'Repeat-exposure watchers', pct: 9.1,  note: '' }
+                        ],
+                        cohort_medians: [
+                            { cohort: 'Music-only exposure', median_hours: 81.6, note: 'Slower — audio-first discovery, then wait.' },
+                            { cohort: 'Clips-only exposure', median_hours: 44.2, note: 'Ship-edit-driven urgency.' },
+                            { cohort: 'Both (overlap)',      median_hours: 32.8, note: 'Fastest overall — nearly a full day faster than NWT overlap cohort.' }
+                        ],
+                        platform_medians: { all: 58.4, tiktok: 51.2, instagram: 74.6 },
+                        read: 'HR overlap watchers converted 21% faster than NWT overlap (32.8h vs 41.2h). Ship-edit urgency + t.A.T.u. cultural moment compressed the discovery-to-watch window. The book-fan cohort watched fastest of all.'
+                    },
+                    post_watch_ripple: {
+                        label: 'Post-watch ripple · what happens AFTER they watch',
+                        subtitle: 'Do viewers go BACK to the music? DSP streaming lift, sound-page usage, and downstream cultural signal.',
+                        dsp_lift: [
+                            { track: 'All the Things She Said (t.A.T.u.)',        spotify_lift_pct: 384.2, apple_lift_pct: 287.4, shazam_lift_pct: 812.7,  peak_week: '4/26–5/02', note: 'Cultural moment. 2003 track back on the Spotify Global Top 50. This is the flagship licensing win.' },
+                            { track: 'All the Things She Said (Harrison cover)',  spotify_lift_pct: 812.4, apple_lift_pct: 621.7, shazam_lift_pct: 1421.0, peak_week: '5/03–5/09', note: 'Cover released to time with the show — 812% Spotify lift from a near-zero baseline. Highest absolute-multiplier lift in the panel this quarter.' },
+                            { track: 'Mangetout (Wet Leg)',                       spotify_lift_pct: 127.4, apple_lift_pct: 94.1,  shazam_lift_pct: 218.7,  peak_week: '5/03–5/09', note: 'Already had momentum; show compounded it.' },
+                            { track: 'My Moon My Man (Feist)',                    spotify_lift_pct: 218.4, apple_lift_pct: 174.2, shazam_lift_pct: 484.2,  peak_week: '5/10–5/16', note: '2007 track re-entered the Canadian charts. Long-tail catalog revival.' },
+                            { track: 'I\'ll Believe in Anything (Wolf Parade)',   spotify_lift_pct: 174.8, apple_lift_pct: 132.7, shazam_lift_pct: 421.4,  peak_week: '5/17–5/23', note: 'Indie deep-cut reintroduced to a new generation.' }
+                        ],
+                        viewers_becoming_creators: {
+                            count_hh: 542700,
+                            pct_of_viewers: 13.0,
+                            median_creator_edits_per_hh: 3.4,
+                            top_content_types: ['Ship-edit remixes', 'Book-quote overlays', 'Cast fancam re-cuts', 'Hockey-scene compilations'],
+                            note: '543K viewer households produced their own content using one of the licensed tracks — 13.0% of the show\'s total viewer base became a creator downstream. Nearly 2x the NWT viewers-becoming-creators rate. This show TURNED viewers into evangelists.'
+                        },
+                        read: 'Music-licensing decisions on HR extend far past the watch. The Harrison cover alone drove +812% Spotify lift — the highest relative lift in the panel this quarter. 13% of viewers became creators, nearly 2x NWT. The earned-media flywheel is running hot.'
+                    },
+                    licensing_roi: {
+                        label: 'Licensing ROI · the per-song incremental $ case',
+                        subtitle: 'Per licensed track: incremental HHs attributable to music-driven discovery, retention lift, subscription-LTV multiplier, and deal-case dollar value.',
+                        panel_denominator_hh: 4180000,
+                        songs: [
+                            { song: 'All the Things She Said (t.A.T.u.)',                incremental_hh: 187400, retention_pp: 5.4, ltv_multiplier: 1.18, deck_value_usd: 6420000, deal_case: 'Anchor track. Cultural relaunch. Sync fee paid for itself 11.2x on subscription-LTV alone. Extend to soundtrack + trailer.' },
+                            { song: 'All the Things She Said (Harrison cover)',          incremental_hh: 128600, retention_pp: 4.2, ltv_multiplier: 1.14, deck_value_usd: 3720000, deal_case: 'Purpose-built for the show — highest relative ROI in the panel. Renew + commission a follow-up.' },
+                            { song: 'Mangetout (Wet Leg)',                               incremental_hh: 68400,  retention_pp: 2.8, ltv_multiplier: 1.09, deck_value_usd: 1240000, deal_case: 'Contemporary track. Existing audio momentum + show placement. Renew.' },
+                            { song: 'My Moon My Man (Feist)',                            incremental_hh: 52100,  retention_pp: 3.1, ltv_multiplier: 1.11, deck_value_usd: 984000,  deal_case: 'Catalog revival. Feist re-entered the Canadian charts on the strength of this placement.' },
+                            { song: 'I\'ll Believe in Anything (Wolf Parade)',           incremental_hh: 38700,  retention_pp: 2.4, ltv_multiplier: 1.07, deck_value_usd: 641000,  deal_case: 'Indie deep-cut. Consider positioning as the "prestige" placement — smaller reach, high sentiment.' }
+                        ],
+                        total_incremental_hh: 475200,
+                        total_deck_value_usd: 13005000,
+                        read: '$13.0M in modeled deck value across five licensed tracks — 1.34x the NWT total on a smaller viewer base. The t.A.T.u. relaunch is the flagship win of the quarter. The Harrison cover is the highest relative ROI in the panel.'
+                    }
                 }
             },
             pitch: {
@@ -67273,6 +67539,21 @@
         // resetting the show / platform the user picked.
         var _jiqMusicActiveShow     = 'nobody_wants_this';
         var _jiqMusicActivePlatform = 'all';
+        var _jiqMusicActiveStage    = 'universe';
+
+        // Small helpers used across multiple music-stage renderers.
+        function _jiqMusicHhAbbrev(n) {
+            n = Number(n) || 0;
+            if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+            if (n >= 1000)    return (n / 1000).toFixed(0) + 'K';
+            return String(Math.round(n));
+        }
+        function _jiqMusicUsdAbbrev(n) {
+            n = Number(n) || 0;
+            if (n >= 1000000) return '$' + (n / 1000000).toFixed(2) + 'M';
+            if (n >= 1000)    return '$' + (n / 1000).toFixed(0) + 'K';
+            return '$' + Math.round(n);
+        }
 
         function renderJourneyIqMusicInfluence(p) {
             var data = (p && p.shows) ? p : _JIQ_MUSIC_DATA;
@@ -67288,6 +67569,35 @@
                 meta.textContent = (data.panel_basis && data.panel_basis.short) || '';
             }
 
+            // Stage tab bar (journey pulls). Persists show + platform state.
+            var stages = data.stages || [];
+            var activeStage = null;
+            for (var _si = 0; _si < stages.length; _si++) {
+                if (stages[_si].id === _jiqMusicActiveStage) { activeStage = stages[_si]; break; }
+            }
+            if (!activeStage && stages.length) { activeStage = stages[0]; _jiqMusicActiveStage = activeStage.id; }
+            activeStage = activeStage || {};
+            var stageTabsEl = document.getElementById('jiqMusicStageTabs');
+            if (stageTabsEl) {
+                stageTabsEl.innerHTML = stages.map(function(s) {
+                    var on = (s.id === _jiqMusicActiveStage);
+                    return '<button type="button" data-stage="' + s.id + '"'
+                         + ' style="padding:0.42rem 0.75rem; border-radius:6px; font-size:0.72rem; font-weight:700; cursor:pointer;'
+                         +        ' border:1px solid ' + (on ? '#c4b5fd' : 'rgba(255,255,255,0.14)') + ';'
+                         +        ' background:' + (on ? 'rgba(196,181,253,0.14)' : 'rgba(255,255,255,0.03)') + ';'
+                         +        ' color:' + (on ? '#e9d5ff' : 'var(--text-secondary)') + '; white-space:nowrap;">'
+                         + s.emoji + ' ' + _jiqEsc(s.label)
+                         + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(stageTabsEl.querySelectorAll('button'), function(btn) {
+                    btn.addEventListener('click', function() {
+                        _jiqMusicActiveStage = btn.getAttribute('data-stage');
+                        renderJourneyIqMusicInfluence(data);
+                    });
+                });
+            }
+
+            // Show tab bar - Nobody Wants This / Heated Rivalry.
             var showKeys = Object.keys(data.shows);
             if (showKeys.indexOf(_jiqMusicActiveShow) === -1) _jiqMusicActiveShow = showKeys[0];
             var showTabsEl = document.getElementById('jiqMusicShowTabs');
@@ -67315,51 +67625,86 @@
             var platforms = show.platforms || {};
             var platKeys = Object.keys(platforms);
             if (platKeys.indexOf(_jiqMusicActivePlatform) === -1) _jiqMusicActivePlatform = platKeys[0];
+
+            // Platform pills - hidden for stages that don't use them.
             var platTabsEl = document.getElementById('jiqMusicPlatformTabs');
             if (platTabsEl) {
-                var platEmoji = { all: '🌐', tiktok: '🎵', instagram: '📸' };
-                platTabsEl.innerHTML = platKeys.map(function(k) {
-                    var pd = platforms[k];
-                    var on = (k === _jiqMusicActivePlatform);
-                    return '<button type="button" data-platform="' + k + '"'
-                         + ' style="padding:0.32rem 0.75rem; border-radius:5px; font-size:0.72rem; font-weight:700; cursor:pointer;'
-                         +        ' border:1px solid ' + (on ? show.accent : 'rgba(255,255,255,0.14)') + ';'
-                         +        ' background:' + (on ? (show.accent + '22') : 'rgba(255,255,255,0.03)') + ';'
-                         +        ' color:' + (on ? show.accent : 'var(--text-secondary)') + ';">'
-                         + (platEmoji[k] || '·') + ' ' + _jiqEsc(pd.label || k)
-                         + '</button>';
-                }).join('');
-                Array.prototype.forEach.call(platTabsEl.querySelectorAll('button'), function(btn) {
-                    btn.addEventListener('click', function() {
-                        _jiqMusicActivePlatform = btn.getAttribute('data-platform');
-                        renderJourneyIqMusicInfluence(data);
+                if (activeStage.uses_platform) {
+                    platTabsEl.style.display = 'flex';
+                    var platEmoji = { all: '🌐', tiktok: '🎵', instagram: '📸' };
+                    platTabsEl.innerHTML = platKeys.map(function(k) {
+                        var pd = platforms[k];
+                        var on = (k === _jiqMusicActivePlatform);
+                        return '<button type="button" data-platform="' + k + '"'
+                             + ' style="padding:0.32rem 0.75rem; border-radius:5px; font-size:0.72rem; font-weight:700; cursor:pointer;'
+                             +        ' border:1px solid ' + (on ? show.accent : 'rgba(255,255,255,0.14)') + ';'
+                             +        ' background:' + (on ? (show.accent + '22') : 'rgba(255,255,255,0.03)') + ';'
+                             +        ' color:' + (on ? show.accent : 'var(--text-secondary)') + ';">'
+                             + (platEmoji[k] || '·') + ' ' + _jiqEsc(pd.label || k)
+                             + '</button>';
+                    }).join('');
+                    Array.prototype.forEach.call(platTabsEl.querySelectorAll('button'), function(btn) {
+                        btn.addEventListener('click', function() {
+                            _jiqMusicActivePlatform = btn.getAttribute('data-platform');
+                            renderJourneyIqMusicInfluence(data);
+                        });
                     });
-                });
+                } else {
+                    platTabsEl.style.display = 'none';
+                    platTabsEl.innerHTML = '';
+                }
             }
+
+            var stageSubEl = document.getElementById('jiqMusicStageSubtitle');
+            if (stageSubEl) stageSubEl.textContent = activeStage.sub || '';
 
             var slice = platforms[_jiqMusicActivePlatform] || {};
             var body = document.getElementById('jiqMusicInfluenceBody');
             if (!body) return;
 
-            var totalMusicPct   = Number(slice.music_only_pct || 0) + Number(slice.music_and_clips_pct || 0);
-            var totalClipsPct   = Number(slice.clips_only_pct || 0) + Number(slice.music_and_clips_pct || 0);
-            var anyExposurePct  = totalMusicPct + Number(slice.clips_only_pct || 0);
-            var viewersHH       = Number(show.viewers_hh || 0);
+            var stageFn = ({
+                universe: _jiqMusicRender_universe,
+                timeline: _jiqMusicRender_timeline,
+                sound:    _jiqMusicRender_sound,
+                edits:    _jiqMusicRender_edits,
+                path:     _jiqMusicRender_path,
+                lag:      _jiqMusicRender_lag,
+                ripple:   _jiqMusicRender_ripple,
+                roi:      _jiqMusicRender_roi
+            })[_jiqMusicActiveStage];
+            if (typeof stageFn === 'function') {
+                stageFn(body, show, slice, data);
+            } else {
+                body.innerHTML = '<div style="padding:1rem; color:var(--text-secondary); font-style:italic;">Stage not yet implemented.</div>';
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // MUSIC JOURNEY STAGE RENDERERS
+        // Each stage function renders into `body` (the shared card body)
+        // and gets the currently-selected show / platform slice / full
+        // data object. Show tabs + platform pills persist across stages.
+        // ══════════════════════════════════════════════════════════════
+
+        // Stage 1: Universe - the Venn read + causal-lift banner + songs.
+        function _jiqMusicRender_universe(body, show, slice, data) {
+            var viewersHH = Number(show.viewers_hh || 0);
             function pctOfViewers(pct) {
-                var hh = viewersHH * (pct / 100);
+                var hh = viewersHH * ((Number(pct) || 0) / 100);
                 if (hh >= 1000000) return (hh / 1000000).toFixed(2) + 'M HH';
                 if (hh >= 1000)    return (hh / 1000).toFixed(0) + 'K HH';
                 return hh.toFixed(0) + ' HH';
             }
+            var anyExposurePct = Number(slice.music_only_pct || 0) + Number(slice.clips_only_pct || 0) + Number(slice.music_and_clips_pct || 0);
 
             var tileGrid = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
                 + [
-                    { label: 'Viewers reached',   value: pctOfViewers(100),                accent: show.accent, sub: 'ladders to ' + (viewersHH / 1000000).toFixed(2) + 'M HH panel' },
-                    { label: 'Any music touch',   value: anyExposurePct.toFixed(1) + '%',  accent: '#c4b5fd',   sub: pctOfViewers(anyExposurePct) },
-                    { label: 'Music-only',        value: Number(slice.music_only_pct || 0).toFixed(1) + '%', accent: show.accent, sub: pctOfViewers(slice.music_only_pct) },
-                    { label: 'Clips-only',        value: Number(slice.clips_only_pct || 0).toFixed(1) + '%', accent: '#38bdf8',   sub: pctOfViewers(slice.clips_only_pct) },
-                    { label: 'Both (overlap)',    value: Number(slice.music_and_clips_pct || 0).toFixed(1) + '%', accent: '#a78bfa', sub: pctOfViewers(slice.music_and_clips_pct) },
-                    { label: 'No music touch',    value: Number(slice.no_music_pct || 0).toFixed(1) + '%',   accent: '#94a3b8',   sub: pctOfViewers(slice.no_music_pct) }
+                    { label: 'Viewers reached', value: pctOfViewers(100),               accent: show.accent, sub: 'ladders to ' + (viewersHH / 1000000).toFixed(2) + 'M HH panel' },
+                    { label: 'Any music touch', value: anyExposurePct.toFixed(1) + '%', accent: '#c4b5fd',   sub: pctOfViewers(anyExposurePct) },
+                    { label: 'Music-only',      value: Number(slice.music_only_pct || 0).toFixed(1) + '%', accent: show.accent, sub: pctOfViewers(slice.music_only_pct) },
+                    { label: 'Clips-only',      value: Number(slice.clips_only_pct || 0).toFixed(1) + '%', accent: '#38bdf8',   sub: pctOfViewers(slice.clips_only_pct) },
+                    { label: 'Both (overlap)',  value: Number(slice.music_and_clips_pct || 0).toFixed(1) + '%', accent: '#a78bfa', sub: pctOfViewers(slice.music_and_clips_pct) },
+                    { label: 'No music touch',  value: Number(slice.no_music_pct || 0).toFixed(1) + '%',   accent: '#94a3b8',   sub: pctOfViewers(slice.no_music_pct) }
                   ].map(function(t) {
                     return '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + t.accent + ';">'
                          +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.05em;">' + _jiqEsc(t.label) + '</div>'
@@ -67369,9 +67714,6 @@
                   }).join('')
                 + '</div>';
 
-            // Causal-read banner - surfaces the incremental lift vs a
-            // matched no-music-touchpoint control cohort so the deck can
-            // survive a "how do you know this is causal?" challenge.
             var liftPp = Number(slice.incremental_lift_pp || 0);
             var liftHtml = liftPp > 0 ? '<div style="padding:0.7rem 0.9rem; border-radius:7px;'
                 +      ' background:linear-gradient(135deg, rgba(167,139,250,0.16) 0%, rgba(56,189,248,0.06) 100%);'
@@ -67407,11 +67749,6 @@
                 + '</div>';
 
             var songs = show.songs || [];
-            var songsMax = 0;
-            songs.forEach(function(s) {
-                var t = Number(s.music_only_pct || 0) + Number(s.clips_only_pct || 0) + Number(s.music_and_clips_pct || 0);
-                if (t > songsMax) songsMax = t;
-            });
             var songsHtml = songs.length ? '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.2rem;">🎼 Song-level breakdown · ' + _jiqEsc(show.label) + '</h4>'
                 + '<div style="font-size:0.68rem; color:var(--text-secondary); font-style:italic; margin-bottom:0.4rem; line-height:1.5;">'
                 +   'Song rows are % of show viewers whose <em>primary</em> music touchpoint mapped to this track — mutually exclusive assignment, so columns sum to the show totals. A viewer exposed to multiple songs is attributed to their highest-engagement track.'
@@ -67456,6 +67793,403 @@
                 + '</div>' : '';
 
             body.innerHTML = tileGrid + liftHtml + vennBox + songsHtml + pitchHtml;
+        }
+
+        // Stage 2: Discovery Timeline - dual-series line chart of
+        // sound-page traffic vs first-watch curve across the study
+        // window, plus a lag-summary callout and week-by-week table.
+        function _jiqMusicRender_timeline(body, show, slice, data) {
+            var t = show.timeline;
+            if (!t || !t.weeks) { body.innerHTML = '<div style="opacity:0.6; padding:1rem;">Timeline data unavailable.</div>'; return; }
+            var weeks = t.weeks;
+            var W = 900, H = 340, padL = 44, padR = 24, padT = 24, padB = 46;
+            var maxV = 0;
+            weeks.forEach(function(w) { maxV = Math.max(maxV, w.sound_index || 0, w.watch_index || 0); });
+            maxV = Math.ceil((maxV || 100) * 1.1 / 50) * 50;
+            var innerW = W - padL - padR;
+            var innerH = H - padT - padB;
+            var stepX = innerW / Math.max(weeks.length - 1, 1);
+            function ptX(i) { return padL + i * stepX; }
+            function ptY(v) { return padT + innerH - ((Number(v) || 0) / maxV) * innerH; }
+            function pathFor(key) {
+                return weeks.map(function(w, i) {
+                    return (i === 0 ? 'M' : 'L') + ptX(i).toFixed(1) + ',' + ptY(w[key]).toFixed(1);
+                }).join(' ');
+            }
+            var gridLines = '';
+            for (var g = 0; g <= 4; g++) {
+                var y = padT + (innerH * g / 4);
+                var v = maxV - (maxV * g / 4);
+                gridLines += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3,4"/>'
+                          + '<text x="' + (padL - 6) + '" y="' + (y + 3) + '" text-anchor="end" font-size="9.5" fill="rgba(255,255,255,0.5)">' + Math.round(v) + '</text>';
+            }
+            var xLabels = weeks.map(function(w, i) {
+                if (weeks.length > 8 && (i % 2 === 1) && i !== weeks.length - 1) return '';
+                return '<text x="' + ptX(i).toFixed(1) + '" y="' + (H - padB + 14) + '" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.6)">' + _jiqEsc(w.week_label) + '</text>';
+            }).join('');
+            var soundDots = weeks.map(function(w, i) {
+                return '<circle cx="' + ptX(i).toFixed(1) + '" cy="' + ptY(w.sound_index).toFixed(1) + '" r="3.2" fill="' + show.accent + '" stroke="#fff" stroke-width="1"/>';
+            }).join('');
+            var watchDots = weeks.map(function(w, i) {
+                return '<circle cx="' + ptX(i).toFixed(1) + '" cy="' + ptY(w.watch_index).toFixed(1) + '" r="3.2" fill="#38bdf8" stroke="#fff" stroke-width="1"/>';
+            }).join('');
+            var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Timeline chart">'
+                + '<rect x="0" y="0" width="' + W + '" height="' + H + '" rx="10" fill="rgba(15,23,42,0.35)" stroke="rgba(255,255,255,0.06)"/>'
+                + gridLines
+                + '<path d="' + pathFor('sound_index') + '" fill="none" stroke="' + show.accent + '" stroke-width="2.4"/>'
+                + '<path d="' + pathFor('watch_index') + '" fill="none" stroke="#38bdf8" stroke-width="2.4"/>'
+                + soundDots + watchDots
+                + xLabels
+                + '<g transform="translate(' + (padL + 8) + ',' + (padT + 6) + ')">'
+                +   '<rect x="0" y="0" width="230" height="42" rx="6" fill="rgba(15,23,42,0.55)" stroke="rgba(255,255,255,0.10)"/>'
+                +   '<circle cx="12" cy="14" r="4" fill="' + show.accent + '"/>'
+                +   '<text x="22" y="18" font-size="11" fill="#fff" font-weight="700">Sound-page traffic index</text>'
+                +   '<circle cx="12" cy="32" r="4" fill="#38bdf8"/>'
+                +   '<text x="22" y="36" font-size="11" fill="#fff" font-weight="700">First-watch index</text>'
+                + '</g>'
+                + '</svg>';
+            var lag = t.lag_summary || {};
+            var lagBanner = '<div style="padding:0.75rem 0.9rem; border-radius:7px;'
+                +      ' background:linear-gradient(135deg, ' + show.accent + '22 0%, rgba(56,189,248,0.10) 100%);'
+                +      ' border:1px solid ' + show.accent + '44; margin-bottom:0.85rem; display:flex; gap:0.85rem; align-items:center; flex-wrap:wrap;">'
+                +   '<div style="min-width:100px;">'
+                +     '<div style="font-size:0.6rem; text-transform:uppercase; letter-spacing:0.08em; opacity:0.65; font-weight:800;">Median lag</div>'
+                +     '<div style="font-size:1.8rem; font-weight:900; color:#fff; line-height:1;">' + Number(lag.median_lag_days || 0).toFixed(1) + '</div>'
+                +     '<div style="font-size:0.66rem; opacity:0.7;">days · sound → watch</div>'
+                +   '</div>'
+                +   '<div style="font-size:0.78rem; line-height:1.55; flex:1 1 260px;">'
+                +     '<div style="font-weight:800; color:#fff; margin-bottom:0.15rem;">' + _jiqEsc(lag.headline || '') + '</div>'
+                +     '<div style="color:var(--text-secondary);">' + _jiqEsc(lag.note || '') + '</div>'
+                +   '</div>'
+                + '</div>';
+            var weekTable = '<h4 style="font-size:0.82rem; margin:0.5rem 0 0.35rem;">📆 Week-by-week</h4>'
+                + '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:0.74rem;">'
+                + '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
+                +   '<th style="padding:5px 8px; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Week</th>'
+                +   '<th style="padding:5px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Sound idx</th>'
+                +   '<th style="padding:5px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Watch idx</th>'
+                +   '<th style="padding:5px 8px; font-size:0.58rem; opacity:0.7;">Note</th>'
+                + '</tr></thead><tbody>'
+                + weeks.map(function(w) {
+                    return '<tr style="border-bottom:1px solid var(--border-color);">'
+                         +   '<td style="padding:5px 8px; font-weight:700;">' + _jiqEsc(w.week_label) + '</td>'
+                         +   '<td style="padding:5px 8px; text-align:right; font-weight:700; color:' + show.accent + ';">' + w.sound_index + '</td>'
+                         +   '<td style="padding:5px 8px; text-align:right; font-weight:700; color:#38bdf8;">' + w.watch_index + '</td>'
+                         +   '<td style="padding:5px 8px; font-size:0.68rem; color:var(--text-secondary); font-style:italic;">' + _jiqEsc(w.note || '') + '</td>'
+                         + '</tr>';
+                }).join('')
+                + '</tbody></table></div>';
+            body.innerHTML = lagBanner + '<div style="padding:0.5rem; border-radius:8px; background:rgba(15,23,42,0.15); border:1px solid rgba(255,255,255,0.06); margin-bottom:0.85rem;">' + svg + '</div>' + weekTable;
+        }
+
+        // Stage 3: Sound Pages - per-song creator-adoption cards +
+        // aggregate summary showing peak week + top geos + peak
+        // multiplier for each licensed track.
+        function _jiqMusicRender_sound(body, show, slice, data) {
+            var s = show.sound_pages;
+            if (!s || !s.songs) { body.innerHTML = '<div style="opacity:0.6; padding:1rem;">Sound-page data unavailable.</div>'; return; }
+            var summary = '<div style="padding:0.7rem 0.9rem; border-radius:7px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); margin-bottom:0.85rem;">'
+                + '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800;">Aggregate</div>'
+                + '<div style="font-size:0.78rem; line-height:1.55; margin-top:0.2rem;">' + _jiqEsc(s.summary || '') + '</div>'
+                + '</div>';
+            var maxCreators = 0;
+            s.songs.forEach(function(sn) { maxCreators = Math.max(maxCreators, sn.creators_using_sound || 0); });
+            var cards = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:0.65rem;">'
+                + s.songs.map(function(sn) {
+                    var pctBar = ((sn.creators_using_sound || 0) / (maxCreators || 1)) * 100;
+                    return '<div style="padding:0.75rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.025); border-left:3px solid ' + show.accent + ';">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:0.5rem;">'
+                         +     '<div>'
+                         +       '<div style="font-weight:800; font-size:0.88rem;">' + _jiqEsc(sn.song) + '</div>'
+                         +       '<div style="font-size:0.7rem; opacity:0.7;">' + _jiqEsc(sn.artist || '') + '</div>'
+                         +     '</div>'
+                         +     '<div style="text-align:right;">'
+                         +       '<div style="font-size:1.05rem; font-weight:900; color:' + show.accent + ';">' + _jiqMusicHhAbbrev(sn.creators_using_sound) + '</div>'
+                         +       '<div style="font-size:0.6rem; opacity:0.65;">creators using sound</div>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<div style="height:4px; border-radius:2px; background:rgba(255,255,255,0.06); margin:0.5rem 0 0.55rem;">'
+                         +     '<div style="height:100%; width:' + pctBar.toFixed(1) + '%; background:' + show.accent + '; border-radius:2px;"></div>'
+                         +   '</div>'
+                         +   '<div style="display:flex; gap:0.4rem; font-size:0.66rem; flex-wrap:wrap; margin-bottom:0.4rem;">'
+                         +     '<span style="padding:2px 7px; border-radius:4px; background:' + show.accent + '22; color:' + show.accent + '; font-weight:700;">Peak: ' + _jiqEsc(sn.peak_week) + '</span>'
+                         +     '<span style="padding:2px 7px; border-radius:4px; background:rgba(167,139,250,0.12); color:#c4b5fd; font-weight:700;">' + _jiqEsc(sn.peak_multiplier) + '</span>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.75;"><strong>Top geos:</strong> ' + _jiqEsc((sn.top_geos || []).join(' · ')) + '</div>'
+                         +   '<div style="font-size:0.7rem; color:var(--text-secondary); font-style:italic; line-height:1.5; margin-top:0.4rem; padding-top:0.4rem; border-top:1px solid rgba(255,255,255,0.06);">' + _jiqEsc(sn.creator_note || '') + '</div>'
+                         + '</div>';
+                }).join('')
+                + '</div>';
+            body.innerHTML = summary + cards;
+        }
+
+        // Stage 4: Fan Edits - edit-type distribution + creator-tier
+        // reach share + top-edit table.
+        function _jiqMusicRender_edits(body, show, slice, data) {
+            var e = show.fan_edits;
+            if (!e) { body.innerHTML = '<div style="opacity:0.6; padding:1rem;">Fan-edit data unavailable.</div>'; return; }
+            var topline = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + [
+                    { label: 'Total edits indexed', value: _jiqMusicHhAbbrev(e.total_edits_indexed), accent: show.accent, sub: 'in-study creator content' },
+                    { label: 'Total reach',         value: _jiqMusicHhAbbrev(e.total_reach_hh) + ' HH', accent: '#38bdf8', sub: 'panel-matched exposure' }
+                  ].map(function(t) {
+                    return '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + t.accent + ';">'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.05em;">' + _jiqEsc(t.label) + '</div>'
+                         +   '<div style="font-size:1.3rem; font-weight:900; margin-top:0.1rem; color:' + t.accent + ';">' + t.value + '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.1rem;">' + _jiqEsc(t.sub) + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+            var typesMax = 0; (e.edit_types || []).forEach(function(x) { typesMax = Math.max(typesMax, x.pct_of_reach || 0); });
+            var typesHtml = '<h4 style="font-size:0.82rem; margin:0.4rem 0 0.35rem;">✂️ Edit types by reach share</h4>'
+                + (e.edit_types || []).map(function(x) {
+                    var wBar = ((x.pct_of_reach || 0) / (typesMax || 1)) * 100;
+                    return '<div style="padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.06);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:0.15rem;">'
+                         +     '<div style="font-weight:700; font-size:0.78rem;">' + _jiqEsc(x.type) + '</div>'
+                         +     '<div style="font-size:0.72rem;"><strong style="color:' + show.accent + ';">' + Number(x.pct_of_reach).toFixed(1) + '% reach</strong> · <span style="opacity:0.7;">' + Number(x.pct_of_edits).toFixed(1) + '% edits</span></div>'
+                         +   '</div>'
+                         +   '<div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.05);">'
+                         +     '<div style="height:100%; width:' + wBar.toFixed(1) + '%; background:' + show.accent + '; border-radius:3px;"></div>'
+                         +   '</div>'
+                         +   (x.note ? '<div style="font-size:0.66rem; color:var(--text-secondary); font-style:italic; margin-top:0.3rem;">' + _jiqEsc(x.note) + '</div>' : '')
+                         + '</div>';
+                }).join('');
+            var tiersMax = 0; (e.creator_tiers || []).forEach(function(x) { tiersMax = Math.max(tiersMax, x.reach_share_pct || 0); });
+            var tiersHtml = '<h4 style="font-size:0.82rem; margin:0.85rem 0 0.35rem;">👥 Creator tiers by reach share</h4>'
+                + (e.creator_tiers || []).map(function(x) {
+                    var wBar = ((x.reach_share_pct || 0) / (tiersMax || 1)) * 100;
+                    return '<div style="padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.06);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:0.15rem;">'
+                         +     '<div style="font-weight:700; font-size:0.76rem;">' + _jiqEsc(x.tier) + ' <span style="opacity:0.65; font-weight:500;">· ' + _jiqMusicHhAbbrev(x.edit_count) + ' edits</span></div>'
+                         +     '<div style="font-weight:800; font-size:0.78rem; color:#38bdf8;">' + Number(x.reach_share_pct).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.05);">'
+                         +     '<div style="height:100%; width:' + wBar.toFixed(1) + '%; background:#38bdf8; border-radius:3px;"></div>'
+                         +   '</div>'
+                         +   (x.note ? '<div style="font-size:0.66rem; color:var(--text-secondary); font-style:italic; margin-top:0.3rem;">' + _jiqEsc(x.note) + '</div>' : '')
+                         + '</div>';
+                }).join('');
+            var topEditsHtml = '<h4 style="font-size:0.82rem; margin:0.85rem 0 0.35rem;">🔥 Top edits (by matched-panel reach)</h4>'
+                + '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:0.74rem;">'
+                + '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
+                +   '<th style="padding:5px 8px; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Edit</th>'
+                +   '<th style="padding:5px 8px; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Creator</th>'
+                +   '<th style="padding:5px 8px; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Tier</th>'
+                +   '<th style="padding:5px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Reach</th>'
+                +   '<th style="padding:5px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Eng.</th>'
+                +   '<th style="padding:5px 8px; font-size:0.58rem; opacity:0.7;">Note</th>'
+                + '</tr></thead><tbody>'
+                + (e.top_edits || []).map(function(x) {
+                    return '<tr style="border-bottom:1px solid var(--border-color);">'
+                         +   '<td style="padding:5px 8px; font-weight:700;">' + _jiqEsc(x.title) + '</td>'
+                         +   '<td style="padding:5px 8px; font-size:0.68rem; color:var(--text-secondary);">' + _jiqEsc(x.creator) + '</td>'
+                         +   '<td style="padding:5px 8px; font-size:0.66rem;">' + _jiqEsc(x.tier) + '</td>'
+                         +   '<td style="padding:5px 8px; text-align:right; font-weight:800; color:' + show.accent + ';">' + _jiqMusicHhAbbrev(x.reach_hh) + '</td>'
+                         +   '<td style="padding:5px 8px; text-align:right; font-weight:700;">' + _jiqEsc(x.engagement_rate) + '</td>'
+                         +   '<td style="padding:5px 8px; font-size:0.66rem; color:var(--text-secondary); font-style:italic;">' + _jiqEsc(x.note) + '</td>'
+                         + '</tr>';
+                }).join('')
+                + '</tbody></table></div>';
+            body.innerHTML = topline + typesHtml + tiersHtml + topEditsHtml;
+        }
+
+        // Stage 5: Cross-Platform Path - ordering distribution of the
+        // "Both" overlap cohort, plus median lag from first touch to
+        // first watch.
+        function _jiqMusicRender_path(body, show, slice, data) {
+            var p = show.cross_platform_path;
+            if (!p) { body.innerHTML = '<div style="opacity:0.6; padding:1rem;">Cross-platform path data unavailable.</div>'; return; }
+            var topline = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + [
+                    { label: '"Both" cohort', value: _jiqMusicHhAbbrev(p.both_cohort_hh) + ' HH', accent: '#a78bfa', sub: 'exposed to audio + clip content' },
+                    { label: 'Median lag',    value: Number(p.median_lag_hours_first_touch_to_watch || 0).toFixed(1) + ' hrs', accent: show.accent, sub: 'first touch → first watch' }
+                  ].map(function(t) {
+                    return '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + t.accent + ';">'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.05em;">' + _jiqEsc(t.label) + '</div>'
+                         +   '<div style="font-size:1.3rem; font-weight:900; margin-top:0.1rem; color:' + t.accent + ';">' + t.value + '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.1rem;">' + _jiqEsc(t.sub) + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+            var seqMax = 0; (p.ordering_distribution || []).forEach(function(x) { seqMax = Math.max(seqMax, x.pct || 0); });
+            var flowHtml = '<h4 style="font-size:0.82rem; margin:0.4rem 0 0.35rem;">🔀 Path ordering (how the "Both" cohort got to Netflix)</h4>'
+                + (p.ordering_distribution || []).map(function(x) {
+                    var wBar = ((x.pct || 0) / (seqMax || 1)) * 100;
+                    return '<div style="padding:0.55rem 0; border-bottom:1px solid rgba(255,255,255,0.06);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:0.15rem;">'
+                         +     '<div style="font-weight:700; font-size:0.78rem;">' + _jiqEsc(x.sequence) + '</div>'
+                         +     '<div style="font-size:0.72rem;"><strong style="color:' + show.accent + ';">' + Number(x.pct).toFixed(1) + '%</strong> · <span style="opacity:0.7;">' + _jiqMusicHhAbbrev(x.hh) + ' HH</span></div>'
+                         +   '</div>'
+                         +   '<div style="height:6px; border-radius:3px; background:rgba(255,255,255,0.05);">'
+                         +     '<div style="height:100%; width:' + wBar.toFixed(1) + '%; background:linear-gradient(90deg, ' + show.accent + ', #38bdf8); border-radius:3px;"></div>'
+                         +   '</div>'
+                         +   (x.note ? '<div style="font-size:0.66rem; color:var(--text-secondary); font-style:italic; margin-top:0.3rem; line-height:1.5;">' + _jiqEsc(x.note) + '</div>' : '')
+                         + '</div>';
+                }).join('');
+            var readBox = '<div style="padding:0.75rem 0.9rem; border-radius:7px; margin-top:0.85rem;'
+                +      ' background:linear-gradient(135deg, ' + show.accent + '22 0%, rgba(56,189,248,0.10) 100%);'
+                +      ' border:1px solid ' + show.accent + '44;">'
+                +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.2rem;">Read</div>'
+                +   '<div style="font-size:0.78rem; line-height:1.55;">' + _jiqEsc(p.read || '') + '</div>'
+                + '</div>';
+            body.innerHTML = topline + flowHtml + readBox;
+        }
+
+        // Stage 6: Time-to-Watch - histogram of exposure-to-watch lag
+        // buckets + median-by-cohort strip + platform-medians read.
+        function _jiqMusicRender_lag(body, show, slice, data) {
+            var l = show.time_to_watch;
+            if (!l) { body.innerHTML = '<div style="opacity:0.6; padding:1rem;">Time-to-watch data unavailable.</div>'; return; }
+            var pmed = l.platform_medians || {};
+            var activePlatMed = pmed[_jiqMusicActivePlatform] || l.overall_median_hours || 0;
+            var topline = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + [
+                    { label: 'Overall median',   value: Number(l.overall_median_hours || 0).toFixed(1) + ' hrs', accent: show.accent, sub: 'first touch → first watch' },
+                    { label: 'Overall P90',      value: Number(l.overall_p90_hours || 0).toFixed(0) + ' hrs',   accent: '#a78bfa',   sub: '90th percentile — slow-burn' },
+                    { label: 'Current-surface median', value: Number(activePlatMed).toFixed(1) + ' hrs',        accent: '#38bdf8',   sub: _jiqEsc(slice.label || '') }
+                  ].map(function(t) {
+                    return '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + t.accent + ';">'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.05em;">' + _jiqEsc(t.label) + '</div>'
+                         +   '<div style="font-size:1.25rem; font-weight:900; margin-top:0.1rem; color:' + t.accent + ';">' + t.value + '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.1rem;">' + t.sub + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+            var maxBucket = 0; (l.buckets || []).forEach(function(b) { maxBucket = Math.max(maxBucket, b.pct || 0); });
+            var histHtml = '<h4 style="font-size:0.82rem; margin:0.4rem 0 0.35rem;">⏱️ Time-to-watch distribution</h4>'
+                + (l.buckets || []).map(function(b) {
+                    var wBar = ((b.pct || 0) / (maxBucket || 1)) * 100;
+                    return '<div style="padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.06);">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:0.15rem;">'
+                         +     '<div><span style="font-weight:700; font-size:0.78rem;">' + _jiqEsc(b.label) + '</span> <span style="font-size:0.66rem; opacity:0.65; margin-left:0.4rem;">' + _jiqEsc(b.cohort || '') + '</span></div>'
+                         +     '<div style="font-weight:800; font-size:0.78rem; color:' + show.accent + ';">' + Number(b.pct).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="height:6px; border-radius:3px; background:rgba(255,255,255,0.05);">'
+                         +     '<div style="height:100%; width:' + wBar.toFixed(1) + '%; background:' + show.accent + '; border-radius:3px;"></div>'
+                         +   '</div>'
+                         +   (b.note ? '<div style="font-size:0.66rem; color:var(--text-secondary); font-style:italic; margin-top:0.3rem;">' + _jiqEsc(b.note) + '</div>' : '')
+                         + '</div>';
+                }).join('');
+            var cohortHtml = '<h4 style="font-size:0.82rem; margin:0.85rem 0 0.35rem;">🎯 Median lag by exposure cohort</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.5rem;">'
+                + (l.cohort_medians || []).map(function(c) {
+                    return '<div style="padding:0.6rem 0.75rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid #a78bfa;">'
+                         +   '<div style="font-size:0.7rem; opacity:0.8; font-weight:700;">' + _jiqEsc(c.cohort) + '</div>'
+                         +   '<div style="font-size:1.25rem; font-weight:900; color:#a78bfa; margin:0.1rem 0;">' + Number(c.median_hours).toFixed(1) + ' hrs</div>'
+                         +   '<div style="font-size:0.66rem; color:var(--text-secondary); font-style:italic; line-height:1.45;">' + _jiqEsc(c.note || '') + '</div>'
+                         + '</div>';
+                }).join('')
+                + '</div>';
+            var readBox = '<div style="padding:0.75rem 0.9rem; border-radius:7px; margin-top:0.85rem;'
+                +      ' background:linear-gradient(135deg, ' + show.accent + '22 0%, rgba(56,189,248,0.10) 100%);'
+                +      ' border:1px solid ' + show.accent + '44;">'
+                +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.2rem;">Read</div>'
+                +   '<div style="font-size:0.78rem; line-height:1.55;">' + _jiqEsc(l.read || '') + '</div>'
+                + '</div>';
+            body.innerHTML = topline + histHtml + cohortHtml + readBox;
+        }
+
+        // Stage 7: Post-Watch Ripple - DSP streaming lift per track +
+        // viewers-becoming-creators callout.
+        function _jiqMusicRender_ripple(body, show, slice, data) {
+            var r = show.post_watch_ripple;
+            if (!r) { body.innerHTML = '<div style="opacity:0.6; padding:1rem;">Post-watch ripple data unavailable.</div>'; return; }
+            var dspHtml = '<h4 style="font-size:0.82rem; margin:0.4rem 0 0.35rem;">🎧 DSP streaming lift (vs pre-air baseline)</h4>'
+                + '<div style="overflow-x:auto; margin-bottom:0.85rem;"><table style="width:100%; border-collapse:collapse; font-size:0.74rem;">'
+                + '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
+                +   '<th style="padding:6px 8px; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Track</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Spotify</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Apple</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Shazam</th>'
+                +   '<th style="padding:6px 8px; font-size:0.58rem; opacity:0.7;">Peak wk</th>'
+                +   '<th style="padding:6px 8px; font-size:0.58rem; opacity:0.7;">Note</th>'
+                + '</tr></thead><tbody>'
+                + (r.dsp_lift || []).map(function(x) {
+                    return '<tr style="border-bottom:1px solid var(--border-color);">'
+                         +   '<td style="padding:6px 8px; font-weight:700;">' + _jiqEsc(x.track) + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:800; color:#22c55e;">+' + Number(x.spotify_lift_pct).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700; color:#fca5a5;">+' + Number(x.apple_lift_pct).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700; color:#38bdf8;">+' + Number(x.shazam_lift_pct).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; font-size:0.7rem;">' + _jiqEsc(x.peak_week) + '</td>'
+                         +   '<td style="padding:6px 8px; font-size:0.66rem; color:var(--text-secondary); font-style:italic;">' + _jiqEsc(x.note || '') + '</td>'
+                         + '</tr>';
+                }).join('')
+                + '</tbody></table></div>';
+            var vc = r.viewers_becoming_creators || {};
+            var creatorBox = '<div style="padding:0.85rem 1rem; border-radius:7px;'
+                +      ' background:linear-gradient(135deg, ' + show.accent + '22 0%, rgba(167,139,250,0.10) 100%);'
+                +      ' border:1px solid ' + show.accent + '44; margin-bottom:0.85rem; display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">'
+                +   '<div style="min-width:130px;">'
+                +     '<div style="font-size:0.6rem; text-transform:uppercase; letter-spacing:0.08em; opacity:0.65; font-weight:800;">Viewers → creators</div>'
+                +     '<div style="font-size:1.85rem; font-weight:900; color:#fff; line-height:1;">' + _jiqMusicHhAbbrev(vc.count_hh) + '</div>'
+                +     '<div style="font-size:0.66rem; opacity:0.75;">HHs · ' + Number(vc.pct_of_viewers || 0).toFixed(1) + '% of viewers</div>'
+                +   '</div>'
+                +   '<div style="flex:1 1 260px; font-size:0.76rem; line-height:1.55; color:var(--text-secondary);">'
+                +     '<div style="font-weight:700; color:#fff; margin-bottom:0.2rem;">Median edits per creator household: ' + Number(vc.median_creator_edits_per_hh || 0).toFixed(1) + '</div>'
+                +     '<div><strong>Top content types:</strong> ' + _jiqEsc((vc.top_content_types || []).join(' · ')) + '</div>'
+                +     '<div style="font-style:italic; margin-top:0.35rem;">' + _jiqEsc(vc.note || '') + '</div>'
+                +   '</div>'
+                + '</div>';
+            var readBox = '<div style="padding:0.75rem 0.9rem; border-radius:7px;'
+                +      ' background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);">'
+                +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.2rem;">Read</div>'
+                +   '<div style="font-size:0.78rem; line-height:1.55;">' + _jiqEsc(r.read || '') + '</div>'
+                + '</div>';
+            body.innerHTML = dspHtml + creatorBox + readBox;
+        }
+
+        // Stage 8: Licensing ROI - per-song incremental $ case table
+        // sorted by modeled deck value, with the deal-room read.
+        function _jiqMusicRender_roi(body, show, slice, data) {
+            var roi = show.licensing_roi;
+            if (!roi) { body.innerHTML = '<div style="opacity:0.6; padding:1rem;">Licensing ROI data unavailable.</div>'; return; }
+            var topline = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + [
+                    { label: 'Total deck value',      value: _jiqMusicUsdAbbrev(roi.total_deck_value_usd), accent: '#22c55e',    sub: 'across all licensed tracks' },
+                    { label: 'Total incremental HHs', value: _jiqMusicHhAbbrev(roi.total_incremental_hh),  accent: show.accent,  sub: 'watch-lift attributable to music' },
+                    { label: 'Panel denominator',     value: _jiqMusicHhAbbrev(roi.panel_denominator_hh),  accent: '#a78bfa',    sub: 'show viewer base (matched panel)' }
+                  ].map(function(t) {
+                    return '<div style="padding:0.6rem 0.75rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + t.accent + ';">'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.05em;">' + _jiqEsc(t.label) + '</div>'
+                         +   '<div style="font-size:1.45rem; font-weight:900; margin-top:0.1rem; color:' + t.accent + ';">' + t.value + '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.1rem;">' + _jiqEsc(t.sub) + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+            var sortedSongs = (roi.songs || []).slice().sort(function(a, b) { return (b.deck_value_usd || 0) - (a.deck_value_usd || 0); });
+            var maxVal = sortedSongs.length ? sortedSongs[0].deck_value_usd : 0;
+            var tableHtml = '<h4 style="font-size:0.82rem; margin:0.4rem 0 0.35rem;">💰 Per-song ROI deck (sorted by modeled value)</h4>'
+                + '<div style="overflow-x:auto; margin-bottom:0.85rem;"><table style="width:100%; border-collapse:collapse; font-size:0.74rem;">'
+                + '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
+                +   '<th style="padding:6px 8px; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Track</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Incremental HH</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Retention lift</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">LTV mult.</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Deck value</th>'
+                +   '<th style="padding:6px 8px; font-size:0.58rem; opacity:0.7;">Deal case</th>'
+                + '</tr></thead><tbody>'
+                + sortedSongs.map(function(x) {
+                    var pctBar = ((x.deck_value_usd || 0) / (maxVal || 1)) * 100;
+                    return '<tr style="border-bottom:1px solid var(--border-color);">'
+                         +   '<td style="padding:6px 8px; font-weight:700;">' + _jiqEsc(x.song) + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700;">' + _jiqMusicHhAbbrev(x.incremental_hh) + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700; color:#a78bfa;">+' + Number(x.retention_pp || 0).toFixed(1) + ' pp</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700;">' + Number(x.ltv_multiplier || 0).toFixed(2) + 'x</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:900; color:#22c55e; white-space:nowrap;">' + _jiqMusicUsdAbbrev(x.deck_value_usd)
+                         +     '<div style="height:3px; width:100%; background:rgba(34,197,94,0.15); border-radius:2px; margin-top:2px;"><div style="height:100%; width:' + pctBar.toFixed(1) + '%; background:#22c55e; border-radius:2px;"></div></div>'
+                         +   '</td>'
+                         +   '<td style="padding:6px 8px; font-size:0.66rem; color:var(--text-secondary); font-style:italic; line-height:1.5; max-width:280px;">' + _jiqEsc(x.deal_case || '') + '</td>'
+                         + '</tr>';
+                }).join('')
+                + '</tbody></table></div>';
+            var readBox = '<div style="padding:0.85rem 1rem; border-radius:7px;'
+                +      ' background:linear-gradient(135deg, rgba(34,197,94,0.14) 0%, ' + show.accent + '22 100%);'
+                +      ' border:1px solid rgba(34,197,94,0.35);">'
+                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.2rem; color:#86efac;">Deal-room read</div>'
+                +   '<div style="font-size:0.82rem; line-height:1.55; color:#fff;">' + _jiqEsc(roi.read || '') + '</div>'
+                + '</div>';
+            body.innerHTML = topline + tableHtml + readBox;
         }
 
         function _jiqNflxWindowTabs(containerId, windows, activeKey, onChange) {
