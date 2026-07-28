@@ -399,14 +399,27 @@ def _generate_typographic_hero(text: str, palette: str = "dark") -> str:
     return out.name
 
 
+_BRAND_LOGO_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static"
+)
+_BRAND_LOGO_WHITE = os.path.join(_BRAND_LOGO_DIR, "crosswalk-logo-brand-white.png")
+_BRAND_LOGO_BLACK = os.path.join(_BRAND_LOGO_DIR, "crosswalk-logo-brand-black.png")
+
+
 def _render_crosswalk_logo_png(on_dark: bool = True) -> str:
-    """Pillow-rendered Crosswalk wordmark for the cover slide. No SVG
-    dependency required. Returns a path to a transparent PNG."""
+    """Return the path to the brand-provided Crosswalk wordmark PNG:
+    white variant for dark backgrounds, black variant for light. If
+    the shipped asset is missing (e.g. running outside the repo),
+    fall back to a Pillow-rendered wordmark so the deck still builds."""
+    target = _BRAND_LOGO_WHITE if on_dark else _BRAND_LOGO_BLACK
+    if os.path.exists(target):
+        return target
+    # Fallback: render a wordmark with Pillow. Kept as a safety net
+    # for environments that don't ship the static assets.
     w, h = 760, 100
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     fg = (244, 241, 234, 255) if on_dark else (12, 22, 24, 255)
-    accent = (200, 230, 0, 255)
     font_candidates = [
         "/System/Library/Fonts/Supplemental/Arial Black.ttf",
         "/System/Library/Fonts/HelveticaNeue.ttc",
@@ -424,13 +437,6 @@ def _render_crosswalk_logo_png(on_dark: bool = True) -> str:
     if font is None:
         font = ImageFont.load_default()
     d.text((0, 8), "CROSSWALK", fill=fg, font=font)
-    # Lozenge accent + product subtitle, BehaviorGraph-style
-    try:
-        small = ImageFont.truetype(font.path, 22) if hasattr(font, "path") else font
-    except Exception:
-        small = font
-    d.rectangle((420, 60, 460, 84), fill=accent)
-    d.text((470, 60), "BehaviorGraph", fill=fg, font=small)
     out = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
     im.save(out.name, "PNG", optimize=True)
     return out.name
@@ -2038,10 +2044,14 @@ def build_deck(data: dict,
     out = io.BytesIO()
     prs.save(out)
 
-    # Best-effort cleanup of any tmp files we materialized.
+    # Best-effort cleanup of any tmp files we materialized. Only
+    # delete paths that live under the system temp dir - the shipped
+    # brand logo lives inside the repo's static/ dir and must never
+    # be unlinked.
+    tmp_root = tempfile.gettempdir()
     for p in (ctx.cover_image, ctx.logo):
         try:
-            if p and os.path.exists(p):
+            if p and os.path.exists(p) and os.path.abspath(p).startswith(tmp_root):
                 os.unlink(p)
         except Exception:
             pass
