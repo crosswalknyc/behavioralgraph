@@ -4202,7 +4202,10 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                                                  keywords=geo_kws),
         'streaming_trending':  lambda: _fetch_streaming_trending(state, lookback_days,
                                                                     keywords=geo_kws),
-        'products_by_retailer':lambda: _fetch_trending_products(keywords=geo_kws),
+        # Products by retailer removed from the dashboard 2026-07-28.
+        # Aggregator + scrapers preserved in code so re-enabling is
+        # a one-line change - just re-add the task here and the panel
+        # in index.html.
         'movers':              lambda: compute_search_movers(state),
         'wikipedia_trending':  lambda: _read_snapshot('wikipedia_trending'),
         'music_charts':        lambda: _read_snapshot('music_charts'),
@@ -4227,7 +4230,10 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     headlines, articles_by_source = results.get('headlines_pack') or ([], [])
     social_trending    = results.get('social_trending') or {}
     streaming_trending = results.get('streaming_trending') or {}
-    products           = results.get('products_by_retailer') or []
+    # Products tab retired 2026-07-28; keep an empty list bound so the
+    # payload contract (`cards.products_by_retailer` present + list-typed)
+    # stays intact for any older cached frontend still deployed.
+    products           = []
     movers             = results.get('movers') or {'available': False,
                                                      'note': 'warming up'}
     # Wikipedia trending is a straight snapshot read (built daily by

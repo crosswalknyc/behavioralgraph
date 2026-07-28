@@ -24449,13 +24449,14 @@
             window.__intentIQ = window.__intentIQ || { titles: [], currentSlug: null, overview: null, cohorts: null };
 
             function _iiqHideAllOtherViews() {
-                var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
-                           'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
-                           'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
-                           'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
-                           'shareOfTimeIQView','flywheelConversionView','talentFitIQView',
-                           'journeyIQView','blueIQView'];
-                ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
+                // 2026-07-28: delegate to the canonical helper defined
+                // beside `_iqTopLevelViewIds`. Old hand-rolled ids array
+                // silently missed newer views (impactIQView, trendsIQView,
+                // microdramasIQView, helmIQView) and left them stacked
+                // when you switched into Intent IQ from those products.
+                if (typeof _iqHideAllViewsExcept === 'function') {
+                    _iqHideAllViewsExcept('intentIQView');
+                }
             }
 
             window.showIntentIQ = function() {
