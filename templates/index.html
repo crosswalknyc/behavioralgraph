@@ -46045,7 +46045,10 @@
         var _TIQ_FUSE_TAB_ICON = {
             search:            '🔎',
             people:            '👤',
-            wikipedia:         '📚',
+            // Wikipedia collapses under Trending People (same tab in
+            // the tab strip) so the fusion chip uses the person icon
+            // regardless of which of the two signals fired first.
+            wikipedia:         '👤',
             mover_breakout:    '🚀',
             mover_rising:      '📈',
             mover_sustained:   '🔥',
@@ -54788,8 +54791,8 @@
                         },
                         music_influence: _JIQ_MUSIC_DATA,
                         facts: [
-                            { label: 'Panel',   value: '41.8M matched U.S. households · 03/15 – 06/30. Observational match; every headline is paired with an incremental-lift read against a matched no-music-touchpoint control cohort.' },
-                            { label: 'Nobody Wants This', value: '58.8% of viewers had a music-linked touchpoint before their first watch. Matched-control cohort watch-rate lift: +14.3 pp. Audio-only exposure alone reached 3.78M HHs.' },
+                            { label: 'Panel',   value: '41.8M matched U.S. viewers · 03/15 – 06/30. Observational match; every headline is paired with an incremental-lift read against a matched no-music-touchpoint control cohort.' },
+                            { label: 'Nobody Wants This', value: '58.8% of viewers had a music-linked touchpoint before their first watch. Matched-control cohort watch-rate lift: +14.3 pp. Audio-only exposure alone reached 3.78M viewers.' },
                             { label: 'Heated Rivalry',    value: '52.1% of viewers had a music touchpoint — high for a Netflix title this quarter. t.A.T.u. sound-page traffic 2xed baseline the week the show dropped. Matched-control watch-rate lift: +16.8 pp.' },
                             { label: 'Read',    value: 'Clip-only is the marketing-driven segment. Audio-only is the earned-media flywheel. The overlap is where music-licensing decisions pay for themselves.' }
                         ]
@@ -66187,8 +66190,8 @@
         var _JIQ_MUSIC_DATA = {
             panel_basis: {
                 label: 'Panel basis',
-                short: '41.8M HHs · 03/15–06/30',
-                detail: '41.8M matched U.S. households · 03/15/2026 – 06/30/2026. Observational match; every headline is paired with an incremental-lift read against a matched no-music-touchpoint control cohort.'
+                short: '41.8M viewers · 03/15–06/30',
+                detail: '41.8M matched U.S. viewers · 03/15/2026 – 06/30/2026. Observational match; every headline is paired with an incremental-lift read against a matched no-music-touchpoint control cohort.'
             },
             stages: [
                 { id: 'universe', emoji: '🎵', label: 'Universe',             sub: 'who was exposed to what',                      uses_platform: true  },
@@ -66329,7 +66332,7 @@
                     },
                     time_to_watch: {
                         label: 'Time-to-watch · from first exposure to first Netflix stream',
-                        subtitle: 'Distribution of hours between first music-linked touchpoint and first minute of show playback, per household.',
+                        subtitle: 'Distribution of hours between first music-linked touchpoint and first minute of show playback, per viewer.',
                         overall_median_hours: 71.2,
                         overall_p90_hours: 336.0,
                         buckets: [
@@ -66363,13 +66366,13 @@
                             pct_of_viewers: 7.5,
                             median_creator_edits_per_hh: 2.1,
                             top_content_types: ['Sound-only Reels (relationship pov)', 'Show clip re-cuts', 'Show-inspired original content (cooking, fashion, dating)'],
-                            note: '481K viewer households produced their own content using one of the licensed tracks — 7.5% of the show\'s total viewer base became a creator downstream. The largest earned-media flywheel signal in the study.'
+                            note: '481K viewers produced their own content using one of the licensed tracks — 7.5% of the show\'s total viewer base became a creator downstream. The largest earned-media flywheel signal in the study.'
                         },
-                        read: 'Music-licensing decisions extend past the watch. Summer Girl alone drove +187% Spotify streaming lift and 412% Shazam lift. The viewers-becoming-creators cohort is 481K HHs — the earned-media flywheel keeps compounding after the watch ends.'
+                        read: 'Music-licensing decisions extend past the watch. Summer Girl alone drove +187% Spotify streaming lift and 412% Shazam lift. The viewers-becoming-creators cohort is 481K viewers — the earned-media flywheel keeps compounding after the watch ends.'
                     },
                     licensing_roi: {
                         label: 'Licensing ROI · the per-song incremental $ case',
-                        subtitle: 'Per licensed track: incremental HHs attributable to music-driven discovery (matched-control cohort model), retention lift, subscription-LTV multiplier, and deal-case dollar value.',
+                        subtitle: 'Per licensed track: incremental viewers attributable to music-driven discovery (matched-control cohort model), retention lift, subscription-LTV multiplier, and deal-case dollar value.',
                         panel_denominator_hh: 6420000,
                         songs: [
                             { song: 'Summer Girl (HAIM)',                            incremental_hh: 218400, retention_pp: 4.8, ltv_multiplier: 1.14, deck_value_usd: 4820000, deal_case: 'Anchor track. Sync fee paid for itself 6.4x on subscription-LTV alone. Renew + expand.' },
@@ -66511,7 +66514,7 @@
                     },
                     time_to_watch: {
                         label: 'Time-to-watch · from first exposure to first Netflix stream',
-                        subtitle: 'Distribution of hours between first music-linked touchpoint and first minute of show playback, per household.',
+                        subtitle: 'Distribution of hours between first music-linked touchpoint and first minute of show playback, per viewer.',
                         overall_median_hours: 58.4,
                         overall_p90_hours: 288.0,
                         buckets: [
@@ -66545,13 +66548,13 @@
                             pct_of_viewers: 13.0,
                             median_creator_edits_per_hh: 3.4,
                             top_content_types: ['Ship-edit remixes', 'Book-quote overlays', 'Cast fancam re-cuts', 'Hockey-scene compilations'],
-                            note: '543K viewer households produced their own content using one of the licensed tracks — 13.0% of the show\'s total viewer base became a creator downstream. Nearly 2x the NWT viewers-becoming-creators rate. This show TURNED viewers into evangelists.'
+                            note: '543K viewers produced their own content using one of the licensed tracks — 13.0% of the show\'s total viewer base became a creator downstream. Nearly 2x the NWT viewers-becoming-creators rate. This show TURNED viewers into evangelists.'
                         },
                         read: 'Music-licensing decisions on HR extend far past the watch. The Harrison cover alone drove +812% Spotify lift — the highest relative lift in the panel this quarter. 13% of viewers became creators, nearly 2x NWT. The earned-media flywheel is running hot.'
                     },
                     licensing_roi: {
                         label: 'Licensing ROI · the per-song incremental $ case',
-                        subtitle: 'Per licensed track: incremental HHs attributable to music-driven discovery, retention lift, subscription-LTV multiplier, and deal-case dollar value.',
+                        subtitle: 'Per licensed track: incremental viewers attributable to music-driven discovery, retention lift, subscription-LTV multiplier, and deal-case dollar value.',
                         panel_denominator_hh: 4180000,
                         songs: [
                             { song: 'All the Things She Said (t.A.T.u.)',                incremental_hh: 187400, retention_pp: 5.4, ltv_multiplier: 1.18, deck_value_usd: 6420000, deal_case: 'Anchor track. Cultural relaunch. Sync fee paid for itself 11.2x on subscription-LTV alone. Extend to soundtrack + trailer.' },
@@ -66567,8 +66570,8 @@
                 }
             },
             pitch: {
-                headline: 'Music is upper-funnel discovery, not just soundtrack.',
-                body: '58.8% of Nobody Wants This viewers and 67.6% of Heated Rivalry viewers had a music-linked touchpoint on TikTok or Instagram before their first watch. Audio-only exposure (no clip) reached 3.78M HHs across Nobody Wants This and 1.69M HHs across Heated Rivalry — a discovery surface that pure clip-based attribution misses. The clip-only cohort is the marketing-driven segment; the audio-only cohort is the earned-media flywheel. The overlap is where music licensing decisions pay for themselves.'
+                headline: 'Music sits upstream of tune-in — not just inside the show.',
+                body: '58.8% of Nobody Wants This viewers and 52.1% of Heated Rivalry viewers had a music-linked touchpoint on TikTok or Instagram before their first watch. Against matched no-music-touchpoint controls, exposed viewers watched at a +14.3 pp (Nobody Wants This) / +16.8 pp (Heated Rivalry) higher rate — the incremental lift, not just sequence-of-exposure. Audio-only exposure reached 3.78M viewers across Nobody Wants This and 1.30M viewers across Heated Rivalry — a discovery surface that pure clip-based attribution misses. Clip-only is the marketing-driven segment. Audio-only is the earned-media flywheel. The overlap is where music-licensing decisions pay for themselves.'
             }
         };
 
@@ -67846,15 +67849,15 @@
             var viewersHH = Number(show.viewers_hh || 0);
             function pctOfViewers(pct) {
                 var hh = viewersHH * ((Number(pct) || 0) / 100);
-                if (hh >= 1000000) return (hh / 1000000).toFixed(2) + 'M HH';
-                if (hh >= 1000)    return (hh / 1000).toFixed(0) + 'K HH';
-                return hh.toFixed(0) + ' HH';
+                if (hh >= 1000000) return (hh / 1000000).toFixed(2) + 'M viewers';
+                if (hh >= 1000)    return (hh / 1000).toFixed(0) + 'K viewers';
+                return hh.toFixed(0) + ' viewers';
             }
             var anyExposurePct = Number(slice.music_only_pct || 0) + Number(slice.clips_only_pct || 0) + Number(slice.music_and_clips_pct || 0);
 
             var tileGrid = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
                 + [
-                    { label: 'Viewers reached', value: pctOfViewers(100),               accent: show.accent, sub: 'ladders to ' + (viewersHH / 1000000).toFixed(2) + 'M HH panel' },
+                    { label: 'Viewers reached', value: pctOfViewers(100),               accent: show.accent, sub: 'study viewer denominator' },
                     { label: 'Any music touch', value: anyExposurePct.toFixed(1) + '%', accent: '#c4b5fd',   sub: pctOfViewers(anyExposurePct) },
                     { label: 'Music-only',      value: Number(slice.music_only_pct || 0).toFixed(1) + '%', accent: show.accent, sub: pctOfViewers(slice.music_only_pct) },
                     { label: 'Clips-only',      value: Number(slice.clips_only_pct || 0).toFixed(1) + '%', accent: '#38bdf8',   sub: pctOfViewers(slice.clips_only_pct) },
@@ -67878,7 +67881,7 @@
                 +     '<div style="font-size:1.55rem; font-weight:900; color:#fff; line-height:1;">+' + liftPp.toFixed(1) + ' pp</div>'
                 +   '</div>'
                 +   '<div style="font-size:0.76rem; color:var(--text-secondary); line-height:1.5; flex:1 1 260px;">'
-                +     'Music-exposed HHs on <strong>' + _jiqEsc(slice.label || '') + '</strong> watched <strong>' + _jiqEsc(show.label) + '</strong> at a <strong style="color:#c4b5fd;">+' + liftPp.toFixed(1) + ' pp</strong> higher rate than a matched cohort of eligible HHs with <em>no</em> music touchpoint on this surface. This is the incremental lift — not just sequence-of-exposure.'
+                +     'Music-exposed viewers on <strong>' + _jiqEsc(slice.label || '') + '</strong> watched <strong>' + _jiqEsc(show.label) + '</strong> at a <strong style="color:#c4b5fd;">+' + liftPp.toFixed(1) + ' pp</strong> higher rate than a matched cohort of eligible viewers with <em>no</em> music touchpoint on this surface. This is the incremental lift — not just sequence-of-exposure.'
                 +   '</div>'
                 + '</div>' : '';
 
@@ -68086,7 +68089,7 @@
             var topline = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
                 + [
                     { label: 'Total edits indexed', value: _jiqMusicHhAbbrev(e.total_edits_indexed), accent: show.accent, sub: 'in-study creator content' },
-                    { label: 'Total reach',         value: _jiqMusicHhAbbrev(e.total_reach_hh) + ' HH', accent: '#38bdf8', sub: 'panel-matched exposure' }
+                    { label: 'Total reach',         value: _jiqMusicHhAbbrev(e.total_reach_hh) + ' viewers', accent: '#38bdf8', sub: 'panel-matched exposure' }
                   ].map(function(t) {
                     return '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + t.accent + ';">'
                          +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.05em;">' + _jiqEsc(t.label) + '</div>'
@@ -68157,7 +68160,7 @@
             if (!p) { body.innerHTML = '<div style="opacity:0.6; padding:1rem;">Cross-platform path data unavailable.</div>'; return; }
             var topline = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
                 + [
-                    { label: '"Both" cohort', value: _jiqMusicHhAbbrev(p.both_cohort_hh) + ' HH', accent: '#a78bfa', sub: 'exposed to audio + clip content' },
+                    { label: '"Both" cohort', value: _jiqMusicHhAbbrev(p.both_cohort_hh) + ' viewers', accent: '#a78bfa', sub: 'exposed to audio + clip content' },
                     { label: 'Median lag',    value: Number(p.median_lag_hours_first_touch_to_watch || 0).toFixed(1) + ' hrs', accent: show.accent, sub: 'first touch → first watch' }
                   ].map(function(t) {
                     return '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + t.accent + ';">'
@@ -68174,7 +68177,7 @@
                     return '<div style="padding:0.55rem 0; border-bottom:1px solid rgba(255,255,255,0.06);">'
                          +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:0.15rem;">'
                          +     '<div style="font-weight:700; font-size:0.78rem;">' + _jiqEsc(x.sequence) + '</div>'
-                         +     '<div style="font-size:0.72rem;"><strong style="color:' + show.accent + ';">' + Number(x.pct).toFixed(1) + '%</strong> · <span style="opacity:0.7;">' + _jiqMusicHhAbbrev(x.hh) + ' HH</span></div>'
+                         +     '<div style="font-size:0.72rem;"><strong style="color:' + show.accent + ';">' + Number(x.pct).toFixed(1) + '%</strong> · <span style="opacity:0.7;">' + _jiqMusicHhAbbrev(x.hh) + ' viewers</span></div>'
                          +   '</div>'
                          +   '<div style="height:6px; border-radius:3px; background:rgba(255,255,255,0.05);">'
                          +     '<div style="height:100%; width:' + wBar.toFixed(1) + '%; background:linear-gradient(90deg, ' + show.accent + ', #38bdf8); border-radius:3px;"></div>'
@@ -68278,10 +68281,10 @@
                 +   '<div style="min-width:130px;">'
                 +     '<div style="font-size:0.6rem; text-transform:uppercase; letter-spacing:0.08em; opacity:0.65; font-weight:800;">Viewers → creators</div>'
                 +     '<div style="font-size:1.85rem; font-weight:900; color:#fff; line-height:1;">' + _jiqMusicHhAbbrev(vc.count_hh) + '</div>'
-                +     '<div style="font-size:0.66rem; opacity:0.75;">HHs · ' + Number(vc.pct_of_viewers || 0).toFixed(1) + '% of viewers</div>'
+                +     '<div style="font-size:0.66rem; opacity:0.75;">' + Number(vc.pct_of_viewers || 0).toFixed(1) + '% of show viewers</div>'
                 +   '</div>'
                 +   '<div style="flex:1 1 260px; font-size:0.76rem; line-height:1.55; color:var(--text-secondary);">'
-                +     '<div style="font-weight:700; color:#fff; margin-bottom:0.2rem;">Median edits per creator household: ' + Number(vc.median_creator_edits_per_hh || 0).toFixed(1) + '</div>'
+                +     '<div style="font-weight:700; color:#fff; margin-bottom:0.2rem;">Median edits per creator: ' + Number(vc.median_creator_edits_per_hh || 0).toFixed(1) + '</div>'
                 +     '<div><strong>Top content types:</strong> ' + _jiqEsc((vc.top_content_types || []).join(' · ')) + '</div>'
                 +     '<div style="font-style:italic; margin-top:0.35rem;">' + _jiqEsc(vc.note || '') + '</div>'
                 +   '</div>'
@@ -68302,7 +68305,7 @@
             var topline = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
                 + [
                     { label: 'Total deck value',      value: _jiqMusicUsdAbbrev(roi.total_deck_value_usd), accent: '#22c55e',    sub: 'across all licensed tracks' },
-                    { label: 'Total incremental HHs', value: _jiqMusicHhAbbrev(roi.total_incremental_hh),  accent: show.accent,  sub: 'watch-lift attributable to music' },
+                    { label: 'Total incremental viewers', value: _jiqMusicHhAbbrev(roi.total_incremental_hh),  accent: show.accent,  sub: 'watch-lift attributable to music' },
                     { label: 'Panel denominator',     value: _jiqMusicHhAbbrev(roi.panel_denominator_hh),  accent: '#a78bfa',    sub: 'show viewer base (matched panel)' }
                   ].map(function(t) {
                     return '<div style="padding:0.6rem 0.75rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + t.accent + ';">'
@@ -68318,7 +68321,7 @@
                 + '<div style="overflow-x:auto; margin-bottom:0.85rem;"><table style="width:100%; border-collapse:collapse; font-size:0.74rem;">'
                 + '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
                 +   '<th style="padding:6px 8px; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Track</th>'
-                +   '<th style="padding:6px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Incremental HH</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Incremental viewers</th>'
                 +   '<th style="padding:6px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Retention lift</th>'
                 +   '<th style="padding:6px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">LTV mult.</th>'
                 +   '<th style="padding:6px 8px; text-align:right; font-size:0.58rem; opacity:0.7;">Deck value</th>'

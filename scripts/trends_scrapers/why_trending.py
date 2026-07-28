@@ -69,27 +69,37 @@ _S3_PREFIX      = 'trends_iq_snapshots/latest/'
 _HISTORY_LOOKBACK_DAYS = 4
 
 # Cap how many items we ask Claude to explain per day. We size to cover
-# every row visible on each card:
-#   Wikipedia   -> top 30 (the 🌐 Trending People card shows 30 rows,
-#                  and this is the surface where bio-fallback captions
-#                  were showing up as fake "why" text, so full coverage
-#                  matters most here).
-#   GDELT people -> top 8   (fusion People card shows dozens but the
-#                            top 8 carry the vast majority of interest).
-#   Search      -> top 8   (Google Trends card visible items).
-_MAX_WIKI_ITEMS   = 30
-_MAX_PEOPLE_ITEMS = 8
-_MAX_SEARCH_ITEMS = 8
-_TOTAL_ITEM_CAP   = 60
+# every row visible on the 🔥 Trending fused feed (top ~60) PLUS the
+# standalone Trending People card (top 30) since that's the highest-
+# scrutiny surface for the bio-fallback failure mode.
+#
+#   Wikipedia          -> top 30
+#   GDELT people       -> top 12
+#   Search             -> top 15
+#   Movers (b + r)     -> top 20  (breakout + rising, the momentum core
+#                                   of the fused feed)
+#   Films              -> top 15  (dedupe across ticketing platforms)
+#   Streaming          -> top 15  (dedupe across streaming platforms)
+#   Music              -> top 15  (dedupe across music charts)
+#   Headlines          -> top 15
+_MAX_WIKI_ITEMS      = 30
+_MAX_PEOPLE_ITEMS    = 12
+_MAX_SEARCH_ITEMS    = 15
+_MAX_MOVER_ITEMS     = 20
+_MAX_FILM_ITEMS      = 15
+_MAX_STREAMING_ITEMS = 15
+_MAX_MUSIC_ITEMS     = 15
+_MAX_HEADLINE_ITEMS  = 15
+_TOTAL_ITEM_CAP      = 120
 
 # Single-sentence explanations don't need Opus. Match the model naming
 # convention the rest of the workspace uses (claude_client.py defaults
 # to claude-sonnet-4-5); haiku-4-5 is the cheap fast tier from the
 # same family. Overridable via WHY_TRENDING_MODEL env var.
 _CLAUDE_MODEL = os.environ.get('WHY_TRENDING_MODEL') or 'claude-haiku-4-5'
-# Enough to fit 60 items of context-rich prompt (~200 tokens each) +
-# 60 responses (~30 tokens each). Empirical cap on haiku is 8k output.
-_MAX_TOKENS   = 4000
+# Enough to fit 120 items of context-rich prompt (~200 tokens each) +
+# 120 responses (~30 tokens each). Empirical cap on haiku is 8k output.
+_MAX_TOKENS   = 8000
 
 
 _STOPWORDS = {'the', 'a', 'an', 'and', 'of', 'in', 'on', 'to', 'for', 'at'}
@@ -365,13 +375,159 @@ def _lookup_headlines_for(
     return out[:4]
 
 
+def _dedupe_titles_across_sources(rows: list[dict], title_field: str,
+                                    max_out: int) -> list[dict]:
+    """Given a list of `{title_field: str, ...}` rows drawn from multiple
+    platforms, keep the first occurrence of each normalized title and
+    return up to `max_out` items. Preserves input order (which is
+    already roughly rank-descending)."""
+    seen: set[str] = set()
+    out: list[dict] = []
+    for r in rows:
+        title = (r.get(title_field) or '').strip()
+        key = _cp_normalize(title)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(r)
+        if len(out) >= max_out:
+            break
+    return out
+
+
+def _flatten_music_tracks(music_snap: Optional[dict]) -> list[dict]:
+    """Flatten `music_charts.json` into a single ranked list of tracks.
+    Each entry: `{title, artist, chart_labels}`. Ordered by best rank
+    across any chart (a track that's #1 on Spotify AND #3 on Apple ranks
+    higher than one at #5 on both)."""
+    if not music_snap:
+        return []
+    per_track: dict[str, dict] = {}
+    for src_slug, panel in (music_snap.get('sources') or music_snap).items():
+        if not isinstance(panel, dict):
+            continue
+        items = panel.get('items') or []
+        chart = panel.get('label') or src_slug
+        for i, it in enumerate(items[:25]):
+            title  = (it.get('title')  or '').strip()
+            artist = (it.get('artist') or '').strip()
+            key = _cp_normalize(title + ' ' + artist)
+            if not key:
+                continue
+            rank = i + 1
+            e = per_track.setdefault(key, {
+                'title':        title,
+                'artist':       artist,
+                'best_rank':    rank,
+                'chart_labels': [],
+            })
+            e['chart_labels'].append(f'{chart} #{rank}')
+            if rank < e['best_rank']:
+                e['best_rank'] = rank
+    return sorted(per_track.values(), key=lambda e: e['best_rank'])
+
+
+def _flatten_titles(snap: Optional[dict], nested_keys: tuple = ('items',)) -> list[dict]:
+    """Flatten a scraper snapshot whose shape is `{ src_slug: {label,
+    items: [{title, ...}]}, ... }` into a single title-first ranked
+    list `[{title, best_rank, platform_labels}]`. Ordered by best rank."""
+    if not snap:
+        return []
+    per: dict[str, dict] = {}
+    # Some snapshots wrap sources under `sources`, others put them at the
+    # top level. Try `sources` first, fall back to top-level.
+    sources = snap.get('sources') if isinstance(snap, dict) else None
+    if not isinstance(sources, dict):
+        sources = {k: v for k, v in (snap or {}).items()
+                    if isinstance(v, dict) and 'items' in v}
+    for src_slug, panel in (sources or {}).items():
+        if not isinstance(panel, dict):
+            continue
+        items: list = []
+        for key in nested_keys:
+            v = panel.get(key)
+            if isinstance(v, list) and v:
+                items = v
+                break
+        label = panel.get('label') or src_slug
+        for i, it in enumerate(items[:15]):
+            title = (it.get('title') or '').strip()
+            k = _cp_normalize(title)
+            if not k:
+                continue
+            rank = i + 1
+            e = per.setdefault(k, {
+                'title':           title,
+                'best_rank':       rank,
+                'platform_labels': [],
+            })
+            e['platform_labels'].append(f'{label} #{rank}')
+            if rank < e['best_rank']:
+                e['best_rank'] = rank
+    return sorted(per.values(), key=lambda e: e['best_rank'])
+
+
+# The 6 streaming platforms each write their own snapshot. Mirror the
+# slug + label pairs from trends_iq._STREAMING_PLATFORMS.
+_STREAMING_PLATFORM_SLUGS = (
+    ('netflix',    'Netflix'),
+    ('disneyplus', 'Disney+'),
+    ('hulu',       'Hulu'),
+    ('max',        'Max'),
+    ('primevideo', 'Prime Video'),
+    ('espnplus',   'ESPN+'),
+)
+
+
+def _flatten_streaming_titles() -> list[dict]:
+    """Read each per-platform streaming snapshot (netflix.json,
+    disneyplus.json, hulu.json, max.json, primevideo.json,
+    espnplus.json) and merge their US film + TV lists into a single
+    dedup'd `[{title, kind, best_rank, platform_labels}]` ranked by
+    best rank."""
+    per: dict[str, dict] = {}
+    for slug, label in _STREAMING_PLATFORM_SLUGS:
+        snap = _read_snapshot(slug)
+        if not snap:
+            continue
+        # Netflix ships us_films / us_tv (from Netflix's own weekly TSV).
+        # The others put everything in `national` and we don't have a
+        # film/tv split on this side; treat as "titles" of unspecified kind.
+        buckets: list[tuple[str, list]] = []
+        if slug == 'netflix':
+            buckets.append(('film', snap.get('us_films') or []))
+            buckets.append(('tv',   snap.get('us_tv')    or []))
+        else:
+            buckets.append(('title', snap.get('national') or []))
+        for kind, items in buckets:
+            for i, it in enumerate(items[:15]):
+                title = (it.get('title') or '').strip()
+                k = _cp_normalize(title)
+                if not k:
+                    continue
+                rank = i + 1
+                e = per.setdefault(k, {
+                    'title':           title,
+                    'kind':            kind,
+                    'best_rank':       rank,
+                    'platform_labels': [],
+                })
+                e['platform_labels'].append(f'{label} #{rank}')
+                if rank < e['best_rank']:
+                    e['best_rank'] = rank
+                    e['kind']      = kind
+    return sorted(per.values(), key=lambda e: e['best_rank'])
+
+
 def _collect_items() -> list[dict]:
     """Gather the top items across every relevant source. Each returned
     dict looks like:
 
         {
           'name':      "Elon Musk",
-          'source':    'wikipedia',         # or 'people', 'search'
+          'source':    'wikipedia',   # or 'people', 'search', 'mover',
+                                        #   'film', 'streaming', 'music',
+                                        #   'headline'
           'context':   "Wikipedia views +67% (204k -> 341k). "
                        "Headlines mentioning: 'Musk unveils new Grok model.'",
         }
@@ -536,6 +692,116 @@ def _collect_items() -> list[dict]:
             clues.append(f'Related headline: "{h}"')
         _push(term, 'search', ' '.join(clues))
 
+    # -----------------------------------------------------------------
+    # Movers (breakout + rising) - momentum core of the fused feed.
+    # Movers snapshots are stored under `movers.json` (built by
+    # movers_from_history.py). Breakout + rising bucket items are the
+    # ones the fusion score weighs highest, so they deserve WHY captions.
+    # -----------------------------------------------------------------
+    movers_snap = _read_snapshot('movers')
+    mover_terms: list[dict] = []
+    if movers_snap:
+        for bucket_key in ('breakout', 'rising'):
+            for row in (movers_snap.get(bucket_key) or []):
+                term = (row.get('term') or '').strip()
+                if term:
+                    row['_bucket'] = bucket_key
+                    mover_terms.append(row)
+    mover_terms = _dedupe_titles_across_sources(mover_terms, 'term', _MAX_MOVER_ITEMS)
+    for row in mover_terms:
+        term   = (row.get('term') or '').strip()
+        bucket = row.get('_bucket') or 'mover'
+        pct    = row.get('mentions_change_pct') or row.get('delta_pct')
+        clues: list[str] = []
+        if bucket == 'breakout':
+            clues.append('Breakout query: 5x+ session growth off a low baseline this window.')
+        else:
+            if isinstance(pct, (int, float)):
+                clues.append(f'Rising query: session count up {int(round(pct * 100)):+d}% vs baseline.')
+            else:
+                clues.append('Rising query: sustained 25%+ growth in panel sessions.')
+        # Pull associated headlines (local pool + GDELT fallback) so
+        # Claude has the actual event to anchor on.
+        for h in _headlines_for(term)[:3]:
+            clues.append(f'Headline: "{h}"')
+        _push(term, 'mover', ' '.join(clues))
+
+    # -----------------------------------------------------------------
+    # Films (theatrical ticketing). Titles that show up on 3+ of the
+    # 5 ticketing platforms are the ones with real cultural presence
+    # this week; the platform_labels list gives Claude the "in theaters
+    # everywhere" signal.
+    # -----------------------------------------------------------------
+    film_snap = _read_snapshot('film_ticketing')
+    film_titles = _flatten_titles(film_snap)[:_MAX_FILM_ITEMS]
+    for f in film_titles:
+        title  = f.get('title') or ''
+        labels = f.get('platform_labels') or []
+        clues: list[str] = []
+        if labels:
+            clues.append('In theaters this week: ' + ', '.join(labels[:5]) + '.')
+        for h in _headlines_for(title)[:2]:
+            clues.append(f'Headline: "{h}"')
+        _push(title, 'film', ' '.join(clues))
+
+    # -----------------------------------------------------------------
+    # Streaming (film + tv titles). Same dedup pattern as films but
+    # across streaming platforms (Netflix, Disney+, Hulu, Max, Prime
+    # Video, ESPN+) and split by film vs tv.
+    # -----------------------------------------------------------------
+    streaming_titles = _flatten_streaming_titles()[:_MAX_STREAMING_ITEMS]
+    for st in streaming_titles:
+        title  = st.get('title') or ''
+        kind   = st.get('kind')  or 'title'
+        labels = st.get('platform_labels') or []
+        clues: list[str] = []
+        if labels:
+            clues.append(f'Top-charting {kind} on streaming this week: ' +
+                          ', '.join(labels[:5]) + '.')
+        for h in _headlines_for(title)[:2]:
+            clues.append(f'Headline: "{h}"')
+        _push(title, 'streaming', ' '.join(clues))
+
+    # -----------------------------------------------------------------
+    # Music (tracks). Feed the artist as extra context so Claude can
+    # anchor on "new album released", "featured in a viral TikTok",
+    # etc. - the reasons a specific track climbs the charts.
+    # -----------------------------------------------------------------
+    music_snap = _read_snapshot('music_charts') or _read_snapshot('music')
+    music_tracks = _flatten_music_tracks(music_snap)[:_MAX_MUSIC_ITEMS]
+    for m in music_tracks:
+        title  = m.get('title')  or ''
+        artist = m.get('artist') or ''
+        labels = m.get('chart_labels') or []
+        display = f'{title} by {artist}' if artist else title
+        clues: list[str] = []
+        if labels:
+            clues.append('Charting on: ' + ', '.join(labels[:5]) + '.')
+        if artist:
+            clues.append(f'Artist: {artist}.')
+        for h in _headlines_for(display)[:2]:
+            clues.append(f'Headline: "{h}"')
+        _push(display, 'music', ' '.join(clues))
+
+    # -----------------------------------------------------------------
+    # Headlines. Ranked article titles - the "why" is essentially
+    # the headline itself, but Claude will paraphrase it into a
+    # neutral single-sentence explanation.
+    # -----------------------------------------------------------------
+    if headlines_snap:
+        top_headlines = (headlines_snap.get('national')
+                          or headlines_snap.get('items')
+                          or headlines_snap.get('articles') or [])[:_MAX_HEADLINE_ITEMS]
+        for h in top_headlines:
+            title  = (h.get('title') or h.get('headline') or '').strip()
+            source = h.get('source') or h.get('domain') or ''
+            clues: list[str] = []
+            if source:
+                clues.append(f'Headline from {source}: "{title}".')
+            else:
+                clues.append(f'Headline: "{title}".')
+            _push(title, 'headline', ' '.join(clues))
+
     return out[:_TOTAL_ITEM_CAP]
 
 
@@ -552,44 +818,59 @@ def _build_prompt(items: list[dict]) -> str:
     better than showing a bio.
     """
     header = (
-        "You write ONE-LINE explanations of WHY specific people or "
-        "topics are TRENDING RIGHT NOW.\n"
+        "You write ONE-LINE explanations of WHY the following people, "
+        "topics, movies, shows, songs, or news events are TRENDING "
+        "RIGHT NOW.\n"
+        "\n"
+        "The `source` field on each item tells you what kind of item it "
+        "is:\n"
+        "  - people / wikipedia -> a person (real human)\n"
+        "  - search / mover     -> a search query (person, topic, or event)\n"
+        "  - film               -> a movie in theaters this week\n"
+        "  - streaming          -> a title (film or tv) charting on a streamer\n"
+        "  - music              -> a song ('Title by Artist' in the name field)\n"
+        "  - headline           -> a specific news article\n"
         "\n"
         "STRICT RULES:\n"
-        "1. Answer WHY (the news event, story, or moment). NEVER answer "
-        "WHO or WHAT (biography, occupation, background).\n"
+        "1. Answer WHY (the concrete event, release, cultural moment, "
+        "or news story driving the trend right now). NEVER answer WHO "
+        "or WHAT alone (biography, plot summary, genre, occupation).\n"
         "2. You MUST anchor every answer to a concrete signal in the "
-        "clues: either (a) a news headline quoted in the clues, (b) a "
-        "related search query in the clues, or (c) a Wikipedia extract "
-        "that describes an EVENT (a date, an action, an incident) - "
-        "NOT a bio.\n"
-        "3. If the clues contain ONLY a bio line + a view/mention count "
-        "and NO headline / event / related-query signal, you MUST "
-        "return an empty string \"\". Do NOT guess. Do NOT extrapolate "
-        "from the bio (\"probably in a new film\", \"likely upcoming "
-        "match\") - that is HALLUCINATION and is banned.\n"
+        "clues: (a) a news headline quoted in the clues, (b) a related "
+        "search query, (c) a chart position / platform presence ('Top "
+        "on Netflix + Hulu' is a valid signal for a streaming title), "
+        "(d) an event described in an extract.\n"
+        "3. If the clues contain ONLY a bio line and NO event / "
+        "headline / chart / release signal, return an empty string "
+        "\"\". Do NOT guess. Do NOT extrapolate from a bio (\"probably "
+        "in a new film\", \"likely upcoming match\") - that is "
+        "HALLUCINATION and is banned.\n"
         "4. If a clue explicitly says 'do NOT quote' or 'context only', "
-        "treat it as background only. Never paraphrase it as the "
-        "answer.\n"
+        "treat it as background only. Never paraphrase it as the answer.\n"
         "5. You MAY cross-reference other items in this batch. If item "
         "A's clues mention item B's name, the connection is a fair "
         "signal to use in either explanation.\n"
         "6. One sentence, present tense, 20 words or fewer. Lead with "
-        "the event, not the person's name. Avoid the words 'or', "
-        "'possibly', 'likely', 'reportedly' - those are hedges that "
-        "indicate you're guessing. If you'd need a hedge, return \"\".\n"
+        "the event / release / connection, not the item name. Avoid "
+        "the words 'or', 'possibly', 'likely', 'reportedly' - those "
+        "are hedges that indicate you're guessing. If you'd need a "
+        "hedge, return \"\".\n"
         "7. Do not include em dashes.\n"
         "\n"
         "EXAMPLES:\n"
-        "  GOOD: \"Van driven into crowd at Berlin Pride on July 25.\"                    (event from extract)\n"
-        "  GOOD: \"Directing upcoming Star Wars: Starfighter film announced this week.\"  (headline signal)\n"
-        "  GOOD: \"Featured at Marvel Comic-Con panel with new costume redesign.\"        (headline signal)\n"
-        "  BAD:  \"Canadian-American filmmaker and actor.\"                               (bio, not why)\n"
-        "  BAD:  \"British actor born 1993.\"                                             (bio, not why)\n"
-        "  BAD:  \"Appeared in a recently released film generating interest.\"            (hallucinated bio)\n"
-        "  BAD:  \"Announced or completed significant match or career decision.\"         (hedge word 'or')\n"
-        "  BAD:  \"Wikipedia views spiked +67% yesterday.\"                               (restates the delta)\n"
-        "  BAD:  \"Trending on Wikipedia today.\"                                         (says nothing)\n"
+        "  GOOD (person):     \"Van driven into crowd at Berlin Pride on July 25.\"\n"
+        "  GOOD (person):     \"Directing upcoming Star Wars: Starfighter film announced this week.\"\n"
+        "  GOOD (film):       \"Christopher Nolan's new epic opened in theaters this weekend.\"\n"
+        "  GOOD (streaming):  \"New season dropped on Netflix, charting in the top 3 of both Netflix and Hulu.\"\n"
+        "  GOOD (music):      \"Lead single from Post Malone's new country album, up across Spotify and Shazam.\"\n"
+        "  GOOD (mover):      \"Overnight breakout after live-broadcast incident during the game.\"\n"
+        "  GOOD (headline):   \"Federal Reserve signals rate cut at September meeting per new minutes.\"\n"
+        "  BAD:               \"Canadian-American filmmaker and actor.\"                     (bio)\n"
+        "  BAD:               \"British actor born 1993.\"                                    (bio)\n"
+        "  BAD:               \"Appeared in a recently released film generating interest.\"   (hallucination)\n"
+        "  BAD:               \"Announced or completed significant match or career decision.\" (hedge)\n"
+        "  BAD:               \"Wikipedia views spiked +67% yesterday.\"                      (restates the delta)\n"
+        "  BAD:               \"Trending on Wikipedia today.\"                                (says nothing)\n"
         "\n"
         "OUTPUT FORMAT: Return ONLY a JSON object, no prose. Keys = the "
         "input NAME strings exactly as given. Values = the one-sentence "
