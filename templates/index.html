@@ -23716,6 +23716,29 @@
             #trendsIQView .tiq-mover-badge.down    { background: rgba(239, 68, 68, 0.22);  color: #fca5a5; }
             #trendsIQView .tiq-mover-badge.flat    { background: rgba(148, 163, 184, 0.2); color: #cbd5f5; }
             #trendsIQView .tiq-mover-badge.dropped { background: rgba(239, 68, 68, 0.18);  color: #fca5a5; }
+            /* Fused Trending feed rows: slightly wider spacing than
+               standard tiq-row because each row carries an extra meta
+               line + up to 8 source chips. */
+            #trendsIQView .tiq-fuse-row { padding: 0.6rem 0; }
+            #trendsIQView .tiq-fuse-meta-line { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.15rem; }
+            #trendsIQView .tiq-fuse-meta { opacity: 0.85; }
+            #trendsIQView .tiq-fuse-meta strong { color: #a78bfa; font-weight: 700; }
+            #trendsIQView .tiq-fuse-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 0.4rem; }
+            #trendsIQView .tiq-fuse-chip {
+                display: inline-flex; align-items: center; gap: 3px;
+                padding: 2px 7px; border-radius: 999px;
+                font-size: 0.7rem; color: #cbd5f5;
+                background: rgba(148, 163, 184, 0.12);
+                border: 1px solid rgba(148, 163, 184, 0.22);
+                white-space: nowrap;
+            }
+            #trendsIQView .tiq-fuse-chip:hover {
+                background: rgba(124, 58, 237, 0.22);
+                color: #ddd6fe;
+                border-color: rgba(124, 58, 237, 0.4);
+            }
+            #trendsIQView .tiq-fuse-chip-label { font-weight: 500; }
+            #trendsIQView .tiq-fuse-chip-rank { opacity: 0.7; font-weight: 600; }
             #trendsIQView .tiq-headline-list { display: flex; flex-direction: column; }
             #trendsIQView .tiq-headline-image { flex: 0 0 64px; width: 64px; height: 48px; border-radius: 4px; background-color: #000000; }
             /* CROSSWALK / TRENDING fallback rendered as real HTML text (not an
@@ -43072,7 +43095,7 @@
         // Google Trends, GDELT, major news RSS feeds, Reddit, YouTube,
         // and retailer bestseller pages. Every tab renders its own card
         // grid.
-        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'searches', activeSocial: 'reddit', activeRetailer: 'amazon', headlinesView: 'top', inFlight: null };
+        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'trending', activeSocial: 'reddit', activeRetailer: 'amazon', headlinesView: 'top', inFlight: null };
 
         function _trendsIQHideAllOtherViews() {
             // 2026-07-28: delegate to _iqHideAllViewsExcept.
@@ -44419,8 +44442,10 @@
             // Tooltip copy per top-level tab. Kept alongside the tabs
             // array so it's easy to see and update in one place.
             var tabs = [
-                { key: 'searches',  label: 'Trending',         count: counts.searches  || 0, icon: '🔎',
-                  tip: 'Trending searches: The top search queries and hashtags in the window, sliced into overall, entertainment, retail, politics, finance, sports, and more. What people are actively looking for right now.' },
+                { key: 'trending',  label: 'Trending',         count: counts.trending  || 0, icon: '🔥',
+                  tip: 'Trending: A single fused feed pulling the top items from every other tab (Search, People, Wikipedia, Movers, Music, Podcasts, Books, Films, Streaming, Social, Headlines) and ranking them by cross-platform presence and rank strength. Items appearing on 3+ tabs surface at the top.' },
+                { key: 'searches',  label: 'Search',           count: counts.searches  || 0, icon: '🔎',
+                  tip: 'Search: The top search queries and hashtags in the window, sliced into overall, entertainment, retail, politics, finance, sports, and more. What people are actively looking for right now.' },
                 { key: 'movers',    label: 'Movers',           count: counts.movers    || 0, icon: '🚀',
                   tip: 'Movers: Day-over-day and week-over-week momentum. Breakout, climbing, cooling, and sustained-heat buckets show which trends are gaining, holding, or losing steam.' },
                 { key: 'headlines', label: 'Headlines',        count: headlineCount,         icon: '📰',
@@ -44445,7 +44470,7 @@
             var strip = document.getElementById('trendsIQTabStrip');
             strip.style.display = 'flex';
             strip.innerHTML = tabs.map(function(t) {
-                var active = (t.key === (window.__trendsIQ.activeTab || 'movers')) ? ' active' : '';
+                var active = (t.key === (window.__trendsIQ.activeTab || 'trending')) ? ' active' : '';
                 var badgeId = (t.key === 'watchlist') ? ' id="trendsIQWatchBadge"' : '';
                 var tipAttr = t.tip ? ' data-tooltip="' + _tiqEsc(t.tip) + '"' : '';
                 return '<div class="tiq-tab has-tooltip' + active + '" data-tiq-tab="' + t.key + '"' + tipAttr + ' onclick="setTrendsIQTab(\'' + t.key + '\')">' +
@@ -44456,6 +44481,7 @@
 
             var panels = document.getElementById('trendsIQPanels');
             panels.innerHTML =
+                _renderTIQPanel('trending',  renderTIQTrending(cards.fused_trending || [])) +
                 _renderTIQPanel('movers',    renderTIQMovers(cards.movers || {available:false})) +
                 _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [],
                                                                  cards.articles_by_source || [],
@@ -44496,11 +44522,11 @@
                 window.__trendsIQ.activeTab = 'books';
             }
             // Products tab was removed 2026-07-28. Returning users with
-            // stale session state land on Trending instead of a ghost.
+            // stale session state land on the fused Trending feed.
             if (window.__trendsIQ.activeTab === 'products') {
-                window.__trendsIQ.activeTab = 'searches';
+                window.__trendsIQ.activeTab = 'trending';
             }
-            setTrendsIQTab(window.__trendsIQ.activeTab || 'searches');
+            setTrendsIQTab(window.__trendsIQ.activeTab || 'trending');
 
             if (!window.__trendsIQ.watchReady) {
                 tiqLoadWatchlist().then(function() {
@@ -45986,6 +46012,111 @@
             return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' + cards + '</div>';
         }
 
+        // ============================================================
+        // Fused Trending feed (the 🔥 Trending tab)
+        // ============================================================
+        // Icon + friendly-label maps for the source chips beneath each
+        // fused row. `_tiqFuseTabIcon` maps the backend's source_type
+        // slug (search / people / music / mover_breakout / etc.) to a
+        // single emoji so the chip strip stays compact.
+        var _TIQ_FUSE_TAB_ICON = {
+            search:            '🔎',
+            people:            '👤',
+            wikipedia:         '📚',
+            mover_breakout:    '🚀',
+            mover_rising:      '📈',
+            mover_sustained:   '🔥',
+            music:             '🎵',
+            podcasts:          '🎙️',
+            books:             '📖',
+            films:             '🎬',
+            streaming:         '📺',
+            social:            '💬',
+            headlines:         '📰',
+            philanthropy:      '❤️'
+        };
+        function _tiqFuseTabIcon(tab) { return _TIQ_FUSE_TAB_ICON[tab] || '•'; }
+
+        function renderTIQTrending(rows) {
+            if (!rows || !rows.length) {
+                return '<div class="tiq-empty">Fused trending feed is warming up. This tab combines the top of every other tab into one ranked view.</div>';
+            }
+            var header =
+                '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
+                'One ranked feed pulling from every other tab. Score rewards being highly ranked on individual sources AND appearing on multiple tabs at once. Items on 3+ tabs get the 🔥 cultural-moment badge.' +
+                '</div>';
+
+            var body = '<div class="tiq-headline-list" style="max-height:1200px;overflow-y:auto;">' +
+                rows.map(function(r, i) {
+                    var img = _tiqPosterCell(r.image || '');
+                    var name = _tiqEsc(r.name || '');
+                    var titleLine = r.url
+                        ? '<a href="' + _tiqEsc(r.url) + '" target="_blank" rel="noopener">' + name + '</a>'
+                        : name;
+                    // Cross-platform badge - reuse the same 🔥 badge
+                    // Movers / Wikipedia / People rows already show. An
+                    // item on 3+ distinct tabs IS a cultural moment.
+                    var fireBadge = (r.platform_count >= 3)
+                        ? ' <span class="tiq-trend tiq-trend-cross" title="Trending on ' + r.platform_count + ' distinct tabs simultaneously">\uD83D\uDD25 cultural moment</span>'
+                        : '';
+                    // Score meta (small, right of platform count)
+                    var meta = '<span class="tiq-fuse-meta">' +
+                               'on <strong>' + r.platform_count + '</strong> tab' + (r.platform_count === 1 ? '' : 's') +
+                               ' &middot; score ' + Number(r.score).toFixed(2) +
+                               '</span>';
+                    // Why line (Claude one-liner from why_trending
+                    // snapshot). Strict mode: only render when the
+                    // backend gave us a real `why` string. Never fall
+                    // back to a Wikipedia bio here - the fused feed's
+                    // point is WHY, not WHO.
+                    var whyLine = r.why
+                        ? '<div class="tiq-row-why" style="font-size:12px;opacity:0.75;margin-top:3px;font-style:italic;color:#c9d3e0;line-height:1.35;">\u201C' + _tiqEsc(r.why) + '\u201D</div>'
+                        : '';
+                    // Source chips - dedupe by tab so "Spotify + Apple
+                    // Music + Shazam" collapses into one "🎵 Music #1"
+                    // chip (Music is one tab). Show best rank per tab.
+                    var sources = r.sources || [];
+                    var byTab = {};
+                    sources.forEach(function(s) {
+                        var t = s.tab_label || s.tab || 'source';
+                        if (!byTab[t] || (s.rank || 999) < (byTab[t].rank || 999)) {
+                            byTab[t] = s;
+                        }
+                    });
+                    var chipList = Object.keys(byTab).map(function(k) { return byTab[k]; });
+                    chipList.sort(function(a, b) { return (a.rank || 999) - (b.rank || 999); });
+                    var chipsHtml = chipList.slice(0, 8).map(function(s) {
+                        var icon = _tiqFuseTabIcon(s.tab || '');
+                        var lbl  = s.subtab ? (s.tab_label + ' - ' + s.subtab) : s.tab_label;
+                        var tip  = _tiqEsc(lbl + ' - rank #' + s.rank);
+                        return '<span class="tiq-fuse-chip has-tooltip" data-tooltip="' + tip + '">' +
+                               icon + ' <span class="tiq-fuse-chip-label">' + _tiqEsc(s.tab_label || '') + '</span>' +
+                               ' <span class="tiq-fuse-chip-rank">#' + s.rank + '</span>' +
+                               '</span>';
+                    }).join('');
+                    // Watchlist / drilldown actions - reuse the movers
+                    // 'search' kind so the star + history feed the same
+                    // backend as searches / movers rows do.
+                    var actions = _tiqActions('trend', 'fused', r.name, r.name, 'National');
+                    return '<div class="tiq-row tiq-fuse-row">' +
+                           '<div class="tiq-rank">' + (i + 1) + '</div>' +
+                           img +
+                           '<div class="tiq-row-body">' +
+                             '<div class="tiq-row-title">' + titleLine + fireBadge + actions + '</div>' +
+                             '<div class="tiq-fuse-meta-line">' + meta + '</div>' +
+                             whyLine +
+                             '<div class="tiq-fuse-chips">' + chipsHtml + '</div>' +
+                           '</div>' +
+                           '</div>';
+                }).join('') +
+                '</div>';
+            return '<div class="tiq-card">' +
+                   '<h4>🔥 Trending Now</h4>' +
+                   header +
+                   body +
+                   '</div>';
+        }
+
         // Shorten "Thu, 10 Jul 2026 09:34:11 GMT" -> "10 Jul". Used in
         // the philanthropy news feed to keep the meta line tight.
         function _tiqShortDate(s) {
@@ -46429,6 +46560,7 @@
             var panels = document.getElementById('trendsIQPanels');
             if (!panels) return;
             panels.innerHTML =
+                _renderTIQPanel('trending',  renderTIQTrending(cards.fused_trending || [])) +
                 _renderTIQPanel('movers',    renderTIQMovers(cards.movers || {available:false})) +
                 _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [],
                                                                  cards.articles_by_source || [],
@@ -46446,7 +46578,7 @@
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('films',     renderTIQFilms(cards.films_ticketing || {})) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
-            setTrendsIQTab(window.__trendsIQ.activeTab || 'searches');
+            setTrendsIQTab(window.__trendsIQ.activeTab || 'trending');
         }
 
         // ---------- Historical arc drilldown ----------

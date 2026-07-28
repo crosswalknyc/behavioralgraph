@@ -2757,6 +2757,322 @@ def _annotate_with_why(
 
 
 # ============================================================================
+# Fused Trending feed
+# ============================================================================
+# The "Trending" tab is a single ranked feed that fuses every signal in
+# the dashboard: searches, people, wikipedia, movers, music, podcasts,
+# books, social, streaming, films, headlines, philanthropy. Each item's
+# score is:
+#
+#     score = sum_over_sources( rank_score * source_weight )
+#           + (distinct_platforms - 1) * CROSS_PLATFORM_BONUS
+#
+# where rank_score linearly decays from 1.0 (rank #1) to 0 (last rank
+# on that source), source_weight reflects how strong / diverse each
+# signal is, and CROSS_PLATFORM_BONUS rewards items appearing on many
+# distinct tabs (the true "cultural moment" pattern).
+#
+# Weights (higher = louder signal). Movers/breakout gets an outsized
+# multiplier because breakout status IS the definition of "trending"
+# in day-over-day / week-over-week momentum terms; a breakout that
+# also shows on 3 other tabs vaults to the top of the feed.
+_FUSE_WEIGHTS = {
+    'search':            1.00,   # mass intent
+    'people':            1.00,   # already a fused person index
+    'wikipedia':         0.80,   # cultural interest
+    'mover_breakout':    1.50,   # momentum king
+    'mover_rising':      1.10,
+    'mover_sustained':   0.80,
+    'social':            0.90,   # real-time
+    'headlines':         0.70,
+    'streaming':         0.70,
+    'music':             0.70,
+    'films':             0.60,   # theatrical
+    'podcasts':          0.50,
+    'books':             0.50,
+    'philanthropy':      0.40,
+}
+_FUSE_CROSS_PLATFORM_BONUS = 0.25
+_FUSE_MIN_KEY_LEN          = 3
+_FUSE_TOP_N                = 60
+
+# Strip 4-digit year tokens so "The Odyssey (2026)" collapses to
+# "odyssey" - same underlying entity as bare "The Odyssey". Only years
+# in the 1900-2099 range to avoid nuking legit numeric tokens.
+_FUSE_YEAR_RE = re.compile(r'\b(?:19|20)\d{2}\b')
+
+
+def _fuse_normalize(text: str) -> str:
+    """Fusion-key normalization: `_cp_normalize` + year-stripping.
+
+    Two strings hash to the same key iff they refer to the same
+    underlying entity - even across year suffixes and casing / punctuation
+    variations. Used only for the fusion feed; the 🔥 cultural-moment
+    detector keeps using `_cp_normalize` so its cross-platform threshold
+    stays consistent with the row-level `cross_platform` flag.
+    """
+    key = _cp_normalize(text or '')
+    if not key:
+        return ''
+    key = _FUSE_YEAR_RE.sub(' ', key)
+    return re.sub(r'\s+', ' ', key).strip()
+
+
+def _fuse_display_name_choice(current: str, candidate: str) -> str:
+    """Pick the "better looking" display name across two variants of
+    the same entity. Prefers: (1) fewer trailing digits (drops year
+    suffixes), (2) more Title-Cased words, (3) longer non-shouty text.
+    """
+    if not candidate:
+        return current
+    if not current:
+        return candidate
+    # Prefer strings without trailing year parens
+    cur_has_year = bool(_FUSE_YEAR_RE.search(current))
+    can_has_year = bool(_FUSE_YEAR_RE.search(candidate))
+    if cur_has_year and not can_has_year:
+        return candidate
+    if can_has_year and not cur_has_year:
+        return current
+    # Prefer the one with more Title-Cased tokens
+    def _titled(t: str) -> int:
+        return sum(1 for w in t.split() if w[:1].isupper() and not w.isupper())
+    if _titled(candidate) > _titled(current):
+        return candidate
+    # Prefer the shorter one when both are Title Case (dropping a
+    # trailing platform tag)
+    if len(candidate) < len(current) and _titled(candidate) >= _titled(current):
+        return candidate
+    return current
+
+
+def _compute_fused_trending(cards: dict, limit: int = _FUSE_TOP_N) -> list[dict]:
+    """Rank every trending signal in `cards` into a single fused feed.
+
+    Returns a list of `{rank, name, score, platform_count, sources,
+    url, image, why}` dicts sorted by score descending. `sources` is
+    a list of `{tab, tab_label, subtab, rank, url?, image?}` showing
+    where the item is trending.
+
+    Idempotent + pure - safe to call on cached or fresh payloads.
+    """
+    fused: dict[str, dict] = {}
+
+    def _add(text: str, display: str, source_type: str,
+             tab_label: str, subtab_label: Optional[str],
+             rank: int, max_rank: int,
+             url: Optional[str] = None,
+             image: Optional[str] = None) -> None:
+        norm = _fuse_normalize(text)
+        if not norm or len(norm) < _FUSE_MIN_KEY_LEN:
+            return
+        # Rank score: #1 -> 1.0, last -> ~0. Clamp at 0.
+        denom = max(max_rank, 1)
+        rank_score = max(0.0, 1.0 - (rank - 1) / denom)
+        weight  = _FUSE_WEIGHTS.get(source_type, 0.5)
+        weighted = rank_score * weight
+
+        row = fused.setdefault(norm, {
+            'name':     display or text,
+            'score':    0.0,
+            'sources':  [],
+            'image':    None,
+            'best_url': None,
+        })
+        row['score'] += weighted
+        row['sources'].append({
+            'tab':        source_type,
+            'tab_label':  tab_label,
+            'subtab':     subtab_label,
+            'rank':       rank,
+            'url':        url,
+            'image':      image,
+        })
+        row['name'] = _fuse_display_name_choice(row['name'], display or text)
+        # First non-empty image wins (usually people/wikipedia have the
+        # cleanest headshot).
+        if image and not row['image']:
+            row['image'] = image
+        # First non-empty URL wins.
+        if url and not row['best_url']:
+            row['best_url'] = url
+
+    # ---------------- Trending searches ----------------
+    searches = cards.get('trending_searches') or []
+    max_s = min(len(searches), 80)
+    for i, s in enumerate(searches[:max_s]):
+        _add(s.get('term') or s.get('query') or '',
+             s.get('term') or s.get('query') or '',
+             'search', 'Search', 'Overall', i + 1, max_s)
+
+    # ---------------- Trending people ----------------
+    people = cards.get('trending_people') or []
+    max_p = min(len(people), 30)
+    for i, p in enumerate(people[:max_p]):
+        _add(p.get('name') or '', p.get('name') or '',
+             'people', 'Trending people', None, i + 1, max_p,
+             image=p.get('image') or p.get('thumb') or p.get('thumbnail'))
+
+    # ---------------- Wikipedia ----------------
+    wiki = cards.get('wikipedia_trending') or []
+    max_w = min(len(wiki), 30)
+    for i, w in enumerate(wiki[:max_w]):
+        _add(w.get('title') or '', w.get('title') or '',
+             'wikipedia', 'Wikipedia', None, i + 1, max_w,
+             url=w.get('url'),
+             image=w.get('image') or w.get('thumbnail'))
+
+    # ---------------- Movers (breakout / rising / sustained) ----------------
+    movers = cards.get('movers') or {}
+    for bucket_name, source_type in (
+        ('breakout',  'mover_breakout'),
+        ('rising',    'mover_rising'),
+        ('sustained', 'mover_sustained'),
+    ):
+        bucket = movers.get(bucket_name) or []
+        max_b = min(len(bucket), 20)
+        for i, m in enumerate(bucket[:max_b]):
+            _add(m.get('term') or '', m.get('term') or '',
+                 source_type, 'Movers', bucket_name.title(), i + 1, max_b)
+
+    # ---------------- Music (per-source cards) ----------------
+    for src_slug, panel in (cards.get('music_trending') or {}).items():
+        items = (panel or {}).get('items') or []
+        max_i = min(len(items), 25)
+        panel_label = (panel or {}).get('label') or src_slug
+        for i, it in enumerate(items[:max_i]):
+            _add(it.get('title') or '', it.get('title') or '',
+                 'music', 'Music', panel_label, i + 1, max_i,
+                 url=it.get('url'), image=it.get('image'))
+
+    # ---------------- Podcasts ----------------
+    for src_slug, panel in (cards.get('podcasts_trending') or {}).items():
+        items = (panel or {}).get('items') or []
+        max_i = min(len(items), 20)
+        panel_label = (panel or {}).get('label') or src_slug
+        for i, it in enumerate(items[:max_i]):
+            _add(it.get('title') or '', it.get('title') or '',
+                 'podcasts', 'Podcasts', panel_label, i + 1, max_i,
+                 url=it.get('url'), image=it.get('image'))
+
+    # ---------------- Books ----------------
+    for src_slug, panel in (cards.get('books_trending') or {}).items():
+        items = (panel or {}).get('items') or []
+        max_i = min(len(items), 20)
+        panel_label = (panel or {}).get('label') or src_slug
+        for i, it in enumerate(items[:max_i]):
+            _add(it.get('title') or '', it.get('title') or '',
+                 'books', 'Books', panel_label, i + 1, max_i,
+                 url=it.get('url'), image=it.get('image'))
+
+    # ---------------- Films (theatrical ticketing) ----------------
+    for src_slug, panel in (cards.get('films_ticketing') or {}).items():
+        items = (panel or {}).get('items') or []
+        max_i = min(len(items), 20)
+        panel_label = (panel or {}).get('label') or src_slug
+        for i, it in enumerate(items[:max_i]):
+            _add(it.get('title') or '', it.get('title') or '',
+                 'films', 'Films', panel_label, i + 1, max_i,
+                 url=it.get('url'), image=it.get('image'))
+
+    # ---------------- Streaming (film + tv per platform) ----------------
+    for platform_slug, panel in (cards.get('streaming_trending') or {}).items():
+        panel_label = (panel or {}).get('label') or platform_slug
+        for kind in ('film', 'tv'):
+            items = (panel or {}).get(kind) or []
+            max_i = min(len(items), 15)
+            subtab = f'{panel_label} - {kind.title()}'
+            for i, it in enumerate(items[:max_i]):
+                _add(it.get('title') or '', it.get('title') or '',
+                     'streaming', 'Streaming', subtab, i + 1, max_i,
+                     url=it.get('url'), image=it.get('image'))
+
+    # ---------------- Social (posts / videos / topics) ----------------
+    for platform_slug, panel in (cards.get('social_trending') or {}).items():
+        items = (panel or {}).get('items') or []
+        max_i = min(len(items), 20)
+        panel_label = (panel or {}).get('label') or platform_slug
+        for i, it in enumerate(items[:max_i]):
+            text = it.get('title') or it.get('topic') or it.get('hashtag') or ''
+            if not text:
+                continue
+            _add(text, text, 'social', 'Social', panel_label, i + 1, max_i,
+                 url=it.get('url'),
+                 image=it.get('image') or it.get('thumb') or it.get('thumbnail'))
+
+    # ---------------- Headlines ----------------
+    headlines = cards.get('trending_headlines') or []
+    max_h = min(len(headlines), 30)
+    for i, h in enumerate(headlines[:max_h]):
+        _add(h.get('title') or '', h.get('title') or '',
+             'headlines', 'Headlines', None, i + 1, max_h,
+             url=h.get('url'), image=h.get('image'))
+
+    # ---------------- Philanthropy ----------------
+    phil = cards.get('philanthropy_news') or []
+    max_ph = min(len(phil), 15)
+    for i, p in enumerate(phil[:max_ph]):
+        _add(p.get('title') or '', p.get('title') or '',
+             'philanthropy', 'Philanthropy', None, i + 1, max_ph,
+             url=p.get('url'), image=p.get('image'))
+
+    # Cross-platform bonus: count DISTINCT tab labels (not source
+    # instances). "Spotify + Apple Music" is 1 tab (Music), not 2.
+    for row in fused.values():
+        tabs = {s['tab_label'] for s in row['sources'] if s.get('tab_label')}
+        row['platform_count'] = len(tabs)
+        row['score'] += max(0, row['platform_count'] - 1) * _FUSE_CROSS_PLATFORM_BONUS
+
+    # Attach `why` from the daily why_trending snapshot when the
+    # normalized key matches. The snapshot is keyed by `_cp_normalize`
+    # so we look up via that (not the year-stripped fusion key) - a
+    # miss just leaves `why` empty and the frontend renders without
+    # the caption row.
+    why_snap  = _read_snapshot('why_trending') or {}
+    why_items = why_snap.get('items') or {}
+    if why_items:
+        # Build a fusion-key -> why lookup by re-hashing whatever the
+        # snapshot has. Cheaper than reversing every fused entry.
+        why_by_fuse: dict[str, str] = {}
+        for k, v in why_items.items():
+            fk = _fuse_normalize(k)
+            if fk and v and fk not in why_by_fuse:
+                why_by_fuse[fk] = v
+        for norm, row in fused.items():
+            w = why_by_fuse.get(norm) or why_items.get(norm)
+            if w:
+                row['why'] = w
+
+    # Sort by score, take top N.
+    ranked = sorted(fused.values(), key=lambda r: r['score'], reverse=True)
+
+    output: list[dict] = []
+    for i, r in enumerate(ranked[:limit]):
+        # Deduplicate source appearances by (tab, subtab) so the chip
+        # strip doesn't repeat "Music - Spotify Top 200" twice for the
+        # same song. Keep the best (lowest) rank on each (tab, subtab).
+        by_key: dict[tuple, dict] = {}
+        for s in r['sources']:
+            k = (s.get('tab'), s.get('subtab'))
+            existing = by_key.get(k)
+            if not existing or (s.get('rank') or 999) < (existing.get('rank') or 999):
+                by_key[k] = s
+        clean_sources = sorted(by_key.values(),
+                                key=lambda s: (s.get('rank') or 999))
+        output.append({
+            'rank':           i + 1,
+            'name':           r['name'],
+            'score':          round(r['score'], 3),
+            'platform_count': r['platform_count'],
+            'sources':        clean_sources,
+            'url':            r['best_url'],
+            'image':          r['image'],
+            'why':            r.get('why') or '',
+        })
+    return output
+
+
+# ============================================================================
 # Card 2 + 3: Trending headlines and articles by source
 # ============================================================================
 def _parse_rss(body: str, source: str, domain: str, limit: int = 15) -> list[dict]:
@@ -4360,6 +4676,9 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'books_trending':                 book_charts,
             'films_ticketing':                film_sources,
             'libby_trending':                 libby_trends,
+            # `fused_trending` is populated below after the payload
+            # dict is built - it needs the full `cards` slice to fuse.
+            'fused_trending':                 [],
             'philanthropy_news':              philanthropy_news,
             'philanthropy_news_by_source':    philanthropy_by_source,
             'social_trending':                social_trending,
@@ -4412,8 +4731,21 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                            len(movers.get('rising')   or []) +
                            len(movers.get('falling')  or []) +
                            len(movers.get('sustained') or [])),
+            # `trending` is populated below alongside `fused_trending`.
+            'trending':      0,
         },
     }
+
+    # Fused Trending feed - computed after the payload is assembled so
+    # it can score every signal in one pass. Populated in-place on both
+    # the `cards` and `counts` dicts.
+    try:
+        fused = _compute_fused_trending(payload['cards'])
+    except Exception as e:
+        logger.warning("fused trending compute failed: %s", e)
+        fused = []
+    payload['cards']['fused_trending'] = fused
+    payload['counts']['trending']      = len(fused)
 
     _cache_put(filters, payload)
     _write_history_snapshots(headlines, trending_people)
