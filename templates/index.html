@@ -49943,7 +49943,11 @@
                 var gpPost    = Math.round(gpSize * gpPostPct / 100);
                 var gpLiftUsers = gpPost - gpPre;
                 document.getElementById('bpiqKpiGenPopAudience').textContent = _bpiqFmtNum(gpSize);
-                document.getElementById('bpiqKpiGenPopAudienceProj').textContent = '';
+                // Keep the reserved spacer line (matches the Target
+                // Consumers card's static &nbsp;) so the value sits at the
+                // same height in both cards; textContent='' would collapse
+                // this to zero and drop the Control value ~1 line lower.
+                document.getElementById('bpiqKpiGenPopAudienceProj').innerHTML = '&nbsp;';
                 document.getElementById('bpiqKpiGenPopPreUsers').innerHTML  = _bpiqStackedKpi(_bpiqFmtNum(gpPre),  gpPrePct.toFixed(2)  + '%');
                 document.getElementById('bpiqKpiGenPopPostUsers').innerHTML = _bpiqStackedKpi(_bpiqFmtNum(gpPost), gpPostPct.toFixed(2) + '%');
                 var _controlPpHtml = _bpiqFmtPp(gpPostPct - gpPrePct);
