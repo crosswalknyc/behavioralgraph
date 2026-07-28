@@ -4211,6 +4211,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         'music_charts':        lambda: _read_snapshot('music_charts'),
         'podcast_charts':      lambda: _read_snapshot('podcast_charts'),
         'book_charts':         lambda: _read_snapshot('book_charts'),
+        'film_ticketing':      lambda: _read_snapshot('film_ticketing'),
         'libby_trends':        lambda: _read_snapshot('libby_trends'),
         'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
     }
@@ -4257,6 +4258,13 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # Book charts (Amazon Best-Sellers + Apple Books; Audible stubbed).
     book_snap    = results.get('book_charts') or {}
     book_charts  = book_snap.get('sources') or {}
+
+    # Film ticketing (Fandango + Cinemark live; AMC / Regal / Atom
+    # stubbed with cookie-donation guidance until a signed-in session
+    # bypass lands). Runs from Jenna's laptop cron because Hetzner is
+    # IP-blocked by every ticketing platform.
+    film_snap    = results.get('film_ticketing') or {}
+    film_sources = film_snap.get('sources') or {}
 
     # Libby popular for LA County (ebook / audiobook / magazine split).
     libby_snap    = results.get('libby_trends') or {}
@@ -4350,6 +4358,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'music_trending':                 music_charts,
             'podcasts_trending':              podcast_charts,
             'books_trending':                 book_charts,
+            'films_ticketing':                film_sources,
             'libby_trending':                 libby_trends,
             'philanthropy_news':              philanthropy_news,
             'philanthropy_news_by_source':    philanthropy_by_source,
@@ -4395,6 +4404,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                   for k in ('amazon', 'apple', 'audible', 'spotify')) +
                               sum(len(((libby_trends.get(k) or {}).get('items') or []))
                                   for k in ('ebook', 'audiobook', 'magazine'))),
+            'films':         sum(len(((film_sources.get(k) or {}).get('items') or []))
+                                  for k in ('fandango', 'cinemark', 'amc', 'regal', 'atom')),
             'philanthropy':  (len(philanthropy_news) +
                               len(searches_by_category.get('philanthropy') or [])),
             'movers':    (len(movers.get('breakout') or []) +

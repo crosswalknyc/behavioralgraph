@@ -71,6 +71,16 @@ RESIDENTIAL_SCRAPERS = [
     ('tiktok',        'TikTok'),
     ('instagram',     'Instagram'),
     ('x_twitter',     'X'),
+    # Film ticketing (2026-07-28): all 5 platforms IP-block the Hetzner
+    # datacenter. Fandango serves a "Message To Our Fans" placebo page,
+    # Cinemark 403s at the edge, AMC/Regal serve Akamai captcha shells,
+    # and Atom Tickets refuses to hydrate. From the Mac's residential IP,
+    # Fandango + Cinemark return 30 titles each via plain HTTP. AMC/Regal
+    # remain captcha-walled even from residential + Playwright + stealth;
+    # donated amctheatres.com / regmovies.com cookies from a signed-in
+    # Chrome session may unblock them (a passed-captcha session is
+    # trusted for a while) but that path is opt-in via donate_cookies.py.
+    ('film_ticketing', 'Film Ticketing'),
 ]
 
 

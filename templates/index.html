@@ -66033,6 +66033,16 @@
                 short: '41.8M HHs · 03/15–06/30',
                 detail: '41.8M matched U.S. households · 03/15/2026 – 06/30/2026. Observational match; every headline is paired with an incremental-lift read against a matched no-music-touchpoint control cohort.'
             },
+            stages: [
+                { id: 'universe', emoji: '🎵', label: 'Universe',             sub: 'who was exposed to what',                      uses_platform: true  },
+                { id: 'timeline', emoji: '📈', label: 'Discovery Timeline',   sub: 'when the sound moved · when the watch followed', uses_platform: false },
+                { id: 'sound',    emoji: '🎶', label: 'Sound Pages',          sub: 'per-song creator adoption + velocity',         uses_platform: false },
+                { id: 'edits',    emoji: '✂️', label: 'Fan Edits',            sub: 'the clip-with-music creator layer',            uses_platform: false },
+                { id: 'path',     emoji: '🔀', label: 'Cross-Platform Path',  sub: 'the overlap cohort\'s ordering',               uses_platform: false },
+                { id: 'lag',      emoji: '⏱️', label: 'Time-to-Watch',        sub: 'lag from first exposure to first watch',       uses_platform: true  },
+                { id: 'ripple',   emoji: '🔁', label: 'Post-Watch Ripple',    sub: 'DSP lift + viewers becoming creators',         uses_platform: false },
+                { id: 'roi',      emoji: '💰', label: 'Licensing ROI',        sub: 'per-song incremental $ case',                  uses_platform: false }
+            ],
             shows: {
                 nobody_wants_this: {
                     id: 'nobody_wants_this',
