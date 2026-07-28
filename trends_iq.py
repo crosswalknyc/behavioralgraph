@@ -242,12 +242,20 @@ NEWS_FEEDS = [
 # scraper degrades to the coming-soon placeholder instead of a hard fail.
 # Facebook has no viable public trending source and is intentionally
 # omitted (was previously a coming-soon tile; removed 2026-07-07).
+# Instagram and X removed from Social 2026-07-28 per Jenna. Removing
+# them here drops them from every surface that reads through this list:
+#   * The Social tab (no more Instagram / X sub-tabs)
+#   * Movers cross-platform overlap
+#   * Trending People cross-platform overlap
+#   * Cross-platform badges on Music / Trending People rows
+# Their scrapers still run daily and their snapshots still land in
+# `trends_iq_snapshots/latest/{instagram,x}.json` for historical arcs
+# via the History button and for future re-enablement. To restore
+# either surface, re-add the tuple in the desired display order.
 SOCIAL_PLATFORMS = [
     ('reddit',    'Reddit',    True),
     ('youtube',   'YouTube',   False),
     ('tiktok',    'TikTok',    False),
-    ('instagram', 'Instagram', False),
-    ('x',         'X',         False),
 ]
 
 
