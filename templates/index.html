@@ -88633,6 +88633,24 @@
                 });
                 Object.keys(buckets).forEach(k => buckets[k].sort((a,b) => b.fit - a.fit));
 
+                // TEMP relabel (2026-07): the source CSVs don't yet emit a
+                // CREATOR/INFLUENCER subcategory, so creators/influencers fall
+                // into the generic "TALENT" rollup. While the dedicated creator
+                // bucket is empty, surface the generic bucket AS "Creators /
+                // Influencers". Once the CSVs start populating the real
+                // CREATOR/INFLUENCER subcategory, those items route into the
+                // dedicated creator group above and this generic bucket
+                // automatically reverts to "Other Talent" (no double-labeling).
+                const _talentGroup  = groupDefs.find(g => g.key === 'talent');
+                const _creatorGroup = groupDefs.find(g => g.key === 'creator');
+                const _creatorPopulated = !!(_creatorGroup && (buckets[_creatorGroup.key] || []).length);
+                if (_talentGroup && !_creatorPopulated) {
+                    _talentGroup.title    = 'Creators / Influencers';
+                    _talentGroup.icon     = '📱';
+                    _talentGroup.styleKey = 'creator';
+                    _talentGroup.note     = 'Creators / influencers aligned to this audience. (Currently drawn from the general talent pool; a dedicated creator subcategory is coming.)';
+                }
+
                 // Populate the "Sort by Creator Type" dropdown with only the
                 // subcategories that actually have candidates. Preserve the
                 // current selection when still valid, else reset to "all".
@@ -88708,7 +88726,7 @@
                             <div class="marketing-partners-group-head">
                                 <div class="marketing-partners-group-title">
                                     <span style="font-size:1.1rem;">${g.icon}</span>
-                                    <span class="marketing-tier ${g.key}">${g.title}</span>
+                                    <span class="marketing-tier ${g.styleKey || g.key}">${g.title}</span>
                                     <span style="font-size:0.72rem;color:var(--text-secondary);font-weight:500;letter-spacing:0.03em;">${items.length} shown</span>
                                 </div>
                                 <div class="marketing-partners-group-note">${g.note}</div>
