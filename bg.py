@@ -28045,6 +28045,16 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             or (brands[0] if brands else '')
             or ''
         )
+        # 2026-07-28 (rail #5): final format normalizer BEFORE recompute
+        # so the recompute pass finalizes Raw/Proj from post-normalized
+        # BP values. Catches WoF-Avid defect classes 5/6/7/8 (SAMPLE
+        # SIZE drift, phantom raw=0/BP>0 rows, BRAND CATEGORY row
+        # corruption, mixed '%' suffix). Idempotent.
+        try:
+            from post_generation_enforcers import normalize_final_format as _normalize_final
+            df_final, _n_nf = _normalize_final(df_final, _subj_for_recompute, verbose=True)
+        except Exception as _nfe:
+            print(f"   ⚠️ pre-save normalize_final_format skipped: {_nfe}")
         df_final, _n_rp = _recompute_rawproj_pre(df_final, _subj_for_recompute, verbose=True)
     except Exception as _e:
         print(f"   ⚠️ pre-save Raw/Proj recompute skipped: {_e}")

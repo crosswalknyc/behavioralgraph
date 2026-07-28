@@ -7310,6 +7310,197 @@ def strip_youtube_from_wrong_category(df, subject, verbose=True):
 
 
 # ============================================================================
+# Final format normalizer (2026-07-28 pipeline hardening rail #5)
+#
+# Catches the four defect classes flagged on WHEEL OF FORTUNE - Avid Fan.csv
+# (defects 5, 6, 7, 8) that had escaped every prior enforcer:
+#   D5. SAMPLE SIZE Raw drifted from BRAND INPUT Raw (e.g. 151705 vs 151721)
+#   D6. Rows with Original Raw Numbers=0 but Brand Penetration (Row)>0
+#       (phantom cells; LOCATION drifts past 100%)
+#   D7. BRAND CATEGORY row has stale Raw/Proj/CS from the source of the
+#       skin, resulting in an impossible "identical raws across parent
+#       and subset cut" pattern
+#   D8. Mixed '%' suffix in Brand Penetration (Row) — some rows carry it,
+#       some don't, sometimes alternating within one category grid
+#
+# Runs at the tail of run_all_enforcers, right before
+# recompute_raw_and_projection (so the recompute pass finalizes Raw/Proj
+# from the post-normalized BP values).
+# ============================================================================
+
+
+def _norm_col_upper(v):
+    return str(v).strip().upper()
+
+
+def normalize_final_format(df, subject, verbose=True):
+    """Final format normalizer. Idempotent. Safe on any profile csv.
+
+    Applies four fixes in order:
+      1. Strip '%' from every non-empty Brand Penetration (Row) cell so
+         the column is uniformly numeric-as-string (matches TU
+         convention). Dashboard reads both formats, but mixed-in-one-file
+         is a defect signature.
+      2. Zero every row where Original Raw Numbers == 0 but Brand
+         Penetration (Row) > 0 (BP, CS, Raw, Proj -> 0/0.0000/0/0).
+         Then renormalize LOCATION back to 100% since that column is
+         expected to sum to 100 by construction (like demos).
+      3. Blank all numeric fields on the BRAND CATEGORY metadata row
+         (BP, CS, Raw, Proj -> ''). Matches the canonical convention
+         used by Reba - Avid Fan.csv and other clean sibling files.
+      4. Force SAMPLE SIZE Raw to match BRAND INPUT Raw when they drift.
+         Drift shows up as e.g. SAMPLE SIZE = 99.9895% + Raw=151705 but
+         BRAND INPUT Raw=151721. Sets BP=100.0000, Raw=<brand_input_raw>,
+         Proj recomputed from the 10M/329.9M panel formula.
+
+    Returns (df, n_changes). Errors are swallowed (best-effort).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+
+    total = 0
+
+    # --- Fix 1: strip '%' from every BP cell -----------------------------
+    try:
+        bp_series = df[bp_col].astype(str)
+        pct_mask = bp_series.str.contains('%', regex=False, na=False)
+        n_pct = int(pct_mask.sum())
+        if n_pct:
+            df[bp_col] = bp_series.str.replace('%', '', regex=False).str.strip()
+            if verbose:
+                print(f'   [normalize_final] stripped % from {n_pct} '
+                      f'Brand Penetration (Row) cell(s)')
+            total += n_pct
+    except Exception as e:
+        if verbose:
+            print(f'   [normalize_final] Fix 1 (%) failed: {e}')
+
+    # --- Fix 2: zero raw=0 / bp>0 phantom rows ---------------------------
+    zeroed_by_col = {}
+    try:
+        if raw_col is not None:
+            def _to_i(v):
+                try:
+                    return int(float(str(v).replace(',', '').strip()))
+                except Exception:
+                    return None
+            raws = df[raw_col].apply(_to_i)
+            bps  = df[bp_col].apply(_bp)
+            phantom = (raws == 0) & (bps.fillna(0) > 0)
+            if phantom.any():
+                for idx in df.index[phantom]:
+                    cat = _norm_col_upper(df.at[idx, 'Column'])
+                    zeroed_by_col[cat] = zeroed_by_col.get(cat, 0) + 1
+                    df.at[idx, bp_col] = '0.0000'
+                    if cs_col is not None:
+                        df.at[idx, cs_col] = '0.0'
+                    df.at[idx, raw_col] = 0
+                    if proj_col is not None:
+                        df.at[idx, proj_col] = 0
+                n_zeroed = int(phantom.sum())
+                total += n_zeroed
+                if verbose:
+                    parts = ', '.join(
+                        f'{c}={n}' for c, n in sorted(zeroed_by_col.items())
+                    )
+                    print(f'   [normalize_final] zeroed {n_zeroed} phantom '
+                          f'raw=0/BP>0 row(s): {parts}')
+
+                # Renormalize LOCATION back to 100 (LOCATION should sum to
+                # 100% by construction; zeroing phantom rows leaves a small
+                # deficit that this scale corrects).
+                m_loc = (df['Column'].astype(str).str.strip().str.upper()
+                         == 'LOCATION')
+                if m_loc.any():
+                    loc_sum = df.loc[m_loc, bp_col].apply(_bp).fillna(0).sum()
+                    if loc_sum > 0 and abs(loc_sum - 100.0) > 0.01:
+                        scale = 100.0 / loc_sum
+                        for idx in df.index[m_loc]:
+                            v = _bp(df.at[idx, bp_col])
+                            if v is None or v <= 0:
+                                continue
+                            new_v = round(v * scale, 4)
+                            df.at[idx, bp_col] = f'{new_v:.4f}'
+                            # Let recompute_raw_and_projection handle
+                            # Raw/Proj downstream.
+                        if verbose:
+                            print(f'   [normalize_final] renormalized '
+                                  f'LOCATION {loc_sum:.4f}% -> ~100.00%')
+                        total += 1
+    except Exception as e:
+        if verbose:
+            print(f'   [normalize_final] Fix 2 (phantom raw=0) failed: {e}')
+
+    # --- Fix 3: blank numeric fields on BRAND CATEGORY row ---------------
+    try:
+        m_bc = (df['Column'].astype(str).str.strip().str.upper()
+                == 'BRAND CATEGORY')
+        if m_bc.any():
+            n_blanked = 0
+            for idx in df.index[m_bc]:
+                dirty = False
+                for c in (bp_col, cs_col, raw_col, proj_col):
+                    if c is None:
+                        continue
+                    cur = str(df.at[idx, c]).strip()
+                    if cur and cur.lower() not in ('nan', ''):
+                        df.at[idx, c] = ''
+                        dirty = True
+                if dirty:
+                    n_blanked += 1
+            if n_blanked:
+                total += n_blanked
+                if verbose:
+                    print(f'   [normalize_final] blanked numeric fields on '
+                          f'{n_blanked} BRAND CATEGORY row(s)')
+    except Exception as e:
+        if verbose:
+            print(f'   [normalize_final] Fix 3 (BRAND CATEGORY) failed: {e}')
+
+    # --- Fix 4: SAMPLE SIZE Raw must match BRAND INPUT Raw ---------------
+    try:
+        col_u = df['Column'].astype(str).str.strip().str.upper()
+        m_bi = col_u == 'BRAND INPUT'
+        m_ss = col_u == 'SAMPLE SIZE'
+        if m_bi.any() and m_ss.any() and raw_col is not None:
+            def _to_i2(v):
+                try:
+                    return int(float(str(v).replace(',', '').strip()))
+                except Exception:
+                    return None
+            bi_raw = _to_i2(df.loc[m_bi, raw_col].iloc[0])
+            ss_idx = df.index[m_ss][0]
+            ss_raw = _to_i2(df.at[ss_idx, raw_col])
+            if bi_raw and ss_raw is not None and bi_raw != ss_raw:
+                new_proj = int(round(bi_raw / 10_000_000 * US_POP))
+                df.at[ss_idx, bp_col] = '100.0000'
+                df.at[ss_idx, raw_col] = bi_raw
+                if proj_col is not None:
+                    df.at[ss_idx, proj_col] = new_proj
+                # CS on SAMPLE SIZE historically carries the raw count as
+                # a display string (e.g. '151721.0'). Preserve that
+                # convention when the existing value looks like a raw
+                # count rather than a percentage.
+                if cs_col is not None:
+                    cs_val = _to_i2(df.at[ss_idx, cs_col])
+                    if cs_val is not None and cs_val > 200 and cs_val != bi_raw:
+                        df.at[ss_idx, cs_col] = f'{bi_raw}.0'
+                if verbose:
+                    print(f'   [normalize_final] SAMPLE SIZE Raw '
+                          f'{ss_raw} -> {bi_raw} (matched BRAND INPUT)')
+                total += 1
+    except Exception as e:
+        if verbose:
+            print(f'   [normalize_final] Fix 4 (SAMPLE SIZE) failed: {e}')
+
+    return df, total
+
+
+# ============================================================================
 # Convenience wrapper
 # ============================================================================
 
@@ -7721,6 +7912,21 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer renormalize_demographics_to_100 failed: {e}")
+
+    # 2026-07-28 (pipeline hardening rail #5, WoF Avid defects 5/6/7/8):
+    # final format normalizer. Runs immediately BEFORE
+    # recompute_raw_and_projection so the recompute pass finalizes
+    # Raw/Proj from post-normalized BP values.
+    #  D5: SAMPLE SIZE Raw drift from BRAND INPUT Raw
+    #  D6: rows with Raw=0 but BP>0 (phantom cells; LOCATION drift)
+    #  D7: stale numeric fields on the BRAND CATEGORY metadata row
+    #  D8: mixed '%' suffix in Brand Penetration (Row) column
+    # Idempotent — no-op on already-clean files.
+    try:
+        df, n = normalize_final_format(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer normalize_final_format failed: {e}")
 
     # 2026-05-27 (D-Proj): VERY LAST -- recompute Raw + Proj from final BP.
     # Every previous enforcer that touched BP may have left stale Raw/Proj
