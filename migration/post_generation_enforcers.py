@@ -7395,12 +7395,17 @@ def normalize_final_format(df, subject, verbose=True):
                 for idx in df.index[phantom]:
                     cat = _norm_col_upper(df.at[idx, 'Column'])
                     zeroed_by_col[cat] = zeroed_by_col.get(cat, 0) + 1
+                    # Assign strings throughout so we don't trip pandas 2.x's
+                    # strict-dtype guard on object-typed columns
+                    # (Hetzner-only failure signature 2026-07-28: "Invalid
+                    # value '0' for dtype 'str'. Value should be a string
+                    # or missing value, got 'int' instead").
                     df.at[idx, bp_col] = '0.0000'
                     if cs_col is not None:
                         df.at[idx, cs_col] = '0.0'
-                    df.at[idx, raw_col] = 0
+                    df.at[idx, raw_col] = '0'
                     if proj_col is not None:
-                        df.at[idx, proj_col] = 0
+                        df.at[idx, proj_col] = '0'
                 n_zeroed = int(phantom.sum())
                 total += n_zeroed
                 if verbose:
@@ -7477,10 +7482,12 @@ def normalize_final_format(df, subject, verbose=True):
             ss_raw = _to_i2(df.at[ss_idx, raw_col])
             if bi_raw and ss_raw is not None and bi_raw != ss_raw:
                 new_proj = int(round(bi_raw / 10_000_000 * US_POP))
+                # Strings throughout — see phantom-zero note above for the
+                # pandas 2.x strict-dtype rationale.
                 df.at[ss_idx, bp_col] = '100.0000'
-                df.at[ss_idx, raw_col] = bi_raw
+                df.at[ss_idx, raw_col] = str(bi_raw)
                 if proj_col is not None:
-                    df.at[ss_idx, proj_col] = new_proj
+                    df.at[ss_idx, proj_col] = str(new_proj)
                 # CS on SAMPLE SIZE historically carries the raw count as
                 # a display string (e.g. '151721.0'). Preserve that
                 # convention when the existing value looks like a raw
