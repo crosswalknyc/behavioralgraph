@@ -23649,7 +23649,14 @@
                 letter-spacing: 0.02em;
             }
             #trendsIQView .tiq-apply-btn:hover { filter: brightness(1.1); }
-            #trendsIQView .tiq-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; font-size: 0.78rem; color: var(--text-secondary); }
+            #trendsIQView .tiq-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; font-size: 0.78rem; color: var(--text-secondary); gap: 0.75rem; flex-wrap: wrap; }
+            #trendsIQView .tiq-meta-right { display: inline-flex; align-items: center; gap: 0.6rem; }
+            /* Refresh button lives next to the "Updated ..." stamp. Clicking it force-refreshes the S3 cache tuple for the current filter; because the cache is shared across all users, one user's refresh updates the "Updated ..." stamp for everyone. */
+            #trendsIQView .tiq-refresh-btn { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.7rem; background: rgba(124, 58, 237, 0.12); color: var(--text-primary); border: 1px solid rgba(124, 58, 237, 0.35); border-radius: 6px; font-size: 0.75rem; font-weight: 500; cursor: pointer; letter-spacing: 0.02em; transition: background 140ms ease, opacity 140ms ease; }
+            #trendsIQView .tiq-refresh-btn:hover { background: rgba(124, 58, 237, 0.24); }
+            #trendsIQView .tiq-refresh-btn[disabled] { opacity: 0.55; cursor: progress; }
+            #trendsIQView .tiq-refresh-icon { display: inline-block; font-size: 0.95rem; line-height: 1; transform: translateY(-1px); }
+            #trendsIQView .tiq-refresh-btn.is-spinning .tiq-refresh-icon { animation: tiqSpin 0.8s linear infinite; }
             #trendsIQView .tiq-loading-overlay { display: flex; align-items: center; gap: 0.6rem; padding: 0.75rem 1rem; background: rgba(124, 58, 237, 0.08); border: 1px solid rgba(124, 58, 237, 0.28); border-radius: 8px; color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.85rem; }
             #trendsIQView .tiq-spinner { width: 16px; height: 16px; border: 2px solid rgba(124, 58, 237, 0.35); border-top-color: #7c3aed; border-radius: 50%; animation: tiqSpin 0.8s linear infinite; }
             @keyframes tiqSpin { to { transform: rotate(360deg); } }
@@ -23940,7 +23947,17 @@
             </div>
             <div class="tiq-meta">
                 <span id="trendsIQMeta">Set filters and click Apply.</span>
-                <span id="trendsIQUpdatedAt"></span>
+                <span class="tiq-meta-right">
+                    <span id="trendsIQUpdatedAt"></span>
+                    <button type="button" id="trendsIQRefreshBtn"
+                            class="tiq-refresh-btn"
+                            title="Refresh trends now. Any user's refresh updates the timestamp for everyone."
+                            onclick="refreshTrendsIQNow()"
+                            style="display: none;">
+                        <span class="tiq-refresh-icon" aria-hidden="true">&#x21bb;</span>
+                        <span class="tiq-refresh-label">Refresh</span>
+                    </button>
+                </span>
             </div>
             <div id="trendsIQLoading" class="tiq-loading-overlay" style="display: none;">
                 <div class="tiq-spinner"></div>
@@ -44287,7 +44304,9 @@
             });
         }
 
-        async function applyTrendsIQFilters() {
+        async function applyTrendsIQFilters(opts) {
+            opts = opts || {};
+            var forceRefresh = !!opts.forceRefresh;
             var filters = {
                 geo_type:      document.getElementById('trendsIQGeoType').value || 'National',
                 geo_value:     document.getElementById('trendsIQGeoValue').value || '',
@@ -44297,19 +44316,36 @@
                 document.getElementById('trendsIQMeta').textContent = 'Pick a region or switch to National.';
                 return;
             }
+            // Refresh button state: swap the label to a spinner while the
+            // force-refresh round-trip is in flight. Whoever wins the race
+            // writes the fresh S3 cache tuple; every other user's next hit
+            // is a cheap cache read that lands on the same "Updated ..."
+            // stamp.
+            var refreshBtn = document.getElementById('trendsIQRefreshBtn');
+            if (forceRefresh && refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.classList.add('is-spinning');
+                var lbl = refreshBtn.querySelector('.tiq-refresh-label');
+                if (lbl) lbl.textContent = 'Refreshing...';
+            }
             document.getElementById('trendsIQLoading').style.display = 'flex';
             document.getElementById('trendsIQTabStrip').style.display = 'none';
             document.getElementById('trendsIQPanels').innerHTML = '';
-            document.getElementById('trendsIQMeta').textContent = 'Fetching trends for ' + (filters.geo_type === 'National' ? 'National' : filters.geo_value) + ' (last ' + filters.lookback_days + 'd)...';
+            document.getElementById('trendsIQMeta').textContent =
+                (forceRefresh ? 'Refreshing trends for ' : 'Fetching trends for ')
+                + (filters.geo_type === 'National' ? 'National' : filters.geo_value)
+                + ' (last ' + filters.lookback_days + 'd)...';
             try {
                 if (window.__trendsIQ.inFlight) { try { window.__trendsIQ.inFlight.abort(); } catch (e) {} }
                 var ctrl = new AbortController();
                 window.__trendsIQ.inFlight = ctrl;
+                var body = Object.assign({}, filters);
+                if (forceRefresh) body.force_refresh = true;
                 var resp = await fetch('/api/trends-iq/data', {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(filters),
+                    body: JSON.stringify(body),
                     signal: ctrl.signal,
                 });
                 var data = await resp.json();
@@ -44323,7 +44359,21 @@
             } finally {
                 document.getElementById('trendsIQLoading').style.display = 'none';
                 window.__trendsIQ.inFlight = null;
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.classList.remove('is-spinning');
+                    var lblAfter = refreshBtn.querySelector('.tiq-refresh-label');
+                    if (lblAfter) lblAfter.textContent = 'Refresh';
+                }
             }
+        }
+
+        // Force-refresh entry point. Wired to the Refresh button next to the
+        // "Updated ..." stamp. Sends force_refresh:true so the backend
+        // recomputes the S3 cache tuple; every other user who visits after
+        // this returns gets the same fresh data (24h TTL).
+        function refreshTrendsIQNow() {
+            applyTrendsIQFilters({ forceRefresh: true });
         }
 
         function _tiqEsc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -44390,6 +44440,11 @@
                 var d = new Date(data.generated_at);
                 updatedAt.textContent = 'Updated ' + d.toLocaleString();
             }
+            // Refresh button becomes visible as soon as we have data in
+            // hand. It stays hidden on the initial "click Apply" copy so
+            // there's nothing to click before the first fetch lands.
+            var refreshBtnShow = document.getElementById('trendsIQRefreshBtn');
+            if (refreshBtnShow) refreshBtnShow.style.display = 'inline-flex';
 
             var watchCount = (window.__trendsIQ.watchList || []).length;
             // "By news source" is nested inside Headlines as a pill
