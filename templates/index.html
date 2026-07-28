@@ -34342,6 +34342,31 @@
                     <div id="jiqObsCompBody"></div>
                 </div>
 
+                <!-- ═══════════════════════════════════════════════════════════════
+                     MUSIC-DRIVEN DISCOVERY · Nobody Wants This + Heated Rivalry
+                     ═══════════════════════════════════════════════════════════════
+                     Single card that internally toggles between:
+                        · Two shows          (Nobody Wants This / Heated Rivalry)
+                        · Three platform lenses (All / TikTok / Instagram)
+                     and renders a two-circle Venn (music-only vs clip-with-music),
+                     a topline tile strip, and a song-level table with mini Venns.
+                     Everything ladders to a single 41.8M matched-HH panel basis. -->
+                <div class="card" id="jiqMusicInfluenceCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(244,114,182,0.05) 0%, rgba(56,189,248,0.05) 100%);
+                            border: 1px solid rgba(244,114,182,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqMusicInfluenceTitle" style="margin: 0;">🎵 Music-driven discovery · did the song get them to watch?</h3>
+                        <div id="jiqMusicInfluenceMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqMusicInfluenceSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;">
+                        Music exposure on TikTok + Instagram fused with Netflix viewership. Show tabs switch the show; platform pills switch the social surface.
+                    </div>
+                    <div id="jiqMusicShowTabs" style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.65rem;"></div>
+                    <div id="jiqMusicPlatformTabs" style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem;"></div>
+                    <div id="jiqMusicInfluenceBody"></div>
+                </div>
+
             </div>
         </div><!-- End journeyIQView -->
 
@@ -54632,6 +54657,9 @@
                         platforms: [
                             { value: '__demo_netflix_ad_sales__', label: 'Netflix' }
                         ],
+                        tv: [
+                            { value: '__demo_music_influence__',  label: 'Music-Driven Discovery' }
+                        ],
                         movie: [
                             { value: '__demo_obsession_caa__',    label: 'Obsession' }
                         ]
@@ -54708,6 +54736,31 @@
         // for any of the always-available pitch-demo keys, or null when
         // the key is a normal backend run that should fetch as usual.
         function _jiqMaybeHydrateDemoRun(key) {
+            if (key === '__demo_music_influence__') {
+                return {
+                    success: true,
+                    data: {
+                        meta: {
+                            story_mode: 'music_influence',
+                            target_name: 'Music-Driven Discovery',
+                            target_display: 'Music-Driven Discovery · Nobody Wants This + Heated Rivalry',
+                            project_name: 'Music-Driven Discovery',
+                            customer_brand: 'Netflix Music',
+                            start_date: '2026-03-15',
+                            end_date: '2026-06-30',
+                            target_type: 'music_discovery_read',
+                            category: 'tv_music_licensing'
+                        },
+                        music_influence: _JIQ_MUSIC_DATA,
+                        facts: [
+                            { label: 'Panel',   value: '41.8M matched U.S. households · streaming-cookie deterministic + social-graph probabilistic · 03/15 – 06/30.' },
+                            { label: 'Nobody Wants This', value: '58.8% of viewers had a music-linked touchpoint on TikTok or Instagram before their first watch. Audio-only exposure alone reached 3.78M HHs.' },
+                            { label: 'Heated Rivalry',    value: '67.6% of viewers had a music touchpoint — the highest observed for any Netflix title this quarter. t.A.T.u. sound-page traffic 2xed its historical baseline the week the show dropped.' },
+                            { label: 'Read',    value: 'Clip-only exposure is the marketing-driven segment. Audio-only exposure is the earned-media flywheel. The overlap is where music licensing decisions pay for themselves.' }
+                        ]
+                    }
+                };
+            }
             if (key === '__demo_obsession_caa__') {
                 return {
                     success: true,
@@ -56452,9 +56505,11 @@
             _jiqHideCard('jiqObsCommerceCard');
             _jiqHideCard('jiqObsBrandCard');
             _jiqHideCard('jiqObsCompCard');
+            _jiqHideCard('jiqMusicInfluenceCard');
 
             var _isObsessionStory = (_storyMode === 'obsession_caa');
             var _isNetflixStory   = (_storyMode === 'netflix_ad_sales');
+            var _isMusicStory     = (_storyMode === 'music_influence');
             if (_isNetflixStory) {
                 if (typeof renderJourneyIqNflxPreSignup === 'function') {
                     renderJourneyIqNflxPreSignup(_pickClickstreamBlock('nflx_pre_signup'));
@@ -56519,6 +56574,15 @@
                 }
             } else {
                 if (typeof _jiqObsHideTabBar === 'function') _jiqObsHideTabBar();
+            }
+
+            // Music-driven discovery branch - single card that internally
+            // switches between Nobody Wants This / Heated Rivalry (show
+            // tabs) and TikTok / Instagram / All (platform pills).
+            if (_isMusicStory) {
+                if (typeof renderJourneyIqMusicInfluence === 'function') {
+                    renderJourneyIqMusicInfluence(_pickClickstreamBlock('music_influence'));
+                }
             }
 
             // Facts - facts can be plain strings or {label, value} dicts.
@@ -66055,6 +66119,144 @@
             }
         };
 
+        // ══════════════════════════════════════════════════════════════
+        // MUSIC-DRIVEN DISCOVERY DATA BLOCK
+        // ══════════════════════════════════════════════════════════════
+        // Answers: "Did engagement with music from a Netflix show on
+        // TikTok/Instagram drive tune-in?" — surfaces the overlap and
+        // unique populations of "music no clips" vs "music + clips",
+        // sliced by platform and by song. All numbers are synthesized
+        // for demo; they ladder to a single household panel basis so
+        // every percentage in the deck is mathematically consistent.
+        //
+        // Panel basis: 41.8M matched U.S. households, streaming-cookie
+        // deterministic + social-graph probabilistic, 03/15 → 06/30.
+        //
+        // Cohort definitions (per show):
+        //   viewers                     — hh that watched ≥1 min of show
+        //   viewers_no_music_touchpoint — viewers with NO known TikTok
+        //                                 or Instagram exposure to the
+        //                                 show's music, licensed or org.
+        //   viewers_music_only          — exposed to music-only content
+        //                                 (audio-forward posts, sound
+        //                                 pages, filter reels; NO clip
+        //                                 of the show visible)
+        //   viewers_clips_only          — saw clips of the show scored
+        //                                 to the licensed track, but
+        //                                 never the audio-only content
+        //   viewers_music_and_clips     — exposed to BOTH audio-only
+        //                                 and clip-with-music content
+        //
+        // Percentages sum to 100% of the viewer denominator.
+        // ──────────────────────────────────────────────────────────────
+        var _JIQ_MUSIC_DATA = {
+            panel_basis: {
+                label: 'Panel basis',
+                short: '41.8M HHs · 03/15–06/30',
+                detail: '41.8M matched U.S. households · deterministic streaming cookie + probabilistic social graph · 03/15/2026 – 06/30/2026 · Netflix viewership fused with TikTok + Instagram exposure logs.'
+            },
+            shows: {
+                nobody_wants_this: {
+                    id: 'nobody_wants_this',
+                    label: 'Nobody Wants This',
+                    subtitle: 'S2 · music-driven discovery read',
+                    viewers_hh: 6420000,
+                    accent: '#f472b6',
+                    accent_dark: '#be185d',
+                    platforms: {
+                        all: {
+                            label: 'All social (TikTok + Instagram)',
+                            no_music_pct: 41.2,
+                            music_only_pct: 18.4,
+                            clips_only_pct: 21.7,
+                            music_and_clips_pct: 18.7,
+                            music_reach_hh: 3781000,
+                            clips_reach_hh: 2596000,
+                            note: '58.8% of viewers had at least one music-linked touchpoint before their first watch — the largest single upper-funnel signal in the show.'
+                        },
+                        tiktok: {
+                            label: 'TikTok',
+                            no_music_pct: 52.6,
+                            music_only_pct: 14.1,
+                            clips_only_pct: 19.2,
+                            music_and_clips_pct: 14.1,
+                            music_reach_hh: 1811000,
+                            clips_reach_hh: 2138000,
+                            note: 'TikTok skews clip-forward — the Summer Girl / Feist sound pages seeded the audio, but the clip edits did the conversion work.'
+                        },
+                        instagram: {
+                            label: 'Instagram',
+                            no_music_pct: 64.8,
+                            music_only_pct: 12.7,
+                            clips_only_pct: 12.4,
+                            music_and_clips_pct: 10.1,
+                            music_reach_hh: 1465000,
+                            clips_reach_hh: 1445000,
+                            note: 'Instagram is more music-only-heavy — Reels using the tracks over unrelated aesthetic content still drove a measurable 22.8% music-exposed viewer share.'
+                        }
+                    },
+                    songs: [
+                        { title: 'Summer Girl',                                    artist: 'HAIM',                     music_only_pct: 6.4, clips_only_pct: 7.8, music_and_clips_pct: 6.9, note: 'The show\'s emotional-throughline song; sound page peaked week 3.' },
+                        { title: 'See Her Out (That\'s Just Life)',                 artist: 'Francis and the Lights',   music_only_pct: 3.1, clips_only_pct: 4.2, music_and_clips_pct: 3.6, note: 'Slow burn — clip-lift dominated after episode 5 aired.' },
+                        { title: 'Love on the Brain',                              artist: 'Rihanna',                  music_only_pct: 4.8, clips_only_pct: 3.1, music_and_clips_pct: 3.7, note: 'Music-heavy — pre-existing catalog audio already had a large TikTok footprint.' },
+                        { title: 'Water the Flowers, Pray for a Garden',           artist: 'Valley',                   music_only_pct: 2.1, clips_only_pct: 3.9, music_and_clips_pct: 2.4, note: 'Clip-dominant; the finale montage did the work.' },
+                        { title: 'You & I',                                        artist: 'LÉON',                     music_only_pct: 2.0, clips_only_pct: 2.7, music_and_clips_pct: 2.1, note: 'Steady long-tail lift on Reels.' }
+                    ]
+                },
+                heated_rivalry: {
+                    id: 'heated_rivalry',
+                    label: 'Heated Rivalry',
+                    subtitle: 'S1 · music-driven discovery read',
+                    viewers_hh: 4180000,
+                    accent: '#38bdf8',
+                    accent_dark: '#0369a1',
+                    platforms: {
+                        all: {
+                            label: 'All social (TikTok + Instagram)',
+                            no_music_pct: 32.4,
+                            music_only_pct: 15.8,
+                            clips_only_pct: 27.3,
+                            music_and_clips_pct: 24.5,
+                            music_reach_hh: 1685000,
+                            clips_reach_hh: 2166000,
+                            note: '67.6% of viewers had a music-linked touchpoint — the highest observed for any Netflix title in the panel this quarter. Fan-edit-driven show.'
+                        },
+                        tiktok: {
+                            label: 'TikTok',
+                            no_music_pct: 39.1,
+                            music_only_pct: 12.2,
+                            clips_only_pct: 27.6,
+                            music_and_clips_pct: 21.1,
+                            music_reach_hh: 1392000,
+                            clips_reach_hh: 2036000,
+                            note: 'TikTok is where the show was made — t.A.T.u. resurgence + Harrison cover fan-edits were the single largest discovery driver.'
+                        },
+                        instagram: {
+                            label: 'Instagram',
+                            no_music_pct: 57.8,
+                            music_only_pct: 10.3,
+                            clips_only_pct: 20.4,
+                            music_and_clips_pct: 11.5,
+                            music_reach_hh: 912000,
+                            clips_reach_hh: 1334000,
+                            note: 'Instagram Reels amplified the clip-with-music combo but never sparked the catalytic sound moment TikTok did.'
+                        }
+                    },
+                    songs: [
+                        { title: 'All the Things She Said',                        artist: 't.A.T.u.',                 music_only_pct: 6.9, clips_only_pct: 9.1, music_and_clips_pct: 9.4, note: 'Cultural relaunch — the sound page 2xed its historical baseline the week the show dropped.' },
+                        { title: 'All the Things She Said (cover)',                artist: 'Harrison',                 music_only_pct: 3.4, clips_only_pct: 5.2, music_and_clips_pct: 4.6, note: 'The cover soundtracked ~38% of the top fan-edits, driving both music and clip lift.' },
+                        { title: 'My Moon My Man',                                 artist: 'Feist',                    music_only_pct: 2.1, clips_only_pct: 4.7, music_and_clips_pct: 3.2, note: 'Music-only lift was quiet; the finale scene did most of the clip conversion.' },
+                        { title: 'I\'ll Believe in Anything',                       artist: 'Wolf Parade',              music_only_pct: 1.8, clips_only_pct: 4.8, music_and_clips_pct: 3.1, note: 'The emotional peak needle-drop — clip-dominant discovery.' },
+                        { title: 'Mangetout',                                      artist: 'Wet Leg',                  music_only_pct: 1.6, clips_only_pct: 3.5, music_and_clips_pct: 4.2, note: 'The overlap cohort here is unusually high — same fans engaged with the audio AND the show clips.' }
+                    ]
+                }
+            },
+            pitch: {
+                headline: 'Music is upper-funnel discovery, not just soundtrack.',
+                body: '58.8% of Nobody Wants This viewers and 67.6% of Heated Rivalry viewers had a music-linked touchpoint on TikTok or Instagram before their first watch. Audio-only exposure (no clip) reached 3.78M HHs across Nobody Wants This and 1.69M HHs across Heated Rivalry — a discovery surface that pure clip-based attribution misses. The clip-only cohort is the marketing-driven segment; the audio-only cohort is the earned-media flywheel. The overlap is where music licensing decisions pay for themselves.'
+            }
+        };
+
         // ──────────────────────────────────────────────────────────────
         // SHARED RENDERER HELPERS for the Netflix block
         // ──────────────────────────────────────────────────────────────
@@ -67069,6 +67271,278 @@
             var takeaway = '';
 
             body.innerHTML = deiHeadHtml + compHtml + antiHtml + benchHtml + takeaway;
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // MUSIC-DRIVEN DISCOVERY · renderer + Venn primitives
+        // ══════════════════════════════════════════════════════════════
+        // Two-circle area-proportional Venn. The `audio` circle
+        // represents everyone with a music-only touchpoint (music_only
+        // + music_and_clips) and the `clips` circle represents everyone
+        // exposed to a clip that used the licensed track (clips_only +
+        // music_and_clips). The lens/overlap sits in the middle; the
+        // "no music" cohort is rendered as a surrounding badge, not a
+        // circle, because a giant containing ring would swamp the two
+        // interesting cohorts visually.
+        function _jiqRenderMusicVenn(opts) {
+            var W = opts.width  || 460;
+            var H = opts.height || 260;
+            var audioPct = Number(opts.music_only_pct || 0) + Number(opts.music_and_clips_pct || 0);
+            var clipsPct = Number(opts.clips_only_pct || 0) + Number(opts.music_and_clips_pct || 0);
+            var overlap  = Number(opts.music_and_clips_pct || 0);
+            var noPct    = Number(opts.no_music_pct || 0);
+            var accent   = opts.accent || '#f472b6';
+            var accent2  = opts.accent2 || '#38bdf8';
+            var maxR = Math.min(W, H) * 0.36;
+            var minR = Math.min(W, H) * 0.12;
+            var maxPct = Math.max(audioPct, clipsPct, 1);
+            function radiusFor(p) {
+                return minR + (Math.sqrt(Math.max(p, 0) / maxPct)) * (maxR - minR);
+            }
+            var rA = radiusFor(audioPct);
+            var rC = radiusFor(clipsPct);
+            var overlapRatio = overlap / Math.max(Math.min(audioPct, clipsPct), 0.0001);
+            overlapRatio = Math.max(0, Math.min(0.95, overlapRatio));
+            var d = (rA + rC) * (1 - overlapRatio * 0.75);
+            var cy = H / 2 + 6;
+            var cxA = (W / 2) - (d / 2);
+            var cxC = (W / 2) + (d / 2);
+            var svg = ''
+                + '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="' + H + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Music vs clips exposure Venn">'
+                +   '<defs>'
+                +     '<radialGradient id="jiqMusicGradA" cx="50%" cy="50%" r="50%">'
+                +       '<stop offset="0%"  stop-color="' + accent + '" stop-opacity="0.55"/>'
+                +       '<stop offset="100%" stop-color="' + accent + '" stop-opacity="0.18"/>'
+                +     '</radialGradient>'
+                +     '<radialGradient id="jiqMusicGradC" cx="50%" cy="50%" r="50%">'
+                +       '<stop offset="0%"  stop-color="' + accent2 + '" stop-opacity="0.55"/>'
+                +       '<stop offset="100%" stop-color="' + accent2 + '" stop-opacity="0.18"/>'
+                +     '</radialGradient>'
+                +   '</defs>'
+                +   '<rect x="6" y="6" width="' + (W - 12) + '" height="' + (H - 12) + '" rx="12" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.06)"/>'
+                +   '<circle cx="' + cxA.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + rA.toFixed(1) + '"'
+                +          ' fill="url(#jiqMusicGradA)" stroke="' + accent + '" stroke-width="1.6"/>'
+                +   '<circle cx="' + cxC.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + rC.toFixed(1) + '"'
+                +          ' fill="url(#jiqMusicGradC)" stroke="' + accent2 + '" stroke-width="1.6"/>'
+                +   '<text x="' + (cxA - rA * 0.55).toFixed(1) + '" y="' + (cy - 6).toFixed(1) + '" text-anchor="middle"'
+                +        ' fill="#fce7f3" font-size="10.5" font-weight="700" letter-spacing="0.06em">MUSIC ONLY</text>'
+                +   '<text x="' + (cxA - rA * 0.55).toFixed(1) + '" y="' + (cy + 12).toFixed(1) + '" text-anchor="middle"'
+                +        ' fill="#fff" font-size="18" font-weight="900">' + Number(opts.music_only_pct || 0).toFixed(1) + '%</text>'
+                +   '<text x="' + (cxC + rC * 0.55).toFixed(1) + '" y="' + (cy - 6).toFixed(1) + '" text-anchor="middle"'
+                +        ' fill="#bae6fd" font-size="10.5" font-weight="700" letter-spacing="0.06em">CLIPS ONLY</text>'
+                +   '<text x="' + (cxC + rC * 0.55).toFixed(1) + '" y="' + (cy + 12).toFixed(1) + '" text-anchor="middle"'
+                +        ' fill="#fff" font-size="18" font-weight="900">' + Number(opts.clips_only_pct || 0).toFixed(1) + '%</text>'
+                +   '<text x="' + (W / 2).toFixed(1) + '" y="' + (cy - 6).toFixed(1) + '" text-anchor="middle"'
+                +        ' fill="#f5f5f5" font-size="10.5" font-weight="700" letter-spacing="0.06em">BOTH</text>'
+                +   '<text x="' + (W / 2).toFixed(1) + '" y="' + (cy + 12).toFixed(1) + '" text-anchor="middle"'
+                +        ' fill="#fff" font-size="20" font-weight="900">' + overlap.toFixed(1) + '%</text>'
+                +   '<g>'
+                +     '<rect x="14" y="14" width="150" height="46" rx="7" fill="rgba(15,23,42,0.55)" stroke="rgba(255,255,255,0.12)"/>'
+                +     '<text x="24" y="32" fill="rgba(255,255,255,0.65)" font-size="9.5" font-weight="700" letter-spacing="0.08em">NO MUSIC TOUCHPOINT</text>'
+                +     '<text x="24" y="52" fill="#fff" font-size="18" font-weight="900">' + noPct.toFixed(1) + '%</text>'
+                +   '</g>'
+                + '</svg>';
+            return svg;
+        }
+
+        // Compact Venn for the per-song table row. Same math, simpler
+        // frame, no legend/labels — the row already carries the song
+        // title and artist to the left.
+        function _jiqRenderMusicMiniVenn(opts) {
+            var W = 130;
+            var H = 60;
+            var audioPct = Number(opts.music_only_pct || 0) + Number(opts.music_and_clips_pct || 0);
+            var clipsPct = Number(opts.clips_only_pct || 0) + Number(opts.music_and_clips_pct || 0);
+            var overlap  = Number(opts.music_and_clips_pct || 0);
+            var accent   = opts.accent || '#f472b6';
+            var accent2  = opts.accent2 || '#38bdf8';
+            var maxR = 22, minR = 8;
+            var maxPct = Math.max(audioPct, clipsPct, 1);
+            function r(p) { return minR + (Math.sqrt(Math.max(p, 0) / maxPct)) * (maxR - minR); }
+            var rA = r(audioPct), rC = r(clipsPct);
+            var overlapRatio = overlap / Math.max(Math.min(audioPct, clipsPct), 0.0001);
+            overlapRatio = Math.max(0, Math.min(0.95, overlapRatio));
+            var d = (rA + rC) * (1 - overlapRatio * 0.75);
+            var cy = H / 2;
+            var cxA = (W / 2) - (d / 2);
+            var cxC = (W / 2) + (d / 2);
+            return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" xmlns="http://www.w3.org/2000/svg">'
+                +    '<circle cx="' + cxA.toFixed(1) + '" cy="' + cy + '" r="' + rA.toFixed(1) + '"'
+                +           ' fill="' + accent + '" fill-opacity="0.35" stroke="' + accent + '" stroke-width="1"/>'
+                +    '<circle cx="' + cxC.toFixed(1) + '" cy="' + cy + '" r="' + rC.toFixed(1) + '"'
+                +           ' fill="' + accent2 + '" fill-opacity="0.35" stroke="' + accent2 + '" stroke-width="1"/>'
+                + '</svg>';
+        }
+
+        // Active-state trackers survive re-renders so the dispatcher
+        // can call renderJourneyIqMusicInfluence repeatedly without
+        // resetting the show / platform the user picked.
+        var _jiqMusicActiveShow     = 'nobody_wants_this';
+        var _jiqMusicActivePlatform = 'all';
+
+        function renderJourneyIqMusicInfluence(p) {
+            var data = (p && p.shows) ? p : _JIQ_MUSIC_DATA;
+            if (!data || !data.shows) { _jiqHideCard('jiqMusicInfluenceCard'); return; }
+            var card = document.getElementById('jiqMusicInfluenceCard');
+            if (!card) return;
+            card.style.display = '';
+
+            var meta = document.getElementById('jiqMusicInfluenceMeta');
+            if (meta && typeof _jiqStudyDateChip === 'function') {
+                meta.innerHTML = _jiqStudyDateChip({ short: (data.panel_basis && data.panel_basis.short) || '' });
+            } else if (meta) {
+                meta.textContent = (data.panel_basis && data.panel_basis.short) || '';
+            }
+
+            var showKeys = Object.keys(data.shows);
+            if (showKeys.indexOf(_jiqMusicActiveShow) === -1) _jiqMusicActiveShow = showKeys[0];
+            var showTabsEl = document.getElementById('jiqMusicShowTabs');
+            if (showTabsEl) {
+                showTabsEl.innerHTML = showKeys.map(function(k) {
+                    var s = data.shows[k];
+                    var on = (k === _jiqMusicActiveShow);
+                    return '<button type="button" data-show="' + k + '"'
+                         + ' style="padding:0.4rem 0.85rem; border-radius:6px; font-size:0.78rem; font-weight:700; cursor:pointer;'
+                         +        ' border:1px solid ' + (on ? s.accent : 'rgba(255,255,255,0.14)') + ';'
+                         +        ' background:' + (on ? (s.accent + '22') : 'rgba(255,255,255,0.03)') + ';'
+                         +        ' color:' + (on ? s.accent : 'var(--text-secondary)') + ';">'
+                         + '🎬 ' + _jiqEsc(s.label)
+                         + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(showTabsEl.querySelectorAll('button'), function(btn) {
+                    btn.addEventListener('click', function() {
+                        _jiqMusicActiveShow = btn.getAttribute('data-show');
+                        renderJourneyIqMusicInfluence(data);
+                    });
+                });
+            }
+
+            var show = data.shows[_jiqMusicActiveShow];
+            var platforms = show.platforms || {};
+            var platKeys = Object.keys(platforms);
+            if (platKeys.indexOf(_jiqMusicActivePlatform) === -1) _jiqMusicActivePlatform = platKeys[0];
+            var platTabsEl = document.getElementById('jiqMusicPlatformTabs');
+            if (platTabsEl) {
+                var platEmoji = { all: '🌐', tiktok: '🎵', instagram: '📸' };
+                platTabsEl.innerHTML = platKeys.map(function(k) {
+                    var pd = platforms[k];
+                    var on = (k === _jiqMusicActivePlatform);
+                    return '<button type="button" data-platform="' + k + '"'
+                         + ' style="padding:0.32rem 0.75rem; border-radius:5px; font-size:0.72rem; font-weight:700; cursor:pointer;'
+                         +        ' border:1px solid ' + (on ? show.accent : 'rgba(255,255,255,0.14)') + ';'
+                         +        ' background:' + (on ? (show.accent + '22') : 'rgba(255,255,255,0.03)') + ';'
+                         +        ' color:' + (on ? show.accent : 'var(--text-secondary)') + ';">'
+                         + (platEmoji[k] || '·') + ' ' + _jiqEsc(pd.label || k)
+                         + '</button>';
+                }).join('');
+                Array.prototype.forEach.call(platTabsEl.querySelectorAll('button'), function(btn) {
+                    btn.addEventListener('click', function() {
+                        _jiqMusicActivePlatform = btn.getAttribute('data-platform');
+                        renderJourneyIqMusicInfluence(data);
+                    });
+                });
+            }
+
+            var slice = platforms[_jiqMusicActivePlatform] || {};
+            var body = document.getElementById('jiqMusicInfluenceBody');
+            if (!body) return;
+
+            var totalMusicPct   = Number(slice.music_only_pct || 0) + Number(slice.music_and_clips_pct || 0);
+            var totalClipsPct   = Number(slice.clips_only_pct || 0) + Number(slice.music_and_clips_pct || 0);
+            var anyExposurePct  = totalMusicPct + Number(slice.clips_only_pct || 0);
+            var viewersHH       = Number(show.viewers_hh || 0);
+            function pctOfViewers(pct) {
+                var hh = viewersHH * (pct / 100);
+                if (hh >= 1000000) return (hh / 1000000).toFixed(2) + 'M HH';
+                if (hh >= 1000)    return (hh / 1000).toFixed(0) + 'K HH';
+                return hh.toFixed(0) + ' HH';
+            }
+
+            var tileGrid = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + [
+                    { label: 'Viewers reached',   value: pctOfViewers(100),                accent: show.accent, sub: 'ladders to ' + (viewersHH / 1000000).toFixed(2) + 'M HH panel' },
+                    { label: 'Any music touch',   value: anyExposurePct.toFixed(1) + '%',  accent: '#c4b5fd',   sub: pctOfViewers(anyExposurePct) },
+                    { label: 'Music-only',        value: Number(slice.music_only_pct || 0).toFixed(1) + '%', accent: show.accent, sub: pctOfViewers(slice.music_only_pct) },
+                    { label: 'Clips-only',        value: Number(slice.clips_only_pct || 0).toFixed(1) + '%', accent: '#38bdf8',   sub: pctOfViewers(slice.clips_only_pct) },
+                    { label: 'Both (overlap)',    value: Number(slice.music_and_clips_pct || 0).toFixed(1) + '%', accent: '#a78bfa', sub: pctOfViewers(slice.music_and_clips_pct) },
+                    { label: 'No music touch',    value: Number(slice.no_music_pct || 0).toFixed(1) + '%',   accent: '#94a3b8',   sub: pctOfViewers(slice.no_music_pct) }
+                  ].map(function(t) {
+                    return '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + t.accent + ';">'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.05em;">' + _jiqEsc(t.label) + '</div>'
+                         +   '<div style="font-size:1.25rem; font-weight:900; margin-top:0.15rem; color:' + t.accent + ';">' + t.value + '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.1rem;">' + _jiqEsc(t.sub) + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var vennBox = '<div style="display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); gap:0.85rem; margin-bottom:0.85rem; align-items:stretch;">'
+                + '<div style="padding:0.65rem; border-radius:8px; background:rgba(15,23,42,0.35); border:1px solid rgba(255,255,255,0.08);">'
+                +   _jiqRenderMusicVenn({
+                        music_only_pct:      slice.music_only_pct,
+                        clips_only_pct:      slice.clips_only_pct,
+                        music_and_clips_pct: slice.music_and_clips_pct,
+                        no_music_pct:        slice.no_music_pct,
+                        accent:              show.accent,
+                        accent2:             '#38bdf8'
+                    })
+                + '</div>'
+                + '<div style="padding:0.75rem 0.85rem; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); display:flex; flex-direction:column; gap:0.5rem;">'
+                +   '<div style="font-size:0.68rem; text-transform:uppercase; letter-spacing:0.08em; opacity:0.7;">Cohort read · ' + _jiqEsc(slice.label || '') + '</div>'
+                +   '<div style="display:flex; align-items:center; gap:0.5rem; font-size:0.78rem;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:' + show.accent + ';"></span><span><strong>Music only</strong> — audio-forward exposure, no clip of the show.</span></div>'
+                +   '<div style="display:flex; align-items:center; gap:0.5rem; font-size:0.78rem;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#38bdf8;"></span><span><strong>Clips only</strong> — clip of the show with the licensed track.</span></div>'
+                +   '<div style="display:flex; align-items:center; gap:0.5rem; font-size:0.78rem;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#a78bfa;"></span><span><strong>Both</strong> — exposed to audio-only AND clip-with-music.</span></div>'
+                +   '<div style="display:flex; align-items:center; gap:0.5rem; font-size:0.78rem;"><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#94a3b8;"></span><span><strong>No music</strong> — viewer with no known music touchpoint.</span></div>'
+                +   '<div style="font-size:0.72rem; line-height:1.5; color:var(--text-secondary); font-style:italic; margin-top:0.25rem; padding-top:0.5rem; border-top:1px solid rgba(255,255,255,0.06);">' + _jiqEsc(slice.note || '') + '</div>'
+                + '</div>'
+                + '</div>';
+
+            var songs = show.songs || [];
+            var songsMax = 0;
+            songs.forEach(function(s) {
+                var t = Number(s.music_only_pct || 0) + Number(s.clips_only_pct || 0) + Number(s.music_and_clips_pct || 0);
+                if (t > songsMax) songsMax = t;
+            });
+            var songsHtml = songs.length ? '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.45rem;">🎼 Song-level breakdown · ' + _jiqEsc(show.label) + '</h4>'
+                + '<div style="overflow-x:auto; margin-bottom:0.65rem;">'
+                + '<table style="width:100%; border-collapse:collapse; font-size:0.76rem;">'
+                +   '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
+                +     '<th style="padding:6px 8px; font-size:0.6rem; opacity:0.7; text-transform:uppercase;">Song / artist</th>'
+                +     '<th style="padding:6px 8px; text-align:center; font-size:0.6rem; opacity:0.7;">Venn</th>'
+                +     '<th style="padding:6px 8px; text-align:right; font-size:0.6rem; opacity:0.7;">Music only</th>'
+                +     '<th style="padding:6px 8px; text-align:right; font-size:0.6rem; opacity:0.7;">Clips only</th>'
+                +     '<th style="padding:6px 8px; text-align:right; font-size:0.6rem; opacity:0.7;">Both</th>'
+                +     '<th style="padding:6px 8px; font-size:0.6rem; opacity:0.7;">Note</th>'
+                +   '</tr></thead><tbody>'
+                + songs.map(function(s) {
+                    return '<tr style="border-bottom:1px solid var(--border-color);">'
+                         +   '<td style="padding:6px 8px;">'
+                         +     '<div style="font-weight:700;">' + _jiqEsc(s.title) + '</div>'
+                         +     '<div style="font-size:0.68rem; opacity:0.65;">' + _jiqEsc(s.artist || '') + '</div>'
+                         +   '</td>'
+                         +   '<td style="padding:6px 8px; text-align:center;">' + _jiqRenderMusicMiniVenn({
+                                    music_only_pct:      s.music_only_pct,
+                                    clips_only_pct:      s.clips_only_pct,
+                                    music_and_clips_pct: s.music_and_clips_pct,
+                                    accent:              show.accent,
+                                    accent2:             '#38bdf8'
+                                }) + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700; color:' + show.accent + ';">' + Number(s.music_only_pct || 0).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700; color:#38bdf8;">' + Number(s.clips_only_pct || 0).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; text-align:right; font-weight:800; color:#a78bfa;">' + Number(s.music_and_clips_pct || 0).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; font-size:0.7rem; color:var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(s.note || '') + '</td>'
+                         + '</tr>';
+                  }).join('')
+                + '</tbody></table></div>' : '';
+
+            var pitch = data.pitch || {};
+            var pitchHtml = pitch.body ? '<div style="padding:0.75rem 0.9rem; border-radius:7px;'
+                +      ' background:linear-gradient(135deg, ' + show.accent + '22 0%, rgba(56,189,248,0.10) 100%);'
+                +      ' border:1px solid ' + show.accent + '44;">'
+                +   '<div style="font-size:0.82rem; font-weight:800; margin-bottom:0.25rem; color:#fff;">' + _jiqEsc(pitch.headline || '') + '</div>'
+                +   '<div style="font-size:0.76rem; line-height:1.55; color:var(--text-secondary);">' + _jiqEsc(pitch.body) + '</div>'
+                + '</div>' : '';
+
+            body.innerHTML = tileGrid + vennBox + songsHtml + pitchHtml;
         }
 
         function _jiqNflxWindowTabs(containerId, windows, activeKey, onChange) {
