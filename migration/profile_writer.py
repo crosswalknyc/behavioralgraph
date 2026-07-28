@@ -1,15 +1,46 @@
 """Canonical single-exit-point for writing a profile CSV to S3.
 
-Every write path (BG.py main pipeline, avid_fan_row_by_row, audience_cut
-synth, super_fan synth, ad-hoc synth scripts, skin builders, patch
-scripts) should route through `write_profile_csv` so the same enforcer
-chain, sort, backup, upload, and dashboard registration run on every
-file that lands in `s3://dashboard-inputs/`.
+Every write path (BG.py main pipeline via `run_parallel_profiles.py`,
+avid_fan_row_by_row, audience_cut synth, super_fan synth, ad-hoc synth
+scripts, skin builders, patch scripts) should route through
+`write_profile_csv` so the same enforcer chain, sort, backup, upload,
+and dashboard registration run on every file that lands in
+`s3://dashboard-inputs/`.
 
 This is the fix for the recurring "we already solved this bug but it's
 back in a new file" pattern. When enforcers only run on some write
 paths, defects that were fixed at write time on one path silently
 re-appear when a different path writes a file.
+
+## Migrating existing scripts
+
+If you have a script that currently does:
+
+    df.to_csv(local_path, index=False)
+    s3.put_object(Bucket="dashboard-inputs", Key=key, Body=..., ...)
+    # optional register_profile_in_dashboard(...)
+
+Replace with a single call:
+
+    from migration.profile_writer import write_profile_csv
+    write_profile_csv(
+        df,
+        subject="<Subject Name>",
+        s3_key=key,
+        category="<BRAND CATEGORY>",
+        display_name="<Dashboard Name>",
+    )
+
+For skin builders derived from a parent OG or Avid, also pass
+`source_key=<parent_s3_key>` so dashboard-cache image / IMDb metadata
+inherits. For year skins, pass `year=YYYY` to fire the anachronism
+check. For Avid cuts, pass `tu_source_key=<parent_TU_key>` to fire the
+TU-vs-Avid subset arithmetic check.
+
+Legacy scripts already running enforcers + register inline
+(audience_cut_synthesis.py, avid_fan_row_by_row.py) do not need
+migration — they already produce equivalent output. Opportunistic
+migration when those files are touched is welcome.
 
 Usage
 -----
@@ -287,4 +318,70 @@ def write_profile_csv(
     }
 
 
-__all__ = ["write_profile_csv"]
+def upload_and_register_profile(
+    local_path: str,
+    s3_key: Optional[str] = None,
+    *,
+    subject: Optional[str] = None,
+    category: Optional[str] = None,
+    display_name: Optional[str] = None,
+    source_key: Optional[str] = None,
+    tu_source_key: Optional[str] = None,
+    year: Optional[int] = None,
+    apply_final_enforcers: bool = False,
+    backup: bool = True,
+    sort: bool = True,
+    register: bool = True,
+    verbose: bool = True,
+    s3_client=None,
+) -> dict:
+    """Thin path-based wrapper around `write_profile_csv` for the case
+    where BG.py's `run_full_pipeline` has already produced a local CSV
+    with all in-pipeline enforcers applied (audit playbook, crosswalk,
+    pre-publish gate, etc.). Reads the CSV, then does upload + backup +
+    dashboard registration through the canonical path.
+
+    Set `apply_final_enforcers=True` to force `run_all_enforcers` again
+    as a final safety net; default is False because BG.py has already
+    done comprehensive enforcement inline. TU-vs-Avid coherence and
+    anachronism checks still run when their trigger kwargs are passed
+    (`tu_source_key`, `year`).
+
+    Args:
+      local_path: absolute path to CSV on disk
+      s3_key: destination S3 key. Defaults to `os.path.basename(local_path)`.
+      subject: subject name for enforcer coherence checks. Falls back to
+        the file's BRAND INPUT row if not provided.
+      category: brand category
+      display_name: dashboard display name. Falls back to derived from key.
+      source_key, tu_source_key, year: see `write_profile_csv`
+      apply_final_enforcers: rerun `run_all_enforcers` (default False)
+    """
+    import pandas as pd
+    if s3_key is None:
+        s3_key = os.path.basename(local_path)
+    df = pd.read_csv(local_path, dtype=object, keep_default_na=False)
+    if not subject:
+        try:
+            m = df.iloc[:, 0].astype(str).str.upper().str.strip() \
+                == "BRAND INPUT"
+            if m.any():
+                subject = str(df.loc[m].iloc[0, 1]).strip()
+        except Exception:
+            pass
+    if not subject:
+        subject = re.sub(r"\.csv$", "", os.path.basename(local_path)).strip()
+    return write_profile_csv(
+        df, subject=subject, s3_key=s3_key,
+        category=category, display_name=display_name,
+        source_key=source_key,
+        run_enforcers=apply_final_enforcers,
+        apply_anachronism=True,
+        year=year,
+        tu_source_key=tu_source_key,
+        register=register, backup=backup, sort=sort,
+        verbose=verbose, s3_client=s3_client,
+    )
+
+
+__all__ = ["write_profile_csv", "upload_and_register_profile"]
