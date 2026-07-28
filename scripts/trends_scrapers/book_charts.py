@@ -470,9 +470,12 @@ def _fetch_spotify_audiobooks(limit: int = 100) -> tuple[list[dict], str]:
 
 
 def fetch() -> dict[str, Any]:
-    """Pull all four sources. Amazon + Apple are the primary signals
-    today; Audible and Spotify audiobooks ship as available=False
-    until cookies land.
+    """Pull the live book / audiobook sources. Spotify Audiobooks was
+    removed from this dict 2026-07-28 per Jenna: Spotify blocks
+    Hetzner's datacenter IP at the Varnish edge so the source could
+    never populate without a residential proxy. `_fetch_spotify_audiobooks`
+    is kept in the module (dead code) so re-enabling is a one-line
+    change once a proxy is provisioned.
     """
     amazon_items = _fetch_amazon_books(limit=50)
     # Prefer paid chart when it's populated (books people are actually
@@ -481,12 +484,11 @@ def fetch() -> dict[str, Any]:
     apple_items  = _fetch_apple_books(limit=100, tier='paid')
     if not apple_items:
         apple_items = _fetch_apple_books(limit=100, tier='free')
-    aud_items,  aud_sub = _fetch_audible_books(limit=100)
-    spot_items, spot_sub = _fetch_spotify_audiobooks(limit=100)
+    aud_items, aud_sub = _fetch_audible_books(limit=100)
 
     return {
         'national':  amazon_items[:50] or apple_items[:50],
-        'available': bool(amazon_items or apple_items or aud_items or spot_items),
+        'available': bool(amazon_items or apple_items or aud_items),
         'sources': {
             'amazon': {
                 'label':     'Amazon Best-Sellers (Books)',
@@ -507,12 +509,6 @@ def fetch() -> dict[str, Any]:
                                           'audiobook platform.'),
                 'items':     aud_items,
                 'available': bool(aud_items),
-            },
-            'spotify': {
-                'label':     'Spotify Audiobooks',
-                'sub':       spot_sub,
-                'items':     spot_items,
-                'available': bool(spot_items),
             },
         },
     }

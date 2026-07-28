@@ -44469,7 +44469,7 @@
                 { key: 'podcasts',  label: 'Podcasts',         count: counts.podcasts  || 0, icon: '🎙️',
                   tip: 'Podcasts: Trending shows on Apple Podcasts, Spotify, Amazon Music, and Audible.' },
                 { key: 'books',     label: 'Books',            count: counts.books     || 0, icon: '📚',
-                  tip: 'Books: Best-selling and trending titles across Amazon, Apple Books, Audible, Spotify Audiobooks, and Libby (LA County Library eBooks, audiobooks, and magazines).' },
+                  tip: 'Books: Best-selling and trending titles across Amazon, Apple Books, Audible, and Libby (LA County Library eBooks, audiobooks, and magazines).' },
                 { key: 'social',    label: 'Social',           count: 0,                     icon: '💬',
                   tip: 'Social: Trending posts and videos on Reddit, YouTube, and TikTok. Real content, not hashtag lists.' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
@@ -44602,7 +44602,6 @@
             'Amazon Best-Sellers (Books)':       'Amazon Best-Sellers: The top-selling books on Amazon right now.',
             'Apple Books Top 100 (US)':          'Apple Books: The top-paid chart in the Apple Books store.',
             'Audible Best-Sellers':              'Audible Best-Sellers: The top-selling audiobooks on Audible right now.',
-            'Spotify Audiobooks':                'Spotify Audiobooks: Top audiobooks available on Spotify. Included with Spotify Premium.',
             // ---------- Libby (folded into the Books tab as three sibling cards) ----------
             'Libby: Popular eBooks':             'Libby: Popular eBooks: The most-borrowed eBooks on Libby (LA County Library) right now.',
             'Libby: Popular Audiobooks':         'Libby: Popular Audiobooks: The most-borrowed audiobooks on Libby (LA County Library) right now.',
@@ -45867,10 +45866,11 @@
 
         function renderTIQBooks(sources, libbySources) {
             // Order: Amazon Best-Sellers (biggest scale) -> Apple Books
-            // top-paid -> Audible (audiobook flagship) -> Spotify
-            // audiobooks (newer surface, expanding fast) -> Libby eBooks,
+            // top-paid -> Audible (audiobook flagship) -> Libby eBooks,
             // Audiobooks, Magazines (LA County Library borrows).
-            var storeKeys = ['amazon', 'apple', 'audible', 'spotify'];
+            // 'spotify' key removed 2026-07-28 - Spotify blocks
+            // datacenter IPs so the source could never populate.
+            var storeKeys = ['amazon', 'apple', 'audible'];
             var storePresent = storeKeys.filter(function(k) { return sources[k]; });
             var libbyKeys = ['ebook', 'audiobook', 'magazine'];
             var libby = libbySources || {};
