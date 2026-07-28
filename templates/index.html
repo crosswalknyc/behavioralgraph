@@ -88520,10 +88520,13 @@
             // Selected "Sort by Creator Type" subcategory ('all' shows every
             // populated subcategory). Persists across re-renders.
             let _mkCreatorTypeFilter = 'all';
-            function _mkOnCreatorTypeChange(sel) {
+            // Exposed on window (this marketing block runs inside a wrapper
+            // scope, like window.showMarketingSection) so the inline
+            // onchange="_mkOnCreatorTypeChange(this)" can resolve it.
+            window._mkOnCreatorTypeChange = function(sel) {
                 _mkCreatorTypeFilter = (sel && sel.value) ? sel.value : 'all';
                 _mkRenderCreators();
-            }
+            };
             function _mkRenderCreators() {
                 const el = document.getElementById('marketingCreatorRoster');
                 if (!el) return;
