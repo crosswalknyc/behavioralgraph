@@ -429,35 +429,44 @@ def _fetch_audible_books(limit: int = 100) -> tuple[list[dict], str]:
 
 
 # ---------------------------------------------------------------------------
-# Spotify Audiobooks  (bot-detected out - keeps a stub sub-label)
+# Spotify Audiobooks  (Varnish edge IP-block - keeps a stub sub-label)
 # ---------------------------------------------------------------------------
-# Spotify's audiobooks catalog lives at `open.spotify.com/genre/
-# audiobooks-web`, but reaching it requires two things Playwright can't
-# reliably obtain right now:
-#   1. A valid `/get_access_token` bearer, which Spotify's Varnish edge
-#      returns 403 URL Blocked for on any request outside their web-app
-#      client-integrity flow.
-#   2. A `clienttoken.spotify.com`-issued client token, which their
-#      integrity service refuses to mint when the caller fingerprints
-#      as automation.
-# Verified 2026-07-27 with fresh open.spotify.com cookies from a
-# logged-in PREMIUM Chrome session, requested from both a laptop IP
-# and Hetzner's clean datacenter IP: the browse page returns HTTP 200
-# with a 13.7KB anonymous client-shell (zero `/audiobook/` hrefs, zero
-# `/playlist/`, zero `/show/`) and the client-side JS refuses to
-# hydrate under Playwright. This is Spotify's hardened anti-scrape
-# posture as of mid-2026; Premium cookies alone are not sufficient.
+# We DO have valid Premium cookies (sp_dc, sp_key, sp_t donated from
+# Jenna's logged-in Chrome, refreshed 2026-07-28). What's blocking is
+# NOT the cookies. It's Spotify's Varnish edge:
 #
-# Audible Top 100 (already live in this file) covers the audiobook
-# signal from the biggest platform, so this stays as an honest
-# placeholder.
+#   Requests from the Hetzner datacenter IP to
+#   `open.spotify.com/get_access_token` are refused with HTTP 403
+#   "URL Blocked / Error 54113" served by cache-fra-etou8220027-FRA.
+#   That's Spotify's Frankfurt edge fingerprinting the caller as
+#   datacenter and blocking the token endpoint outright, regardless
+#   of what cookies we send.
+#
+# Without that bearer token we can't call the pathfinder GraphQL that
+# the web player uses for browse content, and without pathfinder the
+# `/genre/audiobooks-web` DOM never hydrates its audiobook grid (300KB
+# of HTML renders but zero `/audiobook/<id>` hrefs appear).
+#
+# Verified 2026-07-28 12:07 PT with the current Premium cookies:
+#   * cookie donation status: fresh, 27 cookies incl. sp_dc/sp_key/sp_t
+#   * /get_access_token from Hetzner: 403 URL Blocked
+#   * /genre/audiobooks-web DOM after consent-banner dismiss: 0 hrefs
+#   * DOM does show the Premium account's currently-playing audiobook
+#     in the play-bar area, confirming auth works - just not browse
+#
+# The ONLY fix is to route the Playwright request through a residential
+# IP (IPRoyal or similar, ~$50-100/mo). Hetzner IPs are permanently
+# flagged. Until that's provisioned, Audible Top 100 on this tab
+# remains the audiobook signal.
 def _fetch_spotify_audiobooks(limit: int = 100) -> tuple[list[dict], str]:
-    """Stubbed. Spotify's audiobook browse won't hydrate under Playwright
-    even with Premium cookies (client-token gate + integrity checks).
-    Audible Top 100 on this tab is our audiobook signal today."""
-    return [], ('Spotify locks audiobook browse behind client-integrity '
-                'checks Playwright can\'t pass. Audible Top 100 (also on '
-                'this tab) is our audiobook signal.')
+    """Stubbed. Spotify blocks Hetzner's datacenter IP at the Varnish
+    edge (HTTP 403 on /get_access_token) regardless of Premium cookies.
+    Would need a residential proxy to unblock. Audible Top 100 on this
+    tab is the audiobook signal today."""
+    return [], ('Spotify blocks datacenter IPs at their edge, so even '
+                'with Premium cookies we cannot pull their audiobook '
+                'browse from the scraper host. Audible Top 100 (also on '
+                'this tab) is the audiobook signal.')
 
 
 def fetch() -> dict[str, Any]:
