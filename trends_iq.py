@@ -2914,11 +2914,17 @@ def _compute_fused_trending(cards: dict, limit: int = _FUSE_TOP_N) -> list[dict]
              image=p.get('image') or p.get('thumb') or p.get('thumbnail'))
 
     # ---------------- Wikipedia ----------------
+    # Wikipedia rolls up under the same UI tab as trending people
+    # ("Trending people" is the tab label users see). Sharing the tab
+    # label here means the fusion chip strip collapses a person-hit +
+    # a wiki-hit into ONE chip (via the frontend's tab-label dedupe)
+    # and the cross-platform bonus counts them as one platform, which
+    # matches how users read the dashboard.
     wiki = cards.get('wikipedia_trending') or []
     max_w = min(len(wiki), 30)
     for i, w in enumerate(wiki[:max_w]):
         _add(w.get('title') or '', w.get('title') or '',
-             'wikipedia', 'Wikipedia', None, i + 1, max_w,
+             'wikipedia', 'Trending people', None, i + 1, max_w,
              url=w.get('url'),
              image=w.get('image') or w.get('thumbnail'))
 
