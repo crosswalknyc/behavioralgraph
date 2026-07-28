@@ -1404,11 +1404,24 @@ def _extract_core_brand(project_name, brands=None):
     candidates = [clean] if clean else []
     
     if brands:
-        # Extract domain-based brand names from URLs
+        # Real-URL TLD whitelist — must end with a known TLD before we treat a
+        # dotted string like "Colin.Rosenblum" as a domain. Without this, any
+        # person's name typed with a period was being split into a bare first
+        # name (e.g. "Colin.Rosenblum" -> "COLIN"), which then catastrophically
+        # collided with Gen Pop entries like "COLIN FARRELL" / "ADAM SANDLER"
+        # / "ARIANA GRANDE" via Pass 2 startswith() matching downstream.
+        _URL_DOMAIN_RX = re.compile(
+            r'^(?:https?://)?(?:www\.)?([a-zA-Z0-9-]+)\.'
+            r'(com|org|net|io|co|edu|gov|app|tv|fm|us|uk|ca|de|fr|jp|cn|in|au|me|ai|xyz|info|biz)'
+            r'(?:[/?#].*)?$',
+            re.IGNORECASE,
+        )
         for b in brands:
             b_str = str(b).strip()
             # Pull domain from URLs: youtube.com/mrbeast -> youtube
-            domain_match = re.match(r'^(?:https?://)?(?:www\.)?([a-zA-Z0-9]+)\.', b_str)
+            # (requires a recognized TLD so person names like "Adam.J.Kurtz"
+            #  do NOT get bucketed as "ADAM" — see comment above)
+            domain_match = _URL_DOMAIN_RX.match(b_str)
             if domain_match:
                 domain_brand = domain_match.group(1).upper()
                 if domain_brand not in ('COM', 'ORG', 'NET', 'IO', 'CO', 'WWW'):
@@ -1435,6 +1448,30 @@ def _extract_core_brand(project_name, brands=None):
             seen.add(c)
             unique.append(c)
     return unique
+
+
+def _parse_bp_value(v):
+    """Coerce a Gen Pop CSV BP cell to float percent.
+
+    Gen Pop CSV stores Brand Penetration with a trailing '%' (e.g. "88.0665%").
+    Direct float() on these strings raises ValueError, which was being silently
+    swallowed by the calling try/except — making the GenPop-first sample-size
+    path fall through to the digital-panel fallback for EVERY big-name brand.
+    This helper strips the '%' (and stray whitespace / commas) before float().
+    Returns None if the value can't be parsed (caller should treat as miss).
+    """
+    if v is None:
+        return None
+    try:
+        if isinstance(v, (int, float)):
+            import math
+            return None if (isinstance(v, float) and math.isnan(v)) else float(v)
+        s = str(v).strip().rstrip('%').replace(',', '').strip()
+        if not s or s.lower() in ('nan', 'none'):
+            return None
+        return float(s)
+    except (ValueError, TypeError):
+        return None
 
 
 def get_genpop_penetration_for_brand(brand_name, brand_category=None, brands=None):
@@ -1485,20 +1522,36 @@ def get_genpop_penetration_for_brand(brand_name, brand_category=None, brands=Non
         for cat in search_cats:
             mask = (gp_upper['_col'] == cat) & (gp_upper['_val'] == try_name)
             if mask.any():
-                return float(gp_upper.loc[mask].iloc[0][bp_name]), cat
+                bp = _parse_bp_value(gp_upper.loc[mask].iloc[0][bp_name])
+                if bp is not None:
+                    return bp, cat
         # Then try all categories
         for cat in all_cats:
             if cat in skip:
                 continue
             mask = (gp_upper['_col'] == cat) & (gp_upper['_val'] == try_name)
             if mask.any():
-                return float(gp_upper.loc[mask].iloc[0][bp_name]), cat
+                bp = _parse_bp_value(gp_upper.loc[mask].iloc[0][bp_name])
+                if bp is not None:
+                    return bp, cat
     
-    # Pass 2: Substring/contains match — check if any Gen Pop value contains a candidate
-    # (only for candidates with 4+ chars to avoid false positives like "AT" or "FOX")
+    # Pass 2: PREFIX match — check if any Gen Pop value starts with a candidate.
+    #
+    # SAFETY: single-token candidates that are short / common first names
+    # (e.g. "COLIN", "ADAM", "ARIANA", "JAMES") will fuzzy-match unrelated
+    # celebrities like "COLIN FARRELL" / "ADAM SANDLER" / "ARIANA GRANDE" and
+    # return their (huge) Gen Pop penetration. That has produced multi-million
+    # sample sizes for niche creators whose first name happens to overlap
+    # with a famous person. To prevent this, Pass 2 now requires the try_name
+    # to be EITHER multi-token OR a long single token (>= 7 chars). Niche-
+    # creator searches naturally fail this filter and fall through to the
+    # safer category-tier estimate downstream.
     gp_vals = gp_upper[~gp_upper['_col'].isin(skip)]
     for try_name in candidate_names:
         if not try_name or len(try_name) < 4:
+            continue
+        # NEW SAFETY GUARD — block first-name expansion (Bug fix May 2026)
+        if len(try_name.split()) < 2 and len(try_name) < 7:
             continue
         # Check if a Gen Pop value exactly starts with the candidate (e.g. "YOUTUBE" matches "YOUTUBE")
         contains_mask = gp_vals['_val'].str.startswith(try_name + ' ') | (gp_vals['_val'] == try_name)
@@ -1507,31 +1560,179 @@ def get_genpop_penetration_for_brand(brand_name, brand_category=None, brands=Non
             for cat in search_cats:
                 cat_match = contains_mask & (gp_vals['_col'] == cat)
                 if cat_match.any():
-                    return float(gp_vals.loc[cat_match].iloc[0][bp_name]), cat
+                    bp = _parse_bp_value(gp_vals.loc[cat_match].iloc[0][bp_name])
+                    if bp is not None:
+                        return bp, cat
             # Otherwise take first match
             row = gp_vals.loc[contains_mask].iloc[0]
-            return float(row[bp_name]), row['_col']
+            bp = _parse_bp_value(row[bp_name])
+            if bp is not None:
+                return bp, row['_col']
     
     # Pass 3: Check if any Gen Pop value is contained in the PROFILE NAME only
     # (not search terms, to avoid "mr beast youtube" matching YOUTUBE)
     # e.g. profile "YouTube Most Viewed" contains Gen Pop value "YOUTUBE"
+    #
+    # SAFETY: gp_val must be >= 7 chars so "ARIANA" (6) does NOT match profile
+    # "ARIANA VITALE", but "MARKIPLIER" (10) still matches a profile that
+    # contains it. Same first-name-collision class of bug as Pass 2.
     profile_norm = _normalize_brand_for_lookup(brand_name)
     if profile_norm and len(profile_norm) >= 6:
         for cat in (search_cats + [c for c in all_cats if c not in skip and c not in search_cats]):
             cat_rows = gp_vals[gp_vals['_col'] == cat]
             for idx, row in cat_rows.iterrows():
                 gp_val = row['_val']
-                if len(gp_val) >= 4 and gp_val in profile_norm:
-                    return float(row[bp_name]), cat
+                # Raised from 4 -> 7 chars (Bug fix May 2026)
+                if len(gp_val) >= 7 and gp_val in profile_norm:
+                    bp = _parse_bp_value(row[bp_name])
+                    if bp is not None:
+                        return bp, cat
     
     return None, None
 
+
+# ============================================================================
+# SVOD SUBSCRIBER-IQ SAMPLE-SIZE LOOKUP (Tier 1.5 — between GenPop and panel)
+# 2026-06-17 Jenna: "can we add a filter where if it cant find the input in
+# gen pop it checks if it's in subscriber iq/svod and then if not there
+# either it does the fall back?"
+#
+# Source: s3://svod-acquisition/ — Subscriber IQ "Show-to-Platform
+# Attribution" CSVs (Total Show Watchers + Gen Pop Projection per show).
+# These are authoritative panel-counted sample sizes for SVOD shows /
+# movies that we explicitly tracked through SIQ. When a brand is in
+# SIQ but NOT in Gen Pop (typical for new shows / movies whose pop-level
+# penetration is too low for the universal Gen Pop baseline), we want
+# to use the SIQ Total Show Watchers count as the sample size and the
+# SIQ Gen Pop Projection (= count × 32.99) as the projection.
+# ============================================================================
+
+SVOD_SIQ_BUCKET = 'svod-acquisition'
+_SVOD_SIQ_CACHE = None  # {NORMALIZED_BRAND -> (sample, projection, s3_key)}
+
+
+def _load_svod_siq_cache(force=False):
+    """One-shot scan of s3://svod-acquisition/ root. Parses each CSV's
+    'Show/Content Tracked' (the canonical show name) and 'Total Show
+    Watchers' (panel-counted sample) + 'Gen Pop Projection'.
+
+    Returns dict: NORMALIZED_BRAND -> (sample_size, projection, s3_key).
+    Idempotent (cached in module). Pass force=True to refresh.
+    """
+    global _SVOD_SIQ_CACHE
+    if _SVOD_SIQ_CACHE is not None and not force:
+        return _SVOD_SIQ_CACHE
+
+    cache = {}
+    try:
+        import boto3, csv as _csv, io as _io
+        s3 = boto3.client('s3', region_name='us-east-2')
+        # List newest-first so older shadowed entries get overwritten by
+        # newer SIQ regenerations on the second pass.
+        all_keys = []
+        for page in s3.get_paginator('list_objects_v2').paginate(Bucket=SVOD_SIQ_BUCKET):
+            for obj in page.get('Contents', []) or []:
+                k = obj['Key']
+                if '/' in k:
+                    continue  # root-level only
+                if not k.lower().endswith('.csv'):
+                    continue
+                all_keys.append((obj['LastModified'], k))
+        all_keys.sort()  # oldest first -> newest overwrites cache
+
+        for last_modified, k in all_keys:
+            try:
+                body = s3.get_object(Bucket=SVOD_SIQ_BUCKET, Key=k)['Body'].read().decode('utf-8', errors='ignore')
+            except Exception:
+                continue
+            show_name = None
+            sample = None
+            projection = None
+            try:
+                for row in _csv.reader(_io.StringIO(body)):
+                    if not row:
+                        continue
+                    label = (row[0] or '').strip()
+                    if label == 'Show/Content Tracked':
+                        # The show name is in the first non-empty cell after label
+                        for c in row[1:]:
+                            cv = (c or '').strip()
+                            if cv:
+                                show_name = cv
+                                break
+                    elif label == 'Total Show Watchers':
+                        # row[2] is the Count cell; row[9] is Gen Pop Projection
+                        if len(row) > 2:
+                            try:
+                                sample = int(str(row[2]).replace(',', '').replace('"', '').strip())
+                            except (ValueError, TypeError):
+                                pass
+                        if len(row) > 9:
+                            try:
+                                projection = int(str(row[9]).replace(',', '').replace('"', '').strip())
+                            except (ValueError, TypeError):
+                                pass
+                        if sample and show_name:
+                            # Got everything we need; no need to keep scanning.
+                            break
+            except Exception:
+                continue
+            if show_name and sample and sample > 0:
+                norm = _normalize_brand_for_lookup(show_name)
+                if norm:
+                    cache[norm] = (sample, projection, k)
+    except Exception as e:
+        print(f"[svod-siq cache] WARN: could not build cache: {e}")
+
+    _SVOD_SIQ_CACHE = cache
+    try:
+        print(f"[svod-siq cache] built — {len(cache)} show(s) indexed")
+    except Exception:
+        pass
+    return cache
+
+
+def get_svod_siq_sample_for_brand(brand_name, brands=None):
+    """Look up a brand in the SVOD Subscriber IQ corpus and return its
+    panel-counted sample size + Gen Pop projection.
+
+    Returns (sample_size, projection, s3_key) on hit, or (None, None, None)
+    on miss. Uses the same _extract_core_brand candidate-name resolution
+    as get_genpop_penetration_for_brand so the matching surface is
+    consistent between Tier 1 (GenPop) and Tier 1.5 (SVOD-SIQ).
+    """
+    try:
+        cache = _load_svod_siq_cache()
+        if not cache:
+            return None, None, None
+        candidates = _extract_core_brand(brand_name, brands)
+        if not candidates:
+            return None, None, None
+        # Also include the raw brand_name (normalized) as a fallback in case
+        # _extract_core_brand stripped something the SIQ display name kept.
+        candidates = list(dict.fromkeys(candidates + [brand_name]))
+        for cand in candidates:
+            if not cand:
+                continue
+            norm = _normalize_brand_for_lookup(cand)
+            if norm and norm in cache:
+                sample, projection, key = cache[norm]
+                return sample, projection, key
+        return None, None, None
+    except Exception as e:
+        print(f"[svod-siq lookup] WARN for '{brand_name}': {e}")
+        return None, None, None
+
+
 def _sample_size_jitter_mult(subject_hint, lo, hi):
-    """Per-subject deterministic multiplier in [lo, hi]. Used only for
-    the UNKNOWN-signal fallback path. The KNOWN-signal path uses pure
-    odd-prime boosts because organic ClickHouse UID counts already vary
-    subject-to-subject — multiplying by a prime is bijective and
-    preserves that natural variance.
+    """Per-subject deterministic multiplier in [lo, hi]. Same subject
+    always gets the same multiplier (idempotent reruns); different
+    subjects get spread across the full band. Used only for the
+    UNKNOWN-signal fallback path (where the input is an artificially
+    constant tier-percent). The KNOWN-signal path uses pure odd-integer
+    boosts because organic ClickHouse UID counts already vary subject
+    to subject — multiplying by a prime preserves and amplifies that
+    natural variance.
     """
     import hashlib
     if not subject_hint:
@@ -1545,24 +1746,45 @@ def _sample_size_jitter_mult(subject_hint, lo, hi):
 def estimate_sample_size_for_unknown_brand(brand_category, actual_universe_size=None, subject_hint=None):
     """Estimate a reasonable sample size for a brand not found in Gen Pop.
 
-    Mirrors the Hetzner BG.py logic (must stay in sync). Revised 2026-06-04
-    per Jenna's 100K-clamp + odd-boost audit:
-        - TRUST the real ClickHouse UID count (passed as actual_universe_size).
-        - Multiply by a distinct ODD PRIME per tier — bijective, so distinct
-          UID inputs always produce distinct sample sizes.
-        - No `// 10` rounding (kills the round-number artifact).
+    PRINCIPLE (revised 2026-06-04 per Jenna's 100K-clamp + follower-count
+    + odd-boost audits):
+        When we have a real signal — the ClickHouse COUNT(DISTINCT UID) from
+        TEMP_UIDS — TRUST IT and multiply by a distinct ODD PRIME per tier.
+        That preserves and amplifies the natural variance of organic UID
+        counts (2,613 vs 2,617 vs 4,823 → 33,969 vs 34,021 vs 62,699,
+        each ~13x apart by construction), and no two subjects with
+        different real UID counts can ever collapse to the same sample
+        size (multiplication by an integer is bijective).
 
-    Tier boosts:
-        < 500       : 23x   (super-niche; tiny samples need padding)
-        500  - 2K   : 17x
-        2K   - 20K  : 13x   (Brooke Hyland zone)
-        20K  - 100K : 7x
-        100K - 500K : 3x
-        >= 500K     : 1.7x  (already huge signal)
+    PRIOR BUGS:
+        v1: sample_size = (tier_lo + ...) * 10M — threw away small real
+            signals. 5K UIDs → ~100,600 (the 99K-110K clamp band).
+        v2: integer multiplication + (sample_size // 10) * 10 — produced
+            round numbers ending in 0; could collapse nearby UID counts
+            to identical sample sizes (2,595 and 2,596 → both 5,190).
+        v3: jitter-based variance — still risked cluster collisions
+            when two different subjects landed at similar jitter values.
+        v4 (CURRENT): distinct ODD PRIME per tier, no // 10 rounding.
+            Bijective: distinct UID inputs → distinct outputs. Spread
+            is inherited from the organic variance of ClickHouse counts.
 
-    If actual_universe_size is None (rare), fall back to category-tier
-    midpoint × 10M × per-subject jitter [0.50, 1.50] to avoid every
-    fallback-path file in the same category landing on identical values.
+    BOOST TIERS (odd primes — each tier produces a non-overlapping band):
+        actual_universe_size known → n × prime_for_tier:
+            < 500       : 23x  (super-niche; tiny samples need padding)
+            500  - 2K   : 17x  (small influencer / niche creator)
+            2K   - 20K  : 13x  (mid-tier talent — Brooke Hyland zone)
+            20K  - 100K : 7x   (recognized name, sitcom actor tier)
+            100K - 500K : 3x   (mass-market celebrity)
+            >= 500K     : 1.7x (already huge signal; modest boost)
+        Hard ceiling at GENPOP_CAP (10M). Floor at 1 (never zero).
+        No // 10 rounding — numbers stay organic.
+
+    UNKNOWN-SIGNAL FALLBACK:
+        actual_universe_size unknown → category tier mid-point × 10M
+        × per-subject jitter [0.50, 1.50]. The wide jitter prevents
+        every fallback-path file in the same category from landing on
+        the identical mid-tier value. (Only used when ClickHouse
+        couldn't tell us anything — should be rare.)
     """
     GENPOP_CAP = 10_000_000
     bc_upper = (brand_category or '').strip().upper()
@@ -1589,6 +1811,10 @@ def estimate_sample_size_for_unknown_brand(brand_category, actual_universe_size=
         sample_size = min(sample_size, GENPOP_CAP)
         return max(sample_size, 1)
 
+    # No real signal — must guess from category tier. Wide per-subject
+    # jitter prevents same-category files from collapsing to identical
+    # mid-tier values. This path runs only when ClickHouse couldn't
+    # produce a UID count, which should be rare.
     tier = DIGITAL_PANEL_TIER_ESTIMATES.get(bc_upper, (0.01, 0.08))
     lo_t, hi_t = tier
     pct_mid = (lo_t + hi_t) / 2
@@ -1665,10 +1891,11 @@ def anchor_to_genpop(df, sample_size):
         val = str(row[gp_val]).strip().upper()
         if cat in SKIP_CATS:
             continue
-        try:
-            bp = float(row[gp_bp])
-            cs = float(row[gp_cs])
-        except (ValueError, TypeError):
+        # Use _parse_bp_value to handle the '%' suffix in Gen Pop CSV cells
+        # (bug fix 2026-06-16: bare float() silently dropped every row).
+        bp = _parse_bp_value(row[gp_bp])
+        cs = _parse_bp_value(row[gp_cs])
+        if bp is None or cs is None:
             continue
         gp_lookup[(cat, val)] = {'bp': bp, 'cs': cs}
 
@@ -2461,11 +2688,10 @@ def _build_census_caps_from_genpop():
         if cat not in DEMO_CATS:
             continue
         val = str(row[gp_val]).strip().upper()
-        try:
-            bp = float(row[gp_bp])
-        except (ValueError, TypeError):
-            continue
-        if bp <= 0:
+        # Use _parse_bp_value to handle the '%' suffix in Gen Pop CSV cells
+        # (bug fix 2026-06-16: bare float() silently dropped every row).
+        bp = _parse_bp_value(row[gp_bp])
+        if bp is None or bp <= 0:
             continue
         cap = int(round((bp / 100.0) * _GENPOP_TOTAL))
         caps.setdefault(cat, {})[val] = cap
@@ -9364,6 +9590,32 @@ def ai_final_gut_check(df, brand_category, project_name, brands):
         "undermine trust as much as wrong INTEREST or SOCIAL MEDIA rows.\n"
         "- When you return FIX/adjustments, include **specific** category + item corrections for "
         "any misaligned SEARCH ENGINE/AI or STREAMING/PLATFORM rows you identify.\n"
+        "\n"
+        "=== STREAMING/PLATFORM UNIVERSAL BASELINES (Defect 30, 2026-06-15 PM) ===\n"
+        "Netflix and Amazon Prime Video have **flat universal baselines** across "
+        "essentially every US adult audience. These are NOT audience-driven values — "
+        "they are platform-reach floors that hold regardless of demographic skew:\n"
+        "  - **Netflix BP ≈ 73-77%** (target ~75%). Single highest-penetration "
+        "    streaming service in the US. Sits above the entire field for every "
+        "    persona except Netflix-rivals like Amazon Prime Video / Disney+ etc. "
+        "    when those platforms are themselves the profile subject.\n"
+        "  - **Amazon Prime Video BP ≈ 64-68%** (target ~66%). Flat across all "
+        "    audiences regardless of Amazon affinity. Yes — even older-male / rural / "
+        "    Amazon-shopper cohorts: Prime's reach still trails Netflix in the panel.\n"
+        "Producing Netflix below 70% on a non-streaming-subject profile is a "
+        "**suppression defect**, not a persona signal. Producing Prime below 62% "
+        "is also a suppression defect. The post-pipeline enforcer "
+        "`enforce_netflix_leads_streaming_platform` will detect & raise either "
+        "back to baseline if you ship suppressed values, but the right thing to "
+        "do is to produce the baseline values yourself.\n"
+        "Ranking rule: Netflix must be the #1 STREAMING/PLATFORM row unless:\n"
+        "  (a) the subject of this profile **is** another streaming platform "
+        f'(e.g. this profile is "AMAZON PRIME VIDEO", "HULU", "DISNEY+", "DOGTV", '
+        '"FIFA+"). The subject self-pins at 100% and Netflix is the #1 **peer**.\n'
+        "  (b) the subject is Netflix itself (self-pin at 100%).\n"
+        "Other peers (HBO Max, Hulu, Disney+, Paramount+, Peacock, etc.) ARE "
+        "audience-driven — let them move with the persona. Just don't suppress "
+        "Netflix or Prime to do it.\n"
     )
     audience_context = audience_context + streaming_search_mandate
 
@@ -11732,15 +11984,44 @@ def check_s3_for_existing_results(brand, start_date, end_date):
     return exact_match, similar_files
 
 def upload_result_to_s3(file_path, brand_name):
-    """Upload a result file to S3."""
+    """Upload a result file to S3.
+
+    Pre-publish gate: refuses to upload if scripts/pre_publish_gate.py
+    detects placeholder pinning, projection leak, BRAND INPUT spam, or
+    category truncation. Set BYPASS_PUBLISH_GATE=1 to override (use only
+    when you've reviewed the warnings manually).
+    """
     s3_client = get_s3_client()
     if not s3_client:
         return None
-    
+
+    # PRE-PUBLISH GATE — added 2026-05-30 after Jenna's "7 creator pulls"
+    # escalation (Jordan Matter / Mei Lin / Rosanna / Alex & Jessica / Edith
+    # Galvez / Ariana Vitale / Adam J Kurtz). See PIPELINE_DEFECTS_FOR_JENNA
+    # and scripts/pre_publish_gate.py.
+    if os.environ.get('BYPASS_PUBLISH_GATE', '').strip() != '1':
+        try:
+            import subprocess as _sp
+            _gate = os.path.join(os.path.dirname(__file__), 'scripts', 'pre_publish_gate.py')
+            if os.path.exists(_gate):
+                _r = _sp.run(['python3', _gate, file_path], capture_output=True, text=True)
+                if _r.returncode != 0:
+                    print(f"🚨 PRE-PUBLISH GATE FAILED for {brand_name} — refusing to upload")
+                    print(_r.stdout)
+                    print(_r.stderr)
+                    print(f"   To override after manual review: BYPASS_PUBLISH_GATE=1 ...")
+                    return None
+                else:
+                    # warnings-only outputs are still printed for visibility
+                    if '⚠️' in _r.stdout:
+                        print(_r.stdout)
+        except Exception as _e:
+            print(f"⚠️  pre-publish gate raised: {_e} (proceeding with upload)")
+
     try:
         timestamp = datetime.now().strftime('%m_%d_%Y_%H_%M')
         s3_key = f"{brand_name}_{timestamp}.csv"
-        
+
         s3_client.upload_file(file_path, S3_BUCKET, s3_key)
         print(f"✅ Uploaded to S3: s3://{S3_BUCKET}/{s3_key}")
         return s3_key
@@ -12623,8 +12904,13 @@ def compute_noisy_sample_size(original_n: int) -> int:
     """
     1) If original_n < 100k, let base = original_n * 100; else base = original_n.
     2) Multiply base by a random draw from N(1.0, 0.05) (±5% jitter).
-    3) If jittered ≤ 100k, force it to 100k * (1 + δ), where δ ∼ Uniform(0.01, 0.05).
-       That guarantees the final value is strictly > 100k.
+    3) If jittered ≤ 100k, force it to 100k * (1 + δ), where δ ∼ Uniform(0.05, 0.45).
+       That guarantees the final value is strictly > 100k AND avoids the
+       three-creator cluster artifact (Jenna 2026-06-03: Kaitlyn 100,010 /
+       Brooke 100,040 / Zhirelle 100,020 — 3 different audiences within 40
+       units of each other on raw base = clamp signature, not coincidence).
+       Wider δ band (was 0.01-0.05, now 0.05-0.45) spreads outputs into
+       105k-145k so no two profiles land within 1% of each other.
     4) Cap the result at 8,000,000 on the high end.
     """
     if original_n < 100_000:
@@ -12640,9 +12926,11 @@ def compute_noisy_sample_size(original_n: int) -> int:
         fuzz = np.random.normal(loc=1.0, scale=0.05)
     noisy = int(base * fuzz)
 
-    # If jittered value is ≤ 100k, force it to 100k * (1 + δ), δ ∈ [0.01, 0.05]
+    # If jittered value is ≤ 100k, force into the 105k-145k band with wide jitter.
+    # Old logic used delta ∈ [0.01, 0.05] which produced tight clusters at 101-105k;
+    # widened 2026-06-03 to prevent 3-creator clamp artifact.
     if noisy <= 100_000:
-        delta = np.random.uniform(0.01, 0.05)
+        delta = np.random.uniform(0.05, 0.45)
         noisy = int(100_000 * (1.0 + delta))
 
     # Finally, cap at 8,000,000 on the high end
@@ -14836,6 +15124,31 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
         s = re.sub(r'[^a-z0-9]+', '', s)
         return s
     
+    # ─────────────────────────────────────────────────────────────────────
+    # Hostmap-aware writer dedup (added 2026-06-03 per Jenna's spec).
+    # Build a lookup of (brand_norm) -> (canonical_spelling, allowed_cat_keys).
+    # When pinning a brand to 100%, we ONLY pin in categories that hostmap
+    # marks as canonical for that brand — preventing variants like
+    # `BRANDY~CLARK` or `brandy-clark` from being pinned in categories where
+    # the brand is not hostmap-canonical. Also rewrites the Value to the
+    # canonical hostmap spelling so the dashboard never displays a variant.
+    # Brands NOT in hostmap fall through to the legacy "pin anywhere"
+    # behavior (preserves support for brand-new entities not yet in the
+    # reference table). 
+    # ─────────────────────────────────────────────────────────────────────
+    try:
+        _hg = _load_hostmap_category_gate()
+        _hg_norm_to_canon = _hg.get('norm_to_canon', {}) or {}
+        _hg_norm_to_cat_keys = _hg.get('norm_to_cat_keys', {}) or {}
+    except Exception as _hge:
+        if not SILENCE_VERBOSE_OUTPUT:
+            print(f"   ⚠️ hostmap-aware writer dedup disabled (load failed): {_hge}")
+        _hg_norm_to_canon = {}
+        _hg_norm_to_cat_keys = {}
+
+    def _hg_norm(s: str) -> str:
+        return re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+
     for input_brand in input_brands:
         # Generate all possible variations of the input brand
         brand_variations = generate_brand_variations(input_brand)
@@ -14847,6 +15160,20 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
         domain_core = _domain_core(input_brand)
         if domain_core:
             brand_variations.append(domain_core)
+
+        # Hostmap canonical + allowed categories for this brand (if known).
+        # `_hg_canonical_value` is the canonical spelling we'll write to the
+        # Value column when pinning. `_hg_allowed_cat_keys` gates which
+        # Column values are allowed to receive the pin. Empty set means
+        # "brand not in hostmap — fall through to legacy pin-anywhere".
+        _hg_canonical_value = None
+        _hg_allowed_cat_keys: set = set()
+        for _v in {input_brand, normalized_brand} | set(brand_variations):
+            _vn = _hg_norm(_v)
+            if _vn and _vn in _hg_norm_to_canon:
+                _hg_canonical_value = _hg_norm_to_canon[_vn]
+                _hg_allowed_cat_keys = set(_hg_norm_to_cat_keys.get(_vn) or set())
+                break
         
         # Create a comprehensive set of variations for matching
         all_variations = set()
@@ -14906,6 +15233,24 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
                     is_match = True
             
             if is_match:
+                row_col = str(row.get('Column', '')).strip().upper()
+
+                # ─────────────────────────────────────────────────────────
+                # Hostmap-aware writer dedup: if this brand is in hostmap
+                # and the row's category is NOT in the brand's hostmap-
+                # canonical category set, do not pin a variant spelling
+                # into the wrong category. (Brands not in hostmap fall
+                # through — _hg_allowed_cat_keys empty means "no gate".)
+                # ─────────────────────────────────────────────────────────
+                if _hg_allowed_cat_keys:
+                    _row_cat_key = re.sub(r'[^A-Z0-9]', '', row_col)
+                    if _row_cat_key not in _hg_allowed_cat_keys:
+                        if not SILENCE_VERBOSE_OUTPUT:
+                            print(f"   ⏭️  Skipping 100% pin for '{input_brand}' "
+                                  f"in {row_col} (not hostmap-canonical; "
+                                  f"canonical cats: {sorted(_hg_allowed_cat_keys)})")
+                        continue
+
                 # MPB FAMILY exemption (unless purchasers_only is on).
                 # The brand-input panel is selected on digital engagement, NOT
                 # actual purchase confirmation, so only a subset truly
@@ -14915,12 +15260,21 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
                 # misrepresent the purchase signal. The cross-category
                 # alignment will later propagate MPB's real purchase rate
                 # (e.g. Old Navy 62%) down into APPAREL/FOOTWEAR etc.
-                row_col = str(row.get('Column', '')).strip().upper()
                 if (not purchasers_only) and row_col in _MPB_FAMILY:
                     skipped_mpb += 1
                     if not SILENCE_VERBOSE_OUTPUT:
                         print(f"   ⏭️  Skipping 100% override for input brand '{input_brand}' in {row_col} (purchasers_only=False; MPB family — will inherit MPB's real purchase rate)")
                     continue
+
+                # Hostmap-aware Value rewrite: replace the matched variant
+                # spelling with the canonical hostmap spelling so the
+                # dashboard never displays `BRANDY~CLARK` or `brandy-clark`.
+                if _hg_canonical_value and value != _hg_canonical_value:
+                    df_behavior.loc[idx, 'Value'] = _hg_canonical_value
+                    if not SILENCE_VERBOSE_OUTPUT:
+                        print(f"   🔤 Rewrote variant '{value}' → canonical "
+                              f"'{_hg_canonical_value}' in {row_col}")
+
                 old_pct = float(row[pct_col])
                 _cur_pct = df_behavior.loc[idx, pct_col]
                 if isinstance(_cur_pct, str):
@@ -17348,7 +17702,8 @@ def _run_single_category_agent(category: str, values: list[str],
                                 canonical_baseline_lookup: dict | None = None,
                                 anchor_mode: str = 'persona',
                                 study_dates: str = '',
-                                item_guidance: dict | None = None) -> list[dict]:
+                                item_guidance: dict | None = None,
+                                persona_brief: str = '') -> list[dict]:
     """Worker for Step 2 — one gpt-4o call per category.
 
     Returns list of {value, bp, reason}.
@@ -17356,6 +17711,15 @@ def _run_single_category_agent(category: str, values: list[str],
     item_guidance: optional output from _run_item_guidance_agent. When
         provided, its grounded expected_high/expected_low lists replace
         any blind guidance from the persona doc's category_guidance.
+
+    persona_brief: optional pre-built ELEVATE / ATTENUATE / PANEL-ANCHOR
+        block from `migration.persona_briefs.build_category_persona_brief`.
+        Injected into the prompt right after the dossier block so the
+        scoring agent sees explicit "elevate these clusters", "attenuate
+        those clusters", and panel-realistic BP anchors for the specific
+        (subject audience archetype, category) combination. When empty,
+        the prompt falls back to persona-doc-only guidance. Added
+        2026-07-28 as one of the four pipeline hardening rails.
     """
     import json as _json
     client = _get_openai_client()
@@ -17982,6 +18346,7 @@ DIGITAL IDENTITY (from persona research — read carefully):
 
 {_format_brand_intelligence_block(values) if category.strip().upper() == 'MOST PURCHASED BRANDS' else ''}
 {_format_dossier_evidence_block(category, values)}
+{('AUDIENCE-ARCHETYPE PERSONA BRIEF:' + chr(10) + persona_brief + chr(10)) if persona_brief else ''}
 KEY DEMOGRAPHICS:
 {_json.dumps(demo_snapshot, indent=2)}
 
@@ -20546,6 +20911,42 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             print(f"      [{_g_cat}] high={_g_doc.get('expected_high', [])[:8]} | "
                   f"low={_g_doc.get('expected_low', [])[:8]}")
 
+    # ── Build audience-archetype persona briefs (2026-07-28 pipeline
+    # hardening rail #1). Reads AGE / GENDER / ETHNICITY from `df`
+    # (already populated from persona_doc above) to derive an audience
+    # archetype (older_female_mainstream, young_male_gaming, etc.) and
+    # returns a category-specific ELEVATE / ATTENUATE / PANEL-ANCHOR
+    # block per (subject, category). Empty string when no explicit brief
+    # exists for that (category, archetype). Skip on genpop path — the
+    # briefs are subject-audience-specific, not gen-pop-baseline.
+    _brief_map: dict[str, str] = {}
+    if anchor_mode != 'genpop':
+        try:
+            from migration.persona_briefs import (
+                build_category_persona_brief as _build_persona_brief,
+            )
+        except Exception:
+            try:
+                from persona_briefs import (
+                    build_category_persona_brief as _build_persona_brief,
+                )
+            except Exception:
+                _build_persona_brief = None  # type: ignore
+        if _build_persona_brief is not None:
+            _brief_hits = 0
+            for _bcat in cats_needing_llm:
+                try:
+                    _brief = _build_persona_brief(subject, _bcat, df)
+                except Exception as _be:
+                    print(f"   ⚠️ persona_brief build failed for [{_bcat}]: {_be}")
+                    _brief = ''
+                if _brief:
+                    _brief_map[_bcat] = _brief
+                    _brief_hits += 1
+            print(f"   🎯 persona-brief coverage: {_brief_hits}/"
+                  f"{len(cats_needing_llm)} categories have explicit "
+                  f"ELEVATE/ATTENUATE anchoring")
+
     # ── WAVE 2: Scoring agents (gpt-4o, one per chunk) ───────────────────
     print(f"🤖 Wave 2: Launching {len(_work_units)} scoring agent calls …")
     with _futures.ThreadPoolExecutor(max_workers=35) as pool:
@@ -20553,7 +20954,8 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             pool.submit(_run_single_category_agent, cat,
                          chunk, persona_doc, subject,
                          canonical_baseline_lookup, anchor_mode, study_dates,
-                         _guidance_map.get(cat)): (cat, ci)
+                         _guidance_map.get(cat),
+                         _brief_map.get(cat, '')): (cat, ci)
             for cat, chunk, ci in _work_units
         }
         _done_units: set[tuple[str, int]] = set()
@@ -20576,7 +20978,8 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                         _chunk_results[cat].append(_run_single_category_agent(
                             cat, chunk, persona_doc, subject,
                             canonical_baseline_lookup, anchor_mode, study_dates,
-                            _guidance_map.get(cat)))
+                            _guidance_map.get(cat),
+                            _brief_map.get(cat, '')))
                         print(f"   ✅ Retry {_attempt}/{_MAX_AGENT_RETRIES} for [{cat}] chunk {ci} succeeded")
                         break
                     except Exception as _e:
@@ -22700,6 +23103,963 @@ def _canonicalize_brand_category(bc):
     return raw
 
 
+
+# === BIOGRAPHICAL-FLOORS SAFEGUARD ===
+# Added to catch two recurring audit defects:
+#   (1) Forced-zero rows for biographically-obvious brand ties — e.g.
+#       BARD COLLEGE = 0% in Chevy Chase's COLLEGE/UNIVERSITY (his alma mater),
+#       BIRDWATCHING = 0% in Dave Chappelle's INTEREST (well-documented hobby).
+#       Caused by category-scoring LLMs not knowing the biographical fact.
+#       The active_affiliations agent only catches BUSINESS affiliations
+#       (endorsements, ownership) — not alma maters / hobbies / media
+#       contributor roles. We add a final-pass nano-tier LLM audit that
+#       reviews 0%-BP rows in biographical categories.
+#   (2) AVID FAN / CASUAL FAN rows where the 'Value' label drifted away
+#       from the actually-computed 'Brand Penetration (Row)' — e.g. label
+#       says '9.6%' but BP says 54.6%. We reconcile the label to match BP.
+def enforce_fan_label_consistency(df):
+    """Fix AVID FAN / CASUAL FAN / SUPER FAN rows where 'Value' label
+    drifted away from the actually-computed 'Brand Penetration (Row)'.
+    Sets Value = f'{BP:.1f}%' so the dashboard label matches the data."""
+    try:
+        if 'Column' not in df.columns or 'Value' not in df.columns:
+            return df
+        bp_col = 'Brand Penetration (Row)'
+        if bp_col not in df.columns:
+            return df
+        fan_cols = {'AVID FAN', 'CASUAL FAN', 'SUPER FAN', 'SUPERFAN', 'CORE FAN'}
+        n_fixed = 0
+        for idx in df.index:
+            col = str(df.loc[idx, 'Column']).strip().upper()
+            if col not in fan_cols:
+                continue
+            try:
+                bp = float(str(df.loc[idx, bp_col]).rstrip('%').strip())
+            except Exception:
+                continue
+            if bp <= 0:
+                continue
+            new_label = f"{bp:.1f}%"
+            old_label = str(df.loc[idx, 'Value']).strip()
+            if old_label != new_label:
+                df.at[idx, 'Value'] = new_label
+                print(f"   ↻ fan-label fix: {col} '{old_label}' → '{new_label}'")
+                n_fixed += 1
+        if n_fixed:
+            print(f"   ✓ enforce_fan_label_consistency: {n_fixed} label(s) reconciled")
+    except Exception as _e:
+        print(f"   ⚠️ enforce_fan_label_consistency error (continuing): {_e}")
+    return df
+
+
+def enforce_biographical_floors(df, subject_name, brand_category=None):
+    """Cheap (gpt-4.1-nano) LLM audit: catch biographical forced-zeros across
+    vertical categories. Sets BP ≥ suggested floor for any brand the audit
+    identifies as a documented biographical tie (alma mater, personal hobby,
+    media contributor, hometown, charity board, signature dining spot, etc.).
+
+    Cost: ~1 nano call per profile, ~$0.005. Safe — only floors brands the
+    LLM is HIGH-CONFIDENCE about; defaults to no-op on uncertainty / errors.
+    """
+    try:
+        if not subject_name or 'Column' not in df.columns or 'Value' not in df.columns:
+            return df
+        bp_col = 'Brand Penetration (Row)'
+        if bp_col not in df.columns:
+            return df
+
+        BIOGRAPHICAL_CATEGORIES = {
+            'COLLEGE/UNIVERSITY', 'INTEREST', 'MEDIA', 'MUSICIAN/BAND',
+            'ATHLETE', 'ACTOR', 'TALENT', 'WHERE THEY DINE', 'WHERE THEY SHOP',
+            'NON PROFIT/CHARITY', 'ORGANIZATIONAL MEMBERSHIPS', 'LOCATION',
+            'PODCAST', 'WRITER/DIRECTOR/AUTHOR/ARTIST', 'HOST/PERSONALITY',
+            'POLITICS/ACTIVIST', 'SPORTS TEAM',
+        }
+
+        zero_rows = []
+        for idx in df.index:
+            col = str(df.loc[idx, 'Column']).strip().upper()
+            if col not in BIOGRAPHICAL_CATEGORIES:
+                continue
+            try:
+                bp = float(str(df.loc[idx, bp_col]).rstrip('%').strip())
+            except Exception:
+                continue
+            if bp > 0:
+                continue
+            val = str(df.loc[idx, 'Value']).strip()
+            if not val:
+                continue
+            zero_rows.append((col, val))
+
+        if not zero_rows:
+            return df
+
+        from collections import defaultdict
+        by_cat = defaultdict(set)
+        for col, val in zero_rows:
+            by_cat[col].add(val)
+        candidates = {cat: sorted(vs)[:80] for cat, vs in by_cat.items()}
+        if not candidates:
+            return df
+
+        try:
+            from openai import OpenAI
+            client = OpenAI()
+        except Exception as _oe:
+            print(f"   ⚠️ enforce_biographical_floors: OpenAI client unavailable ({_oe})")
+            return df
+
+        import json as _json
+        cand_lines = []
+        for cat, vs in sorted(candidates.items()):
+            cand_lines.append(f"\n[{cat}]")
+            for v in vs:
+                cand_lines.append(f"  - {v}")
+        candidates_blob = "\n".join(cand_lines)
+
+        cat_hint = f" (category: {brand_category})" if brand_category else ""
+        prompt = (
+            f"You are auditing a brand-affinity profile for {subject_name!r}{cat_hint}.\n\n"
+            f"The pipeline currently shows 0% Brand Penetration for the candidates below.\n"
+            f"Identify ONLY items with a DOCUMENTED PUBLIC biographical connection\n"
+            f"to {subject_name} — alma mater, personal hobby, charity board membership,\n"
+            f"media outlet they regularly write for / appear on, restaurant chain they\n"
+            f"openly favor, hometown, signature collaboration, employer, etc.\n\n"
+            f"DO NOT invent ties. DO NOT include speculation. ONLY items where you can\n"
+            f"name a SPECIFIC factual link.\n\n"
+            f"For each match, suggest a realistic floor BP based on:\n"
+            f"  - alma mater                  : 8-15\n"
+            f"  - personal hobby              : 12-20\n"
+            f"  - media outlet they write for : 15-25\n"
+            f"  - charity board               : 8-15\n"
+            f"  - hometown                    : 8-20\n"
+            f"  - employer / business         : 15-30\n"
+            f"  - documented favorite QSR/dine: 10-20\n"
+            f"  - team/franchise tie-in       : 15-30\n\n"
+            f"Subject: {subject_name}\n"
+            f"{('Brand category: ' + str(brand_category)) if brand_category else ''}\n\n"
+            f"Candidates (currently 0% BP):{candidates_blob}\n\n"
+            'Return ONLY this JSON (no commentary):\n'
+            '{\n'
+            '  "biographical_floors": [\n'
+            '    {"category": "COLLEGE/UNIVERSITY", "brand": "BARD COLLEGE", "min_pct": 12.0, "reason": "<1-sentence factual tie>"}\n'
+            '  ]\n'
+            '}\n\n'
+            'If none match, return {"biographical_floors": []}.'
+        )
+
+        try:
+            resp = client.chat.completions.create(
+                model='gpt-4.1-nano',
+                messages=[{'role': 'user', 'content': prompt}],
+                temperature=0.1,
+                max_tokens=1200,
+            )
+            text = (resp.choices[0].message.content or '').strip()
+            if text.startswith('```'):
+                text = text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+            start = text.find('{'); end = text.rfind('}') + 1
+            if start < 0 or end <= start:
+                print(f"   ⚠️ enforce_biographical_floors: bad JSON response")
+                return df
+            payload = _json.loads(text[start:end])
+        except Exception as _le:
+            print(f"   ⚠️ enforce_biographical_floors: LLM call failed ({_le})")
+            return df
+
+        floors = payload.get('biographical_floors') or []
+        if not floors:
+            print(f"   ℹ enforce_biographical_floors: no biographical ties identified")
+            return df
+
+        sample_size = None
+        s_mask = df['Column'].astype(str).str.upper().str.strip() == 'SAMPLE SIZE'
+        if s_mask.any() and 'Category Share' in df.columns:
+            try:
+                sample_size = float(str(df.loc[s_mask, 'Category Share'].iloc[0]))
+            except Exception:
+                pass
+        if not sample_size:
+            bi_mask = df['Column'].astype(str).str.upper().str.strip() == 'BRAND INPUT'
+            if bi_mask.any() and 'Original Raw Numbers' in df.columns:
+                try:
+                    v = str(df.loc[bi_mask, 'Original Raw Numbers'].iloc[0]).replace(',', '').strip()
+                    sample_size = float(v)
+                except Exception:
+                    pass
+        if not sample_size:
+            sample_size = 1_000_000.0
+
+        touched = set()
+        n_floored = 0
+        for f in floors:
+            cat = str(f.get('category', '')).strip().upper()
+            brand = str(f.get('brand', '')).strip().upper()
+            try:
+                min_pct = float(f.get('min_pct', 0))
+            except Exception:
+                continue
+            reason = str(f.get('reason', '')).strip()
+            if not cat or not brand or min_pct <= 0:
+                continue
+            if min_pct > 35:
+                min_pct = 35
+            for idx in df.index:
+                if str(df.loc[idx, 'Column']).strip().upper() != cat:
+                    continue
+                if str(df.loc[idx, 'Value']).strip().upper() != brand:
+                    continue
+                try:
+                    current = float(str(df.loc[idx, bp_col]).rstrip('%').strip())
+                except Exception:
+                    current = 0
+                if current >= min_pct:
+                    break
+                df.at[idx, bp_col] = f"{min_pct:.4f}%"
+                if 'Original Raw Numbers' in df.columns:
+                    df.at[idx, 'Original Raw Numbers'] = int(sample_size * min_pct / 100.0)
+                if 'US Gen Pop Projection' in df.columns:
+                    df.at[idx, 'US Gen Pop Projection'] = int(sample_size * min_pct / 100.0 / 10_000_000 * 329_900_000)
+                touched.add(cat)
+                n_floored += 1
+                print(f"   ↑ biographical floor: {brand} in {cat}: {current}% → {min_pct}%  ({reason})")
+                break
+
+        if 'Category Share' in df.columns and touched:
+            for cat in touched:
+                cat_mask = df['Column'].astype(str).str.upper().str.strip() == cat
+                cat_idx = df[cat_mask].index
+                total = 0.0
+                for ci in cat_idx:
+                    try:
+                        total += float(str(df.loc[ci, bp_col]).rstrip('%').strip())
+                    except Exception:
+                        pass
+                if total > 0:
+                    for ci in cat_idx:
+                        try:
+                            bp = float(str(df.loc[ci, bp_col]).rstrip('%').strip())
+                        except Exception:
+                            bp = 0
+                        df.at[ci, 'Category Share'] = f"{(bp/total)*100.0:.4f}%"
+
+        if n_floored:
+            print(f"   ✓ enforce_biographical_floors: {n_floored} brand(s) floored across {len(touched)} categor(ies)")
+    except Exception as _e:
+        print(f"   ⚠️ enforce_biographical_floors error (continuing): {_e}")
+    return df
+# === END BIOGRAPHICAL-FLOORS SAFEGUARD ===
+
+# === TELECOM-ANCHOR SAFEGUARD (D104) ===
+# Catches systemic AT&T / Verizon / T-Mobile / Spectrum / Xfinity
+# suppression. Floors are derived from p10 of observed BPs across 50
+# recent healthy profiles -- so the enforcer only lifts brands that fall
+# into the bottom decile (clearly suppressed), leaving healthy profiles
+# untouched. Uses MAX(current, floor) semantics: never lowers anything.
+TELECOM_FLOORS = {
+    'AT&T':              25.0,
+    'VERIZON':           28.0,
+    'VERIZON WIRELESS':  28.0,
+    'T-MOBILE':          25.0,
+    'TMOBILE':           25.0,
+    'T MOBILE':          25.0,
+    'SPECTRUM':          14.0,
+    'XFINITY':           16.0,
+    'COMCAST XFINITY':   16.0,
+    'CRICKET WIRELESS':   2.0,
+    'CRICKET':            2.0,
+    'BOOST MOBILE':       2.0,
+    'MINT MOBILE':        2.0,
+    'CENTURYLINK':        2.0,
+    'OPTIMUM':            2.0,
+    'STRAIGHT TALK':      2.0,
+    'US CELLULAR':        2.0,
+    'USCELLULAR':         2.0,
+    'VISIBLE':            2.0,
+}
+TELECOM_CATEGORIES = ('TELECOM', 'WIRELESS', 'MOBILE CARRIER', 'TELECOMMUNICATIONS', 'ISP', 'INTERNET SERVICE PROVIDER')
+
+def enforce_canonical_telecom_anchors(df):
+    """Floor any TELECOM/WIRELESS row whose BP falls below its anchor.
+    Never lowers anything; only raises floors-violations to the anchor.
+    Recomputes derived columns (Original Raw Numbers, US Gen Pop Projection,
+    Category Share) to stay internally consistent.
+
+    Defect 41 fix (2026-06-16 PM, Jenna AT&T 25.00 pin report): the
+    lift now applies deterministic per-(subject, brand) jitter in
+    [0, +1.5pt] above the floor. Previous direct-floor write produced
+    identical 25.0000% across 36 corpus profiles -- direct Rule #1
+    violation ("No hard cap, floor, multiplier, or clamp may produce
+    identical BPs across rows, profiles, or category-iterations of
+    the same brand").
+    """
+    import hashlib as _hl_telecom
+    try:
+        if 'Column' not in df.columns or 'Value' not in df.columns:
+            return df
+        col_upper = df['Column'].astype(str).str.upper()
+        tel_mask = col_upper.isin(TELECOM_CATEGORIES)
+        if not tel_mask.any():
+            return df
+
+        # Determine percent-string format on Brand Penetration (Row)
+        bp_col = 'Brand Penetration (Row)'
+        if bp_col not in df.columns:
+            return df
+        bp_is_pct = df[bp_col].astype(str).str.contains('%', na=False).any()
+        cs_col = 'Category Share'
+        cs_is_pct = (cs_col in df.columns) and df[cs_col].astype(str).str.contains('%', na=False).any()
+
+        # Cast columns to object so we can write mixed types
+        for _c in (bp_col, cs_col, 'Original Raw Numbers', 'US Gen Pop Projection'):
+            if _c in df.columns and str(df[_c].dtype) == 'str':
+                df[_c] = df[_c].astype('object')
+
+        # Get sample size for raw-number recompute
+        sample_size = 0
+        sample_size_gp = 0
+        ss_mask = col_upper == 'SAMPLE SIZE'
+        if ss_mask.any():
+            try:
+                sample_size = int(df.loc[ss_mask, 'Original Raw Numbers'].iloc[0])
+                sample_size_gp = int(df.loc[ss_mask, 'US Gen Pop Projection'].iloc[0])
+            except Exception:
+                pass
+
+        # Identify subject for the jitter seed (Defect 41)
+        subject_name = ''
+        bi_mask = col_upper == 'BRAND INPUT'
+        if bi_mask.any():
+            try:
+                subject_name = str(df.loc[bi_mask, 'Value'].iloc[0]).strip()
+            except Exception:
+                pass
+
+        def _floor_jitter(brand: str, span: float = 1.5) -> float:
+            """Hash-deterministic jitter in [0, +span] per (subject, brand,
+            'telecom-floor'). One-sided positive so the lift is preserved."""
+            seed = f"{subject_name}|{brand}|telecom-floor".encode()
+            h = int(_hl_telecom.blake2b(seed, digest_size=8).hexdigest(), 16)
+            frac = (h % 100000) / 100000.0    # [0, 1)
+            return span * frac
+
+        def _bp_to_float(v):
+            try:
+                return float(str(v).replace('%', '').replace(',', '').strip() or 0)
+            except Exception:
+                return 0.0
+
+        val_upper = df['Value'].astype(str).str.upper().str.strip()
+        touched_cats = set()
+        n_lifted = 0
+        lift_log = []
+        for canonical_name, floor in TELECOM_FLOORS.items():
+            row_mask = tel_mask & val_upper.eq(canonical_name)
+            if not row_mask.any():
+                continue
+            for idx in df[row_mask].index:
+                cur_bp = _bp_to_float(df.at[idx, bp_col])
+                if cur_bp >= floor:
+                    continue
+                # LIFT to floor + deterministic jitter (Defect 41)
+                jitter = _floor_jitter(canonical_name, span=1.5)
+                lifted = round(floor + jitter, 4)
+                # Avoid 4dp collision with the floor exact value
+                if abs(lifted - floor) < 0.005:
+                    lifted = round(floor + 0.5 + jitter, 4)
+                df.at[idx, bp_col] = (f"{lifted:.4f}%" if bp_is_pct else lifted)
+                if sample_size > 0:
+                    df.at[idx, 'Original Raw Numbers'] = int(sample_size * lifted / 100.0)
+                    df.at[idx, 'US Gen Pop Projection'] = int(sample_size_gp * lifted / 100.0)
+                touched_cats.add(df.at[idx, 'Column'])
+                n_lifted += 1
+                lift_log.append(f"      {df.at[idx, 'Column']} | {canonical_name}: {cur_bp:.2f}% -> {lifted:.4f}% (floor {floor:.1f}+jitter)")
+
+        # Recompute Category Share for touched categories so it sums to 100%
+        for cat in touched_cats:
+            cat_mask2 = df['Column'].astype(str) == cat
+            total = sum(_bp_to_float(v) for v in df.loc[cat_mask2, bp_col])
+            if total > 0:
+                for ci in df[cat_mask2].index:
+                    b = _bp_to_float(df.at[ci, bp_col])
+                    df.at[ci, cs_col] = (f"{(b/total)*100.0:.4f}%" if cs_is_pct else round((b/total)*100.0, 4))
+
+        if n_lifted:
+            print(f"   \u2713 enforce_canonical_telecom_anchors: lifted {n_lifted} brand(s) across {len(touched_cats)} categor(ies)")
+            for line in lift_log[:10]:
+                print(line)
+    except Exception as _e:
+        print(f"   \u26A0 enforce_canonical_telecom_anchors error (continuing): {_e}")
+    return df
+# === END TELECOM-ANCHOR SAFEGUARD ===
+
+
+# === BIG-4 BANK ANCHOR SAFEGUARD (D109) ===
+# US adult banking-panel reality: Chase, Bank of America, Wells Fargo, and
+# Citibank are present in ~99-100% of recent profiles (see
+# /tmp/derive_bank_floors.py audit, n=100). When the LLM omits one for a
+# niche audience, downstream analytics break (BANKING category looks
+# incomplete to dashboard consumers). When the LLM keeps one but suppresses
+# it well below empirical p25, the analytics under-represent real US adult
+# banking share.
+#
+# Floors derived empirically: ~85% of the p25 across 100 recent profiles.
+# Canonical names match the reference.host_mapping spellings exactly
+# ("Chase", "Bank of America", "Wells Fargo", "Citibank") — alt-spellings
+# (JPMORGAN CHASE / BOFA / WELLSFARGO / CITI etc.) are accepted as the
+# same brand to avoid double-insertion.
+#
+# Semantics: MAX(current, floor) for present rows; INSERT canonical row at
+# floor for missing brands. Targets BANKING category only (the user-
+# specified scope); never creates a brand-new BANKING category if the
+# profile omitted one entirely. Recomputes Category Share + Raw + Proj.
+BIG4_BANK_FLOORS = {
+    'CHASE':           27.0,
+    'BANK OF AMERICA': 22.0,
+    'WELLS FARGO':     20.0,
+    'CITIBANK':         9.0,
+}
+# Alt-spellings accepted as the same brand (case-insensitive). The
+# canonical insert spelling is the BIG4_BANK_FLOORS key.
+BIG4_BANK_ALT_SPELLINGS = {
+    'CHASE':           ['CHASE', 'CHASE BANK', 'JPMORGAN CHASE', 'JP MORGAN CHASE', 'J.P. MORGAN CHASE'],
+    'BANK OF AMERICA': ['BANK OF AMERICA', 'BANK OF AMERICA CORP', 'BOFA', 'B OF A', 'BANKOFAMERICA'],
+    'WELLS FARGO':     ['WELLS FARGO', 'WELLS FARGO & CO', 'WELLSFARGO', 'WELLS FARGO BANK'],
+    'CITIBANK':        ['CITIBANK', 'CITI', 'CITIGROUP', 'CITI BANK', 'CITI CARDS'],
+}
+BIG4_BANK_CATEGORIES = ('BANKING',)
+
+
+def enforce_canonical_big4_banks(df):
+    """Ensure CHASE, BANK OF AMERICA, WELLS FARGO, CITIBANK are always
+    present in the BANKING category at >= empirical floor BP. Inserts
+    missing rows at the floor; lifts present-but-suppressed rows to the
+    floor. Never lowers anything. Recomputes derived columns so the
+    BANKING category stays internally consistent.
+    """
+    try:
+        if 'Column' not in df.columns or 'Value' not in df.columns:
+            return df
+        col_upper = df['Column'].astype(str).str.upper()
+        bank_mask = col_upper.isin(BIG4_BANK_CATEGORIES)
+        if not bank_mask.any():
+            # BANKING column absent — skip (don't create a fresh category)
+            return df
+
+        bp_col = 'Brand Penetration (Row)'
+        if bp_col not in df.columns:
+            return df
+        bp_is_pct = df[bp_col].astype(str).str.contains('%', na=False).any()
+        cs_col = 'Category Share'
+        cs_is_pct = (cs_col in df.columns) and df[cs_col].astype(str).str.contains('%', na=False).any()
+
+        # Cast mixed-type-target cols to object to avoid string-dtype writes failing
+        for _c in (bp_col, cs_col, 'Original Raw Numbers', 'US Gen Pop Projection'):
+            if _c in df.columns and str(df[_c].dtype) == 'str':
+                df[_c] = df[_c].astype('object')
+
+        # Sample size for raw/proj recompute
+        sample_size = 0
+        sample_size_gp = 0
+        ss_mask = col_upper == 'SAMPLE SIZE'
+        if ss_mask.any():
+            try:
+                sample_size = int(df.loc[ss_mask, 'Original Raw Numbers'].iloc[0])
+                sample_size_gp = int(df.loc[ss_mask, 'US Gen Pop Projection'].iloc[0])
+            except Exception:
+                pass
+
+        def _bp_to_float(v):
+            try:
+                return float(str(v).replace('%', '').replace(',', '').strip() or 0)
+            except Exception:
+                return 0.0
+
+        val_upper = df['Value'].astype(str).str.upper().str.strip()
+        n_lifted = 0
+        n_inserted = 0
+        action_log = []
+        new_rows = []
+
+        for canonical, floor in BIG4_BANK_FLOORS.items():
+            alts_u = [a.upper() for a in BIG4_BANK_ALT_SPELLINGS.get(canonical, [canonical])]
+            present_mask = bank_mask & val_upper.isin(alts_u)
+
+            if present_mask.any():
+                # PRESENT — lift if any matching row is below floor
+                for idx in df[present_mask].index:
+                    cur_bp = _bp_to_float(df.at[idx, bp_col])
+                    if cur_bp >= floor:
+                        continue
+                    df.at[idx, bp_col] = (f"{floor:.4f}%" if bp_is_pct else floor)
+                    if sample_size > 0:
+                        df.at[idx, 'Original Raw Numbers'] = int(sample_size * floor / 100.0)
+                        df.at[idx, 'US Gen Pop Projection'] = int(sample_size_gp * floor / 100.0)
+                    n_lifted += 1
+                    action_log.append(f"      BANKING | {canonical}: {cur_bp:.2f}% -> {floor:.1f}%")
+            else:
+                # MISSING — insert canonical hostmap spelling at floor BP
+                new_row = {c: None for c in df.columns}
+                new_row['Column'] = 'BANKING'
+                new_row['Value'] = canonical
+                new_row[bp_col] = (f"{floor:.4f}%" if bp_is_pct else floor)
+                if cs_col in df.columns:
+                    # placeholder; recomputed below
+                    new_row[cs_col] = (f"0.0000%" if cs_is_pct else 0.0)
+                if sample_size > 0:
+                    new_row['Original Raw Numbers'] = int(sample_size * floor / 100.0)
+                    new_row['US Gen Pop Projection'] = int(sample_size_gp * floor / 100.0)
+                new_rows.append(new_row)
+                n_inserted += 1
+                action_log.append(f"      BANKING | {canonical}: INSERT @ {floor:.1f}% (was missing)")
+
+        if new_rows:
+            df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+
+        # Recompute Category Share for BANKING so it sums to 100%
+        if n_lifted or n_inserted:
+            bank_mask2 = df['Column'].astype(str).str.upper() == 'BANKING'
+            total = sum(_bp_to_float(v) for v in df.loc[bank_mask2, bp_col])
+            if total > 0:
+                for ci in df[bank_mask2].index:
+                    b = _bp_to_float(df.at[ci, bp_col])
+                    df.at[ci, cs_col] = (f"{(b/total)*100.0:.4f}%" if cs_is_pct else round((b/total)*100.0, 4))
+
+            parts = []
+            if n_lifted:   parts.append(f"lifted {n_lifted}")
+            if n_inserted: parts.append(f"inserted {n_inserted}")
+            print(f"   \u2713 enforce_canonical_big4_banks: {' + '.join(parts)} bank(s) in BANKING")
+            for line in action_log[:10]:
+                print(line)
+    except Exception as _e:
+        print(f"   \u26A0 enforce_canonical_big4_banks error (continuing): {_e}")
+    return df
+# === END BIG-4 BANK ANCHOR SAFEGUARD ===
+
+
+# === CANONICAL COLUMN STRIP (D110) ===
+# Many post-generation enforcers use temporary working columns (_col_u,
+# _val_u, bp_num, etc.) for case-folding or float-coercion convenience. The
+# common pattern is to assign them at the top of the function and drop them
+# at the end via df.drop(columns=['_col_u', '_val_u']). But if any enforcer
+# returns early, hits an exception path, or simply forgot the drop, those
+# columns survive all the way to disk and show up in the shipped CSV as
+# pipeline-internal field leaks (Jenna's colleague flagged Dixie D'Amelio
+# with 11 columns including bp_num, _col_u, _val_u, plus legacy Raw and
+# Gen Pop Projection short-form duplicates from a pre-canonicalization era).
+#
+# This final pass enforces a strict whitelist: only the 6 canonical columns
+# survive, in canonical order. Everything else is dropped. Idempotent.
+# Runs as the very last step before to_csv() so no downstream enforcer
+# can re-introduce a leak after the strip.
+CANONICAL_OUTPUT_COLUMNS = (
+    'Column',
+    'Value',
+    'Brand Penetration (Row)',
+    'Category Share',
+    'Original Raw Numbers',
+    'US Gen Pop Projection',
+)
+
+
+def enforce_canonical_columns(df):
+    """Strip any column not in the canonical whitelist. Returns the df with
+    columns reordered to canonical order. Logs the stripped columns so any
+    upstream leak is visible in the run log.
+    """
+    try:
+        if df is None or len(df) == 0:
+            return df
+        present = [c for c in CANONICAL_OUTPUT_COLUMNS if c in df.columns]
+        if len(present) < 2:
+            # Missing too many canonical columns — bail (don't mangle further).
+            print(f"   \u26A0 enforce_canonical_columns: only {len(present)}/6 canonical columns present; skipping")
+            return df
+        extra = [c for c in df.columns if c not in CANONICAL_OUTPUT_COLUMNS]
+        if not extra:
+            return df[present]
+        print(f"   \u2713 enforce_canonical_columns: stripped {len(extra)} non-canonical column(s): {extra}")
+        return df[present]
+    except Exception as _e:
+        print(f"   \u26A0 enforce_canonical_columns error (continuing): {_e}")
+        return df
+# === END CANONICAL COLUMN STRIP ===
+
+
+# === BRAND CATEGORY ROW SAFEGUARD (D111) ===
+# Pipeline regression discovered 2026-06-08 (Jenna): the early-June actor
+# batch shipped 174 profiles without the BRAND CATEGORY row, breaking
+# dashboard categorization (Ben Affleck not in ACTOR bucket, Bradley
+# Cooper uncategorized, etc.). Root cause: the row gets constructed in
+# df_sample (line 25201) with Value=brand_category, but some downstream
+# pass between construction and final write silently drops it (suspect
+# a dropna / drop_duplicates / metadata-scrub edge case).
+#
+# Rather than chase the leak through 45k lines, this enforcer guarantees
+# the row exists at write-time. If missing AND a brand_category was
+# supplied, it inserts the row right after SAMPLE SIZE. If the row
+# exists with an empty/UNKNOWN value AND brand_category is supplied,
+# it overwrites with the correct value. Idempotent.
+def enforce_brand_category_row(df, brand_category, force=False):
+    """Insert / overwrite BRAND CATEGORY row using the supplied category.
+
+    Numeric cells are blanked (NaN) — the dashboard reads Value column
+    only for categorization, so we don't fabricate BP/Raw/Proj numbers.
+
+    Args:
+        force: When False (default, legacy behaviour) an existing row with a
+            non-blank Value is preserved — this enforcer only fills in gaps.
+            When True, the row's Value is ALWAYS overwritten with
+            `brand_category`. Set force=True from the Avid Fan writer + the
+            new post_generation_enforcers.enforce_brand_category_mirror
+            enforcer to guarantee mirror semantics (avid category === main
+            category === caller's canonical value) per Jenna 2026-07-17
+            "avid cuts always have the same category as main cuts and never
+            end up as uncategorized".
+    """
+    try:
+        if df is None or len(df) == 0:
+            return df
+        if 'Column' not in df.columns or 'Value' not in df.columns:
+            return df
+        bc = (str(brand_category).strip().upper()
+              if brand_category else '')
+        if bc in ('', 'UNKNOWN', 'NAN', 'NONE'):
+            # Nothing to write; can't synthesize a category from thin air.
+            return df
+        col_u = df['Column'].astype(str).str.strip().str.upper()
+        bc_idx = df.index[col_u == 'BRAND CATEGORY'].tolist()
+        # Coerce numeric columns to object so we can place blanks safely.
+        for _c in ('Brand Penetration (Row)', 'Category Share',
+                   'Original Raw Numbers', 'US Gen Pop Projection'):
+            if _c in df.columns and df[_c].dtype != object:
+                df = df.copy()
+                df[_c] = df[_c].astype(object)
+        import numpy as _np
+        if bc_idx:
+            # Row exists.
+            #   force=False (legacy): overwrite Value ONLY if blank/UNKNOWN.
+            #   force=True  (mirror): overwrite Value unconditionally so
+            #                         the row matches the caller's canonical
+            #                         category (avid ↔ main mirror path).
+            i = bc_idx[0]
+            cur = str(df.at[i, 'Value']).strip().upper()
+            if cur in ('', 'UNKNOWN', 'NAN', 'NONE'):
+                df.at[i, 'Value'] = bc
+                print(f"   \u2713 enforce_brand_category_row: filled blank BRAND CATEGORY row with {bc!r}")
+            elif force and cur != bc:
+                df.at[i, 'Value'] = bc
+                print(f"   \u2713 enforce_brand_category_row(force=True): overwrote BRAND CATEGORY {cur!r} → {bc!r}")
+            return df
+        # Missing: insert right after SAMPLE SIZE (or at index 2 as fallback).
+        ss_idx = df.index[col_u == 'SAMPLE SIZE'].tolist()
+        insert_at = ss_idx[0] + 1 if ss_idx else 2
+        new_row = {c: _np.nan for c in df.columns}
+        new_row['Column'] = 'BRAND CATEGORY'
+        new_row['Value'] = bc
+        import pandas as _pd
+        top = df.iloc[:insert_at]
+        bot = df.iloc[insert_at:]
+        df_new = _pd.concat(
+            [top, _pd.DataFrame([new_row], columns=df.columns), bot],
+            ignore_index=True,
+        )
+        print(f"   \u2713 enforce_brand_category_row: INSERTED missing BRAND CATEGORY row with {bc!r} at index {insert_at}")
+        return df_new
+    except Exception as _e:
+        print(f"   \u26A0 enforce_brand_category_row error (continuing): {_e}")
+        return df
+# === END BRAND CATEGORY ROW SAFEGUARD ===
+
+
+# === DEMO CLOSURE FINAL-GATE (2026-06-09 Jenna escalation) ============
+# 754-profile sweep found 7 files (Geraldo Rivera ETHNICITY 103.45%,
+# Gabriel Iglesias INCOME 95.65%, etc.) where one of the 9 demographic
+# categories failed the sum-to-100 invariant. Root cause: the existing
+# renormalize call lives DEEP inside the crosswalk-audit-framework
+# conditional (line ~28302) so it doesn't fire for runs that skip that
+# block. This wrapper makes demo-closure a hard guarantee at every save
+# site — renormalize + validate immediately before df.to_csv so demo
+# drift can never reach disk.
+#
+# Per workspace rule #3 ("Only demographic categories sum to 100%"):
+# this is one of the legitimately-hard mathematical invariants — demos
+# MUST sum to 100 by definition, no audience-reasoning carve-out.
+def _demo_safe_to_csv(df, path, subject_label='', tag=''):
+    """Renormalize demographics + hard-validate sum-to-100, then write
+    df to path. If validation still fails after renormalize (would
+    indicate a structural bug in the renormalize itself, not drift),
+    log a loud warning and proceed — never block the save (matches
+    existing soft-warning convention for save-site instrumentation).
+    Also rank-orders rows within each category by BP descending (per
+    Jenna 2026-06-10: analysts proof CSVs faster when each category is
+    in rank order). Returns the (possibly-renormalized + sorted) df.
+    """
+    try:
+        import sys as _sys_dc
+        import os as _os_dc
+        _migration_dir_dc = _os_dc.path.join(
+            _os_dc.path.dirname(_os_dc.path.abspath(__file__)), 'migration',
+        )
+        if _migration_dir_dc not in _sys_dc.path:
+            _sys_dc.path.insert(0, _migration_dir_dc)
+        from post_generation_enforcers import (
+            fill_missing_bp_from_raw as _fill_bp_dc,
+            renormalize_demographics_to_100 as _renorm_dc,
+            validate_demo_sum_100 as _validate_dc,
+        )
+        # Backfill BP from raw BEFORE demo-renormalize, so that demo rows
+        # with blank BP (the recurring pipeline regression where the LLM
+        # agents silently fail to write BP) can be renormalized correctly.
+        # Idempotent: skips rows where BP is already valid.
+        try:
+            df, _n_bp_fill = _fill_bp_dc(
+                df, subject=subject_label, verbose=False,
+            )
+            if _n_bp_fill:
+                print(f"   \U0001F4CA BP backfill save-gate [{tag or 'save'}]: "
+                      f"filled {_n_bp_fill} blank BP cell(s) for {subject_label}")
+        except Exception as _bp_fill_err:
+            print(f"   \u26A0 BP backfill save-gate skipped: {_bp_fill_err}")
+        df, _n_adj_dc = _renorm_dc(
+            df, subject=subject_label, tolerance=0.5, verbose=False,
+        )
+        if _n_adj_dc:
+            print(f"   \U0001F527 demo-closure save-gate [{tag or 'save'}]: "
+                  f"renormalized {_n_adj_dc} demo cat(s) for {subject_label}")
+        _viol_dc = _validate_dc(
+            df, subject=subject_label, tolerance=0.5,
+            raise_on_fail=False, verbose=False,
+        )
+        if _viol_dc:
+            print(f"   \U0001F6A8 demo-closure save-gate [{tag or 'save'}]: "
+                  f"{len(_viol_dc)} demo(s) STILL out of band for "
+                  f"{subject_label} after renorm — file will save anyway "
+                  f"(structural bug, not drift):")
+            for _cat_dc, _sum_dc, _n_dc in _viol_dc:
+                print(f"      \u2717 {_cat_dc} sum={_sum_dc:.4f}% (n={_n_dc})")
+    except Exception as _dc_err:
+        print(f"   \u26A0 demo-closure save-gate skipped: {_dc_err}")
+    # Cross-profile 4dp dejitter (Jenna 2026-06-10 colleague observation):
+    # break (cat, brand, bp4) tuples shared across >=2 OTHER profiles.
+    # Catches TELECOM/MINT MOBILE pin (5 talent profiles), CREDIT
+    # PROVIDER/VISA pin (4 show cohorts), etc. Excludes LOCATION (DMA
+    # codes legitimately repeat). Idempotent — once re-jittered with
+    # subject-salted hash, the new value won't collide on the next pass.
+    try:
+        import sys as _sys_xp
+        import os as _os_xp
+        _migration_dir_xp = _os_xp.path.join(
+            _os_xp.path.dirname(_os_xp.path.abspath(__file__)), 'migration',
+        )
+        if _migration_dir_xp not in _sys_xp.path:
+            _sys_xp.path.insert(0, _migration_dir_xp)
+        from post_generation_enforcers import (
+            dejitter_cross_profile_4dp_collisions as _xprof_dejitter,
+        )
+        df, _n_xp = _xprof_dejitter(
+            df, subject=subject_label, verbose=False,
+        )
+        if _n_xp:
+            print(f"   \U0001F310 cross-profile 4dp dejitter "
+                  f"[{tag or 'save'}]: re-jittered {_n_xp} row(s) for "
+                  f"{subject_label}")
+    except Exception as _xp_err:
+        print(f"   \u26A0 cross-profile 4dp dejitter save-gate skipped: "
+              f"{_xp_err}")
+    # Within-cat 4dp + tight-cluster dejitter save-gate (Jenna 2026-06-11
+    # 13-talent batch QC). Catches: (a) any 2+ exact-4dp pairs in same
+    # category — Bronny/Draymond at 8.1149 in Kit Harington ATHLETE,
+    # Soto/Jokic at 7.9056 in TALENT — that the prior min_collision=3
+    # threshold missed; (b) 3+ rows clustered within 0.005pp window that
+    # read as "pinned" at 2dp/3dp resolution. Both are idempotent and use
+    # subject-salted jitter (no fixed values).
+    try:
+        from post_generation_enforcers import (
+            dejitter_within_cat_4dp_collisions as _wcat4_dejitter,
+            dejitter_within_cat_tight_clusters as _wcat_tight_dejitter,
+        )
+        df, _n_wc4 = _wcat4_dejitter(df, subject=subject_label, verbose=False)
+        if _n_wc4:
+            print(f"   \U0001F3B2 within-cat 4dp dejitter "
+                  f"[{tag or 'save'}]: shifted {_n_wc4} row(s) for "
+                  f"{subject_label}")
+        df, _n_wct = _wcat_tight_dejitter(df, subject=subject_label,
+                                          verbose=False)
+        if _n_wct:
+            print(f"   \U0001F3AF within-cat tight-cluster dejitter "
+                  f"[{tag or 'save'}]: spread {_n_wct} row(s) for "
+                  f"{subject_label}")
+    except Exception as _wc_err:
+        print(f"   \u26A0 within-cat dejitter save-gate skipped: "
+              f"{_wc_err}")
+    # PORN MEDIA audience-aware band clamp (Jenna 2026-06-11 8-profile
+    # depression escalation: Kate McKinnon Pornhub 5.78% / band [22,32];
+    # Kim Cattrall 7.81% / band [15,25]; sweep showed 79/154 today+
+    # yesterday files out-of-band). The band-clamp was wired into
+    # run_all_enforcers but bypassed by save paths that didn't go
+    # through it (super-fan synthesis, custom batches, etc.). Running
+    # it at every _demo_safe_to_csv save-gate is the strongest
+    # defense-in-depth — idempotent (no-op when in-band).
+    try:
+        from post_generation_enforcers import (
+            apply_porn_canonical_normalize as _porn_canon_save,
+            apply_porn_leader_invariant as _porn_leader_save,
+        )
+        df, _n_pc = _porn_canon_save(df, subject_label, verbose=False)
+        if _n_pc:
+            print(f"   \U0001F512 PORN MEDIA band-clamp "
+                  f"[{tag or 'save'}]: lifted/capped {_n_pc} row(s) for "
+                  f"{subject_label}")
+        df, _n_pl = _porn_leader_save(df, subject_label, verbose=False)
+        if _n_pl:
+            print(f"   \U0001F512 PORN MEDIA leader-break "
+                  f"[{tag or 'save'}]: scaled {_n_pl} peer(s) for "
+                  f"{subject_label}")
+    except Exception as _porn_err:
+        print(f"   \u26A0 PORN MEDIA save-gate skipped: {_porn_err}")
+    # Rank-order pass: sort rows within each category by BP descending
+    # so analysts can proof CSVs faster. Preserves outer category order,
+    # bucketed-demo semantic order (AGE / INCOME / EDUCATION), and meta
+    # rows (BRAND INPUT, SAMPLE SIZE, etc.).
+    try:
+        df = _sort_within_categories_by_bp_desc(df)
+    except Exception as _sort_err:
+        print(f"   \u26A0 rank-order save-gate skipped: {_sort_err}")
+    # G12 soft-warning: profile_raw > gp_raw signals Gen Pop needs a
+    # bp bump for this brand. Per Jenna 2026-06-10 ("don't edit
+    # profiles, update Gen Pop instead"), this is a SOFT warning that
+    # logs and writes the bump-list to a side-file consumed by
+    # `scripts/reconcile_gen_pop.py`.
+    try:
+        import sys as _sys_g12
+        import os as _os_g12
+        _migration_dir_g12 = _os_g12.path.join(
+            _os_g12.path.dirname(_os_g12.path.abspath(__file__)), 'migration',
+        )
+        if _migration_dir_g12 not in _sys_g12.path:
+            _sys_g12.path.insert(0, _migration_dir_g12)
+        from post_generation_enforcers import (
+            validate_profile_raw_le_gp_raw as _g12_validate,
+        )
+        _g12_warnings, _g12_bumps = _g12_validate(
+            df, subject=subject_label, verbose=True,
+        )
+        if _g12_bumps:
+            try:
+                import json as _json_g12
+                _g12_dir = _os_g12.path.join(
+                    _os_g12.path.dirname(_os_g12.path.abspath(__file__)),
+                    'local_profile_output', '.genpop_reconcile',
+                )
+                _os_g12.makedirs(_g12_dir, exist_ok=True)
+                _g12_path = _os_g12.path.join(
+                    _g12_dir,
+                    f'{(subject_label or "profile").replace(" ", "_")}_'
+                    f'{_os_g12.path.basename(path)}.json',
+                )
+                with open(_g12_path, 'w') as _g12_fh:
+                    _json_g12.dump({
+                        'subject': subject_label,
+                        'profile_path': path,
+                        'bumps': {f'{c}|{v}': d
+                                   for (c, v), d in _g12_bumps.items()},
+                    }, _g12_fh, indent=2, default=str)
+                print(f"   📝 G12 wrote {len(_g12_bumps)} Gen Pop bump request(s) "
+                      f"→ {_g12_path}")
+            except Exception as _g12_we:
+                print(f"   ⚠ G12 bump-file write skipped: {_g12_we}")
+    except Exception as _g12_err:
+        print(f"   ⚠ G12 raw>gp_raw soft-gate skipped: {_g12_err}")
+    df.to_csv(path, index=False)
+    return df
+
+
+# === RANK-ORDER FINAL-GATE (Jenna nit 2026-06-10) ====================
+# After all enforcers + recovery passes run, some categories end up
+# slightly out of BP-descending order (MPB after mpb-floor adds, SPORTS
+# TEAM after roster-floor inserts, DIGITAL BANKING after Apple/PayPal
+# canonicalize, PORN MEDIA after leader-invariant scaling, etc.). The
+# data is correct — it's just that rows aren't rank-sorted, which
+# slows analysts down when proofing the CSV. This wrapper sorts each
+# category block by BP descending while preserving:
+#   - Outer category-block order (whichever category appears first in
+#     the input file appears first in the output file)
+#   - Bucketed-demo semantic order (AGE, INCOME, EDUCATION buckets stay
+#     in their natural progression — e.g. 17-and-under → 65+ — even
+#     when one bucket has higher BP than another)
+#   - Meta / single-row category positioning (BRAND INPUT, SAMPLE SIZE,
+#     BRAND CATEGORY, etc. stay where they were)
+#   - The 100% subject self-pin floats to the top of its category
+#     naturally (it has the highest BP)
+def _sort_within_categories_by_bp_desc(df):
+    """Sort rows within each Category by BP descending (analyst nit).
+
+    Stable: ties broken by original-row order (preserves writer intent
+    when two values are identical). Bucketed demos (AGE / INCOME /
+    EDUCATION) preserve their semantic order — they're NOT sorted by
+    BP, since '65 OR OLDER' should not appear before '17 AND UNDER'
+    just because the audience skews older.
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df
+    bp_col = None
+    for _c in ('Brand Penetration (Row)', 'Brand Penetration', 'BP', 'bp'):
+        if _c in df.columns:
+            bp_col = _c
+            break
+    if bp_col is None:
+        return df
+    import pandas as _pd_so
+    # Bucketed demographic categories — keep input row order (semantic
+    # bucket progression set by the writer prompt schema).
+    _DEMO_PRESERVE_ORDER = {'AGE', 'INCOME', 'EDUCATION'}
+    # Meta / single-row categories — keep input position.
+    _META_KEEP = {
+        'INPUT_METADATA', 'BRAND INPUT', 'BRAND CATEGORY', 'SAMPLE SIZE',
+        'SUBJECT', 'AVID FAN', 'CASUAL FAN', 'AL/NL', 'AFC/NFC',
+    }
+    def _bp_key(v):
+        try:
+            s = str(v).strip().rstrip('%')
+            if not s or s.lower() == 'nan':
+                return -1.0
+            return float(s)
+        except Exception:
+            return -1.0
+    df = df.reset_index(drop=True).copy()
+    df['__so_orig_idx__'] = df.index
+    df['__so_cat_u__'] = df['Column'].astype(str).str.strip().str.upper()
+    # First-occurrence index per category — defines outer block order.
+    _first_idx = {}
+    for _i, _c in enumerate(df['__so_cat_u__'].tolist()):
+        if _c not in _first_idx:
+            _first_idx[_c] = _i
+    blocks = []
+    for cat_u, gdf in df.groupby('__so_cat_u__', sort=False):
+        if cat_u in _META_KEEP or cat_u in _DEMO_PRESERVE_ORDER:
+            sorted_g = gdf.sort_values('__so_orig_idx__')
+        else:
+            tmp = gdf.copy()
+            tmp['__so_bp__'] = tmp[bp_col].apply(_bp_key)
+            sorted_g = tmp.sort_values(
+                ['__so_bp__', '__so_orig_idx__'],
+                ascending=[False, True],
+            ).drop(columns='__so_bp__')
+        blocks.append((_first_idx.get(cat_u, 1 << 30), sorted_g))
+    blocks.sort(key=lambda x: x[0])
+    out = _pd_so.concat([g for _, g in blocks], ignore_index=True)
+    out = out.drop(
+        columns=['__so_orig_idx__', '__so_cat_u__'],
+        errors='ignore',
+    )
+    return out
+# === END RANK-ORDER FINAL-GATE =======================================
+# === END DEMO CLOSURE FINAL-GATE ====================================
+
+
+
 def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, behavior_start, behavior_end, filters, skew_settings, is_genpop, purchasers_only=False, previous_file_path=None, brand_category=None, is_listener_watcher=False, output_dir=None, geo_zip_codes=None, geo_dma=None):
     from datetime import datetime
     import time
@@ -23495,9 +24855,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
               AND c.COMMON_NAME != ' '
             QUALIFY rn <= {visits_per_user}
         """, settings={
-            'max_memory_usage':                   120 * 1024 * 1024 * 1024,  # 120 GiB
-            'max_bytes_before_external_sort':      40 * 1024 * 1024 * 1024,  # spill at 40 GiB
-            'max_bytes_before_external_group_by':  40 * 1024 * 1024 * 1024,
+            'max_memory_usage':                   200 * 1024 * 1024 * 1024,  # 200 GiB (bumped 2026-06-16 for YouTube/TikTok/Instagram-scale universes)
+            'max_bytes_before_external_sort':      30 * 1024 * 1024 * 1024,  # spill at 30 GiB (lowered from 40 to encourage earlier MergeSortingTransform spilling)
+            'max_bytes_before_external_group_by':  30 * 1024 * 1024 * 1024,
             'max_threads':                        32,
         })
         
@@ -24327,13 +25687,84 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 genpop_derived_sample = round(genpop_pct / 100 * GENPOP_SAMPLE_CAP)
                 genpop_derived_sample = (genpop_derived_sample // 10) * 10
                 genpop_derived_sample = max(genpop_derived_sample, 10_000)
-                final_sample_size = genpop_derived_sample
-                if not SILENCE_VERBOSE_OUTPUT:
+                
+                # ───────────────────────────────────────────────────────────
+                # SANITY GUARD (May 2026 — niche-creator first-name collision)
+                # ───────────────────────────────────────────────────────────
+                # Reject Gen Pop matches that are implausibly large relative to
+                # the digital-panel evidence. This catches future fuzzy-match
+                # bugs (e.g. niche creator "Colin Rosenblum" accidentally
+                # mapped to "COLIN FARRELL" @ 22%) without depending on a
+                # specific match path being correct.
+                #
+                # Heuristic: if raw_universe < 1,000 (tiny niche cohort), the
+                # Gen Pop result must not exceed both:
+                #   (a) 100x the conservative category-tier estimate, AND
+                #   (b) raw_universe × MAX_INFLATION_FACTOR × 200
+                # If either ceiling is breached, fall through to Step 2 (tier
+                # estimator) which is the safe last-known-good path for
+                # creators / influencers / niche talent.
+                _raw_for_guard = getattr(run_full_pipeline, 'universe_size', None) or 0
+                if _raw_for_guard and _raw_for_guard < 1000:
+                    try:
+                        _tier_est = estimate_sample_size_for_unknown_brand(
+                            brand_category, actual_universe_size=_raw_for_guard
+                        )
+                    except Exception:
+                        _tier_est = 100_000
+                    _ceiling_a = max(_tier_est * 100, 250_000)
+                    _ceiling_b = _raw_for_guard * MAX_INFLATION_FACTOR * 200
+                    _ceiling = max(_ceiling_a, _ceiling_b)
+                    if genpop_derived_sample > _ceiling:
+                        print(
+                            f"🛡️  Gen Pop SANITY GUARD tripped: '{project_name}' matched "
+                            f"{genpop_cat}@{genpop_pct:.4f}% → would give "
+                            f"{genpop_derived_sample:,} sample, but raw universe is only "
+                            f"{_raw_for_guard:,}. Ceiling = {_ceiling:,}. "
+                            f"REJECTING Gen Pop match — falling through to tier estimator."
+                        )
+                        final_sample_size = None
+                    else:
+                        final_sample_size = genpop_derived_sample
+                else:
+                    final_sample_size = genpop_derived_sample
+                
+                if final_sample_size is not None and not SILENCE_VERBOSE_OUTPUT:
                     print(f"📊 Gen Pop lookup: '{project_name}' found in {genpop_cat} at {genpop_pct:.4f}%")
                     print(f"✅ Final SAMPLE SIZE set from Gen Pop: {final_sample_size:,}")
         except Exception as e:
             print(f"⚠️ Gen Pop lookup failed (non-fatal): {e}")
-        
+
+        # Step 1.5: If Gen Pop didn't yield a result, try the SVOD
+        # Subscriber IQ corpus (s3://svod-acquisition/). These are
+        # authoritative panel-counted sample sizes for SVOD shows / movies
+        # we explicitly tracked (e.g. The Rip, Trap House). Use SIQ
+        # "Total Show Watchers" as the sample size when the brand isn't
+        # in Gen Pop but IS in SIQ. (Added 2026-06-17 per Jenna's
+        # GenPop -> SVOD-IQ -> panel tiering request.)
+        if final_sample_size is None:
+            try:
+                siq_sample, siq_proj, siq_key = get_svod_siq_sample_for_brand(
+                    project_name, brands=brands
+                )
+                if siq_sample and siq_sample > 0:
+                    final_sample_size = int(siq_sample)
+                    if not SILENCE_VERBOSE_OUTPUT:
+                        print(
+                            f"📺 SVOD-SIQ lookup: '{project_name}' found in "
+                            f"s3://{SVOD_SIQ_BUCKET}/{siq_key}"
+                        )
+                        print(
+                            f"✅ Final SAMPLE SIZE set from SVOD-SIQ: "
+                            f"{final_sample_size:,}  "
+                            f"(SIQ projection: {siq_proj:,})"
+                            if siq_proj else
+                            f"✅ Final SAMPLE SIZE set from SVOD-SIQ: "
+                            f"{final_sample_size:,}"
+                        )
+            except Exception as e:
+                print(f"⚠️ SVOD-SIQ lookup failed (non-fatal): {e}")
+
         # Step 2: If Gen Pop didn't yield a result, try digital panel estimate
         if final_sample_size is None:
             try:
@@ -24357,11 +25788,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             except Exception as e:
                 print(f"⚠️ Digital panel estimate failed: {e}")
         
-        # Step 3: Last resort — classic inflation method (odd-prime tier
-        # boost; mirrors Step 2). Revised 2026-06-04 per Jenna's
-        # follower-count + odd-boost audit. Multiplication by an odd
-        # prime is bijective, so distinct UID counts always produce
-        # distinct sample sizes. No `// 10` rounding.
+        # Step 3: Last resort — classic inflation method
         if final_sample_size is None:
             try:
                 cur = conn.cursor()
@@ -24375,6 +25802,14 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 bounded = min(int(actual_sample_size or 0), GENPOP_SAMPLE_CAP)
                 if bounded >= GENPOP_SAMPLE_CAP:
                     bounded = GENPOP_SAMPLE_CAP - max(1, int(GENPOP_SAMPLE_CAP * 0.005))
+                # Distinct ODD PRIME per tier (revised 2026-06-04 per Jenna's
+                # follower-count + odd-boost audit). Matches the Step 2
+                # estimator so Step 2 and Step 3 produce comparable values.
+                # Multiplication by a prime is bijective: distinct UID
+                # counts → distinct sample sizes. Organic ClickHouse
+                # variance (e.g. 2,613 vs 2,617) gets amplified by the
+                # boost, producing well-spread non-round numbers (33,969
+                # vs 34,021) instead of clustering at a clamp band.
                 if bounded < 500:
                     INFLATION_FACTOR = 23
                 elif bounded < 2_000:
@@ -25364,10 +26799,25 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     
     # Insert 'Brand Input' row at the top before saving
     # ALWAYS use the submitted brands -- never override with a previous run's brand input
-    if brands and isinstance(brands, list) and len(brands) == 1:
+    #
+    # 2026-05-30 (D4 fix): Use the CANONICAL project_name when available
+    # rather than joining the full expansion of brand variations. Niche
+    # creators get 25-30+ variations like
+    #   "Adam-J-Kurtz, Adam.J.Kurtz, AdamJKurtz, Adam_J_Kurtz, ADAM%20J%20KURTZ,
+    #    ADAM%26J%26KURTZ, ADAM%2BJ%2BKURTZ, ... (~30 entries, 400+ chars)"
+    # which produces an unusable BRAND INPUT cell in the dashboard. The
+    # variations list is for URL/clickstream matching only — the BRAND INPUT
+    # row is a human-readable identifier and should be the proper name.
+    project_clean = str(project_name or '').strip().replace('_', ' ')
+    if project_clean:
+        brand_input_str = project_clean
+    elif brands and isinstance(brands, list) and len(brands) == 1:
+        brand_input_str = brands[0]
+    elif brands and isinstance(brands, list) and len(brands) > 1:
+        # Use only the first variation (canonical) — never join all of them
         brand_input_str = brands[0]
     else:
-        brand_input_str = ', '.join(brands) if brands else ''
+        brand_input_str = ''
     brand_row = pd.DataFrame({
         'Column': ['BRAND INPUT'],
         'Value': [brand_input_str],
@@ -26599,14 +28049,183 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     except Exception as _e:
         print(f"   ⚠️ pre-save Raw/Proj recompute skipped: {_e}")
 
-    # Save to CSV
+
+    # === BIOGRAPHICAL-FLOORS SAFEGUARD ===
+    # Catches forced-zeros for known biographical ties + reconciles AVID/CASUAL
+    # FAN label drift. Both functions defined at module top of this file.
     try:
-        df_final.to_csv(final_file, index=False)
+        df_final = enforce_fan_label_consistency(df_final)
+    except Exception as _e:
+        print(f"   ⚠️ enforce_fan_label_consistency failed (continuing): {_e}")
+    try:
+        _subj_for_audit = (locals().get('_subject_name') or project_name or '')
+        df_final = enforce_biographical_floors(df_final, _subj_for_audit, brand_category)
+    except Exception as _e:
+        print(f"   ⚠️ enforce_biographical_floors failed (continuing): {_e}")
+    try:
+        df_final = enforce_canonical_telecom_anchors(df_final)
+    except Exception as _e:
+        print(f"   ⚠️ enforce_canonical_telecom_anchors failed (continuing): {_e}")
+    try:
+        # D109 (2026-06-08): ensure Big-4 US banks always appear in BANKING.
+        # Inserts canonical hostmap-spelling rows at empirical floors if
+        # missing; lifts present-but-suppressed rows to the floor.
+        df_final = enforce_canonical_big4_banks(df_final)
+    except Exception as _e:
+        print(f"   ⚠️ enforce_canonical_big4_banks failed (continuing): {_e}")
+
+    # === MISSING-ENFORCER WIRING (2026-06-09 Jenna post-Kinnear-batch
+    # regression) ========================================================
+    # The following enforcers were added to
+    # migration/post_generation_enforcers.run_all_enforcers but never
+    # imported here, so they silently never ran for any profile generated
+    # via run_full_pipeline. The June 9 actor batch (35 profiles since
+    # Greg Kinnear) shipped with ALL 5 defect classes intact:
+    #   D88  GREG~KINNEAR tilde delimiter            (108 rows / 35 files)
+    #   D112 Apple Pay > PayPal inversion            ( 37 rows)
+    #   D115 BP/CS suppression on isolated rows      ( 22 rows recovery)
+    #   G1   sequential-digit placeholder BPs        (138 rows)
+    #   4dp  within-cat ≥3-brand BP collisions       ( 34 groups)
+    # The enforcers exist, work, and are wired into run_all_enforcers
+    # (which the corpus-wide audit invokes); they just weren't wired into
+    # the in-pipeline write path. Wiring here — runs AFTER every other
+    # deterministic pass and BEFORE the first save — guarantees the
+    # on-disk file is clean by save-1, AND that the audit-playbook +
+    # crosswalk-framework reads (which load from disk) inherit clean input.
+    try:
+        import sys as _sys_mw
+        _migration_dir_mw = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), 'migration',
+        )
+        # 2026-06-10 (Jenna 3am audit RCA): force-reload from migration/.
+        # validate_genpop.py used to prepend bg-webapp/ to sys.path, which
+        # cached the STALE bg-webapp/post_generation_enforcers.py — making
+        # the wiring fail with ImportError on every new enforcer. Even
+        # after fixing validate_genpop, harden by always loading via
+        # absolute file path so we're immune to sys.path order.
+        try:
+            import importlib.util as _ilu_mw
+            _pge_path_mw = os.path.join(_migration_dir_mw, 'post_generation_enforcers.py')
+            _spec_mw = _ilu_mw.spec_from_file_location(
+                'post_generation_enforcers', _pge_path_mw,
+            )
+            _pge_mw = _ilu_mw.module_from_spec(_spec_mw)
+            _spec_mw.loader.exec_module(_pge_mw)
+            _sys_mw.modules['post_generation_enforcers'] = _pge_mw
+            _enf_strip_tilde = _pge_mw.apply_strip_tilde_from_brand_input
+            _enf_db_canon = _pge_mw.apply_db_canonical_normalize
+            _enf_porn_canon = _pge_mw.apply_porn_canonical_normalize
+            _enf_porn_leader = _pge_mw.apply_porn_leader_invariant
+            _enf_bp_cs = _pge_mw.apply_bp_cs_consistency_recovery
+            _enf_g1 = _pge_mw.dejitter_sequential_placeholders
+            _enf_coll = _pge_mw.dejitter_within_cat_4dp_collisions
+            _enf_round2dp = _pge_mw.depin_round_brand_bps
+        except Exception as _force_e:
+            # Fall back to standard import (will pick up cached version
+            # if any). Logged so we know if force-load failed.
+            print(f"   ⚠️ force-load from migration/ failed ({_force_e}); "
+                  f"falling back to sys.path resolution")
+            if _migration_dir_mw not in _sys_mw.path:
+                _sys_mw.path.insert(0, _migration_dir_mw)
+            from post_generation_enforcers import (
+                apply_strip_tilde_from_brand_input as _enf_strip_tilde,
+                apply_db_canonical_normalize as _enf_db_canon,
+                apply_porn_canonical_normalize as _enf_porn_canon,
+                apply_porn_leader_invariant as _enf_porn_leader,
+                apply_bp_cs_consistency_recovery as _enf_bp_cs,
+                dejitter_sequential_placeholders as _enf_g1,
+                dejitter_within_cat_4dp_collisions as _enf_coll,
+                depin_round_brand_bps as _enf_round2dp,
+            )
+        _subj_mw = (
+            locals().get('project_name')
+            or locals().get('_subject_name')
+            or (brands[0] if brands else '')
+            or ''
+        )
+        # 1. D88 tilde-strip — must run first so downstream subject-
+        # string compares see the canonical form.
+        try:
+            df_final, _n88 = _enf_strip_tilde(df_final, _subj_mw, verbose=True)
+        except Exception as _e:
+            print(f"   ⚠️ D88 tilde-strip skipped: {_e}")
+        # 2. D112 — Apple Pay / PayPal canonical-band normalize so
+        # PayPal leads Apple Pay by ≥5pp (G7 invariant).
+        try:
+            df_final, _n112 = _enf_db_canon(df_final, _subj_mw, verbose=True)
+        except Exception as _e:
+            print(f"   ⚠️ D112 DB canon skipped: {_e}")
+        # 3a. PORN MEDIA audience-aware band clamp (Jenna 2026-06-11
+        # 8-profile escalation: Kate McKinnon Pornhub 5.78% on a
+        # female-skew adult audience expecting [22,32]; Kim Cattrall
+        # 7.81%, Kristen Bell 8.46%, etc. — and the inverse, e.g. older
+        # female-skew profiles emitting Pornhub at 40% above their
+        # [15,25] band). Sweep showed 79/154 today+yesterday files
+        # out-of-band — apply_porn_canonical_normalize was wired into
+        # run_all_enforcers but not the BG.py defense-in-depth save-gate,
+        # so any pipeline path that bypassed run_all_enforcers (e.g.
+        # super-fan generation, custom batch paths) skipped the clamp.
+        # Must run BEFORE apply_porn_leader_invariant (peers scale with
+        # PORNHUB inside this enforcer; the leader gate then ensures
+        # PORNHUB > peers + 1pp).
+        try:
+            df_final, _n_porn_canon = _enf_porn_canon(
+                df_final, _subj_mw, verbose=True,
+            )
+        except Exception as _e:
+            print(f"   ⚠️ PORN MEDIA band-clamp skipped: {_e}")
+        # 3b. D118 — PORN MEDIA leader-break invariant (Hilary Swank
+        # XNXX@49.6%). PORNHUB must lead all peers by ≥1pp; otherwise
+        # scale peers down. Runs AFTER apply_porn_canonical_normalize
+        # both here (3a) and in run_all_enforcers.
+        try:
+            df_final, _n118 = _enf_porn_leader(df_final, _subj_mw, verbose=True)
+        except Exception as _e:
+            print(f"   ⚠️ D118 porn leader-break skipped: {_e}")
+        # 4. D115 — BP/CS internal-inconsistency recovery from preserved
+        # CS where writer suppressed BP/RAW/PROJ in lockstep.
+        try:
+            df_final, _n115 = _enf_bp_cs(df_final, _subj_mw, verbose=True)
+        except Exception as _e:
+            print(f"   ⚠️ D115 BP/CS recovery skipped: {_e}")
+        # 5. G1 sequential-digit placeholder dejitter — catches LLM
+        # patterns like 5.4321 / 12.3456 / 9.8765 etc.
+        try:
+            df_final, _ng1 = _enf_g1(df_final, _subj_mw, verbose=True)
+        except Exception as _e:
+            print(f"   ⚠️ G1 sequential dejitter skipped: {_e}")
+        # 6. 4dp within-cat collision dejitter — breaks 3+ brands tied
+        # at the same exact 4-decimal BP within one category.
+        try:
+            df_final, _ncoll = _enf_coll(df_final, _subj_mw, verbose=True)
+        except Exception as _e:
+            print(f"   ⚠️ 4dp within-cat dejitter skipped: {_e}")
+        # 7. final round-2dp depin mop-up — D115 recovery + dejitter
+        # passes can occasionally land BPs back on .00/.50 boundaries;
+        # this runs last so the saved file is guaranteed off-boundary.
+        try:
+            df_final, _nr2 = _enf_round2dp(df_final, _subj_mw, verbose=True)
+        except Exception as _e:
+            print(f"   ⚠️ round-2dp depin mop-up skipped: {_e}")
+    except Exception as _mw_err:
+        print(f"   ⚠️ missing-enforcer wiring skipped: {_mw_err}")
+
+    # Save to CSV (demo-closure save-gate per Jenna 2026-06-09)
+    try:
+        df_final = _demo_safe_to_csv(
+            df_final, final_file,
+            subject_label=str(project_name or (brands[0] if brands else '')),
+            tag='save-1-pre-audit-playbook',
+        )
         print(f"✅ Successfully saved to: {final_file}")
     except OSError as e:
         print(f"❌ Error saving file: {e}")
         fallback_file = os.path.join(base_dir, f"fallback_{timestamp}.csv")
-        df_final.to_csv(fallback_file, index=False)
+        df_final = _demo_safe_to_csv(
+            df_final, fallback_file,
+            subject_label=str(project_name or (brands[0] if brands else '')),
+            tag='save-1-fallback',
+        )
         final_file = fallback_file
     
     # Calculate total time
@@ -26683,7 +28302,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     else (v if str(v).endswith('%')
                           else f"{float(str(v).replace('%','').strip() or 0):.4f}%")
                 )
-            _df_final_ap.to_csv(final_file, index=False)
+            _df_final_ap = _demo_safe_to_csv(
+                _df_final_ap, final_file,
+                subject_label=str(locals().get('_subj_for_enforce', '') or
+                                   project_name or
+                                   (brands[0] if brands else '')),
+                tag='save-2-audit-playbook',
+            )
             print(f"✅ Audit playbook applied (in-pipeline final pass): {final_file}")
     except Exception as _ap_in_err:
         print(f"⚠️ in-pipeline audit-playbook pass skipped: {_ap_in_err}")
@@ -26962,10 +28587,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     if 'conn' in dir() and conn is not None:
                         try:
                             _mpb_cur = conn.cursor()
-                            # Rule #4c (2026-05-28): exclude brands that
-                            # are *also* tagged ``Hidden`` anywhere in
-                            # hostmap (Dippin Dots, Klorane, Molton Brown,
-                            # Wildfang, Evolution Fresh).
+                            # Rule #4c (2026-05-28): exclude any brand that
+                            # is *also* tagged ``Hidden`` anywhere in hostmap
+                            # (e.g. Dippin Dots, Klorane, Molton Brown,
+                            # Wildfang, Evolution Fresh). Without this gate
+                            # the floor agent could ADD an MPB-tagged brand
+                            # whose Hidden tag would then drop it again in
+                            # the strip pass downstream — wasted reasoning.
                             _mpb_cur.execute(
                                 "SELECT DISTINCT BRAND, SECTION "
                                 "FROM reference.host_mapping "
@@ -26995,11 +28623,19 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                             print(f"   ⚠️ mpb-floor: hostmap fetch failed: "
                                   f"{_mpb_fetch_err}")
                     if _mpb_candidates:
+                        # 2026-05-30 (Jenna May 30 batch fix): pass raw_universe
+                        # so mpb-floor can ADAPTIVELY scale its target down for
+                        # niche profiles (24 panel users → target ~1,300 instead
+                        # of 1,500, preventing LLM placeholder emission).
+                        _raw_univ_for_mpb = getattr(run_full_pipeline,
+                                                    'universe_size', None)
                         _df_cw, _mpb_decisions = _cw_mpb_floor(
                             _df_cw, _mpb_candidates, _oa_client,
                             persona_doc=_pdoc,
                             audience_composition=_report.audience_composition,
-                            subject=_subject, verbose=True,
+                            subject=_subject,
+                            raw_universe=_raw_univ_for_mpb,
+                            verbose=True,
                         )
                         if _mpb_decisions:
                             _n_mpb_add = sum(1 for d in _mpb_decisions
@@ -27094,11 +28730,49 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 # recompute Raw/Proj before the final write so the disk file
                 # stays canonical.
                 try:
-                    from post_generation_enforcers import (
-                        recompute_raw_and_projection as _recompute_rawproj_cw,
-                        dejitter_x5x0_displays as _dejitter_x5x0_cw,
-                        dejitter_cross_cat_4dp_pins as _dejitter_xcat4dp_cw,
-                    )
+                    # 2026-06-10 (Jenna 3am audit RCA): force-load from
+                    # migration/ to bypass any stale bg-webapp/post_generation_enforcers.py
+                    # that may have been cached earlier in module-load.
+                    try:
+                        import importlib.util as _ilu_cw
+                        _pge_path_cw = os.path.join(
+                            os.path.dirname(os.path.abspath(__file__)),
+                            'migration', 'post_generation_enforcers.py',
+                        )
+                        _spec_cw = _ilu_cw.spec_from_file_location(
+                            'post_generation_enforcers', _pge_path_cw,
+                        )
+                        _pge_cw = _ilu_cw.module_from_spec(_spec_cw)
+                        _spec_cw.loader.exec_module(_pge_cw)
+                        import sys as _sys_cw
+                        _sys_cw.modules['post_generation_enforcers'] = _pge_cw
+                        _recompute_rawproj_cw = _pge_cw.recompute_raw_and_projection
+                        _dejitter_x5x0_cw = _pge_cw.dejitter_x5x0_displays
+                        _dejitter_xcat4dp_cw = _pge_cw.dejitter_cross_cat_4dp_pins
+                        _strip_tilde_cw = _pge_cw.apply_strip_tilde_from_brand_input
+                        _db_canon_cw = _pge_cw.apply_db_canonical_normalize
+                        _porn_canon_cw = _pge_cw.apply_porn_canonical_normalize
+                        _porn_leader_cw = _pge_cw.apply_porn_leader_invariant
+                        _bp_cs_cw = _pge_cw.apply_bp_cs_consistency_recovery
+                        _g1_cw = _pge_cw.dejitter_sequential_placeholders
+                        _coll_cw = _pge_cw.dejitter_within_cat_4dp_collisions
+                        _round2dp_cw = _pge_cw.depin_round_brand_bps
+                    except Exception as _force_e_cw:
+                        print(f"   ⚠️ post-audit force-load failed ({_force_e_cw}); "
+                              f"falling back to sys.path import")
+                        from post_generation_enforcers import (
+                            recompute_raw_and_projection as _recompute_rawproj_cw,
+                            dejitter_x5x0_displays as _dejitter_x5x0_cw,
+                            dejitter_cross_cat_4dp_pins as _dejitter_xcat4dp_cw,
+                            apply_strip_tilde_from_brand_input as _strip_tilde_cw,
+                            apply_db_canonical_normalize as _db_canon_cw,
+                            apply_porn_canonical_normalize as _porn_canon_cw,
+                            apply_porn_leader_invariant as _porn_leader_cw,
+                            apply_bp_cs_consistency_recovery as _bp_cs_cw,
+                            dejitter_sequential_placeholders as _g1_cw,
+                            dejitter_within_cat_4dp_collisions as _coll_cw,
+                            depin_round_brand_bps as _round2dp_cw,
+                        )
                     # Final dejitter mop-up: compose_mpb_from_subcats and
                     # other late audit-framework passes (empty-cat, mpb-floor)
                     # add new rows that were never seen by the dejitter passes
@@ -27109,6 +28783,27 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         _df_cw2, _n_dj2 = _dejitter_x5x0_cw(_df_cw2, _subject, verbose=True)
                     except Exception as _de_err:
                         print(f"   ⚠️ post-audit-framework dejitter mop-up skipped: {_de_err}")
+                    # 2026-06-09 (post-Kinnear-batch defense-in-depth):
+                    # second-pass missing-enforcer wiring on _df_cw2.
+                    # Same set as the in-pipeline pass at line ~27470, but
+                    # applied on the audit-framework output so the pre-
+                    # publish gate sees a clean df. Each wrapped in its
+                    # own try/except — failures are non-fatal so the gate
+                    # is still reachable for any individual enforcer crash.
+                    for _enf_fn, _enf_tag in (
+                        (_strip_tilde_cw, 'D88 tilde'),
+                        (_db_canon_cw, 'D112 DB canon'),
+                        (_porn_canon_cw, 'PORN MEDIA band-clamp'),
+                        (_porn_leader_cw, 'D118 porn leader-break'),
+                        (_bp_cs_cw, 'D115 BP/CS recovery'),
+                        (_g1_cw, 'G1 sequential dejitter'),
+                        (_coll_cw, '4dp within-cat dejitter'),
+                        (_round2dp_cw, 'round-2dp depin'),
+                    ):
+                        try:
+                            _df_cw2, _ = _enf_fn(_df_cw2, _subject, verbose=False)
+                        except Exception as _e_inner:
+                            print(f"   ⚠️ {_enf_tag} (post-audit pass) skipped: {_e_inner}")
 
                     # Crosswalk Audience Vetting Framework — score every brand
                     # row against Gen_Pop_2026.csv (digital-only published
@@ -27153,6 +28848,37 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                                 model='gpt-4o', batch_size=12,
                                 verbose=True,
                             )
+
+                            # AGENT-REASONED SIDECAR (2026-06-02)
+                            # enforce_audit_playbook runs again later (lines
+                            # 33852 + 33890) and reads from disk. To stop it
+                            # from overwriting the agent's persona-grounded
+                            # decisions, persist the (col, val) keys for
+                            # every CHANGE decision into a sidecar JSON next
+                            # to the final CSV. The later playbook reads
+                            # this sidecar and skips its cap on those rows.
+                            try:
+                                _reasoned_keys = []
+                                for _d in (_vet_decisions or []):
+                                    _dec = str(_d.get('decision', '')).upper().strip()
+                                    if _dec == 'CHANGE':
+                                        _ck = str(_d.get('category', '')).upper().strip()
+                                        _vk = str(_d.get('brand', '')).upper().strip()
+                                        if _ck and _vk:
+                                            _reasoned_keys.append([_ck, _vk])
+                                if final_file:
+                                    import json as _json_vrk
+                                    _sidecar = final_file + '.vet_reasoned.json'
+                                    with open(_sidecar, 'w') as _f_vrk:
+                                        _json_vrk.dump({
+                                            'subject': _subject,
+                                            'reasoned_keys': _reasoned_keys,
+                                        }, _f_vrk, indent=2)
+                                    print(f'   📝 vet-reasoned sidecar: '
+                                          f'{len(_reasoned_keys)} CHANGE keys → '
+                                          f'{_sidecar}')
+                            except Exception as _vrk_err:
+                                print(f'   ⚠️ vet-reasoned sidecar write skipped: {_vrk_err}')
                         else:
                             print('   ⚠️ vet-reason skipped: no OpenAI client available')
 
@@ -27194,6 +28920,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                             _df_cw2, _sweep_summary = _pv_sweep(
                                 _df_cw2, _subject, verbose=True,
                             )
+                            # Persist cluster-compression flags to S3 audit log
                             try:
                                 _flags = _sweep_summary.get('cluster_flags') or []
                                 if _flags and not isinstance(_flags, str):
@@ -27255,40 +28982,135 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         else (v if str(v).endswith('%')
                               else f"{float(str(v).replace('%','').strip() or 0):.4f}%")
                     )
-                # D111 (2026-06-08): guarantee BRAND CATEGORY row present
-                # + populated. Early-June actor batch shipped 174 profiles
-                # missing this row entirely, breaking dashboard categorization.
+                # 2026-05-30 (Jenna May 30 batch fix): pre-publish gate.
+                # Runs deterministic defect checks (sequential-digit
+                # placeholders, impossible projections, BRAND INPUT URL-
+                # permutation soup, within-cat 4dp collisions). Logs all
+                # defects; in audit-only mode it does NOT block save
+                # (so this codepath stays compatible with reruns) but
+                # surfaces a loud warning so any survivor is visible in
+                # the run log and a downstream check can pick it up.
+                # 2026-06 (Jenna P0+P2): demographic sum-to-100 fix + check.
+                # P2 (renormalize): each of the 9 demos rescaled to sum=100%
+                #   in place. Recomputes Original Raw Numbers + US Gen Pop
+                #   Projection from the new BPs. Idempotent; no-op when
+                #   already within 0.5pp tolerance. Fixes OCCUPATION over-
+                #   emission (110-141%) and AGE deterministic drop (96.28%)
+                #   at write time.
+                # P0 (validate): hard-fail check that the fix worked. Wired
+                #   into pre-publish gate as G5 (audit-only here, same
+                #   pattern as G1-G4) so any survivor logs loudly.
                 try:
-                    _BC_VAL = (str(brand_category).strip().upper()
-                               if brand_category else '')
-                    if _BC_VAL and _BC_VAL not in ('UNKNOWN', 'NAN', 'NONE'):
-                        _col_u_bc = _df_cw2['Column'].astype(str).str.strip().str.upper()
-                        _bc_idx_list = _df_cw2.index[_col_u_bc == 'BRAND CATEGORY'].tolist()
-                        for _c_num in ('Brand Penetration (Row)', 'Category Share',
-                                       'Original Raw Numbers', 'US Gen Pop Projection'):
-                            if _c_num in _df_cw2.columns and _df_cw2[_c_num].dtype != object:
-                                _df_cw2[_c_num] = _df_cw2[_c_num].astype(object)
-                        import numpy as _np_bc
-                        if _bc_idx_list:
-                            _bi = _bc_idx_list[0]
-                            _cur_v = str(_df_cw2.at[_bi, 'Value']).strip().upper()
-                            if _cur_v in ('', 'UNKNOWN', 'NAN', 'NONE'):
-                                _df_cw2.at[_bi, 'Value'] = _BC_VAL
-                                print(f"   \u2713 enforce_brand_category_row: filled blank with {_BC_VAL!r}")
-                        else:
-                            _ss_idx_bc = _df_cw2.index[_col_u_bc == 'SAMPLE SIZE'].tolist()
-                            _ins_at = _ss_idx_bc[0] + 1 if _ss_idx_bc else 2
-                            _new_bc = {c: _np_bc.nan for c in _df_cw2.columns}
-                            _new_bc['Column'] = 'BRAND CATEGORY'
-                            _new_bc['Value'] = _BC_VAL
-                            import pandas as _pd_bc
-                            _top_bc = _df_cw2.iloc[:_ins_at]
-                            _bot_bc = _df_cw2.iloc[_ins_at:]
-                            _df_cw2 = _pd_bc.concat(
-                                [_top_bc, _pd_bc.DataFrame([_new_bc], columns=_df_cw2.columns), _bot_bc],
-                                ignore_index=True,
-                            )
-                            print(f"   \u2713 enforce_brand_category_row: INSERTED {_BC_VAL!r} at index {_ins_at}")
+                    from post_generation_enforcers import (
+                        renormalize_demographics_to_100 as _renorm_demo,
+                    )
+                    _df_cw2, _n_renormed = _renorm_demo(
+                        _df_cw2, subject=_subject, tolerance=0.5,
+                        verbose=True,
+                    )
+                except Exception as _renorm_err:
+                    print(f'   ⚠️ renormalize_demographics_to_100 errored (non-fatal): {_renorm_err}')
+
+                # 2026-06-07 (Jenna deep audit): flipped raise_on_fail
+                # from False → True. The gate has been in audit-only mode
+                # since the May-30 batch escalation; flipping it to enforce
+                # mode now that:
+                #   - run_all_enforcers wires apply_cp_canonical_normalize
+                #     (D102b) so 100% of CP suppressions are fixed pre-gate
+                #   - apply_telecom_canonical_normalize (D106) catches AT&T
+                #     age-aware depressions
+                #   - apply_strip_tilde_from_brand_input (D88) and the D109
+                #     fix at set_brand_input_to_cohort_name catch the writer
+                #     bugs that G6 enforces
+                # so the gate should rarely fire on a healthy pipeline run.
+                try:
+                    from post_generation_enforcers import (
+                        run_pre_publish_gate as _pp_gate,
+                        PrePublishGateError as _pp_gate_err,
+                    )
+                    _pp_gate(
+                        _df_cw2, _subject,
+                        project_name=project_name,
+                        raise_on_fail=True,
+                        verbose=True,
+                    )
+                except _pp_gate_err as _pp_first_err:
+                    # 2026-06-22 Jenna policy ("synth fix and patch the file
+                    # vs kill it all together"): replaces the 2026-06-16
+                    # delete-and-abort behavior below. When the gate flags
+                    # un-auto-patchable defects, try a SYNTH-RECOVERY pass
+                    # before giving up:
+                    #   1. Coerce numeric columns (BP / CS / Raw / Proj) to
+                    #      numeric dtype -- many gate auto-patches (G1, G13,
+                    #      G14, G17, G7 NEAR_TIE) silently crash inside their
+                    #      try/except on pandas StringDtype, so a dtype-clean
+                    #      retry usually unblocks them.
+                    #   2. Re-run the gate. If it passes, ship.
+                    #   3. If defects still remain, log them and SHIP ANYWAY
+                    #      (a patched-with-warnings file is better than a
+                    #      nuked one per Jenna's policy).
+                    # The old behavior was to delete final_file then re-raise,
+                    # killing the profile entirely. That bit Lisa BLACKPINK
+                    # twice (G13 auto-patch crashed silently on StringDtype).
+                    print(f'   ⚠️  pre-publish gate flagged defects on '
+                          f'{final_file} -- attempting synth-recovery')
+                    _first_defects = str(_pp_first_err)
+                    print(f'      first-pass defects: '
+                          f'{_first_defects[:600]}')
+                    try:
+                        import pandas as _pd
+                        _coerced = 0
+                        for _nc in ('Brand Penetration (Row)',
+                                    'Category Share',
+                                    'Original Raw Numbers',
+                                    'US Gen Pop Projection'):
+                            if _nc in _df_cw2.columns:
+                                if (_df_cw2[_nc].dtype.name not in
+                                        ('object', 'O', 'float64', 'int64')):
+                                    _df_cw2[_nc] = _pd.to_numeric(
+                                        _df_cw2[_nc], errors='coerce'
+                                    )
+                                    _coerced += 1
+                        if _coerced:
+                            print(f'   🔧 synth-recovery: coerced '
+                                  f'{_coerced} numeric column(s) to '
+                                  f'float64 (was StringDtype)')
+                    except Exception as _coerce_err:
+                        print(f'   ⚠️  synth-recovery dtype coerce '
+                              f'failed: {_coerce_err}')
+                    try:
+                        _pp_gate(
+                            _df_cw2, _subject,
+                            project_name=project_name,
+                            raise_on_fail=True,
+                            verbose=True,
+                        )
+                        print(f'   ✅ synth-recovery PASS: gate succeeded '
+                              f'on retry after dtype coerce')
+                    except _pp_gate_err as _pp_second_err:
+                        _remaining = str(_pp_second_err)
+                        print(f'   ⚠️  synth-recovery: defects still '
+                              f'remain after dtype coerce')
+                        print(f'      remaining: {_remaining[:600]}')
+                        print(f'   🚀 synth-recovery: SHIPPING ANYWAY per '
+                              f'Jenna "patch don\'t kill" directive '
+                              f'(2026-06-22)')
+                    except Exception as _other_err:
+                        print(f'   ⚠️  synth-recovery retry errored: '
+                              f'{_other_err}')
+                        print(f'   🚀 synth-recovery: SHIPPING ANYWAY')
+                    # Fall through to save (no delete, no re-raise).
+                except ImportError as _pp_imp_err:
+                    print(f'   ⚠️ pre-publish gate import failed (non-fatal): {_pp_imp_err}')
+                except Exception as _pp_err:
+                    print(f'   ⚠️ pre-publish gate errored (non-fatal): {_pp_err}')
+                # D111 (2026-06-08, actor-batch regression): guarantee the
+                # BRAND CATEGORY row is present + populated. Early-June actor
+                # batch shipped 174 profiles where this row was silently
+                # dropped between construction (BG.py:25201) and write,
+                # breaking dashboard categorization.
+                try:
+                    _df_cw2 = enforce_brand_category_row(_df_cw2, brand_category)
                 except Exception as _bce_err:
                     print(f'   ⚠️ enforce_brand_category_row failed (continuing): {_bce_err}')
                 # D110 (2026-06-08, Dixie D'Amelio leak): final canonical-
@@ -27297,20 +29119,16 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 # (Raw, Gen Pop Projection) so the on-disk CSV always has
                 # exactly the 6 canonical columns in canonical order.
                 try:
-                    _CANON_COLS = (
-                        'Column', 'Value', 'Brand Penetration (Row)',
-                        'Category Share', 'Original Raw Numbers',
-                        'US Gen Pop Projection',
-                    )
-                    _present = [c for c in _CANON_COLS if c in _df_cw2.columns]
-                    if len(_present) >= 2:
-                        _extra = [c for c in _df_cw2.columns if c not in _CANON_COLS]
-                        if _extra:
-                            print(f"   \u2713 canonical-column strip: removed {len(_extra)} leaked column(s): {_extra}")
-                        _df_cw2 = _df_cw2[_present]
+                    _df_cw2 = enforce_canonical_columns(_df_cw2)
                 except Exception as _csk_err:
-                    print(f'   ⚠️ canonical-column strip failed (continuing): {_csk_err}')
-                _df_cw2.to_csv(final_file, index=False)
+                    print(f'   ⚠️ enforce_canonical_columns failed (continuing): {_csk_err}')
+                _df_cw2 = _demo_safe_to_csv(
+                    _df_cw2, final_file,
+                    subject_label=str(locals().get('_subj_for_enforce', '') or
+                                       project_name or
+                                       (brands[0] if brands else '')),
+                    tag='save-3-crosswalk-audit-framework',
+                )
                 if _n_gaps_inserted:
                     print(f"   📋 crosswalk-audit-framework inserted {_n_gaps_inserted} "
                           f"structural-gap row(s) at consensus midpoint")
@@ -27319,8 +29137,88 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             if _s3_url:
                 print(f"   💾 Crosswalk audit report → {_s3_url}")
     except Exception as _cw_err:
+        # 2026-06-16 (Defect 28/30 regression): PrePublishGateError must NOT
+        # be swallowed here. If we swallow it, the pipeline continues, kicks
+        # off avid auto-synth, returns the (already-saved-at-save-1/save-2)
+        # local CSV to the runner, and run_parallel_profiles.py uploads it
+        # to S3 -- shipping a gate-failed profile (e.g. Netflix-suppressed
+        # STREAMING/PLATFORM grid). Re-raise so the runner fails the row.
+        # Other exceptions (true crosswalk-framework bugs) remain non-fatal.
+        if type(_cw_err).__name__ == 'PrePublishGateError':
+            print(f"❌ crosswalk-audit-framework gate FAILED -- aborting "
+                  f"profile (will not upload to S3): {_cw_err}")
+            raise
         print(f"⚠️ crosswalk-audit-framework skipped: {_cw_err}")
         import traceback as _tb; _tb.print_exc()
+
+    # ═══ POST-PIPELINE AVID-FAN AUTO-SYNTHESIS (2026-06-15 fix) ═══════════
+    # Auto-synthesize an avid-fan skin for every profile produced by
+    # run_full_pipeline. Lives HERE (not in main()) so callers that bypass
+    # main() -- parallel runners, webapp, SDK -- also get an avid skin.
+    # Skips only for non-fan-target categories (Gen Pop, banking customers,
+    # shopping-intent / trend topics). Failures are non-fatal -- the OG
+    # profile is already saved on disk, so a Claude/network blip on the
+    # avid pass shouldn't fail the run.
+    try:
+        if final_file and os.path.exists(final_file):
+            try:
+                from avid_fan_row_by_row import (
+                    synthesize_avid_fan as _synth_avid_rfp,
+                    should_synthesize_avid_for_category as _avid_gate_rfp,
+                )
+            except ImportError:
+                from migration.avid_fan_row_by_row import (
+                    synthesize_avid_fan as _synth_avid_rfp,
+                    should_synthesize_avid_for_category as _avid_gate_rfp,
+                )
+            _avid_bc_rfp = ""
+            try:
+                _df_av_rfp = pd.read_csv(
+                    final_file, low_memory=False, on_bad_lines="skip",
+                )
+                _col_u_av_rfp = (_df_av_rfp["Column"]
+                                  .astype(str).str.strip().str.upper())
+                _bc_mask_rfp = _col_u_av_rfp == "BRAND CATEGORY"
+                if _bc_mask_rfp.any():
+                    _avid_bc_rfp = str(
+                        _df_av_rfp.loc[_bc_mask_rfp, "Value"].iloc[0],
+                    ).strip()
+            except Exception as _bc_av_rfp_err:
+                print(f"⚠ avid-fan: couldn't read BRAND CATEGORY from "
+                      f"{final_file}: {_bc_av_rfp_err}")
+            if not _avid_gate_rfp(_avid_bc_rfp):
+                print(f"⏭️  avid-fan auto-synth skipped: "
+                      f"BRAND CATEGORY={_avid_bc_rfp!r} is in "
+                      f"AVID_NON_APPLICABLE_CATEGORIES")
+            else:
+                print(f"\n🎯 Pipeline complete — auto-synthesizing Avid Fan "
+                      f"from {final_file} ...")
+                # 2026-07-17 Jenna mirror rule: pass this pull's canonical
+                # brand_category down as the authoritative value. The synth
+                # uses it as priority 1 (mirror semantics) so the avid file's
+                # BRAND CATEGORY row is guaranteed to match the main file's
+                # and never end up UNCATEGORIZED — even if the main file
+                # writer or an intermediate pass dropped/mangled its own
+                # BRAND CATEGORY row. Fall back to _avid_bc_rfp (read from
+                # the main file above) only if brand_category wasn't
+                # supplied to run_full_pipeline (legacy caller path).
+                _mirror_bc_rfp = (brand_category
+                                  if brand_category
+                                  else _avid_bc_rfp) or None
+                _result_av_rfp = _synth_avid_rfp(
+                    final_file,
+                    source_kind="local_path",
+                    source_s3_key=os.path.basename(final_file),
+                    brand_category=_mirror_bc_rfp,
+                )
+                print(f"\n✅ Avid Fan synthesis complete: "
+                      f"{_result_av_rfp['out_key']}  "
+                      f"collisions_fixed="
+                      f"{_result_av_rfp.get('n_collisions_fixed')}")
+    except Exception as _av_rfp_err:
+        print(f"⚠ post-pipeline avid-fan auto-synthesis skipped "
+              f"(non-fatal): {_av_rfp_err}")
+    # ═══ END POST-PIPELINE AVID-FAN AUTO-SYNTHESIS ════════════════════════
 
     return final_file
 
@@ -28089,6 +29987,14 @@ def _enforce_platform_realism(df, project_name: str = '', persona_doc=None):
     try:
         bp = 'Brand Penetration (Row)'
         cs = 'Category Share'
+        # PROFILE-SPECIFIC JITTER SALT (anti-cross-profile-pinning, 2026-06-02).
+        # Without this, every profile that hits the same cap or floor gets the
+        # SAME 4-decimal value because the md5 seed only included (cat, brand)
+        # or (val,). Mix project_name in so capped/floored values vary per
+        # persona.
+        _profile_salt = hashlib.md5(
+            (str(project_name) or 'genpop').encode('utf-8')
+        ).hexdigest()[:12]
         if bp not in df.columns:
             return df
 
@@ -28222,7 +30128,7 @@ def _enforce_platform_realism(df, project_name: str = '', persona_doc=None):
             for idx in df[m].index:
                 v = _to_num(df.at[idx, bp])
                 if v > cap:
-                    seed = int(hashlib.md5(f"{cat}|{brand}".encode()).hexdigest()[:8], 16)
+                    seed = int(hashlib.md5(f"{cat}|{brand}|{_profile_salt}".encode()).hexdigest()[:8], 16)
                     jitter = (seed % 700) / 1000.0
                     new_v = round(max(0.1, cap - 0.4 - jitter), 4)
                     df.at[idx, bp] = new_v
@@ -28254,7 +30160,7 @@ def _enforce_platform_realism(df, project_name: str = '', persona_doc=None):
                 continue
             v = _to_num(df.at[idx, bp])
             if v < floor:
-                seed = int(hashlib.md5(val.encode()).hexdigest()[:8], 16)
+                seed = int(hashlib.md5(f"{val}|{_profile_salt}".encode()).hexdigest()[:8], 16)
                 jitter = (seed % 700) / 1000.0
                 df.at[idx, bp] = round(floor + jitter, 4)
                 floor_n += 1
@@ -29134,8 +31040,254 @@ def _detect_parent_family(brands, brand_category):
     return None
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# FINAL-PASS ENFORCERS (added 2026-06-02 after Brandy Clark audit)
+# These run at the very END of enforce_audit_playbook (step 23) so the
+# saved file always has:
+#   (a) near-universal infrastructure brands present (Visa in CREDIT
+#       PROVIDER, Mastercard in CREDIT PROVIDER, Zelle in DIGITAL BANKING,
+#       YouTube in SOCIAL MEDIA) — their absence indicates a generation
+#       defect, not a persona signal
+#   (b) brand-input separator-variants (JASON~MOMOA, JASON-MOMOA,
+#       JASON.MOMOA, JASONMOMOA) rewritten to the canonical spaced form
+#       'JASON MOMOA' in any non-BRAND-INPUT row (BRAND INPUT itself
+#       keeps the raw permutation as the spec)
+#   (c) every behavioral category sorted descending by BP, with split
+#       non-contiguous blocks consolidated at the first occurrence,
+#       and Category Share recomputed within each block
+# ─────────────────────────────────────────────────────────────────────────
+
+# (CATEGORY, BRAND, gen_pop_BP, jitter_pp, min_bp, max_bp)
+# Pulled 2026-06-02 from Gen_Pop_2026.csv
+_ALWAYS_PRESENT_INFRA = [
+    ("CREDIT PROVIDER", "VISA",       76.66, 3.0, 60.0, 95.0),
+    ("CREDIT PROVIDER", "MASTERCARD", 52.04, 3.0, 35.0, 80.0),
+    ("DIGITAL BANKING", "ZELLE",      32.04, 3.0, 15.0, 55.0),
+    ("SOCIAL MEDIA",    "YOUTUBE",    88.07, 2.0, 70.0, 96.0),
+]
+
+
+def _ensure_infrastructure_brands_present(df, profile_salt='gen'):
+    """Insert near-universal infra brands (Visa, Mastercard, Zelle,
+    YouTube) at gen-pop ± per-profile jitter when missing.
+
+    Idempotent: no-op if already present. Skips entirely if the category
+    doesn't exist in the file (don't manufacture a new category). Uses
+    per-profile MD5 salt so identical inserts don't pin across profiles.
+    Returns (df, n_inserted).
+    """
+    import hashlib as _hl
+    bp_col = 'Brand Penetration (Row)'
+    if (bp_col not in df.columns or 'Column' not in df.columns
+            or 'Value' not in df.columns):
+        return df, 0
+
+    def _num(v):
+        if isinstance(v, (int, float)):
+            try: return float(v)
+            except Exception: return 0.0
+        try: return float(str(v).rstrip('%').replace(',', ''))
+        except Exception: return 0.0
+
+    for c in [bp_col, 'Category Share', 'Original Raw Numbers',
+              'US Gen Pop Projection', 'Value', 'Column']:
+        if c in df.columns:
+            df[c] = df[c].astype(object)
+
+    cu = df['Column'].astype(str).str.upper().str.strip()
+    vu = df['Value'].astype(str).str.upper().str.strip()
+
+    ss_rows = df.index[cu == 'SAMPLE SIZE'].tolist()
+    sample_size = None
+    if ss_rows:
+        try:
+            sample_size = int(str(df.at[ss_rows[0], bp_col]).replace(',', ''))
+        except Exception:
+            try:
+                sample_size = int(float(str(
+                    df.at[ss_rows[0], 'Original Raw Numbers']
+                ).replace(',', '')))
+            except Exception:
+                sample_size = None
+
+    inserts = []  # (insert_after_idx, row_dict)
+    for cat, brand, gp_bp, jitter_pp, lo, hi in _ALWAYS_PRESENT_INFRA:
+        if ((cu == cat) & (vu == brand)).any():
+            continue
+        cat_idx = df.index[cu == cat].tolist()
+        if not cat_idx:
+            continue  # category not in this file - don't manufacture
+        template_idx = cat_idx[0]
+
+        h = int(_hl.md5(
+            f"{brand}|{cat}|{profile_salt}".encode('utf-8')
+        ).hexdigest()[:8], 16) / 0xFFFFFFFF
+        new_bp = round(max(lo, min(hi, gp_bp + (-jitter_pp + h * 2 * jitter_pp))), 4)
+
+        t_bp = _num(df.at[template_idx, bp_col])
+        t_raw = _num(df.at[template_idx, 'Original Raw Numbers'])
+        t_proj = _num(df.at[template_idx, 'US Gen Pop Projection'])
+        ss = sample_size
+        if ss is None and t_bp > 0 and t_raw > 0:
+            ss = int(round(t_raw / (t_bp / 100.0)))
+        ss = ss or 1500
+        proj_scale = ((t_proj / t_raw)
+                      if (t_raw > 0 and t_proj > 0)
+                      else (260_000_000 / ss))
+
+        new_raw = round(ss * (new_bp / 100.0))
+        new_proj = round(new_raw * proj_scale)
+
+        row = {c: '' for c in df.columns}
+        row['Column'] = cat
+        row['Value'] = brand
+        row[bp_col] = round(new_bp, 4)
+        row['Category Share'] = "0.0000%"
+        row['Original Raw Numbers'] = new_raw
+        row['US Gen Pop Projection'] = new_proj
+        inserts.append((cat_idx[-1], row))
+
+    if not inserts:
+        return df, 0
+
+    inserts.sort(key=lambda x: -x[0])  # bottom-up to keep indices valid
+    for insert_after, row in inserts:
+        top = df.iloc[: insert_after + 1]
+        bot = df.iloc[insert_after + 1:]
+        df = pd.concat([top, pd.DataFrame([row]), bot], ignore_index=True)
+    return df, len(inserts)
+
+
+def _normalize_brand_input_variants(df, project_name):
+    """Rewrite separator-variants of project_name (JASON~MOMOA,
+    JASON-MOMOA, JASON.MOMOA, JASON_MOMOA, JASONMOMOA, etc.) to the
+    canonical spaced form (JASON MOMOA) in any non-BRAND-INPUT row.
+
+    The BRAND INPUT row itself keeps the raw permutation string since
+    that's the literal spec. Multi-token project names only.
+    Returns (df, n_fixed).
+    """
+    import re
+    if (not project_name or 'Value' not in df.columns
+            or 'Column' not in df.columns):
+        return df, 0
+    canonical = re.sub(r'\s+', ' ', str(project_name).strip()).upper()
+    parts = canonical.split(' ')
+    if len(parts) < 2:
+        return df, 0
+    sep_class = r"[-_.~/#|\s]*"
+    pat = re.compile(
+        "^" + sep_class.join(re.escape(p) for p in parts) + "$",
+        re.IGNORECASE,
+    )
+
+    df['Value'] = df['Value'].astype(object)
+    df['Column'] = df['Column'].astype(object)
+
+    n_fixed = 0
+    for idx in df.index:
+        col_label = str(df.at[idx, 'Column']).upper().strip()
+        if col_label == 'BRAND INPUT':
+            continue
+        v = str(df.at[idx, 'Value']).strip()
+        if not v or v.upper() == canonical:
+            continue
+        if pat.match(v):
+            df.at[idx, 'Value'] = canonical
+            n_fixed += 1
+    return df, n_fixed
+
+
+def _final_sort_categories_descending(df):
+    """Consolidate non-contiguous Column blocks at their first
+    occurrence and sort each non-demographic block by BP descending
+    (ties broken by Value alpha for determinism). Then recompute
+    Category Share within every block.
+
+    Demographic / metadata columns (AGE, GENDER, INCOME, DMA, etc.)
+    are passed through untouched — they have intrinsic order.
+    Returns (df, n_blocks_changed).
+    """
+    bp_col = 'Brand Penetration (Row)'
+    if ('Column' not in df.columns or 'Value' not in df.columns
+            or bp_col not in df.columns):
+        return df, 0
+
+    SKIP = {
+        "BRAND INPUT", "SAMPLE SIZE",
+        "AGE", "GENDER", "ETHNICITY", "INCOME", "EDUCATION",
+        "DMA", "LOCATION", "STATE", "REGION",
+        "DEVICE", "PLATFORM", "OS",
+    }
+
+    def _num(v):
+        if isinstance(v, (int, float)):
+            try: return float(v)
+            except Exception: return -1e9
+        try: return float(str(v).rstrip('%').replace(',', ''))
+        except Exception: return -1e9
+
+    rows = df.to_dict(orient='records')
+    col_order = []
+    col_first_pos = {}
+    col_rows = {}
+    for pos, r in enumerate(rows):
+        cu = str(r.get('Column', '')).upper().strip()
+        if cu not in col_first_pos:
+            col_first_pos[cu] = pos
+            col_order.append(cu)
+            col_rows[cu] = []
+        col_rows[cu].append(r)
+
+    n_changed = 0
+    for cu in col_order:
+        if cu in SKIP:
+            continue
+        blk = col_rows[cu]
+        if len(blk) < 2:
+            continue
+        sorted_blk = sorted(blk, key=lambda r: (
+            -_num(r.get(bp_col)),
+            str(r.get('Value', '')).upper(),
+        ))
+        if sorted_blk != blk:
+            n_changed += 1
+            col_rows[cu] = sorted_blk
+
+    out = []
+    emitted = set()
+    for pos, r in enumerate(rows):
+        cu = str(r.get('Column', '')).upper().strip()
+        if cu in emitted:
+            continue
+        if pos == col_first_pos[cu]:
+            out.extend(col_rows[cu])
+            emitted.add(cu)
+    new_df = pd.DataFrame(out, columns=df.columns)
+
+    if 'Category Share' in new_df.columns:
+        new_df['Category Share'] = new_df['Category Share'].astype(object)
+        cu_new = new_df['Column'].astype(str).str.upper().str.strip()
+        for cu in set(cu_new.tolist()):
+            if cu in SKIP:
+                continue
+            mask = (cu_new == cu)
+            idxs = new_df.index[mask].tolist()
+            if len(idxs) < 2:
+                continue
+            bps = [max(_num(new_df.at[i, bp_col]), 0.0) for i in idxs]
+            s = sum(bps)
+            if s <= 0:
+                continue
+            for i, bp in zip(idxs, bps):
+                new_df.at[i, 'Category Share'] = f"{(bp / s) * 100:.4f}%"
+
+    return new_df, n_changed
+
+
 def enforce_audit_playbook(df, brands=None, brand_category=None,
-                            persona_doc=None, is_genpop=False):
+                            persona_doc=None, is_genpop=False,
+                            vet_reasoned_keys=None):
     """Deterministic post-processing safety net mirroring the deep-audit recipe.
 
     Catches the recurring defects found by manual audits of Bonvoy, Amex
@@ -29184,6 +31336,61 @@ def enforce_audit_playbook(df, brands=None, brand_category=None,
         psum = (str(persona_doc.get('persona_summary', '') if isinstance(persona_doc, dict) else '') or '').lower()
     except Exception:
         psum = ''
+
+    # PROFILE-SPECIFIC JITTER SALT (anti-cross-profile-pinning, 2026-06-02)
+    # Audit found cap+jitter sites whose md5 seed was f"{col}|{val}" with no
+    # subject info, producing the EXACT same clamped 4-decimal value across
+    # every profile (e.g. [TRAVEL] BOOKING = 21.8771% in all 13 audited
+    # profiles, AIRBNB = 24.8329 in 12, WALGREENS = 21.9650 in 9, etc.).
+    # Every md5 jitter inside this playbook MUST mix this salt in so that
+    # capped values vary per persona instead of being templated.
+    import hashlib as _hl_top
+    _profile_salt = _hl_top.md5(
+        f"{brand_text}|{cat_upper}".encode('utf-8')
+    ).hexdigest()[:12] or 'gen'
+
+    # AGENT-REASONED ROW PROTECTION (anti-undo, 2026-06-02)
+    # When this playbook runs AFTER agent_reason_vet_failures (the 2nd/3rd
+    # pass via lines 33852/33890), the agent has already considered each
+    # flagged row's persona context and returned KEEP or CHANGE. Re-clamping
+    # those rows to the ATTR cap was overwriting the agent's reasoning —
+    # that's why audits found [TRAVEL] BOOKING pinned at exactly 21.8771%
+    # across 13 unrelated profiles even with the reasoning loop active.
+    # vet_reasoned_keys is a set of (col_upper, val_upper) tuples for rows
+    # the agent explicitly changed. The ATTR cap loop skips those rows.
+    _vrk = set()
+    if vet_reasoned_keys:
+        try:
+            _vrk = {(str(c).upper().strip(), str(v).upper().strip())
+                     for (c, v) in vet_reasoned_keys}
+        except Exception:
+            _vrk = set()
+
+    def _soft_cap(cur_v: float, ceiling_v: float, key: str) -> float:
+        """Idempotent soft cap that preserves persona-driven variation.
+
+        Old behavior (hard cap): any value > ceiling slammed to ceiling+jit.
+        That erased the LLM's per-persona reasoning above the cap.
+
+        New behavior:
+          cur ≤ 1.5*ceiling   → unchanged (50% headroom for persona elevation)
+          cur > 1.5*ceiling   → soft-clamp to (1.5*ceiling - 0.15 ± 0.1pp)
+                                 jittered per-(profile, key) so cross-profile
+                                 outputs vary. Output is strictly < 1.5*ceiling
+                                 so re-runs are no-ops (idempotent).
+
+        Egregious LLM hallucinations (e.g. Booking @ 60% with cap 22) get
+        clamped, but realistic persona elevation (Marmot Booking @ 32%) flows
+        through untouched.
+        """
+        soft_threshold = ceiling_v * 1.5
+        if cur_v <= soft_threshold:
+            return cur_v
+        h_sc = int(_hl_top.md5(
+            f'softcap|{key}|{_profile_salt}'.encode()
+        ).hexdigest()[:8], 16)
+        jit_sc = ((h_sc % 9973) / 9973.0 - 0.5) * 0.2  # ±0.1pp
+        return round(max(0.001, soft_threshold - 0.15 + jit_sc), 4)
 
     # Vertical flags — when True, SKIP the corresponding cap
     is_kids_brand = (
@@ -29614,7 +31821,9 @@ def enforce_audit_playbook(df, brands=None, brand_category=None,
         # Only jitter if perfectly round (no decimal noise)
         if abs(cur - round(cur)) >= 0.0001:
             continue
-        seed = f'{col_u}|{val_u}|{cur:.0f}'
+        # NOTE: mix _profile_salt so identical round values across different
+        # profiles get DIFFERENT 4-decimal offsets (anti-pinning).
+        seed = f'{col_u}|{val_u}|{cur:.0f}|{_profile_salt}'
         h = int(_hl.md5(seed.encode()).hexdigest()[:8], 16)
         # Offset in roughly [-0.45, +0.45] — visible 4-decimal noise
         offset = ((h % 9973) / 9973.0 - 0.5) * 0.9
@@ -29747,20 +31956,33 @@ def enforce_audit_playbook(df, brands=None, brand_category=None,
         ('BETTING', 'FANATICS SPORTSBOOK'): 2.5,
     }
     attr_caps = 0
+    attr_skipped_agent = 0
     for idx, r in df.iterrows():
         col = str(r.get('Column', '')).strip().upper()
         val = str(r.get('Value', '') or '').strip().upper()
         cur = float(df.at[idx, bp])
         # First check the curated per-brand ceiling for the defective categories
         ceiling = ATTR_CAPS.get((col, val)) or ATTR_BRAND_CEILINGS.get((col, val))
-        if ceiling is not None and cur > ceiling:
-            # Add 4-decimal jitter so deflated rows don't all hit the exact cap
-            h = int(_hl.md5(f'attr|{col}|{val}'.encode()).hexdigest()[:8], 16)
-            jit = ((h % 9973) / 9973.0 - 0.5) * 0.4
-            df.at[idx, bp] = round(max(0.001, ceiling + jit), 4)
+        if ceiling is None or cur <= ceiling:
+            continue
+        # Respect the vet-reason agent's autonomy. If this row was already
+        # reasoned about persona context, do not re-clamp it (2026-06-02).
+        if (col, val) in _vrk:
+            attr_skipped_agent += 1
+            continue
+        # Soft cap (anti-pinning, 2026-06-02): allow up to 1.5x ceiling
+        # through unchanged so LLM persona reasoning above the cap survives.
+        # Egregious overshoots (LLM hallucinations) clamp to 1.5x ceiling
+        # jittered per-(profile, brand) so cross-profile values aren't
+        # templated.
+        new_v = _soft_cap(cur, ceiling, key=f'attr|{col}|{val}')
+        if abs(new_v - cur) > 1e-6:
+            df.at[idx, bp] = new_v
             attr_caps += 1
     if attr_caps:
         actions['attr_caps'] = attr_caps
+    if attr_skipped_agent:
+        actions['attr_skipped_agent_reasoned'] = attr_skipped_agent
 
     # ── 20b. QSR RANKING INTEGRITY — McDonald's ≥ Domino's ────────────
     # Audit 2026-05-22 caught Domino's reading above McDonald's. In any
@@ -29779,7 +32001,7 @@ def enforce_audit_playbook(df, brands=None, brand_category=None,
                     dv = float(df.at[di, bp])
                     if dv >= mc_val:
                         new = mc_val * 0.65
-                        h = int(_hl.md5(f'qsr|dominos|{new:.4f}'.encode()).hexdigest()[:8], 16)
+                        h = int(_hl.md5(f'qsr|dominos|{new:.4f}|{_profile_salt}'.encode()).hexdigest()[:8], 16)
                         jit = ((h % 9973) / 9973.0 - 0.5) * 0.3
                         df.at[di, bp] = round(max(0.001, new + jit), 4)
                         actions['qsr_rank'] = actions.get('qsr_rank', 0) + 1
@@ -29802,7 +32024,7 @@ def enforce_audit_playbook(df, brands=None, brand_category=None,
                 cur = float(df.at[mi, bp])
                 if cur < 50:  # only lift when clearly under-read
                     new = min(89.0, cur + 40.0)
-                    h = int(_hl.md5(f'ms|{col_check}|{new:.4f}'.encode()).hexdigest()[:8], 16)
+                    h = int(_hl.md5(f'ms|{col_check}|{new:.4f}|{_profile_salt}'.encode()).hexdigest()[:8], 16)
                     jit = ((h % 9973) / 9973.0 - 0.5) * 0.4
                     df.at[mi, bp] = round(max(0.001, new + jit), 4)
                     ms_lifted += 1
@@ -29969,6 +32191,46 @@ def enforce_audit_playbook(df, brands=None, brand_category=None,
     except Exception as _e:
         print(f"   ⚠️  BP type normalization failed: {_e}")
 
+    # ── 23. FINAL CLEANUP (added 2026-06-02) ──────────────────────────
+    # (a) Insert near-universal infrastructure brands when missing
+    # (b) Normalize project-name variants in non-BRAND-INPUT rows
+    # (c) Consolidate split blocks + sort each category descending +
+    #     recompute Category Share
+    # Order matters: insert → normalize → sort. Sort runs LAST so any
+    # row inserted in (a) lands in correct rank, and any row renamed in
+    # (b) gets correct ordering relative to its peers.
+    try:
+        df, _n_infra = _ensure_infrastructure_brands_present(
+            df, profile_salt=_profile_salt,
+        )
+        if _n_infra:
+            actions['infra_brands_inserted'] = _n_infra
+
+        # Derive project_name from BRAND INPUT row (set canonically upstream)
+        _proj_name = ''
+        try:
+            _bi = df.loc[
+                df['Column'].astype(str).str.upper().str.strip() == 'BRAND INPUT',
+                'Value',
+            ]
+            if len(_bi):
+                _proj_name = str(_bi.iloc[0]).strip()
+        except Exception:
+            _proj_name = ''
+        # Fall back to brands joined if BRAND INPUT row is missing/empty
+        if not _proj_name and brands:
+            _proj_name = ' '.join(str(b) for b in brands)
+
+        df, _n_norm = _normalize_brand_input_variants(df, _proj_name)
+        if _n_norm:
+            actions['brand_variants_normalized'] = _n_norm
+
+        df, _n_sort = _final_sort_categories_descending(df)
+        if _n_sort:
+            actions['categories_sorted'] = _n_sort
+    except Exception as _e:
+        print(f"   ⚠️  Step-23 final-cleanup failed (non-fatal): {_e}")
+
     total = sum(actions.values())
     if total > 0:
         nz = {k: v for k, v in actions.items() if v}
@@ -30040,29 +32302,56 @@ def _get_host_mapping_brand_set():
     return _HOST_MAPPING_BRAND_CACHE
 
 
-def set_brand_input_to_csv(df):
-    """
-    Set the BRAND INPUT row's Value column to "CSV" instead of the actual brand input.
-    
+def set_brand_input_to_cohort_name(df, cohort_name):
+    """Set the BRAND INPUT row's Value column to the cohort name.
+
+    Replaces the legacy `set_brand_input_to_csv` (D109 writer-bug, 2026-06-07
+    audit by Jenna): that function literally wrote the string 'CSV' as the
+    subject identifier, leaving 4 cohort profiles (Michael_Movie, Power_Ballad,
+    Home_Internet_Shopping x2) with BRAND INPUT.Value = 'CSV' in S3 — a string
+    that fails the run_pre_publish_gate G6 check (length < 4).
+
     Args:
-        df: DataFrame with 'Column' and 'Value' columns
-    
+        df: DataFrame with 'Column' and 'Value' columns.
+        cohort_name: human-readable cohort identifier (e.g. 'POWER BALLAD',
+                     'MICHAEL (MOVIE)', 'HOME INTERNET SHOPPING - OVERALL').
+
     Returns:
         Modified DataFrame
     """
     df = df.copy()
-    
-    # Find the BRAND INPUT row
+    cohort_name = str(cohort_name or '').strip()
+    if len(cohort_name) < 4:
+        # Refuse to write a too-short subject — gate would fail it anyway.
+        print(f"⚠️ D109: cohort_name={cohort_name!r} too short (<4 chars). "
+              f"Using 'COHORT_UNKNOWN' as fallback so write doesn't fail "
+              f"silently — fix call site.")
+        cohort_name = 'COHORT_UNKNOWN'
+    cohort_name = cohort_name.upper()
+
     brand_input_mask = df['Column'].str.upper() == 'BRAND INPUT'
-    
     if brand_input_mask.any():
-        # Set the Value to "CSV" for all BRAND INPUT rows
-        df.loc[brand_input_mask, 'Value'] = 'CSV'
-        print("✅ Set BRAND INPUT Value to 'CSV'")
+        df.loc[brand_input_mask, 'Value'] = cohort_name
+        print(f"✅ Set BRAND INPUT Value to '{cohort_name}'")
     else:
         print("⚠️ BRAND INPUT row not found in dataframe")
-    
     return df
+
+
+def set_brand_input_to_csv(df, cohort_name=None):
+    """DEPRECATED — kept as a thin shim so any old call site still compiles.
+
+    The original implementation literally wrote the 3-letter string 'CSV' as
+    the BRAND INPUT Value, which was the D109 writer-bug. Use
+    set_brand_input_to_cohort_name(df, cohort_name) instead.
+    """
+    import warnings
+    warnings.warn(
+        "set_brand_input_to_csv is deprecated (D109 writer-bug). "
+        "Use set_brand_input_to_cohort_name(df, cohort_name) instead.",
+        DeprecationWarning, stacklevel=2,
+    )
+    return set_brand_input_to_cohort_name(df, cohort_name or 'COHORT_UNKNOWN')
 
 def adjust_platform_to_100_percent(df, platform_name):
     """
@@ -30133,7 +32422,22 @@ def adjust_platform_to_100_percent(df, platform_name):
     
     # Convert Brand Penetration (Row) to numeric if it's not already
     df[brand_penetration_col] = pd.to_numeric(df[brand_penetration_col], errors='coerce')
-    
+
+    # DTYPE-SAFETY (recurring defect 2026-06-06): the other 3 columns we
+    # assign into below (Category Share / Original Raw Numbers / US Gen Pop
+    # Projection) are loaded from CSV as the new pandas string-extension
+    # dtype, which REJECTS direct float/int assignment with TypeError:
+    # "Invalid value '100.0' for dtype 'str'". Coerce them to numeric here
+    # so the subsequent .loc[...] = float/int assignments succeed. This
+    # killed 10 streamer + 1 intent profile silently overnight before the
+    # CSVs ever made it to S3 â post-processing crash, local file orphaned.
+    for _safe_col in ('Category Share', 'Original Raw Numbers', 'US Gen Pop Projection'):
+        if _safe_col in df.columns:
+            try:
+                df[_safe_col] = pd.to_numeric(df[_safe_col].astype(str).str.replace('%', '').str.replace(',', ''), errors='coerce')
+            except Exception:
+                df[_safe_col] = df[_safe_col].astype('object')
+
     # Search for the platform name (case-insensitive)
     platform_name_upper = str(platform_name).upper().strip()
     df['Value_upper'] = df['Value'].astype(str).str.upper().str.strip()
@@ -33616,7 +35920,59 @@ def check_for_similar_previous_run(brands, s1, e1, s2, e2):
 
 def main():
     project_name, brands, s1, e1, s2, e2, filters, skew_settings, is_genpop, purchasers_only, brand_category = get_user_inputs()
-    
+
+    # ═══ SUPER-FAN PROFILE PROMPT (2026-06-09 Jenna directive) ═══════════
+    # Ask whether to generate a super-fan variant (N+ touchpoints/yr).
+    # If yes:
+    #   - If a 1+ baseline already exists in S3 for this subject, skip the
+    #     pipeline entirely and synthesize the N+ from the existing source.
+    #   - Otherwise, run the pipeline normally to build the 1+ baseline,
+    #     then synthesize the N+ from the just-saved file.
+    # Uses Claude reasoning agents for sizing + brand classification so
+    # the result differs meaningfully (lift bands scale with N).
+    _super_fan_n = 0
+    _super_fan_existing_src = None
+    try:
+        import sys as _sys_sf, os as _os_sf
+        _migration_dir_sf = _os_sf.path.join(
+            _os_sf.path.dirname(_os_sf.path.abspath(__file__)), 'migration',
+        )
+        if _migration_dir_sf not in _sys_sf.path:
+            _sys_sf.path.insert(0, _migration_dir_sf)
+        from super_fan_synthesis import (
+            prompt_super_fan as _prompt_super_fan,
+            find_latest_subject_profile_in_s3 as _find_existing_source,
+            synthesize_and_upload_super_fan as _synth_super_fan,
+        )
+        _subject_for_sf = (brands[0] if brands else (project_name or '')).strip()
+        if _subject_for_sf:
+            _super_fan_n = _prompt_super_fan(_subject_for_sf)
+            if _super_fan_n >= 2:
+                _super_fan_existing_src = _find_existing_source(_subject_for_sf)
+                if _super_fan_existing_src:
+                    print(f"\n🎯 Found existing 1+ source: "
+                          f"{_super_fan_existing_src}")
+                    print(f"🎯 Skipping baseline pull — synthesizing "
+                          f"{_super_fan_n}+ super-fan directly.\n")
+                    _result_sf = _synth_super_fan(
+                        _super_fan_existing_src, _subject_for_sf,
+                        _super_fan_n, source_kind='s3_key',
+                    )
+                    print(f"\n✅ Super-fan synthesis complete: "
+                          f"{_result_sf['out_key']}  "
+                          f"defects={len(_result_sf.get('defects') or [])}")
+                    return
+                else:
+                    print(f"\n🎯 No existing 1+ source for "
+                          f"{_subject_for_sf}; pulling baseline first, "
+                          f"then synthesizing {_super_fan_n}+ from result.\n")
+    except Exception as _sf_err:
+        # Never let the super-fan path block a normal pipeline run.
+        print(f"⚠ super-fan prompt skipped (non-fatal): {_sf_err}")
+        _super_fan_n = 0
+        _super_fan_existing_src = None
+    # ═══ END SUPER-FAN PROMPT ═══════════════════════════════════════════
+
     # 🔒 DETERMINISTIC SEEDING: Create consistent random seed based on inputs
     # This ensures same inputs always produce same outputs
     seed_string = f"{brands[0]}_{s1}_{e1}_{s2}_{e2}" if brands else f"{s1}_{e1}_{s2}_{e2}"
@@ -33804,9 +36160,24 @@ def main():
             
             # Apply listener/watcher/player profile adjustments if requested
             if is_listener_watcher_player:
-                # Set BRAND INPUT Value to "CSV"
-                enhanced_df = set_brand_input_to_csv(enhanced_df)
-                
+                # D109 fix (2026-06-07): write the cohort name instead of
+                # the literal string 'CSV'. Prefers platform_name; falls back
+                # to a clean filename-derived cohort id (strips trailing
+                # _MM_DD_YYYY_HH_MM timestamp + replaces underscores w/ spaces).
+                _d109_cohort = platform_name
+                if not _d109_cohort and final_file_path:
+                    import os as _os_d109
+                    import re as _re_d109
+                    _d109_cohort = _os_d109.path.splitext(
+                        _os_d109.path.basename(final_file_path)
+                    )[0]
+                    _d109_cohort = _re_d109.sub(
+                        r'_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', '', _d109_cohort
+                    ).replace('_', ' ')
+                enhanced_df = set_brand_input_to_cohort_name(
+                    enhanced_df, _d109_cohort
+                )
+
                 if platform_name:
                     enhanced_df = adjust_platform_to_100_percent(enhanced_df, platform_name)
             
@@ -33816,16 +36187,40 @@ def main():
             # talent / venue / podcast / media / health / niche-streaming
             # over-caps. Mirrors PROFILE_AUDIT_RECIPE.md.
             try:
+                # Load vet-reasoned sidecar (2026-06-02) so this re-run does
+                # NOT overwrite the agent's KEEP/CHANGE decisions from
+                # agent_reason_vet_failures.
+                _vrk_load = None
+                try:
+                    import json as _json_vrk2
+                    _sidecar = final_file_path + '.vet_reasoned.json'
+                    if os.path.exists(_sidecar):
+                        with open(_sidecar) as _f_vrk2:
+                            _vrk_data = _json_vrk2.load(_f_vrk2)
+                        _vrk_load = [tuple(k) for k in
+                                     (_vrk_data.get('reasoned_keys') or [])]
+                        if _vrk_load:
+                            print(f"   📖 vet-reasoned sidecar loaded: "
+                                  f"{len(_vrk_load)} keys will skip cap")
+                except Exception as _vrk_load_err:
+                    print(f"   ⚠️ vet-reasoned sidecar load skipped: "
+                          f"{_vrk_load_err}")
                 enhanced_df = enforce_audit_playbook(
                     enhanced_df, brands=brands, brand_category=brand_category,
                     persona_doc=globals().get('CURRENT_PERSONA_DOC'),
                     is_genpop=is_genpop,
+                    vet_reasoned_keys=_vrk_load,
                 )
             except Exception as _ap_err:
                 print(f"⚠️ audit-playbook skipped: {_ap_err}")
 
-            # Save the enhanced file back
-            enhanced_df.to_csv(final_file_path, index=False)
+            # Save the enhanced file back (demo-closure save-gate)
+            enhanced_df = _demo_safe_to_csv(
+                enhanced_df, final_file_path,
+                subject_label=str(globals().get('CURRENT_SUBJECT_NAME', '') or
+                                   (brands[0] if brands else '')),
+                tag='save-4-main-enhanced',
+            )
             
             print(f"✅ Enhanced main file with frequency metrics: {final_file_path}")
             
@@ -33836,16 +36231,31 @@ def main():
     if (not include_frequency or is_genpop) and is_listener_watcher_player:
         # Read the CSV file
         df = pd.read_csv(final_file_path)
-        
-        # Set BRAND INPUT Value to "CSV"
-        df = set_brand_input_to_csv(df)
-        
+
+        # D109 fix (2026-06-07): write cohort name instead of literal 'CSV'.
+        _d109_cohort = platform_name
+        if not _d109_cohort and final_file_path:
+            import os as _os_d109b
+            import re as _re_d109b
+            _d109_cohort = _os_d109b.path.splitext(
+                _os_d109b.path.basename(final_file_path)
+            )[0]
+            _d109_cohort = _re_d109b.sub(
+                r'_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', '', _d109_cohort
+            ).replace('_', ' ')
+        df = set_brand_input_to_cohort_name(df, _d109_cohort)
+
         if platform_name:
             # Apply platform adjustment
             df = adjust_platform_to_100_percent(df, platform_name)
         
-        # Save back
-        df.to_csv(final_file_path, index=False)
+        # Save back (demo-closure save-gate)
+        df = _demo_safe_to_csv(
+            df, final_file_path,
+            subject_label=str(globals().get('CURRENT_SUBJECT_NAME', '') or
+                               (brands[0] if brands else '')),
+            tag='save-5-main-platform-adjust',
+        )
         print(f"✅ Updated file with platform adjustment: {final_file_path}")
 
     # ═══ FINAL AUDIT PLAYBOOK — always runs on disk before exit ═════════
@@ -33854,10 +36264,28 @@ def main():
     try:
         if final_file_path and os.path.exists(final_file_path):
             _df_final = pd.read_csv(final_file_path, low_memory=False)
+            # Load vet-reasoned sidecar (2026-06-02) so this final pass does
+            # not overwrite the vet-reason agent's persona-grounded decisions.
+            _vrk_final = None
+            try:
+                import json as _json_vrkf
+                _sc = final_file_path + '.vet_reasoned.json'
+                if os.path.exists(_sc):
+                    with open(_sc) as _f_sc:
+                        _sc_data = _json_vrkf.load(_f_sc)
+                    _vrk_final = [tuple(k) for k in
+                                  (_sc_data.get('reasoned_keys') or [])]
+                    if _vrk_final:
+                        print(f"   📖 vet-reasoned sidecar (final pass): "
+                              f"{len(_vrk_final)} keys skip cap")
+            except Exception as _vrkf_err:
+                print(f"   ⚠️ vet-reasoned sidecar load skipped: "
+                      f"{_vrkf_err}")
             _df_final = enforce_audit_playbook(
                 _df_final, brands=brands, brand_category=brand_category,
                 persona_doc=globals().get('CURRENT_PERSONA_DOC'),
                 is_genpop=is_genpop,
+                vet_reasoned_keys=_vrk_final,
             )
             # Reformat BP column back to %-suffixed strings to match disk convention
             bp_col = 'Brand Penetration (Row)'
@@ -33866,10 +36294,131 @@ def main():
                     lambda v: f"{float(v):.4f}%" if isinstance(v, (int, float))
                     else (v if str(v).endswith('%') else f"{float(str(v).replace('%','').strip() or 0):.4f}%")
                 )
-            _df_final.to_csv(final_file_path, index=False)
-            print(f"✅ Audit playbook applied (final pass): {final_file_path}")
+
+            # ═══ PRE-PUBLISH GATE (2026-06-07 wiring, final-pass) ════════
+            # Belt-and-suspenders second gate after enforce_audit_playbook,
+            # which can mutate BPs and re-introduce defects that the
+            # earlier gate at the crosswalk-audit-framework save site
+            # already cleared. Hard-fails on:
+            #   G1 sequential-digit placeholder BP survived
+            #   G2 US Gen Pop Projection > US_POP × 1.05
+            #   G3 BRAND INPUT > 80 chars (URL-permutation soup)
+            #   G4 within-cat 4dp collisions ≥ 10
+            #   G5 demo sum=100 invariant fails
+            #   G6 BRAND INPUT canonical (D88 tilde / D109 'CSV' / truncation)
+            _gate_blocked = False
+            try:
+                from post_generation_enforcers import (
+                    run_pre_publish_gate as _run_pre_publish_gate2,
+                    PrePublishGateError as _PrePublishGateError2,
+                )
+                _gate_subject = ''
+                _bi_rows = _df_final[
+                    _df_final['Column'].astype(str).str.upper() == 'BRAND INPUT'
+                ]
+                if len(_bi_rows):
+                    _gate_subject = str(_bi_rows.iloc[0].get('Value', '') or '')
+                try:
+                    _run_pre_publish_gate2(
+                        _df_final, _gate_subject,
+                        project_name=os.path.basename(final_file_path or ''),
+                        raise_on_fail=True, verbose=True,
+                    )
+                except _PrePublishGateError2 as _gate_err:
+                    # 2026-06-22 Jenna policy: synth-recovery instead of
+                    # abort. Same pattern as the crosswalk-audit-framework
+                    # gate (~28956). See that comment block for rationale.
+                    print(f"⚠️  final-pass gate flagged defects on "
+                          f"{final_file_path} -- attempting synth-recovery")
+                    print(f"   first-pass defects: {str(_gate_err)[:600]}")
+                    try:
+                        import pandas as _pd
+                        _coerced2 = 0
+                        for _nc2 in ('Brand Penetration (Row)',
+                                     'Category Share',
+                                     'Original Raw Numbers',
+                                     'US Gen Pop Projection'):
+                            if _nc2 in _df_final.columns:
+                                if (_df_final[_nc2].dtype.name not in
+                                        ('object', 'O', 'float64', 'int64')):
+                                    _df_final[_nc2] = _pd.to_numeric(
+                                        _df_final[_nc2], errors='coerce'
+                                    )
+                                    _coerced2 += 1
+                        if _coerced2:
+                            print(f"   🔧 synth-recovery: coerced "
+                                  f"{_coerced2} numeric column(s)")
+                    except Exception as _coerce_err2:
+                        print(f"   ⚠️  synth-recovery dtype coerce "
+                              f"failed: {_coerce_err2}")
+                    try:
+                        _run_pre_publish_gate2(
+                            _df_final, _gate_subject,
+                            project_name=os.path.basename(
+                                final_file_path or ''
+                            ),
+                            raise_on_fail=True, verbose=True,
+                        )
+                        print(f"   ✅ synth-recovery PASS: gate succeeded "
+                              f"on retry after dtype coerce")
+                    except _PrePublishGateError2 as _gate_err2:
+                        print(f"   ⚠️  synth-recovery: defects still remain")
+                        print(f"      remaining: {str(_gate_err2)[:600]}")
+                        print(f"   🚀 synth-recovery: SHIPPING ANYWAY per "
+                              f"Jenna 'patch don't kill' directive "
+                              f"(2026-06-22)")
+                    except Exception as _other_err2:
+                        print(f"   ⚠️  synth-recovery retry errored: "
+                              f"{_other_err2}")
+                        print(f"   🚀 synth-recovery: SHIPPING ANYWAY")
+                    # _gate_blocked stays False -- save proceeds.
+            except ImportError as _gate_imp_err:
+                # Gate import error — log but don't block save (degrade
+                # gracefully if the enforcers module is unavailable).
+                print(f"⚠️ run_pre_publish_gate import failed (non-fatal): "
+                      f"{_gate_imp_err}")
+            # Only save when the gate didn't block (or wasn't reachable).
+            if not _gate_blocked:
+                _df_final = _demo_safe_to_csv(
+                    _df_final, final_file_path,
+                    subject_label=str(globals().get('CURRENT_SUBJECT_NAME', '') or
+                                       (brands[0] if brands else '')),
+                    tag='save-6-final-audit-playbook',
+                )
+                print(f"✅ Audit playbook applied (final pass): {final_file_path}")
     except Exception as _ap_err2:
+        # Re-raise PrePublishGateError so callers see the block, but treat
+        # other errors as non-fatal (preserves existing belt-and-suspenders
+        # semantics for the final pass).
+        if type(_ap_err2).__name__ == 'PrePublishGateError':
+            raise
         print(f"⚠️ final audit-playbook pass skipped: {_ap_err2}")
+
+    # ═══ POST-PIPELINE SUPER-FAN SYNTHESIS (2026-06-09 Jenna directive) ═
+    # If the operator asked for a super-fan AND no existing 1+ baseline
+    # was found at the start, synthesize from the freshly-saved baseline.
+    try:
+        if (_super_fan_n >= 2 and not _super_fan_existing_src
+                and final_file_path):
+            print(f"\n🎯 Pipeline complete — synthesizing {_super_fan_n}+ "
+                  f"super-fan from {final_file_path} ...")
+            _result_sf2 = _synth_super_fan(
+                final_file_path, _subject_for_sf, _super_fan_n,
+                source_kind='local_path',
+            )
+            print(f"\n✅ Super-fan synthesis complete: "
+                  f"{_result_sf2['out_key']}  "
+                  f"defects={len(_result_sf2.get('defects') or [])}")
+    except Exception as _sf2_err:
+        print(f"⚠ post-pipeline super-fan synthesis skipped "
+              f"(non-fatal): {_sf2_err}")
+    # ═══ END POST-PIPELINE SUPER-FAN SYNTHESIS ══════════════════════════
+
+    # ═══ AVID-FAN AUTO-SYNTHESIS now lives inside run_full_pipeline() ════
+    # As of 2026-06-15 the avid hook fires inside run_full_pipeline so
+    # that every caller (main, parallel runners, webapp, SDK) gets an
+    # avid skin. Keeping this comment as a breadcrumb for archaeology.
+    # ═════════════════════════════════════════════════════════════════════
 
     conn.close()
 
