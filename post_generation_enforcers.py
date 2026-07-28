@@ -387,6 +387,17 @@ def _set_bp(df, idx, new_bp, bp_col, cs_col, raw_col, proj_col, sample_size):
       Raw  = sample_size * new_bp / 100
       Proj = (Raw / 10_000_000) * US_POP   (= sample_size * new_bp / 100 * 32.99)
     """
+    # 2026-06-22 Jenna fix: pandas StringDtype on bp/raw/proj columns raises
+    # "Invalid value 'X' for dtype 'str'" when we assign a float. This bit
+    # the G13 Lisa BLACKPINK auto-patch tonight (logged
+    # "G13 auto-patch FAILED (Invalid value '100.0' for dtype 'str')").
+    # Coerce target columns to float64 once before assignment so every
+    # gate that calls _set_bp (G14, G17, G7 NEAR_TIE, ...) is safe.
+    for _dtcol in (bp_col, raw_col, proj_col):
+        if (_dtcol and _dtcol in df.columns
+                and df[_dtcol].dtype.name not in ('object', 'O',
+                                                  'float64', 'int64')):
+            df[_dtcol] = pd.to_numeric(df[_dtcol], errors='coerce')
     df.at[idx, bp_col] = round(float(new_bp), 4)
     new_raw = int(round(sample_size * new_bp / 100.0))
     if raw_col:
@@ -1853,6 +1864,31 @@ def strip_product_skus(df, subject, verbose=True):
     )
 
 
+# Build-time annotation patterns (Defect 26 — Shemar Moore SAILING-na leak).
+# These are upstream mapping/remap instructions that should have been resolved
+# during the build but leaked into Value cells. Examples seen in the wild:
+#   "SAILING-na (use OUTDOOR LIFE)"  -- remap instruction in INTEREST grid
+#   "FOO-TBD"                          -- placeholder pending resolution
+#   "BAR (see BAZ)"                    -- cross-reference hint
+#   "QUX => QUUX"                      -- arrow remap
+#   "TODO: rebuild"                    -- explicit dev-marker
+# Detection is conservative: each pattern must be distinctive enough that no
+# legitimate brand/interest/talent label could plausibly match it. The key
+# signal is INSTRUCTIONAL VERBS (use/see/remap/map to/replace with) inside
+# parentheses, or development-process suffixes/markers (-NA, -TBD, TODO:,
+# FIXME:, =>) that don't appear in real-world panel labels.
+_ANNOTATION_RX = _re.compile(
+    r'(?ix)'                                            # case-insensitive, verbose
+    r'(?:'
+    r'  -\s*(?:NA|TBD|TODO|PENDING|FIXME)\b'            # SAILING-na, FOO-TBD
+    r'| \(\s*(?:USE|SEE|REMAP|MAP\s+TO|INSTEAD|REPLACE\s+WITH)\s+[A-Z]'  # (use X)
+    r'| \b(?:TODO|FIXME)\s*:'                           # TODO: / FIXME:
+    r'| \bN\s*/\s*A\b'                                  # N/A
+    r'| =>'                                             # remap arrow
+    r')'
+)
+
+
 def _is_polluted_brand_value(v):
     if not v:
         return False
@@ -1861,19 +1897,1121 @@ def _is_polluted_brand_value(v):
         return True
     if v.startswith('.') or v.startswith('http'):
         return True
+    # 2026-06-15 (Defect 26): build-time annotation/remap instruction leaks.
+    if _ANNOTATION_RX.search(v):
+        return True
     return False
 
 
 def strip_polluted_brand_values(df, subject, verbose=True):
-    """Drop brand rows whose Value is a search-result string or URL fragment
-    (e.g. 'Bing | Breaking: Taylor Swift trending today', 'Google | Maps').
-    Skips metadata columns (INPUT_METADATA / BRAND INPUT / SAMPLE SIZE)
-    which legitimately contain long structured strings."""
+    """Drop brand rows whose Value is a search-result string, URL fragment,
+    or build-time annotation/remap instruction (e.g. 'Bing | Breaking: ...',
+    'Google | Maps', 'SAILING-na (use OUTDOOR LIFE)', 'FOO-TBD',
+    'TODO: rebuild', 'X => Y'). Skips metadata columns (INPUT_METADATA /
+    BRAND INPUT / SAMPLE SIZE) which legitimately contain long structured
+    strings."""
     return _strip_rows(
         df, subject,
         lambda c, v: _is_polluted_brand_value(v),
         label='polluted-brand', verbose=verbose,
     )
+
+
+# ============================================================================
+# 2026-06-15 (Rob Schneider INTEREST defect) — phantom-zero row stripper.
+#
+# Symptom: Rob Schneider profile shipped with three INTEREST rows at exact
+# 0.0000% / Raw=0 / Projection=0 (BOOKTOK, EDM, K-POP). Other recent
+# profiles (Sebastian Stan, Sophie Turner, Parker Posey, Stephen Colbert,
+# Seth Rogen, Rooney Mara) had none of these tokens at all -- they were
+# phantom rows synthesized by the hybrid sanity check from "named under-
+# index" mentions in the persona dossier (line 275 of Rob's run log:
+# "Under-indexes hard on: K-pop, BookTok, ... EDM").
+#
+# Root cause: hybrid_reasoning.apply_sanity_fixes was inserting new
+# (Category, Value) rows for any auditor fix with current_bp == 0,
+# without checking whether suggested_bp was also 0. Patched 2026-06-15
+# (kicked the floor to 0.10). This enforcer is the defense-in-depth:
+# any non-meta, non-demo row at exact 0.0% / Raw=0 is a build defect
+# (legitimate engagement is never exactly zero in panel data) and gets
+# dropped.
+# ============================================================================
+
+def strip_phantom_zero_rows(df, subject, verbose=True):
+    """Drop any non-meta, non-demo row whose Brand Penetration AND
+    Original Raw Numbers are both exactly zero. These rows are always
+    phantom inserts (build-side closure / persona-dossier under-index
+    echoing) -- a genuinely engaged audience cannot hit exact 0.0000%
+    on a named brand/interest/talent token. Real low-engagement rows
+    have at least 1 raw confirmation and a non-zero (jittered) BP.
+
+    Preserves:
+      - METADATA_COLS (BRAND INPUT / SAMPLE SIZE / BRAND CATEGORY / etc.)
+      - DEPIN_DEMO_CATS (demo zeros are legitimate sub-bucket absences)
+      - rows with BP > 0 OR Raw > 0 (non-phantom, just low signal)
+
+    Returns (df, n_dropped). Renormalizes Category Share for any
+    affected category so the trio remains internally consistent.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    def _to_float(cell):
+        try:
+            s = str(cell).replace('%', '').replace(',', '').strip()
+            if not s or s.lower() in ('nan', 'none', ''):
+                return None
+            return float(s)
+        except (ValueError, TypeError):
+            return None
+
+    drop_idx = []
+    affected_cats = set()
+    examples = []
+    for idx, r in df.iterrows():
+        col = str(r.get('Column', '') or '').strip()
+        val = str(r.get('Value', '') or '').strip()
+        if not col or not val:
+            continue
+        col_u = col.upper()
+        if col_u in METADATA_COLS:
+            continue
+        if col_u in DEPIN_DEMO_CATS:
+            continue
+        if col_u in DEPIN_META_CATS:
+            continue
+        bp_v = _to_float(r.get(bp_col)) if bp_col else None
+        raw_v = _to_float(r.get(raw_col)) if raw_col else None
+        # Drop iff BOTH are exactly zero (or one is zero and the other
+        # is missing). One being non-zero means the row has signal
+        # somewhere -- jitter it elsewhere instead of dropping here.
+        bp_zero = (bp_v is not None and bp_v == 0.0)
+        raw_zero = (raw_v is not None and raw_v == 0.0)
+        if (bp_zero and (raw_zero or raw_v is None)) or \
+           (raw_zero and (bp_zero or bp_v is None)):
+            drop_idx.append(idx)
+            affected_cats.add(col)
+            if len(examples) < 8:
+                examples.append((col, val))
+
+    if not drop_idx:
+        return df, 0
+
+    if verbose:
+        ex = ', '.join(f'[{c}]"{v}"' for c, v in examples)
+        more = f' (+{len(drop_idx)-len(examples)} more)' if len(drop_idx) > len(examples) else ''
+        print(f"   🧹 stripped {len(drop_idx)} phantom-zero row(s): {ex}{more}")
+
+    df = df.drop(index=drop_idx).reset_index(drop=True)
+    for cat in affected_cats:
+        df = _renormalize_category(df, cat, bp_col, cs_col, raw_col, proj_col,
+                                   sample_size)
+    return df, len(drop_idx)
+
+
+# ============================================================================
+# 2026-06-15 (Apple Pay native-category gap) — subject-self-pin in native
+# category enforcer.
+#
+# Symptom: Apple_Pay_06_03_2026_22_28.csv shipped with BRAND INPUT=APPLE PAY
+# at 100% but no APPLE PAY row anywhere in DIGITAL BANKING (its native
+# category). The DIGITAL BANKING grid had 11 peers (PayPal, Venmo, Zelle,
+# Cash App, ...) but the anchor brand was completely absent. Same gap also
+# observed in PayPal_06_03_2026_18_25.csv (PAYPAL absent from its own
+# DIGITAL BANKING grid).
+#
+# Per Profile IQ Rule #3:
+#   "Subject = exactly 100% in: BRAND INPUT, SUBJECT, the subject's own
+#    league category, all companion cols (SPORTS TEAM, AL/NL, AFC/NFC,
+#    divisions), persona/content cats."
+# The subject's native (BRAND CATEGORY) is one of those self-pin categories
+# -- the existing enforce_input_brand_100 in BG.py only PINS rows where the
+# subject already exists; it does not INSERT a missing row. This enforcer
+# fills that gap by reading BRAND CATEGORY metadata + BRAND INPUT and
+# inserting the subject row at 100% if missing.
+# ============================================================================
+
+def ensure_subject_in_native_category(df, subject, verbose=True):
+    """Insert subject row at 100% in the BRAND CATEGORY native category if
+    missing. Uses the BRAND CATEGORY metadata row (already in every profile)
+    to identify the native category -- no hostmap lookup required.
+
+    Returns (df, n_inserted). 0 means subject was already present (the
+    common case once enforce_input_brand_100 has run on a well-formed
+    profile, or the BRAND CATEGORY is one we don't pin into -- e.g. some
+    INTEREST/PERSONA-only inputs).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if not bp_col or not raw_col or not proj_col:
+        return df, 0
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+
+    # Pull BRAND INPUT row (subject + sample-size raw + projection).
+    bi_mask = col_u == 'BRAND INPUT'
+    if not bi_mask.any():
+        return df, 0
+    bi_row = df.loc[bi_mask].iloc[0]
+    subject_name = str(bi_row.get('Value', '') or '').strip()
+    if not subject_name:
+        return df, 0
+
+    def _to_int(cell):
+        try:
+            s = str(cell).replace(',', '').replace('%', '').strip()
+            if not s or s.lower() in ('nan', 'none'):
+                return None
+            return int(float(s))
+        except (ValueError, TypeError):
+            return None
+
+    subj_raw = _to_int(bi_row.get(raw_col))
+    subj_proj = _to_int(bi_row.get(proj_col))
+    if subj_raw is None or subj_proj is None:
+        return df, 0
+
+    # Pull BRAND CATEGORY metadata row to identify native category.
+    bc_mask = col_u == 'BRAND CATEGORY'
+    if not bc_mask.any():
+        return df, 0
+    native_cat = str(df.loc[bc_mask].iloc[0].get('Value', '') or '').strip()
+    if not native_cat:
+        return df, 0
+    native_cat_u = native_cat.upper()
+
+    # Skip categories we don't pin subject into. Demographic / metadata
+    # native categories don't carry a 100% self-pin.
+    if (native_cat_u in METADATA_COLS or native_cat_u in DEPIN_DEMO_CATS
+            or native_cat_u in DEPIN_META_CATS):
+        return df, 0
+
+    # MPB-only profiles follow MPB rules (Rule #3 exception). Don't pin
+    # at 100% in MOST PURCHASED BRANDS family.
+    if native_cat_u in {
+        'MOST PURCHASED BRANDS', 'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS',
+        'WHERE THEY SHOP', 'TECHNOLOGY BRAND', 'HOME/OUTDOOR', 'CPG',
+        'BEVERAGES', 'FRANCHISE',
+    }:
+        return df, 0
+
+    # Find the native category rows in the profile.
+    cat_mask = col_u == native_cat_u
+    if not cat_mask.any():
+        # Native category is missing entirely. Don't synthesize the whole
+        # category here -- that's a bigger build-side issue (escalate).
+        if verbose:
+            print(f"   ⚠️ ensure_subject_in_native_category: BRAND CATEGORY "
+                  f"'{native_cat}' has no rows in profile -- skipping insert "
+                  f"(needs full-category re-pull, not row-level patch)")
+        return df, 0
+
+    val_u = df['Value'].astype(str).str.upper().str.strip()
+    subj_u = subject_name.upper()
+    # Case + punctuation insensitive match (workspace rule #4 dedup).
+    subj_norm = _re.sub(r'[^A-Z0-9]', '', subj_u)
+    val_norm = val_u.str.replace(r'[^A-Z0-9]', '', regex=True)
+    present_mask = cat_mask & (val_norm == subj_norm)
+    if present_mask.any():
+        # 2026-06-16 PM (Defect 38b -- Gemini SEARCH ENGINE/AI 32.87%, also
+        # Jennifer Lawrence ACTOR 86.92%, MGM+ STREAMING/PLATFORM 3.75%, and
+        # 15 social-media platforms like Snapchat / Pinterest / Discord at
+        # 13-45% in SOCIAL MEDIA): when subject IS a brand whose category is
+        # also the grid name (Gemini -> SEARCH ENGINE/AI, etc.), the
+        # cat-agent reasons about the subject as a peer ("Gemini's share is
+        # 32% of this Gemini-avid audience") rather than as a self-pin.
+        # enforce_input_brand_100 (BG.py) is supposed to catch this but
+        # breaks on case mismatch ("Gemini" Title Case vs "GEMINI" subject)
+        # or on certain category labels.
+        #
+        # Force-pin every subject row in the native category to 100.0000%,
+        # normalize the Value to match BRAND INPUT exactly, recompute
+        # Raw/Projection. The native cat is the subject's "own league" per
+        # Rule #3 -- pin is unconditional here, even from 0% or 3%.
+        n_pinned = 0
+        for idx in df.index[present_mask]:
+            cur_bp = None
+            try:
+                cur_bp = float(str(df.at[idx, bp_col]).replace('%', '').replace(',', '').strip())
+            except (ValueError, TypeError):
+                pass
+            cur_val = str(df.at[idx, 'Value']).strip()
+            if (cur_bp is not None and abs(cur_bp - 100.0) < 0.0001
+                    and cur_val == subject_name):
+                continue  # already correct
+            df.at[idx, 'Value'] = subject_name
+            df.at[idx, bp_col] = '100.0000%'
+            df.at[idx, raw_col] = subj_raw
+            df.at[idx, proj_col] = subj_proj
+            n_pinned += 1
+            if verbose:
+                msg = (f"   📌 native-pin [{native_cat}] "
+                       f"'{cur_val}'@{cur_bp or 0:.4f}% -> "
+                       f"'{subject_name}'@100.0000%")
+                print(msg)
+        if n_pinned > 0 and cs_col:
+            try:
+                df = _renormalize_category(df, native_cat, bp_col, cs_col,
+                                            raw_col, proj_col, subj_raw)
+            except Exception as _re_err:
+                if verbose:
+                    print(f"   ⚠️ renormalize {native_cat} failed "
+                          f"(non-fatal): {_re_err}")
+        return df, n_pinned
+
+    # Insert subject at 100% above the first native-category row.
+    insert_at = df.index[cat_mask][0]
+    new_row = {c: '' for c in df.columns}
+    new_row['Column'] = native_cat
+    new_row['Value'] = subject_name
+    new_row[bp_col] = '100.0000%'
+    if cs_col:
+        new_row[cs_col] = 100.0
+    new_row[raw_col] = subj_raw
+    new_row[proj_col] = subj_proj
+
+    top = df.iloc[:insert_at]
+    bottom = df.iloc[insert_at:]
+    df_new = pd.concat(
+        [top, pd.DataFrame([new_row]), bottom], ignore_index=True,
+    )
+    if verbose:
+        print(f"   📌 inserted subject self-pin: [{native_cat}] "
+              f"\"{subject_name}\" @ 100.0000% "
+              f"(raw={subj_raw:,}, projection={subj_proj:,})")
+    return df_new, 1
+
+
+# ============================================================================
+# 2026-06-15 (Netflix self-anchor near-miss) — pin subject to exactly 100%
+# in any non-meta, non-demo, non-MPB category where the subject row exists
+# with BP >= 95%.
+#
+# Symptom: Netflix_06_12_2026_01_23.csv shipped with NETFLIX at:
+#   BRAND INPUT      = 100.0000%   (sample_size 10M)
+#   STREAMING/PLATFORM = 100.0000%   (sample_size 10M)
+#   STREAMING VIDEO   =  99.0376%   (raw 9,903,760)  ← near-miss
+#
+# Root cause: BG.py::enforce_input_brand_100 gates by hostmap-canonical
+# category for the brand (added 2026-06-03 to prevent variants like
+# `BRANDY~CLARK` from being pinned in wrong categories). If hostmap lists
+# NETFLIX's SECTION as `STREAMING/PLATFORM` only (not `STREAMING VIDEO`),
+# the gate skips STREAMING VIDEO and the writer's emitted near-100 value
+# survives. Same pattern hits any subject that appears in a sister/parent
+# grid that hostmap doesn't list canonically.
+#
+# This enforcer is the writer-stage signal interpreter: a BP >= 95% is the
+# writer's clear self-pin intent; pin to exactly 100% with raw=sample_size
+# and projection=profile_universe. The 95% threshold avoids over-correcting
+# legitimate brand-mention rows where the subject's name happens to appear
+# at moderate BP (those would be rare and below the threshold anyway).
+# ============================================================================
+
+# ============================================================================
+# Native-cluster self-pin (2026-06-16 PM, Defect 38 -- Jenna BofA/Citi/BMO):
+#
+# Some BRAND CATEGORY metadata maps to MULTIPLE display grids, all of which
+# represent the subject's "own league" per Rule #3 (subject must be 100% in
+# native cat). Examples:
+#   BANKS = {BANK, BANKING, BANKS}  -- BANK (legacy singular) + BANKING
+#                                      (canonical post-2026-06-16) both
+#                                      render in the dashboard's "Banking"
+#                                      panel
+#
+# `pin_subject_to_100_in_appearing_categories` picks just ONE of those grids
+# (max-BP or BRAND CATEGORY metadata match) and pins only there. This left
+# Citibank shipping with BANK="CITIBANK"@100% AND BANKING="Citibank"@15.67%
+# (peer-style row) -- the BANKING grid (the larger, canonical one) had the
+# subject ranked 5th behind Chase/BofA/Wells/Vanguard. BMO shipped with BANK
+# at 100% but completely absent from BANKING (writer omitted BMO because
+# it's not a major US retail bank in isolation).
+#
+# This enforcer iterates every grid in the subject's native cluster that
+# is PRESENT in the profile and either pins the existing subject row to 100
+# (normalizing the Value to match BRAND INPUT exactly) or INSERTS a new row
+# when the subject row is absent. Does NOT create a grid that wasn't already
+# in the profile -- only operates within already-present grids.
+#
+# STREAMING/PLATFORM + STREAMING VIDEO are NOT clustered here -- the active
+# Defect-31 enforcer `dedupe_subject_streaming_grids` drops the non-native
+# peer row by design (the dashboard merges those grids into one display
+# section, so a 100% self-pin alongside a 4% peer reads as contradictory).
+# Banks have no such merge -- both bars rendered properly when both are at
+# 100% (see BofA reference profile from 06-16 which already had this).
+# ============================================================================
+
+NATIVE_CLUSTERS = {
+    "BANKS": {"BANK", "BANKING", "BANKS"},
+    # 2026-06-16 PM (NetShort + GoodShort defect): vertical-shorts subjects
+    # render in the dashboard's "Streaming" display section which merges
+    # STREAMING VIDEO + STREAMING/PLATFORM. Both grids must carry the
+    # subject's 100% self-pin (the cat-agent emits one but skips the other
+    # for some subjects -- 6 of 8 corpus vertical-shorts had both, NetShort
+    # + GoodShort had only STREAMING VIDEO). Limited to BRAND CATEGORY =
+    # 'VERTICAL SHORTS' so it does NOT trigger for Netflix-type subjects
+    # (where BRAND CATEGORY is itself one of the streaming grids; those
+    # are handled by `dedupe_subject_streaming_grids` instead, which
+    # drops the peer-row artifact in the non-native grid).
+    "VERTICAL SHORTS": {"VERTICAL SHORTS", "STREAMING VIDEO",
+                        "STREAMING/PLATFORM"},
+}
+
+
+def enforce_native_cluster_self_pin(df, subject, verbose=True):
+    """For each grid in the subject's native cluster present in the profile,
+    ensure the subject row exists at exactly 100.0000% with Value matching
+    BRAND INPUT. Inserts missing rows.
+
+    Cluster membership is resolved from BRAND CATEGORY metadata. Profiles
+    whose BRAND CATEGORY isn't a member of any cluster are no-op.
+
+    Returns (df, n_changes). n_changes counts inserts + pins separately.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if not all((bp_col, cs_col, raw_col, proj_col)):
+        return df, 0
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    bi_mask = col_u == 'BRAND INPUT'
+    if not bi_mask.any():
+        return df, 0
+    bi_row = df.loc[bi_mask].iloc[0]
+    subject_name = str(bi_row.get('Value', '') or '').strip()
+    if not subject_name:
+        return df, 0
+
+    bc_mask = col_u == 'BRAND CATEGORY'
+    if not bc_mask.any():
+        return df, 0
+    brand_category = str(df.loc[bc_mask].iloc[0].get('Value', '') or '').strip().upper()
+    if not brand_category:
+        return df, 0
+
+    cluster = None
+    for _k, members in NATIVE_CLUSTERS.items():
+        if brand_category in members:
+            cluster = members
+            break
+    if cluster is None:
+        return df, 0
+
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+    if sample_size is None or sample_size <= 0:
+        return df, 0
+    # Universe for projection: use BRAND INPUT row's projection col (same
+    # convention as _set_bp uses indirectly via _detect_sample_size).
+    def _to_int(v):
+        try:
+            s = str(v).replace(',', '').replace('%', '').strip()
+            if not s or s.lower() in ('nan', 'none'):
+                return None
+            return int(float(s))
+        except (ValueError, TypeError):
+            return None
+    profile_universe = _to_int(bi_row.get(proj_col))
+    if profile_universe is None:
+        return df, 0
+
+    def _to_float(v):
+        try:
+            s = str(v).replace('%', '').replace(',', '').strip()
+            if not s or s.lower() in ('nan', 'none'):
+                return None
+            return float(s)
+        except (ValueError, TypeError):
+            return None
+
+    subj_norm = _re.sub(r'[^A-Z0-9]', '', subject_name.upper())
+    val_norm = (
+        df['Value'].astype(str).str.upper()
+        .str.replace(r'[^A-Z0-9]', '', regex=True)
+    )
+
+    existing_grids = [c for c in cluster if (col_u == c).any()]
+    if not existing_grids:
+        return df, 0
+
+    n_changes = 0
+    touched_cats = set()
+
+    for grid in existing_grids:
+        # 2026-06-16 PM (NetShort/GoodShort avid bug): recompute masks
+        # each iteration. Inserting a new row in iteration N changes
+        # df length, leaving the precomputed col_u / val_norm series
+        # one row short for iteration N+1 (IndexError on .index[mask]).
+        col_u = df['Column'].astype(str).str.upper().str.strip()
+        val_norm = (
+            df['Value'].astype(str).str.upper()
+            .str.replace(r'[^A-Z0-9]', '', regex=True)
+        )
+        grid_mask = col_u == grid
+        subj_in_grid_mask = grid_mask & (val_norm == subj_norm)
+        idxs = list(df.index[subj_in_grid_mask])
+        if idxs:
+            for idx in idxs:
+                cur_bp = _to_float(df.at[idx, bp_col])
+                cur_val = str(df.at[idx, 'Value']).strip()
+                already_pinned = (cur_bp is not None
+                                   and abs(cur_bp - 100.0) < 0.0001)
+                value_canonical = (cur_val == subject_name)
+                if already_pinned and value_canonical:
+                    continue
+                df.at[idx, 'Value'] = subject_name
+                df.at[idx, bp_col] = '100.0000%'
+                df.at[idx, raw_col] = sample_size
+                df.at[idx, proj_col] = profile_universe
+                touched_cats.add(grid)
+                n_changes += 1
+                if verbose:
+                    if not value_canonical:
+                        print(f"   📌 native-cluster pin [{grid}] "
+                              f"'{cur_val}' -> '{subject_name}' "
+                              f"BP {cur_bp or 0:.4f}% -> 100.0000%")
+                    else:
+                        print(f"   📌 native-cluster pin [{grid}] "
+                              f"BP {cur_bp or 0:.4f}% -> 100.0000%")
+        else:
+            # Insert. Place RIGHT AFTER the last row of this grid so it
+            # stays grouped in display order.
+            grid_idxs = list(df.index[grid_mask])
+            if not grid_idxs:
+                continue
+            insert_after_pos = df.index.get_loc(grid_idxs[-1])
+            new_row = {c: '' for c in df.columns}
+            new_row['Column'] = grid
+            new_row['Value'] = subject_name
+            new_row[bp_col] = '100.0000%'
+            new_row[cs_col] = '0.0000%'  # recomputed below via renormalize
+            new_row[raw_col] = sample_size
+            new_row[proj_col] = profile_universe
+            top = df.iloc[:insert_after_pos + 1]
+            bot = df.iloc[insert_after_pos + 1:]
+            df = pd.concat(
+                [top, pd.DataFrame([new_row]), bot], ignore_index=True,
+            )
+            touched_cats.add(grid)
+            n_changes += 1
+            if verbose:
+                print(f"   ➕ native-cluster insert [{grid}] "
+                      f"'{subject_name}'@100.0000%")
+
+    # Recompute Category Share for each touched grid (BANKING-style reach
+    # categories aren't normalized to sum=100, but Category Share should
+    # be in sync with current BP values).
+    for cat in touched_cats:
+        try:
+            df = _renormalize_category(df, cat, bp_col, cs_col, raw_col,
+                                        proj_col, sample_size)
+        except Exception as _re_err:
+            if verbose:
+                print(f"   ⚠️ renormalize {cat} after native-cluster pin "
+                      f"failed (non-fatal): {_re_err}")
+
+    return df, n_changes
+
+
+def pin_subject_to_100_in_appearing_categories(df, subject, verbose=True):
+    """Pin subject to exactly 100.0000% only in the NATIVE grid -- the
+    non-MPB-family category where the subject row has the HIGHEST BP --
+    when that BP is a writer near-miss in [95, 100). All other subject-
+    row appearances are PEER RATES (cross-platform overlap measures, e.g.
+    Fandango At Home audience using STREAMING/PLATFORM peers at ~4.5%)
+    and must be left untouched.
+
+    Threshold history:
+      - 2026-06-15 AM: BP >= 95% -> 100 in every appearing cat
+                       (Netflix Defect 22 near-miss)
+      - 2026-06-15 PM: BP > 0    -> 100 in every appearing cat
+                       (Fandango Defect 23 deep miss)
+      - 2026-06-15 PM (revised, this version): scoped to HIGHEST-BP grid
+        only, threshold [95, 100). Reason: Jenna's native-grid scoping
+        framing -- some services anchor in STREAMING/PLATFORM (Netflix,
+        Canela, Crackle, DAZN), others in STREAMING VIDEO (Fandango At
+        Home, GoodShort), depending on upstream classification. The
+        (0, 100) widening was over-correcting peer rates as if they were
+        self-pin misses. Native = highest-BP grid; peers = the rest.
+
+    Skip set:
+      - METADATA_COLS, DEPIN_DEMO_CATS, DEPIN_META_CATS
+      - MPB family (Rule #3 exception)
+    Returns (df, n_pinned).  n_pinned ∈ {0, 1}.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if not bp_col or not raw_col or not proj_col:
+        return df, 0
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+
+    bi_mask = col_u == 'BRAND INPUT'
+    if not bi_mask.any():
+        return df, 0
+    bi_row = df.loc[bi_mask].iloc[0]
+    subject_name = str(bi_row.get('Value', '') or '').strip()
+    if not subject_name:
+        return df, 0
+
+    sz_mask = col_u == 'SAMPLE SIZE'
+    if not sz_mask.any():
+        return df, 0
+    sz_row = df.loc[sz_mask].iloc[0]
+
+    def _to_int(cell):
+        try:
+            s = str(cell).replace(',', '').replace('%', '').strip()
+            if not s or s.lower() in ('nan', 'none'):
+                return None
+            return int(float(s))
+        except (ValueError, TypeError):
+            return None
+
+    def _to_float(cell):
+        try:
+            s = str(cell).replace('%', '').replace(',', '').strip()
+            if not s or s.lower() in ('nan', 'none'):
+                return None
+            return float(s)
+        except (ValueError, TypeError):
+            return None
+
+    sample_size = _to_int(sz_row.get(raw_col))
+    profile_universe = _to_int(sz_row.get(proj_col))
+    if sample_size is None or profile_universe is None:
+        return df, 0
+
+    skip = (
+        METADATA_COLS | DEPIN_DEMO_CATS | DEPIN_META_CATS
+        | {'MOST PURCHASED BRANDS', 'APPAREL/FOOTWEAR',
+           'BEAUTY/WELLNESS', 'WHERE THEY SHOP', 'TECHNOLOGY BRAND',
+           'HOME/OUTDOOR', 'CPG', 'BEVERAGES', 'FRANCHISE'}
+    )
+
+    subj_norm = _re.sub(r'[^A-Z0-9]', '', subject_name.upper())
+    val_norm = (
+        df['Value'].astype(str).str.upper()
+        .str.replace(r'[^A-Z0-9]', '', regex=True)
+    )
+    base_mask = (val_norm == subj_norm) & (~col_u.isin(skip))
+    candidate_idxs = list(df.index[base_mask])
+    if not candidate_idxs:
+        return df, 0
+
+    # 2026-06-15 PM-revised-2 (DOGTV defect): native grid =
+    # BRAND CATEGORY metadata (Profile IQ Rule #3 canonical), with
+    # max-BP heuristic as fallback when metadata is missing or doesn't
+    # match a candidate row.
+    #
+    # The previous version (Defect 24) used max-BP only -- "writer's
+    # de-facto self-pin grid". That broke for cases like DOGTV/Netflix
+    # where BRAND CATEGORY metadata says STREAMING VIDEO but the writer
+    # ALSO pinned at 100% in STREAMING/PLATFORM (a sister grid). Max-BP
+    # picked S/P and skipped the SV near-miss; the SV near-miss is the
+    # actual native-grid violation per Rule #3.
+    bc_mask = col_u == 'BRAND CATEGORY'
+    bc_native = None
+    if bc_mask.any():
+        bc_val = str(df.loc[bc_mask].iloc[0].get('Value', '') or '').strip().upper()
+        # Only honor BRAND CATEGORY if it's a real grid name (not a
+        # demo/meta cat that would be in skip set anyway).
+        if bc_val and bc_val not in skip:
+            bc_native = bc_val
+
+    best_idx = None
+    best_bp = -1.0
+    used_metadata = False
+    if bc_native is not None:
+        for idx in candidate_idxs:
+            cat_here = str(df.at[idx, 'Column']).strip().upper()
+            if cat_here == bc_native:
+                bp = _to_float(df.at[idx, bp_col])
+                if bp is not None:
+                    best_idx = idx
+                    best_bp = bp
+                    used_metadata = True
+                    break
+
+    # Fallback: BRAND CATEGORY missing or no matching candidate row ->
+    # use max-BP heuristic (Defect 24 behavior).
+    if best_idx is None:
+        for idx in candidate_idxs:
+            bp = _to_float(df.at[idx, bp_col])
+            if bp is None:
+                continue
+            if bp > best_bp:
+                best_bp = bp
+                best_idx = idx
+        if best_idx is None:
+            return df, 0
+
+    # 2026-06-19 PM (Defect 31 — Marriott et al). When BRAND CATEGORY
+    # metadata explicitly identifies the native grid (used_metadata=True),
+    # ANY BP < 99.9999 is a Rule #3 violation, not a peer rate. Pin
+    # regardless of magnitude. Examples found in corpus audit:
+    #   Marriott:  TRAVEL row at 32.77% (writer treated subject as a peer)
+    #   Adidas:    ACTIVEWEAR row at 32.23%
+    #   Dunkin:    QSR row at 29.74%
+    #   Dominos:   QSR row at 31.79%
+    #   Hidive:    STREAMING/PLATFORM row at 7.93%
+    # All of these had BRAND INPUT correctly at 100% but the writer
+    # produced peer-rate values in the in-grid self-row. The enforcer
+    # previously bailed out (best_bp < 95) thinking these were peer
+    # rates. With BRAND CATEGORY metadata identifying the native grid,
+    # the candidate row IS the self-pin slot by definition.
+    #
+    # When falling back to max-BP heuristic (no metadata or no match),
+    # keep the conservative [95, 100) gate to avoid over-correcting
+    # genuine peer rates (e.g., Fandango appearing at 4.5% as a
+    # streaming-platform peer when its native grid is STREAMING VIDEO).
+    if best_bp >= 99.9999:
+        return df, 0  # already pinned
+    if used_metadata:
+        if best_bp >= 100.0:
+            return df, 0
+    else:
+        if not (95.0 <= best_bp < 99.9999):
+            return df, 0
+
+    df.at[best_idx, bp_col] = '100.0000%'
+    df.at[best_idx, raw_col] = sample_size
+    df.at[best_idx, proj_col] = profile_universe
+    affected_cat = str(df.at[best_idx, 'Column']).strip()
+
+    if verbose:
+        src = "BRAND CATEGORY metadata" if used_metadata else "max-BP fallback"
+        print(f"   📌 pinned subject \"{subject_name}\" native self-anchor "
+              f"({src}): [{affected_cat}] {best_bp:.4f}% -> 100.0000% "
+              f"(raw={sample_size:,}, projection={profile_universe:,})")
+
+    df = _renormalize_category(df, affected_cat, bp_col, cs_col, raw_col,
+                               proj_col, sample_size)
+    return df, 1
+
+
+# ============================================================================
+# 2026-06-15 PM (Defect 28 — Netflix peer-rate displacement). Today's batch
+# had 6 profiles where Amazon Prime Video led Netflix in STREAMING/PLATFORM:
+#   Seth Macfarlane    AP 67.88 > NX 60.24
+#   Roseanne Barr      AP 63.84 > NX 51.23
+#   Sean Penn          AP 66.29 > NX 62.51
+#   Richard Jenkins    AP 63.78 > HBO Max 52.81 > NX 50.18  (NX displaced to #3)
+#   Steve Buscemi      AP 67.52 > NX 60.01
+#   Steve-O            AP 65.34 > NX 58.67
+# Per Jenna: "the only time netflix isn't number one is if it really
+# shouldn't be there like another platform is 100% or something." Netflix
+# has the highest universal streaming penetration in the US (~60-70% of
+# adults) -- non-Netflix leadership in STREAMING/PLATFORM is almost
+# always a writer-side bias artifact unless the subject IS the leading
+# platform (e.g. an Amazon Prime Video profile self-pinned at 100%).
+#
+# This enforcer ensures Netflix is the #1 BP among non-self-pin rows.
+# If another platform leads, swap their BP/Raw/Projection (Category Share
+# is then renormalized for STREAMING/PLATFORM).
+# ============================================================================
+
+def enforce_netflix_leads_streaming_platform(df, subject, verbose=True):
+    """Restore Netflix (and Amazon Prime Video, when also suppressed) to
+    their universal STREAMING/PLATFORM baselines.
+
+    Defect 30 (2026-06-15 PM, Jenna):
+      The earlier swap-based fix (Defect 28) moved suppression from
+      Netflix's row into the displaced peer row instead of restoring
+      the baseline. Per Jenna's universal-anchor framing:
+        - Netflix US adult reach ~75% (single highest-penetration
+          streaming service across virtually every demographic).
+          FLOOR=73 (75 - jitter band).
+        - Amazon Prime Video US adult reach ~66% (flat across
+          audiences). FLOOR=64.
+
+    Logic:
+      - If Netflix BP is below 73 (and Netflix isn't itself a streaming
+        subject, BP < 95%), raise to 75 + deterministic jitter[-2,+2].
+        Recompute Raw and Projection via _set_bp().
+      - If Amazon Prime BP is below 64, raise to 66 + jitter[-2,+2].
+      - Renormalize Category Share via _renormalize_category() so the
+        grid still sums correctly.
+
+    Self-pin exception: rows at >=95% BP are exempt (subject IS a
+    streaming brand, or near-self-pin show profile like
+    "POWER ON AMAZON PRIME" with AP at 99.49%).
+
+    Returns (df, n_changes).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if not all((bp_col, cs_col, raw_col, proj_col)):
+        return df, 0
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    sp_mask = col_u == 'STREAMING/PLATFORM'
+    if not sp_mask.any():
+        return df, 0
+
+    def _to_float(v):
+        try:
+            s = str(v).replace('%', '').replace(',', '').strip()
+            if not s or s.lower() in ('nan', 'none'):
+                return None
+            return float(s)
+        except (ValueError, TypeError):
+            return None
+
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    sp_idx = list(df.index[sp_mask])
+    val_u = df.loc[sp_idx, 'Value'].astype(str).str.upper().str.strip()
+
+    nx_idx = next((i for i in sp_idx if val_u.loc[i] == 'NETFLIX'), None)
+    pr_idx = next((i for i in sp_idx
+                   if val_u.loc[i] in ('AMAZON PRIME VIDEO', 'AMAZON PRIME')), None)
+    if nx_idx is None:
+        return df, 0
+
+    nx_bp = _to_float(df.at[nx_idx, bp_col])
+    if nx_bp is None or nx_bp >= 95.0:
+        # Netflix is itself a self-pin / near-self-pin (Netflix profile or
+        # Netflix-original show profile). No-op.
+        return df, 0
+
+    pr_bp = _to_float(df.at[pr_idx, bp_col]) if pr_idx is not None else None
+    pr_self_pin = pr_bp is not None and pr_bp >= 95.0
+
+    # Universal baselines
+    NX_FLOOR, NX_TARGET, NX_JITTER = 73.0, 75.0, 2.0
+    PR_FLOOR, PR_TARGET, PR_JITTER = 64.0, 66.0, 2.0
+
+    n_changes = 0
+
+    if nx_bp < NX_FLOOR:
+        # 2026-06-17 Jenna (Jennifer Beals G17 reject @ 72.5686%): jitter is
+        # now POSITIVE-ONLY (target..target+2*jitter) and the clamp lower
+        # bound is NX_TARGET (75) -- previously [-NX_JITTER, +NX_JITTER]
+        # combined with a [70, 80] clamp could land at 72.8, which then
+        # the post-enforce dejitter step ("BPs nudged off round") pushed
+        # below the 73 floor, blowing the G17 pre-publish gate. New
+        # invariant: post-enforcer Netflix is in [75.0, 79.0] -- gives
+        # the dejitter step ~2pp headroom above the 73 floor.
+        new_nx = NX_TARGET + _jitter_for(subject, 'NETFLIX',
+                                          salt='baseline',
+                                          lo=0.0, hi=NX_JITTER * 2)
+        new_nx = round(min(max(new_nx, NX_TARGET), 80.0), 4)
+        if verbose:
+            print(f"   ⤴ raising NETFLIX {nx_bp:.4f}% -> {new_nx:.4f}% "
+                  f"(below baseline floor {NX_FLOOR}%, suppression detected)")
+        _set_bp(df, nx_idx, new_nx, bp_col, cs_col, raw_col, proj_col, sample_size)
+        n_changes += 1
+
+    if pr_idx is not None and pr_bp is not None and not pr_self_pin and pr_bp < PR_FLOOR:
+        # Same upward-only fix as Netflix (Jenna 2026-06-17).
+        new_pr = PR_TARGET + _jitter_for(subject, 'AMAZON PRIME VIDEO',
+                                          salt='baseline',
+                                          lo=0.0, hi=PR_JITTER * 2)
+        new_pr = round(min(max(new_pr, PR_TARGET), 70.0), 4)
+        if verbose:
+            print(f"   ⤴ raising AMAZON PRIME VIDEO {pr_bp:.4f}% -> "
+                  f"{new_pr:.4f}% (below baseline floor {PR_FLOOR}%)")
+        _set_bp(df, pr_idx, new_pr, bp_col, cs_col, raw_col, proj_col, sample_size)
+        n_changes += 1
+
+    # 2026-06-17 (Jenna Santander Bank): peer-inversion check. Even when
+    # Netflix is above the 73% floor, a peer (Prime, ESPN, Hulu, etc.)
+    # can still lead Netflix and represent a "Netflix suppression
+    # signature" (Prime floats to #1). Cap any non-self-pin peer at
+    # nx_bp - 0.1 so Netflix retains the rank-1 position. Re-reads bp_num
+    # from df so post-lift Netflix is the comparison reference.
+    try:
+        nx_bp_now = _to_float(df.at[nx_idx, bp_col])
+        if nx_bp_now is not None and nx_bp_now < 95.0 and sample_size and sample_size > 0:
+            for i in sp_idx:
+                if i == nx_idx:
+                    continue
+                bp_i = _to_float(df.at[i, bp_col])
+                if bp_i is None:
+                    continue
+                if bp_i >= 95.0:  # peer self-pin (e.g. AP profile) — exempt
+                    continue
+                if bp_i > nx_bp_now + 1e-9:
+                    cap_val = round(nx_bp_now - 0.1, 4)
+                    if cap_val < 1.0:
+                        cap_val = 1.0
+                    if verbose:
+                        print(f"   ⤵ peer-cap {df.at[i, 'Value']} "
+                              f"{bp_i:.4f}% -> {cap_val:.4f}% "
+                              f"(was leading NETFLIX {nx_bp_now:.4f}%)")
+                    _set_bp(df, i, cap_val, bp_col, cs_col, raw_col,
+                            proj_col, sample_size)
+                    n_changes += 1
+            # Renormalize Category Share for the grid after any cap
+            if n_changes > 0:
+                try:
+                    _renormalize_category(df, 'STREAMING/PLATFORM',
+                                          bp_col, cs_col, raw_col, proj_col,
+                                          sample_size)
+                except Exception:
+                    pass
+    except Exception as _pe:
+        if verbose:
+            print(f"   ⚠️ peer-inversion check failed: {_pe}")
+
+    if n_changes == 0:
+        return df, 0
+
+    # Renormalize Category Share for STREAMING/PLATFORM
+    _renormalize_category(df, 'STREAMING/PLATFORM',
+                          bp_col, cs_col, raw_col, proj_col, sample_size)
+    return df, n_changes
+
+
+# ============================================================================
+# Niche-streamer caps in STREAMING/PLATFORM (Defect 39, 2026-06-16 PM,
+# Jenna Tilda Swinton + Willem Dafoe report)
+#
+# THE CRITERION CHANNEL leading Netflix is implausible for ANY real audience:
+# Criterion has ~1-2M US subscribers vs Netflix's 80M+. The cat-agent over-
+# inflates niche streamers in art-house actor profiles (Tilda 94.6%, Willem
+# 99.99%, Sam Elliott 58%, Sissy Spacek 42%, etc. -- 257 corpus profiles
+# affected).
+#
+# Caps applied to STREAMING/PLATFORM grid only (subject self-pin in
+# BRAND INPUT or that streamer's own native grid is exempt by the
+# subject != value check):
+#
+#   THE CRITERION CHANNEL    22.0%   ~1-2M subs
+#   MUBI                     18.0%   ~1M subs
+#   ACORN TV                 15.0%   ~1.5M subs
+#   BRITBOX                  18.0%   ~3M subs
+#   SHUDDER                  12.0%   ~1M subs
+#   KOCOWA / KOCOWA+          8.0%   ~0.5M subs (K-content niche)
+#   HIDIVE                    8.0%   ~0.3M subs (anime niche)
+#   CRACKLE                  18.0%   ~5M subs (FAST tier)
+#   PLEX                     20.0%   ~5M subs (FAST tier)
+#   MGM+ / MGM PLUS          18.0%   ~5M subs
+#
+# Logic per row:
+#   - Skip if subject IS the streamer itself (self-pin allowed).
+#   - If BP > cap, set BP = cap + jitter[-0.5, +0.5], recompute Raw + Proj.
+#   - Renormalize STREAMING/PLATFORM Category Share if any cap fired.
+# ============================================================================
+
+NICHE_STREAMER_CAPS = {
+    'THE CRITERION CHANNEL': 22.0,
+    'CRITERION CHANNEL':     22.0,
+    'MUBI':                  18.0,
+    'ACORN TV':              15.0,
+    'BRITBOX':               18.0,
+    'SHUDDER':               12.0,
+    'KOCOWA':                 8.0,
+    'KOCOWA+':                8.0,
+    'HIDIVE':                 8.0,
+    'CRACKLE':               18.0,
+    'PLEX':                  20.0,
+    'MGM+':                  18.0,
+    'MGM PLUS':              18.0,
+}
+
+
+def enforce_niche_streamer_caps(df, subject, verbose=True):
+    """Cap niche streamers in STREAMING/PLATFORM at plausible ceilings
+    derived from US subscriber base. Skip rows where the subject IS the
+    streamer (self-pin allowed in own profile).
+
+    Returns (df, n_changes).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if not all((bp_col, cs_col, raw_col, proj_col)):
+        return df, 0
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    sp_mask = col_u == 'STREAMING/PLATFORM'
+    if not sp_mask.any():
+        return df, 0
+
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+    if sample_size is None:
+        return df, 0
+
+    # Subject self-pin exemption (rare: the streamer is the subject itself)
+    subject_u = subject.upper().strip() if subject else ''
+    subject_norm = _re.sub(r'[^A-Z0-9]', '', subject_u)
+
+    def _to_float(v):
+        try:
+            s = str(v).replace('%', '').replace(',', '').strip()
+            return float(s) if s and s.lower() not in ('nan', 'none') else None
+        except (ValueError, TypeError):
+            return None
+
+    n_changes = 0
+    for idx in df.index[sp_mask]:
+        v_raw = str(df.at[idx, 'Value']).strip()
+        v_u = v_raw.upper()
+        cap = NICHE_STREAMER_CAPS.get(v_u)
+        if cap is None:
+            continue
+        v_norm = _re.sub(r'[^A-Z0-9]', '', v_u)
+        if v_norm == subject_norm:
+            # Subject IS the streamer: self-pin at 100% legitimate
+            continue
+        cur = _to_float(df.at[idx, bp_col])
+        if cur is None or cur <= cap + 0.05:
+            continue
+        new_bp = cap + _jitter_for(
+            subject or 'unknown', v_u, salt='niche-cap', lo=-0.5, hi=0.5,
+        )
+        new_bp = round(max(0.5, min(cap + 0.5, new_bp)), 4)
+        if verbose:
+            print(f"   📉 niche-cap [{v_raw}] {cur:.4f}% -> {new_bp:.4f}% "
+                  f"(cap {cap:.1f}%, US subs makes higher implausible)")
+        _set_bp(df, idx, new_bp, bp_col, cs_col, raw_col, proj_col,
+                sample_size)
+        n_changes += 1
+
+    if n_changes > 0:
+        _renormalize_category(df, 'STREAMING/PLATFORM',
+                              bp_col, cs_col, raw_col, proj_col, sample_size)
+    return df, n_changes
+
+
+def enforce_vanguard_in_investments(df, subject, verbose=True):
+    """Move VANGUARD from BANKING to INVESTMENTS.
+
+    Defect 42 (2026-06-17, Jenna): the canonical hostmap places Vanguard in
+    SECTION='Investments' (BRAND='Vanguard'), but generation drift parked
+    it in BANKING in 2,219 of 2,538 corpus profiles + Gen_Pop_2026.csv.
+    Vanguard is an investment management firm (mutual funds, ETFs,
+    brokerage), not a retail bank — never offered checking/savings.
+    Rule #4: when a brand IS in hostmap, use hostmap's category.
+
+    Logic:
+      * If VANGUARD appears in BANKING and INVESTMENTS:
+          drop the BANKING duplicate; INVESTMENTS row is canonical.
+      * If VANGUARD appears in BANKING only:
+          relabel Column BANKING -> INVESTMENTS; BP/raw/proj unchanged.
+      * If VANGUARD appears in INVESTMENTS only or not at all: no-op.
+
+    Renormalizes Category Share for BANKING and INVESTMENTS post-move.
+    No BP changes, no jitter (Rule #1 — pure column reassignment, the
+    underlying penetration is the same; we're only correcting which
+    canonical category the row reports under).
+
+    Returns (df, n_changes).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if not bp_col:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    cu = df['Column'].astype(str).str.strip().str.upper()
+    vu = df['Value'].astype(str).str.strip().str.upper()
+    in_banking = (cu == 'BANKING') & (vu == 'VANGUARD')
+    in_invest  = (cu == 'INVESTMENTS') & (vu == 'VANGUARD')
+
+    if not in_banking.any():
+        return df, 0
+
+    if in_invest.any():
+        n = int(in_banking.sum())
+        df.drop(df.loc[in_banking].index, inplace=True)
+        df.reset_index(drop=True, inplace=True)
+        if verbose:
+            print(f"   🏦→📈 Vanguard hostmap-fix: dropped {n} BANKING duplicate "
+                  f"(INVESTMENTS row is canonical at hostmap)")
+    else:
+        df.loc[in_banking, 'Column'] = 'INVESTMENTS'
+        if verbose:
+            n = int(in_banking.sum())
+            print(f"   🏦→📈 Vanguard hostmap-fix: relabelled {n} row(s) "
+                  f"BANKING -> INVESTMENTS")
+
+    if sample_size is not None:
+        _renormalize_category(df, 'BANKING',
+                              bp_col, cs_col, raw_col, proj_col, sample_size)
+        _renormalize_category(df, 'INVESTMENTS',
+                              bp_col, cs_col, raw_col, proj_col, sample_size)
+    return df, 1
+
+
+def dedupe_subject_streaming_grids(df, subject, verbose=True):
+    """Drop the subject-brand peer row from the non-native streaming grid.
+
+    Defect 31 (2026-06-15 PM, Hallmark Plus): the writer can emit the
+    subject brand in BOTH the STREAMING VIDEO and STREAMING/PLATFORM
+    grids. After the dashboard CATEGORY_DISPLAY_LABELS change merges
+    both grids under one "STREAMING/PLATFORM" tab, having a 100%
+    self-anchor in one grid AND a 4% peer row in the other renders
+    as two contradictory bars in the same display section.
+
+    Logic:
+      - If subject appears in BOTH STREAMING VIDEO and STREAMING/PLATFORM
+        AND one row is >= 95% (true self-anchor)
+        AND the other row is < 50% (clearly the non-native peer artifact)
+        -> drop the non-native row, renormalize Category Share.
+      - If both rows are >= 95%: leave alone (rare, both grids agree on
+        self-pin).
+      - If neither row clears 95%: leave alone (no clear native, this is
+        a different defect handled by G14 / pin_subject_to_100_in_appearing).
+
+    Returns (df, n_dropped). n_dropped ∈ {0, 1}.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if not bp_col:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    val_u = df['Value'].astype(str).str.upper().str.strip()
+
+    bi_mask = col_u == 'BRAND INPUT'
+    if not bi_mask.any():
+        return df, 0
+    subject_name = str(df.loc[bi_mask].iloc[0].get('Value', '') or '').strip().upper()
+    if not subject_name:
+        return df, 0
+
+    sv_mask = (col_u == 'STREAMING VIDEO') & (val_u == subject_name)
+    sp_mask = (col_u == 'STREAMING/PLATFORM') & (val_u == subject_name)
+    if not sv_mask.any() or not sp_mask.any():
+        return df, 0  # not a dual-grid case
+
+    sv_idx = df.index[sv_mask][0]
+    sp_idx = df.index[sp_mask][0]
+    try:
+        sv_bp = float(_bp(df.at[sv_idx, bp_col]))
+        sp_bp = float(_bp(df.at[sp_idx, bp_col]))
+    except Exception:
+        return df, 0
+
+    SELF_ANCHOR_FLOOR = 95.0
+    PEER_DROP_CEILING = 50.0
+
+    drop_idx = drop_grid = renorm_cat = None
+    if sv_bp >= SELF_ANCHOR_FLOOR and sp_bp < PEER_DROP_CEILING:
+        drop_idx, drop_grid, renorm_cat = sp_idx, 'STREAMING/PLATFORM', 'STREAMING/PLATFORM'
+    elif sp_bp >= SELF_ANCHOR_FLOOR and sv_bp < PEER_DROP_CEILING:
+        drop_idx, drop_grid, renorm_cat = sv_idx, 'STREAMING VIDEO', 'STREAMING VIDEO'
+    else:
+        return df, 0  # both >=95 (consistent), or neither clears anchor floor
+
+    if verbose:
+        print(f"   🧹 dropping duplicate subject row "
+              f"{drop_grid},{subject_name} (peer {sv_bp if drop_grid=='STREAMING VIDEO' else sp_bp:.4f}% "
+              f"vs native {sp_bp if drop_grid=='STREAMING VIDEO' else sv_bp:.4f}%)")
+    df = df.drop(index=drop_idx).reset_index(drop=True)
+    df = _renormalize_category(df, renorm_cat, bp_col, cs_col, raw_col, proj_col,
+                               sample_size)
+    return df, 1
 
 
 # ============================================================================
@@ -1962,6 +3100,65 @@ def strip_input_metadata_leakage(df, subject, verbose=True):
     return df, len(drop_idx)
 
 
+# ============================================================================
+# strip_avid_casual_fan_rows — retire AVID FAN / CASUAL FAN rows (2026-07-20)
+# ----------------------------------------------------------------------------
+# User mandate 2026-07-20 (Jenna): "remove the avid fan/casual fan rows from
+# all profile iqs pipeline, we don't need that anywhere so it shouldnt be in
+# the output".
+#
+# Runs at the tail of run_all_enforcers (after every enforcer that used
+# them as skip-list markers -- those references become harmless no-ops
+# once the rows are gone) and just before validate_demo_sum_100.
+#
+# Downstream consumers that historically read these rows:
+#   1. avid_fan_row_by_row.py (line ~137) -- reads avid_fan_bp as a SOFT
+#      Claude prompt signal (audience snapshot). Missing row just means
+#      Claude picks cohort_fraction without that specific signal; the
+#      broader audience picture (demos, category BPs) is still fully
+#      available. No functional break.
+#   2. audience_cut_synthesis._compute_deterministic_cohort_fraction
+#      (line ~177) -- reads AVID FAN BP for the rare "OG -> avid_F/M"
+#      derivation. HARD dependency. The function already has a graceful
+#      fallback (line ~183 returns gender-share alone) which now fires
+#      + logs a warning. In practice this path is unused: gender-avid
+#      cuts are always sourced from the auto-generated AVID FAN file,
+#      which returns early at line ~173 (source_intensity="avid" branch)
+#      and never reaches the AVID FAN row read.
+#
+# NEVER touches METADATA_COLS (BRAND INPUT / SAMPLE SIZE / BRAND CATEGORY /
+# SUBJECT). Idempotent -- no-op on files that already lack the rows.
+# ============================================================================
+
+def strip_avid_casual_fan_rows(df, subject, verbose=True):
+    """Drop rows where Column is 'AVID FAN' or 'CASUAL FAN'. Also handles
+    close variants ('SUPER FAN', 'SUPERFAN', 'CORE FAN') for hygiene --
+    matches the ``fan_cols`` set BG.py has referenced since inception.
+
+    Returns (df, n_rows_removed).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    if 'Column' not in df.columns:
+        return df, 0
+
+    FAN_ROW_COLUMNS = {'AVID FAN', 'CASUAL FAN', 'SUPER FAN', 'SUPERFAN',
+                       'CORE FAN'}
+    col_upper = df['Column'].astype(str).str.strip().str.upper()
+    fan_mask = col_upper.isin(FAN_ROW_COLUMNS)
+    n = int(fan_mask.sum())
+    if n == 0:
+        return df, 0
+
+    if verbose:
+        removed_labels = sorted(set(col_upper[fan_mask].tolist()))
+        print(f"   🗑️  strip_avid_casual_fan_rows: dropped {n} fan-row(s) "
+              f"({', '.join(removed_labels)}) -- retired per Jenna 2026-07-20")
+
+    df = df.loc[~fan_mask].reset_index(drop=True)
+    return df, n
+
+
 def recompute_raw_and_projection(df, subject, verbose=True):
     """Recompute Original Raw Numbers + US Gen Pop Projection from BP for
     every row. Sample size derives from BRAND INPUT row (BP=100 ->
@@ -2041,6 +3238,110 @@ def recompute_raw_and_projection(df, subject, verbose=True):
         print(f'   recomputed {cells} Raw/Proj cells '
               f'(sample_size={int(round(sample_size))})')
     return df, cells
+
+
+# Pure-metadata categories that should NEVER carry a BP (BP must stay
+# blank even if raw is populated by an upstream corruption). All other
+# categories — including BRAND INPUT, SAMPLE SIZE, AVID FAN, CASUAL FAN,
+# self-anchor rows in TALENT / MUSICIAN-BAND / etc. — DO carry BP and
+# get filled by the enforcer below.
+_BP_FILL_SKIP_COLS = {'BRAND CATEGORY', 'INPUT_METADATA'}
+
+
+def fill_missing_bp_from_raw(df, subject='', verbose=True):
+    """Backfill blank Brand Penetration (Row) values from Original Raw Numbers.
+
+    Defense-in-depth save-gate enforcer (added 2026-06-24 after Liz flagged
+    Ed Sheeran TU and corpus sweep found 11 same-day-generated files with
+    98.6% blank BP rows). Root cause: the non-GenPop pipeline relies on
+    parallel_category_agents to populate BP per row, but no backstop runs
+    if those agents silently fail. Result: the file lands in S3 with raw
+    counts populated (from the panel query) and Category Share populated
+    (from the Snowflake query) but `Brand Penetration (Row)` literally
+    empty between commas.
+
+    Idempotent: rows where BP is already a valid number are left alone.
+    Only fills rows where BP is blank / None / 'nan' / 'NaN' AND raw > 0
+    AND the row's Column is not pure metadata.
+
+    Formula (matches add_brand_penetration_column_using_final_raw and the
+    /tmp/fix_missing_bp_parallel.py corpus-sweep script):
+        BP = (raw / sample_size) * 100, rounded to 4dp
+
+    Sample-size resolution order (matches recompute_raw_and_projection):
+        1. BRAND INPUT raw (preferred — by definition raw == sample at BP=100)
+        2. SAMPLE SIZE raw
+        3. SAMPLE SIZE Category Share (fallback for older files where the
+           panel N is in the share column rather than raw)
+
+    Skips rows where Column is in `_BP_FILL_SKIP_COLS` ({BRAND CATEGORY,
+    INPUT_METADATA}) — these are pure metadata rows that legitimately
+    carry no BP. AVID FAN / CASUAL FAN / SAMPLE SIZE / BRAND INPUT DO
+    get filled (their BP is derived from raw and is referenced by
+    downstream consumers).
+
+    Returns (df, n_filled) where n_filled is the count of cells written.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col not in df.columns or raw_col is None:
+        return df, 0
+
+    def _num(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', '').strip())
+        except Exception:
+            return None
+
+    def _is_blank(v):
+        if v is None:
+            return True
+        s = str(v).strip()
+        return s in ('', 'None', 'nan', 'NaN')
+
+    c_upper = df['Column'].astype(str).str.upper().str.strip()
+
+    sample_size = None
+    bi_rows = df[c_upper == 'BRAND INPUT']
+    if len(bi_rows) > 0:
+        cand = _num(bi_rows.iloc[0].get(raw_col))
+        if cand and cand > 1000:
+            sample_size = cand
+    if sample_size is None:
+        ss_rows = df[c_upper == 'SAMPLE SIZE']
+        if len(ss_rows) > 0:
+            for try_col in (raw_col, cs_col):
+                if try_col and try_col in df.columns:
+                    cand = _num(ss_rows.iloc[0].get(try_col))
+                    if cand and cand > 1000:
+                        sample_size = cand
+                        break
+    if sample_size is None or sample_size <= 0:
+        if verbose:
+            print('   fill_missing_bp_from_raw: no sample-size source; skipping')
+        return df, 0
+
+    n_filled = 0
+    for idx in df.index:
+        if c_upper.at[idx] in _BP_FILL_SKIP_COLS:
+            continue
+        bp_val = df.at[idx, bp_col]
+        if not _is_blank(bp_val):
+            continue
+        raw_val = _num(df.at[idx, raw_col])
+        if raw_val is None or raw_val <= 0:
+            continue
+        pct = (raw_val / sample_size) * 100.0
+        pct = round(min(pct, 100.0), 4)
+        df.at[idx, bp_col] = f"{pct:.4f}"
+        n_filled += 1
+
+    if verbose and n_filled:
+        print(f'   fill_missing_bp_from_raw: filled {n_filled} blank BP cell(s) '
+              f'for {subject or "(no subject)"} (sample_size={int(round(sample_size))})')
+    return df, n_filled
 
 
 def strip_hostmap_hidden_brands(df, subject, verbose=True):
@@ -5533,12 +6834,515 @@ def dedup_and_depin_subject_substrings(df, subject, verbose=True):
 
 
 # ============================================================================
+# Final-pass subject self-pin guarantee (Defect 37 -- 2026-06-16 Jenna)
+# ============================================================================
+# pin_subject_to_100_in_appearing_categories scopes to ONE "native" grid
+# (BRAND CATEGORY metadata or max-BP fallback) and pins only there. For
+# profiles where the subject appears in MULTIPLE high-BP grids (e.g.
+# STREAMING/PLATFORM canonical + STREAMING VIDEO legacy alias for streamers,
+# or BANKS canonical + BANK legacy singular for banks), the sister grid was
+# missed and shipped with near-misses (Peacock 99.22%, LiveTV 99.73%,
+# Citibank 99.11%) or overflow (YouTube 100.37%).
+#
+# This is a defensive final pass: iterate EVERY subject row in
+# non-MPB / non-demo / non-metadata grids and force exactly 100.0000% if
+# the BP is in [95, 105] (catches both near-miss and impossible overflow).
+# Runs LAST in run_all_enforcers, AFTER recompute_raw_and_projection and
+# AFTER apply_recompute_category_share -- nothing downstream can move it
+# off 100 except validate_demo_sum_100 which is read-only.
+# ============================================================================
+
+def enforce_subject_self_pin_final(df, subject, verbose=True):
+    """Final guarantee: subject = exactly 100.0000% in every appearing
+    non-MPB / non-demo / non-metadata grid where its BP lands in
+    [95, 105]. Catches near-miss (99.x%) AND overflow (100.x%).
+
+    Returns (df, n_pinned).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if not bp_col or not raw_col or not proj_col:
+        return df, 0
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+
+    bi_mask = col_u == 'BRAND INPUT'
+    if not bi_mask.any():
+        return df, 0
+    bi_row = df.loc[bi_mask].iloc[0]
+    subject_name = str(bi_row.get('Value', '') or '').strip()
+    if not subject_name:
+        return df, 0
+
+    sz_mask = col_u == 'SAMPLE SIZE'
+    if not sz_mask.any():
+        return df, 0
+    sz_row = df.loc[sz_mask].iloc[0]
+
+    def _to_int(cell):
+        try:
+            s = str(cell).replace(',', '').replace('%', '').strip()
+            if not s or s.lower() in ('nan', 'none'):
+                return None
+            return int(float(s))
+        except (ValueError, TypeError):
+            return None
+
+    def _to_float(cell):
+        try:
+            s = str(cell).replace('%', '').replace(',', '').strip()
+            if not s or s.lower() in ('nan', 'none'):
+                return None
+            return float(s)
+        except (ValueError, TypeError):
+            return None
+
+    sample_size = _to_int(sz_row.get(raw_col))
+    profile_universe = _to_int(sz_row.get(proj_col))
+    if sample_size is None or profile_universe is None:
+        return df, 0
+
+    # Per Rule #3: subject = exactly 100% in BRAND INPUT, SUBJECT, its own
+    # league cat, all companion cols, persona/content cats. NOT in:
+    # demographics (which sum to 100%), metadata, or MPB family (where
+    # subject's BP is a peer rate among consumer brands).
+    skip = (
+        METADATA_COLS | DEPIN_DEMO_CATS | DEPIN_META_CATS
+        | {'MOST PURCHASED BRANDS', 'APPAREL/FOOTWEAR',
+           'BEAUTY/WELLNESS', 'WHERE THEY SHOP', 'TECHNOLOGY BRAND',
+           'HOME/OUTDOOR', 'CPG', 'BEVERAGES', 'FRANCHISE'}
+    )
+
+    subj_norm = _re.sub(r'[^A-Z0-9]', '', subject_name.upper())
+    val_norm = (
+        df['Value'].astype(str).str.upper()
+        .str.replace(r'[^A-Z0-9]', '', regex=True)
+    )
+    mask = (val_norm == subj_norm) & (~col_u.isin(skip))
+    candidate_idxs = list(df.index[mask])
+    if not candidate_idxs:
+        return df, 0
+
+    touched_cats = set()
+    n_pinned = 0
+    pin_log = []
+    for idx in candidate_idxs:
+        bp = _to_float(df.at[idx, bp_col])
+        if bp is None:
+            continue
+        # Catch near-miss AND overflow. Exact 100.0000 is already correct.
+        if abs(bp - 100.0) < 0.0001:
+            continue
+        if not (95.0 <= bp <= 105.0):
+            # < 95 = peer rate, leave untouched. > 105 = something
+            # structurally broken; let bp_hard_ceiling handle.
+            continue
+        cat_here = str(df.at[idx, 'Column']).strip()
+        df.at[idx, bp_col] = '100.0000%'
+        df.at[idx, raw_col] = sample_size
+        df.at[idx, proj_col] = profile_universe
+        touched_cats.add(cat_here)
+        n_pinned += 1
+        pin_log.append((cat_here, bp))
+
+    if n_pinned == 0:
+        return df, 0
+
+    for cat in touched_cats:
+        df = _renormalize_category(df, cat, bp_col, cs_col, raw_col,
+                                   proj_col, sample_size)
+
+    if verbose:
+        print(f"   📌 subject self-pin (final): {n_pinned} row(s) pinned "
+              f"to 100.0000% for \"{subject_name}\"")
+        for cat, old_bp in pin_log:
+            direction = "near-miss" if old_bp < 100.0 else "overflow"
+            print(f"      • [{cat}] {old_bp:.4f}% -> 100.0000% ({direction})")
+
+    return df, n_pinned
+
+
+# ============================================================================
+# enforce_brand_category_mirror — never ship UNCATEGORIZED (2026-07-17)
+# ----------------------------------------------------------------------------
+# Guarantees every profile CSV that flows through run_all_enforcers ends
+# with a canonical BRAND CATEGORY row that matches the caller's declared
+# category. This is the defense-in-depth counterpart to the direct
+# brand_category kwarg thread from BG.run_full_pipeline →
+# avid_fan_row_by_row.synthesize_avid_fan added the same day.
+#
+# Motivating rule (Jenna 2026-07-17): "make sure avid cuts always have the
+# same category as main cuts and never end up as uncategorized".
+#
+# Resolution order (highest priority first):
+#   1. `brand_category` kwarg passed by the caller (BG.py's
+#      run_full_pipeline, dashboard's submit_analysis, or the avid synth's
+#      resolved value). This is the ground truth.
+#   2. Existing BRAND CATEGORY row on df, IF it holds a non-blank
+#      non-UNKNOWN non-UNCATEGORIZED value. Preserves pre-set categories
+#      when the caller didn't specify (legacy compatibility).
+#   3. "GENERAL" — canonical last-resort so the file is never shipped
+#      UNCATEGORIZED. Matches the default in bg-webapp/app.py's
+#      submit_analysis(). A loud warning is printed so operators can patch
+#      upstream metadata.
+#
+# When (1) is provided, the row is overwritten (force=True) so avid ↔ main
+# always mirror even if apply_avid_transform / an intermediate enforcer
+# left a stale value in place.
+# ============================================================================
+
+def enforce_brand_category_mirror(df, subject, brand_category=None, verbose=True):
+    """Ensure BRAND CATEGORY row exists, is non-empty, and matches the
+    caller's canonical value when supplied. Returns (df, n_changes).
+
+    Contract:
+      - After this runs, df ALWAYS has exactly one BRAND CATEGORY row
+        with a non-blank Value (never UNCATEGORIZED / UNKNOWN / blank).
+      - When `brand_category` is provided by the caller, that value wins
+        (mirror semantics — avid CSVs generated from a main pull match
+        the main pull's category exactly).
+      - When `brand_category` is None but the row already exists with a
+        valid Value, the existing value is preserved (fallback semantics
+        for legacy callers that didn't thread brand_category through).
+      - Terminal fallback is "GENERAL" so no file ships uncategorized.
+    """
+    n_changes = 0
+    if df is None or len(df) == 0:
+        return df, 0
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df, 0
+
+    _UNRESOLVED = ('', 'UNKNOWN', 'UNCATEGORIZED', 'NAN', 'NONE')
+
+    def _clean(v):
+        s = str(v or '').strip()
+        return s if s and s.upper() not in _UNRESOLVED else ''
+
+    caller_bc = _clean(brand_category)
+
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+    bc_mask = col_u == 'BRAND CATEGORY'
+    existing_bc = _clean(df.loc[bc_mask, 'Value'].iloc[0]) if bc_mask.any() else ''
+
+    # Resolve the canonical value.
+    if caller_bc:
+        canonical = caller_bc.upper()
+        source = 'caller.brand_category (mirror)'
+    elif existing_bc:
+        canonical = existing_bc.upper()
+        source = 'existing BRAND CATEGORY row (preserve)'
+    else:
+        canonical = 'GENERAL'
+        source = 'GENERAL (LAST-RESORT FALLBACK)'
+        if verbose:
+            print(f"   ⚠️ enforce_brand_category_mirror: no category "
+                  f"resolvable for subject={subject!r} — forcing "
+                  f"BRAND CATEGORY='GENERAL' so file ships categorized. "
+                  f"Investigate upstream: caller should pass "
+                  f"brand_category through the pipeline.")
+
+    # Decide whether we need to write.
+    need_write = False
+    if not bc_mask.any():
+        need_write = True  # row is missing, insert it
+    else:
+        cur = str(df.loc[bc_mask, 'Value'].iloc[0]).strip().upper()
+        if cur in _UNRESOLVED or cur != canonical:
+            need_write = True
+
+    if not need_write:
+        return df, 0
+
+    # Delegate to BG.enforce_brand_category_row with force=True so an
+    # existing wrong-value row is overwritten, not left as-is.
+    try:
+        try:
+            from BG import enforce_brand_category_row as _enf_bc_row
+        except ImportError:
+            from bg import enforce_brand_category_row as _enf_bc_row
+        df = _enf_bc_row(df, canonical, force=True)
+        n_changes = 1
+        if verbose:
+            print(f"   ✓ enforce_brand_category_mirror: BRAND CATEGORY "
+                  f"set to {canonical!r} (source: {source})")
+    except Exception as _e:
+        # Direct fallback: manipulate df ourselves.
+        if verbose:
+            print(f"   ⚠️ enforce_brand_category_mirror: BG helper failed "
+                  f"({_e}), using direct insertion fallback")
+        import pandas as _pd_bcm
+        if bc_mask.any():
+            df.loc[bc_mask, 'Value'] = canonical
+            n_changes = 1
+        else:
+            new_row = {c: '' for c in df.columns}
+            new_row[df.columns[0]] = 'BRAND CATEGORY'
+            new_row[df.columns[1]] = canonical
+            ss_idx = df.index[col_u == 'SAMPLE SIZE'].tolist()
+            insert_at = ss_idx[0] + 1 if ss_idx else 2
+            top = df.iloc[:insert_at]
+            bot = df.iloc[insert_at:]
+            df = _pd_bcm.concat(
+                [top, _pd_bcm.DataFrame([new_row], columns=df.columns), bot],
+                ignore_index=True,
+            )
+            n_changes = 1
+
+    return df, n_changes
+
+
+# ============================================================================
+# apply_platform_pin — SELF-ANCHOR pin driven by caller spec (2026-07-09)
+# ----------------------------------------------------------------------------
+# Consolidates the ad-hoc "pin YouTube to 100% for creator profiles" and
+# "pin Paramount+ to 100% for Invader Zim" behaviour that previously lived
+# in /tmp/strict_youtube_pin_watcher.py + /tmp/generic_pin_watcher.py.
+#
+# Reads env vars set by the runner-script template (both /root paths):
+#   BG_PIN_PLATFORM  — canonical display name to pin (e.g. "YOUTUBE",
+#                      "PARAMOUNT+", "MGM+", "NETFLIX"). Empty → no-op.
+#   BG_PIN_SECTION   — Column value to pin inside. Defaults to
+#                      "STREAMING/PLATFORM"; falls back to
+#                      "APP/PLATFORM USAGE" if the primary section is
+#                      absent in this profile.
+#
+# Behaviour:
+#   • Zero-out every other row in the target section.
+#   • Set the target row's BP to 100.0000% (insert a synthetic row if
+#     the platform isn't already present).
+#   • Recompute Raw + Proj for every touched row using the canonical
+#     _set_bp formulas so the downstream recompute pass is a no-op.
+#   • Renormalize Category Share for the section.
+#
+# Match is normalized (`_norm_brand`) so "YouTube" matches
+# "YOUTUBE"/"You Tube"/"YOUTUBE " but NEVER "YouTube TV",
+# "YouTube Kids", "YouTube Music" (those normalize to different keys).
+# ============================================================================
+
+def apply_platform_pin(df, subject, verbose=True):
+    """Pin a streaming platform to 100% BP in STREAMING/PLATFORM (or the
+    fallback APP/PLATFORM USAGE section) when BG_PIN_PLATFORM env var is
+    set by the caller. Returns (df, n_changes).
+
+    Idempotent: re-running on an already-pinned file is a no-op.
+    """
+    target_display = (os.environ.get('BG_PIN_PLATFORM') or '').strip()
+    if not target_display:
+        return df, 0
+
+    target_norm = _norm_brand(target_display)
+    if not target_norm:
+        return df, 0
+
+    if df is None or len(df) == 0:
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+
+    requested_section = (os.environ.get('BG_PIN_SECTION') or
+                         'STREAMING/PLATFORM').strip().upper()
+    fallback_sections = ['STREAMING/PLATFORM', 'APP/PLATFORM USAGE']
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+
+    target_section = None
+    for candidate in [requested_section] + [s for s in fallback_sections
+                                            if s != requested_section]:
+        if (col_u == candidate).any():
+            target_section = candidate
+            break
+    if target_section is None:
+        target_section = requested_section
+
+    def _num(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', '').strip())
+        except Exception:
+            return None
+
+    sample_size = None
+    for cat in ('BRAND INPUT', 'SAMPLE SIZE'):
+        cand = df[col_u == cat]
+        if len(cand) == 0:
+            continue
+        r = cand.iloc[0]
+        bp = _num(r.get(bp_col))
+        raw = _num(r.get(raw_col)) if raw_col else None
+        if raw and bp and bp > 0:
+            sample_size = raw / (bp / 100.0)
+            break
+    if sample_size is None:
+        if verbose:
+            print(f"   apply_platform_pin: no sample-size source; skipping "
+                  f"pin of {target_display!r}")
+        return df, 0
+
+    section_mask = col_u == target_section
+    n_changes = 0
+    pin_idx = None
+
+    if section_mask.any():
+        val_series = df.loc[section_mask, 'Value'].astype(str)
+        norms = val_series.apply(_norm_brand)
+        matches = df.loc[section_mask].index[(norms == target_norm).values]
+        if len(matches) > 0:
+            pin_idx = matches[0]
+
+    if pin_idx is None:
+        if section_mask.any():
+            tpl_idx = df.index[section_mask][0]
+            new_row = df.loc[tpl_idx].copy()
+            new_row['Column'] = target_section
+            new_row['Value']  = target_display
+            for c in (bp_col, cs_col, raw_col, proj_col):
+                if c and c in new_row.index:
+                    new_row[c] = 0.0
+            insert_pos = df.index[section_mask].max() + 1
+            df = pd.concat([
+                df.iloc[:insert_pos],
+                pd.DataFrame([new_row]),
+                df.iloc[insert_pos:],
+            ], ignore_index=True)
+            col_u = df['Column'].astype(str).str.strip().str.upper()
+            section_mask = col_u == target_section
+            val_series = df.loc[section_mask, 'Value'].astype(str)
+            norms = val_series.apply(_norm_brand)
+            pin_idx = df.loc[section_mask].index[(norms == target_norm).values][0]
+            n_changes += 1
+            if verbose:
+                print(f"   apply_platform_pin: inserted synthetic "
+                      f"{target_display!r} row into {target_section!r}")
+        else:
+            if verbose:
+                print(f"   apply_platform_pin: section {target_section!r} "
+                      f"absent AND no template row to clone from; skipping")
+            return df, 0
+
+    for idx in df.index[section_mask]:
+        cur_bp = _num(df.at[idx, bp_col]) or 0.0
+        want_bp = 100.0 if idx == pin_idx else 0.0
+        if abs(cur_bp - want_bp) > 0.0001:
+            df = _set_bp(df, idx, want_bp, bp_col, cs_col,
+                         raw_col, proj_col, sample_size)
+            n_changes += 1
+
+    df = _renormalize_category(df, target_section, bp_col, cs_col,
+                               raw_col, proj_col, sample_size)
+
+    if verbose and n_changes:
+        print(f"   ✅ apply_platform_pin: {target_display!r} pinned to 100.0000% "
+              f"in {target_section!r} ({n_changes} row change(s))")
+    return df, n_changes
+
+
+# ============================================================================
+# strip_youtube_from_wrong_category
+# ----------------------------------------------------------------------------
+# 2026-07-21 (Jenna): "make sure youtube is never categorized as streaming
+# video and always falls within the social media category. like on animation
+# on fox it is showing in both, it should be 100% and in social media"
+#
+# The bare brand YOUTUBE only ever belongs in SOCIAL MEDIA. If a template
+# or LLM pass drops a YouTube row into STREAMING/PLATFORM or STREAMING
+# VIDEO (typically pinned at 100% because the subject is YouTube-native),
+# strip it and let SOCIAL MEDIA / YOUTUBE carry the pin instead.
+#
+# Preserved rows (distinct services with their own product footprint):
+#   YOUTUBE MUSIC     -> STREAMING/MUSIC
+#   YOUTUBE KIDS      -> STREAMING/PLATFORM
+#   YOUTUBE TV        -> VIRTUAL MVPD FAST / VMVPD
+#   YOUTUBE PREMIUM   -> STREAMING/PLATFORM
+#   YOUTUBE ORIGINALS -> STREAMING/PLATFORM
+# ============================================================================
+
+_YT_WRONG_CATS = {"STREAMING/PLATFORM", "STREAMING VIDEO"}
+
+
+def strip_youtube_from_wrong_category(df, subject, verbose=True):
+    """Drop bare-YOUTUBE rows from STREAMING/PLATFORM and STREAMING VIDEO.
+    Recomputes Category Share for both categories after the drop.
+    """
+    if "Column" not in df.columns or "Value" not in df.columns:
+        return df, 0
+    cu = df["Column"].astype(str).str.upper().str.strip()
+    vu = df["Value"].astype(str).str.upper().str.strip()
+    drop_idx = df[cu.isin(_YT_WRONG_CATS) & vu.eq("YOUTUBE")].index
+    if len(drop_idx) == 0:
+        return df, 0
+    dropped = [
+        (str(df.at[i, "Column"]).strip(),
+         str(df.at[i, "Value"]).strip(),
+         str(df.at[i, "Brand Penetration (Row)"]).strip())
+        for i in drop_idx
+    ]
+    df = df.drop(index=drop_idx).reset_index(drop=True)
+
+    # Recompute Category Share for the affected categories
+    bp_col = "Brand Penetration (Row)"
+    cs_col = "Category Share"
+    for target in ("STREAMING/PLATFORM", "STREAMING VIDEO"):
+        cu2 = df["Column"].astype(str).str.upper().str.strip()
+        idx = df[cu2.eq(target)].index
+        if len(idx) == 0:
+            continue
+        bp_sum = 0.0
+        for i in idx:
+            v = str(df.at[i, bp_col]).replace("%", "").replace(",", "").strip()
+            try:
+                bp_sum += float(v)
+            except Exception:
+                pass
+        if bp_sum <= 0:
+            continue
+        for i in idx:
+            v = str(df.at[i, bp_col]).replace("%", "").replace(",", "").strip()
+            try:
+                bp = float(v)
+            except Exception:
+                continue
+            df.at[i, cs_col] = round(bp / bp_sum * 100.0, 4)
+
+    if verbose:
+        for col, val, bp in dropped:
+            print(f"   🚫 strip_youtube_from_wrong_category: dropped "
+                  f"{col} / {val!r}  BP={bp!r}  (belongs in SOCIAL MEDIA)")
+    return df, len(dropped)
+
+
+# ============================================================================
 # Convenience wrapper
 # ============================================================================
 
-def run_all_enforcers(df, subject, brand_category=None, verbose=True):
-    """Run every enforcer in order. Returns (df, total_changes)."""
+def run_all_enforcers(df, subject, brand_category=None, verbose=True,
+                       target_year=None):
+    """Run every enforcer in order. Returns (df, total_changes).
+
+    target_year (optional): if provided (e.g. 2022 for a `Gen_Pop_2022.csv`
+    generation), runs the anachronism check to zero / dampen brands that
+    didn't exist yet in the target year. Only pass when the file's
+    contents are meant to represent that historical year.
+    """
     total = 0
+    # 2026-07-28 (Jenna pipeline hardening): anachronism check for year
+    # skins. Zero / dampen brands whose launch_year > target_year. Only
+    # fires when target_year is passed. Runs FIRST so downstream
+    # enforcers see the corrected values.
+    if target_year is not None:
+        try:
+            try:
+                from migration.anachronism_check import (
+                    strip_anachronistic_brands,
+                )
+            except ImportError:
+                from anachronism_check import (  # type: ignore
+                    strip_anachronistic_brands,
+                )
+            df, n = strip_anachronistic_brands(
+                df, year=target_year, subject=subject, verbose=verbose,
+            )
+            total += n
+        except Exception as e:
+            print(f"   ⚠️ enforcer strip_anachronistic_brands failed: {e}")
     # 2026-06-07 (Jenna deep audit, D88): strip `~` from BRAND INPUT FIRST
     # so all downstream subject-string comparisons see the canonical form.
     # 226 of 525 corpus files (43%) had tilde subjects pre-fix.
@@ -5547,6 +7351,33 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer apply_strip_tilde_from_brand_input failed: {e}")
+    # 2026-06-24 (Liz Ed Sheeran flag, corpus sweep found 11 same-day-gen
+    # files with 98%+ blank BP rows): backfill BP from raw FIRST so every
+    # downstream enforcer can read a valid BP. Idempotent — no-op if BPs
+    # are already populated. Without this, depin / renorm / cap enforcers
+    # silently skip rows with blank BP.
+    try:
+        df, n = fill_missing_bp_from_raw(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer fill_missing_bp_from_raw failed: {e}")
+    # 2026-07-17 (Jenna): "avid cuts always have the same category as main
+    # cuts and never end up as uncategorized". Runs EARLY — before any
+    # enforcer that reads BRAND CATEGORY (strip_subject_from_wrong_category
+    # at line ~7100, apply_politics_persona_cap, etc.) so downstream logic
+    # always sees a resolved value. When called from BG.py's main-file
+    # writer or from avid_fan_row_by_row (which now threads the caller's
+    # brand_category through to run_all_enforcers), the passed-in value
+    # wins with force=True, guaranteeing avid ↔ main mirror. When called
+    # from a legacy path without brand_category, existing row is preserved,
+    # else falls back to "GENERAL" so no file ships UNCATEGORIZED.
+    try:
+        df, n = enforce_brand_category_mirror(
+            df, subject, brand_category=brand_category, verbose=verbose,
+        )
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_brand_category_mirror failed: {e}")
     for fn in (
         strip_input_metadata_leakage,      # 2026-05-27 (D5) — prompt-context echoes
         strip_hostmap_hidden_brands,       # 2026-05-27 (Rule #4b) — Hidden never ships
@@ -5555,6 +7386,15 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         strip_corporate_parents,
         strip_product_skus,
         strip_polluted_brand_values,
+        strip_youtube_from_wrong_category, # 2026-07-21 (Jenna) - bare YouTube must live in SOCIAL MEDIA only
+        strip_phantom_zero_rows,           # 2026-06-15 (Rob Schneider INTEREST defect) — phantom 0.0000% inserts
+        ensure_subject_in_native_category, # 2026-06-15 (Apple Pay native-cat gap) — subject must self-pin in BRAND CATEGORY
+        enforce_native_cluster_self_pin,   # 2026-06-16 PM (Defect 38) — subject = 100% in ALL cluster grids (BANKING+BANK for BANKS)
+        pin_subject_to_100_in_appearing_categories, # 2026-06-15 (Netflix 99.04 near-miss) — pin >=95% subject rows to exact 100
+        enforce_netflix_leads_streaming_platform,   # 2026-06-15 PM (Defect 28) — Netflix #1 in S/P excl. self-pins
+        enforce_niche_streamer_caps,                # 2026-06-16 PM (Defect 39) — Criterion/MUBI/Acorn/etc. capped to plausible US-sub ceilings
+        enforce_vanguard_in_investments,            # 2026-06-17 (Defect 42) — Vanguard moved BANKING -> INVESTMENTS per hostmap canonical
+        dedupe_subject_streaming_grids,             # 2026-06-15 PM (Defect 31) — drop subject duplicate from non-native streaming grid
         apply_politics_persona_cap,
         apply_taylor_swift_persona_tier,
     ):
@@ -5907,6 +7747,82 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True):
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer apply_recompute_category_share failed: {e}")
+
+    # 2026-06-16 (Jenna Defect 37 -- Peacock/LiveTV/YouTube/Citibank
+    # near-miss + overflow): FINAL guarantee pass. pin_subject_to_100_*
+    # earlier in the chain only pins ONE "native" grid; this catches the
+    # legacy-alias sister grids (STREAMING VIDEO when canonical is
+    # STREAMING/PLATFORM, BANK when canonical is BANKS) AND overflow
+    # (BP > 100% which is mathematically impossible). Corpus sweep on
+    # 2026-06-16 found 110 files / 181 rows affected -- mostly Avid Fans
+    # where _apply_persona_uniqueness_noise clamps to [0.5, 99.5] yielding
+    # 99.49% self-pin without a follow-up subject-pin step.
+    try:
+        df, n = enforce_subject_self_pin_final(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_subject_self_pin_final failed: {e}")
+
+    # 2026-06-16 (Defect 37 mop-up): hard-ceiling for any non-subject row
+    # > 100%. Previously only in run_post_vet_safety_sweep, which doesn't
+    # run for Avid Fan synthesis -- YouTube STREAMING VIDEO shipped at
+    # 100.3744% as a result. Runs AFTER enforce_subject_self_pin_final so
+    # legitimate subject overflows (e.g. 100.37 -> 100) are pinned first;
+    # this is the catch-all for non-subject rows (e.g. peer brands the
+    # LLM emitted at 100.1%).
+    try:
+        df, n = enforce_bp_hard_ceiling(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_bp_hard_ceiling failed: {e}")
+
+    # 2026-06-17 (Jenna Santander Bank — Defect 28/30 final-pass guarantee):
+    # Netflix BP can be DROPPED back below the 73% floor by any of the ~20
+    # passes that run after the early enforce_netflix_leads_streaming_platform
+    # call (propagation, dejitter, recompute_raw_and_projection,
+    # apply_recompute_category_share, enforce_bp_hard_ceiling, ...). Santander
+    # Bank shipped 2026-06-17 with NX=62.13 / PR=64.17 (a Prime>Netflix
+    # inversion) despite the early enforcer running, because a later pass
+    # re-introduced the suppression. This SECOND, FINAL pass runs after
+    # everything else has settled and guarantees the on-disk file written by
+    # run_full_pipeline cannot ship with Netflix < baseline floor or any
+    # peer leading Netflix in STREAMING/PLATFORM (excl. self-pins).
+    try:
+        df, n = enforce_netflix_leads_streaming_platform(
+            df, subject, verbose=verbose,
+        )
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_netflix_leads_streaming_platform "
+              f"(final pass) failed: {e}")
+
+    # 2026-07-09 (Jenna consolidation): apply_platform_pin — self-anchor
+    # pin driven by BG_PIN_PLATFORM env var set by the caller (dispatcher
+    # spec or runner-script argv). No-op when the env var is empty.
+    # Runs AFTER every other streaming-platform enforcer
+    # (enforce_netflix_leads_streaming_platform, enforce_niche_streamer_caps,
+    # enforce_bp_hard_ceiling) so its 100% pin is authoritative for the
+    # requested platform. Replaces the ad-hoc /tmp/strict_youtube_pin_watcher
+    # + /tmp/generic_pin_watcher scripts, ensuring dashboard-initiated
+    # pulls receive identical pinning to CLI-initiated pulls.
+    try:
+        df, n = apply_platform_pin(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer apply_platform_pin failed: {e}")
+
+    # 2026-07-20 (Jenna): retire AVID FAN / CASUAL FAN rows from every
+    # profile IQ output. Runs LAST-mutating (after every row-touching
+    # enforcer + after apply_platform_pin) and just before the read-only
+    # validate_demo_sum_100 check. Downstream consumers that used to read
+    # these rows (avid_fan_row_by_row Claude signal, audience_cut_synthesis
+    # deterministic cohort_fraction) have graceful fallbacks -- see the
+    # docstring on strip_avid_casual_fan_rows for the full rationale.
+    try:
+        df, n = strip_avid_casual_fan_rows(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer strip_avid_casual_fan_rows failed: {e}")
 
     # 2026-06 (Jenna P0 validator): validate_demo_sum_100 as the final
     # check in the chain. By this point renormalize has fixed any drift
@@ -8023,7 +9939,16 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
     if df is None or len(df) == 0:
         return defects
 
-    bp_col, _, _, proj_col = _detect_cols(df)
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    # sample_size is used by gate-level auto-patches (G17, etc.) so the
+    # gate can repair fixable BP-floor defects in-place rather than
+    # rejecting the whole profile. Per Jenna 2026-06-17: "you shouldn't
+    # just abandon something if that happens, you should just patch
+    # netflix to be where it needs to be then publish".
+    try:
+        _gate_sample_size = _detect_sample_size(df, bp_col, raw_col)
+    except Exception:
+        _gate_sample_size = None
 
     # ── G1: sequential-digit placeholders ─────────────────────────────
     # Aligned with `dejitter_sequential_placeholders` exemption set: the
@@ -8032,6 +9957,16 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
     # values that may coincidentally land on the 4-monotonic-digit pattern
     # — those aren't placeholders. Gate must skip the same set or it will
     # fire on values dejitter intentionally left alone.
+    #
+    # 2026-06-18 Jenna policy change (Perks of Being a Wallflower G1 reject
+    # @ MUSICIAN/BAND/SIA 20.6543%, Bridesmaids x2 same defect, The Rip
+    # 1st-attempt same defect): instead of FAILING the gate when one or two
+    # placeholder patterns survive the upstream dejitter pass, AUTO-PATCH
+    # the survivors in-place by perturbing the value just enough to break
+    # the sequential-digit pattern. Mirror of the G14/G17 fixes —
+    # "patch, don't reject" per the standing directive. Only falls through
+    # to defect-append when the patch itself cannot land (no sample_size,
+    # writer exception, or value still matches the pattern after 8 retries).
     try:
         placeholder_mask = detect_placeholder_bps(df, bp_col)
         if placeholder_mask.any():
@@ -8039,16 +9974,65 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
             exempt = cat_upper.isin(DEPIN_DEMO_CATS | DEPIN_META_CATS)
             real_placeholders = placeholder_mask & ~exempt
             if real_placeholders.any():
-                n = int(real_placeholders.sum())
-                sample = df.loc[real_placeholders].head(5)[['Column', 'Value', bp_col]]
-                sample_str = '; '.join(
-                    f"{r['Column']}/{r['Value']}@{r[bp_col]}"
-                    for _, r in sample.iterrows()
-                )
-                defects.append(
-                    f'G1 PLACEHOLDER: {n} sequential-digit BP(s) survived '
-                    f'(e.g. {sample_str})'
-                )
+                patched_g1 = 0
+                failed_g1: list[str] = []
+                if (_gate_sample_size and _gate_sample_size > 0 and bp_col):
+                    for idx in df.index[real_placeholders]:
+                        try:
+                            cur_bp = _bp(df.at[idx, bp_col])
+                            if cur_bp is None or pd.isna(cur_bp):
+                                continue
+                            cat_g1 = str(df.at[idx, 'Column'] or '').strip().upper()
+                            val_g1 = str(df.at[idx, 'Value'] or '').strip().upper()
+                            h = int(_hl.blake2b(
+                                f'{subject}|{cat_g1}|{val_g1}|g1-gate-rewrite'
+                                .encode(),
+                                digest_size=8,
+                            ).hexdigest(), 16)
+                            if cur_bp < 5.0:
+                                base = 0.30 + ((h % 901) / 1000.0)
+                                jitter = ((h >> 16) % 89) / 10000.0
+                                new_v = round(base + jitter, 4)
+                            else:
+                                int_part = int(cur_bp)
+                                jitter_pp = (((h % 1001) - 500) / 10000.0)
+                                tail_jitter = ((h >> 24) % 89) / 10000.0
+                                new_v = round(cur_bp + jitter_pp + tail_jitter, 4)
+                                new_v = max(int_part - 0.5,
+                                            min(int_part + 0.999, new_v))
+                                new_v = round(new_v, 4)
+                            attempts = 0
+                            while _is_sequential_digit_bp(new_v) and attempts < 8:
+                                new_v = round(new_v + 0.0037 * (attempts + 1), 4)
+                                attempts += 1
+                            if _is_sequential_digit_bp(new_v):
+                                failed_g1.append(
+                                    f"{cat_g1}/{val_g1}@{cur_bp:.4f}"
+                                )
+                                continue
+                            _set_bp(df, idx, new_v,
+                                    bp_col, cs_col, raw_col, proj_col,
+                                    _gate_sample_size)
+                            patched_g1 += 1
+                            if verbose:
+                                print(
+                                    '   🛠  G1 auto-patched (gate-level): '
+                                    f'[{cat_g1}]"{val_g1}" '
+                                    f'{cur_bp:.4f}% -> {new_v:.4f}%'
+                                )
+                        except Exception as _pe_g1:
+                            failed_g1.append(f"row-{idx}:{_pe_g1}")
+                else:
+                    failed_g1 = [
+                        f"{r['Column']}/{r['Value']}@{r[bp_col]}"
+                        for _, r in df.loc[real_placeholders].head(5).iterrows()
+                    ]
+                if failed_g1:
+                    defects.append(
+                        f'G1 PLACEHOLDER: {len(failed_g1)} sequential-digit '
+                        f'BP(s) survived (e.g. {"; ".join(failed_g1[:5])}) '
+                        f'-- gate could not auto-patch'
+                    )
     except Exception as e:
         defects.append(f'G1 PLACEHOLDER: detector errored: {e}')
 
@@ -8150,6 +10134,18 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
     # the agent's call stands.
     try:
         db_rows = df[df['Column'].astype(str).str.upper().str.strip() == 'DIGITAL BANKING'].copy()
+        # 2026-06-15: skip G7 entirely when the SUBJECT is APPLE PAY or
+        # PAYPAL — the subject's required 100% native-category self-pin
+        # (Rule #3) is not a writer-bug, just a self-pin. The gate is
+        # designed for non-payments-subject profiles where AP/PP are
+        # peer signals.
+        bi_g7 = df.loc[df['Column'].astype(str).str.upper().str.strip() == 'BRAND INPUT']
+        subj_u_g7 = (
+            str(bi_g7.iloc[0].get('Value', '') or '').strip().upper()
+            if len(bi_g7) else ''
+        )
+        if subj_u_g7 in {'APPLE PAY', 'PAYPAL'}:
+            db_rows = db_rows.iloc[0:0]  # short-circuit gate
         if len(db_rows):
             db_rows['_v'] = db_rows['Value'].astype(str).str.upper().str.strip()
             pp_r = db_rows[db_rows['_v'] == 'PAYPAL']
@@ -8186,6 +10182,69 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
                         f'plausible bands even for very-young audience '
                         f'(18-34={a18_34_g7:.0f}%); writer-bug signature)'
                     )
+                elif (apple_can_lead_g7 and pp_v >= 40.0 and ap_v >= 40.0
+                      and ap_v > pp_v - 3.0):
+                    # 2026-06-15 Pete Davidson defect: AP=53.27% > PP=52.52%
+                    # by 0.75pp shipped because Pete's 60% under-35 audience
+                    # made apple_can_lead=True. But a 0.75pp lead by AP
+                    # (or any tie within 3pp) when both anchors are >= 40%
+                    # is not a real young-cohort signal -- it's writer
+                    # noise. PayPal is the universal US adult-panel
+                    # leader; even for young audiences it should keep a
+                    # meaningful lead when both PP and AP are in the
+                    # mainstream-engagement band.
+                    #
+                    # 2026-06-22 Jenna policy ("patch, don't reject"):
+                    # AUTO-PATCH the writer noise — bump PayPal BP to
+                    # AP + 5pp (capped at 100) so the universal anchor
+                    # leads meaningfully, then renormalize DIGITAL BANKING
+                    # category share. Same pattern as G14/G17. Falls back
+                    # to defect-append if sample_size is unavailable or
+                    # the patch raises, so we never ship silently bad
+                    # data. Bit Lisa BLACKPINK profile tonight (AP=55.56%,
+                    # PP=57.76% — 2.20pp lead, just inside the 3pp window).
+                    patched_g7 = False
+                    if (_gate_sample_size and _gate_sample_size > 0
+                            and bp_col):
+                        try:
+                            pp_idx = pp_r.index[0]
+                            new_pp = min(100.0, ap_v + 5.0)
+                            _set_bp(df, pp_idx, new_pp,
+                                    bp_col, cs_col, raw_col, proj_col,
+                                    _gate_sample_size)
+                            try:
+                                _renormalize_category(
+                                    df, 'DIGITAL BANKING',
+                                    bp_col, cs_col, raw_col, proj_col,
+                                    _gate_sample_size,
+                                )
+                            except Exception:
+                                pass
+                            patched_g7 = True
+                            if verbose:
+                                print(
+                                    '   🛠  G7 NEAR_TIE auto-patched '
+                                    '(gate-level): PAYPAL '
+                                    f'{pp_v:.2f}% -> {new_pp:.2f}% '
+                                    f'(AP {ap_v:.2f}% + 5pp); '
+                                    'DIGITAL BANKING renormalized'
+                                )
+                        except Exception as _pe_g7:
+                            if verbose:
+                                print(
+                                    '   ⚠️  G7 NEAR_TIE auto-patch FAILED '
+                                    f'({_pe_g7}); falling back to defect'
+                                )
+                    if not patched_g7:
+                        defects.append(
+                            f'G7 DIGITAL_BANKING_NEAR_TIE: APPLE PAY '
+                            f'{ap_v:.2f}% within 3pp of PAYPAL '
+                            f'{pp_v:.2f}% (both ≥40%); the universal '
+                            f'anchor should lead meaningfully even for '
+                            f'young audiences (18-34={a18_34_g7:.0f}%, '
+                            f'55+={a55_plus_g7:.0f}%) '
+                            f'(gate could not auto-patch)'
+                        )
     except Exception as e:
         defects.append(f'G7 DIGITAL_BANKING_INVERSION: detector errored: {e}')
 
@@ -8359,6 +10418,617 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
                     )
     except Exception as e:
         defects.append(f'G11 PORN_LEADER_BREAK: detector errored: {e}')
+
+    # ── G12: phantom-zero rows (Rob Schneider INTEREST defect, 2026-06-15) ─
+    # Any non-meta, non-demo row at exact 0.0000% / Raw=0 is a phantom
+    # insert (build-side closure / hybrid-audit echo of "named under-
+    # index" persona-doc phrases). A genuinely engaged audience cannot
+    # hit exact zero on a named brand/interest/talent token. The
+    # strip_phantom_zero_rows enforcer now drops these in run_all_enforcers,
+    # but this gate is the belt-and-suspenders survivor check.
+    try:
+        if 'Column' in df.columns and 'Value' in df.columns and bp_col:
+            cat_u_g12 = df['Column'].astype(str).str.strip().str.upper()
+            val_g12 = df['Value'].astype(str).str.strip()
+            bp_num_g12 = df[bp_col].apply(_bp)
+            raw_col_g12 = next(
+                (c for c in df.columns if 'Original Raw Numbers' in c),
+                None,
+            )
+            raw_num_g12 = (
+                df[raw_col_g12].apply(_bp) if raw_col_g12 in df.columns
+                else None
+            )
+            skip_g12 = METADATA_COLS | DEPIN_DEMO_CATS | DEPIN_META_CATS
+            phantom_idxs = []
+            for i in df.index:
+                cu = cat_u_g12.iat[df.index.get_loc(i)] if hasattr(cat_u_g12, 'iat') else cat_u_g12.loc[i]
+                if cu in skip_g12 or not val_g12.loc[i]:
+                    continue
+                bv = bp_num_g12.loc[i]
+                rv = raw_num_g12.loc[i] if raw_num_g12 is not None else None
+                bp_zero = (bv is not None and pd.notna(bv) and float(bv) == 0.0)
+                raw_zero = (rv is not None and pd.notna(rv) and float(rv) == 0.0)
+                if (bp_zero and (raw_zero or rv is None)) or \
+                   (raw_zero and (bp_zero or bv is None)):
+                    phantom_idxs.append(i)
+            if phantom_idxs:
+                sample_g12 = '; '.join(
+                    f"[{cat_u_g12.loc[i]}]\"{val_g12.loc[i]}\""
+                    for i in phantom_idxs[:5]
+                )
+                more_g12 = (
+                    f' (+{len(phantom_idxs)-5} more)'
+                    if len(phantom_idxs) > 5 else ''
+                )
+                defects.append(
+                    f'G12 PHANTOM_ZERO: {len(phantom_idxs)} non-meta row(s) '
+                    f'at exact BP=0/Raw=0 -- phantom inserts that should '
+                    f'have been stripped (sample: {sample_g12}{more_g12})'
+                )
+    except Exception as e:
+        defects.append(f'G12 PHANTOM_ZERO: detector errored: {e}')
+
+    # ── G13: subject missing from native category (Apple Pay defect, 2026-06-15) ───
+    # Per Profile IQ Rule #3, the subject must be present at 100% in its
+    # BRAND CATEGORY (its native dashboard grid). The
+    # ensure_subject_in_native_category enforcer inserts it if missing;
+    # this gate is the survivor check.
+    #
+    # 2026-06-19 Jenna policy change (Chase Bank G13 reject — subject
+    # "CHASE BANK" absent from BANK grid despite ensure_subject_in_native_
+    # category enforcer running upstream): if the subject is truly missing
+    # from its native grid, AUTO-PATCH by inserting a new self-pin row at
+    # 100% with the subject's exact name, then re-normalize Category Share.
+    # Mirror of the G14 + G17 fixes — patch, don't reject. Falls through to
+    # defect-append only when sample_size is unavailable or the insert
+    # itself raises.
+    try:
+        if 'Column' in df.columns and 'Value' in df.columns:
+            cat_u_g13 = df['Column'].astype(str).str.strip().str.upper()
+            val_u_g13 = df['Value'].astype(str).str.strip().str.upper()
+            bi_g13 = df.loc[cat_u_g13 == 'BRAND INPUT']
+            bc_g13 = df.loc[cat_u_g13 == 'BRAND CATEGORY']
+            if len(bi_g13) and len(bc_g13):
+                subj_g13 = str(bi_g13.iloc[0].get('Value', '') or '').strip().upper()
+                native_g13 = str(bc_g13.iloc[0].get('Value', '') or '').strip().upper()
+                # Skip categories that don't carry a 100% subject self-pin.
+                _g13_skip = (
+                    METADATA_COLS | DEPIN_DEMO_CATS | DEPIN_META_CATS
+                    | {'MOST PURCHASED BRANDS', 'APPAREL/FOOTWEAR',
+                       'BEAUTY/WELLNESS', 'WHERE THEY SHOP',
+                       'TECHNOLOGY BRAND', 'HOME/OUTDOOR', 'CPG',
+                       'BEVERAGES', 'FRANCHISE'}
+                )
+                if (subj_g13 and native_g13 and native_g13 not in _g13_skip):
+                    cat_rows_g13 = df.loc[cat_u_g13 == native_g13]
+                    if len(cat_rows_g13) > 0:
+                        subj_norm = _re.sub(r'[^A-Z0-9]', '', subj_g13)
+                        cat_val_norm = (
+                            cat_rows_g13['Value'].astype(str).str.upper()
+                            .str.replace(r'[^A-Z0-9]', '', regex=True)
+                        )
+                        if not (cat_val_norm == subj_norm).any():
+                            patched_g13 = False
+                            if (_gate_sample_size and _gate_sample_size > 0
+                                    and bp_col):
+                                try:
+                                    # 2026-06-22 Jenna fix: pandas StringDtype
+                                    # on bp_col / cs_col raises
+                                    # "Invalid value '100.0' for dtype 'str'"
+                                    # when we try to assign a float. Coerce
+                                    # the target numeric columns to 'object'
+                                    # so float/int assignments succeed.
+                                    for _dtcol in (bp_col, cs_col,
+                                                   raw_col, proj_col):
+                                        if (_dtcol and _dtcol in df.columns
+                                                and df[_dtcol].dtype.name
+                                                not in ('object', 'O',
+                                                        'float64', 'int64')):
+                                            df[_dtcol] = (
+                                                df[_dtcol].astype(object)
+                                            )
+                                    # Use the first peer row in the same
+                                    # category as a column-shape template,
+                                    # then overwrite key fields.
+                                    template_idx = cat_rows_g13.index[0]
+                                    new_idx = len(df)
+                                    df.loc[new_idx] = df.loc[template_idx]
+                                    df.at[new_idx, 'Column'] = native_g13
+                                    df.at[new_idx, 'Value'] = subj_g13
+                                    df.at[new_idx, bp_col] = 100.0
+                                    if raw_col:
+                                        df.at[new_idx, raw_col] = int(
+                                            _gate_sample_size
+                                        )
+                                    if proj_col:
+                                        df.at[new_idx, proj_col] = int(round(
+                                            _gate_sample_size *
+                                            (US_POP / 10_000_000.0)
+                                        ))
+                                    try:
+                                        _renormalize_category(
+                                            df, native_g13,
+                                            bp_col, cs_col, raw_col, proj_col,
+                                            _gate_sample_size,
+                                        )
+                                    except Exception:
+                                        pass
+                                    patched_g13 = True
+                                    if verbose:
+                                        print(
+                                            '   🛠  G13 auto-patched '
+                                            '(gate-level): inserted subject '
+                                            f'"{subj_g13}" @ 100.0000% into '
+                                            f'[{native_g13}] grid '
+                                            f'({len(cat_rows_g13)} peer rows '
+                                            'already present)'
+                                        )
+                                except Exception as _pe_g13:
+                                    if verbose:
+                                        print(
+                                            '   ⚠️  G13 auto-patch FAILED '
+                                            f'({_pe_g13}); falling back '
+                                            'to defect'
+                                        )
+                            if not patched_g13:
+                                defects.append(
+                                    f'G13 SUBJECT_MISSING_NATIVE: subject '
+                                    f'\"{subj_g13}\" absent from BRAND '
+                                    f'CATEGORY \"{native_g13}\" '
+                                    f'({len(cat_rows_g13)} peer rows '
+                                    'present) -- Profile IQ Rule #3 '
+                                    'violation (gate could not auto-patch)'
+                                )
+    except Exception as e:
+        defects.append(f'G13 SUBJECT_MISSING_NATIVE: detector errored: {e}')
+
+    # ── G14: subject self-anchor NEAR-miss in NATIVE grid (2026-06-15) ───
+    # Native grid = BRAND CATEGORY metadata (Profile IQ Rule #3 canonical),
+    # with max-BP fallback when metadata is missing or doesn't match a
+    # candidate row. All other subject-row appearances are PEER RATES
+    # (cross-platform overlap) and must NOT be flagged.
+    #
+    # G14 fires only when the native grid (per BRAND CATEGORY metadata,
+    # or max-BP fallback) is at BP in [95, 100):
+    #   DOGTV     STREAMING VIDEO 98.9296% (BC=SV; max-BP would pick S/P)
+    #   Netflix   STREAMING VIDEO 99.0376% (BC=SV; max-BP would pick S/P)
+    #   GoodShort STREAMING VIDEO 99.9900% (BC=SV; agrees with max-BP)
+    # native_bp == 100 -> already pinned, PASS.
+    # native_bp <  95  -> writer pinned in sister grid or nowhere; deeper
+    # defect surfaced by hostmap audit / ensure_subject_in_native_category.
+    #
+    # History:
+    #   - PM (Defect 24): rescoped from "(0, 100) any cat" to
+    #     "highest-BP cat in [95, 100)".
+    #   - PM-revised-2 (Defect 27, DOGTV): use BRAND CATEGORY metadata
+    #     first; max-BP only as fallback. Max-BP broke when the writer
+    #     ALSO pinned 100 in a sister grid (S/P) AND near-pinned the
+    #     metadata-canonical native (SV) -- max-BP picked S/P and missed
+    #     the actual native-grid violation.
+    try:
+        if 'Column' in df.columns and 'Value' in df.columns:
+            cat_u_g14 = df['Column'].astype(str).str.strip().str.upper()
+            bi_g14 = df.loc[cat_u_g14 == 'BRAND INPUT']
+            if len(bi_g14):
+                subj_g14 = str(bi_g14.iloc[0].get('Value', '') or '').strip().upper()
+                if subj_g14:
+                    skip_g14 = (
+                        METADATA_COLS | DEPIN_DEMO_CATS | DEPIN_META_CATS
+                        | {'MOST PURCHASED BRANDS', 'APPAREL/FOOTWEAR',
+                           'BEAUTY/WELLNESS', 'WHERE THEY SHOP',
+                           'TECHNOLOGY BRAND', 'HOME/OUTDOOR', 'CPG',
+                           'BEVERAGES', 'FRANCHISE'}
+                    )
+                    subj_norm_g14 = _re.sub(r'[^A-Z0-9]', '', subj_g14)
+                    val_norm_g14 = (
+                        df['Value'].astype(str).str.upper()
+                        .str.replace(r'[^A-Z0-9]', '', regex=True)
+                    )
+                    candidate = (val_norm_g14 == subj_norm_g14) & (~cat_u_g14.isin(skip_g14))
+                    bp_num_g14 = df[bp_col].apply(_bp)
+
+                    # Try BRAND CATEGORY metadata first
+                    bc_mask_g14 = cat_u_g14 == 'BRAND CATEGORY'
+                    bc_native_g14 = None
+                    if bc_mask_g14.any():
+                        bc_val_g14 = str(df.loc[bc_mask_g14].iloc[0]
+                                         .get('Value', '') or '').strip().upper()
+                        if bc_val_g14 and bc_val_g14 not in skip_g14:
+                            bc_native_g14 = bc_val_g14
+
+                    best_cat_g14 = None
+                    best_val_g14 = None
+                    best_bp_g14 = -1.0
+                    best_idx_g14 = None
+                    src_g14 = None
+                    if bc_native_g14 is not None:
+                        for idx in df.index[candidate]:
+                            if cat_u_g14.loc[idx] == bc_native_g14:
+                                bv = bp_num_g14.loc[idx]
+                                if bv is not None and not pd.isna(bv):
+                                    best_cat_g14 = cat_u_g14.loc[idx]
+                                    best_val_g14 = df.at[idx, 'Value']
+                                    best_bp_g14 = float(bv)
+                                    best_idx_g14 = idx
+                                    src_g14 = 'BRAND CATEGORY metadata'
+                                    break
+                    if best_cat_g14 is None:
+                        # Fallback: max-BP across all candidate rows
+                        for idx in df.index[candidate]:
+                            bv = bp_num_g14.loc[idx]
+                            if bv is None or pd.isna(bv):
+                                continue
+                            bv_f = float(bv)
+                            if bv_f > best_bp_g14:
+                                best_bp_g14 = bv_f
+                                best_cat_g14 = cat_u_g14.loc[idx]
+                                best_val_g14 = df.at[idx, 'Value']
+                                best_idx_g14 = idx
+                        if best_cat_g14 is not None:
+                            src_g14 = 'max-BP fallback'
+
+                    if best_cat_g14 is not None and 95.0 <= best_bp_g14 < 99.9999:
+                        # 2026-06-18 Jenna policy change (Chase Bank G14
+                        # reject @ 99.2320% — same defect on 3 retries):
+                        # instead of failing the gate when the writer's
+                        # self-pin intent landed in [95, 100), AUTO-PATCH
+                        # the subject self-anchor row to exactly 100% in
+                        # its native grid and renormalize Category Share.
+                        # Mirror of the G17 fix (2026-06-17) — Jenna's
+                        # directive: "you shouldn't just abandon something
+                        # if that happens, you should just patch X to be
+                        # where it needs to be then publish". Falls back
+                        # to defect-append if sample_size is unavailable
+                        # or the patch raises, so we never ship silently
+                        # bad data.
+                        patched_g14 = False
+                        if (_gate_sample_size and _gate_sample_size > 0
+                                and bp_col and best_idx_g14 is not None):
+                            try:
+                                _set_bp(df, best_idx_g14, 100.0,
+                                        bp_col, cs_col, raw_col, proj_col,
+                                        _gate_sample_size)
+                                try:
+                                    _renormalize_category(
+                                        df, best_cat_g14,
+                                        bp_col, cs_col, raw_col, proj_col,
+                                        _gate_sample_size,
+                                    )
+                                except Exception:
+                                    pass
+                                patched_g14 = True
+                                if verbose:
+                                    print(
+                                        '   🛠  G14 auto-patched (gate-level): '
+                                        f'[{best_cat_g14}]"{best_val_g14}" '
+                                        f'{best_bp_g14:.4f}% -> 100.0000% '
+                                        f'({src_g14})'
+                                    )
+                            except Exception as _pe_g14:
+                                if verbose:
+                                    print(
+                                        '   ⚠️  G14 auto-patch FAILED '
+                                        f'({_pe_g14}); falling back to defect'
+                                    )
+                        if not patched_g14:
+                            defects.append(
+                                f'G14 SUBJECT_SELF_ANCHOR_NEAR_MISS: subject '
+                                f'"{subj_g14}" native grid ({src_g14}) '
+                                f'[{best_cat_g14}]"{best_val_g14}" at '
+                                f'{best_bp_g14:.4f}% -- writer self-pin intent '
+                                f'missed exact 100 (Rule #3 native-grid '
+                                f'invariant; gate could not auto-patch)'
+                            )
+    except Exception as e:
+        defects.append(f'G14 SUBJECT_SELF_ANCHOR_NEAR_MISS: detector errored: {e}')
+
+    # ── G15: subject label variant across grids (FIFA+ defect, 2026-06-15) ──
+    # Detects writer-side label drift: BRAND INPUT canonical = "FIFA+",
+    # but writer emits self-pin rows under variants like "FIFA" (no plus)
+    # in companion grids. The variant rows match the subject under
+    # case+punct-insensitive normalization but use a different visible
+    # spelling than the canonical.
+    #
+    # G15 fires when any non-meta, non-demo row has Value normalizing to
+    # the same key as BRAND INPUT but a different actual spelling. This
+    # catches FIFA+/FIFA, AT&T/ATT, Macy's/Macys, etc. -- cases where the
+    # dashboard renders the same service under inconsistent labels and
+    # cross-grid dedup breaks.
+    #
+    # Detection-only (no auto-rename): the canonical-vs-variant choice
+    # is ambiguous in some cases (e.g. "FIFA" the org is a real entity
+    # distinct from FIFA+ the streaming product, and we don't want to
+    # silently collapse them). Flagging publication is the safe move;
+    # human/writer fixes the label, or the strip pass + ensure_native
+    # gate handles it on a per-profile basis.
+    try:
+        if 'Column' in df.columns and 'Value' in df.columns:
+            cat_u_g15 = df['Column'].astype(str).str.strip().str.upper()
+            bi_g15 = df.loc[cat_u_g15 == 'BRAND INPUT']
+            if len(bi_g15):
+                canonical_g15 = str(bi_g15.iloc[0].get('Value', '') or '').strip()
+                canonical_u_g15 = canonical_g15.upper()
+                canonical_norm_g15 = _re.sub(r'[^A-Z0-9]', '', canonical_u_g15)
+                # Only meaningful when canonical contains punctuation or
+                # the writer could plausibly have dropped chars; if
+                # canonical is plain alphanum, every variant would
+                # equal the canonical and there's nothing to flag.
+                if canonical_norm_g15 and canonical_norm_g15 != canonical_u_g15:
+                    skip_g15 = (
+                        METADATA_COLS | DEPIN_DEMO_CATS | DEPIN_META_CATS
+                    )
+                    val_u_g15 = df['Value'].astype(str).str.strip().str.upper()
+                    val_norm_g15 = val_u_g15.str.replace(r'[^A-Z0-9]', '', regex=True)
+                    variant_mask = (
+                        (val_norm_g15 == canonical_norm_g15)
+                        & (val_u_g15 != canonical_u_g15)
+                        & (~cat_u_g15.isin(skip_g15))
+                    )
+                    if variant_mask.any():
+                        variants = []
+                        for idx in df.index[variant_mask]:
+                            variants.append(
+                                (cat_u_g15.loc[idx], df.at[idx, 'Value'],
+                                 df.at[idx, bp_col])
+                            )
+                        sample_g15 = '; '.join(
+                            f'[{c}]"{v}"@{bp}'
+                            for c, v, bp in variants[:5]
+                        )
+                        more_g15 = (
+                            f' (+{len(variants)-5} more)'
+                            if len(variants) > 5 else ''
+                        )
+                        defects.append(
+                            f'G15 SUBJECT_LABEL_VARIANT: BRAND INPUT '
+                            f'canonical="{canonical_g15}" but '
+                            f'{len(variants)} row(s) use punct-stripped '
+                            f'variant: {sample_g15}{more_g15} '
+                            f'-- cross-grid label drift breaks dedup'
+                        )
+    except Exception as e:
+        defects.append(f'G15 SUBJECT_LABEL_VARIANT: detector errored: {e}')
+
+    # ── G16: build-time annotation leak (Shemar Moore defect, 2026-06-15) ───
+    # Survivor check for the annotation-pattern stripper in
+    # _is_polluted_brand_value. Fires when any non-meta, non-demo Value
+    # matches a build-time annotation/remap pattern: '-NA', '-TBD',
+    # '-TODO', '-PENDING', '-FIXME' suffix; '(use X)', '(see X)',
+    # '(remap X)', '(map to X)', '(instead X)', '(replace with X)';
+    # 'TODO:', 'FIXME:'; 'N/A'; or '=>' arrow remap.
+    #
+    # In the wild: Shemar_Moore profile shipped with INTEREST/'SAILING-na
+    # (use OUTDOOR LIFE)' at BP=0/Raw=0 -- an upstream mapping instruction
+    # ("remap SAILING (not-applicable) to OUTDOOR LIFE") that should have
+    # been resolved during the build. Defect-19's strip_phantom_zero_rows
+    # caught it incidentally because BP=0 AND Raw=0, but a non-zero
+    # annotation row would have shipped uncaught. G16 closes that gap.
+    try:
+        if 'Column' in df.columns and 'Value' in df.columns:
+            cat_u_g16 = df['Column'].astype(str).str.strip().str.upper()
+            skip_g16 = METADATA_COLS | DEPIN_DEMO_CATS | DEPIN_META_CATS
+            non_meta = ~cat_u_g16.isin(skip_g16)
+            leaks = []
+            for idx in df.index[non_meta]:
+                v = str(df.at[idx, 'Value'] or '').strip()
+                if v and _ANNOTATION_RX.search(v):
+                    leaks.append((cat_u_g16.loc[idx], v))
+            if leaks:
+                sample_g16 = '; '.join(
+                    f'[{c}]"{v[:40]}"' for c, v in leaks[:5]
+                )
+                more_g16 = f' (+{len(leaks)-5} more)' if len(leaks) > 5 else ''
+                defects.append(
+                    f'G16 BUILD_ANNOTATION_LEAK: {len(leaks)} row(s) '
+                    f'contain upstream mapping/remap instructions in '
+                    f'Value: {sample_g16}{more_g16} '
+                    f'-- should have been resolved during build, not '
+                    f'shipped to dashboard'
+                )
+    except Exception as e:
+        defects.append(f'G16 BUILD_ANNOTATION_LEAK: detector errored: {e}')
+
+    # ── G17: Netflix BP suppressed in STREAMING/PLATFORM (Defect 28+30) ──
+    # Survivor check for enforce_netflix_leads_streaming_platform.
+    # Original (Defect 28, 2026-06-15 AM) flagged inversions only;
+    # Defect 30 (2026-06-15 PM) widened to suppression-below-baseline:
+    # Netflix's universal US adult reach is ~75%, so any BP below the
+    # 73% jitter floor is suppression -- even when Netflix still ranks
+    # #1 (e.g. NX 67% with Prime 50% means BOTH were suppressed).
+    # Self-pin exception: BP >= 95% is exempt (subject IS a streaming
+    # brand, or near-self-pin show profile like "POWER ON AMAZON PRIME"
+    # with AP at 99.49%).
+    try:
+        if 'Column' in df.columns and 'Value' in df.columns:
+            cat_u_g17 = df['Column'].astype(str).str.strip().str.upper()
+            sp_idx_g17 = df.index[cat_u_g17 == 'STREAMING/PLATFORM']
+            if len(sp_idx_g17):
+                val_u_g17 = (df.loc[sp_idx_g17, 'Value']
+                             .astype(str).str.upper().str.strip())
+                bp_num_g17 = df.loc[sp_idx_g17, bp_col].apply(_bp)
+                nx_idxs = [i for i in sp_idx_g17 if val_u_g17.loc[i] == 'NETFLIX']
+                if nx_idxs:
+                    nx_idx_g17 = nx_idxs[0]
+                    nx_bp_g17 = bp_num_g17.loc[nx_idx_g17]
+                    nx_bp_g17 = float(nx_bp_g17) if nx_bp_g17 is not None and not pd.isna(nx_bp_g17) else None
+                    if nx_bp_g17 is not None and nx_bp_g17 < 95.0:
+                        # 2026-06-17 Jenna policy change (Jennifer Beals G17
+                        # reject @ 72.5686%): instead of failing the gate
+                        # when Netflix is below the 73% floor or a peer
+                        # leads it, AUTO-PATCH the file in place:
+                        #   - Netflix < 73 -> raise to 75 + jitter[0..4],
+                        #     recompute Raw/Proj
+                        #   - peer leading Netflix (non-self-pin) -> cap
+                        #     peer to 74.9, recompute Raw/Proj
+                        #   - renormalize STREAMING/PLATFORM Category Share
+                        # Only fall back to defect-append if the auto-patch
+                        # itself raises. This implements Jenna's directive:
+                        # "you shouldn't just abandon something if that
+                        # happens, you should just patch netflix to be
+                        # where it needs to be then publish".
+                        patch_notes = []
+                        patched_anything = False
+                        gate_ss_local = _gate_sample_size
+                        if gate_ss_local and gate_ss_local > 0 and bp_col:
+                            # (a) Netflix below the 73% baseline floor
+                            if nx_bp_g17 < 73.0:
+                                try:
+                                    NX_TARGET_FIX = 75.0
+                                    new_nx_g17 = NX_TARGET_FIX + _jitter_for(
+                                        subject, 'NETFLIX',
+                                        salt='gate_baseline',
+                                        lo=0.0, hi=4.0,
+                                    )
+                                    new_nx_g17 = round(min(max(new_nx_g17, NX_TARGET_FIX), 79.0), 4)
+                                    _set_bp(df, nx_idx_g17, new_nx_g17,
+                                            bp_col, cs_col, raw_col, proj_col,
+                                            gate_ss_local)
+                                    patch_notes.append(
+                                        f'NETFLIX {nx_bp_g17:.4f}% -> '
+                                        f'{new_nx_g17:.4f}%'
+                                    )
+                                    nx_bp_g17 = new_nx_g17
+                                    patched_anything = True
+                                except Exception as _pe:
+                                    patch_notes.append(
+                                        f'NETFLIX patch FAILED ({_pe})'
+                                    )
+                            # (b) Any non-self-pin peer leads Netflix
+                            #     -> cap to nx_bp - 0.1 (peer-cap = 74.9 if
+                            #     nx is 75, or peer-cap=nx-0.1 in general).
+                            #     Recompute bp_num so we work off post-patch
+                            #     values.
+                            try:
+                                bp_num_g17 = df.loc[sp_idx_g17, bp_col].apply(_bp)
+                            except Exception:
+                                pass
+                            for i in sp_idx_g17:
+                                if i == nx_idx_g17:
+                                    continue
+                                bp = bp_num_g17.loc[i]
+                                if bp is None or pd.isna(bp):
+                                    continue
+                                bp_f = float(bp)
+                                if bp_f >= 95.0:
+                                    continue
+                                if bp_f > nx_bp_g17 + 1e-9:
+                                    try:
+                                        peer_cap_g17 = round(nx_bp_g17 - 0.1, 4)
+                                        if peer_cap_g17 < 1.0:
+                                            peer_cap_g17 = 1.0
+                                        _set_bp(df, i, peer_cap_g17,
+                                                bp_col, cs_col, raw_col,
+                                                proj_col, gate_ss_local)
+                                        patch_notes.append(
+                                            f'{df.at[i, "Value"]} '
+                                            f'{bp_f:.4f}% -> {peer_cap_g17:.4f}% '
+                                            f'(peer-cap below Netflix)'
+                                        )
+                                        patched_anything = True
+                                    except Exception as _pe2:
+                                        patch_notes.append(
+                                            f'{df.at[i, "Value"]} '
+                                            f'peer-cap FAILED ({_pe2})'
+                                        )
+                            if patched_anything:
+                                try:
+                                    _renormalize_category(
+                                        df, 'STREAMING/PLATFORM',
+                                        bp_col, cs_col, raw_col, proj_col,
+                                        gate_ss_local,
+                                    )
+                                except Exception:
+                                    pass
+                                if verbose:
+                                    print(
+                                        '   🛠  G17 auto-patched (gate-level): '
+                                        + ' | '.join(patch_notes)
+                                    )
+                        else:
+                            # Couldn't determine sample_size -> fall back to
+                            # legacy detect-only behaviour so we don't ship
+                            # silently bad data.
+                            problems = []
+                            if nx_bp_g17 < 73.0:
+                                problems.append(
+                                    f'NETFLIX_BELOW_BASELINE: Netflix at '
+                                    f'{nx_bp_g17:.4f}% is below the 73% '
+                                    f'floor (universal baseline ~75%) -- '
+                                    f'and gate could not auto-patch (no '
+                                    f'sample_size)'
+                                )
+                            leaders = []
+                            for i in sp_idx_g17:
+                                if i == nx_idx_g17:
+                                    continue
+                                bp = bp_num_g17.loc[i]
+                                if bp is None or pd.isna(bp):
+                                    continue
+                                bp_f = float(bp)
+                                if bp_f >= 95.0:
+                                    continue
+                                if bp_f > nx_bp_g17 + 1e-9:
+                                    leaders.append((df.at[i, 'Value'], bp_f))
+                            if leaders:
+                                leaders.sort(key=lambda t: -t[1])
+                                sample_g17 = '; '.join(
+                                    f'"{v}"@{bp:.4f}%' for v, bp in leaders[:3]
+                                )
+                                problems.append(
+                                    f'NETFLIX_NOT_#1: Netflix at '
+                                    f'{nx_bp_g17:.4f}% but {len(leaders)} '
+                                    f'peer(s) lead: {sample_g17} -- and '
+                                    f'gate could not auto-patch (no '
+                                    f'sample_size)'
+                                )
+                            if problems:
+                                defects.append(
+                                    'G17 NETFLIX_SUPPRESSED_STREAMING_PLATFORM: '
+                                    + ' | '.join(problems)
+                                )
+    except Exception as e:
+        defects.append(f'G17 NETFLIX_SUPPRESSED_STREAMING_PLATFORM: detector errored: {e}')
+
+    # ── G18: subject brand duplicated in non-native streaming grid ───────
+    # Defect 31 (2026-06-15 PM, Hallmark Plus). Survivor check for
+    # dedupe_subject_streaming_grids. After today's CATEGORY_DISPLAY_LABELS
+    # change, both STREAMING VIDEO and STREAMING/PLATFORM render under one
+    # tab; if the subject brand appears at >=95% in one and < 50% in the
+    # other, the dashboard shows two contradictory bars side by side.
+    # Post-enforcer state should never have this -- if G18 fires, the
+    # enforcer regressed.
+    try:
+        if 'Column' in df.columns and 'Value' in df.columns:
+            cat_u_g18 = df['Column'].astype(str).str.strip().str.upper()
+            val_u_g18 = df['Value'].astype(str).str.strip().str.upper()
+            bi_mask_g18 = cat_u_g18 == 'BRAND INPUT'
+            if bi_mask_g18.any():
+                subj_g18 = str(df.loc[bi_mask_g18].iloc[0].get('Value', '') or '').strip().upper()
+                if subj_g18:
+                    sv_g18 = df.index[(cat_u_g18 == 'STREAMING VIDEO') & (val_u_g18 == subj_g18)]
+                    sp_g18 = df.index[(cat_u_g18 == 'STREAMING/PLATFORM') & (val_u_g18 == subj_g18)]
+                    if len(sv_g18) and len(sp_g18):
+                        sv_bp_g18 = _bp(df.at[sv_g18[0], bp_col])
+                        sp_bp_g18 = _bp(df.at[sp_g18[0], bp_col])
+                        try:
+                            sv_bp_g18 = float(sv_bp_g18) if sv_bp_g18 is not None and not pd.isna(sv_bp_g18) else None
+                            sp_bp_g18 = float(sp_bp_g18) if sp_bp_g18 is not None and not pd.isna(sp_bp_g18) else None
+                        except Exception:
+                            sv_bp_g18 = sp_bp_g18 = None
+                        if sv_bp_g18 is not None and sp_bp_g18 is not None:
+                            if ((sv_bp_g18 >= 95.0 and sp_bp_g18 < 50.0) or
+                                (sp_bp_g18 >= 95.0 and sv_bp_g18 < 50.0)):
+                                defects.append(
+                                    f'G18 SUBJECT_DUPLICATED_NON_NATIVE_STREAMING: '
+                                    f'subject {subj_g18!r} appears at '
+                                    f'{sv_bp_g18:.4f}% in STREAMING VIDEO and '
+                                    f'{sp_bp_g18:.4f}% in STREAMING/PLATFORM '
+                                    f'-- non-native peer row creates duplicate '
+                                    f'bar in merged STREAMING/PLATFORM display tab'
+                                )
+    except Exception as e:
+        defects.append(f'G18 SUBJECT_DUPLICATED_NON_NATIVE_STREAMING: detector errored: {e}')
 
     if verbose:
         if defects:
