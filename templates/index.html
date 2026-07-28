@@ -44474,8 +44474,6 @@
                   tip: 'Social: Trending posts and videos on Reddit, YouTube, and TikTok. Real content, not hashtag lists.' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
                   tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, Max, Prime Video, and ESPN+, split into Film and TV.' },
-                { key: 'products',  label: 'Products',         count: counts.retailers || 0, icon: '🛍️',
-                  tip: 'Products: Best-sellers and trending SKUs at Amazon, Target, Walmart, Nike, Sephora, Ulta, Best Buy, Etsy, and Lululemon. Price, rank, and link where available.' },
                 { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★',
                   tip: 'Watchlist: The trends you have starred. Populates the daily digest email so you get pinged when anything on this list breaks out, drops off, or crosses a threshold you set.' },
             ];
@@ -44508,7 +44506,6 @@
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
-                _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
 
             // If the user had previously landed on the removed "sources"
@@ -44531,6 +44528,11 @@
             // users so they don't land on a ghost panel.
             if (window.__trendsIQ.activeTab === 'libby') {
                 window.__trendsIQ.activeTab = 'books';
+            }
+            // Products tab was removed 2026-07-28. Returning users with
+            // stale session state land on Trending instead of a ghost.
+            if (window.__trendsIQ.activeTab === 'products') {
+                window.__trendsIQ.activeTab = 'searches';
             }
             setTrendsIQTab(window.__trendsIQ.activeTab || 'searches');
 
@@ -46417,7 +46419,6 @@
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
-                _renderTIQPanel('products',  renderTIQProducts(cards.products_by_retailer || [])) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
             setTrendsIQTab(window.__trendsIQ.activeTab || 'searches');
         }
