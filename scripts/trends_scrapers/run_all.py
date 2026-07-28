@@ -6,9 +6,11 @@ Runs every scraper in the package, writes per-source snapshots to S3,
 and writes a summary `s3://dashboard-inputs/trends_iq_snapshots/latest/_index.json`
 with counts + errors so we can monitor freshness at a glance.
 
-Hetzner crontab (5am UTC = 1am ET, before dashboard traffic peaks):
+Hetzner crontab (12:00 UTC = 8:00 AM EDT / 7:00 AM ET, right before
+Jenna starts her workday so the "Updated ..." stamp reads as a fresh
+morning refresh instead of the middle of the night):
 
-    0 5 * * *  cd /root/finished_codes/bg-webapp && [ -f /root/finished_codes/.env.trends_scrapers ] && set -a && . /root/finished_codes/.env.trends_scrapers && set +a; /usr/bin/python3 -m scripts.trends_scrapers.run_all >> /var/log/trends_scrapers.log 2>&1
+    0 12 * * *  cd /root/finished_codes/bg-webapp && [ -f /root/finished_codes/.env.trends_scrapers ] && set -a && . /root/finished_codes/.env.trends_scrapers && set +a; /usr/bin/python3 -m scripts.trends_scrapers.run_all >> /var/log/trends_scrapers.log 2>&1
 
 Manual one-shot (during dev):
 
