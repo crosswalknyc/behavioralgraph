@@ -35456,13 +35456,11 @@
             }
 
             function _iiq2HideAllOtherViews() {
-                var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
-                           'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
-                           'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
-                           'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
-                           'shareOfTimeIQView','flywheelConversionView','talentFitIQView',
-                           'journeyIQView','blueIQView','intentIQView','impactIQView','helmIQView'];
-                ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
+                // 2026-07-28: delegate to _iqHideAllViewsExcept - see the
+                // matching comment on _iiqHideAllOtherViews above.
+                if (typeof _iqHideAllViewsExcept === 'function') {
+                    _iqHideAllViewsExcept('impactIQView');
+                }
             }
 
             window.showImpactIQ = function() {
@@ -37539,17 +37537,21 @@
                             localStorage.setItem('bg_last_product', val);
                         }
                     } catch (_) { /* localStorage disabled - no persist */ }
-                    // Ensure selected view is visible (guard against handler not running or layout issues)
-                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', helmIQ: 'helmIQView' };
+                    // Ensure selected view is visible (guard against handler not running or layout issues).
+                    // 2026-07-28: added trendsIQ / microdramasIQ / impactIQ
+                    // mappings so the tail-guard can visibly render those
+                    // views if the primary handler fails; the hide sweep
+                    // now delegates to the canonical _iqHideAllViewsExcept
+                    // helper so every future top-level product is covered
+                    // by just appending its id to _iqTopLevelViewIds.
+                    var viewIds = { profileIQ: 'dashboardView', subscriberIQ: 'subscriberIQView', llmoIQ: 'llmoIQView', rankerIQ: 'rankerIQView', ticketSalesIQ: 'ticketSalesIQView', ticketSalesTracker: 'ticketSalesTrackerView', hedgeFundIQ: 'hedgeFundIQView', sentimentIQ: 'sentimentIQView', roasIQ: 'roasIQView', ecommerceIQ: 'ecommerceIQView', brandPartnershipIQ: 'ecommerceIQView', journeyIQ: 'journeyIQView', shareOfTimeIQ: 'shareOfTimeIQView', sfConversion: 'sfConversionView', flywheelConversion: 'flywheelConversionView', customAnalysis: 'customAnalysisView', talentSearchIQ: 'talentSearchIQView', talentTheaterIQ: 'talentTheaterIQView', talentFitIQ: 'talentFitIQView', blueIQ: 'blueIQView', intentIQ: 'intentIQView', helmIQ: 'helmIQView', trendsIQ: 'trendsIQView', microdramasIQ: 'microdramasIQView', impactIQ: 'impactIQView' };
                     var activeId = viewIds[val];
                     if (activeId) {
                         var activeEl = document.getElementById(activeId);
                         if (activeEl) { activeEl.style.display = 'flex'; activeEl.style.visibility = 'visible'; }
-                        ['formView', 'dashboardView', 'subscriberIQView', 'llmoIQView', 'rankerIQView', 'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView', 'sentimentIQView', 'roasIQView', 'ecommerceIQView', 'shareOfTimeIQView', 'sfConversionView', 'flywheelConversionView', 'customAnalysisView', 'talentSearchIQView', 'talentTheaterIQView', 'talentFitIQView', 'journeyIQView', 'blueIQView', 'intentIQView', 'helmIQView'].forEach(function(id) {
-                            if (id === activeId) return;
-                            var el = document.getElementById(id);
-                            if (el) el.style.display = 'none';
-                        });
+                        if (typeof _iqHideAllViewsExcept === 'function') {
+                            _iqHideAllViewsExcept(activeId);
+                        }
                     }
                 });
             }
@@ -39498,16 +39500,10 @@
         })();
 
         function _blueIQHideAllOtherViews() {
-            var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
-                       'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
-                       'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
-                       'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
-                       'shareOfTimeIQView','flywheelConversionView','talentFitIQView','journeyIQView',
-                       'intentIQView','helmIQView','trendsIQView'];
-            ids.forEach(function(id) {
-                var el = document.getElementById(id);
-                if (el) el.style.display = 'none';
-            });
+            // 2026-07-28: delegate to _iqHideAllViewsExcept.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('blueIQView');
+            }
         }
 
         window.showBlueIQ = function() {
@@ -43125,16 +43121,10 @@
         window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'searches', activeSocial: 'reddit', activeRetailer: 'amazon', headlinesView: 'top', inFlight: null };
 
         function _trendsIQHideAllOtherViews() {
-            var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
-                       'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
-                       'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
-                       'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
-                       'shareOfTimeIQView','flywheelConversionView','talentFitIQView','journeyIQView',
-                       'intentIQView','blueIQView','helmIQView','microdramasIQView'];
-            ids.forEach(function(id) {
-                var el = document.getElementById(id);
-                if (el) el.style.display = 'none';
-            });
+            // 2026-07-28: delegate to _iqHideAllViewsExcept.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('trendsIQView');
+            }
         }
 
         window.showTrendsIQ = function() {
@@ -43171,16 +43161,10 @@
         window.__microdramasIQ = { filterOptions: null, lastData: null, activePanel: 'peacock', inFlight: null };
 
         function _microdramasIQHideAllOtherViews() {
-            var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
-                       'ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView',
-                       'talentSearchIQView','talentTheaterIQView','formView','customAnalysisView',
-                       'roasIQView','ecommerceIQView','llmoIQView','sentimentIQView',
-                       'shareOfTimeIQView','flywheelConversionView','talentFitIQView','journeyIQView',
-                       'intentIQView','blueIQView','helmIQView','trendsIQView'];
-            ids.forEach(function(id) {
-                var el = document.getElementById(id);
-                if (el) el.style.display = 'none';
-            });
+            // 2026-07-28: delegate to _iqHideAllViewsExcept.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('microdramasIQView');
+            }
         }
 
         window.showMicrodramasIQ = function() {
@@ -48084,10 +48068,10 @@
             var opt = dd && dd.querySelector('option[value="sentimentIQ"]');
             if (opt && opt.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('sentimentIQ');
-            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','flywheelConversionView','shareOfTimeIQView','sfConversionView','talentFitIQView','journeyIQView'].forEach(function(id) {
-                var el = document.getElementById(id); if (el) el.style.display = 'none';
-            });
-            if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
+            // 2026-07-28: canonical hide + LLMO cleanup in one call.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('sentimentIQView');
+            }
             var v = document.getElementById('sentimentIQView');
             if (v) v.style.display = 'flex';
             loadSentimentIQSidebar();
@@ -48866,10 +48850,10 @@
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('roasIQ');
             if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
             if (typeof loadAndApplyLiveFeatures === 'function') loadAndApplyLiveFeatures();
-            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView'].forEach(function(id) {
-                var el = document.getElementById(id); if (el) el.style.display = 'none';
-            });
-            hideLLMOIQView();
+            // 2026-07-28: canonical hide + LLMO cleanup in one call.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('roasIQView');
+            }
             var rv = document.getElementById('roasIQView'); if (rv) rv.style.display = 'flex';
             loadRoasIQProfiles();
         }
@@ -49224,10 +49208,17 @@
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('ecommerceIQ');
             if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
             if (typeof loadAndApplyLiveFeatures === 'function') loadAndApplyLiveFeatures();
-            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView'].forEach(function(id) {
-                var el = document.getElementById(id); if (el) el.style.display = 'none';
-            });
-            hideLLMOIQView();
+            // 2026-07-28: canonical hide + LLMO cleanup in one call. Old
+            // hand-rolled list missed trendsIQView / microdramasIQView /
+            // sentimentIQView / journeyIQView / blueIQView / intentIQView
+            // / impactIQView / shareOfTimeIQView / flywheelConversionView
+            // / sfConversionView / talentFitIQView / helmIQView so Trends
+            // (and any of those others) visibly stacked below Brand
+            // Partnership when switching from Trends to Brand Partnership.
+            // Reported by Jenna 2026-07-28 with screenshot.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('ecommerceIQView');
+            }
             var ev = document.getElementById('ecommerceIQView'); if (ev) ev.style.display = 'flex';
             loadEcomIQProfiles();
             if (typeof setEcomIQMode === 'function' && typeof _ecomIQMode !== 'undefined') {
@@ -72866,10 +72857,10 @@
             if (opt?.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('shareOfTimeIQ');
             if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
-            ['dashboardView','subscriberIQView','rankerIQView','ticketSalesIQView','ticketSalesTrackerView','hedgeFundIQView','roasIQView','ecommerceIQView','formView','customAnalysisView','talentSearchIQView','talentTheaterIQView','sfConversionView','flywheelConversionView','talentFitIQView'].forEach(function(id) {
-                var el = document.getElementById(id); if (el) el.style.display = 'none';
-            });
-            if (typeof hideLLMOIQView === 'function') hideLLMOIQView();
+            // 2026-07-28: canonical hide + LLMO cleanup in one call.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('shareOfTimeIQView');
+            }
             var sv = document.getElementById('shareOfTimeIQView'); if (sv) sv.style.display = 'flex';
             sotApplyRunAccessVisibility();
             sotLoadRuns();
