@@ -174,6 +174,55 @@ def _format_audience_user(snap: dict) -> str:
     return "\n".join(L)
 
 
+def _claude_messages_with_retry(*, system, user, max_tokens, temperature,
+                                tag, max_attempts: int = 3,
+                                base_delay: float = 2.0):
+    """Wrap claude_messages with bounded retry + backoff. Surfaces a clear
+    log line per attempt so silent failures (rate-limit, transient API
+    error, JSON parse miss) are visible in the run log.
+
+    On 2026-06-14 a backfill run silently produced ~750 jitter-only avid
+    profiles because `reason_avid_audience` and `reason_category_rows`
+    swallowed exceptions / empty responses on the first attempt and
+    fell through to fallback paths. Returning `None` from this helper
+    is now the unambiguous "all attempts failed" signal so callers can
+    log + propagate rather than mask.
+    """
+    try:
+        from claude_client import claude_messages
+    except Exception:
+        try:
+            sys.path.insert(0, HERE)
+            from claude_client import claude_messages  # type: ignore
+        except Exception as e:
+            print(f"[avid-fan][{tag}] claude import failed: {e}")
+            return None
+
+    last_err = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            resp = claude_messages(
+                system=system, user=user,
+                max_tokens=max_tokens, temperature=temperature,
+            )
+            if resp:
+                return resp
+            last_err = f"empty response (attempt {attempt}/{max_attempts})"
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {e}"
+        if attempt < max_attempts:
+            delay = base_delay * (2 ** (attempt - 1))
+            print(f"[avid-fan][{tag}] attempt {attempt}/{max_attempts} "
+                  f"failed ({last_err}); retrying in {delay:.1f}s")
+            try:
+                import time as _t
+                _t.sleep(delay)
+            except Exception:
+                pass
+    print(f"[avid-fan][{tag}] all {max_attempts} attempts failed: {last_err}")
+    return None
+
+
 def reason_avid_audience(snap: dict) -> dict:
     """Phase 1 Claude call: cohort_fraction + demo_targets + narrative."""
     fallback = {
@@ -186,28 +235,18 @@ def reason_avid_audience(snap: dict) -> dict:
         "reasoning": "fallback: Claude unavailable, using broad demos as-is",
         "claude_used": False,
     }
-    try:
-        from claude_client import claude_messages
-    except Exception:
-        try:
-            sys.path.insert(0, HERE)
-            from claude_client import claude_messages  # type: ignore
-        except Exception as e:
-            print(f"[avid-fan] claude import failed: {e}")
-            return fallback
-
     user = _format_audience_user(snap)
-    try:
-        resp = claude_messages(
-            system=_AUDIENCE_SYSTEM, user=user,
-            max_tokens=4096, temperature=0.4,
-        )
-    except Exception as e:
-        print(f"[avid-fan] phase 1 claude call failed: {e}")
+    resp = _claude_messages_with_retry(
+        system=_AUDIENCE_SYSTEM, user=user,
+        max_tokens=4096, temperature=0.4,
+        tag="phase-1-audience",
+    )
+    if resp is None:
+        print(f"[avid-fan] phase 1 returned None after retries; using fallback")
         return fallback
     obj = _extract_json_block(resp) if resp else None
     if not isinstance(obj, dict):
-        print(f"[avid-fan] phase 1 returned no JSON; fallback")
+        print(f"[avid-fan] phase 1 returned no JSON block; using fallback")
         return fallback
 
     out = dict(fallback)
@@ -321,13 +360,17 @@ _CAT_ROW_SYSTEM = (
 
 
 def _format_category_user(subject: str, audience_summary: str, category: str,
-                          rows: list) -> str:
+                          rows: list, persona_brief: str = "") -> str:
     L = [f"SUBJECT: {subject}",
          "AVID AUDIENCE PROFILE:",
          audience_summary,
-         "",
+         ""]
+    if persona_brief:
+        L.append(persona_brief)
+        L.append("")
+    L.extend([
          f"CATEGORY: {category}",
-         f"ITEMS ({len(rows)} rows, broad BP = current 1+ value):"]
+         f"ITEMS ({len(rows)} rows, broad BP = current 1+ value):"])
     for label, bp in rows:
         L.append(f"  - {label} :: broad_bp={bp:.4f}")
     L.append("")
@@ -352,7 +395,8 @@ def _audience_summary_text(audience: dict) -> str:
 
 
 def reason_category_rows(subject: str, audience: dict, category: str,
-                         rows: list, *, chunk_size: int = 200) -> dict:
+                         rows: list, *, chunk_size: int = 200,
+                         df_source=None) -> dict:
     """Phase 2 Claude call -- reasons over EVERY row in the category (no
     top-N truncation). Long lists are split into sequential chunks of
     `chunk_size` rows so the agent can reason about each row without
@@ -360,23 +404,44 @@ def reason_category_rows(subject: str, audience: dict, category: str,
 
     Per Jenna 2026-06-12 "no caps on anything anywhere for agents",
     there is no row-count cap and no priority gating upstream.
+
+    df_source (optional): if provided, an audience-archetype-aware
+    persona brief with ELEVATE / ATTENUATE / PANEL-ANCHOR clusters is
+    appended to the user prompt via
+    `migration.persona_briefs.build_category_persona_brief`. When
+    (category, archetype) has no explicit brief, the append is a no-op.
     """
     if not rows:
         return {}
     audience_summary = _audience_summary_text(audience)
 
-    try:
-        from claude_client import claude_messages
-    except Exception:
+    persona_brief = ""
+    if df_source is not None:
         try:
-            sys.path.insert(0, HERE)
-            from claude_client import claude_messages  # type: ignore
+            from migration.persona_briefs import (
+                build_category_persona_brief,
+            )
         except Exception:
-            return {}
+            try:
+                from persona_briefs import (  # type: ignore
+                    build_category_persona_brief,
+                )
+            except Exception:
+                build_category_persona_brief = None  # type: ignore
+        if build_category_persona_brief is not None:
+            try:
+                persona_brief = build_category_persona_brief(
+                    subject, category, df_source,
+                )
+            except Exception as e:
+                print(f"[avid-fan] persona_brief build failed for "
+                      f"{category}: {e}")
+                persona_brief = ""
 
     rows_sorted = sorted(rows, key=lambda kv: -kv[1])
     out: dict = {}
     n_chunks = (len(rows_sorted) + chunk_size - 1) // chunk_size
+    n_chunks_failed = 0
     for i in range(n_chunks):
         chunk = rows_sorted[i * chunk_size:(i + 1) * chunk_size]
         if n_chunks > 1:
@@ -384,18 +449,22 @@ def reason_category_rows(subject: str, audience: dict, category: str,
         else:
             chunk_label = category
         user = _format_category_user(subject, audience_summary,
-                                     chunk_label, chunk)
-        try:
-            resp = claude_messages(
-                system=_CAT_ROW_SYSTEM, user=user,
-                max_tokens=24000, temperature=0.3,
-            )
-        except Exception as e:
+                                     chunk_label, chunk,
+                                     persona_brief=persona_brief)
+        resp = _claude_messages_with_retry(
+            system=_CAT_ROW_SYSTEM, user=user,
+            max_tokens=24000, temperature=0.3,
+            tag=f"phase-2-{category}-chunk{i+1}/{n_chunks}",
+        )
+        if resp is None:
+            n_chunks_failed += 1
             print(f"[avid-fan] cat={category} chunk {i+1}/{n_chunks} "
-                  f"claude failed: {e}")
+                  f"all retries exhausted -- skipping (rows in this chunk "
+                  f"will fall back to source-jitter)")
             continue
         obj = _extract_json_block(resp) if resp else None
         if not isinstance(obj, dict):
+            n_chunks_failed += 1
             continue
         for it in obj.get("items", []) or []:
             if not isinstance(it, dict):
@@ -497,6 +566,13 @@ def apply_avid_transform(df, audience: dict, category_decisions: dict,
             # 2026-06-12 "avid sample size looks the same as OG" bug
             # -- the dashboard reads BRAND INPUT for the header pill,
             # so an unwritten row meant analysts saw the OG sample.
+            #
+            # 2026-06-16 PM (Jenna): also force BP=100% defensively. The
+            # OG should have BP=100 here, but Defect 38b found OGs whose
+            # subject self-pin was missed (Gemini OG at 32.87% in
+            # SEARCH ENGINE/AI) -- those OGs may also have non-100 BRAND
+            # INPUT in edge cases. BRAND INPUT @ 100% is Rule #3 mandate.
+            df.at[idx, bp_col] = "100.0000%"
             df.at[idx, raw_col] = float(new_sample)
             df.at[idx, proj_col] = float(new_uspop)
             continue
@@ -739,6 +815,7 @@ def synthesize_avid_fan(
     dry_run: bool = False,
     register_in_dashboard: bool = True,
     source_s3_key: Optional[str] = None,
+    brand_category: Optional[str] = None,
 ) -> dict:
     """End-to-end orchestrator. Loads `source` (an S3 key or local CSV
     path), runs Phase 1-4 synthesis, writes the avid fan CSV to S3, and
@@ -760,6 +837,16 @@ def synthesize_avid_fan(
         `source_key` so the avid entry inherits custom_image / imdb_id
         from the parent OG cache row. Skip if synthesizing from a non-S3
         file.
+      brand_category: optional canonical BRAND CATEGORY (e.g.
+        "SERIES - NETFLIX", "MUSICIAN/BAND"). When provided, this is the
+        AUTHORITATIVE value used to guarantee the avid file's BRAND
+        CATEGORY row matches the main pull's category (mirror semantics
+        per Jenna 2026-07-17: "avid cuts always have the same category as
+        main cuts and never end up as uncategorized"). Set from
+        BG.run_full_pipeline's brand_category argument when auto-
+        synthesizing after a main pull; leave None only when the caller
+        genuinely doesn't know (e.g. backfill orchestrators reading old
+        files with no metadata).
 
     Returns: dict with keys `out_key`, `status` ('uploaded'|'dry-run'),
       `audience`, `stats`, `n_collisions_fixed`, `register_status`.
@@ -820,7 +907,8 @@ def synthesize_avid_fan(
             rows.append((str(r.get(val_col, "")).strip(), v))
         if not rows:
             continue
-        decisions = reason_category_rows(subject, audience, cat, rows)
+        decisions = reason_category_rows(subject, audience, cat, rows,
+                                         df_source=df_baseline)
         if decisions:
             cat_decisions[cat] = decisions
         rows_decided += len(decisions)
@@ -841,60 +929,305 @@ def synthesize_avid_fan(
     df_avid, n_fixed = enforce_no_collisions(df_avid, df_baseline, subject)
     print(f"     re-jittered {n_fixed} rows to break collisions")
 
-    # Subject canonical filename: "{Subject Name} - Avid Fan.csv"
+    # Phase 5 (2026-06-15 Defect 29): post-synthesis differentiation gate.
+    # On 2026-06-14 a backfill run uploaded ~750 avid profiles where
+    # both Phase 1 (audience reasoning) and Phase 2 (per-category Claude
+    # row-by-row) silently returned empty -- Claude rate-limit / parse
+    # failure / etc -- and the apply_avid_transform fallback wrote
+    # `old_bp + jitter(±0.10)` for every row. The result was a file
+    # that LOOKS like a complete avid skin but is structurally identical
+    # to the OG (mean |delta| ≈ 0.025pp). The dashboard happily showed
+    # it; only Jenna's eye caught the lack of persona variation.
+    #
+    # This gate computes mean |Avid BP - OG BP| over non-meta, non-demo
+    # brand rows. For a healthy persona-shaped cut the value is in the
+    # 0.5-5.0pp range (Reba's gold-standard run was 0.60). When the
+    # value is below MIN_MEAN_DELTA_PP we conclude both Claude phases
+    # effectively no-op'd and we REFUSE to upload, raising a clear
+    # exception so the backfill checkpoint marks the profile `failed`
+    # and it can be retried.
+    DEMO_CATS_FOR_GATE = {
+        'GENDER','AGE','INCOME','ETHNICITY','EDUCATION','OCCUPATION',
+        'PARENTAL_STATUS','RELATIONSHIP','SEXUAL_ORIENTATION',
+    }
+    META_CATS_FOR_GATE = {
+        'BRAND INPUT','SAMPLE SIZE','INPUT_METADATA','BRAND CATEGORY',
+        'BRAND ID','REPORT INPUT','SUBJECT','LOCATION','DMA','REGION',
+        'AVID FAN','CASUAL FAN',
+    }
+    MIN_MEAN_DELTA_PP = 0.10  # below this = pipeline failed silently
+
+    # Compute out_key BEFORE the Phase 5 gate so the FAIL message can
+    # reference it. Without this the gate's `raise RuntimeError(msg)`
+    # itself raised UnboundLocalError because out_key was defined later
+    # in the function -- which the bare `except Exception` below caught
+    # and turned into "gate errored, proceeding with upload anyway",
+    # silently uploading every gate-FAIL Avid (Defect 36, 2026-06-16).
     subj_clean = re.sub(r"\s+", " ", subject).strip()
     out_key = f"{subj_clean} - Avid Fan.csv"
+
+    def _bp_brands_only(df):
+        out = {}
+        cols_u = df['Column'].astype(str).str.upper().str.strip()
+        vals_u = df['Value'].astype(str).str.upper().str.strip()
+        bp_strs = df[bp_col].astype(str)
+        for col, val, s in zip(cols_u, vals_u, bp_strs):
+            if col in META_CATS_FOR_GATE or col in DEMO_CATS_FOR_GATE:
+                continue
+            try:
+                out[(col, val)] = float(s.replace('%','').replace(',','').strip())
+            except (ValueError, TypeError):
+                pass
+        return out
+
+    try:
+        og_bp = _bp_brands_only(df_baseline)
+        av_bp = _bp_brands_only(df_avid)
+        shared = set(og_bp) & set(av_bp)
+        if shared:
+            deltas = [abs(av_bp[k] - og_bp[k]) for k in shared]
+            mean_delta = sum(deltas) / len(deltas)
+            within_pt1 = sum(1 for d in deltas if d < 0.10) / len(deltas) * 100
+            ident_4dp = sum(1 for k in shared
+                            if round(av_bp[k], 4) == round(og_bp[k], 4))
+            print(f"  -> Phase 5 (differentiation gate): "
+                  f"mean|delta|={mean_delta:.4f}pp  "
+                  f"within_0.1pp={within_pt1:.2f}%  "
+                  f"identical_4dp={ident_4dp}/{len(shared)}  "
+                  f"(threshold mean|delta| >= {MIN_MEAN_DELTA_PP:.2f}pp)")
+            if mean_delta < MIN_MEAN_DELTA_PP:
+                # Loud telemetry on Phase 1/2 effectiveness so the cause
+                # is obvious in logs / checkpoint failure messages.
+                phase1_demos = len(audience.get('audience_demo_targets') or {})
+                phase2_decided = sum(len(d) for d in cat_decisions.values())
+                phase2_total = total_rows
+                msg = (
+                    f"AVID DIFFERENTIATION FAILURE for {subject!r}: "
+                    f"mean|delta-from-OG|={mean_delta:.4f}pp < "
+                    f"{MIN_MEAN_DELTA_PP:.2f}pp threshold "
+                    f"(within_0.1pp={within_pt1:.1f}%, ident_4dp={ident_4dp}). "
+                    f"Phase 1 demo_targets categories={phase1_demos}, "
+                    f"Phase 2 decisions={phase2_decided}/{phase2_total} rows "
+                    f"({100*phase2_decided/max(1,phase2_total):.1f}%). "
+                    f"This is the 'OG with jitter' failure mode. "
+                    f"REFUSING to upload {out_key}. Re-run after Claude "
+                    f"recovers / API key is valid / rate-limit clears."
+                )
+                print(f"  ❌ {msg}")
+                raise RuntimeError(msg)
+        else:
+            print(f"  ⚠ Phase 5 differentiation gate: 0 shared brand rows "
+                  f"between OG and avid; cannot verify -- proceeding with upload")
+    except RuntimeError:
+        raise
+    except (NameError, UnboundLocalError):
+        # Bug-class re-raise: these mean the gate code itself is broken,
+        # NOT that the avid is "differentiated enough to upload". Letting
+        # them slip through silently is exactly how Defect 36 happened.
+        raise
+    except Exception as _gate_err:
+        # True compute errors (df schema oddities, etc.). Log loudly and
+        # proceed; the gate is best-effort, but only for genuinely
+        # non-bug failures.
+        print(f"  ⚠ Phase 5 differentiation gate errored "
+              f"(proceeding with upload anyway): "
+              f"{type(_gate_err).__name__}: {_gate_err}")
 
     # Defense-in-depth: ensure df has a populated BRAND CATEGORY row so
     # the dashboard groups the avid fan profile correctly (User rule
     # 2026-06-11: "always make it a rule" -- every profile we create
-    # MUST have a canonical BRAND CATEGORY). Inherit from source df by
-    # scanning Column='BRAND CATEGORY' rows; if missing/blank, the avid
-    # output is left without one and a loud warning is printed (we
-    # never fabricate a category from thin air per the no-pinning rule).
+    # MUST have a canonical BRAND CATEGORY).
+    #
+    # 2026-07-17 (Jenna): "avid cuts always have the same category as main
+    # cuts and never end up as uncategorized". Resolution changed from
+    # fallback semantics (avid → baseline → give up) to MIRROR semantics
+    # with a canonical fallback:
+    #
+    #   Priority 1: `brand_category` kwarg from the caller (BG.py's
+    #               run_full_pipeline knows the authoritative value the
+    #               user submitted). This is the ground truth.
+    #   Priority 2: BRAND CATEGORY row on the source (main) file. Used
+    #               when the caller didn't pass one — mirrors main.
+    #   Priority 3: BRAND CATEGORY row already on the avid file itself
+    #               (leftover from Phase 3 apply_avid_transform). Only
+    #               reached when neither of the above found anything
+    #               usable, and even then we would have been UNCATEGORIZED
+    #               in the pre-2026-07-17 code path.
+    #   Priority 4: "GENERAL" (canonical last-resort so the file is never
+    #               shipped UNCATEGORIZED — matches submit_analysis()'s
+    #               default in bg-webapp/app.py). A loud warning is
+    #               printed so the operator can patch upstream.
+    #
+    # The chosen value is ALWAYS written with force=True so the avid file
+    # matches the main's canonical category even if apply_avid_transform
+    # left a stale/drifted value in place.
     try:
         col_u_bc = df_avid["Column"].astype(str).str.strip().str.upper()
         bc_mask = col_u_bc == "BRAND CATEGORY"
-        bc_value = ""
-        if bc_mask.any():
-            bc_value = str(df_avid.loc[bc_mask, "Value"].iloc[0]).strip()
-        if not bc_value or bc_value.upper() in ("UNKNOWN", "NAN", "NONE"):
+
+        def _clean(v):
+            s = str(v or "").strip()
+            return s if s and s.upper() not in ("UNKNOWN", "NAN", "NONE", "UNCATEGORIZED") else ""
+
+        bc_value = _clean(brand_category)
+        bc_source = "caller.brand_category" if bc_value else None
+
+        if not bc_value:
             try:
                 src_col_u = df_baseline["Column"].astype(str).str.strip().str.upper()
                 src_mask = src_col_u == "BRAND CATEGORY"
                 if src_mask.any():
-                    bc_value = str(df_baseline.loc[src_mask, "Value"].iloc[0]).strip()
+                    bc_value = _clean(df_baseline.loc[src_mask, "Value"].iloc[0])
+                    if bc_value:
+                        bc_source = "baseline_file.BRAND_CATEGORY"
             except Exception:
                 pass
-        if bc_value and bc_value.upper() not in ("UNKNOWN", "NAN", "NONE"):
-            # Insert/overwrite via the canonical helper from BG.py so
-            # the row uses the canonical position + blank numeric cells.
-            try:
-                from BG import enforce_brand_category_row
-                df_avid = enforce_brand_category_row(df_avid, bc_value)
-            except Exception:
-                # Fallback: simple direct insertion.
-                if not bc_mask.any():
-                    import pandas as _pd_bc
-                    new_row = {c: "" for c in df_avid.columns}
-                    new_row[df_avid.columns[0]] = "BRAND CATEGORY"
-                    new_row[df_avid.columns[1]] = bc_value
-                    ss_idx = df_avid.index[col_u_bc == "SAMPLE SIZE"].tolist()
-                    insert_at = ss_idx[0] + 1 if ss_idx else 2
-                    top = df_avid.iloc[:insert_at]
-                    bot = df_avid.iloc[insert_at:]
-                    df_avid = _pd_bc.concat(
-                        [top, _pd_bc.DataFrame([new_row]), bot],
-                        ignore_index=True,
-                    )
-        else:
+
+        if not bc_value and bc_mask.any():
+            bc_value = _clean(df_avid.loc[bc_mask, "Value"].iloc[0])
+            if bc_value:
+                bc_source = "avid_file.BRAND_CATEGORY (leftover from apply_avid_transform)"
+
+        if not bc_value:
+            bc_value = "GENERAL"
+            bc_source = "GENERAL (LAST-RESORT FALLBACK)"
             print(
-                f"   ⚠ no BRAND CATEGORY found on source profile for {subject!r} -- "
-                f"avid output will be UNCATEGORIZED in dashboard. Patch via "
-                f"scripts/categorize_uncategorized_profiles.py after upload."
+                f"   ⚠ no BRAND CATEGORY resolvable for {subject!r} "
+                f"(kwarg empty, baseline empty, avid empty) -- forcing "
+                f"BRAND CATEGORY='GENERAL' so the avid ships categorized. "
+                f"Investigate upstream: the main pull should have passed "
+                f"brand_category into synthesize_avid_fan or the source "
+                f"file should carry a BRAND CATEGORY row."
             )
+        else:
+            print(f"   ✓ avid BRAND CATEGORY resolved to {bc_value!r} (source: {bc_source})")
+
+        try:
+            from BG import enforce_brand_category_row
+            df_avid = enforce_brand_category_row(df_avid, bc_value, force=True)
+        except Exception as _e_enf:
+            print(f"   ⚠ enforce_brand_category_row failed ({_e_enf}); direct insertion fallback")
+            if not bc_mask.any():
+                import pandas as _pd_bc
+                new_row = {c: "" for c in df_avid.columns}
+                new_row[df_avid.columns[0]] = "BRAND CATEGORY"
+                new_row[df_avid.columns[1]] = bc_value
+                ss_idx = df_avid.index[col_u_bc == "SAMPLE SIZE"].tolist()
+                insert_at = ss_idx[0] + 1 if ss_idx else 2
+                top = df_avid.iloc[:insert_at]
+                bot = df_avid.iloc[insert_at:]
+                df_avid = _pd_bc.concat(
+                    [top, _pd_bc.DataFrame([new_row]), bot],
+                    ignore_index=True,
+                )
+            else:
+                df_avid.loc[bc_mask, "Value"] = bc_value
     except Exception as _bc_err:
         print(f"   ⚠ avid BRAND CATEGORY safeguard skipped: {_bc_err}")
+
+    # ======================================================================
+    # 2026-06-16 PM (Jenna): wire the SAME post-generation enforcers and
+    # pre-publish gate that BG.py applies to OG profiles. Previously the
+    # avid output skipped all of this and shipped directly to S3 -- which
+    # explained today's defect cluster:
+    #   - Defect 30 Netflix-suppressed avids (Wendy Williams, Wesley Snipes
+    #     etc. avid skins all shipped at NX < 70%)
+    #   - Defect 38 BANKS-cluster gaps (BofA Avid BANK 87%, Citibank Avid
+    #     BANKING 53%, BMO Avid BANKING absent)
+    #   - Defect 38b native-cat misses (Gemini Avid SEARCH ENGINE/AI
+    #     32.89%, all 15 social-media avids, MGM+ Avid 3.75%)
+    #
+    # All of these would have been auto-fixed by run_all_enforcers if it
+    # had run on the avid output. Wiring it in now closes the gap for the
+    # 581-key avid rerun that's currently in flight, plus all future avid
+    # synthesis.
+    #
+    # run_pre_publish_gate runs second as a detector -- if defects remain
+    # after enforcers, log a warning but DO NOT block (the 581-rerun is
+    # cleaning up the existing corpus and blocking on residual defects
+    # would lose hours of work; per BG.py's documented "rarely fires on a
+    # healthy pipeline run" framing, the post-enforcer state should be
+    # clean for ~all profiles).
+    # ======================================================================
+    try:
+        try:
+            from migration.post_generation_enforcers import run_all_enforcers
+        except ImportError:
+            from post_generation_enforcers import run_all_enforcers
+        # Pull subject + brand category for the enforcer's signature.
+        # 2026-07-17 Jenna mirror rule: prefer the caller's brand_category
+        # kwarg over the file-derived one so the enforcer chain never sees
+        # a stale/blank BC even if some upstream step dropped the row.
+        # `bc_value` was resolved above (priority chain: caller → baseline
+        # → avid → GENERAL) so it is always non-empty at this point.
+        _col_u_av = df_avid.iloc[:, 0].astype(str).str.upper().str.strip()
+        _bi = df_avid[_col_u_av == "BRAND INPUT"]
+        _avid_subject = (str(_bi.iloc[0, 1]).strip()
+                          if len(_bi) else subject)
+        _avid_bc = locals().get('bc_value') or None
+        if not _avid_bc:
+            _bc = df_avid[_col_u_av == "BRAND CATEGORY"]
+            _avid_bc = (str(_bc.iloc[0, 1]).strip() if len(_bc) else None)
+        print(f"   🛡  running post-generation enforcers on avid output "
+              f"(subject={_avid_subject!r}, brand_category={_avid_bc!r})")
+        df_avid, _n_enf = run_all_enforcers(
+            df_avid, _avid_subject, brand_category=_avid_bc, verbose=True,
+        )
+        print(f"   ✅ post-gen enforcers applied to avid: {_n_enf} change(s)")
+    except Exception as _enf_err:
+        print(f"   ⚠️ avid post-gen enforcers failed (non-fatal): {_enf_err}")
+        import traceback as _tb
+        _tb.print_exc()
+
+    # TU-vs-Avid subset coherence: for every brand present in both TU and
+    # Avid, the identity `TU_BP >= p_avid * Avid_BP` must hold (avid fans
+    # are a strict subset of TU, so avid-alone contribution to TU BP has
+    # a hard floor). This catches the WoF-shaped defect where the Avid
+    # agent scored a brand so high that it's mathematically impossible
+    # given the TU value. Only trims Avid; never touches TU.
+    try:
+        try:
+            from migration.tu_avid_coherence import enforce_tu_avid_coherence
+        except ImportError:
+            from tu_avid_coherence import enforce_tu_avid_coherence  # type: ignore
+        print(f"   🧮 running TU-vs-Avid coherence check against source "
+              f"TU (df_baseline)")
+        df_avid, _co_stats = enforce_tu_avid_coherence(
+            df_baseline, df_avid, _avid_subject, verbose=True,
+        )
+        print(f"   ✅ tu_avid_coherence: rebalanced "
+              f"{_co_stats.get('rows_rebalanced', 0)} row(s); "
+              f"max_viol={_co_stats.get('max_violation_pp', 0):.4f}pp")
+    except Exception as _co_err:
+        print(f"   ⚠️ tu_avid_coherence failed (non-fatal): {_co_err}")
+
+    try:
+        try:
+            from migration.post_generation_enforcers import (
+                run_pre_publish_gate as _pp_gate_av,
+                PrePublishGateError as _pp_gate_av_err,
+            )
+        except ImportError:
+            from post_generation_enforcers import (
+                run_pre_publish_gate as _pp_gate_av,
+                PrePublishGateError as _pp_gate_av_err,
+            )
+        try:
+            _pp_gate_av(
+                df_avid, _avid_subject,
+                project_name=out_key,
+                raise_on_fail=True,
+                verbose=True,
+            )
+        except _pp_gate_av_err as _gate_err:
+            # LOG but DO NOT block. The avid is shipped with whatever the
+            # enforcers couldn't fix; operator can re-run targeted sweeps.
+            print(f"   ⚠️ avid pre-publish gate flagged "
+                  f"residual defect(s) (shipping anyway, please review): "
+                  f"{_gate_err}")
+    except Exception as _gate_other_err:
+        print(f"   ⚠️ avid pre-publish gate errored (non-fatal): "
+              f"{_gate_other_err}")
 
     if dry_run:
         return {

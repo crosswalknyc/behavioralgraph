@@ -178,8 +178,23 @@ def _compute_deterministic_cohort_fraction(
     if a_mask.any():
         avid_pct = _fbp(df_source.loc[a_mask, bp_col].iloc[0])
     if avid_pct is None:
-        # No avid intensity row in source -- can't derive subset fraction.
-        # Fall back to gender split alone (caller can override).
+        # No AVID FAN intensity row in source -- can't derive the subset
+        # fraction deterministically. Two known paths reach this branch:
+        #   1. Genuine ingestion gap on the source file (old / non-standard).
+        #   2. Source was produced after 2026-07-20 when the pipeline
+        #      started stripping AVID FAN rows per Jenna's mandate.
+        # For case (2) the correct workflow is to source avid gender-cuts
+        # from the AVID FAN CSV instead of the OG (that path takes the
+        # `source_intensity == "avid"` early-return above and never hits
+        # this branch). Fall back to gender_pct alone here so we don't
+        # crash; warn loudly so the operator can re-source if it matters.
+        print(f"   ⚠️  _compute_deterministic_cohort_fraction: source has "
+              f"no AVID FAN row (post-2026-07-20 pipeline outputs no "
+              f"longer include it). Falling back to gender_pct alone for "
+              f"gender={gender!r} intensity={intensity!r} "
+              f"source_intensity={source_intensity!r} -- for accurate "
+              f"avid_{gender.upper()} sizing, source from the AVID FAN "
+              f"CSV instead of the OG/main CSV.")
         return max(0.005, min(0.995, gender_pct / 100.0))
 
     combined = (gender_pct / 100.0) * (avid_pct / 100.0)
@@ -458,16 +473,21 @@ def _audience_summary_text(audience: dict, gender: str, intensity: str) -> str:
 
 def _format_category_user(subject: str, audience_summary: str,
                           category: str, rows: list,
-                          gender: str, intensity: str) -> str:
+                          gender: str, intensity: str,
+                          persona_brief: str = "") -> str:
     g_word = "FEMALE" if gender.upper() == "F" else "MALE"
     L = [f"SUBJECT: {subject}",
          f"GENDER PIN: {gender.upper()} ({g_word})",
          f"INTENSITY: {intensity.lower()}",
          "AUDIENCE PROFILE:",
          audience_summary,
-         "",
+         ""]
+    if persona_brief:
+        L.append(persona_brief)
+        L.append("")
+    L.extend([
          f"CATEGORY: {category}",
-         f"ITEMS ({len(rows)} rows, source_bp = current value in source profile):"]
+         f"ITEMS ({len(rows)} rows, source_bp = current value in source profile):"])
     for label, bp in rows:
         L.append(f"  - {label} :: source_bp={bp:.4f}")
     L.append("")
@@ -482,17 +502,47 @@ def _format_category_user(subject: str, audience_summary: str,
 
 def reason_category_rows_cut(subject: str, audience: dict, category: str,
                              rows: list, gender: str, intensity: str,
-                             *, chunk_size: int = 200) -> dict:
+                             *, chunk_size: int = 200,
+                             df_source=None) -> dict:
     """Phase 2 Claude call -- reasons over EVERY row in the category (no
     top-N truncation, no priority gating). Long lists are split into
     sequential chunks of `chunk_size` rows so the agent gets the full
     list across calls; decisions from each chunk are merged.
 
     Per Jenna 2026-06-12: "no caps on anything anywhere for agents".
+
+    df_source (optional): if provided, an audience-archetype-aware
+    persona brief with ELEVATE / ATTENUATE / PANEL-ANCHOR clusters is
+    generated via `migration.persona_briefs.build_category_persona_brief`
+    and appended to the user prompt. When (category, archetype) has no
+    explicit brief, the append is a no-op.
     """
     if not rows:
         return {}
     audience_summary = _audience_summary_text(audience, gender, intensity)
+
+    persona_brief = ""
+    if df_source is not None:
+        try:
+            from migration.persona_briefs import (
+                build_category_persona_brief,
+            )
+        except Exception:
+            try:
+                from persona_briefs import (  # type: ignore
+                    build_category_persona_brief,
+                )
+            except Exception:
+                build_category_persona_brief = None  # type: ignore
+        if build_category_persona_brief is not None:
+            try:
+                persona_brief = build_category_persona_brief(
+                    subject, category, df_source,
+                )
+            except Exception as e:
+                print(f"[audience-cut] persona_brief build failed for "
+                      f"{category}: {e}")
+                persona_brief = ""
 
     try:
         from claude_client import claude_messages
@@ -510,6 +560,7 @@ def reason_category_rows_cut(subject: str, audience: dict, category: str,
             chunk_label = category
         user = _format_category_user(
             subject, audience_summary, chunk_label, chunk, gender, intensity,
+            persona_brief=persona_brief,
         )
         try:
             resp = claude_messages(
@@ -927,6 +978,7 @@ def synthesize_audience_cut(
             continue
         decisions = reason_category_rows_cut(
             subject, audience, cat, rows, gender, intensity,
+            df_source=df_source,
         )
         if decisions:
             cat_decisions[cat] = decisions
