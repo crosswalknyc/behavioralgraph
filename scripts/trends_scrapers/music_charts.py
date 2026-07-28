@@ -1,6 +1,7 @@
 """
 Music charts scraper - Spotify Top 200, Apple Music Top 100, Shazam
-Top 200, TikTok Sounds, and Amazon Music All Hits.
+Top 200, YouTube Music (US weekly), TikTok Sounds, and Amazon Music
+All Hits.
 
 Aggregates the biggest free (and cookie-donated) music trending signals
 into a single snapshot the dashboard renders as one tab:
@@ -8,6 +9,8 @@ into a single snapshot the dashboard renders as one tab:
     Spotify Daily Top 200 US -> mainstream streaming (via kworb.net)
     Apple Music Top 100 US   -> what Apple Music subscribers play
     Shazam Top 200 US        -> what people are IDing right now (discovery)
+    YouTube Music US Weekly  -> what's most-played on YouTube in the US
+                                (via kworb.net, YouTube's own stream data)
     TikTok Trending Sounds   -> what's about to hit the charts (leading)
     Amazon Music All Hits    -> Amazon's editorial flagship hits
                                 playlist (needs music.amazon.com cookies)
@@ -23,6 +26,7 @@ Snapshot shape (kind='music'):
         "spotify":  {"label": "Spotify Daily Top 200 (US)", "items": [{...}]},
         "apple":    {"label": "Apple Music Top 100 (US)",   "items": [{...}]},
         "shazam":   {"label": "Shazam Top 200 (US)",        "items": [{...}]},
+        "youtube":  {"label": "YouTube Music (US)",         "items": [{...}]},
         "tiktok":   {"label": "TikTok Sounds",              "items": [{...}], "available": bool},
         "amazon":   {"label": "Amazon Music: All Hits (US)", "items": [{...}], "available": bool}
       }
@@ -180,6 +184,90 @@ def _fetch_shazam(limit: int = 100) -> list[dict]:
             'title':  title,
             'artist': artist,
             'url':    f'https://www.shazam.com/search?q={q}',
+        })
+        if len(items) >= limit:
+            break
+    return items
+
+
+# ---------------------------------------------------------------------------
+# YouTube Music US Weekly  (via kworb.net)
+# ---------------------------------------------------------------------------
+# YouTube's own charts pages (charts.youtube.com/charts/TopSongs/us/weekly)
+# are a heavy Angular SPA that requires Playwright to hydrate. kworb.net's
+# `/youtube/insights/us.html` is community-standard for this data: it
+# aggregates weekly view counts directly from YouTube's own stream data
+# and publishes them as a clean HTML table refreshed weekly. Every major
+# music-industry tracker uses this feed for YouTube ranking.
+#
+# Row format on the page:
+#   <tr ><td class="np">1</td>
+#     <td class="np">=</td>                            (rank change)
+#     <td class="text mp"><div>Artist - Track</div></td>
+#     <td>Wks</td><td>Peak</td><td>(xN)</td>
+#     <td>8,580,866</td>                                (streams this week)
+#     <td>+2,730,838</td>                               (delta)
+#   </tr>
+_YTM_URL = 'https://kworb.net/youtube/insights/us.html'
+
+# Same anchor pattern as _KWORB_ROW_RE but without the artist/track
+# anchor tags: kworb's YouTube page collapses artist + title into a
+# single `<div>Artist - Track</div>` text node.
+_YTM_ROW_RE = re.compile(
+    r'<tr[^>]*>\s*<td class="np">(\d+)</td>\s*'
+    r'<td class="np">[^<]*</td>\s*'
+    r'<td class="text mp"><div>([^<]+)</div></td>',
+    re.DOTALL,
+)
+
+
+def _fetch_youtube_music(limit: int = 100) -> list[dict]:
+    """Parse kworb's US YouTube weekly chart table. Rows read as
+    'Artist - Track'; we split on the first ' - ' to recover both.
+    Deep-link goes to a YouTube Music search since kworb doesn't
+    expose the video ID.
+
+    Silent failure returns [] - the snapshot still writes with the
+    other sources so the card just goes blank for one day."""
+    try:
+        r = requests.get(_YTM_URL, headers={'User-Agent': _UA,
+                                             'Accept': 'text/html'},
+                          timeout=20)
+    except Exception as e:
+        logger.warning("youtube music (kworb): %s", e)
+        return []
+    if not r.ok:
+        logger.warning("youtube music (kworb): http %s", r.status_code)
+        return []
+    items: list[dict] = []
+    for m in _YTM_ROW_RE.finditer(r.text or ''):
+        try:
+            rank = int(m.group(1))
+        except ValueError:
+            continue
+        combined = _html.unescape((m.group(2) or '').strip())
+        if not combined:
+            continue
+        # Split on the FIRST " - " so titles containing hyphens
+        # (e.g. "Love The Way You Lie (feat. Rihanna)" isn't affected
+        # but "TOTO - Africa" splits cleanly). "Artist - Track" is
+        # kworb's stable format.
+        if ' - ' in combined:
+            artist, title = combined.split(' - ', 1)
+            artist = artist.strip()
+            title  = title.strip()
+        else:
+            # Track only (rare - usually a compilation entry).
+            artist = ''
+            title  = combined
+        if not title:
+            continue
+        q = requests.utils.quote(f'{title} {artist}'.strip())
+        items.append({
+            'rank':   rank,
+            'title':  title,
+            'artist': artist,
+            'url':    f'https://music.youtube.com/search?q={q}',
         })
         if len(items) >= limit:
             break
@@ -937,19 +1025,21 @@ def fetch() -> dict[str, Any]:
     spotify_items = _fetch_spotify(limit=100)
     apple_items   = _fetch_apple(limit=100)
     shazam_items  = _fetch_shazam(limit=100)
+    ytm_items     = _fetch_youtube_music(limit=100)
     tt_items, tt_meta = _fetch_tiktok_sounds(limit=40)
     amz_items, amz_sub = _fetch_amazon_music(limit=100)
 
     # Backfill artwork thumbnails from iTunes Search API for every
     # source that doesn't ship its own image field. Shared cache so a
-    # track that appears on both Spotify and Shazam is only looked up
-    # once. Apple items already carry `artworkUrl100` from the RSS,
-    # so `_enrich_with_itunes_artwork` no-ops on them. TikTok items
-    # rarely have artist metadata, but we run enrichment anyway - it
-    # skips items missing artist/title.
+    # track that appears on multiple charts is only looked up once.
+    # Apple items already carry `artworkUrl100` from the RSS, so
+    # `_enrich_with_itunes_artwork` no-ops on them. TikTok items rarely
+    # have artist metadata, but we run enrichment anyway - it skips
+    # items missing artist/title.
     art_cache: dict[tuple[str, str], str] = {}
     _enrich_with_itunes_artwork(spotify_items, art_cache)
     _enrich_with_itunes_artwork(shazam_items,  art_cache)
+    _enrich_with_itunes_artwork(ytm_items,     art_cache)
     _enrich_with_itunes_artwork(tt_items,      art_cache)
     logger.info("itunes artwork cache: %d unique lookups", len(art_cache))
 
@@ -975,7 +1065,8 @@ def fetch() -> dict[str, Any]:
         # snapshot summary in _index.json shows a useful count. The real
         # breakdown lives in `sources` and is what compute_view reads.
         'national': spotify_items[:50] or apple_items[:50],
-        'available': bool(spotify_items or apple_items or shazam_items or tt_items),
+        'available': bool(spotify_items or apple_items or shazam_items
+                          or ytm_items or tt_items),
         'sources': {
             'spotify': {
                 'label':     'Spotify Daily Top 200 (US)',
@@ -988,6 +1079,12 @@ def fetch() -> dict[str, Any]:
                 'sub':       'What Apple Music subscribers are playing.',
                 'items':     apple_items,
                 'available': bool(apple_items),
+            },
+            'youtube': {
+                'label':     'YouTube Music (US)',
+                'sub':       'What people are watching and listening to on YouTube.',
+                'items':     ytm_items,
+                'available': bool(ytm_items),
             },
             'tiktok': {
                 'label':          'TikTok Sounds (7d)',

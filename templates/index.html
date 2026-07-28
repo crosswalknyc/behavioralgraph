@@ -44464,7 +44464,7 @@
                 { key: 'people',    label: 'Trending people',  count: counts.people    || 0, icon: '👤',
                   tip: 'Trending people: Individuals rising across news, Wikipedia interest, social, and search. Each row shows a one-line "why they are trending" caption and a direction indicator (up, down, or stable).' },
                 { key: 'music',     label: 'Music',            count: counts.music     || 0, icon: '🎵',
-                  tip: 'Music: Spotify, Apple Music, Shazam, and Amazon Music. What people are streaming, playing, and identifying right now.' },
+                  tip: 'Music: Spotify, Apple Music, YouTube Music, Shazam, and Amazon Music. What people are streaming, playing, and identifying right now.' },
                 { key: 'podcasts',  label: 'Podcasts',         count: counts.podcasts  || 0, icon: '🎙️',
                   tip: 'Podcasts: Trending shows on Apple Podcasts, Spotify, Amazon Music, and Audible.' },
                 { key: 'books',     label: 'Books',            count: counts.books     || 0, icon: '📚',
@@ -45744,7 +45744,7 @@
             // flagship playlist - ~57 tracks). If cookies expire the card
             // gracefully falls back to a "warming up" placeholder with an
             // operator instruction.
-            var keys = ['spotify', 'apple', 'shazam', 'amazon'];
+            var keys = ['spotify', 'apple', 'youtube', 'shazam', 'amazon'];
             var present = keys.filter(function(k) { return sources[k]; });
             if (!present.length) {
                 return '<div class="tiq-empty">Music charts are warming up. Check back later.</div>';
