@@ -21758,8 +21758,7 @@
                             <span class="marketing-section-sub">Talent whose own audiences over-index against this profile, grouped by talent subcategory (Actors, Musicians / Bands, Athletes, Hosts / Personalities, Creators / Influencers, and more). Each subcategory surfaces its top 6 alignments, with overlap %, index, fit score, best platforms to activate, audience match, and the rationale for the pick.</span>
                         </div>
                         <div id="marketingCreatorControls" class="marketing-creator-controls" style="display:none;">
-                            <label for="creatorTypeSort" class="marketing-creator-sort-label">Sort by Creator Type</label>
-                            <select id="creatorTypeSort" class="marketing-creator-sort" onchange="_mkOnCreatorTypeChange(this)"></select>
+                            <select id="creatorTypeSort" class="marketing-creator-sort" onchange="_mkOnCreatorTypeChange(this)" aria-label="Sort by Creator Type"></select>
                         </div>
                         <div id="marketingCreatorRoster" class="marketing-partners-wrap"></div>
                     </section>
@@ -88645,7 +88644,7 @@
                         _mkCreatorTypeFilter = 'all';
                     }
                     if (sortSel) {
-                        sortSel.innerHTML = ['<option value="all">All Creator Types</option>']
+                        sortSel.innerHTML = ['<option value="all">Sort by Creator Type</option>']
                             .concat(availGroups.map(g => `<option value="${g.key}">${g.icon} ${g.title}</option>`))
                             .join('');
                         sortSel.value = _mkCreatorTypeFilter;
@@ -88691,8 +88690,15 @@
                         </div>`;
                 };
 
-                const html = groupDefs
-                    .filter(g => _mkCreatorTypeFilter === 'all' || g.key === _mkCreatorTypeFilter)
+                // "Sort by Creator Type": bring the chosen subcategory to the
+                // top of the list; all other subcategories stay below in their
+                // default order (stable sort). 'all' keeps the default order.
+                const orderedGroups = groupDefs.slice();
+                if (_mkCreatorTypeFilter !== 'all') {
+                    orderedGroups.sort((a, b) =>
+                        (b.key === _mkCreatorTypeFilter ? 1 : 0) - (a.key === _mkCreatorTypeFilter ? 1 : 0));
+                }
+                const html = orderedGroups
                     .map(g => {
                     const items = (buckets[g.key] || []).slice(0, 6);
                     if (!items.length) return '';
