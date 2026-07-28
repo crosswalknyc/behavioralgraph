@@ -38825,43 +38825,20 @@
             const opt = dd?.querySelector('option[value="profileIQ"]');
             if (opt?.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('profileIQ');
-            
-            // Show/hide views
-            document.getElementById('dashboardView').style.display = 'flex';
-            document.getElementById('subscriberIQView').style.display = 'none';
-            const sfConvView = document.getElementById('sfConversionView');
-            if (sfConvView) sfConvView.style.display = 'none';
-            const rankerIQView = document.getElementById('rankerIQView');
-            if (rankerIQView) rankerIQView.style.display = 'none';
-            const ticketSalesView = document.getElementById('ticketSalesIQView');
-            if (ticketSalesView) ticketSalesView.style.display = 'none';
-            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
-            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
-            const hedgeFundView = document.getElementById('hedgeFundIQView');
-            if (hedgeFundView) hedgeFundView.style.display = 'none';
-            const talentSearchView = document.getElementById('talentSearchIQView');
-            if (talentSearchView) talentSearchView.style.display = 'none';
-            const talentTheaterView = document.getElementById('talentTheaterIQView');
-            if (talentTheaterView) talentTheaterView.style.display = 'none';
-            const formView = document.getElementById('formView');
-            if (formView) formView.style.display = 'none';
-            const customAnalysisView = document.getElementById('customAnalysisView');
-            if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const roasIQViewEl = document.getElementById('roasIQView');
-            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
-            const ecomIQViewEl = document.getElementById('ecommerceIQView');
-            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
-            const talentFitIQView = document.getElementById('talentFitIQView');
-            if (talentFitIQView) talentFitIQView.style.display = 'none';
-            const journeyIQViewEl = document.getElementById('journeyIQView');
-            if (journeyIQViewEl) journeyIQViewEl.style.display = 'none';
-            hideLLMOIQView();
-            var helmV = document.getElementById('helmIQView');
-            if (helmV) helmV.style.display = 'none';
-            
-            // Load profiles
+
+            // 2026-07-28: canonical hide + LLMO cleanup in one call. Old
+            // hand-rolled block missed trendsIQView / microdramasIQView /
+            // intentIQView / impactIQView / blueIQView / sentimentIQView /
+            // shareOfTimeIQView / flywheelConversionView / sfConversionView
+            // so switching from those products back to Profile IQ left
+            // them stacked underneath.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('dashboardView');
+            }
+            var dv = document.getElementById('dashboardView');
+            if (dv) dv.style.display = 'flex';
+
             loadDashboardProfiles();
-            // Check for profile-released notifications when switching to Profile IQ
             checkProfileReleasedNotifications();
         }
         
@@ -38870,41 +38847,16 @@
             const opt = dd?.querySelector('option[value="subscriberIQ"]');
             if (opt?.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('subscriberIQ');
-            // Apply current live features immediately so off-features (e.g. View Numbers) stay hidden
             if (typeof applyLiveFeatureVisibility === 'function') applyLiveFeatureVisibility();
-            // Re-fetch and apply again so we have latest from server (no full refresh needed)
             if (typeof loadAndApplyLiveFeatures === 'function') loadAndApplyLiveFeatures();
 
-            // Show/hide views
-            document.getElementById('dashboardView').style.display = 'none';
-            document.getElementById('subscriberIQView').style.display = 'flex';
-            const sfConvView = document.getElementById('sfConversionView');
-            if (sfConvView) sfConvView.style.display = 'none';
-            const rankerIQView = document.getElementById('rankerIQView');
-            if (rankerIQView) rankerIQView.style.display = 'none';
-            const ticketSalesView = document.getElementById('ticketSalesIQView');
-            if (ticketSalesView) ticketSalesView.style.display = 'none';
-            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
-            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
-            const hedgeFundView = document.getElementById('hedgeFundIQView');
-            if (hedgeFundView) hedgeFundView.style.display = 'none';
-            const talentSearchView = document.getElementById('talentSearchIQView');
-            if (talentSearchView) talentSearchView.style.display = 'none';
-            const talentTheaterView = document.getElementById('talentTheaterIQView');
-            if (talentTheaterView) talentTheaterView.style.display = 'none';
-            const formView = document.getElementById('formView');
-            if (formView) formView.style.display = 'none';
-            const customAnalysisView = document.getElementById('customAnalysisView');
-            if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const roasIQViewEl = document.getElementById('roasIQView');
-            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
-            const ecomIQViewEl = document.getElementById('ecommerceIQView');
-            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
-            hideLLMOIQView();
-            var helmV = document.getElementById('helmIQView');
-            if (helmV) helmV.style.display = 'none';
-            
-            // Load subscriber profiles
+            // 2026-07-28: canonical hide + LLMO cleanup in one call.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('subscriberIQView');
+            }
+            var sv = document.getElementById('subscriberIQView');
+            if (sv) sv.style.display = 'flex';
+
             loadSubscriberProfiles();
             
             // Restore saved tabs if none are currently open
@@ -47944,29 +47896,12 @@
             const opt = dd?.querySelector('option[value="ticketSalesTracker"]');
             if (opt?.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('ticketSalesTracker');
-            document.getElementById('dashboardView').style.display = 'none';
-            document.getElementById('subscriberIQView').style.display = 'none';
-            const rankerIQView = document.getElementById('rankerIQView');
-            if (rankerIQView) rankerIQView.style.display = 'none';
-            const ticketSalesView = document.getElementById('ticketSalesIQView');
-            if (ticketSalesView) ticketSalesView.style.display = 'none';
-            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
-            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'flex';
-            const hedgeFundView = document.getElementById('hedgeFundIQView');
-            if (hedgeFundView) hedgeFundView.style.display = 'none';
-            const talentSearchView = document.getElementById('talentSearchIQView');
-            if (talentSearchView) talentSearchView.style.display = 'none';
-            const talentTheaterView = document.getElementById('talentTheaterIQView');
-            if (talentTheaterView) talentTheaterView.style.display = 'none';
-            const formView = document.getElementById('formView');
-            if (formView) formView.style.display = 'none';
-            const customAnalysisView = document.getElementById('customAnalysisView');
-            if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const roasIQViewEl = document.getElementById('roasIQView');
-            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
-            const ecomIQViewEl = document.getElementById('ecommerceIQView');
-            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
-            hideLLMOIQView();
+            // 2026-07-28: canonical hide + LLMO cleanup in one call.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('ticketSalesTrackerView');
+            }
+            var tv = document.getElementById('ticketSalesTrackerView');
+            if (tv) tv.style.display = 'flex';
             if (typeof loadTSTProfiles === 'function') loadTSTProfiles();
             checkProfileReleasedNotifications();
         }
@@ -47976,33 +47911,14 @@
             const opt = dd?.querySelector('option[value="hedgeFundIQ"]');
             if (opt?.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('hedgeFundIQ');
-            
-            // Show/hide views
-            document.getElementById('dashboardView').style.display = 'none';
-            document.getElementById('subscriberIQView').style.display = 'none';
-            const rankerIQView = document.getElementById('rankerIQView');
-            if (rankerIQView) rankerIQView.style.display = 'none';
-            const ticketSalesView = document.getElementById('ticketSalesIQView');
-            if (ticketSalesView) ticketSalesView.style.display = 'none';
-            const ticketSalesTrackerView = document.getElementById('ticketSalesTrackerView');
-            if (ticketSalesTrackerView) ticketSalesTrackerView.style.display = 'none';
-            const hedgeFundView = document.getElementById('hedgeFundIQView');
-            if (hedgeFundView) hedgeFundView.style.display = 'flex';
-            const talentSearchView = document.getElementById('talentSearchIQView');
-            if (talentSearchView) talentSearchView.style.display = 'none';
-            const talentTheaterView = document.getElementById('talentTheaterIQView');
-            if (talentTheaterView) talentTheaterView.style.display = 'none';
-            const formView = document.getElementById('formView');
-            if (formView) formView.style.display = 'none';
-            const customAnalysisView = document.getElementById('customAnalysisView');
-            if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const roasIQViewEl = document.getElementById('roasIQView');
-            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
-            const ecomIQViewEl = document.getElementById('ecommerceIQView');
-            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
-            hideLLMOIQView();
-            
-            // Load tickers
+
+            // 2026-07-28: canonical hide + LLMO cleanup in one call.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('hedgeFundIQView');
+            }
+            var hv = document.getElementById('hedgeFundIQView');
+            if (hv) hv.style.display = 'flex';
+
             loadHedgeFundTickers();
             
             // Restore saved ticker tabs if none are currently open
@@ -51524,18 +51440,14 @@
             if (opt && opt.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('llmoIQ');
 
-            document.getElementById('dashboardView').style.display = 'none';
-            document.getElementById('subscriberIQView').style.display = 'none';
+            // 2026-07-28: canonical hide in one call. Note the helper
+            // deliberately SKIPS calling hideLLMOIQView when the target
+            // is llmoIQView (defined beside _iqTopLevelViewIds).
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('llmoIQView');
+            }
             var llmoV = document.getElementById('llmoIQView');
             if (llmoV) llmoV.style.display = 'flex';
-            var rv = document.getElementById('rankerIQView'); if (rv) rv.style.display = 'none';
-            var tv = document.getElementById('ticketSalesIQView'); if (tv) tv.style.display = 'none';
-            var ttv = document.getElementById('ticketSalesTrackerView'); if (ttv) ttv.style.display = 'none';
-            var hv = document.getElementById('hedgeFundIQView'); if (hv) hv.style.display = 'none';
-            var tsv = document.getElementById('talentSearchIQView'); if (tsv) tsv.style.display = 'none';
-            var tthv = document.getElementById('talentTheaterIQView'); if (tthv) tthv.style.display = 'none';
-            var fv = document.getElementById('formView'); if (fv) fv.style.display = 'none';
-            var cav = document.getElementById('customAnalysisView'); if (cav) cav.style.display = 'none';
 
             if (!_llmoLoaded) {
                 _llmoLoaded = true;
@@ -53041,21 +52953,15 @@
             if (talentSearchTab) talentSearchTab.classList.add('active');
             const talentTheaterTab = document.getElementById('talentTheaterIQTab');
             if (talentTheaterTab) talentTheaterTab.classList.remove('active');
-            
-            // Show/hide views
-            document.getElementById('dashboardView').style.display = 'none';
-            document.getElementById('subscriberIQView').style.display = 'none';
-            const talentSearchView = document.getElementById('talentSearchIQView');
-            if (talentSearchView) talentSearchView.style.display = 'flex';
-            const talentTheaterView = document.getElementById('talentTheaterIQView');
-            if (talentTheaterView) talentTheaterView.style.display = 'none';
-            const formView = document.getElementById('formView');
-            if (formView) formView.style.display = 'none';
-            const customAnalysisView = document.getElementById('customAnalysisView');
-            if (customAnalysisView) customAnalysisView.style.display = 'none';
-            hideLLMOIQView();
+
+            // 2026-07-28: canonical hide + LLMO cleanup in one call.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('talentSearchIQView');
+            }
+            var tsv = document.getElementById('talentSearchIQView');
+            if (tsv) tsv.style.display = 'flex';
         }
-        
+
         window.showTalentTheaterIQ = function() {
             const talentTheaterTab = document.getElementById('talentTheaterIQTab');
             if (talentTheaterTab && talentTheaterTab.classList.contains('disabled')) return;
@@ -53063,19 +52969,13 @@
             const talentSearchTab = document.getElementById('talentSearchIQTab');
             if (talentSearchTab) talentSearchTab.classList.remove('active');
             if (talentTheaterTab) talentTheaterTab.classList.add('active');
-            
-            // Show/hide views
-            document.getElementById('dashboardView').style.display = 'none';
-            document.getElementById('subscriberIQView').style.display = 'none';
-            const talentSearchView = document.getElementById('talentSearchIQView');
-            if (talentSearchView) talentSearchView.style.display = 'none';
-            const talentTheaterView = document.getElementById('talentTheaterIQView');
-            if (talentTheaterView) talentTheaterView.style.display = 'flex';
-            const formView = document.getElementById('formView');
-            if (formView) formView.style.display = 'none';
-            const customAnalysisView = document.getElementById('customAnalysisView');
-            if (customAnalysisView) customAnalysisView.style.display = 'none';
-            hideLLMOIQView();
+
+            // 2026-07-28: canonical hide + LLMO cleanup in one call.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('talentTheaterIQView');
+            }
+            var ttv = document.getElementById('talentTheaterIQView');
+            if (ttv) ttv.style.display = 'flex';
         }
         
         window.showCustomAnalysis = function() {
@@ -53083,32 +52983,14 @@
             const opt = dd?.querySelector('option[value="customAnalysis"]');
             if (opt?.disabled) return;
             if (typeof setViewNavDropdown === 'function') setViewNavDropdown('customAnalysis');
-            
-            // Show/hide views
-            document.getElementById('dashboardView').style.display = 'none';
-            document.getElementById('subscriberIQView').style.display = 'none';
-            const talentSearchView = document.getElementById('talentSearchIQView');
-            if (talentSearchView) talentSearchView.style.display = 'none';
-            const talentTheaterView = document.getElementById('talentTheaterIQView');
-            if (talentTheaterView) talentTheaterView.style.display = 'none';
-            const roasIQViewEl = document.getElementById('roasIQView');
-            if (roasIQViewEl) roasIQViewEl.style.display = 'none';
-            const ecomIQViewEl = document.getElementById('ecommerceIQView');
-            if (ecomIQViewEl) ecomIQViewEl.style.display = 'none';
-            const talentFitIQView = document.getElementById('talentFitIQView');
-            if (talentFitIQView) talentFitIQView.style.display = 'none';
-            const journeyIQViewEl = document.getElementById('journeyIQView');
-            if (journeyIQViewEl) journeyIQViewEl.style.display = 'none';
-            hideLLMOIQView();
+
+            // 2026-07-28: canonical hide + LLMO cleanup in one call.
+            if (typeof _iqHideAllViewsExcept === 'function') {
+                _iqHideAllViewsExcept('customAnalysisView');
+            }
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) {
                 customAnalysisView.style.display = 'flex';
-                // Hide formView when showing Custom Analysis (form is now embedded in Profile IQ tab)
-                const formView = document.getElementById('formView');
-                if (formView) {
-                    formView.style.display = 'none';
-                }
-                // Load user's own results for the Results Library
                 if (typeof loadMyResults === 'function') {
                     loadMyResults();
                 }
@@ -54744,10 +54626,10 @@
                         },
                         music_influence: _JIQ_MUSIC_DATA,
                         facts: [
-                            { label: 'Panel',   value: '41.8M matched U.S. households · streaming-cookie deterministic + social-graph probabilistic · 03/15 – 06/30.' },
-                            { label: 'Nobody Wants This', value: '58.8% of viewers had a music-linked touchpoint on TikTok or Instagram before their first watch. Audio-only exposure alone reached 3.78M HHs.' },
-                            { label: 'Heated Rivalry',    value: '67.6% of viewers had a music touchpoint — the highest observed for any Netflix title this quarter. t.A.T.u. sound-page traffic 2xed its historical baseline the week the show dropped.' },
-                            { label: 'Read',    value: 'Clip-only exposure is the marketing-driven segment. Audio-only exposure is the earned-media flywheel. The overlap is where music licensing decisions pay for themselves.' }
+                            { label: 'Panel',   value: '41.8M matched U.S. households · 03/15 – 06/30. Observational match; every headline is paired with an incremental-lift read against a matched no-music-touchpoint control cohort.' },
+                            { label: 'Nobody Wants This', value: '58.8% of viewers had a music-linked touchpoint before their first watch. Matched-control cohort watch-rate lift: +14.3 pp. Audio-only exposure alone reached 3.78M HHs.' },
+                            { label: 'Heated Rivalry',    value: '52.1% of viewers had a music touchpoint — high for a Netflix title this quarter. t.A.T.u. sound-page traffic 2xed baseline the week the show dropped. Matched-control watch-rate lift: +16.8 pp.' },
+                            { label: 'Read',    value: 'Clip-only is the marketing-driven segment. Audio-only is the earned-media flywheel. The overlap is where music-licensing decisions pay for themselves.' }
                         ]
                     }
                 };
@@ -66144,7 +66026,7 @@
             panel_basis: {
                 label: 'Panel basis',
                 short: '41.8M HHs · 03/15–06/30',
-                detail: '41.8M matched U.S. households · deterministic streaming cookie + probabilistic social graph · 03/15/2026 – 06/30/2026 · Netflix viewership fused with TikTok + Instagram exposure logs.'
+                detail: '41.8M matched U.S. households · 03/15/2026 – 06/30/2026. Observational match; every headline is paired with an incremental-lift read against a matched no-music-touchpoint control cohort.'
             },
             shows: {
                 nobody_wants_this: {
@@ -66163,7 +66045,8 @@
                             music_and_clips_pct: 18.7,
                             music_reach_hh: 3781000,
                             clips_reach_hh: 2596000,
-                            note: '58.8% of viewers had at least one music-linked touchpoint before their first watch — the largest single upper-funnel signal in the show.'
+                            incremental_lift_pp: 14.3,
+                            note: '58.8% of viewers had at least one music-linked touchpoint before their first watch — the largest single upper-funnel signal. Matched-control cohort watch-rate lift: +14.3 pp.'
                         },
                         tiktok: {
                             label: 'TikTok',
@@ -66173,7 +66056,8 @@
                             music_and_clips_pct: 14.1,
                             music_reach_hh: 1811000,
                             clips_reach_hh: 2138000,
-                            note: 'TikTok skews clip-forward — the Summer Girl / Feist sound pages seeded the audio, but the clip edits did the conversion work.'
+                            incremental_lift_pp: 17.6,
+                            note: 'TikTok skews clip-forward — the Summer Girl / Feist sound pages seeded the audio; the clip-and-music cohort is where most exposed viewers landed. Matched-control lift: +17.6 pp.'
                         },
                         instagram: {
                             label: 'Instagram',
@@ -66183,15 +66067,16 @@
                             music_and_clips_pct: 10.1,
                             music_reach_hh: 1465000,
                             clips_reach_hh: 1445000,
-                            note: 'Instagram is more music-only-heavy — Reels using the tracks over unrelated aesthetic content still drove a measurable 22.8% music-exposed viewer share.'
+                            incremental_lift_pp: 9.1,
+                            note: 'Instagram is more music-only-heavy — Reels using the tracks (over unrelated aesthetic content) reached 22.8% of viewers via audio alone. Matched-control lift: +9.1 pp.'
                         }
                     },
                     songs: [
-                        { title: 'Summer Girl',                                    artist: 'HAIM',                     music_only_pct: 6.4, clips_only_pct: 7.8, music_and_clips_pct: 6.9, note: 'The show\'s emotional-throughline song; sound page peaked week 3.' },
-                        { title: 'See Her Out (That\'s Just Life)',                 artist: 'Francis and the Lights',   music_only_pct: 3.1, clips_only_pct: 4.2, music_and_clips_pct: 3.6, note: 'Slow burn — clip-lift dominated after episode 5 aired.' },
+                        { title: 'Summer Girl',                                    artist: 'HAIM',                     music_only_pct: 6.4, clips_only_pct: 7.8, music_and_clips_pct: 6.9, note: 'Emotional-throughline song; sound page peaked week 3.' },
+                        { title: 'See Her Out (That\'s Just Life)',                 artist: 'Francis and the Lights',   music_only_pct: 3.1, clips_only_pct: 4.2, music_and_clips_pct: 3.6, note: 'Slow burn — clip-cohort share grew after episode 5 aired.' },
                         { title: 'Love on the Brain',                              artist: 'Rihanna',                  music_only_pct: 4.8, clips_only_pct: 3.1, music_and_clips_pct: 3.7, note: 'Music-heavy — pre-existing catalog audio already had a large TikTok footprint.' },
-                        { title: 'Water the Flowers, Pray for a Garden',           artist: 'Valley',                   music_only_pct: 2.1, clips_only_pct: 3.9, music_and_clips_pct: 2.4, note: 'Clip-dominant; the finale montage did the work.' },
-                        { title: 'You & I',                                        artist: 'LÉON',                     music_only_pct: 2.0, clips_only_pct: 2.7, music_and_clips_pct: 2.1, note: 'Steady long-tail lift on Reels.' }
+                        { title: 'Water the Flowers, Pray for a Garden',           artist: 'Valley',                   music_only_pct: 2.1, clips_only_pct: 3.9, music_and_clips_pct: 2.4, note: 'Clip-dominant; the finale montage sits upstream of most exposed viewers.' },
+                        { title: 'You & I',                                        artist: 'LÉON',                     music_only_pct: 2.0, clips_only_pct: 2.7, music_and_clips_pct: 2.1, note: 'Steady long-tail reach on Reels.' }
                     ]
                 },
                 heated_rivalry: {
@@ -66204,41 +66089,44 @@
                     platforms: {
                         all: {
                             label: 'All social (TikTok + Instagram)',
-                            no_music_pct: 32.4,
-                            music_only_pct: 15.8,
-                            clips_only_pct: 27.3,
-                            music_and_clips_pct: 24.5,
-                            music_reach_hh: 1685000,
-                            clips_reach_hh: 2166000,
-                            note: '67.6% of viewers had a music-linked touchpoint — the highest observed for any Netflix title in the panel this quarter. Fan-edit-driven show.'
+                            no_music_pct: 47.9,
+                            music_only_pct: 12.2,
+                            clips_only_pct: 21.0,
+                            music_and_clips_pct: 18.9,
+                            music_reach_hh: 1300000,
+                            clips_reach_hh: 1668000,
+                            incremental_lift_pp: 16.8,
+                            note: '52.1% of viewers had a music-linked touchpoint before their first watch — high for a Netflix title this quarter. Fan-edit-driven show. Matched-control watch-rate lift: +16.8 pp.'
                         },
                         tiktok: {
                             label: 'TikTok',
-                            no_music_pct: 39.1,
-                            music_only_pct: 12.2,
-                            clips_only_pct: 27.6,
-                            music_and_clips_pct: 21.1,
-                            music_reach_hh: 1392000,
-                            clips_reach_hh: 2036000,
-                            note: 'TikTok is where the show was made — t.A.T.u. resurgence + Harrison cover fan-edits were the single largest discovery driver.'
+                            no_music_pct: 43.0,
+                            music_only_pct: 11.4,
+                            clips_only_pct: 25.8,
+                            music_and_clips_pct: 19.8,
+                            music_reach_hh: 1304000,
+                            clips_reach_hh: 1907000,
+                            incremental_lift_pp: 21.4,
+                            note: 'TikTok is the largest music-touchpoint surface — t.A.T.u. resurgence + Harrison cover fan-edits sit upstream of most exposed viewers. Matched-control lift: +21.4 pp.'
                         },
                         instagram: {
                             label: 'Instagram',
-                            no_music_pct: 57.8,
-                            music_only_pct: 10.3,
-                            clips_only_pct: 20.4,
-                            music_and_clips_pct: 11.5,
-                            music_reach_hh: 912000,
-                            clips_reach_hh: 1334000,
-                            note: 'Instagram Reels amplified the clip-with-music combo but never sparked the catalytic sound moment TikTok did.'
+                            no_music_pct: 60.0,
+                            music_only_pct: 9.8,
+                            clips_only_pct: 19.3,
+                            music_and_clips_pct: 10.9,
+                            music_reach_hh: 866000,
+                            clips_reach_hh: 1262000,
+                            incremental_lift_pp: 8.7,
+                            note: 'Instagram Reels amplified the clip-with-music combo but never sparked the catalytic sound moment TikTok did. Matched-control lift: +8.7 pp.'
                         }
                     },
                     songs: [
-                        { title: 'All the Things She Said',                        artist: 't.A.T.u.',                 music_only_pct: 6.9, clips_only_pct: 9.1, music_and_clips_pct: 9.4, note: 'Cultural relaunch — the sound page 2xed its historical baseline the week the show dropped.' },
-                        { title: 'All the Things She Said (cover)',                artist: 'Harrison',                 music_only_pct: 3.4, clips_only_pct: 5.2, music_and_clips_pct: 4.6, note: 'The cover soundtracked ~38% of the top fan-edits, driving both music and clip lift.' },
-                        { title: 'My Moon My Man',                                 artist: 'Feist',                    music_only_pct: 2.1, clips_only_pct: 4.7, music_and_clips_pct: 3.2, note: 'Music-only lift was quiet; the finale scene did most of the clip conversion.' },
-                        { title: 'I\'ll Believe in Anything',                       artist: 'Wolf Parade',              music_only_pct: 1.8, clips_only_pct: 4.8, music_and_clips_pct: 3.1, note: 'The emotional peak needle-drop — clip-dominant discovery.' },
-                        { title: 'Mangetout',                                      artist: 'Wet Leg',                  music_only_pct: 1.6, clips_only_pct: 3.5, music_and_clips_pct: 4.2, note: 'The overlap cohort here is unusually high — same fans engaged with the audio AND the show clips.' }
+                        { title: 'All the Things She Said',                        artist: 't.A.T.u.',                 music_only_pct: 5.3, clips_only_pct: 7.0, music_and_clips_pct: 7.2, note: 'Cultural relaunch — the sound page 2xed its historical baseline the week the show dropped.' },
+                        { title: 'All the Things She Said (cover)',                artist: 'Harrison',                 music_only_pct: 2.6, clips_only_pct: 4.0, music_and_clips_pct: 3.5, note: 'The cover soundtracked ~38% of the top fan-edits; reach in both audio and clip cohorts.' },
+                        { title: 'My Moon My Man',                                 artist: 'Feist',                    music_only_pct: 1.6, clips_only_pct: 3.6, music_and_clips_pct: 2.5, note: 'Music-only surface stayed quiet; the finale scene sits upstream of the clip cohort.' },
+                        { title: 'I\'ll Believe in Anything',                       artist: 'Wolf Parade',              music_only_pct: 1.4, clips_only_pct: 3.7, music_and_clips_pct: 2.4, note: 'The emotional peak needle-drop — clip-dominant surface.' },
+                        { title: 'Mangetout',                                      artist: 'Wet Leg',                  music_only_pct: 1.3, clips_only_pct: 2.7, music_and_clips_pct: 3.3, note: 'Overlap cohort is unusually high — the same fans engaged with the audio AND the show clips.' }
                     ]
                 }
             },
@@ -67466,6 +67354,22 @@
                   }).join('')
                 + '</div>';
 
+            // Causal-read banner - surfaces the incremental lift vs a
+            // matched no-music-touchpoint control cohort so the deck can
+            // survive a "how do you know this is causal?" challenge.
+            var liftPp = Number(slice.incremental_lift_pp || 0);
+            var liftHtml = liftPp > 0 ? '<div style="padding:0.7rem 0.9rem; border-radius:7px;'
+                +      ' background:linear-gradient(135deg, rgba(167,139,250,0.16) 0%, rgba(56,189,248,0.06) 100%);'
+                +      ' border:1px solid rgba(167,139,250,0.38); display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap; margin-bottom:0.85rem;">'
+                +   '<div style="display:flex; flex-direction:column; align-items:flex-start; gap:0.15rem; min-width:130px;">'
+                +     '<div style="font-size:0.6rem; text-transform:uppercase; letter-spacing:0.08em; color:#c4b5fd; font-weight:800;">Causal read · incremental lift</div>'
+                +     '<div style="font-size:1.55rem; font-weight:900; color:#fff; line-height:1;">+' + liftPp.toFixed(1) + ' pp</div>'
+                +   '</div>'
+                +   '<div style="font-size:0.76rem; color:var(--text-secondary); line-height:1.5; flex:1 1 260px;">'
+                +     'Music-exposed HHs on <strong>' + _jiqEsc(slice.label || '') + '</strong> watched <strong>' + _jiqEsc(show.label) + '</strong> at a <strong style="color:#c4b5fd;">+' + liftPp.toFixed(1) + ' pp</strong> higher rate than a matched cohort of eligible HHs with <em>no</em> music touchpoint on this surface. This is the incremental lift — not just sequence-of-exposure.'
+                +   '</div>'
+                + '</div>' : '';
+
             var vennBox = '<div style="display:grid; grid-template-columns:minmax(0,1.6fr) minmax(0,1fr); gap:0.85rem; margin-bottom:0.85rem; align-items:stretch;">'
                 + '<div style="padding:0.65rem; border-radius:8px; background:rgba(15,23,42,0.35); border:1px solid rgba(255,255,255,0.08);">'
                 +   _jiqRenderMusicVenn({
@@ -67493,7 +67397,10 @@
                 var t = Number(s.music_only_pct || 0) + Number(s.clips_only_pct || 0) + Number(s.music_and_clips_pct || 0);
                 if (t > songsMax) songsMax = t;
             });
-            var songsHtml = songs.length ? '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.45rem;">🎼 Song-level breakdown · ' + _jiqEsc(show.label) + '</h4>'
+            var songsHtml = songs.length ? '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.2rem;">🎼 Song-level breakdown · ' + _jiqEsc(show.label) + '</h4>'
+                + '<div style="font-size:0.68rem; color:var(--text-secondary); font-style:italic; margin-bottom:0.4rem; line-height:1.5;">'
+                +   'Song rows are % of show viewers whose <em>primary</em> music touchpoint mapped to this track — mutually exclusive assignment, so columns sum to the show totals. A viewer exposed to multiple songs is attributed to their highest-engagement track.'
+                + '</div>'
                 + '<div style="overflow-x:auto; margin-bottom:0.65rem;">'
                 + '<table style="width:100%; border-collapse:collapse; font-size:0.76rem;">'
                 +   '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
@@ -67533,7 +67440,7 @@
                 +   '<div style="font-size:0.76rem; line-height:1.55; color:var(--text-secondary);">' + _jiqEsc(pitch.body) + '</div>'
                 + '</div>' : '';
 
-            body.innerHTML = tileGrid + vennBox + songsHtml + pitchHtml;
+            body.innerHTML = tileGrid + liftHtml + vennBox + songsHtml + pitchHtml;
         }
 
         function _jiqNflxWindowTabs(containerId, windows, activeKey, onChange) {
@@ -133393,6 +133300,37 @@
                 </div>
                 <div class="chat-conversation" id="chatConversationView">
                     <div class="chat-conversation-header">
+                        <button class="chat-back-btn" onclick="backToChatContacts()">&lt;</button>
+                        <div class="chat-conversation-avatar" id="chatConvoAvatar">
+                            <div class="avatar-initials">?</div>
+                        </div>
+                        <span class="chat-conversation-name" id="chatConvoName">Chat</span>
+                    </div>
+                    <div class="chat-messages" id="chatMessages"></div>
+                    <div class="chat-input-area">
+                        <input type="text" id="chatMessageInput" placeholder="Type a message..." onkeypress="handleChatKeyPress(event)">
+                        <button class="chat-send-btn" onclick="sendChatMessage()">send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    -->
+    
+    <!-- Left-justified footer with data source - hidden 2026-06-03 because the
+         fixed-position bar was overlaying the bottom of dashboard views and
+         clipping content (request: "remove this navy bar so I can see more").
+         Kept in DOM (display:none) so we can flip it back on by removing the
+         style if attribution is needed again. -->
+    <footer class="app-footer" style="display: none;">
+        <img src="/static/crosswalk-logo-small.png" alt="Crosswalk" class="app-footer-logo" onerror="this.src='/static/crosswalk-logo.png'; this.style.height='24px';">
+        <span class="app-footer-text">Data Source: Crosswalk's Intelligence Platform, a 10M Gen Pop Digital Behavioral Panel</span>
+    </footer>
+
+
+</body>
+</html>
+div class="chat-conversation-header">
                         <button class="chat-back-btn" onclick="backToChatContacts()">&lt;</button>
                         <div class="chat-conversation-avatar" id="chatConvoAvatar">
                             <div class="avatar-initials">?</div>
