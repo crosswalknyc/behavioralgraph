@@ -2549,6 +2549,34 @@
         body[data-theme="light"] .marketing-tier.politics  { color: #475569; }
         body[data-theme="light"] .marketing-tier.emerging  { color: #4d7c0f; }
         body[data-theme="light"] .marketing-tier.talent    { color: #475569; }
+        /* Creator Roster "Sort by Creator Type" control */
+        .marketing-creator-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin: 0.25rem 0 1.1rem;
+            flex-wrap: wrap;
+        }
+        .marketing-creator-sort-label {
+            font-size: 0.72rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--text-secondary, #8ba3bd);
+            font-family: 'Space Mono', monospace;
+        }
+        .marketing-creator-sort {
+            background: var(--bg-input, #0d1a2a);
+            color: var(--text-primary, #e6f1ff);
+            border: 1px solid var(--border-color, #2a3a4a);
+            border-radius: 8px;
+            padding: 0.4rem 0.7rem;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            min-width: 220px;
+        }
+        .marketing-creator-sort:focus { outline: none; border-color: #66d9ef; }
 
         .marketing-fit-pill {
             display: inline-flex;
@@ -21728,6 +21756,10 @@
                         <div class="marketing-section-head">
                             <h3>Recommended Influencer &amp; Creator Roster</h3>
                             <span class="marketing-section-sub">Talent whose own audiences over-index against this profile, grouped by talent subcategory (Actors, Musicians / Bands, Athletes, Hosts / Personalities, Creators / Influencers, and more). Each subcategory surfaces its top 6 alignments, with overlap %, index, fit score, best platforms to activate, audience match, and the rationale for the pick.</span>
+                        </div>
+                        <div id="marketingCreatorControls" class="marketing-creator-controls" style="display:none;">
+                            <label for="creatorTypeSort" class="marketing-creator-sort-label">Sort by Creator Type</label>
+                            <select id="creatorTypeSort" class="marketing-creator-sort" onchange="_mkOnCreatorTypeChange(this)"></select>
                         </div>
                         <div id="marketingCreatorRoster" class="marketing-partners-wrap"></div>
                     </section>
@@ -88486,9 +88518,17 @@
             }
 
             // ---------- Creator Roster ----------
+            // Selected "Sort by Creator Type" subcategory ('all' shows every
+            // populated subcategory). Persists across re-renders.
+            let _mkCreatorTypeFilter = 'all';
+            function _mkOnCreatorTypeChange(sel) {
+                _mkCreatorTypeFilter = (sel && sel.value) ? sel.value : 'all';
+                _mkRenderCreators();
+            }
             function _mkRenderCreators() {
                 const el = document.getElementById('marketingCreatorRoster');
                 if (!el) return;
+                const controls = document.getElementById('marketingCreatorControls');
                 // Pull ALL talent items across categories. Preserve the
                 // sub-category via a per-item lookup for the card label.
                 const behav = _mkBehav();
@@ -88511,9 +88551,14 @@
                         // real reach or a genuine over-index (>= 130).
                         if (pct < 0.2 && idx < 130) return;
                         seenName.add(norm);
+                        // Prefer the item's own parsed subcategory (e.g. a
+                        // creator filed under the generic "TALENT" umbrella
+                        // carries subcategory "CREATOR/INFLUENCER"). Fall back
+                        // to the category key it was found under.
+                        const subCat = (it.subcategory || '').toString().toUpperCase().trim();
                         rows.push({
                             name: it.name,
-                            cat: cat,
+                            cat: (subCat || cat).toUpperCase(),
                             pct: pct,
                             index: idx,
                             fit: _mkFitScore(pct, idx)
@@ -88521,6 +88566,7 @@
                     });
                 });
                 if (!rows.length) {
+                    if (controls) controls.style.display = 'none';
                     el.innerHTML = '<div class="marketing-empty">No creator / talent overlap detected in this profile\'s behavioral data.</div>';
                     return;
                 }
@@ -88573,12 +88619,39 @@
                 // within the group by fit score (reach-weighted affinity),
                 // strongest signal first.
                 const buckets = {};
-                groupDefs.forEach(g => { buckets[g.key] = []; });
+                // Normalize a category label for tolerant matching, so
+                // "CREATOR/INFLUENCER", "CREATOR_INFLUENCER" and
+                // "creator influencer" all resolve to the same group.
+                const _catNorm = s => (s || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
+                groupDefs.forEach(g => { buckets[g.key] = []; g._normCats = g.cats.map(_catNorm); });
                 rows.forEach(r => {
-                    const g = groupDefs.find(gd => gd.cats.includes(r.cat));
+                    // Any subcategory that doesn't map to a named group falls
+                    // back to "Other Talent" so nothing is silently dropped.
+                    const rn = _catNorm(r.cat);
+                    const g = groupDefs.find(gd => gd._normCats.includes(rn))
+                        || groupDefs.find(gd => gd.key === 'talent');
                     if (g) buckets[g.key].push(r);
                 });
                 Object.keys(buckets).forEach(k => buckets[k].sort((a,b) => b.fit - a.fit));
+
+                // Populate the "Sort by Creator Type" dropdown with only the
+                // subcategories that actually have candidates. Preserve the
+                // current selection when still valid, else reset to "all".
+                const availGroups = groupDefs.filter(g => (buckets[g.key] || []).length);
+                if (controls) {
+                    const sortSel = document.getElementById('creatorTypeSort');
+                    const validKeys = availGroups.map(g => g.key);
+                    if (_mkCreatorTypeFilter !== 'all' && !validKeys.includes(_mkCreatorTypeFilter)) {
+                        _mkCreatorTypeFilter = 'all';
+                    }
+                    if (sortSel) {
+                        sortSel.innerHTML = ['<option value="all">All Creator Types</option>']
+                            .concat(availGroups.map(g => `<option value="${g.key}">${g.icon} ${g.title}</option>`))
+                            .join('');
+                        sortSel.value = _mkCreatorTypeFilter;
+                    }
+                    controls.style.display = availGroups.length ? '' : 'none';
+                }
 
                 // Rationale is data-grounded: reach + index + fit archetype.
                 const rationaleFor = (r) => {
@@ -88618,7 +88691,9 @@
                         </div>`;
                 };
 
-                const html = groupDefs.map(g => {
+                const html = groupDefs
+                    .filter(g => _mkCreatorTypeFilter === 'all' || g.key === _mkCreatorTypeFilter)
+                    .map(g => {
                     const items = (buckets[g.key] || []).slice(0, 6);
                     if (!items.length) return '';
                     const cards = items.map(r => cardFor(r, g.icon)).join('');
