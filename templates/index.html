@@ -54768,9 +54768,9 @@
                         },
                         music_influence: _JIQ_MUSIC_DATA,
                         facts: [
-                            { label: 'Panel',   value: '41.8M matched U.S. viewers · 03/15 – 06/30. Observational match; every headline is paired with an incremental-lift read against a matched no-music-touchpoint control cohort.' },
-                            { label: 'Nobody Wants This', value: '58.8% of viewers had a music-linked touchpoint before their first watch. Matched-control cohort watch-rate lift: +14.3 pp. Audio-only exposure alone reached 3.78M viewers.' },
-                            { label: 'Heated Rivalry',    value: '52.1% of viewers had a music touchpoint — high for a Netflix title this quarter. t.A.T.u. sound-page traffic 2xed baseline the week the show dropped. Matched-control watch-rate lift: +16.8 pp.' },
+                            { label: 'Panel',   value: '62.4M matched U.S. viewers · 03/15 – 06/30. Panel = Netflix-active viewers with observed TikTok + Instagram activity. Every headline is paired with an incremental-lift read against a matched no-music-touchpoint control cohort.' },
+                            { label: 'Nobody Wants This', value: '8.4M U.S. viewers on S2. 58.8% had a music-linked touchpoint before their first watch. Matched-control cohort watch-rate lift: +14.3 pp. Audio-adjacent reach: 3.12M viewers.' },
+                            { label: 'Heated Rivalry',    value: '17.8M U.S. viewers on S1 — a breakout hockey-romance built on BookTok + t.A.T.u. resurgence. 52.1% had a music touchpoint. Matched-control watch-rate lift: +16.8 pp. Audio-adjacent reach: 5.54M viewers.' },
                             { label: 'Read',    value: 'Clip-only is the marketing-driven segment. Audio-only is the earned-media flywheel. The overlap is where music-licensing decisions pay for themselves.' }
                         ]
                     }
@@ -66144,8 +66144,10 @@
         // for demo; they ladder to a single household panel basis so
         // every percentage in the deck is mathematically consistent.
         //
-        // Panel basis: 41.8M matched U.S. households, streaming-cookie
+        // Panel basis: 62.4M matched U.S. viewers, streaming-cookie
         // deterministic + social-graph probabilistic, 03/15 → 06/30.
+        // Show-level totals: 8.4M viewers on Nobody Wants This S2,
+        // 17.8M viewers on Heated Rivalry S1.
         //
         // Cohort definitions (per show):
         //   viewers                     — hh that watched ≥1 min of show
@@ -66167,8 +66169,8 @@
         var _JIQ_MUSIC_DATA = {
             panel_basis: {
                 label: 'Panel basis',
-                short: '41.8M viewers · 03/15–06/30',
-                detail: '41.8M matched U.S. viewers · 03/15/2026 – 06/30/2026. Observational match; every headline is paired with an incremental-lift read against a matched no-music-touchpoint control cohort.'
+                short: '62.4M viewers · 03/15–06/30',
+                detail: '62.4M matched U.S. viewers · 03/15/2026 – 06/30/2026. Panel = deterministically matched Netflix-active viewers with observed TikTok + Instagram activity. Every headline is paired with an incremental-lift read against a matched no-music-touchpoint control cohort.'
             },
             stages: [
                 { id: 'universe', emoji: '🎵', label: 'Universe',             sub: 'who was exposed to what',                      uses_platform: true  },
@@ -66184,8 +66186,8 @@
                 nobody_wants_this: {
                     id: 'nobody_wants_this',
                     label: 'Nobody Wants This',
-                    subtitle: 'S2 · music-driven discovery read',
-                    viewers_hh: 6420000,
+                    subtitle: 'S2 · 8.4M U.S. viewers · music-driven discovery read',
+                    viewers_hh: 8400000,
                     accent: '#f472b6',
                     accent_dark: '#be185d',
                     platforms: {
@@ -66195,8 +66197,8 @@
                             music_only_pct: 18.4,
                             clips_only_pct: 21.7,
                             music_and_clips_pct: 18.7,
-                            music_reach_hh: 3781000,
-                            clips_reach_hh: 2596000,
+                            music_reach_hh: 3116400,
+                            clips_reach_hh: 3393600,
                             incremental_lift_pp: 14.3,
                             note: '58.8% of viewers had at least one music-linked touchpoint before their first watch — the largest single upper-funnel signal. Matched-control cohort watch-rate lift: +14.3 pp.'
                         },
@@ -66206,8 +66208,8 @@
                             music_only_pct: 14.1,
                             clips_only_pct: 19.2,
                             music_and_clips_pct: 14.1,
-                            music_reach_hh: 1811000,
-                            clips_reach_hh: 2138000,
+                            music_reach_hh: 2368800,
+                            clips_reach_hh: 2797200,
                             incremental_lift_pp: 17.6,
                             note: 'TikTok skews clip-forward — the Summer Girl / Feist sound pages seeded the audio; the clip-and-music cohort is where most exposed viewers landed. Matched-control lift: +17.6 pp.'
                         },
@@ -66217,8 +66219,8 @@
                             music_only_pct: 12.7,
                             clips_only_pct: 12.4,
                             music_and_clips_pct: 10.1,
-                            music_reach_hh: 1465000,
-                            clips_reach_hh: 1445000,
+                            music_reach_hh: 1915200,
+                            clips_reach_hh: 1890000,
                             incremental_lift_pp: 9.1,
                             note: 'Instagram is more music-only-heavy — Reels using the tracks (over unrelated aesthetic content) reached 22.8% of viewers via audio alone. Matched-control lift: +9.1 pp.'
                         }
@@ -66257,19 +66259,19 @@
                         label: 'Sound page adoption · the audio-only surface',
                         subtitle: 'For each licensed track: unique creators using the sound, peak week, and geographic hotspots.',
                         songs: [
-                            { song: 'Summer Girl',                          artist: 'HAIM',                     creators_using_sound: 187400, peak_week: '4/12–4/18', peak_multiplier: '2.71x baseline', top_geos: ['NYC', 'LA', 'Austin'],       creator_note: 'Emotional-throughline sound; adopted heavily by lifestyle + relationship creators.' },
-                            { song: 'See Her Out (That\'s Just Life)',       artist: 'Francis and the Lights',   creators_using_sound: 74200,  peak_week: '4/19–4/25', peak_multiplier: '1.94x baseline', top_geos: ['LA', 'Portland', 'NYC'],     creator_note: 'Slow burn; adoption grew across S2 arc.' },
-                            { song: 'Love on the Brain',                    artist: 'Rihanna',                  creators_using_sound: 421800, peak_week: '4/05–4/11', peak_multiplier: '1.44x baseline', top_geos: ['Atlanta', 'LA', 'NYC'],      creator_note: 'Catalog track — massive existing base. Show usage added a +44% lift on top.' },
-                            { song: 'Water the Flowers, Pray for a Garden', artist: 'Valley',                   creators_using_sound: 38100,  peak_week: '4/26–5/02', peak_multiplier: '3.12x baseline', top_geos: ['LA', 'Nashville', 'Chicago'], creator_note: 'Finale montage — largest week-over-week lift of any song in the show.' },
-                            { song: 'You & I',                              artist: 'LÉON',                     creators_using_sound: 28900,  peak_week: '5/10–5/16', peak_multiplier: '2.08x baseline', top_geos: ['NYC', 'Toronto', 'LA'],      creator_note: 'Long-tail Reels usage — audio outpaced clips on this one.' }
+                            { song: 'Summer Girl',                          artist: 'HAIM',                     creators_using_sound: 245100, peak_week: '4/12–4/18', peak_multiplier: '2.71x baseline', top_geos: ['NYC', 'LA', 'Austin'],       creator_note: 'Emotional-throughline sound; adopted heavily by lifestyle + relationship creators.' },
+                            { song: 'See Her Out (That\'s Just Life)',       artist: 'Francis and the Lights',   creators_using_sound: 97100,  peak_week: '4/19–4/25', peak_multiplier: '1.94x baseline', top_geos: ['LA', 'Portland', 'NYC'],     creator_note: 'Slow burn; adoption grew across S2 arc.' },
+                            { song: 'Love on the Brain',                    artist: 'Rihanna',                  creators_using_sound: 551700, peak_week: '4/05–4/11', peak_multiplier: '1.44x baseline', top_geos: ['Atlanta', 'LA', 'NYC'],      creator_note: 'Catalog track — massive existing base. Show usage added a +44% lift on top.' },
+                            { song: 'Water the Flowers, Pray for a Garden', artist: 'Valley',                   creators_using_sound: 49800,  peak_week: '4/26–5/02', peak_multiplier: '3.12x baseline', top_geos: ['LA', 'Nashville', 'Chicago'], creator_note: 'Finale montage — largest week-over-week lift of any song in the show.' },
+                            { song: 'You & I',                              artist: 'LÉON',                     creators_using_sound: 37800,  peak_week: '5/10–5/16', peak_multiplier: '2.08x baseline', top_geos: ['NYC', 'Toronto', 'LA'],      creator_note: 'Long-tail Reels usage — audio outpaced clips on this one.' }
                         ],
-                        summary: '750,400 unique creators used one of the five licensed tracks in the study window. Peak week (4/12–4/18) saw 2.71x baseline for Summer Girl alone.'
+                        summary: '981,500 unique creators used one of the five licensed tracks in the study window. Peak week (4/12–4/18) saw 2.71x baseline for Summer Girl alone.'
                     },
                     fan_edits: {
                         label: 'Fan-edit ecosystem · the clip-with-music surface',
                         subtitle: 'For clips of the show scored to the licensed tracks: who made them, what type, and what tier of creator drove the reach.',
-                        total_edits_indexed: 84200,
-                        total_reach_hh: 4820000,
+                        total_edits_indexed: 110100,
+                        total_reach_hh: 6305000,
                         edit_types: [
                             { type: 'Ship / romance edits',    pct_of_edits: 44.2, pct_of_reach: 51.8, note: 'Noah + Joanne slow-mo cuts, hospital scene, apology montage. Highest-reach type.' },
                             { type: 'Cast candid + fancam',    pct_of_edits: 21.7, pct_of_reach: 22.4, note: 'Adam Brody / Kristen Bell BTS clips scored to the licensed tracks.' },
@@ -66278,31 +66280,31 @@
                             { type: 'Montage / recap edits',   pct_of_edits: 7.7,  pct_of_reach: 6.9,  note: 'Season summary edits at S2 finale.' }
                         ],
                         creator_tiers: [
-                            { tier: 'Celebrity (>10M)', edit_count: 41,     reach_share_pct: 18.4, note: '3 edits from cast + 12 from adjacent celebrity accounts.' },
-                            { tier: 'Macro (1M–10M)',   edit_count: 892,    reach_share_pct: 34.2, note: 'Where most of the reach concentrated.' },
-                            { tier: 'Mid (100K–1M)',    edit_count: 4180,   reach_share_pct: 27.6, note: 'The engagement backbone.' },
-                            { tier: 'Micro (10K–100K)', edit_count: 12400,  reach_share_pct: 12.8, note: 'The long-tail believers.' },
-                            { tier: 'Nano (<10K)',      edit_count: 66600,  reach_share_pct: 7.0,  note: 'Fan-first evangelism — reach small, sentiment high.' }
+                            { tier: 'Celebrity (>10M)', edit_count: 54,     reach_share_pct: 18.4, note: '3 edits from cast + 12 from adjacent celebrity accounts.' },
+                            { tier: 'Macro (1M–10M)',   edit_count: 1170,   reach_share_pct: 34.2, note: 'Where most of the reach concentrated.' },
+                            { tier: 'Mid (100K–1M)',    edit_count: 5470,   reach_share_pct: 27.6, note: 'The engagement backbone.' },
+                            { tier: 'Micro (10K–100K)', edit_count: 16220,  reach_share_pct: 12.8, note: 'The long-tail believers.' },
+                            { tier: 'Nano (<10K)',      edit_count: 87110,  reach_share_pct: 7.0,  note: 'Fan-first evangelism — reach small, sentiment high.' }
                         ],
                         top_edits: [
-                            { title: 'Joanne + Noah "Summer Girl" walking home',   creator: '@edits.by.june',     tier: 'Macro',     reach_hh: 486000, engagement_rate: '18.4%', note: 'Single largest-reach edit — reposted 400K+ times.' },
-                            { title: 'Rabbi bar cold-open · Love on the Brain',    creator: '@brodycore',         tier: 'Macro',     reach_hh: 312000, engagement_rate: '14.7%', note: 'Comedic reframe of a serious song. High saves.' },
-                            { title: 'S2 finale montage · Water the Flowers',      creator: '@nobodywants.edits', tier: 'Mid',       reach_hh: 214000, engagement_rate: '22.1%', note: 'Fan-run account; hit above its follower weight.' },
-                            { title: 'Kristen Bell BTS Reel · Summer Girl',        creator: '@kristenanniebell',  tier: 'Celebrity', reach_hh: 198000, engagement_rate: '11.3%', note: 'Cast-native. Talent-attributable reach.' },
-                            { title: 'Joanne dialogue compilation · See Her Out',  creator: '@joannecoded',       tier: 'Mid',       reach_hh: 174000, engagement_rate: '19.8%', note: 'Quote-edit format; strongest completion rate.' }
+                            { title: 'Joanne + Noah "Summer Girl" walking home',   creator: '@edits.by.june',     tier: 'Macro',     reach_hh: 635700, engagement_rate: '18.4%', note: 'Single largest-reach edit — reposted 400K+ times.' },
+                            { title: 'Rabbi bar cold-open · Love on the Brain',    creator: '@brodycore',         tier: 'Macro',     reach_hh: 408100, engagement_rate: '14.7%', note: 'Comedic reframe of a serious song. High saves.' },
+                            { title: 'S2 finale montage · Water the Flowers',      creator: '@nobodywants.edits', tier: 'Mid',       reach_hh: 279900, engagement_rate: '22.1%', note: 'Fan-run account; hit above its follower weight.' },
+                            { title: 'Kristen Bell BTS Reel · Summer Girl',        creator: '@kristenanniebell',  tier: 'Celebrity', reach_hh: 259000, engagement_rate: '11.3%', note: 'Cast-native. Talent-attributable reach.' },
+                            { title: 'Joanne dialogue compilation · See Her Out',  creator: '@joannecoded',       tier: 'Mid',       reach_hh: 227600, engagement_rate: '19.8%', note: 'Quote-edit format; strongest completion rate.' }
                         ]
                     },
                     cross_platform_path: {
                         label: 'Cross-platform path · the "Both" cohort\'s ordering',
                         subtitle: 'For the 18.7% of viewers exposed to both audio-only AND clip-with-music content — which platform came first, and how far apart.',
-                        both_cohort_hh: 1200540,
+                        both_cohort_hh: 1570800,
                         ordering_distribution: [
-                            { sequence: 'TikTok sound → TikTok clip → Netflix',          pct: 34.2, hh: 410585, note: 'Single-platform TikTok pipeline. Fastest lag (median 2.4 days).' },
-                            { sequence: 'TikTok sound → Instagram Reels clip → Netflix', pct: 21.7, hh: 260517, note: 'Classic cross-platform funnel — audio seeded on TikTok, clip closed on IG.' },
-                            { sequence: 'Simultaneous (within 48h)',                     pct: 18.4, hh: 220899, note: 'Cross-platform storm — sound trending on both surfaces at once.' },
-                            { sequence: 'Instagram Reel → TikTok → Netflix',             pct: 14.8, hh: 177680, note: 'IG-first users who discovered fan-edits on TikTok before watching.' },
-                            { sequence: 'TikTok clip → TikTok sound → Netflix',          pct: 6.7,  hh: 80436,  note: 'Clip came first, viewer sought out the audio, then watched.' },
-                            { sequence: 'Instagram sound → Instagram clip → Netflix',    pct: 4.2,  hh: 50423,  note: 'Single-platform Instagram pipeline. Rare but the highest-intent segment.' }
+                            { sequence: 'TikTok sound → TikTok clip → Netflix',          pct: 34.2, hh: 537200, note: 'Single-platform TikTok pipeline. Fastest lag (median 2.4 days).' },
+                            { sequence: 'TikTok sound → Instagram Reels clip → Netflix', pct: 21.7, hh: 340900, note: 'Classic cross-platform funnel — audio seeded on TikTok, clip closed on IG.' },
+                            { sequence: 'Simultaneous (within 48h)',                     pct: 18.4, hh: 289000, note: 'Cross-platform storm — sound trending on both surfaces at once.' },
+                            { sequence: 'Instagram Reel → TikTok → Netflix',             pct: 14.8, hh: 232500, note: 'IG-first users who discovered fan-edits on TikTok before watching.' },
+                            { sequence: 'TikTok clip → TikTok sound → Netflix',          pct: 6.7,  hh: 105200, note: 'Clip came first, viewer sought out the audio, then watched.' },
+                            { sequence: 'Instagram sound → Instagram clip → Netflix',    pct: 4.2,  hh: 66000,  note: 'Single-platform Instagram pipeline. Rare but the highest-intent segment.' }
                         ],
                         median_lag_hours_first_touch_to_watch: 58.4,
                         read: 'TikTok is the sound seeder in 62.6% of overlap paths. Cross-platform (TikTok → Instagram) is the second most common. Simultaneous exposure is the "storm" pattern — the sound trending across both surfaces at once, the highest-intent moment.'
@@ -66339,35 +66341,35 @@
                             { track: 'You & I (LÉON)',                                spotify_lift_pct: 74.6,  apple_lift_pct: 52.4,  shazam_lift_pct: 218.7, peak_week: '5/10–5/16', note: 'Slow-burn Reels-driven lift; long-tail continues past study window.' }
                         ],
                         viewers_becoming_creators: {
-                            count_hh: 481200,
+                            count_hh: 630000,
                             pct_of_viewers: 7.5,
                             median_creator_edits_per_hh: 2.1,
                             top_content_types: ['Sound-only Reels (relationship pov)', 'Show clip re-cuts', 'Show-inspired original content (cooking, fashion, dating)'],
-                            note: '481K viewers produced their own content using one of the licensed tracks — 7.5% of the show\'s total viewer base became a creator downstream. The largest earned-media flywheel signal in the study.'
+                            note: '630K viewers produced their own content using one of the licensed tracks — 7.5% of the show\'s total viewer base became a creator downstream. The largest earned-media flywheel signal in the study.'
                         },
-                        read: 'Music-licensing decisions extend past the watch. Summer Girl alone drove +187% Spotify streaming lift and 412% Shazam lift. The viewers-becoming-creators cohort is 481K viewers — the earned-media flywheel keeps compounding after the watch ends.'
+                        read: 'Music-licensing decisions extend past the watch. Summer Girl alone drove +187% Spotify streaming lift and 412% Shazam lift. The viewers-becoming-creators cohort is 630K viewers — the earned-media flywheel keeps compounding after the watch ends.'
                     },
                     licensing_roi: {
                         label: 'Licensing ROI · the per-song incremental $ case',
                         subtitle: 'Per licensed track: incremental viewers attributable to music-driven discovery (matched-control cohort model), retention lift, subscription-LTV multiplier, and deal-case dollar value.',
-                        panel_denominator_hh: 6420000,
+                        panel_denominator_hh: 8400000,
                         songs: [
-                            { song: 'Summer Girl (HAIM)',                            incremental_hh: 218400, retention_pp: 4.8, ltv_multiplier: 1.14, deck_value_usd: 4820000, deal_case: 'Anchor track. Sync fee paid for itself 6.4x on subscription-LTV alone. Renew + expand.' },
-                            { song: 'Water the Flowers (Valley)',                    incremental_hh: 128700, retention_pp: 3.2, ltv_multiplier: 1.09, deck_value_usd: 2140000, deal_case: 'Finale placement — high emotional cap. Extend to trailer + soundtrack.' },
-                            { song: 'Love on the Brain (Rihanna)',                   incremental_hh: 94100,  retention_pp: 1.4, ltv_multiplier: 1.03, deck_value_usd: 1180000, deal_case: 'Catalog track. Small relative lift but massive base. Keep as-is; do not upspend.' },
-                            { song: 'See Her Out (Francis and the Lights)',          incremental_hh: 61400,  retention_pp: 2.8, ltv_multiplier: 1.08, deck_value_usd: 928000,  deal_case: 'Under-the-radar discovery — the show introduced Francis to a new audience. Consider a follow-on placement.' },
-                            { song: 'You & I (LÉON)',                                incremental_hh: 42800,  retention_pp: 2.1, ltv_multiplier: 1.06, deck_value_usd: 618000,  deal_case: 'Long-tail Reels driver. Renew.' }
+                            { song: 'Summer Girl (HAIM)',                            incremental_hh: 285700, retention_pp: 4.8, ltv_multiplier: 1.14, deck_value_usd: 6304000, deal_case: 'Anchor track. Sync fee paid for itself 6.4x on subscription-LTV alone. Renew + expand.' },
+                            { song: 'Water the Flowers (Valley)',                    incremental_hh: 168400, retention_pp: 3.2, ltv_multiplier: 1.09, deck_value_usd: 2799000, deal_case: 'Finale placement — high emotional cap. Extend to trailer + soundtrack.' },
+                            { song: 'Love on the Brain (Rihanna)',                   incremental_hh: 123100, retention_pp: 1.4, ltv_multiplier: 1.03, deck_value_usd: 1544000, deal_case: 'Catalog track. Small relative lift but massive base. Keep as-is; do not upspend.' },
+                            { song: 'See Her Out (Francis and the Lights)',          incremental_hh: 80300,  retention_pp: 2.8, ltv_multiplier: 1.08, deck_value_usd: 1214000, deal_case: 'Under-the-radar discovery — the show introduced Francis to a new audience. Consider a follow-on placement.' },
+                            { song: 'You & I (LÉON)',                                incremental_hh: 56000,  retention_pp: 2.1, ltv_multiplier: 1.06, deck_value_usd: 809000,  deal_case: 'Long-tail Reels driver. Renew.' }
                         ],
-                        total_incremental_hh: 545400,
-                        total_deck_value_usd: 9686000,
-                        read: '$9.69M in modeled deck value across five licensed tracks. Summer Girl is the anchor — a single track paid for itself 6.4x on subscription-LTV alone. The music-licensing budget is the highest-ROI marketing line the show has.'
+                        total_incremental_hh: 713500,
+                        total_deck_value_usd: 12670000,
+                        read: '$12.67M in modeled deck value across five licensed tracks. Summer Girl is the anchor — a single track paid for itself 6.4x on subscription-LTV alone. The music-licensing budget is the highest-ROI marketing line the show has.'
                     }
                 },
                 heated_rivalry: {
                     id: 'heated_rivalry',
                     label: 'Heated Rivalry',
-                    subtitle: 'S1 · music-driven discovery read',
-                    viewers_hh: 4180000,
+                    subtitle: 'S1 · 17.8M U.S. viewers · music-driven discovery read',
+                    viewers_hh: 17800000,
                     accent: '#38bdf8',
                     accent_dark: '#0369a1',
                     platforms: {
@@ -66377,8 +66379,8 @@
                             music_only_pct: 12.2,
                             clips_only_pct: 21.0,
                             music_and_clips_pct: 18.9,
-                            music_reach_hh: 1300000,
-                            clips_reach_hh: 1668000,
+                            music_reach_hh: 5535800,
+                            clips_reach_hh: 7102200,
                             incremental_lift_pp: 16.8,
                             note: '52.1% of viewers had a music-linked touchpoint before their first watch — high for a Netflix title this quarter. Fan-edit-driven show. Matched-control watch-rate lift: +16.8 pp.'
                         },
@@ -66388,8 +66390,8 @@
                             music_only_pct: 11.4,
                             clips_only_pct: 25.8,
                             music_and_clips_pct: 19.8,
-                            music_reach_hh: 1304000,
-                            clips_reach_hh: 1907000,
+                            music_reach_hh: 5553600,
+                            clips_reach_hh: 8116800,
                             incremental_lift_pp: 21.4,
                             note: 'TikTok is the largest music-touchpoint surface — t.A.T.u. resurgence + Harrison cover fan-edits sit upstream of most exposed viewers. Matched-control lift: +21.4 pp.'
                         },
@@ -66399,8 +66401,8 @@
                             music_only_pct: 9.8,
                             clips_only_pct: 19.3,
                             music_and_clips_pct: 10.9,
-                            music_reach_hh: 866000,
-                            clips_reach_hh: 1262000,
+                            music_reach_hh: 3684600,
+                            clips_reach_hh: 5375600,
                             incremental_lift_pp: 8.7,
                             note: 'Instagram Reels amplified the clip-with-music combo but never sparked the catalytic sound moment TikTok did. Matched-control lift: +8.7 pp.'
                         }
@@ -66439,19 +66441,19 @@
                         label: 'Sound page adoption · the audio-only surface',
                         subtitle: 'For each licensed track: unique creators using the sound, peak week, and geographic hotspots.',
                         songs: [
-                            { song: 'All the Things She Said',        artist: 't.A.T.u.',    creators_using_sound: 421700, peak_week: '4/26–5/02', peak_multiplier: '3.28x baseline', top_geos: ['NYC', 'LA', 'Chicago'],       creator_note: 'Cultural relaunch. Sound page 2xed historical baseline the week the show dropped — largest heritage-track resurgence in the panel this quarter.' },
-                            { song: 'All the Things She Said (cover)', artist: 'Harrison',   creators_using_sound: 187200, peak_week: '5/03–5/09', peak_multiplier: '4.14x baseline', top_geos: ['Toronto', 'NYC', 'LA'],       creator_note: 'The cover was made FOR this moment — new sound, immediate creator adoption. Highest peak multiplier in the study.' },
-                            { song: 'My Moon My Man',                 artist: 'Feist',       creators_using_sound: 84300,  peak_week: '5/10–5/16', peak_multiplier: '2.14x baseline', top_geos: ['Toronto', 'NYC', 'Portland'],   creator_note: 'Catalog track from 2007; Canadian indie-scene revival driven entirely by the show.' },
-                            { song: 'I\'ll Believe in Anything',       artist: 'Wolf Parade', creators_using_sound: 62100,  peak_week: '5/17–5/23', peak_multiplier: '2.87x baseline', top_geos: ['Montreal', 'NYC', 'LA'],      creator_note: 'The emotional-peak needle-drop. Adoption came 2–3 weeks after air as the scene circulated.' },
-                            { song: 'Mangetout',                      artist: 'Wet Leg',     creators_using_sound: 148700, peak_week: '5/03–5/09', peak_multiplier: '2.32x baseline', top_geos: ['LA', 'NYC', 'Austin'],        creator_note: 'Already had TikTok momentum pre-show; show usage compounded the existing audio wave.' }
+                            { song: 'All the Things She Said',        artist: 't.A.T.u.',    creators_using_sound: 1795800, peak_week: '4/26–5/02', peak_multiplier: '3.28x baseline', top_geos: ['NYC', 'LA', 'Chicago'],       creator_note: 'Cultural relaunch. Sound page 2xed historical baseline the week the show dropped — largest heritage-track resurgence in the panel this quarter.' },
+                            { song: 'All the Things She Said (cover)', artist: 'Harrison',   creators_using_sound: 797300,  peak_week: '5/03–5/09', peak_multiplier: '4.14x baseline', top_geos: ['Toronto', 'NYC', 'LA'],       creator_note: 'The cover was made FOR this moment — new sound, immediate creator adoption. Highest peak multiplier in the study.' },
+                            { song: 'My Moon My Man',                 artist: 'Feist',       creators_using_sound: 359000,  peak_week: '5/10–5/16', peak_multiplier: '2.14x baseline', top_geos: ['Toronto', 'NYC', 'Portland'],   creator_note: 'Catalog track from 2007; Canadian indie-scene revival driven entirely by the show.' },
+                            { song: 'I\'ll Believe in Anything',       artist: 'Wolf Parade', creators_using_sound: 264500,  peak_week: '5/17–5/23', peak_multiplier: '2.87x baseline', top_geos: ['Montreal', 'NYC', 'LA'],      creator_note: 'The emotional-peak needle-drop. Adoption came 2–3 weeks after air as the scene circulated.' },
+                            { song: 'Mangetout',                      artist: 'Wet Leg',     creators_using_sound: 633300,  peak_week: '5/03–5/09', peak_multiplier: '2.32x baseline', top_geos: ['LA', 'NYC', 'Austin'],        creator_note: 'Already had TikTok momentum pre-show; show usage compounded the existing audio wave.' }
                         ],
-                        summary: '904,000 unique creators used one of the five licensed tracks in the study window. Peak week (4/26–5/02) saw t.A.T.u. sound-page 3.28x baseline — the largest heritage-track resurgence tied to a Netflix release this quarter.'
+                        summary: '3.85M unique creators used one of the five licensed tracks in the study window. Peak week (4/26–5/02) saw t.A.T.u. sound-page 3.28x baseline — the largest heritage-track resurgence tied to a Netflix release this quarter.'
                     },
                     fan_edits: {
                         label: 'Fan-edit ecosystem · the clip-with-music surface',
                         subtitle: 'For clips of the show scored to the licensed tracks: who made them, what type, and what tier of creator drove the reach.',
-                        total_edits_indexed: 187400,
-                        total_reach_hh: 8140000,
+                        total_edits_indexed: 798100,
+                        total_reach_hh: 34668000,
                         edit_types: [
                             { type: 'Ship / romance edits',   pct_of_edits: 62.4, pct_of_reach: 71.2, note: 'Shane + Ilya slow-mo cuts, locker-room tension, hotel-scene edits. Dominant type — HR is a ship-edit-first show.' },
                             { type: 'Cast candid + fancam',   pct_of_edits: 14.8, pct_of_reach: 12.4, note: 'Cast promo shots + press-tour candids scored to fan tracks.' },
@@ -66460,31 +66462,31 @@
                             { type: 'Montage / recap edits',  pct_of_edits: 4.2,  pct_of_reach: 2.5,  note: 'Season-summary edits post-finale.' }
                         ],
                         creator_tiers: [
-                            { tier: 'Celebrity (>10M)', edit_count: 22,     reach_share_pct: 12.1, note: 'Very few celebrity edits — fan-driven show.' },
-                            { tier: 'Macro (1M–10M)',   edit_count: 1120,   reach_share_pct: 38.4, note: 'BookTok crossover creators dominated.' },
-                            { tier: 'Mid (100K–1M)',    edit_count: 8420,   reach_share_pct: 31.2, note: 'Ship-edit specialists — the show\'s core creator layer.' },
-                            { tier: 'Micro (10K–100K)', edit_count: 42800,  reach_share_pct: 14.7, note: 'Where fan-first evangelism concentrated.' },
-                            { tier: 'Nano (<10K)',      edit_count: 135040, reach_share_pct: 3.6,  note: 'Long-tail — small individual reach, massive collective count.' }
+                            { tier: 'Celebrity (>10M)', edit_count: 94,     reach_share_pct: 12.1, note: 'Very few celebrity edits — fan-driven show.' },
+                            { tier: 'Macro (1M–10M)',   edit_count: 4770,   reach_share_pct: 38.4, note: 'BookTok crossover creators dominated.' },
+                            { tier: 'Mid (100K–1M)',    edit_count: 35860,  reach_share_pct: 31.2, note: 'Ship-edit specialists — the show\'s core creator layer.' },
+                            { tier: 'Micro (10K–100K)', edit_count: 182290, reach_share_pct: 14.7, note: 'Where fan-first evangelism concentrated.' },
+                            { tier: 'Nano (<10K)',      edit_count: 575030, reach_share_pct: 3.6,  note: 'Long-tail — small individual reach, massive collective count.' }
                         ],
                         top_edits: [
-                            { title: 'Shane + Ilya "All the Things She Said" locker room', creator: '@rivalryedits',    tier: 'Macro',     reach_hh: 872000, engagement_rate: '24.6%', note: 'The definitive fan-edit — reposted 900K+ times, single largest reach edit in the panel.' },
-                            { title: 'Book-to-show comparison · Harrison cover',            creator: '@booktokcaptain',  tier: 'Macro',     reach_hh: 618000, engagement_rate: '21.4%', note: 'BookTok crossover — where the Rachel Reid audience met the show audience.' },
-                            { title: 'Ilya reaction montage · Mangetout',                   creator: '@hockeyromance.hq', tier: 'Macro',     reach_hh: 484000, engagement_rate: '19.8%', note: 'Cast fancam · high-engagement short-form.' },
-                            { title: 'Hotel scene edit · I\'ll Believe in Anything',        creator: '@ilyahollander',   tier: 'Mid',       reach_hh: 341000, engagement_rate: '31.2%', note: 'Highest engagement rate — emotional peak scene.' },
-                            { title: 'Book quotes over show scenes · My Moon My Man',       creator: '@rachelreidverse', tier: 'Mid',       reach_hh: 287000, engagement_rate: '22.4%', note: 'Book-quote overlay format — bridged the source-material fandom.' }
+                            { title: 'Shane + Ilya "All the Things She Said" locker room', creator: '@rivalryedits',    tier: 'Macro',     reach_hh: 3714000, engagement_rate: '24.6%', note: 'The definitive fan-edit — reposted 900K+ times, single largest reach edit in the panel.' },
+                            { title: 'Book-to-show comparison · Harrison cover',            creator: '@booktokcaptain',  tier: 'Macro',     reach_hh: 2632000, engagement_rate: '21.4%', note: 'BookTok crossover — where the Rachel Reid audience met the show audience.' },
+                            { title: 'Ilya reaction montage · Mangetout',                   creator: '@hockeyromance.hq', tier: 'Macro',     reach_hh: 2061000, engagement_rate: '19.8%', note: 'Cast fancam · high-engagement short-form.' },
+                            { title: 'Hotel scene edit · I\'ll Believe in Anything',        creator: '@ilyahollander',   tier: 'Mid',       reach_hh: 1452000, engagement_rate: '31.2%', note: 'Highest engagement rate — emotional peak scene.' },
+                            { title: 'Book quotes over show scenes · My Moon My Man',       creator: '@rachelreidverse', tier: 'Mid',       reach_hh: 1222000, engagement_rate: '22.4%', note: 'Book-quote overlay format — bridged the source-material fandom.' }
                         ]
                     },
                     cross_platform_path: {
                         label: 'Cross-platform path · the "Both" cohort\'s ordering',
                         subtitle: 'For the 18.9% of viewers exposed to both audio-only AND clip-with-music content — which platform came first, and how far apart.',
-                        both_cohort_hh: 790020,
+                        both_cohort_hh: 3364200,
                         ordering_distribution: [
-                            { sequence: 'TikTok sound → TikTok clip → Netflix',          pct: 41.8, hh: 330228, note: 'Single-platform TikTok pipeline. Dominant for this show.' },
-                            { sequence: 'Simultaneous (within 48h)',                     pct: 21.7, hh: 171434, note: 'Cross-platform storm — highest during weeks 4-5 as sound trended on both surfaces.' },
-                            { sequence: 'TikTok sound → Instagram Reels clip → Netflix', pct: 18.4, hh: 145364, note: 'Cross-platform funnel — audio seeded on TikTok, clip closed on IG.' },
-                            { sequence: 'BookTok → TikTok sound → Netflix',              pct: 8.4,  hh: 66362,  note: 'Unique to Heated Rivalry — book-fan discovery path. Source-material crossover.' },
-                            { sequence: 'Instagram Reel → TikTok → Netflix',             pct: 5.6,  hh: 44241,  note: 'IG-first users pulled toward TikTok fan-edits before watching.' },
-                            { sequence: 'Instagram sound → Instagram clip → Netflix',    pct: 4.1,  hh: 32391,  note: 'Single-platform Instagram pipeline. Small but high-intent.' }
+                            { sequence: 'TikTok sound → TikTok clip → Netflix',          pct: 41.8, hh: 1406200, note: 'Single-platform TikTok pipeline. Dominant for this show.' },
+                            { sequence: 'Simultaneous (within 48h)',                     pct: 21.7, hh: 730000,  note: 'Cross-platform storm — highest during weeks 4-5 as sound trended on both surfaces.' },
+                            { sequence: 'TikTok sound → Instagram Reels clip → Netflix', pct: 18.4, hh: 619000,  note: 'Cross-platform funnel — audio seeded on TikTok, clip closed on IG.' },
+                            { sequence: 'BookTok → TikTok sound → Netflix',              pct: 8.4,  hh: 282600,  note: 'Unique to Heated Rivalry — book-fan discovery path. Source-material crossover.' },
+                            { sequence: 'Instagram Reel → TikTok → Netflix',             pct: 5.6,  hh: 188400,  note: 'IG-first users pulled toward TikTok fan-edits before watching.' },
+                            { sequence: 'Instagram sound → Instagram clip → Netflix',    pct: 4.1,  hh: 137900,  note: 'Single-platform Instagram pipeline. Small but high-intent.' }
                         ],
                         median_lag_hours_first_touch_to_watch: 42.6,
                         read: 'TikTok is the sound seeder in 68.6% of overlap paths. BookTok is a Heated-Rivalry-specific 8.4% path — the source-material crossover. Simultaneous exposure (21.7%) is the largest single "storm" signal in the study — the cross-platform sound moment that both TikTok and Instagram were carrying at once.'
@@ -66521,34 +66523,34 @@
                             { track: 'I\'ll Believe in Anything (Wolf Parade)',   spotify_lift_pct: 174.8, apple_lift_pct: 132.7, shazam_lift_pct: 421.4,  peak_week: '5/17–5/23', note: 'Indie deep-cut reintroduced to a new generation.' }
                         ],
                         viewers_becoming_creators: {
-                            count_hh: 542700,
+                            count_hh: 2314000,
                             pct_of_viewers: 13.0,
                             median_creator_edits_per_hh: 3.4,
                             top_content_types: ['Ship-edit remixes', 'Book-quote overlays', 'Cast fancam re-cuts', 'Hockey-scene compilations'],
-                            note: '543K viewers produced their own content using one of the licensed tracks — 13.0% of the show\'s total viewer base became a creator downstream. Nearly 2x the NWT viewers-becoming-creators rate. This show TURNED viewers into evangelists.'
+                            note: '2.31M viewers produced their own content using one of the licensed tracks — 13.0% of the show\'s total viewer base became a creator downstream. Nearly 2x the NWT viewers-becoming-creators rate. This show TURNED viewers into evangelists.'
                         },
                         read: 'Music-licensing decisions on HR extend far past the watch. The Harrison cover alone drove +812% Spotify lift — the highest relative lift in the panel this quarter. 13% of viewers became creators, nearly 2x NWT. The earned-media flywheel is running hot.'
                     },
                     licensing_roi: {
                         label: 'Licensing ROI · the per-song incremental $ case',
                         subtitle: 'Per licensed track: incremental viewers attributable to music-driven discovery, retention lift, subscription-LTV multiplier, and deal-case dollar value.',
-                        panel_denominator_hh: 4180000,
+                        panel_denominator_hh: 17800000,
                         songs: [
-                            { song: 'All the Things She Said (t.A.T.u.)',                incremental_hh: 187400, retention_pp: 5.4, ltv_multiplier: 1.18, deck_value_usd: 6420000, deal_case: 'Anchor track. Cultural relaunch. Sync fee paid for itself 11.2x on subscription-LTV alone. Extend to soundtrack + trailer.' },
-                            { song: 'All the Things She Said (Harrison cover)',          incremental_hh: 128600, retention_pp: 4.2, ltv_multiplier: 1.14, deck_value_usd: 3720000, deal_case: 'Purpose-built for the show — highest relative ROI in the panel. Renew + commission a follow-up.' },
-                            { song: 'Mangetout (Wet Leg)',                               incremental_hh: 68400,  retention_pp: 2.8, ltv_multiplier: 1.09, deck_value_usd: 1240000, deal_case: 'Contemporary track. Existing audio momentum + show placement. Renew.' },
-                            { song: 'My Moon My Man (Feist)',                            incremental_hh: 52100,  retention_pp: 3.1, ltv_multiplier: 1.11, deck_value_usd: 984000,  deal_case: 'Catalog revival. Feist re-entered the Canadian charts on the strength of this placement.' },
-                            { song: 'I\'ll Believe in Anything (Wolf Parade)',           incremental_hh: 38700,  retention_pp: 2.4, ltv_multiplier: 1.07, deck_value_usd: 641000,  deal_case: 'Indie deep-cut. Consider positioning as the "prestige" placement — smaller reach, high sentiment.' }
+                            { song: 'All the Things She Said (t.A.T.u.)',                incremental_hh: 798100, retention_pp: 5.4, ltv_multiplier: 1.18, deck_value_usd: 27340000, deal_case: 'Anchor track. Cultural relaunch. Sync fee paid for itself 11.2x on subscription-LTV alone. Extend to soundtrack + trailer.' },
+                            { song: 'All the Things She Said (Harrison cover)',          incremental_hh: 547700, retention_pp: 4.2, ltv_multiplier: 1.14, deck_value_usd: 15840000, deal_case: 'Purpose-built for the show — highest relative ROI in the panel. Renew + commission a follow-up.' },
+                            { song: 'Mangetout (Wet Leg)',                               incremental_hh: 291300, retention_pp: 2.8, ltv_multiplier: 1.09, deck_value_usd: 5281000,  deal_case: 'Contemporary track. Existing audio momentum + show placement. Renew.' },
+                            { song: 'My Moon My Man (Feist)',                            incremental_hh: 221900, retention_pp: 3.1, ltv_multiplier: 1.11, deck_value_usd: 4191000,  deal_case: 'Catalog revival. Feist re-entered the Canadian charts on the strength of this placement.' },
+                            { song: 'I\'ll Believe in Anything (Wolf Parade)',           incremental_hh: 164800, retention_pp: 2.4, ltv_multiplier: 1.07, deck_value_usd: 2730000,  deal_case: 'Indie deep-cut. Consider positioning as the "prestige" placement — smaller reach, high sentiment.' }
                         ],
-                        total_incremental_hh: 475200,
-                        total_deck_value_usd: 13005000,
-                        read: '$13.0M in modeled deck value across five licensed tracks — 1.34x the NWT total on a smaller viewer base. The t.A.T.u. relaunch is the flagship win of the quarter. The Harrison cover is the highest relative ROI in the panel.'
+                        total_incremental_hh: 2023800,
+                        total_deck_value_usd: 55382000,
+                        read: '$55.4M in modeled deck value across five licensed tracks — 4.37x the NWT total, powered by a 2.1x larger viewer base plus a higher per-viewer retention lift. The t.A.T.u. relaunch is the flagship win of the quarter. The Harrison cover is the highest relative ROI in the panel.'
                     }
                 }
             },
             pitch: {
                 headline: 'Music sits upstream of tune-in — not just inside the show.',
-                body: '58.8% of Nobody Wants This viewers and 52.1% of Heated Rivalry viewers had a music-linked touchpoint on TikTok or Instagram before their first watch. Against matched no-music-touchpoint controls, exposed viewers watched at a +14.3 pp (Nobody Wants This) / +16.8 pp (Heated Rivalry) higher rate — the incremental lift, not just sequence-of-exposure. Audio-only exposure reached 3.78M viewers across Nobody Wants This and 1.30M viewers across Heated Rivalry — a discovery surface that pure clip-based attribution misses. Clip-only is the marketing-driven segment. Audio-only is the earned-media flywheel. The overlap is where music-licensing decisions pay for themselves.'
+                body: 'Study base: 8.4M U.S. viewers on Nobody Wants This S2 and 17.8M U.S. viewers on Heated Rivalry S1. 58.8% (NWT) and 52.1% (HR) had a music-linked touchpoint on TikTok or Instagram before their first watch. Against matched no-music-touchpoint controls, exposed viewers watched at a +14.3 pp (NWT) / +16.8 pp (HR) higher rate — the incremental lift, not just sequence-of-exposure. Audio-adjacent reach: 3.12M viewers (NWT) and 5.54M viewers (HR) — a discovery surface that pure clip-based attribution misses. Clip-only is the marketing-driven segment. Audio-only is the earned-media flywheel. The overlap is where music-licensing decisions pay for themselves.'
             }
         };
 
