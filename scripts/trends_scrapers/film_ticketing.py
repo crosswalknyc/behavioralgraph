@@ -1,13 +1,17 @@
 """
-Film-ticketing scraper - top movies on Fandango, Cinemark, AMC, Regal,
-and Atom Tickets.
+Film-ticketing scraper - top movies on Fandango, Cinemark, AMC, and Regal.
 
-Aggregates the "now-playing / in-theaters" listings from the 5 biggest
+Aggregates the "now-playing / in-theaters" listings from the 4 biggest
 US movie-ticketing platforms into a single snapshot the dashboard
 renders as the Films tab. Order of movies on each source's default
 browse is popularity / sales-density driven (that's how these sites
 merchandise their own front page), so ranks map cleanly to "what's
 selling now" on each platform.
+
+Atom Tickets was previously in this list but was removed 2026-07-29
+per Jenna: their React DOM uses non-standard slug shapes the generic
+parser doesn't catch, and Fandango + Cinemark cover the same
+theatrical signal at higher fidelity.
 
 Snapshot shape (kind='film'):
 
@@ -21,8 +25,7 @@ Snapshot shape (kind='film'):
         "fandango": {"label": "Fandango",      "items": [{...}]},
         "cinemark": {"label": "Cinemark",      "items": [{...}]},
         "amc":      {"label": "AMC Theatres",  "items": [{...}]},
-        "regal":    {"label": "Regal Cinemas", "items": [{...}]},
-        "atom":     {"label": "Atom Tickets",  "items": [{...}]}
+        "regal":    {"label": "Regal Cinemas", "items": [{...}]}
       }
     }
 
@@ -45,13 +48,6 @@ Access notes (verified 2026-07-28):
                           - not guaranteed.
     Regal                 Same class of Akamai bot-block as AMC.
                           Same cookie-donation escape hatch.
-    Atom Tickets          Fully client-rendered React app. Its DOM
-                          uses non-standard slug/anchor shapes that
-                          the generic movie-list parser doesn't
-                          catch on the first pass. Ships as a
-                          "warming up" tile; parser needs targeted
-                          work once we have Playwright + a fresh
-                          hydrated HTML capture to inspect.
 
 Because Hetzner is IP-blocked by every one of these sites, this
 scraper is registered in `local_residential_run.py` (Jenna's laptop
@@ -425,70 +421,107 @@ def _fetch_amc(limit: int = 25) -> tuple[list[dict], str]:
 # ---------------------------------------------------------------------------
 # Regal Cinemas — All Movies in Theatres
 # ---------------------------------------------------------------------------
-# 403 on plain requests. Playwright + stealth passes. Regal's slug prefix
-# is `/movies/` same as AMC.
+# 403 on plain requests. Playwright + stealth passes. Regal's page is
+# server-rendered Next.js and inlines the "Now Playing" list as a JSON
+# blob (`"MovieFeedEntries": [{"Order": 0, "Movie": {"Title": ...,
+# "Poster": ..., "FilmCode": ...}}]`) rather than exposing it as
+# `<a href="/movies/...">` anchors. Parse that blob directly - the
+# anchor-scraping path finds zero movie links even on a fully rendered
+# page (verified 2026-07-29).
 _REGAL_URL      = 'https://www.regmovies.com/movies/all-movies-in-theatres'
 _REGAL_HOMEPAGE = 'https://www.regmovies.com/'
+_REGAL_FEED_KEY_RE = re.compile(r'"MovieFeedEntries"\s*:\s*\[')
+
+
+def _extract_json_array(html: str, start_idx: int) -> Optional[str]:
+    """Given the index of a '[' in `html`, walk forward counting brackets
+    (respecting string literals) and return the matching '[...]' slice or
+    None if the array doesn't close cleanly."""
+    n = len(html)
+    depth = 0
+    i = start_idx
+    while i < n:
+        c = html[i]
+        if c == '[':
+            depth += 1
+        elif c == ']':
+            depth -= 1
+            if depth == 0:
+                return html[start_idx:i + 1]
+        elif c == '"':
+            j = i + 1
+            while j < n:
+                if html[j] == '\\':
+                    j += 2
+                    continue
+                if html[j] == '"':
+                    break
+                j += 1
+            i = j
+        i += 1
+    return None
 
 
 def _fetch_regal(limit: int = 25) -> tuple[list[dict], str]:
     html = _playwright_render(
         _REGAL_URL, _REGAL_HOMEPAGE,
         wait_selectors=[
-            'a[href^="/movies/"]',
-            '[class*="MovieTile"], [class*="movie-tile"]',
+            # Regal renders the list as `<img>` posters + a Next.js
+            # data blob rather than /movies/ anchors, so wait on
+            # anything that signals hydration completed.
+            'img[src*="regalcdn"]',
+            '[class*="Poster"], [class*="poster"]',
         ],
         cookie_domain='regmovies.com',
     )
     if not html:
         return [], _COOKIE_DONATION_HINT.format(
             site='regmovies.com', domain='regmovies.com')
-    items = _parse_generic_movie_list(
-        html, 'https://www.regmovies.com',
-        title_slug_prefix='/movies/', limit=limit)
+
+    import json as _json
+    m = _REGAL_FEED_KEY_RE.search(html)
+    if not m:
+        return [], _COOKIE_DONATION_HINT.format(
+            site='regmovies.com', domain='regmovies.com')
+    blob = _extract_json_array(html, m.end() - 1)
+    if not blob:
+        return [], _COOKIE_DONATION_HINT.format(
+            site='regmovies.com', domain='regmovies.com')
+    try:
+        entries = _json.loads(blob)
+    except Exception:
+        return [], _COOKIE_DONATION_HINT.format(
+            site='regmovies.com', domain='regmovies.com')
+
+    items: list[dict] = []
+    # Regal preserves the merchandising order on the "Now Playing" feed
+    # via the Order field. Sort by it and take the first `limit`.
+    for e in sorted(entries, key=lambda x: x.get('Order', 999)):
+        mv = e.get('Movie') or {}
+        title = _clean_title(mv.get('Title') or '')
+        if not _is_title(title):
+            continue
+        image = mv.get('Poster') or ''
+        # Build a real URL via FilmCode. Regal's search page accepts
+        # `?filmCode=<code>` and deep-links to the film's page. If we
+        # have neither slug nor code, fall back to the browse root.
+        film_code = mv.get('FilmCode') or ''
+        if film_code:
+            url = f'https://www.regmovies.com/showtimes?filmCode={film_code}'
+        else:
+            url = _REGAL_URL
+        items.append({
+            'rank':  len(items) + 1,
+            'title': title,
+            'url':   url,
+            'image': image,
+        })
+        if len(items) >= limit:
+            break
     if items:
         return items, ''
     return [], _COOKIE_DONATION_HINT.format(
         site='regmovies.com', domain='regmovies.com')
-
-
-# ---------------------------------------------------------------------------
-# Atom Tickets — Now In Theaters
-# ---------------------------------------------------------------------------
-# Fully client-rendered React app. The homepage lists top movies in a
-# hero carousel + a "Now in Theaters" grid; the standalone browse URL
-# path shifted several times in 2025-2026 so we hit the homepage
-# (stable) and pick titles off there.
-_ATOM_URL      = 'https://www.atomtickets.com/'
-_ATOM_HOMEPAGE = 'https://www.atomtickets.com/'
-
-
-def _fetch_atom(limit: int = 25) -> tuple[list[dict], str]:
-    html = _playwright_render(
-        _ATOM_URL, _ATOM_HOMEPAGE,
-        wait_selectors=[
-            'a[href^="/movies/"]',
-            '[data-csm*="Movie"], [class*="MovieTile"]',
-        ],
-    )
-    if not html:
-        return [], 'Warming up.'
-    items = _parse_generic_movie_list(
-        html, 'https://www.atomtickets.com',
-        title_slug_prefix='/movies/', limit=limit)
-    # Guard against noise-only extractions: Atom's React DOM sometimes
-    # exposes one or two nav anchors matching the /movies/ prefix but
-    # no actual film cards. Anything under 3 hits is almost always
-    # false-positive chrome (e.g. "UPCOMING" nav link) rather than
-    # real popularity ranking, so fall through to the operator note.
-    if len(items) >= 3:
-        return items, ''
-    # Atom hydrates fine but uses a non-standard DOM shape the generic
-    # anchor parser doesn't catch. Left as an operator-facing note
-    # rather than a cookie-donation ask because cookies won't help.
-    return [], ('Parser update needed (React DOM uses non-standard '
-                'slug shapes). Fandango + Cinemark cover the same '
-                'theatrical signal for now.')
 
 
 # ---------------------------------------------------------------------------
@@ -510,14 +543,13 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
     cinemark_items = _fetch_cinemark(limit=30) if _wanted('cinemark') else []
     amc_items, amc_sub     = (_fetch_amc(limit=25)   if _wanted('amc')   else ([], ''))
     regal_items, regal_sub = (_fetch_regal(limit=25) if _wanted('regal') else ([], ''))
-    atom_items, atom_sub   = (_fetch_atom(limit=25)  if _wanted('atom')  else ([], ''))
 
     return {
         # Mirror Fandango as the "national" list because it has the
         # broadest US theater reach (~40% of US ticketing volume).
         'national': fandango_items[:30] or cinemark_items[:30],
         'available': bool(fandango_items or cinemark_items or amc_items
-                          or regal_items or atom_items),
+                          or regal_items),
         'sources': {
             'fandango': {
                 'label':     'Fandango',
@@ -543,12 +575,6 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
                 'items':     regal_items,
                 'available': bool(regal_items),
             },
-            'atom': {
-                'label':     'Atom Tickets',
-                'sub':       (atom_sub or 'The mobile-first ticketing platform with strong younger-audience reach.'),
-                'items':     atom_items,
-                'available': bool(atom_items),
-            },
         },
     }
 
@@ -559,7 +585,7 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser(description='Film-ticketing scraper')
     p.add_argument('--only', default='',
                     help='comma-separated source keys: '
-                          'fandango,cinemark,amc,regal,atom')
+                          'fandango,cinemark,amc,regal')
     p.add_argument('--dry-run', action='store_true',
                     help='print results without writing an S3 snapshot')
     args = p.parse_args()
