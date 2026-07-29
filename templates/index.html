@@ -17409,6 +17409,51 @@
         textarea {
             font-size: 16px !important;
         }
+
+        /* ---- 8. Profile IQ header + tab strip ------------------------------------
+           Desktop lays the profile info and the DATA / ANALYSIS TOOLS tab groups
+           in one horizontal row where .toolbar-content{overflow:hidden}. On a
+           phone that pushes the tab strip (Demographics / Behavioral / Interests
+           / Location ...) off the right edge and overflows the title banner.
+           Fix: force the profile-header row and toolbar row to full width so the
+           tabs wrap underneath, let the two tab groups stack, and make each tab
+           group swipe-scroll horizontally (rule 5 handles .dashboard-tabs). */
+        .profile-and-toolbar-row {
+            align-items: stretch;
+        }
+        .profile-and-toolbar-row .profile-header-row,
+        .profile-and-toolbar-row .toolbar-row {
+            flex: 1 1 100% !important;
+            width: 100%;
+            min-width: 0;
+        }
+        .toolbar-row { align-items: stretch; }
+        .toolbar-content {
+            overflow: visible !important;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+        .toolbar-section { width: 100%; }
+
+        /* Title banner: shrink + wrap instead of running off the right edge. */
+        .dash-profile-info { min-width: 0; }
+        .dash-brand-container {
+            flex: 1 1 auto !important;
+            min-width: 0;
+            max-width: 100%;
+        }
+        .dash-brand-box {
+            font-size: 0.95rem;
+            letter-spacing: 0.5px;
+            padding: 0.5rem 0.8rem;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            max-width: 100%;
+        }
+        .dash-meta-grid { margin-left: 0 !important; }
+
+        /* Open-profile chips wrap instead of overflowing. */
+        .profile-tabs-bar { flex-wrap: wrap; }
     }
     </style>
 </head>
