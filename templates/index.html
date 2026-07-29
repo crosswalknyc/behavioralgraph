@@ -88915,6 +88915,15 @@
                 // ...), so every discipline gets its own strata regardless of
                 // raw overlap size. Category synonyms are merged into a single
                 // display group (e.g. CREATOR/INFLUENCER + INFLUENCER/CREATOR).
+                //
+                // 2026-07-29 (Jenna): generic "TALENT" rows and any subcategory
+                // that doesn't map to a named group are folded INTO the
+                // Creators / Influencers bucket rather than surfaced as a
+                // separate "Other Talent" section. In practice, generic
+                // TALENT rows in the source CSVs are almost always creators /
+                // influencers, and the prior "Other Talent" bucket read as
+                // noise on the roster. This mirrors how already-labeled
+                // CREATOR/INFLUENCER items are treated.
                 const groupDefs = [
                     { key: 'actor',     icon: '🎬', title: 'Actors',                 cats: ['ACTOR'],
                       note: 'Screen talent whose fan bases align with this audience. Strong for narrative brand films, premium integrations, and prestige campaign faces.' },
@@ -88924,8 +88933,8 @@
                       note: 'Sports figures aligned to this audience. Best for performance messaging, game-day activations, and jersey-tier sponsorships.' },
                     { key: 'host',      icon: '🎙️', title: 'Hosts / Personalities',  cats: ['HOST/PERSONALITY'],
                       note: 'On-air hosts and personalities. Great for talk-format integrations, live-read endorsements, and trusted-voice storytelling.' },
-                    { key: 'creator',   icon: '📱', title: 'Creators / Influencers', cats: ['CREATOR/INFLUENCER', 'INFLUENCER/CREATOR'],
-                      note: 'Native digital creators. The workhorse tier for always-on social, UGC seeding, and platform-authentic content series.' },
+                    { key: 'creator',   icon: '📱', title: 'Creators / Influencers', cats: ['CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'TALENT'],
+                      note: 'Native digital creators. The workhorse tier for always-on social, UGC seeding, and platform-authentic content series. Includes generic talent rows that did not carry a specific subcategory.' },
                     { key: 'comedian',  icon: '😂', title: 'Comedians',              cats: ['COMEDIAN'],
                       note: 'Comedy talent with audience overlap. Use for high-shareability creative, irreverent brand voice, and viral-leaning social spots.' },
                     { key: 'podcaster', icon: '🎧', title: 'Podcasters',             cats: ['PODCASTER'],
@@ -88933,11 +88942,9 @@
                     { key: 'writer',    icon: '✍️', title: 'Writers / Directors / Artists', cats: ['WRITER/DIRECTOR/AUTHOR/ARTIST'],
                       note: 'Writers, directors, authors, and artists. Best for credibility-led collaborations, editorial partnerships, and cultural-cachet plays.' },
                     { key: 'politics',  icon: '🗳️', title: 'Politics / Activists',   cats: ['POLITICS/ACTIVIST', 'POLITICIAN'],
-                      note: 'Political and activist figures. Handle with care — reserve for mission-aligned or advocacy-driven campaigns only.' },
+                      note: 'Political and activist figures. Handle with care - reserve for mission-aligned or advocacy-driven campaigns only.' },
                     { key: 'emerging',  icon: '🌱', title: 'Emerging Talent',        cats: ['EMERGING TALENT'],
-                      note: 'Rising talent with early audience alignment. Use for scrappy, cost-efficient seeding before they scale.' },
-                    { key: 'talent',    icon: '⭐', title: 'Other Talent',           cats: ['TALENT'],
-                      note: 'Other aligned talent that does not map to a primary subcategory.' }
+                      note: 'Rising talent with early audience alignment. Use for scrappy, cost-efficient seeding before they scale.' }
                 ];
 
                 // Assign each candidate to its subcategory group, then rank
@@ -88950,32 +88957,16 @@
                 const _catNorm = s => (s || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
                 groupDefs.forEach(g => { buckets[g.key] = []; g._normCats = g.cats.map(_catNorm); });
                 rows.forEach(r => {
-                    // Any subcategory that doesn't map to a named group falls
-                    // back to "Other Talent" so nothing is silently dropped.
+                    // 2026-07-29 (Jenna): any subcategory that doesn't map to
+                    // a named group falls back to Creators / Influencers so
+                    // nothing is silently dropped and generic "other" talent
+                    // is treated the same as already-labeled CREATOR/INFLUENCER.
                     const rn = _catNorm(r.cat);
                     const g = groupDefs.find(gd => gd._normCats.includes(rn))
-                        || groupDefs.find(gd => gd.key === 'talent');
+                        || groupDefs.find(gd => gd.key === 'creator');
                     if (g) buckets[g.key].push(r);
                 });
                 Object.keys(buckets).forEach(k => buckets[k].sort((a,b) => b.fit - a.fit));
-
-                // TEMP relabel (2026-07): the source CSVs don't yet emit a
-                // CREATOR/INFLUENCER subcategory, so creators/influencers fall
-                // into the generic "TALENT" rollup. While the dedicated creator
-                // bucket is empty, surface the generic bucket AS "Creators /
-                // Influencers". Once the CSVs start populating the real
-                // CREATOR/INFLUENCER subcategory, those items route into the
-                // dedicated creator group above and this generic bucket
-                // automatically reverts to "Other Talent" (no double-labeling).
-                const _talentGroup  = groupDefs.find(g => g.key === 'talent');
-                const _creatorGroup = groupDefs.find(g => g.key === 'creator');
-                const _creatorPopulated = !!(_creatorGroup && (buckets[_creatorGroup.key] || []).length);
-                if (_talentGroup && !_creatorPopulated) {
-                    _talentGroup.title    = 'Creators / Influencers';
-                    _talentGroup.icon     = '📱';
-                    _talentGroup.styleKey = 'creator';
-                    _talentGroup.note     = 'Creators / influencers aligned to this audience. (Currently drawn from the general talent pool; a dedicated creator subcategory is coming.)';
-                }
 
                 // Populate the "Sort by Creator Type" dropdown with only the
                 // subcategories that actually have candidates. Preserve the
