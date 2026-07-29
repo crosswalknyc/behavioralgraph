@@ -17489,6 +17489,21 @@
         }
         /* Insight cards never force the page wider than the viewport. */
         .dashboard-tab-content .insight-card-v2 { min-width: 0; max-width: 100%; }
+
+        /* ---- 10. Demographics charts: give the bars vertical room ---------------
+           The demographics chart cards use a fixed aspect-ratio (16/10) capped at
+           max-height:400px, and the Chart.js charts run maintainAspectRatio:false
+           (canvas fills the card). On a ~360px-wide phone that aspect-ratio yields
+           a very short plot, so the horizontal bars and their category labels get
+           crammed together and overlap. Switch to an auto, height-based card on
+           mobile with a generous min-height so each category row has space. */
+        .charts-grid .chart-card {
+            aspect-ratio: auto !important;
+            height: auto !important;
+            max-height: none !important;
+            min-height: 340px;
+            overflow: visible;
+        }
     }
     </style>
 </head>
