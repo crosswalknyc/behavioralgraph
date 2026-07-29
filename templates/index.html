@@ -17479,6 +17479,13 @@
             flex: 1 1 calc(50% - 0.5rem) !important;
             min-width: 0;
         }
+        /* Let long values (e.g. the Date Range) wrap to fit instead of being
+           clipped by the desktop nowrap+ellipsis rule. */
+        .metrics-row .metric-card .metric-value {
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+        }
         /* Audience Snapshot: two shrinkable columns. */
         .audience-snapshot {
             grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -17541,18 +17548,20 @@
             cursor: pointer;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 0.5rem;
+            justify-content: flex-start;
+            gap: 0.6rem;
             margin: 0;
         }
         .persistent-sidebar.mobile-collapsible .sidebar-header-section h3::after {
-            content: '\25BE'; /* down chevron */
-            font-size: 0.85em;
-            opacity: 0.65;
+            content: '\25BE'; /* down chevron, right after the label */
+            font-size: 1.4em;
+            line-height: 1;
+            opacity: 0.85;
             transition: transform 0.2s ease;
         }
-        .persistent-sidebar.mobile-collapsed .sidebar-header-section h3::after {
-            transform: rotate(-90deg);
+        /* Collapsed (default) points down; expanded flips it up. */
+        .persistent-sidebar.mobile-collapsible:not(.mobile-collapsed) .sidebar-header-section h3::after {
+            transform: rotate(180deg);
         }
         .persistent-sidebar.mobile-collapsed > *:not(.sidebar-header-section) {
             display: none !important;
