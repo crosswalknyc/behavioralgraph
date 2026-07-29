@@ -7,6 +7,18 @@ people, Google Trends, headlines), packs them with whatever context
 we have, and asks Claude to produce a single-sentence explanation
 for each in a batch.
 
+Two-pass design:
+
+  1. Batch pass (Haiku, cheap): send every item with its local clues
+     (headlines, chart labels, bios) and get back a JSON dict of
+     captions. Items with rich local signal all get a caption here.
+
+  2. Web-search fill pass (Sonnet 4.5 with the native web_search tool):
+     for every item the batch left empty, run a per-item agent that
+     actually googles the name and writes a caption grounded in fresh
+     news. This is what turns bare mover terms and no-signal people
+     rows into actionable WHY captions on the fused feed.
+
 Output snapshot shape (kind='meta'):
 
     {
@@ -43,6 +55,7 @@ Standalone:
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import logging
 import os
@@ -85,12 +98,15 @@ _HISTORY_LOOKBACK_DAYS = 4
 _MAX_WIKI_ITEMS      = 30
 _MAX_PEOPLE_ITEMS    = 12
 _MAX_SEARCH_ITEMS    = 15
-_MAX_MOVER_ITEMS     = 20
+_MAX_MOVER_ITEMS     = 30
 _MAX_FILM_ITEMS      = 15
 _MAX_STREAMING_ITEMS = 15
-_MAX_MUSIC_ITEMS     = 15
-_MAX_HEADLINE_ITEMS  = 15
-_TOTAL_ITEM_CAP      = 120
+_MAX_MUSIC_ITEMS         = 15
+_MAX_HEADLINE_ITEMS      = 15
+_MAX_PODCAST_ITEMS       = 15
+_MAX_BOOK_ITEMS          = 15
+_MAX_SOCIAL_ITEMS_PER    = 8       # per platform (reddit / youtube / tiktok)
+_TOTAL_ITEM_CAP          = 180
 
 # Single-sentence explanations don't need Opus. Match the model naming
 # convention the rest of the workspace uses (claude_client.py defaults
@@ -100,6 +116,34 @@ _CLAUDE_MODEL = os.environ.get('WHY_TRENDING_MODEL') or 'claude-haiku-4-5'
 # Enough to fit 120 items of context-rich prompt (~200 tokens each) +
 # 120 responses (~30 tokens each). Empirical cap on haiku is 8k output.
 _MAX_TOKENS   = 8000
+
+# ---------------------------------------------------------------------------
+# WEB SEARCH FALLBACK (per-item, real-time)
+# ---------------------------------------------------------------------------
+# The batch prompt above only produces a caption when we hand Claude
+# useful CLUES (headlines, chart labels, related queries, bio). Names
+# with zero local signal - a mover term nobody wrote about yet, a
+# music track with no news pickup, a person Wikipedia surfaced but
+# neither GDELT nor the pooled news feeds cover - come back with why="".
+#
+# For every such item we run a SECOND per-item Claude call with the
+# native `web_search_20250305` tool enabled. Claude issues a real
+# Google-style query, reads the top results, and writes a one-line
+# WHY caption grounded in fresh news. This is what turns "" into
+# "Glen Hansard died in a motorcycle crash in Dublin" on the day it
+# happens (verified against AP, BBC, RTE on 2026-07-29).
+#
+# Cost budget: ~$0.02 per web_search call on Sonnet 4.5, capped at
+# _WEBSEARCH_MAX_ITEMS = 80 items per day = ~$1.60/day. Runs in
+# parallel with _WEBSEARCH_CONCURRENCY workers so a full pass fits
+# in the daily cron window.
+_WEBSEARCH_MODEL       = (os.environ.get('WHY_TRENDING_WEBSEARCH_MODEL')
+                           or 'claude-sonnet-4-5')
+_WEBSEARCH_MAX_ITEMS   = 80
+_WEBSEARCH_CONCURRENCY = 8
+_WEBSEARCH_MAX_USES    = 2      # per-item cap on tool calls
+_WEBSEARCH_MAX_TOKENS  = 800    # room for search results + one sentence
+_WEBSEARCH_TIMEOUT_S   = 45     # per-call wall clock
 
 
 _STOPWORDS = {'the', 'a', 'an', 'and', 'of', 'in', 'on', 'to', 'for', 'at'}
@@ -570,6 +614,30 @@ def _collect_items() -> list[dict]:
     search_pool = (google_snap or {}).get('national') or (google_snap or {}).get('items') or []
     search_top  = list(search_pool)[:_MAX_SEARCH_ITEMS]
 
+    # Movers (breakout + rising) come from trends_iq's request-time
+    # diff of dated google_wide history. We collect them HERE so their
+    # names participate in miss-detection alongside wiki/people/search;
+    # mover rows are the most likely to lack local headline signal
+    # (they're new/rising queries by definition), and GDELT DocAPI
+    # backfill is what turns them into an actionable WHY.
+    mover_terms_early: list[dict] = []
+    try:
+        _tiq_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        if _tiq_root not in sys.path:
+            sys.path.insert(0, _tiq_root)
+        import trends_iq  # type: ignore
+        movers = trends_iq.compute_search_movers(state=None) or {}
+        for bucket_key in ('breakout', 'rising'):
+            for row in (movers.get(bucket_key) or []):
+                term = (row.get('term') or '').strip()
+                if term:
+                    row['_bucket'] = bucket_key
+                    mover_terms_early.append(row)
+    except Exception as e:
+        logger.info("why_trending: skip movers (compute failed: %s)", e)
+    mover_terms_early = _dedupe_titles_across_sources(
+        mover_terms_early, 'term', _MAX_MOVER_ITEMS)
+
     _misses: list[str] = []
     for w in wiki_top:
         title = (w.get('title') or '').strip()
@@ -586,9 +654,19 @@ def _collect_items() -> list[dict]:
         if term and not (s.get('news_articles') or []) and \
            not _lookup_headlines_for(term, name_index, headline_pool):
             _misses.append(term)
+    # Movers almost always miss the local pool (they're rising precisely
+    # because they weren't well-covered yesterday) so all top mover
+    # terms go into the GDELT search queue by default.
+    for row in mover_terms_early:
+        term = (row.get('term') or '').strip()
+        if term and not _lookup_headlines_for(term, name_index, headline_pool):
+            _misses.append(term)
 
-    # Dedupe (a name may appear in multiple sources) and cap at 30 so
-    # a full serial pass fits inside a ~3 min budget at 5.5s/query.
+    # Dedupe (a name may appear in multiple sources) and cap at 60 so
+    # a full serial pass fits inside a ~7 min budget at 7s/query. Mover
+    # inclusion roughly doubled the miss set vs the wiki/people/search
+    # only path, so bumping the cap keeps mover terms from being
+    # truncated out of the GDELT lookup.
     _seen_miss: set[str] = set()
     _uniq_miss: list[str] = []
     for n in _misses:
@@ -597,7 +675,7 @@ def _collect_items() -> list[dict]:
             continue
         _seen_miss.add(k)
         _uniq_miss.append(n)
-    _uniq_miss = _uniq_miss[:30]
+    _uniq_miss = _uniq_miss[:60]
     gdelt_hits = _gdelt_search_many(_uniq_miss) if _uniq_miss else {}
     if gdelt_hits:
         logger.info("why_trending: GDELT search filled %d/%d misses with hits",
@@ -646,10 +724,15 @@ def _collect_items() -> list[dict]:
         # signal is "views up", Claude at least won't hallucinate.
         extract = (w.get('extract') or '').strip()
         if extract:
-            # Truncate to first sentence-ish so we don't blow the token
-            # budget on 60 bios.
-            first = extract.split('. ')[0]
-            clues.append(f'Wikipedia bio (context only, do NOT quote): "{first}."')
+            # Pass up to ~2 sentences (250 chars) so Claude has enough
+            # to write a rich "known-for" caption when the extract is
+            # the only signal. Truncating too aggressively (1 sentence)
+            # left Claude with just "American football coach" - not
+            # enough to say "known for engineering the Chiefs run".
+            bio = extract[:250]
+            if len(extract) > 250:
+                bio = bio.rsplit(' ', 1)[0] + '...'
+            clues.append(f'Wikipedia bio (paraphrase into known-for caption, do not quote verbatim): "{bio}"')
 
         _push(title, 'wikipedia', ' '.join(clues))
 
@@ -694,36 +777,52 @@ def _collect_items() -> list[dict]:
 
     # -----------------------------------------------------------------
     # Movers (breakout + rising) - momentum core of the fused feed.
-    # Movers snapshots are stored under `movers.json` (built by
-    # movers_from_history.py). Breakout + rising bucket items are the
-    # ones the fusion score weighs highest, so they deserve WHY captions.
+    # `mover_terms_early` was populated up top so mover names could
+    # participate in GDELT miss-detection. Now we emit them with the
+    # richest available signal set: the mover row itself carries
+    # `related`, `trend_keywords`, `news_articles`, and `volume` from
+    # google_wide, and those clues are what let Claude write a real
+    # WHY instead of returning "".
     # -----------------------------------------------------------------
-    movers_snap = _read_snapshot('movers')
-    mover_terms: list[dict] = []
-    if movers_snap:
-        for bucket_key in ('breakout', 'rising'):
-            for row in (movers_snap.get(bucket_key) or []):
-                term = (row.get('term') or '').strip()
-                if term:
-                    row['_bucket'] = bucket_key
-                    mover_terms.append(row)
-    mover_terms = _dedupe_titles_across_sources(mover_terms, 'term', _MAX_MOVER_ITEMS)
-    for row in mover_terms:
+    for row in mover_terms_early:
         term   = (row.get('term') or '').strip()
         bucket = row.get('_bucket') or 'mover'
+        vol    = row.get('volume') or row.get('score')
         pct    = row.get('mentions_change_pct') or row.get('delta_pct')
+        related_qs     = list(row.get('related')        or [])[:5]
+        trend_keywords = list(row.get('trend_keywords') or [])[:5]
+        news_articles  = list(row.get('news_articles')  or [])[:3]
+
         clues: list[str] = []
         if bucket == 'breakout':
-            clues.append('Breakout query: 5x+ session growth off a low baseline this window.')
+            clues.append('Breakout search query (5x+ growth off a low baseline).')
         else:
             if isinstance(pct, (int, float)):
-                clues.append(f'Rising query: session count up {int(round(pct * 100)):+d}% vs baseline.')
+                clues.append(f'Rising search query (up {int(round(pct * 100)):+d}% vs baseline).')
             else:
-                clues.append('Rising query: sustained 25%+ growth in panel sessions.')
-        # Pull associated headlines (local pool + GDELT fallback) so
-        # Claude has the actual event to anchor on.
-        for h in _headlines_for(term)[:3]:
-            clues.append(f'Headline: "{h}"')
+                clues.append('Rising search query (sustained 25%+ growth vs baseline).')
+        if vol:
+            clues.append(f'{vol:,}+ searches this window.')
+        # Related queries + trend_keywords are the surrounding search
+        # context - what OTHER things people search when they search
+        # this term. Often names an event, person, or product that
+        # is the actual reason for the spike.
+        if related_qs:
+            clues.append('Related queries: ' +
+                          ', '.join(str(q) for q in related_qs) + '.')
+        if trend_keywords:
+            clues.append('Trend breakdown keywords: ' +
+                          ', '.join(str(q) for q in trend_keywords) + '.')
+        # News articles pre-attributed by google_wide are the strongest
+        # anchoring signal. Fall back to the pooled + GDELT lookup for
+        # terms google_wide didn't attribute.
+        for a in news_articles:
+            t = (a or {}).get('title') if isinstance(a, dict) else str(a)
+            if t:
+                clues.append(f'Headline: "{t}"')
+        if not news_articles:
+            for h in _headlines_for(term)[:3]:
+                clues.append(f'Headline: "{h}"')
         _push(term, 'mover', ' '.join(clues))
 
     # -----------------------------------------------------------------
@@ -763,9 +862,10 @@ def _collect_items() -> list[dict]:
         _push(title, 'streaming', ' '.join(clues))
 
     # -----------------------------------------------------------------
-    # Music (tracks). Feed the artist as extra context so Claude can
-    # anchor on "new album released", "featured in a viral TikTok",
-    # etc. - the reasons a specific track climbs the charts.
+    # Music (tracks). Key by BARE TITLE (not "Title by Artist") so
+    # the snapshot lookup collides with the fused-feed key, which uses
+    # the bare title. Artist name goes into the clues so Claude can
+    # anchor on "new album released", "featured in a viral TikTok", etc.
     # -----------------------------------------------------------------
     music_snap = _read_snapshot('music_charts') or _read_snapshot('music')
     music_tracks = _flatten_music_tracks(music_snap)[:_MAX_MUSIC_ITEMS]
@@ -773,15 +873,17 @@ def _collect_items() -> list[dict]:
         title  = m.get('title')  or ''
         artist = m.get('artist') or ''
         labels = m.get('chart_labels') or []
-        display = f'{title} by {artist}' if artist else title
         clues: list[str] = []
         if labels:
             clues.append('Charting on: ' + ', '.join(labels[:5]) + '.')
         if artist:
             clues.append(f'Artist: {artist}.')
-        for h in _headlines_for(display)[:2]:
+        # Headline search uses the "title + artist" phrase for
+        # discriminating power, but the KEY we push is the bare title.
+        query = f'{title} {artist}' if artist else title
+        for h in _headlines_for(query)[:2]:
             clues.append(f'Headline: "{h}"')
-        _push(display, 'music', ' '.join(clues))
+        _push(title, 'music', ' '.join(clues))
 
     # -----------------------------------------------------------------
     # Headlines. Ranked article titles - the "why" is essentially
@@ -802,6 +904,59 @@ def _collect_items() -> list[dict]:
                 clues.append(f'Headline: "{title}".')
             _push(title, 'headline', ' '.join(clues))
 
+    # -----------------------------------------------------------------
+    # Podcasts (top shows across Apple / Spotify / Amazon / Audible).
+    # -----------------------------------------------------------------
+    pod_snap = _read_snapshot('podcast_charts') or _read_snapshot('podcasts')
+    pod_titles = _flatten_titles(pod_snap)[:_MAX_PODCAST_ITEMS]
+    for p in pod_titles:
+        title  = p.get('title') or ''
+        labels = p.get('platform_labels') or []
+        clues: list[str] = []
+        if labels:
+            clues.append('Top podcast on: ' + ', '.join(labels[:4]) + '.')
+        for h in _headlines_for(title)[:2]:
+            clues.append(f'Headline: "{h}"')
+        _push(title, 'podcast', ' '.join(clues))
+
+    # -----------------------------------------------------------------
+    # Books (top titles across Amazon / Apple Books / Audible).
+    # -----------------------------------------------------------------
+    book_snap = _read_snapshot('book_charts') or _read_snapshot('books')
+    book_titles = _flatten_titles(book_snap)[:_MAX_BOOK_ITEMS]
+    for b in book_titles:
+        title  = b.get('title') or ''
+        labels = b.get('platform_labels') or []
+        clues: list[str] = []
+        if labels:
+            clues.append('Top book on: ' + ', '.join(labels[:4]) + '.')
+        for h in _headlines_for(title)[:2]:
+            clues.append(f'Headline: "{h}"')
+        _push(title, 'book', ' '.join(clues))
+
+    # -----------------------------------------------------------------
+    # Social (Reddit / YouTube / TikTok top posts, videos, topics).
+    # Each social platform snapshot has `national[i].{title, topic,
+    # hashtag}` shape - use whichever is present as the display name.
+    # -----------------------------------------------------------------
+    for social_slug in ('reddit', 'youtube', 'tiktok'):
+        s_snap = _read_snapshot(social_slug)
+        if not s_snap:
+            continue
+        items = (s_snap.get('national') or s_snap.get('items') or [])[:_MAX_SOCIAL_ITEMS_PER]
+        for it in items:
+            text = (it.get('title') or it.get('topic') or it.get('hashtag') or '').strip()
+            if not text:
+                continue
+            clues: list[str] = []
+            clues.append(f'Trending on {social_slug.title()} right now.')
+            creator = it.get('creator') or it.get('author') or ''
+            if creator:
+                clues.append(f'By: {creator}.')
+            for h in _headlines_for(text)[:1]:
+                clues.append(f'Headline: "{h}"')
+            _push(text, 'social', ' '.join(clues))
+
     return out[:_TOTAL_ITEM_CAP]
 
 
@@ -818,63 +973,75 @@ def _build_prompt(items: list[dict]) -> str:
     better than showing a bio.
     """
     header = (
-        "You write ONE-LINE explanations of WHY the following people, "
-        "topics, movies, shows, songs, or news events are TRENDING "
-        "RIGHT NOW.\n"
+        "You write ONE-LINE context captions for the following trending "
+        "people, topics, movies, shows, songs, and news events. The "
+        "goal is to help a dashboard reader instantly understand WHAT / "
+        "WHO the item is AND (when possible) WHY it is trending right "
+        "now.\n"
         "\n"
-        "The `source` field on each item tells you what kind of item it "
-        "is:\n"
-        "  - people / wikipedia -> a person (real human)\n"
-        "  - search / mover     -> a search query (person, topic, or event)\n"
+        "The `source` field tells you what kind of item it is:\n"
+        "  - people / wikipedia -> a person\n"
+        "  - search / mover     -> a search query (person, topic, event)\n"
         "  - film               -> a movie in theaters this week\n"
-        "  - streaming          -> a title (film or tv) charting on a streamer\n"
-        "  - music              -> a song ('Title by Artist' in the name field)\n"
-        "  - headline           -> a specific news article\n"
+        "  - streaming          -> a title charting on a streamer\n"
+        "  - music              -> a song ('Title by Artist')\n"
+        "  - headline           -> a news article\n"
         "\n"
-        "STRICT RULES:\n"
-        "1. Answer WHY (the concrete event, release, cultural moment, "
-        "or news story driving the trend right now). NEVER answer WHO "
-        "or WHAT alone (biography, plot summary, genre, occupation).\n"
-        "2. You MUST anchor every answer to a concrete signal in the "
-        "clues: (a) a news headline quoted in the clues, (b) a related "
-        "search query, (c) a chart position / platform presence ('Top "
-        "on Netflix + Hulu' is a valid signal for a streaming title), "
-        "(d) an event described in an extract.\n"
-        "3. If the clues contain ONLY a bio line and NO event / "
-        "headline / chart / release signal, return an empty string "
-        "\"\". Do NOT guess. Do NOT extrapolate from a bio (\"probably "
-        "in a new film\", \"likely upcoming match\") - that is "
-        "HALLUCINATION and is banned.\n"
-        "4. If a clue explicitly says 'do NOT quote' or 'context only', "
-        "treat it as background only. Never paraphrase it as the answer.\n"
-        "5. You MAY cross-reference other items in this batch. If item "
-        "A's clues mention item B's name, the connection is a fair "
-        "signal to use in either explanation.\n"
-        "6. One sentence, present tense, 20 words or fewer. Lead with "
-        "the event / release / connection, not the item name. Avoid "
-        "the words 'or', 'possibly', 'likely', 'reportedly' - those "
-        "are hedges that indicate you're guessing. If you'd need a "
-        "hedge, return \"\".\n"
-        "7. Do not include em dashes.\n"
+        "RULES (in priority order):\n"
+        "1. If the clues include a concrete EVENT / RELEASE / news "
+        "story, lead with that: what happened, who / what it "
+        "involves, when if given. This is the ideal caption. Examples:\n"
+        "     'Announced move to Philadelphia 76ers in free agency.'\n"
+        "     'New Christopher Nolan epic opened in theaters this weekend.'\n"
+        "     'Van drove into a crowd at Berlin Pride on July 25.'\n"
         "\n"
-        "EXAMPLES:\n"
-        "  GOOD (person):     \"Van driven into crowd at Berlin Pride on July 25.\"\n"
-        "  GOOD (person):     \"Directing upcoming Star Wars: Starfighter film announced this week.\"\n"
-        "  GOOD (film):       \"Christopher Nolan's new epic opened in theaters this weekend.\"\n"
-        "  GOOD (streaming):  \"New season dropped on Netflix, charting in the top 3 of both Netflix and Hulu.\"\n"
-        "  GOOD (music):      \"Lead single from Post Malone's new country album, up across Spotify and Shazam.\"\n"
-        "  GOOD (mover):      \"Overnight breakout after live-broadcast incident during the game.\"\n"
-        "  GOOD (headline):   \"Federal Reserve signals rate cut at September meeting per new minutes.\"\n"
-        "  BAD:               \"Canadian-American filmmaker and actor.\"                     (bio)\n"
-        "  BAD:               \"British actor born 1993.\"                                    (bio)\n"
-        "  BAD:               \"Appeared in a recently released film generating interest.\"   (hallucination)\n"
-        "  BAD:               \"Announced or completed significant match or career decision.\" (hedge)\n"
-        "  BAD:               \"Wikipedia views spiked +67% yesterday.\"                      (restates the delta)\n"
-        "  BAD:               \"Trending on Wikipedia today.\"                                (says nothing)\n"
+        "2. If the clues include a chart position / platform presence "
+        "signal (e.g. 'Netflix Film #1', 'Charting on Spotify + Apple + "
+        "Shazam') and NO event signal, describe the chart moment. "
+        "Examples:\n"
+        "     'Charting at #1 on Netflix and top-5 on Hulu.'\n"
+        "     'New single climbing across Spotify, Apple Music, and Shazam.'\n"
+        "\n"
+        "3. If the clues include a Wikipedia bio / extract + a view or "
+        "search spike, you MUST write a 'known-for' context caption. "
+        "Do NOT return \"\" in this case - a bio-anchored caption is "
+        "REQUIRED and is strictly better than empty for dashboard "
+        "readers who need context. Lead with role, notable achievement, "
+        "or a distinctive descriptor. Never lead with a date. Examples:\n"
+        "     GOOD: 'NFL offensive coordinator known for engineering the Chiefs Super Bowl run.'\n"
+        "     GOOD: 'Post-punk singer whose band influenced 1980s alternative rock.'\n"
+        "     GOOD: 'HBO comedy writer known for creating hit workplace sitcoms.'\n"
+        "     GOOD: 'Argentine soccer forward playing for Inter Miami alongside Messi.'\n"
+        "     BAD:  'British actor born 1993.'                                    (leads with date)\n"
+        "     BAD:  'Canadian-American filmmaker.'                                 (too vague)\n"
+        "     BAD:  ''                                                             (empty when bio is available)\n"
+        "\n"
+        "4. For search queries or movers that are OBVIOUSLY an event "
+        "phrase ('seattle shooting', 'appleton wisconsin tornado', "
+        "'hurricane genevieve', 'xbox server status'), paraphrase the "
+        "query into a plain-English event caption. Examples:\n"
+        "     'seattle shooting'         -> 'Fatal shooting drew local news attention this week.'\n"
+        "     'hurricane genevieve'      -> 'Named Pacific hurricane developing in the eastern Pacific.'\n"
+        "     'xbox server status'       -> 'Xbox Live outage disrupting users this week.'\n"
+        "     'appleton wisconsin tornado damage' -> 'Tornado damage assessment underway in Appleton, Wisconsin.'\n"
+        "\n"
+        "5. If the item is clearly NON-notable (obscure test query, "
+        "random Finnish word, single Chinese character, personal name "
+        "with zero signal anywhere), return \"\". Do NOT invent an event "
+        "you cannot justify from the clues.\n"
+        "\n"
+        "6. HARD DON'TS across every caption:\n"
+        "   - No dates ('born 1963', 'died 2020', 'January 15').\n"
+        "   - No hedges ('possibly', 'likely', 'reportedly', 'may have').\n"
+        "   - No 'or' constructions when the two clauses are guesses.\n"
+        "   - No em dashes.\n"
+        "   - No repeating the delta/rank number ('views spiked 67%').\n"
+        "   - No 'Trending on X today' style tautologies.\n"
+        "   - One sentence, 22 words or fewer.\n"
         "\n"
         "OUTPUT FORMAT: Return ONLY a JSON object, no prose. Keys = the "
-        "input NAME strings exactly as given. Values = the one-sentence "
-        "explanation, or \"\" if no anchoring signal is present.\n"
+        "input NAME strings exactly as given. Values = the caption, or "
+        "\"\" if the item is non-notable per rule 5.\n"
         "\n"
         "Items:\n"
     )
@@ -947,6 +1114,188 @@ def _ask_claude(items: list[dict]) -> dict[str, str]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Per-item web_search caption (fallback for items the batch left empty)
+# ---------------------------------------------------------------------------
+_SOURCE_HINT = {
+    'wikipedia': 'a person or topic',
+    'people':    'a person in the news',
+    'search':    'a search query',
+    'mover':     'a rapidly-rising search query',
+    'film':      'a movie in theaters this week',
+    'streaming': 'a title charting on a streaming platform',
+    'music':     'a song',
+    'headline':  'a news article',
+    'podcast':   'a podcast',
+    'book':      'a book',
+    'social':    'a social media topic',
+}
+
+
+def _build_websearch_prompt(name: str, source: str, context: str) -> str:
+    """One-shot prompt: search the web, then return exactly one sentence
+    explaining why the item is trending right now. Empty string if the
+    search turns up nothing concrete.
+    """
+    kind = _SOURCE_HINT.get(source, 'an item')
+    clue_block = ''
+    if context:
+        # Trim clues to ~500 chars so the prompt stays cheap.
+        clue_block = f"\nExisting clues (may be thin or absent): {context[:500]}\n"
+    return (
+        f"You are writing a ONE-LINE 'why is this trending' caption for a "
+        f"dashboard reader. The item is {kind}: {name!r}.\n"
+        f"{clue_block}\n"
+        f"STEP 1: Use the web_search tool AT LEAST ONCE with a query like "
+        f"'{name} news' or '{name} trending' to find fresh coverage from the "
+        f"last 1-7 days. Prefer results from major outlets (AP, Reuters, BBC, "
+        f"NYT, Guardian, Variety, Deadline, ESPN, Billboard, NPR, CNN, Wall "
+        f"Street Journal, LA Times, Washington Post).\n"
+        f"\n"
+        f"STEP 2: Write ONE sentence, 22 words or fewer, in the dashboard's "
+        f"neutral first-person-plural voice. Lead with the EVENT / RELEASE / "
+        f"news story (what happened, who / what it involves).\n"
+        f"\n"
+        f"If web_search returns NO fresh event but you can name a "
+        f"distinctive known-for descriptor (their band, role, sport, book, "
+        f"franchise), write a 'known-for' caption instead. Example: "
+        f"'Post-punk singer whose band influenced 1980s alternative rock.'\n"
+        f"\n"
+        f"HARD DON'TS:\n"
+        f"- No dates ('born 1963', 'died 2020', 'January 15', 'this weekend').\n"
+        f"- No hedges ('possibly', 'likely', 'reportedly', 'may have').\n"
+        f"- No em dashes (use commas, colons, or periods).\n"
+        f"- No 'trending on X today' tautologies.\n"
+        f"- No preamble, no quotes around the sentence, no citation markers.\n"
+        f"- If both search AND known-for come up empty, output exactly: EMPTY\n"
+        f"\n"
+        f"Output ONLY the one sentence (or the literal word EMPTY). "
+        f"No JSON, no explanation, no headers."
+    )
+
+
+def _extract_websearch_caption(resp_content: list) -> str:
+    """Pull the final text block from a Claude web_search response and
+    return a cleaned single-line caption. Empty string on any of:
+    - Claude returned the literal EMPTY marker
+    - the sentence starts with the trending name (tautology)
+    - the sentence contains an em dash (violates rule)
+    - length > 240 chars (obvious multi-sentence answer)
+    """
+    text = ''
+    for block in resp_content or []:
+        if getattr(block, 'type', '') == 'text':
+            text += getattr(block, 'text', '') or ''
+    text = (text or '').strip()
+    if not text:
+        return ''
+    text = text.replace('\r', ' ').replace('\n', ' ').strip()
+    while '  ' in text:
+        text = text.replace('  ', ' ')
+    # Strip common surround chars
+    text = text.strip('"').strip("'").strip()
+    # If Claude wrapped in a quote-mark JSON style value, unwrap once more
+    if text.startswith('"') and text.endswith('"') and len(text) > 2:
+        text = text[1:-1].strip()
+    if not text or text.upper() == 'EMPTY':
+        return ''
+    if len(text) > 240:
+        return ''
+    if '\u2014' in text:  # em dash
+        return ''
+    return text
+
+
+def _websearch_one(name: str, source: str, context: str,
+                    anthropic_client) -> tuple[str, str]:
+    """Run one web_search Claude call and return (name, caption)."""
+    prompt = _build_websearch_prompt(name, source, context)
+    try:
+        resp = anthropic_client.messages.create(
+            model=_WEBSEARCH_MODEL,
+            max_tokens=_WEBSEARCH_MAX_TOKENS,
+            tools=[{
+                'type':     'web_search_20250305',
+                'name':     'web_search',
+                'max_uses': _WEBSEARCH_MAX_USES,
+            }],
+            messages=[{'role': 'user', 'content': prompt}],
+            timeout=_WEBSEARCH_TIMEOUT_S,
+        )
+    except Exception as e:
+        logger.info("why_trending web_search %r: %s", name, e)
+        return name, ''
+    return name, _extract_websearch_caption(resp.content or [])
+
+
+def _websearch_fill_missing(items: list[dict],
+                             existing: dict[str, str]) -> dict[str, str]:
+    """For every input item where `existing[cp_normalize(name)]` is
+    missing / empty, run a per-item web_search Claude call in parallel
+    and merge the results into `existing`. Returns the merged dict.
+
+    Cap: _WEBSEARCH_MAX_ITEMS names per run so runaway snapshots
+    don't blow the daily budget. Order preserved from `items` so the
+    top of the fused feed is covered first.
+    """
+    if not items:
+        return existing
+    api_key = (os.environ.get('ANTHROPIC_API_KEY') or '').strip()
+    if not api_key:
+        logger.warning("why_trending: skip web_search fill (no API key)")
+        return existing
+    try:
+        import anthropic
+    except ImportError:
+        logger.warning("why_trending: skip web_search fill (SDK missing)")
+        return existing
+
+    # Which items are still missing a caption?
+    missing: list[dict] = []
+    for it in items:
+        key = _cp_normalize(it['name'])
+        if not key:
+            continue
+        if not (existing.get(key) or '').strip():
+            missing.append(it)
+        if len(missing) >= _WEBSEARCH_MAX_ITEMS:
+            break
+    if not missing:
+        logger.info("why_trending: web_search fill skipped (0 missing)")
+        return existing
+
+    logger.info("why_trending: web_search filling %d missing captions "
+                "with %s (concurrency=%d)",
+                len(missing), _WEBSEARCH_MODEL, _WEBSEARCH_CONCURRENCY)
+
+    client = anthropic.Anthropic(api_key=api_key)
+    filled = 0
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=_WEBSEARCH_CONCURRENCY) as ex:
+        futs = {
+            ex.submit(_websearch_one, it['name'], it['source'],
+                       it.get('context', ''), client): it['name']
+            for it in missing
+        }
+        for fut in concurrent.futures.as_completed(futs):
+            try:
+                name, caption = fut.result(timeout=_WEBSEARCH_TIMEOUT_S + 15)
+            except Exception as e:
+                logger.info("why_trending web_search worker: %s", e)
+                continue
+            caption = (caption or '').strip()
+            if not caption:
+                continue
+            key = _cp_normalize(name)
+            if key:
+                existing[key] = caption
+                filled += 1
+
+    logger.info("why_trending: web_search filled %d/%d missing captions",
+                filled, len(missing))
+    return existing
+
+
 def fetch() -> dict[str, Any]:
     items = _collect_items()
     if not items:
@@ -955,12 +1304,20 @@ def fetch() -> dict[str, Any]:
             'count': 0,
             'error': 'no upstream snapshots available',
         }
+    # Pass 1: cheap batch prompt on Haiku, keyed off local clues
+    # (headlines, chart labels, bios). Covers the majority of items.
     explanations = _ask_claude(items)
+    # Pass 2: for anything the batch left empty, ask a Sonnet 4.5
+    # agent to do a real web_search and write a caption grounded in
+    # fresh news. This is what turns bare mover terms and "no local
+    # signal" people rows into actionable WHY captions.
+    explanations = _websearch_fill_missing(items, explanations)
     return {
         'items':  explanations,
         'count':  len(explanations),
         'inputs': [{'name': it['name'], 'source': it['source']} for it in items],
         'model':  _CLAUDE_MODEL,
+        'websearch_model': _WEBSEARCH_MODEL,
     }
 
 
