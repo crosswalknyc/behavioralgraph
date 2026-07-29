@@ -17259,6 +17259,158 @@
             } catch (e) { /* localStorage unavailable - stay on default (dark) */ }
         })();
     </script>
+    <!-- ============================================================================
+         MOBILE RESPONSIVE LAYER  (added 2026-07-28)
+         ----------------------------------------------------------------------------
+         Self-contained, ADDITIVE mobile styling for the Profile IQ dashboard.
+
+         SAFETY CONTRACT (do not break):
+           * EVERY rule below lives inside `@media (max-width: 768px)`, so it is
+             physically incapable of applying to desktop viewports (>=769px).
+             Desktop renders from the exact same rules it always has.
+           * This block only ADDS rules; it never edits/deletes existing CSS.
+           * It is the LAST <style> in <head>, so for equal-specificity mobile
+             rules it wins by source order (no need to bump specificity elsewhere).
+           * To fully revert mobile behavior, delete this single block.
+
+         Scope (phase 1): the shared app shell used by Profile IQ — root scroll
+         model, header/product nav, two-pane -> stacked layout, sub-tab strip,
+         footer, and baseline overflow/table/input guards.
+         ============================================================================ -->
+    <style id="mobile-responsive-layer">
+    @media (max-width: 768px) {
+        /* ---- 1. Root scroll model -------------------------------------------------
+           Desktop is a fixed-viewport app: body{overflow:hidden} +
+           .container{height:100vh;overflow:hidden} + inner panes scroll
+           independently. On phones we turn the whole thing into one normal,
+           vertically-scrolling document. */
+        html {
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            height: auto !important;
+            -webkit-text-size-adjust: 100%;
+        }
+        body {
+            overflow: visible !important;
+            overflow-x: hidden !important;
+            height: auto !important;
+            min-height: 100vh;
+        }
+        .container {
+            height: auto !important;
+            min-height: 100vh;
+            overflow: visible !important;
+            padding: 0.6rem 0.75rem calc(56px + env(safe-area-inset-bottom, 0px)) 0.75rem !important;
+        }
+
+        /* ---- 2. Header + product selector ----------------------------------------
+           Let the logo row and the controls stack; make the product nav and
+           user bar span full width so they're tappable. */
+        header {
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-bottom: 0.4rem;
+        }
+        .header-right-section {
+            width: 100%;
+            align-items: stretch;
+            margin-left: 0;
+        }
+        .user-info-bar {
+            width: 100%;
+            justify-content: space-between;
+            gap: 0.6rem;
+        }
+        .view-toggle {
+            width: 100%;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+        .view-nav-custom-wrap {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .view-nav-trigger,
+        .view-nav-panel {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        /* ---- 3. Two-pane dashboard -> stacked -------------------------------------
+           The 280px persistent sidebar (profile list) moves above the content
+           as a capped, self-scrolling panel; the content pane grows naturally. */
+        .dashboard-layout {
+            flex-direction: column !important;
+            height: auto !important;
+            overflow: visible !important;
+            gap: 0.75rem;
+        }
+        .persistent-sidebar {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            height: auto !important;
+            max-height: 45vh;
+            overflow-y: auto !important;
+        }
+        .dashboard-tab-content {
+            height: auto !important;
+            overflow: visible !important;
+            padding-bottom: 1rem !important;
+        }
+
+        /* ---- 4. Action row + grids stack to a single column ----------------------- */
+        .action-buttons-row {
+            grid-template-columns: 1fr !important;
+            gap: 0.5rem;
+        }
+        .content-action-buttons {
+            max-width: 100% !important;
+            flex-wrap: wrap;
+        }
+        .main-grid {
+            grid-template-columns: 1fr !important;
+            gap: 1rem !important;
+        }
+
+        /* ---- 5. Sub-tab strip: horizontal scroll instead of clipping -------------- */
+        .dashboard-tabs {
+            overflow-x: auto !important;
+            overflow-y: hidden;
+            flex-wrap: nowrap;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            padding-bottom: 2px;
+        }
+        .dashboard-tabs::-webkit-scrollbar { display: none; }
+
+        /* ---- 6. Fixed footer: compact ---------------------------------------------- */
+        .app-footer {
+            padding: 0.4rem 0.75rem;
+        }
+        .app-footer-text { font-size: 0.65rem; }
+
+        /* ---- 7. Baseline guards ---------------------------------------------------
+           Prevent wide data tables from forcing horizontal page scroll (they get
+           their own inner scroll), and stop iOS from auto-zooming on input focus
+           (needs >=16px font). Scoped to real inputs to avoid layout surprises. */
+        .dashboard-tab-content table {
+            display: block;
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        input[type="text"],
+        input[type="search"],
+        input[type="email"],
+        input[type="password"],
+        input[type="number"],
+        input[type="tel"],
+        textarea {
+            font-size: 16px !important;
+        }
+    }
+    </style>
 </head>
 <body{% if username %} data-username="{{ username }}"{% endif %}>
     <script>
