@@ -46352,7 +46352,7 @@
         // used before it went live.
         // ============================================================
         function renderTIQFilms(sources) {
-            var keys = ['fandango', 'cinemark', 'amc', 'regal', 'atom'];
+            var keys = ['fandango', 'cinemark', 'amc', 'regal'];
             var present = keys.filter(function(k) { return sources[k]; });
             if (!present.length) {
                 return '<div class="tiq-empty">Film ticketing data is warming up. Check back later.</div>';

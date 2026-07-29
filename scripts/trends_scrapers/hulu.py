@@ -127,19 +127,47 @@ def fetch() -> dict[str, Any]:
                              scroll_ms=2500,
                              hydration_wait_ms=15000)
 
-    all_items: list[dict] = []
+    # Bucket parsed items by kind (Film vs TV) so we can guarantee film
+    # representation in the final 20. Previously we appended every rail
+    # into a single list and truncated at 20 - the Home rail alone
+    # returns 30 TV series most days, which pushed the Movies rail out
+    # entirely and left the Films tab empty on the dashboard.
+    films: list[dict] = []
+    tv:    list[dict] = []
     seen: set[str] = set()
     for label, html in rendered:
         items = _extract_hulu_dom(html, limit=30)
+        parsed_films = parsed_tv = 0
         for it in items:
             key = it['title'].lower()
             if key in seen:
                 continue
             seen.add(key)
             it['collection'] = it.get('collection') or label
-            all_items.append(it)
-        logger.info("hulu %s: parsed %d titles from %d-byte HTML",
-                     label, len(items), len(html))
+            if it.get('category_display') == 'Film':
+                films.append(it)
+                parsed_films += 1
+            else:
+                tv.append(it)
+                parsed_tv += 1
+        logger.info("hulu %s: parsed %d films + %d tv from %d-byte HTML",
+                     label, parsed_films, parsed_tv, len(html))
+
+    # Interleave so both categories are in the top 20. Cap around 60/40
+    # TV/Film mix which mirrors Hulu's actual consumption pattern (Hulu
+    # is TV-first) while guaranteeing at least ~8 films visible when
+    # the Movies rail returns data.
+    all_items: list[dict] = []
+    fi = ti = 0
+    while (fi < len(films) or ti < len(tv)) and len(all_items) < 20:
+        # 3 TV : 2 Film ratio per round -> ~8 films in top 20 when
+        # both rails are healthy.
+        for _ in range(3):
+            if ti < len(tv) and len(all_items) < 20:
+                all_items.append(tv[ti]); ti += 1
+        for _ in range(2):
+            if fi < len(films) and len(all_items) < 20:
+                all_items.append(films[fi]); fi += 1
 
     for i, it in enumerate(all_items[:20], start=1):
         it['rank'] = i
