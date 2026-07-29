@@ -91603,7 +91603,10 @@
         // removes the dataset. Clearing or switching to a different subject
         // wipes the state.
         // -------------------------------------------------------------------
-        const _COMPARISON_PALETTE = ['#fd971f', '#ae81ff', '#f92672', '#66d9ef', '#a6e22e', '#e6db74', '#75715e', '#ff79c6'];
+        // NB: no red/rose in this palette on purpose - a red cut column
+        // reads as "negative data" next to the green/red index coloring.
+        // Slot 3 was #f92672 (rose); swapped to a neutral blue.
+        const _COMPARISON_PALETTE = ['#fd971f', '#ae81ff', '#5a9ad9', '#66d9ef', '#a6e22e', '#e6db74', '#75715e', '#ff79c6'];
         const _COMPARISON_GENPOP_COLOR = '#9ca3af';
         // Synthetic key for the precomputed Category Norm "run". Treated by
         // every downstream rendering helper as if it were a real data cut.
@@ -99349,7 +99352,7 @@
                 : [];
             const palette = (typeof _COMPARISON_PALETTE !== 'undefined' && Array.isArray(_COMPARISON_PALETTE) && _COMPARISON_PALETTE.length)
                 ? _COMPARISON_PALETTE
-                : ['#fd971f', '#a6e22e', '#f92672', '#ae81ff', '#e6db74'];
+                : ['#fd971f', '#a6e22e', '#5a9ad9', '#ae81ff', '#e6db74'];
             // 2026-06-22: one line per cohort + drop the profile name so
             // the chips read e.g. "Total Universe Median: 47.12 years"
             // / "Avid Median: 52.33 years" / "Avid Female Median: 54.84
@@ -99399,7 +99402,7 @@
                 : [];
             const palette = (typeof _COMPARISON_PALETTE !== 'undefined' && Array.isArray(_COMPARISON_PALETTE) && _COMPARISON_PALETTE.length)
                 ? _COMPARISON_PALETTE
-                : ['#fd971f', '#a6e22e', '#f92672', '#ae81ff', '#e6db74'];
+                : ['#fd971f', '#a6e22e', '#5a9ad9', '#ae81ff', '#e6db74'];
             // 2026-06-22: one line per cohort + drop the profile name
             // (mirror of the age-median layout above).
             const baseLbl = (typeof _baseCohortLabel === 'function') ? _baseCohortLabel() : 'Total Universe';
@@ -99460,7 +99463,7 @@
             const _cmpHideGP    = (_cmpSeriesForDemo.length > 0) && !_cmpIncludeGP;
             const _cmpPalette   = (typeof _COMPARISON_PALETTE !== 'undefined' && Array.isArray(_COMPARISON_PALETTE) && _COMPARISON_PALETTE.length)
                 ? _COMPARISON_PALETTE
-                : ['#fd971f', '#a6e22e', '#f92672', '#ae81ff', '#e6db74'];
+                : ['#fd971f', '#a6e22e', '#5a9ad9', '#ae81ff', '#e6db74'];
             // Chart-key → demographics-dict key (mostly identity, but
             // camelCase chart keys map to snake_case dict keys).
             const _cmpDataCatMap = {
