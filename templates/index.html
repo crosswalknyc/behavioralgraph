@@ -17454,6 +17454,41 @@
 
         /* Open-profile chips wrap instead of overflowing. */
         .profile-tabs-bar { flex-wrap: wrap; }
+
+        /* ---- 9. Insights tab content: stop right-edge overflow ------------------
+           An existing @media(max-width:1200px) already single-columns these
+           grids, but with plain `1fr` tracks. `1fr` == `minmax(auto,1fr)`, and
+           the `auto` floor grows to the content's min-content width, so the grids
+           (plus the nowrap metrics row and the inline `1fr 1fr` layout) balloon
+           wider than the phone screen and get clipped on the right. Using
+           `minmax(0,1fr)` lets the tracks shrink so inner content wraps/fits. */
+        .dashboard-tab-content .insights-summary-grid,
+        .dashboard-tab-content .insights-grid-v2 {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
+        /* Nested inline two-column layouts (e.g. TUC+Snapshot / Behavioral
+           Profile) collapse to a single shrinkable column. */
+        .dashboard-tab-content [style*="grid-template-columns: 1fr 1fr"] {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
+        /* Key metrics: 2 cards per line instead of 4-across (nowrap). */
+        .metrics-row {
+            flex-wrap: wrap !important;
+        }
+        .metrics-row .metric-card {
+            flex: 1 1 calc(50% - 0.5rem) !important;
+            min-width: 0;
+        }
+        /* Audience Snapshot: two shrinkable columns. */
+        .audience-snapshot {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+        /* Total Universe Composition pills wrap instead of clipping. */
+        #audienceShareBoxes {
+            flex-wrap: wrap !important;
+        }
+        /* Insight cards never force the page wider than the viewport. */
+        .dashboard-tab-content .insight-card-v2 { min-width: 0; max-width: 100%; }
     }
     </style>
 </head>
