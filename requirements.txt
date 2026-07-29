@@ -24,6 +24,12 @@ google-api-python-client==2.118.0
 PyGithub==2.1.1
 yt-dlp>=2025.10.14
 requests>=2.32.0
+# Trends IQ scrapers (AMC, Reddit, Instagram, Disney+, Best Buy, ReelShort,
+# donated-cookie loader) use curl_cffi to impersonate real Chrome / Safari
+# TLS handshake fingerprints. Sites like AMC (Akamai) and Reddit that only
+# check JA3/JA4 wave curl_cffi requests through where stdlib requests +
+# Playwright headless get bot-blocked.
+curl_cffi>=0.13.0
 # Trends IQ: richer Google Trends data than the public RSS.
 # Wraps the same /_/TrendsUi/data/batchexecute endpoint the new
 # trends.google.com/trending UI uses. Gives volume, growth %,
