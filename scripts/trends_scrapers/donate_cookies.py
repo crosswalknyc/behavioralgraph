@@ -120,6 +120,14 @@ DEFAULT_DOMAINS = [
     #     authed session lets us hit the Web API charts endpoint).
     'audible.com',
     'open.spotify.com',
+    # 2026-07-28: Film-ticketing domains added for the Films tab. AMC
+    # and Regal both use Akamai bot-detection that 403s anonymous
+    # Playwright fingerprints; donated cookies from a signed-in laptop
+    # Chrome session carry the passed-captcha token so daily scrapes
+    # can reach the /movies rail. Fandango + Cinemark work without
+    # cookies from a residential IP, so only these two are gated.
+    'amctheatres.com',
+    'regmovies.com',
 ]
 
 S3_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')

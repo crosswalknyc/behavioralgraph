@@ -91,8 +91,9 @@ _TIMEOUT = 25
 _TITLE_SKIP_SUBSTRINGS = {
     'advance ticket', 'get tickets', 'buy tickets', 'showtimes',
     'trailer', 'watch trailer', 'coming soon', 'sr-only',
-    'now playing', 'in theaters', 'imax', 'dolby', 'more info',
-    'read more', 'view all', 'see all',
+    'now playing', 'now showing', 'in theaters', 'in theatres',
+    'upcoming', 'imax', 'dolby', 'more info',
+    'read more', 'view all', 'see all', 'sign in', 'log in',
 }
 
 
@@ -180,10 +181,13 @@ def _fetch_fandango(limit: int = 25) -> list[dict]:
         if not _is_title(title):
             continue
         image = img_m.group(1) if img_m else ''
-        # Fandango serves a `default_poster--dark-mode.png` placeholder
-        # for movies missing artwork - swallow those so posters look
-        # clean on the dashboard.
-        if 'default_poster' in image:
+        # Fandango's ImageRenderer URLs look like
+        #   `.../default_poster--dark-mode.png/0/images/MasterRepository/fandango/{id}/{poster}.jpg`
+        # where the `default_poster--dark-mode.png` segment is just the
+        # fallback layer inside the transform and the REAL poster is the
+        # `/images/MasterRepository/...jpg` suffix. Only treat the URL
+        # as a placeholder when there's NO real-image suffix.
+        if 'default_poster' in image and '/images/MasterRepository/' not in image:
             image = ''
         items.append({
             'rank':  len(items) + 1,
@@ -315,10 +319,8 @@ def _playwright_render(url: str, homepage: str,
 # Akamai-walled sources ship the same operator guidance. Kept here as
 # a template because each source substitutes its own domain.
 _COOKIE_DONATION_HINT = (
-    'Log into {site} once in your laptop Chrome, then run '
-    '`python3 scripts/trends_scrapers/donate_cookies.py {domain}` '
-    'so the daily scrape can carry that signed-in session past the '
-    'bot-block.'
+    'Bot-blocked. To enable: log into {site} in your laptop Chrome, '
+    'then run `python3 scripts/trends_scrapers/donate_cookies.py {domain}`.'
 )
 
 
@@ -474,14 +476,19 @@ def _fetch_atom(limit: int = 25) -> tuple[list[dict], str]:
     items = _parse_generic_movie_list(
         html, 'https://www.atomtickets.com',
         title_slug_prefix='/movies/', limit=limit)
-    if items:
+    # Guard against noise-only extractions: Atom's React DOM sometimes
+    # exposes one or two nav anchors matching the /movies/ prefix but
+    # no actual film cards. Anything under 3 hits is almost always
+    # false-positive chrome (e.g. "UPCOMING" nav link) rather than
+    # real popularity ranking, so fall through to the operator note.
+    if len(items) >= 3:
         return items, ''
     # Atom hydrates fine but uses a non-standard DOM shape the generic
     # anchor parser doesn't catch. Left as an operator-facing note
     # rather than a cookie-donation ask because cookies won't help.
-    return [], ('Atom Tickets parser needs a targeted pass - their '
-                'React DOM uses non-standard slug shapes. Fandango + '
-                'Cinemark cover the same theatrical signal for now.')
+    return [], ('Parser update needed (React DOM uses non-standard '
+                'slug shapes). Fandango + Cinemark cover the same '
+                'theatrical signal for now.')
 
 
 # ---------------------------------------------------------------------------

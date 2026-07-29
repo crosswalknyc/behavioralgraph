@@ -66514,8 +66514,7 @@
                 { id: 'edits',    emoji: '✂️', label: 'Fan Edits',            sub: 'the clip-with-music creator layer',            uses_platform: false },
                 { id: 'path',     emoji: '🔀', label: 'Cross-Platform Path',  sub: 'the overlap cohort\'s ordering',               uses_platform: false },
                 { id: 'lag',      emoji: '⏱️', label: 'Time-to-Watch',        sub: 'lag from first exposure to first watch',       uses_platform: true  },
-                { id: 'ripple',   emoji: '🔁', label: 'Post-Watch Ripple',    sub: 'DSP lift + viewers becoming creators',         uses_platform: false },
-                { id: 'roi',      emoji: '💰', label: 'Licensing ROI',        sub: 'per-song incremental $ case',                  uses_platform: false }
+                { id: 'ripple',   emoji: '🔁', label: 'Post-Watch Ripple',    sub: 'DSP lift + viewers becoming creators',         uses_platform: false }
             ],
             shows: {
                 nobody_wants_this: {
@@ -68141,8 +68140,7 @@
                 edits:    _jiqMusicRender_edits,
                 path:     _jiqMusicRender_path,
                 lag:      _jiqMusicRender_lag,
-                ripple:   _jiqMusicRender_ripple,
-                roi:      _jiqMusicRender_roi
+                ripple:   _jiqMusicRender_ripple
             })[_jiqMusicActiveStage];
             if (typeof stageFn === 'function') {
                 stageFn(body, show, slice, data);
