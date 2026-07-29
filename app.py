@@ -24771,10 +24771,27 @@ def smart_cache_update():
                             # Only fall back to cached category when CSV has no valid BRAND CATEGORY.
                             if job_data.get('category') == 'UNCATEGORIZED' and job.get('category') and job.get('category') != 'UNCATEGORIZED':
                                 job_data['category'] = job['category']
-                            # Preserve custom display_name if it was manually set
-                            if job.get('display_name') and job.get('display_name') != job.get('project_name'):
-                                job_data['display_name'] = job['display_name']
-                                job_data['name'] = job['display_name']
+                            # Preserve custom display_name if the cached name differs
+                            # from the filename-derived one. Compare the OLD cached
+                            # display_name against the FRESH project_name (derived from
+                            # filename by process_s3_file_metadata). If they differ, the
+                            # old display_name was custom-set (e.g. by
+                            # register_profile_in_dashboard writing
+                            # "Elton John - Instagram Followers" for a file whose stem
+                            # is "Elton_John_Instagram_Followers"), so keep it.
+                            #
+                            # 2026-07-29 (Elton cuts bug): previously compared
+                            # job.get('display_name') to job.get('project_name'),
+                            # both from the OLD entry. Our helper writes them EQUAL,
+                            # so the check always returned False and the hyphenated
+                            # cut names got clobbered on the next refresh, breaking
+                            # sidebar grouping under the parent profile.
+                            cached_display = job.get('display_name')
+                            fresh_project = job_data.get('project_name')
+                            if cached_display and cached_display != fresh_project:
+                                job_data['display_name'] = cached_display
+                                job_data['name'] = cached_display
+                                job_data['project_name'] = cached_display
                             s3_cache['jobs'][i] = job_data
                             break
                     updated_count += 1
