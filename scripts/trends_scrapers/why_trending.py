@@ -1207,25 +1207,39 @@ def _extract_websearch_caption(resp_content: list) -> str:
 
 
 def _websearch_one(name: str, source: str, context: str,
-                    anthropic_client) -> tuple[str, str]:
-    """Run one web_search Claude call and return (name, caption)."""
+                    anthropic_client,
+                    max_attempts: int = 2) -> tuple[str, str]:
+    """Run one web_search Claude call and return (name, caption).
+
+    Retries up to `max_attempts` times when the first call returns
+    EMPTY / an unusable string. Some queries turn up nothing on the
+    first search (Claude picked a bad query variant) but succeed on
+    a retry - the underlying tool is stochastic, and we care more
+    about coverage than latency for this daily-cron path.
+    """
     prompt = _build_websearch_prompt(name, source, context)
-    try:
-        resp = anthropic_client.messages.create(
-            model=_WEBSEARCH_MODEL,
-            max_tokens=_WEBSEARCH_MAX_TOKENS,
-            tools=[{
-                'type':     'web_search_20250305',
-                'name':     'web_search',
-                'max_uses': _WEBSEARCH_MAX_USES,
-            }],
-            messages=[{'role': 'user', 'content': prompt}],
-            timeout=_WEBSEARCH_TIMEOUT_S,
-        )
-    except Exception as e:
-        logger.info("why_trending web_search %r: %s", name, e)
-        return name, ''
-    return name, _extract_websearch_caption(resp.content or [])
+    caption = ''
+    for attempt in range(max_attempts):
+        try:
+            resp = anthropic_client.messages.create(
+                model=_WEBSEARCH_MODEL,
+                max_tokens=_WEBSEARCH_MAX_TOKENS,
+                tools=[{
+                    'type':     'web_search_20250305',
+                    'name':     'web_search',
+                    'max_uses': _WEBSEARCH_MAX_USES,
+                }],
+                messages=[{'role': 'user', 'content': prompt}],
+                timeout=_WEBSEARCH_TIMEOUT_S,
+            )
+        except Exception as e:
+            logger.info("why_trending web_search %r attempt %d: %s",
+                         name, attempt + 1, e)
+            continue
+        caption = _extract_websearch_caption(resp.content or [])
+        if caption:
+            return name, caption
+    return name, caption
 
 
 def _websearch_fill_missing(items: list[dict],
