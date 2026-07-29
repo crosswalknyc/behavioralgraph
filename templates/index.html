@@ -68558,7 +68558,6 @@
             var topline = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
                 + [
                     { label: 'Overall median',   value: Number(l.overall_median_hours || 0).toFixed(1) + ' hrs', accent: show.accent, sub: 'first touch → first watch' },
-                    { label: 'Overall P90',      value: Number(l.overall_p90_hours || 0).toFixed(0) + ' hrs',   accent: '#a78bfa',   sub: '90th percentile — slow-burn' },
                     { label: 'Current-surface median', value: Number(activePlatMed).toFixed(1) + ' hrs',        accent: '#38bdf8',   sub: _jiqEsc(slice.label || '') }
                   ].map(function(t) {
                     return '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + t.accent + ';">'
