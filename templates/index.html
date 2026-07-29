@@ -17504,6 +17504,32 @@
             min-height: 340px;
             overflow: visible;
         }
+
+        /* ---- 11. Data & Analysis Tools as a single dropdown --------------------
+           On phones the two thumbnail tab groups (DATA + ANALYSIS TOOLS) are
+           replaced by one native <select> ("Data & Analysis Tools"). The select
+           is inert on desktop (inline display:none); here we reveal it and hide
+           the button groups. The dropdown reuses each button's click handler, so
+           access rules and tab switching behave exactly as before. */
+        .mobile-tools-nav {
+            display: block !important;
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--bg-input, #0d1a2a);
+            color: var(--text-primary, #e6f1ff);
+            border: 1px solid var(--border-color, #2a3a4a);
+            border-radius: 8px;
+            padding: 0.65rem 0.7rem;
+            font-size: 16px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .mobile-tools-nav:focus { outline: none; border-color: #66d9ef; }
+        #toolbarContent .toolbar-section { display: none !important; }
+
+        /* ---- 12. Hide the floating team-chat widget on phones ------------------ */
+        #chatWidget { display: none !important; }
     }
     </style>
 </head>
@@ -20714,6 +20740,14 @@
                     </div>
                     <div id="toolbarRow" class="toolbar-row">
                         <div class="toolbar-content" id="toolbarContent">
+                            <!-- Mobile-only: consolidated "Data & Analysis Tools" dropdown.
+                                 Hidden on desktop (inline display:none); the mobile
+                                 layer reveals it and hides the button groups below.
+                                 Populated from the live tab buttons so it mirrors
+                                 access rules; see #mobile-nav-enhancements script. -->
+                            <select id="mobileToolsNav" class="mobile-tools-nav" style="display:none;" onfocus="if(window._buildMobileToolsNav)window._buildMobileToolsNav()" onchange="if(window._onMobileToolsNav)window._onMobileToolsNav(this)" aria-label="Data &amp; Analysis Tools">
+                                <option value="" selected disabled>Data &amp; Analysis Tools</option>
+                            </select>
                             <div class="toolbar-section">
                                 <div class="dashboard-tabs">
                                     <button class="tab-btn active has-tooltip" data-tooltip="Insights: Executive summary with key audience statistics, demographic highlights, and behavioral patterns at a glance." onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
@@ -134601,37 +134635,50 @@
         <span class="app-footer-text">Data Source: Crosswalk's Intelligence Platform, a 10M Gen Pop Digital Behavioral Panel</span>
     </footer>
 
-
-</body>
-</html>
-div class="chat-conversation-header">
-                        <button class="chat-back-btn" onclick="backToChatContacts()">&lt;</button>
-                        <div class="chat-conversation-avatar" id="chatConvoAvatar">
-                            <div class="avatar-initials">?</div>
-                        </div>
-                        <span class="chat-conversation-name" id="chatConvoName">Chat</span>
-                    </div>
-                    <div class="chat-messages" id="chatMessages"></div>
-                    <div class="chat-input-area">
-                        <input type="text" id="chatMessageInput" placeholder="Type a message..." onkeypress="handleChatKeyPress(event)">
-                        <button class="chat-send-btn" onclick="sendChatMessage()">send</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    -->
-    
-    <!-- Left-justified footer with data source - hidden 2026-06-03 because the
-         fixed-position bar was overlaying the bottom of dashboard views and
-         clipping content (request: "remove this navy bar so I can see more").
-         Kept in DOM (display:none) so we can flip it back on by removing the
-         style if attribution is needed again. -->
-    <footer class="app-footer" style="display: none;">
-        <img src="/static/crosswalk-logo-small.png" alt="Crosswalk" class="app-footer-logo" onerror="this.src='/static/crosswalk-logo.png'; this.style.height='24px';">
-        <span class="app-footer-text">Data Source: Crosswalk's Intelligence Platform, a 10M Gen Pop Digital Behavioral Panel</span>
-    </footer>
-
+    <!-- Mobile-only: "Data & Analysis Tools" dropdown wiring (added 2026-07-28).
+         Builds the dropdown from the live tab buttons and reuses their click
+         handlers, so tab switching + feature/access gating behave identically.
+         Globals are assigned to window so the inline onfocus/onchange resolve. -->
+    <script id="mobile-nav-enhancements">
+        (function () {
+            window._buildMobileToolsNav = function () {
+                var sel = document.getElementById('mobileToolsNav');
+                if (!sel) return;
+                var groups = document.querySelectorAll('#toolbarContent .dashboard-tabs');
+                var groupLabels = ['Data', 'Analysis Tools'];
+                var btns = [];
+                var html = '<option value="" selected disabled>Data &amp; Analysis Tools</option>';
+                for (var g = 0; g < groups.length; g++) {
+                    var groupBtns = groups[g].querySelectorAll('.tab-btn');
+                    var opts = '';
+                    for (var i = 0; i < groupBtns.length; i++) {
+                        var b = groupBtns[i];
+                        if (b.style.display === 'none') continue; // access-gated / hidden
+                        var labelEl = b.querySelector('.tab-label');
+                        var txt = ((labelEl ? labelEl.textContent : b.textContent) || '').trim();
+                        if (!txt) continue;
+                        opts += '<option value="' + btns.length + '">' + txt + '</option>';
+                        btns.push(b);
+                    }
+                    if (opts) {
+                        html += '<optgroup label="' + (groupLabels[g] || 'Tools') + '">' + opts + '</optgroup>';
+                    }
+                }
+                window._mobileToolsBtns = btns;
+                sel.innerHTML = html;
+                sel.selectedIndex = 0;
+            };
+            window._onMobileToolsNav = function (sel) {
+                var idx = parseInt(sel.value, 10);
+                var btns = window._mobileToolsBtns || [];
+                if (!isNaN(idx) && btns[idx]) { btns[idx].click(); }
+                sel.selectedIndex = 0; // keep the label reading "Data & Analysis Tools"
+            };
+            document.addEventListener('DOMContentLoaded', function () {
+                try { window._buildMobileToolsNav(); } catch (e) {}
+            });
+        })();
+    </script>
 
 </body>
 </html>
