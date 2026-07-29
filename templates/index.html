@@ -17530,6 +17530,42 @@
 
         /* ---- 12. Hide the floating team-chat widget on phones ------------------ */
         #chatWidget { display: none !important; }
+
+        /* ---- 13. Select Profile sidebar -> collapsible to save space ----------
+           The profile picker is a searchable nested tree, so instead of a lossy
+           native <select> it becomes a space-saving accordion: tapping the
+           "Select Profile" header toggles the search + tree. Collapsed by
+           default so the data is front-and-center. (Wiring lives in the
+           #mobile-nav-enhancements script.) */
+        .persistent-sidebar.mobile-collapsible .sidebar-header-section h3 {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin: 0;
+        }
+        .persistent-sidebar.mobile-collapsible .sidebar-header-section h3::after {
+            content: '\25BE'; /* down chevron */
+            font-size: 0.85em;
+            opacity: 0.65;
+            transition: transform 0.2s ease;
+        }
+        .persistent-sidebar.mobile-collapsed .sidebar-header-section h3::after {
+            transform: rotate(-90deg);
+        }
+        .persistent-sidebar.mobile-collapsed > *:not(.sidebar-header-section) {
+            display: none !important;
+        }
+        .persistent-sidebar.mobile-collapsed .sidebar-header-section > *:not(h3) {
+            display: none !important;
+        }
+        .persistent-sidebar.mobile-collapsed {
+            max-height: none !important;
+        }
+        .persistent-sidebar.mobile-collapsible:not(.mobile-collapsed) {
+            max-height: 60vh;
+        }
     }
     </style>
 </head>
@@ -134672,8 +134708,27 @@
                 if (!isNaN(idx) && btns[idx]) { btns[idx].click(); }
                 sel.selectedIndex = 0; // keep the label reading "Data & Analysis Tools"
             };
+            // Make every "Select Profile" sidebar a collapsible accordion on
+            // phones. Gated to mobile so the desktop DOM is never touched.
+            window._initMobileSidebarCollapse = function () {
+                document.querySelectorAll('.persistent-sidebar').forEach(function (sb) {
+                    if (sb._mobileCollapseInit) return;
+                    var header = sb.querySelector('.sidebar-header-section');
+                    var h3 = header && header.querySelector('h3');
+                    if (!h3) return;
+                    sb.classList.add('mobile-collapsible', 'mobile-collapsed');
+                    h3.addEventListener('click', function () {
+                        sb.classList.toggle('mobile-collapsed');
+                    });
+                    sb._mobileCollapseInit = true;
+                });
+            };
+            var _isMobileViewport = function () {
+                return !window.matchMedia || window.matchMedia('(max-width: 768px)').matches;
+            };
             document.addEventListener('DOMContentLoaded', function () {
                 try { window._buildMobileToolsNav(); } catch (e) {}
+                try { if (_isMobileViewport()) window._initMobileSidebarCollapse(); } catch (e) {}
             });
         })();
     </script>
