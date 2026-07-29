@@ -10,15 +10,26 @@ only what the Flask endpoint needs:
   * `resolve_image_url(name, master)` -> (url, source_tag) or (None, 'none')
   * `download_image(url)`          -> (bytes, ext) or None
 
-Rules (per user, 2026-07-01, restated 2026-07-08):
+Rules (per user, 2026-07-01, restated 2026-07-08, updated 2026-07-29):
   * TALENT master category  -> IMDB headshot (`nm` result)
-      Fallbacks: Wikipedia thumbnail, DuckDuckGo image
+      Fallbacks: Wikipedia thumbnail, Google image search, DuckDuckGo image
   * CONTENT (shows / movies) -> IMDB title poster (`tt` result)
-      Fallback: Wikipedia thumbnail
+      Fallbacks: Wikipedia thumbnail, Google image search, DuckDuckGo image
   * BRAND / PLATFORMS / SPORT / TRENDS / OTHER
-      -> Wikipedia thumbnail, DuckDuckGo image, Google favicon
-        (Google image search fallback is emulated via DuckDuckGo's image API
-         because Google's search API requires an API key + billing setup)
+      -> Wikipedia thumbnail, Google image search, DuckDuckGo image, Google favicon
+
+Google image search (2026-07-29, per Jenna): when neither Wikipedia nor IMDb
+returns a hit, we now go straight to a web image search instead of stopping
+at the old DuckDuckGo fallback. The lookup prefers Google's Custom Search
+JSON API when the `GOOGLE_CSE_API_KEY` + `GOOGLE_CSE_ID` env vars are
+configured on the deployment (100 free queries / day; the admin button
+only hits this for the handful of profiles missing an image in one batch,
+so we stay in the free tier). If those env vars aren't set, the lookup
+falls back to a Bing image search HTML scrape - Bing serves fully-populated
+image results without an API key and without gating server-side user
+agents behind a JavaScript wall the way modern Google does. In practice
+this returns the same "search the web for a photo of X" result quality
+that the user asked for.
 
 Every downloaded image is:
   1. Fetched to memory (size-checked, max 2 MB per admin uploader)
@@ -31,6 +42,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
 import time
 import unicodedata
@@ -47,6 +59,8 @@ IMDB_SUGGEST_URL = "https://v3.sg.media-imdb.com/suggestion/x/{q}.json"
 WIKI_SEARCH_URL = "https://en.wikipedia.org/w/api.php"
 WIKI_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
 GOOGLE_FAVICON_URL = "https://www.google.com/s2/favicons?sz=256&domain={domain}"
+GOOGLE_CSE_URL = "https://www.googleapis.com/customsearch/v1"
+BING_IMAGES_URL = "https://www.bing.com/images/search?form=HDRSC2&first=1&safeSearch=Strict&q={q}"
 DDG_IMAGES_URL = "https://duckduckgo.com/i.js"
 
 HEADERS_JSON = {
@@ -274,8 +288,132 @@ def google_favicon(name: str) -> Optional[str]:
     return GOOGLE_FAVICON_URL.format(domain=guesses[0])
 
 
+def _google_cse_search(name: str) -> Optional[str]:
+    """Google Custom Search JSON API. Free tier: 100 queries / day.
+
+    Returns the first result whose URL looks like a real static image. Requires
+    two env vars to be set on the deployment:
+      * GOOGLE_CSE_API_KEY - a Google Cloud API key with Custom Search enabled
+      * GOOGLE_CSE_ID      - the CSE id of an "image search across the web"
+                              Programmable Search Engine
+    Returns None (silently) if either env var is missing or the call fails.
+    """
+    api_key = (os.environ.get("GOOGLE_CSE_API_KEY") or "").strip()
+    cse_id = (os.environ.get("GOOGLE_CSE_ID") or "").strip()
+    if not api_key or not cse_id or not name:
+        return None
+    params = urllib.parse.urlencode({
+        "key": api_key,
+        "cx": cse_id,
+        "q": name,
+        "searchType": "image",
+        "num": 5,
+        "safe": "active",
+        "imgSize": "large",
+    })
+    try:
+        data = _http_get(
+            f"{GOOGLE_CSE_URL}?{params}",
+            {"User-Agent": HEADERS_JSON["User-Agent"], "Accept": "application/json"},
+            is_json=True,
+            timeout=8,
+        )
+    except Exception:
+        return None
+    for item in (data or {}).get("items") or []:
+        link = (item.get("link") or "").strip()
+        if not link.startswith(("http://", "https://")):
+            continue
+        low = link.lower().split("?", 1)[0]
+        if low.endswith((".jpg", ".jpeg", ".png", ".webp", ".gif")):
+            return link
+    return None
+
+
+def _bing_image_scrape(name: str) -> Optional[str]:
+    """Bing image search - the practical no-API-key stand-in for Google.
+
+    Modern Google image search returns a "please enable JavaScript" gate to
+    any server-side user agent, which makes an HTML scrape unreliable. Bing
+    still serves the full image results page as static HTML with a JSON
+    metadata blob per result (attribute `m="{...}"` with a `murl` field
+    containing the original creator URL). That gives us Google-equivalent
+    coverage without an API key.
+
+    Returns the first result whose original media URL is a real static
+    image (jpg / jpeg / png / webp). Skips SVGs and gifs (they render
+    poorly in the profile grid).
+    """
+    if not name:
+        return None
+    url = BING_IMAGES_URL.format(q=urllib.parse.quote(name))
+    req = urllib.request.Request(url, headers={
+        "User-Agent": HEADERS_JSON["User-Agent"],
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "en-US,en;q=0.9",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+    except Exception:
+        return None
+    # Bing embeds each image result's metadata as m="{...}" where the JSON is
+    # HTML-entity-encoded (&quot; instead of "). Pull out murl values directly
+    # from the entity-encoded blob so we don't have to un-escape the whole
+    # attribute value.
+    murls = re.findall(r'&quot;murl&quot;:&quot;([^&\"]+)&quot;', html)
+    for raw in murls:
+        u = raw.strip()
+        if not u.startswith(("http://", "https://")):
+            continue
+        low = u.lower().split("?", 1)[0]
+        if low.endswith((".jpg", ".jpeg", ".png", ".webp")):
+            return u
+    # Second pass: some results carry the URL in a `m=` attribute that
+    # url-encodes rather than html-entity-encodes. Try that shape too.
+    metas = re.findall(r'\bm="(\{[^"]+\})"', html)
+    for meta in metas:
+        try:
+            data = json.loads(meta.replace("&quot;", '"'))
+        except Exception:
+            continue
+        u = (data.get("murl") or "").strip()
+        if not u.startswith(("http://", "https://")):
+            continue
+        low = u.lower().split("?", 1)[0]
+        if low.endswith((".jpg", ".jpeg", ".png", ".webp")):
+            return u
+    return None
+
+
+def google_image_search(name: str) -> tuple[Optional[str], str]:
+    """Web image search: prefer Google Custom Search API, fall back to Bing.
+
+    Added 2026-07-29 (Jenna): when Wikipedia and IMDb both miss on a profile,
+    the "Populate Missing Images" admin button now goes straight to a web
+    image search instead of stopping at the DuckDuckGo proxy. When
+    `GOOGLE_CSE_API_KEY` + `GOOGLE_CSE_ID` are set on the deployment we hit
+    real Google via the Custom Search JSON API; otherwise we scrape Bing
+    (which serves image results without a JavaScript gate and returns
+    Google-equivalent quality for "find me a photo of X" queries).
+
+    Returns (image_url, source_tag). source_tag is 'google-cse' when the
+    real Google API served the hit, 'bing' when the Bing fallback served,
+    or '' when nothing was found.
+    """
+    if not name:
+        return None, ""
+    hit = _google_cse_search(name)
+    if hit:
+        return hit, "google-cse"
+    hit = _bing_image_scrape(name)
+    if hit:
+        return hit, "bing"
+    return None, ""
+
+
 def duckduckgo_image(name: str) -> Optional[str]:
-    """DuckDuckGo image search - stands in for Google image search fallback."""
+    """DuckDuckGo image search - backup for when Google image search fails."""
     if not name:
         return None
     try:
@@ -420,10 +558,11 @@ def download_image(url: str) -> Optional[tuple[bytes, str]]:
 def resolve_image_url(name: str, master: str) -> tuple[Optional[str], str]:
     """Return (image_url, source_tag) for the best available image, or (None, 'none').
 
-    Sources by bucket:
-      TALENT     -> IMDB (nm), Wikipedia, DuckDuckGo image
-      CONTENT    -> IMDB (tt), Wikipedia
-      OTHER      -> Wikipedia, DuckDuckGo image, Google favicon
+    Sources by bucket (2026-07-29, per Jenna: fall back to Google image
+    search when Wikipedia and IMDb both miss):
+      TALENT     -> IMDB (nm), Wikipedia, Google image search, DuckDuckGo
+      CONTENT    -> IMDB (tt), Wikipedia, Google image search, DuckDuckGo
+      OTHER      -> Wikipedia, Google image search, DuckDuckGo, Google favicon
     """
     q = normalize_search_name(name)
     if not q:
@@ -439,6 +578,9 @@ def resolve_image_url(name: str, master: str) -> tuple[Optional[str], str]:
         wiki_url = wiki_lookup(q)
         if wiki_url:
             return wiki_url, "wiki"
+        google_url, google_tag = google_image_search(q)
+        if google_url:
+            return google_url, google_tag
         ddg_url = duckduckgo_image(q)
         if ddg_url:
             return ddg_url, "duckduckgo"
@@ -454,7 +596,9 @@ def resolve_image_url(name: str, master: str) -> tuple[Optional[str], str]:
         wiki_url = wiki_lookup(q)
         if wiki_url:
             return wiki_url, "wiki"
-        # For content buckets like ADULT ANIMATION, fall back to image search
+        google_url, google_tag = google_image_search(q)
+        if google_url:
+            return google_url, google_tag
         ddg_url = duckduckgo_image(q)
         if ddg_url:
             return ddg_url, "duckduckgo"
@@ -464,6 +608,9 @@ def resolve_image_url(name: str, master: str) -> tuple[Optional[str], str]:
     wiki_url = wiki_lookup(q)
     if wiki_url:
         return wiki_url, "wiki"
+    google_url, google_tag = google_image_search(q)
+    if google_url:
+        return google_url, google_tag
     ddg_url = duckduckgo_image(q)
     if ddg_url:
         return ddg_url, "duckduckgo"
