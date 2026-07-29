@@ -12152,7 +12152,15 @@ RECLASSIFY_SECTIONS = [
 
     'Host/Personality',
     'Horse Racing',
-    'Influencer/Creator',
+    # 2026-07-28 (Jenna): flipped slash order from 'Influencer/Creator' to
+    # match the actual hostmap SECTION token 'Talent, Creator/Influencer'
+    # (493 brands, 0 matched the old orientation). Restores the parallel
+    # with 'Actor', 'Athlete', etc. -- creators now get their own
+    # CREATOR/INFLUENCER Column bucket in every profile output, populated
+    # from hostmap. Downstream CATEGORY_ORDER already expects
+    # 'CREATOR/INFLUENCER' at the same slot; dashboard MASTER_CATEGORIES
+    # lists both aliases so it renders either way.
+    'Creator/Influencer',
     'Insurance',
     'Investments',
     'La Liga',
