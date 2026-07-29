@@ -2056,7 +2056,9 @@ def ensure_subject_in_native_category(df, subject, verbose=True):
     if not bi_mask.any():
         return df, 0
     bi_row = df.loc[bi_mask].iloc[0]
-    subject_name = str(bi_row.get('Value', '') or '').strip()
+    subject_name = _clean_subject_from_bi(
+        bi_row.get('Value'), df=df, col_u=col_u, subject_arg=subject,
+    )
     if not subject_name:
         return df, 0
 
@@ -2281,7 +2283,9 @@ def enforce_native_cluster_self_pin(df, subject, verbose=True):
     if not bi_mask.any():
         return df, 0
     bi_row = df.loc[bi_mask].iloc[0]
-    subject_name = str(bi_row.get('Value', '') or '').strip()
+    subject_name = _clean_subject_from_bi(
+        bi_row.get('Value'), df=df, col_u=col_u, subject_arg=subject,
+    )
     if not subject_name:
         return df, 0
 
@@ -2453,7 +2457,9 @@ def pin_subject_to_100_in_appearing_categories(df, subject, verbose=True):
     if not bi_mask.any():
         return df, 0
     bi_row = df.loc[bi_mask].iloc[0]
-    subject_name = str(bi_row.get('Value', '') or '').strip()
+    subject_name = _clean_subject_from_bi(
+        bi_row.get('Value'), df=df, col_u=col_u, subject_arg=subject,
+    )
     if not subject_name:
         return df, 0
 
@@ -3098,6 +3104,198 @@ def strip_input_metadata_leakage(df, subject, verbose=True):
         df = _renormalize_category(df, cat, bp_col, cs_col, raw_col, proj_col,
                                    sample_size)
     return df, len(drop_idx)
+
+
+# ============================================================================
+# strip_url_variant_seed_rows — hide BG.py URL-variant seed lists from
+# category displays (2026-07-29)
+# ----------------------------------------------------------------------------
+# Jenna 2026-07-29 (Elton John TU): "this shouldnt show up in talent. its
+# the brand input row and should be hidden. in general anything with
+# commas like that would b[e]".
+#
+# The screenshot showed a row in MUSICIAN/BAND ranked #1 at 100% with
+# Value='Elton John, EltonJohn, ELTONJOHN, Elton, Sir Elton John,
+# EltonHercules, EltonJohnOfficial'. That is the URL-variant seed list
+# BG.py emits into the BRAND INPUT metadata row -- when the pipeline also
+# leaves a duplicate copy of the same value inside a real category
+# (MUSICIAN/BAND / TALENT / etc.) the dashboard renders the entire
+# comma-separated seed list as a brand name at rank #1. Ugly.
+#
+# Detection heuristic (must distinguish from legitimate comma-in-name
+# stage aliases like 'PITBULL, MR. WORLDWIDE' or 'TYLER, THE CREATOR'):
+#   - >=4 comma-separated parts
+#   - AND at least one part is a no-space single token that is EITHER
+#     CamelCase (e.g. 'EltonHercules', len>=6, mixed upper+lower) OR
+#     all-caps (e.g. 'ELTONJOHN', len>=5, no lowercase).
+# Legit stage names have at most 2 parts and each part is space-separated
+# proper words, so they fail the len>=4 gate up-front.
+#
+# Action:
+#   - If a clean-named row (same normalized first token) already exists in
+#     the same Column: DELETE the seed-list row (duplicate).
+#   - Otherwise: REPLACE the Value with the first comma-separated token
+#     (usually the clean subject name).
+#
+# NEVER touches METADATA_COLS (BRAND INPUT / SAMPLE SIZE / BRAND CATEGORY /
+# SUBJECT). Those legitimately contain URL-variant seed lists (Rule #4c).
+# ============================================================================
+
+def _is_url_variant_seed_list(val):
+    """True iff `val` looks like a BG.py URL-variant seed list.
+
+    Robust against 'PITBULL, MR. WORLDWIDE' / 'TYLER, THE CREATOR'
+    (stage names) by requiring both:
+      (a) >=4 comma-separated parts, AND
+      (b) >=1 part that is a no-space CamelCase (mixed upper+lower, len>=6)
+          OR all-caps token (no lowercase, len>=5).
+    """
+    if not val or not isinstance(val, str):
+        return False
+    parts = [p.strip() for p in val.split(',')]
+    if len(parts) < 4:
+        return False
+    for p in parts:
+        if not p or ' ' in p:
+            continue
+        has_upper = any(c.isupper() for c in p)
+        has_lower = any(c.islower() for c in p)
+        is_camel = has_upper and has_lower and len(p) >= 6
+        is_allcaps = has_upper and (not has_lower) and len(p) >= 5
+        if is_camel or is_allcaps:
+            return True
+    return False
+
+
+def _clean_subject_from_bi(bi_value, df=None, col_u=None, subject_arg=None):
+    """Return a clean, display-ready subject name for use in category
+    row Value cells.
+
+    2026-07-29 (Elton MUSICIAN/BAND seed-list leak): the BRAND INPUT
+    Value legitimately holds the URL-variant seed list
+    ('Elton John, EltonJohn, ELTONJOHN, ...') for runtime URL matching
+    (workspace Rule #4c -- METADATA_COLS values are preserved). But
+    downstream enforcers that insert or force-rename a subject row in a
+    real category (MUSICIAN/BAND, TALENT, etc.) must NEVER use the raw
+    seed list -- it renders as an ugly comma-blob in the dashboard.
+
+    Priority order for a clean name:
+      1. `subject_arg` (the string passed into run_all_enforcers) if
+         non-empty and not itself a seed list.
+      2. The SUBJECT row's Value if present + not a seed list.
+      3. The first comma-separated token of `bi_value`.
+      4. `bi_value` unchanged (safe default if none of the above apply).
+    """
+    if bi_value is None:
+        bi_value = ''
+    bi_value = str(bi_value).strip()
+
+    if (subject_arg and isinstance(subject_arg, str)
+            and subject_arg.strip()
+            and not _is_url_variant_seed_list(subject_arg)):
+        return subject_arg.strip()
+
+    if df is not None and col_u is not None:
+        try:
+            subj_mask = col_u == 'SUBJECT'
+            if subj_mask.any():
+                subj_val = str(
+                    df.loc[subj_mask].iloc[0].get('Value', '') or '',
+                ).strip()
+                if subj_val and not _is_url_variant_seed_list(subj_val):
+                    return subj_val
+        except Exception:
+            pass
+
+    if _is_url_variant_seed_list(bi_value):
+        first_tok = bi_value.split(',')[0].strip()
+        if first_tok:
+            return first_tok
+
+    return bi_value
+
+
+def strip_url_variant_seed_rows(df, subject, verbose=True):
+    """Drop or clean category rows whose Value is a BG.py URL-variant
+    seed list. See module docstring above for detection/action rules.
+
+    NEVER touches METADATA_COLS (BRAND INPUT / SAMPLE SIZE / BRAND
+    CATEGORY / SUBJECT).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    cats_u = df['Column'].astype(str).str.upper().str.strip()
+    vals = df['Value'].astype(str)
+
+    def _norm_first_tok(v):
+        first = v.split(',')[0].strip().upper()
+        # collapse whitespace + punctuation for match
+        return _re.sub(r'[^A-Z0-9]+', '', first)
+
+    to_delete_idx = []
+    to_replace = []       # (idx, new_val)
+    affected_cats = set()
+    examples = []
+
+    for idx in df.index:
+        col_u = cats_u.iat[idx] if hasattr(cats_u, 'iat') else cats_u.iloc[idx]
+        if col_u in METADATA_COLS:
+            continue
+        val = vals.iat[idx] if hasattr(vals, 'iat') else vals.iloc[idx]
+        if not _is_url_variant_seed_list(val):
+            continue
+        first_tok = val.split(',')[0].strip()
+        clean_norm = _norm_first_tok(val)
+        # Look for a clean-named sibling in the same Column
+        cat_mask = (cats_u == col_u)
+        has_clean_sibling = False
+        for j in df.index[cat_mask]:
+            if j == idx:
+                continue
+            other = vals.iat[j] if hasattr(vals, 'iat') else vals.iloc[j]
+            if _is_url_variant_seed_list(other):
+                continue
+            other_norm = _re.sub(r'[^A-Z0-9]+', '', str(other).upper())
+            if other_norm == clean_norm:
+                has_clean_sibling = True
+                break
+        if has_clean_sibling:
+            to_delete_idx.append(idx)
+            affected_cats.add(col_u)
+            if len(examples) < 3:
+                examples.append(('DEL', col_u, val[:60]))
+        else:
+            to_replace.append((idx, first_tok))
+            if len(examples) < 3:
+                examples.append(('REN', col_u, val[:60]))
+
+    if not to_delete_idx and not to_replace:
+        return df, 0
+
+    if verbose:
+        summary = ', '.join(f'[{action} {cat}]"{v}..."'
+                            for action, cat, v in examples)
+        n_total = len(to_delete_idx) + len(to_replace)
+        more = (f' (+{n_total - len(examples)} more)'
+                if n_total > len(examples) else '')
+        print(f"   🧹 strip_url_variant_seed_rows: "
+              f"del={len(to_delete_idx)} rename={len(to_replace)} {summary}{more}")
+
+    for idx, new_val in to_replace:
+        df.at[idx, 'Value'] = new_val
+    if to_delete_idx:
+        df = df.drop(index=to_delete_idx).reset_index(drop=True)
+    # Renormalize categories that lost rows (BP sums)
+    for cat in affected_cats:
+        df = _renormalize_category(df, cat, bp_col, cs_col, raw_col, proj_col,
+                                   sample_size)
+    return df, len(to_delete_idx) + len(to_replace)
 
 
 # ============================================================================
@@ -6871,7 +7069,9 @@ def enforce_subject_self_pin_final(df, subject, verbose=True):
     if not bi_mask.any():
         return df, 0
     bi_row = df.loc[bi_mask].iloc[0]
-    subject_name = str(bi_row.get('Value', '') or '').strip()
+    subject_name = _clean_subject_from_bi(
+        bi_row.get('Value'), df=df, col_u=col_u, subject_arg=subject,
+    )
     if not subject_name:
         return df, 0
 
@@ -7578,6 +7778,7 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         print(f"   ⚠️ enforcer enforce_brand_category_mirror failed: {e}")
     for fn in (
         strip_input_metadata_leakage,      # 2026-05-27 (D5) — prompt-context echoes
+        strip_url_variant_seed_rows,       # 2026-07-29 (Elton MUSICIAN/BAND) — hide URL-variant seed lists from category displays
         strip_hostmap_hidden_brands,       # 2026-05-27 (Rule #4b) — Hidden never ships
         strip_mpb_non_hostmap_brands,      # 2026-05-28 (Rule #4c) — MPB column must match hostmap MPB sections
         strip_url_encoded_subject_dupes,
@@ -8954,6 +9155,7 @@ def run_post_vet_safety_sweep(df, subject, *, verbose=True):
         (enforce_mobile_os_balance,           'mobile_os_norms'),
         (enforce_bp_hard_ceiling,             'bp_caps'),
         (strip_input_metadata_leakage,        'metadata_re_stripped'),
+        (strip_url_variant_seed_rows,         'url_seed_rows_stripped'),
     ):
         try:
             df, n = fn(df, subject, verbose=verbose)
