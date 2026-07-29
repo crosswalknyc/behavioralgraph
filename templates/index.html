@@ -46344,12 +46344,11 @@
         //
         // One card per platform, mirrors the Books grammar. Ordering:
         //   Fandango (biggest single reach in US) -> Cinemark ->
-        //   AMC -> Regal -> Atom.
-        // Fandango + Cinemark are the two live sources today; AMC /
-        // Regal / Atom render as "warming up" cards with cookie-donation
-        // guidance in the sub-copy until a signed-in session bypass
-        // lands. Same "keep the tab shape stable" pattern Amazon Music
-        // used before it went live.
+        //   AMC -> Regal.
+        // Any platform that returns 0 items renders a neutral
+        // "warming up" tile. Operator notifications about stale
+        // cookies fire from the scraper via cookie_gap_notify -
+        // never surfaced here.
         // ============================================================
         function renderTIQFilms(sources) {
             var keys = ['fandango', 'cinemark', 'amc', 'regal'];
@@ -46683,18 +46682,16 @@
                 var active = (k === window.__trendsIQ.activeStreaming) ? ' active' : '';
                 var body;
                 if (!s.available) {
-                    var domainHint = {
-                        'disneyplus': 'disneyplus.com',
-                        'hulu':       'hulu.com',
-                        'max':        'max.com',
-                        'primevideo': 'amazon.com',
-                        'espnplus':   'plus.espn.com'
-                    }[k] || '';
-                    var extraNote = domainHint ?
-                        ' Donate cookies for <code>' + domainHint + '</code> to light this up.' : '';
+                    // Never surface operator-facing hints (cookie
+                    // donation instructions, domain names, script
+                    // commands) here - per Jenna's 2026-07-29
+                    // directive, blocked/stale sources show a neutral
+                    // "warming up" line and the scraper handles the
+                    // offline notification to jenna+jessie via
+                    // cookie_gap_notify.notify_cookie_gap().
                     body = '<div class="tiq-placeholder">' +
                            '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + ' is warming up</div>' +
-                           '<div>Rankings pull from your logged-in session.' + extraNote + '</div>' +
+                           '<div>Check back later.</div>' +
                            '</div>';
                 } else if (!(s.items || []).length &&
                              !(s.films || []).length &&

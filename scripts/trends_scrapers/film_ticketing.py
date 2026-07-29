@@ -312,12 +312,25 @@ def _playwright_render(url: str, homepage: str,
 
 
 # Copy in the "cookie donation to bypass" message so all three
-# Akamai-walled sources ship the same operator guidance. Kept here as
-# a template because each source substitutes its own domain.
-_COOKIE_DONATION_HINT = (
-    'Bot-blocked. To enable: log into {site} in your laptop Chrome, '
-    'then run `python3 scripts/trends_scrapers/donate_cookies.py {domain}`.'
-)
+# User rule 2026-07-29: NEVER surface operator-facing text to the
+# dashboard. When a bot-walled source can't be scraped, show a neutral
+# "warming up" line and let `cookie_gap_notify.notify_cookie_gap()`
+# handle the offline re-donation ask via SES to jenna+jessie (deduped
+# to one email per source/domain per day).
+_WARMING_UP_HINT = 'Warming up. Check back later.'
+
+
+def _mark_cookie_gap(source: str, domain: str, reason: str = '') -> None:
+    """Fire the operator-facing SES notification. Best-effort; never
+    raises. Called from any fetcher that returns 0 items because the
+    donated cookie session is missing or has been rejected by the
+    site. The dashboard tile only ever sees `_WARMING_UP_HINT`."""
+    try:
+        from .cookie_gap_notify import notify_cookie_gap
+        notify_cookie_gap(source, domain, reason=reason)
+    except Exception as e:
+        logger.info("cookie_gap notify failed for %s/%s: %s",
+                     source, domain, e)
 
 
 def _parse_generic_movie_list(html: str, host_prefix: str,
@@ -483,22 +496,27 @@ def _fetch_amc(limit: int = 25) -> tuple[list[dict], str]:
     from ._base import load_donated_cookies
     cookies = load_donated_cookies('amctheatres.com')
     if not cookies:
-        return [], _COOKIE_DONATION_HINT.format(
-            site='amctheatres.com', domain='amctheatres.com')
+        _mark_cookie_gap('amc', 'amctheatres.com',
+                          reason='no donated cookies for amctheatres.com')
+        return [], _WARMING_UP_HINT
 
     try:
         resp = _ccr.get(_AMC_URL, impersonate='chrome131',
                          cookies=cookies, timeout=20)
     except Exception as e:
         logger.info("amc curl_cffi request failed: %s", e)
-        return [], _COOKIE_DONATION_HINT.format(
-            site='amctheatres.com', domain='amctheatres.com')
+        _mark_cookie_gap('amc', 'amctheatres.com',
+                          reason=f'curl_cffi request failed: {e}')
+        return [], _WARMING_UP_HINT
     html = resp.text or ''
     if resp.status_code != 200 or len(html) < 20000:
         logger.info("amc: got status=%d bytes=%d (looks like a bot challenge)",
                      resp.status_code, len(html))
-        return [], _COOKIE_DONATION_HINT.format(
-            site='amctheatres.com', domain='amctheatres.com')
+        _mark_cookie_gap('amc', 'amctheatres.com',
+                          reason=(f'AMC returned status={resp.status_code} '
+                                  f'bytes={len(html)} - likely bot-challenge '
+                                  f'shell; cookies may be stale'))
+        return [], _WARMING_UP_HINT
 
     # Count slug occurrences. AMC's SSR HTML repeats each merchandised
     # title 6-16 times; use count as a merchandising rank proxy.
@@ -531,8 +549,9 @@ def _fetch_amc(limit: int = 25) -> tuple[list[dict], str]:
 
     if items:
         return items, ''
-    return [], _COOKIE_DONATION_HINT.format(
-        site='amctheatres.com', domain='amctheatres.com')
+    _mark_cookie_gap('amc', 'amctheatres.com',
+                      reason='AMC HTML parsed 0 titles - slug regex may need update')
+    return [], _WARMING_UP_HINT
 
 
 # ---------------------------------------------------------------------------
@@ -592,23 +611,27 @@ def _fetch_regal(limit: int = 25) -> tuple[list[dict], str]:
         cookie_domain='regmovies.com',
     )
     if not html:
-        return [], _COOKIE_DONATION_HINT.format(
-            site='regmovies.com', domain='regmovies.com')
+        _mark_cookie_gap('regal', 'regmovies.com',
+                          reason='Playwright returned empty body; cookies may be stale')
+        return [], _WARMING_UP_HINT
 
     import json as _json
     m = _REGAL_FEED_KEY_RE.search(html)
     if not m:
-        return [], _COOKIE_DONATION_HINT.format(
-            site='regmovies.com', domain='regmovies.com')
+        _mark_cookie_gap('regal', 'regmovies.com',
+                          reason='Regal MovieFeedEntries JSON key missing - page shape may have changed')
+        return [], _WARMING_UP_HINT
     blob = _extract_json_array(html, m.end() - 1)
     if not blob:
-        return [], _COOKIE_DONATION_HINT.format(
-            site='regmovies.com', domain='regmovies.com')
+        _mark_cookie_gap('regal', 'regmovies.com',
+                          reason='Regal MovieFeedEntries JSON did not close cleanly')
+        return [], _WARMING_UP_HINT
     try:
         entries = _json.loads(blob)
-    except Exception:
-        return [], _COOKIE_DONATION_HINT.format(
-            site='regmovies.com', domain='regmovies.com')
+    except Exception as e:
+        _mark_cookie_gap('regal', 'regmovies.com',
+                          reason=f'Regal MovieFeedEntries JSON parse failed: {e}')
+        return [], _WARMING_UP_HINT
 
     items: list[dict] = []
     # Regal preserves the merchandising order on the "Now Playing" feed
@@ -637,8 +660,9 @@ def _fetch_regal(limit: int = 25) -> tuple[list[dict], str]:
             break
     if items:
         return items, ''
-    return [], _COOKIE_DONATION_HINT.format(
-        site='regmovies.com', domain='regmovies.com')
+    _mark_cookie_gap('regal', 'regmovies.com',
+                      reason='Regal MovieFeedEntries returned zero valid titles')
+    return [], _WARMING_UP_HINT
 
 
 # ---------------------------------------------------------------------------

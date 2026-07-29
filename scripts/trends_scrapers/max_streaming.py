@@ -182,6 +182,22 @@ def fetch() -> dict[str, Any]:
 
     for i, it in enumerate(all_items[:25], start=1):
         it['rank'] = i
+
+    # If we came back empty across every rail, the donated max.com
+    # cookies are stale / missing / were served the marketing shell
+    # rather than the hydrated app. Fire the offline notifier so
+    # operators know to re-donate from play.max.com; the dashboard
+    # itself just shows a neutral 'warming up' tile.
+    if not all_items:
+        try:
+            from .cookie_gap_notify import notify_cookie_gap
+            notify_cookie_gap('max', 'max.com',
+                              reason=('all Max rails returned 0 titles; '
+                                      'cookies from play.max.com likely '
+                                      'stale or missing'))
+        except Exception as e:
+            logger.info("max cookie_gap notify failed: %s", e)
+
     return {'national': all_items[:25]}
 
 
