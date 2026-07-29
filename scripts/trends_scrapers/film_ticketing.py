@@ -390,28 +390,145 @@ def _parse_generic_movie_list(html: str, host_prefix: str,
 # ---------------------------------------------------------------------------
 # AMC Theatres — Now Playing
 # ---------------------------------------------------------------------------
-# `www.amctheatres.com/movies` returns 403 to plain requests (Akamai
-# / DataDome-style block). Real Chrome via Playwright + stealth passes.
+# `www.amctheatres.com/movies` returns 403 to plain requests and returns
+# a 4KB Akamai bot-challenge shell body to Playwright regardless of
+# `--headless=new` + stealth + donated session cookies. Turns out
+# Akamai on AMC only checks TLS handshake fingerprint (JA3/JA4), so a
+# curl_cffi request that impersonates real Chrome's TLS stack passes
+# through and returns the full ~1MB React SSR HTML (verified
+# 2026-07-29 with impersonate='chrome131').
+#
+# The SSR HTML doesn't embed a structured movie list JSON we can json-
+# parse. Instead each movie is referenced 6-16 times across the page
+# (hero, carousel, filter chips, etc.) via `/movies/<slug>-<numeric-id>`
+# anchor hrefs. We treat the reference count as a merchandising signal:
+# the more times a slug is repeated in the SSR, the more prominent
+# AMC's home page is pushing that title. Sort by count descending and
+# take the top N. Slug -> title is the trailing "-<digits>" strip
+# plus a title-case normalization.
+#
+# Slugs to drop: 'uxrow' (React chrome / grid layout token that
+# happens to match /movies/<slug>) and anything that looks like an
+# event / anniversary / fan-event / special screening (those live on
+# the same page but under a separate rail).
 _AMC_URL      = 'https://www.amctheatres.com/movies'
 _AMC_HOMEPAGE = 'https://www.amctheatres.com/'
 
+# Anchor pattern for AMC slugs. Numeric-id suffix is required so we
+# don't match `/movies/uxrow` (chrome) or `/movies/now-playing`
+# (rail nav).
+_AMC_SLUG_RE = re.compile(r'/movies/([a-z0-9][a-z0-9\-]{2,120}-\d+)')
+
+# Slug fragments that indicate an event / fan-event / anniversary
+# screening / duplicate-format tile rather than a regular "Now
+# Playing" title. Matched anywhere in the slug (case sensitive - AMC
+# slugs are always lowercase).
+_AMC_EVENT_TOKENS = (
+    '-fan-event', '-opening-night', '-anniversary-', 'anniversary-studio',
+    '-meet-up-', 'ghibli-fest', 'private-theatre-rental', 'dci-2026',
+    'dci-20', '-early-access', 'big-loud-and-live', 'singles-opening',
+    'grateful-dead', 'wnba-', '-nba-', 'mlb-', '-live-in-theaters',
+    # Duplicate-format tiles that echo an already-listed mainstream
+    # title (sensory-friendly, open-caption, subtitled, etc.) - these
+    # crowd out real titles from the top-25.
+    'sensory-friendly', '-open-caption', '-subtitled', '-with-subs',
+    '-dubbed-', '-in-imax', '-in-dolby', '-scream-unseen',
+    # Concert / theater simulcasts and one-off celebration days.
+    'the-musical-live', '-day-2026', 'texas-chainsaw-day', 'katseye',
+)
+
+
+def _amc_slug_to_title(slug: str) -> str:
+    """AMC slug: `the-odyssey-76238` -> `The Odyssey`.
+    Preserves sequel numbers: `toy-story-5-72482` -> `Toy Story 5`,
+    `the-bad-guys-2-83811` -> `The Bad Guys 2`.
+
+    Strategy: split on `-`, drop ONLY the final numeric AMC-id token
+    (never subsequent numeric tokens - those are sequel numbers or
+    years like `texas-chainsaw-day-2026`), then title-case each
+    remaining word.
+    """
+    parts = slug.split('-')
+    # Drop exactly one trailing numeric id (the internal AMC film id).
+    # Do NOT loop - `toy-story-5-72482` loses the sequel `5` if we do.
+    if parts and parts[-1].isdigit():
+        parts.pop()
+    if not parts:
+        return ''
+    lowercase = {'of', 'the', 'a', 'an', 'and', 'in', 'to', 'for', 'on',
+                 'with', 'at', 'by'}
+    out = []
+    for i, tok in enumerate(parts):
+        if i > 0 and tok in lowercase:
+            out.append(tok)
+        else:
+            out.append(tok.capitalize())
+    title = ' '.join(out)
+    # AMC's slug format loses apostrophes: `founder-s-story` splits to
+    # ["Founder", "S", "Story"]. Glue standalone "S" back to its
+    # preceding word as `'s`.
+    title = re.sub(r"\b([A-Za-z]{2,}) S\b", r"\1's", title)
+    return title
+
 
 def _fetch_amc(limit: int = 25) -> tuple[list[dict], str]:
-    html = _playwright_render(
-        _AMC_URL, _AMC_HOMEPAGE,
-        wait_selectors=[
-            'a[href^="/movies/"]',
-            '[data-testid*="movie"]',
-            '.MovieCard, .movie-card',
-        ],
-        cookie_domain='amctheatres.com',
-    )
-    if not html:
+    # Lazy-import curl_cffi so machines without it (older Hetzner
+    # boxes) still boot the module and just skip AMC.
+    try:
+        from curl_cffi import requests as _ccr  # type: ignore
+    except Exception:
+        return [], ('curl_cffi not installed. `pip3 install --break-'
+                    'system-packages curl_cffi` on the scraper host.')
+
+    from ._base import load_donated_cookies
+    cookies = load_donated_cookies('amctheatres.com')
+    if not cookies:
         return [], _COOKIE_DONATION_HINT.format(
             site='amctheatres.com', domain='amctheatres.com')
-    items = _parse_generic_movie_list(
-        html, 'https://www.amctheatres.com',
-        title_slug_prefix='/movies/', limit=limit)
+
+    try:
+        resp = _ccr.get(_AMC_URL, impersonate='chrome131',
+                         cookies=cookies, timeout=20)
+    except Exception as e:
+        logger.info("amc curl_cffi request failed: %s", e)
+        return [], _COOKIE_DONATION_HINT.format(
+            site='amctheatres.com', domain='amctheatres.com')
+    html = resp.text or ''
+    if resp.status_code != 200 or len(html) < 20000:
+        logger.info("amc: got status=%d bytes=%d (looks like a bot challenge)",
+                     resp.status_code, len(html))
+        return [], _COOKIE_DONATION_HINT.format(
+            site='amctheatres.com', domain='amctheatres.com')
+
+    # Count slug occurrences. AMC's SSR HTML repeats each merchandised
+    # title 6-16 times; use count as a merchandising rank proxy.
+    from collections import Counter
+    counter: Counter = Counter()
+    for m in _AMC_SLUG_RE.finditer(html):
+        slug = m.group(1)
+        if any(tok in slug for tok in _AMC_EVENT_TOKENS):
+            continue
+        counter[slug] += 1
+
+    items: list[dict] = []
+    for slug, cnt in counter.most_common(limit * 3):
+        title = _clean_title(_amc_slug_to_title(slug))
+        if not _is_title(title):
+            continue
+        # Require the slug to appear at least 4 times - single-digit
+        # counts tend to be filter chips or crossreferenced titles
+        # (e.g. "you might also like" tiles).
+        if cnt < 4:
+            continue
+        items.append({
+            'rank':  len(items) + 1,
+            'title': title,
+            'url':   f'https://www.amctheatres.com/movies/{slug}',
+            'image': '',  # AMC doesn't expose poster URLs in the SSR HTML
+        })
+        if len(items) >= limit:
+            break
+
     if items:
         return items, ''
     return [], _COOKIE_DONATION_HINT.format(
