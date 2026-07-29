@@ -147,9 +147,113 @@ _FANDANGO_IMG_RE   = re.compile(
     r'<img[^>]+class="[^"]*poster-card--img[^"]*"[^>]+src="([^"]+)"'
 )
 
+# Variant-suffix patterns Fandango tacks onto pre-release / special-
+# screening cards. When we see one of these in a grid card title, we
+# strip the suffix and look up the CANONICAL title's /movie-overview
+# anchor elsewhere on the same page. This is how a card like
+# `Spider-Man: Brand New Day Amazon Prime Early Access Screenings (2026)`
+# gets normalized back to `Spider-Man: Brand New Day (2026)` while
+# preserving the merchandising signal (Fandango puts the variant card
+# in the grid because that's the on-sale ticket, but Cinemark shows
+# the canonical title - normalizing lets us match across sources).
+_FANDANGO_VARIANT_SUFFIXES = (
+    ' amazon prime early access screenings',
+    ' amazon prime early access',
+    ' dolby opening night fan event',
+    ' dolby opening night',
+    ' opening night fan event',
+    ' sensory friendly screening',
+    ' sensory friendly',
+    ' open caption',
+    ' subtitled',
+    ' fan event',
+    ' early access',
+    ' imax opening night',
+    ' private theatre rental',
+)
+
+
+def _slugify_title(t: str) -> str:
+    """Normalize a title for cross-source matching."""
+    s = re.sub(r'\s*\(\d{4}\)\s*$', '', (t or '').strip())
+    s = re.sub(r'[^\w\s]+', ' ', s.lower())
+    return ' '.join(s.split())
+
+
+def _fandango_canonicalize_title(title: str) -> str:
+    """Given a Fandango grid title like `Spider-Man: Brand New Day
+    Amazon Prime Early Access Screenings (2026)`, strip any known
+    variant suffix and return the canonical `Spider-Man: Brand New
+    Day (2026)`. Idempotent - titles without a variant suffix pass
+    through untouched."""
+    if not title:
+        return title
+    # Detect + strip the trailing "(YYYY)" so we can compare against
+    # the variant list on the bare title, then re-attach.
+    m_year = re.search(r'\s*\((\d{4})\)\s*$', title)
+    year = ''
+    core = title
+    if m_year:
+        year = m_year.group(0)
+        core = title[:m_year.start()]
+    lo = core.lower()
+    for suf in _FANDANGO_VARIANT_SUFFIXES:
+        if lo.endswith(suf):
+            core = core[:-len(suf)].rstrip(' :-')
+            break
+    return (core + year).strip()
+
+
+def _fandango_lookup_canonical(text: str,
+                                canonical_title: str,
+                                fallback_href: str) -> tuple[str, str]:
+    """Search the full page HTML for a `/movie-overview` anchor whose
+    slug matches the canonical title (i.e. the slug does NOT contain
+    any known variant suffix). Returns (url, image_url) or falls back
+    to `fallback_href` (the variant's own anchor) plus '' image."""
+    slug = _slugify_title(canonical_title)
+    if not slug:
+        return ('https://www.fandango.com' + fallback_href, '')
+    tokens = [t for t in slug.split() if len(t) >= 3]
+    if not tokens:
+        return ('https://www.fandango.com' + fallback_href, '')
+    # Skip anchors whose slug contains ANY variant suffix keyword.
+    variant_kw = ('early-access', 'fan-event', 'opening-night',
+                  'sensory-friendly', 'open-caption', 'subtitled',
+                  'private-theatre', 'dolby-opening')
+    anchor_re = re.compile(r'href="(/([a-z0-9-]+)-\d{5,}/movie-overview)"')
+    for m in anchor_re.finditer(text):
+        href     = m.group(1)
+        slug_txt = m.group(2)
+        if any(kw in slug_txt for kw in variant_kw):
+            continue
+        if not all(t in slug_txt for t in tokens):
+            continue
+        # Grab the poster img in the surrounding 3KB window.
+        img_m = re.search(
+            r'src="([^"]*images\.fandango\.com/[^"]+)"',
+            text[max(0, m.start() - 3000):m.start()],
+        )
+        image = img_m.group(1) if img_m else ''
+        if 'default_poster' in image and '/images/MasterRepository/' not in image:
+            image = ''
+        return 'https://www.fandango.com' + href, image
+    return ('https://www.fandango.com' + fallback_href, '')
+
 
 def _fetch_fandango(limit: int = 25) -> list[dict]:
-    """Server-rendered — parse the poster-card grid straight from HTML.
+    """Server-rendered - parse the poster-card grid, then normalize any
+    variant-suffix cards back to their canonical title so pre-release
+    marquee films like `Spider-Man: Brand New Day` render as the base
+    title (not `... Amazon Prime Early Access Screenings`).
+
+    Fandango's `/movies-in-theaters` grid is sales-density ordered but
+    surfaces the on-sale variant of pre-release films (early-access,
+    fan-event, dolby-opening-night) rather than the canonical entry.
+    We keep the grid order (which is Fandango's editorial ranking) and
+    just rewrite each variant row to point at the canonical /movie-
+    overview URL + poster. The end result matches Cinemark/AMC/Regal's
+    naming so downstream fusion + display stays clean.
 
     Returns list of {rank, title, url, image}. Silent-fail returns []
     so the snapshot still writes with the other sources.
@@ -165,30 +269,42 @@ def _fetch_fandango(limit: int = 25) -> list[dict]:
     if not r.ok:
         logger.warning("fandango: http %s", r.status_code)
         return []
+
+    text = r.text or ''
     items: list[dict] = []
-    for m in _FANDANGO_CARD_RE.finditer(r.text or ''):
+    seen_canonical: set[str] = set()
+    for m in _FANDANGO_CARD_RE.finditer(text):
         card = m.group(1)
         href_m  = _FANDANGO_HREF_RE.search(card)
         title_m = _FANDANGO_TITLE_RE.search(card)
         img_m   = _FANDANGO_IMG_RE.search(card)
         if not (href_m and title_m):
             continue
-        title = _clean_title(title_m.group(1))
-        if not _is_title(title):
+        raw_title  = _clean_title(title_m.group(1))
+        if not _is_title(raw_title):
             continue
-        image = img_m.group(1) if img_m else ''
-        # Fandango's ImageRenderer URLs look like
-        #   `.../default_poster--dark-mode.png/0/images/MasterRepository/fandango/{id}/{poster}.jpg`
-        # where the `default_poster--dark-mode.png` segment is just the
-        # fallback layer inside the transform and the REAL poster is the
-        # `/images/MasterRepository/...jpg` suffix. Only treat the URL
-        # as a placeholder when there's NO real-image suffix.
-        if 'default_poster' in image and '/images/MasterRepository/' not in image:
-            image = ''
+        canon_title = _fandango_canonicalize_title(raw_title)
+        canon_key   = _slugify_title(canon_title)
+        # Dedupe: a canonical title may appear multiple times if
+        # Fandango lists both the variant AND the canonical grid row.
+        if canon_key in seen_canonical:
+            continue
+        seen_canonical.add(canon_key)
+
+        if canon_title != raw_title:
+            # Variant row - look up canonical URL + poster.
+            url, image = _fandango_lookup_canonical(
+                text, canon_title, href_m.group(1))
+        else:
+            url   = 'https://www.fandango.com' + href_m.group(1)
+            image = img_m.group(1) if img_m else ''
+            if 'default_poster' in image and '/images/MasterRepository/' not in image:
+                image = ''
+
         items.append({
             'rank':  len(items) + 1,
-            'title': title,
-            'url':   'https://www.fandango.com' + href_m.group(1),
+            'title': canon_title,
+            'url':   url,
             'image': image,
         })
         if len(items) >= limit:
@@ -451,21 +567,62 @@ _AMC_EVENT_TOKENS = (
 )
 
 
+# Known franchise / compound-word title fixes for AMC slug-to-title.
+# AMC's slugs lose hyphens and colons that appear in the real title
+# (e.g. `spider-man-brand-new-day` should display as
+# `Spider-Man: Brand New Day` to match Cinemark/Fandango/Regal).
+# Left side = slug prefix (all-lowercase, hyphen-separated), right
+# side = corresponding proper title prefix. Match longest first.
+_AMC_TITLE_FIXUPS = (
+    ('spider-man-brand-new-day',      'Spider-Man: Brand New Day'),
+    ('spider-man',                    'Spider-Man'),
+    ('star-wars-the-mandalorian-and-grogu', 'Star Wars: The Mandalorian and Grogu'),
+    ('star-wars',                     'Star Wars'),
+    ('mission-impossible',            'Mission: Impossible'),
+    ('avengers-doomsday',             'Avengers: Doomsday'),
+    ('minions-monsters',              'Minions & Monsters'),
+    ('bad-guys',                      'Bad Guys'),
+    ('paw-patrol',                    'PAW Patrol'),
+    ('hadestown-the-musical',         'Hadestown: The Musical'),
+    ('toy-story',                     'Toy Story'),
+)
+
+
 def _amc_slug_to_title(slug: str) -> str:
     """AMC slug: `the-odyssey-76238` -> `The Odyssey`.
     Preserves sequel numbers: `toy-story-5-72482` -> `Toy Story 5`,
     `the-bad-guys-2-83811` -> `The Bad Guys 2`.
+    Restores hyphen + colon punctuation for known franchise titles via
+    `_AMC_TITLE_FIXUPS` so display matches Cinemark/Fandango/Regal.
 
-    Strategy: split on `-`, drop ONLY the final numeric AMC-id token
-    (never subsequent numeric tokens - those are sequel numbers or
-    years like `texas-chainsaw-day-2026`), then title-case each
-    remaining word.
+    Strategy: strip trailing numeric AMC-id, check the fixups table
+    for a longest-prefix match, then title-case any remaining tail.
+    Fixups table is longest-first so `spider-man-brand-new-day` beats
+    the shorter `spider-man` match.
     """
-    parts = slug.split('-')
-    # Drop exactly one trailing numeric id (the internal AMC film id).
-    # Do NOT loop - `toy-story-5-72482` loses the sequel `5` if we do.
-    if parts and parts[-1].isdigit():
-        parts.pop()
+    # Drop trailing numeric AMC id.
+    slug_no_id = re.sub(r'-\d+$', '', slug).strip('-')
+    if not slug_no_id:
+        return ''
+
+    # Try longest-prefix match against the fixups table.
+    for prefix, proper in sorted(_AMC_TITLE_FIXUPS,
+                                  key=lambda p: -len(p[0])):
+        if slug_no_id == prefix:
+            return proper
+        if slug_no_id.startswith(prefix + '-'):
+            tail = slug_no_id[len(prefix) + 1:]
+            # Title-case the tail words with the standard rules.
+            return proper + ' ' + _amc_titlecase_tail(tail)
+
+    return _amc_titlecase_tail(slug_no_id)
+
+
+def _amc_titlecase_tail(s: str) -> str:
+    """Title-case a hyphen-separated slug tail. Lowercases stopwords
+    when they're not the first token, then re-attaches apostrophe-s
+    fragments (`founder-s-story` -> `Founder's Story`)."""
+    parts = s.split('-')
     if not parts:
         return ''
     lowercase = {'of', 'the', 'a', 'an', 'and', 'in', 'to', 'for', 'on',
@@ -477,9 +634,6 @@ def _amc_slug_to_title(slug: str) -> str:
         else:
             out.append(tok.capitalize())
     title = ' '.join(out)
-    # AMC's slug format loses apostrophes: `founder-s-story` splits to
-    # ["Founder", "S", "Story"]. Glue standalone "S" back to its
-    # preceding word as `'s`.
     title = re.sub(r"\b([A-Za-z]{2,}) S\b", r"\1's", title)
     return title
 
@@ -520,23 +674,94 @@ def _fetch_amc(limit: int = 25) -> tuple[list[dict], str]:
 
     # Count slug occurrences. AMC's SSR HTML repeats each merchandised
     # title 6-16 times; use count as a merchandising rank proxy.
+    #
+    # KEY DESIGN (2026-07-29): AMC also lists SPECIAL SCREENING variants
+    # of a title as SEPARATE slugs whose name-part BEGINS with the
+    # canonical title's name-part, e.g.
+    #    spider-man-brand-new-day-78598                        (real canonical)
+    #    spider-man-brand-new-day-dolby-opening-night-fan-event-84005
+    #    spider-man-brand-new-day-sensory-friendly-screening-84001
+    #    spider-man-brand-new-day-private-theatre-rental-83943
+    # All variants START with `spider-man-brand-new-day-` in their
+    # name-part. Every variant contains at least one `_AMC_EVENT_TOKENS`
+    # substring (that's how we identify them as variants). We fold
+    # each variant's count INTO the canonical slug's count so
+    # merchandising signal accrues to the base title.
+    #
+    # Grouping algorithm:
+    #   1. Collect all slugs with their raw counts.
+    #   2. Split by "canonical" (no event token in slug) vs "variant".
+    #   3. Sort canonicals by name-part length DESCENDING so a longer
+    #      canonical name never gets absorbed into a shorter one that
+    #      happens to be its prefix.
+    #   4. For each variant, attach to the canonical whose name-part
+    #      is the longest prefix of the variant's name-part.
+    #   5. Variants that don't match any canonical stand alone (rare;
+    #      happens when AMC has only variant pages listed for a title).
     from collections import Counter
-    counter: Counter = Counter()
-    for m in _AMC_SLUG_RE.finditer(html):
-        slug = m.group(1)
-        if any(tok in slug for tok in _AMC_EVENT_TOKENS):
-            continue
-        counter[slug] += 1
+    all_counts: Counter = Counter(m.group(1) for m in _AMC_SLUG_RE.finditer(html))
 
+    def _name_part(slug: str) -> str:
+        # Everything before the trailing -<digits> AMC-id.
+        return re.sub(r'-\d+$', '', slug)
+
+    canonicals: list[tuple[str, str, int]] = []   # (name_part, slug, count)
+    variants:   list[tuple[str, str, int]] = []
+    for slug, cnt in all_counts.items():
+        name  = _name_part(slug)
+        is_variant = any(tok in slug for tok in _AMC_EVENT_TOKENS)
+        (variants if is_variant else canonicals).append((name, slug, cnt))
+
+    # Sort canonicals longest-first so we match the most specific
+    # canonical name before its shorter prefix. E.g. we prefer
+    # `the-bad-guys-2` over `the-bad-guys` when the variant is
+    # `the-bad-guys-2-imax-72998`.
+    canonicals.sort(key=lambda t: -len(t[0]))
+
+    # Seed each group with the canonical's own count.
+    groups: dict[str, dict] = {}
+    for name, slug, cnt in canonicals:
+        groups.setdefault(slug, {'slug': slug, 'total': cnt, 'name': name})
+
+    def _match_canonical(variant_name: str) -> Optional[str]:
+        """Return the canonical slug whose name-part is the longest
+        prefix (followed by `-`) of `variant_name`. None if no match."""
+        for name, slug, _cnt in canonicals:
+            if variant_name == name or variant_name.startswith(name + '-'):
+                return slug
+        return None
+
+    for vname, vslug, vcnt in variants:
+        target = _match_canonical(vname)
+        if target:
+            groups[target]['total'] += vcnt
+        else:
+            # No canonical - keep the variant as its own group so we
+            # still surface titles AMC only ever links via variant
+            # pages (e.g. one-off preview screenings that don't have
+            # a base page yet).
+            groups.setdefault(vslug, {'slug': vslug, 'total': vcnt,
+                                       'name': vname})
+
+    # Rank groups by total merchandising count.
     items: list[dict] = []
-    for slug, cnt in counter.most_common(limit * 3):
+    ranked = sorted(groups.values(), key=lambda g: -g['total'])
+    for g in ranked[:limit * 4]:
+        slug = g['slug']
+        cnt  = g['total']
         title = _clean_title(_amc_slug_to_title(slug))
         if not _is_title(title):
             continue
-        # Require the slug to appear at least 4 times - single-digit
-        # counts tend to be filter chips or crossreferenced titles
-        # (e.g. "you might also like" tiles).
-        if cnt < 4:
+        # Filter: don't surface variant-only titles (any event token
+        # in the slug means the title looks like "X Sensory Friendly
+        # Screening" which is ugly on the dashboard). If a title only
+        # has variant listings on the current /movies page, better to
+        # skip it than show the awkward variant name.
+        if any(tok in slug for tok in _AMC_EVENT_TOKENS):
+            continue
+        # Require merged count >= 3 so filter chips / nav artifacts
+        # (single-digit counts on chrome anchors) don't rank.
+        if cnt < 3:
             continue
         items.append({
             'rank':  len(items) + 1,
@@ -564,7 +789,12 @@ def _fetch_amc(limit: int = 25) -> tuple[list[dict], str]:
 # `<a href="/movies/...">` anchors. Parse that blob directly - the
 # anchor-scraping path finds zero movie links even on a fully rendered
 # page (verified 2026-07-29).
-_REGAL_URL      = 'https://www.regmovies.com/movies/all-movies-in-theatres'
+# 2026-07-29: switched from `/movies/all-movies-in-theatres` (which now
+# returns HTTP 404 and serves a stale "now playing only" list missing
+# the top marquee pre-release like Spider-Man: Brand New Day) to
+# `/movies` (HTTP 200, ~140 titles in MovieFeedEntries with the top
+# marquee title at position #1). Verified 2026-07-29.
+_REGAL_URL      = 'https://www.regmovies.com/movies'
 _REGAL_HOMEPAGE = 'https://www.regmovies.com/'
 _REGAL_FEED_KEY_RE = re.compile(r'"MovieFeedEntries"\s*:\s*\[')
 
