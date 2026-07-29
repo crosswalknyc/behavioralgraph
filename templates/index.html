@@ -68261,9 +68261,15 @@
                 + '</div>';
 
             var songs = show.songs || [];
+            var showViewers = Number(show.viewers_hh || 0);
+            function _jiqMusicSongCell(pct, count, color, weight) {
+                var pctSafe = Number(pct || 0);
+                return '<div style="font-weight:' + (weight || 700) + '; color:' + color + '; font-size:0.82rem; line-height:1.15;">' + pctSafe.toFixed(1) + '%</div>'
+                     + '<div style="font-size:0.66rem; opacity:0.6; font-weight:500; margin-top:0.1rem;">' + _jiqMusicHhAbbrev(showViewers * pctSafe / 100) + '</div>';
+            }
             var songsHtml = songs.length ? '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.2rem;">🎼 Song-level breakdown · ' + _jiqEsc(show.label) + '</h4>'
                 + '<div style="font-size:0.68rem; color:var(--text-secondary); font-style:italic; margin-bottom:0.4rem; line-height:1.5;">'
-                +   'Song rows are % of show viewers whose <em>primary</em> music touchpoint mapped to this track — mutually exclusive assignment, so columns sum to the show totals. A viewer exposed to multiple songs is attributed to their highest-engagement track.'
+                +   'Each row shows how show viewers split across their primary music-touchpoint category for this track — audio-only, clips-only, both, or no touchpoint to this track. Row totals are % of the show\'s ' + _jiqMusicHhAbbrev(showViewers) + '-viewer base; a viewer with multiple song touchpoints is attributed to their highest-engagement track.'
                 + '</div>'
                 + '<div style="overflow-x:auto; margin-bottom:0.65rem;">'
                 + '<table style="width:100%; border-collapse:collapse; font-size:0.76rem;">'
@@ -68273,9 +68279,14 @@
                 +     '<th style="padding:6px 8px; text-align:right; font-size:0.6rem; opacity:0.7;">Music only</th>'
                 +     '<th style="padding:6px 8px; text-align:right; font-size:0.6rem; opacity:0.7;">Clips only</th>'
                 +     '<th style="padding:6px 8px; text-align:right; font-size:0.6rem; opacity:0.7;">Both</th>'
+                +     '<th style="padding:6px 8px; text-align:right; font-size:0.6rem; opacity:0.7;">None</th>'
                 +     '<th style="padding:6px 8px; font-size:0.6rem; opacity:0.7;">Note</th>'
                 +   '</tr></thead><tbody>'
                 + songs.map(function(s) {
+                    var mo   = Number(s.music_only_pct || 0);
+                    var co   = Number(s.clips_only_pct || 0);
+                    var mc   = Number(s.music_and_clips_pct || 0);
+                    var none = Math.max(0, 100 - mo - co - mc);
                     return '<tr style="border-bottom:1px solid var(--border-color);">'
                          +   '<td style="padding:6px 8px;">'
                          +     '<div style="font-weight:700;">' + _jiqEsc(s.title) + '</div>'
@@ -68288,9 +68299,10 @@
                                     accent:              show.accent,
                                     accent2:             '#38bdf8'
                                 }) + '</td>'
-                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700; color:' + show.accent + ';">' + Number(s.music_only_pct || 0).toFixed(1) + '%</td>'
-                         +   '<td style="padding:6px 8px; text-align:right; font-weight:700; color:#38bdf8;">' + Number(s.clips_only_pct || 0).toFixed(1) + '%</td>'
-                         +   '<td style="padding:6px 8px; text-align:right; font-weight:800; color:#a78bfa;">' + Number(s.music_and_clips_pct || 0).toFixed(1) + '%</td>'
+                         +   '<td style="padding:6px 8px; text-align:right;">' + _jiqMusicSongCell(mo,   showViewers * mo   / 100, show.accent, 700) + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right;">' + _jiqMusicSongCell(co,   showViewers * co   / 100, '#38bdf8',   700) + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right;">' + _jiqMusicSongCell(mc,   showViewers * mc   / 100, '#a78bfa',   800) + '</td>'
+                         +   '<td style="padding:6px 8px; text-align:right;">' + _jiqMusicSongCell(none, showViewers * none / 100, '#94a3b8',   600) + '</td>'
                          +   '<td style="padding:6px 8px; font-size:0.7rem; color:var(--text-secondary); font-style:italic; line-height:1.5;">' + _jiqEsc(s.note || '') + '</td>'
                          + '</tr>';
                   }).join('')
