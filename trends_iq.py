@@ -98,7 +98,7 @@ except Exception as _ext_err:
 S3_CACHE_BUCKET    = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')
 S3_CACHE_PREFIX    = os.environ.get('TRENDS_IQ_CACHE_PREFIX', 'trends_iq/cache/')
 CACHE_TTL_S        = int(os.environ.get('TRENDS_IQ_CACHE_TTL', '86400'))      # 24h - matches the daily-cron cadence of the underlying trends_iq_snapshots/latest/ writes. There is no reason to invalidate the aggregated dashboard payload before the next scraper cron produces new upstream snapshots.
-DEFAULT_LOOKBACK_DAYS = int(os.environ.get('TRENDS_IQ_LOOKBACK_DAYS', '7'))
+DEFAULT_LOOKBACK_DAYS = int(os.environ.get('TRENDS_IQ_LOOKBACK_DAYS', '1'))
 _HTTP_TIMEOUT_S    = 8
 _UA                = "CrosswalkTrendsIQ/1.0 (+contact: jenna@crosswalknyc.com)"
 

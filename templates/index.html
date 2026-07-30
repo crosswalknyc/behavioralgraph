@@ -24358,9 +24358,9 @@
                 <div>
                     <label for="trendsIQLookback">Window</label>
                     <select id="trendsIQLookback">
-                        <option value="1">Today</option>
+                        <option value="1" selected>Last 24 hours</option>
                         <option value="3">Last 3 days</option>
-                        <option value="7" selected>Last 7 days</option>
+                        <option value="7">Last 7 days</option>
                         <option value="14">Last 14 days</option>
                         <option value="30">Last 30 days</option>
                     </select>
@@ -44699,7 +44699,7 @@
             var filters = {
                 geo_type:      document.getElementById('trendsIQGeoType').value || 'National',
                 geo_value:     document.getElementById('trendsIQGeoValue').value || '',
-                lookback_days: parseInt(document.getElementById('trendsIQLookback').value || '7', 10),
+                lookback_days: parseInt(document.getElementById('trendsIQLookback').value || '1', 10),
             };
             if ((filters.geo_type === 'State' || filters.geo_type === 'DMA') && !filters.geo_value) {
                 document.getElementById('trendsIQMeta').textContent = 'Pick a region or switch to National.';
@@ -44824,7 +44824,11 @@
             var filters = data.filters || {};
             var meta = document.getElementById('trendsIQMeta');
             var updatedAt = document.getElementById('trendsIQUpdatedAt');
-            if (meta) meta.textContent = 'Trending for ' + (filters.geo_label || 'National') + ' - last ' + (filters.lookback_days || 7) + ' days';
+            if (meta) {
+                var _lb = filters.lookback_days || 1;
+                var _windowLabel = (_lb === 1) ? 'last 24 hours' : ('last ' + _lb + ' days');
+                meta.textContent = 'Trending for ' + (filters.geo_label || 'National') + ' - ' + _windowLabel;
+            }
             if (updatedAt && data.generated_at) {
                 var d = new Date(data.generated_at);
                 updatedAt.textContent = 'Updated ' + d.toLocaleString();
