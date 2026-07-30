@@ -45043,7 +45043,7 @@
                 { key: 'social',    label: 'Social',           count: 0,                     icon: '💬',
                   tip: 'Social: Trending posts and videos on Reddit, YouTube, and TikTok. Real content, not hashtag lists.' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
-                  tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, Max, Prime Video, and ESPN+, split into Film and TV.' },
+                  tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, HBO Max, Prime Video, and ESPN+, split into Film and TV.' },
                 { key: 'films',     label: 'Films',            count: counts.films     || 0, icon: '🎬',
                   tip: 'Films: Top titles in theaters right now across Fandango, Cinemark, AMC, Regal, and Atom Tickets. Ranking on each platform reflects that platform\'s own front-page merchandising and sales density.' },
                 { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★',
@@ -45710,7 +45710,11 @@
             'Netflix':     'Netflix: Daily Top-10 titles.',
             'Disney+':     'Disney+: Trending titles right now.',
             'Hulu':        'Hulu: Trending titles right now.',
-            'Max':         'Max: Trending titles right now.',
+            'HBO Max':     'HBO Max: Trending titles right now.',
+            // 'Max' kept for one release so old cached payloads (label
+            // stamped before the rename) still get a tooltip. Safe to
+            // drop after two cache-day rollovers.
+            'Max':         'HBO Max: Trending titles right now.',
             'Prime Video': 'Prime Video: Trending titles right now.',
             'ESPN+':       'ESPN+: Trending programs right now.',
             // Headlines sub-tabs. Keys match _tiqNormalizeHeader output

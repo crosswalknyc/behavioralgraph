@@ -308,7 +308,12 @@ STREAMING_PLATFORMS = [
     ('netflix',    'Netflix',      True),
     ('disneyplus', 'Disney+',      False),
     ('hulu',       'Hulu',         False),
-    ('max',        'Max',          False),
+    # slug stays 'max' for backwards compat with existing S3 snapshot
+    # keys (trends_iq_snapshots/latest/max.json etc.). Display label
+    # updated to 'HBO Max' 2026-07-30 per Jenna: WBD kept HBO in the
+    # official brand and the shorter "Max" alone tested confusingly
+    # in the streaming sub-tab strip.
+    ('max',        'HBO Max',      False),
     ('primevideo', 'Prime Video',  False),
     ('espnplus',   'ESPN+',        False),
 ]
