@@ -71,6 +71,25 @@ logger = logging.getLogger(__name__)
 _UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) '
         'Gecko/20100101 Firefox/120.0')
 
+# User rule 2026-07-29: NEVER surface operator-facing text (e.g.
+# "log into ... and run donate_cookies.py") to the dashboard tile.
+# When a bot-walled source can't be scraped, show a neutral "warming
+# up" line and let cookie_gap_notify.notify_cookie_gap() handle the
+# offline re-donation ask via SES to jenna+jessie (deduped to one
+# email per source/domain per day). Same pattern as film_ticketing.py.
+_WARMING_UP_HINT = 'Warming up. Check back later.'
+
+
+def _mark_cookie_gap(source: str, domain: str, reason: str = '') -> None:
+    """Fire the operator-facing SES notification. Best-effort; never
+    raises. The dashboard tile only ever sees `_WARMING_UP_HINT`."""
+    try:
+        from .cookie_gap_notify import notify_cookie_gap
+        notify_cookie_gap(source, domain, reason=reason)
+    except Exception as e:
+        logger.info("cookie_gap notify failed for %s/%s: %s",
+                     source, domain, e)
+
 
 # ---------------------------------------------------------------------------
 # Amazon Books Best-Sellers  (public HTML)
@@ -337,11 +356,11 @@ def _fetch_audible_books(limit: int = 100) -> tuple[list[dict], str]:
     if not cookies:
         logger.warning(
             "audible books: no donated cookies for audible.com. "
-            "Run `python3 scripts/trends_scrapers/donate_cookies.py "
-            "audible.com` from a logged-in laptop."
+            "Firing cookie-gap SES notification."
         )
-        return [], ('Log into Audible in your laptop Chrome, then '
-                    'run donate_cookies.py audible.com.')
+        _mark_cookie_gap('audible_books', 'audible.com',
+                          reason='no donated cookies on S3')
+        return [], _WARMING_UP_HINT
 
     from urllib.parse import unquote as _unq
     items: list[dict] = []
@@ -370,9 +389,10 @@ def _fetch_audible_books(limit: int = 100) -> tuple[list[dict], str]:
         html = r.text or ''
         if 'lang="de-DE"' in html[:2000] or 'lang="de"' in html[:2000]:
             logger.warning("audible books: got de-DE storefront - cookies "
-                           "may be stale, re-donate")
-            return [], ('Log into Audible in your laptop Chrome, then '
-                        'run donate_cookies.py audible.com.')
+                           "may be stale, firing SES notify")
+            _mark_cookie_gap('audible_books', 'audible.com',
+                              reason='de-DE storefront returned despite cookies - session likely expired')
+            return [], _WARMING_UP_HINT
         if len(html) < 100_000:
             logger.warning("audible books p%d: html too small (%d bytes)",
                            page, len(html))

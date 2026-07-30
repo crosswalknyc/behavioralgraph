@@ -89,6 +89,27 @@ logger = logging.getLogger(__name__)
 _UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) '
         'Gecko/20100101 Firefox/120.0')
 
+# User rule 2026-07-29: NEVER surface operator-facing text (e.g.
+# "log into ... and run donate_cookies.py") to the dashboard tile.
+# When a bot-walled source can't be scraped, show a neutral "warming
+# up" line and let cookie_gap_notify.notify_cookie_gap() handle the
+# offline re-donation ask via SES to jenna+jessie (deduped to one
+# email per source/domain per day). Same pattern as film_ticketing.py.
+_WARMING_UP_HINT = 'Warming up. Check back later.'
+
+
+def _mark_cookie_gap(source: str, domain: str, reason: str = '') -> None:
+    """Fire the operator-facing SES notification. Best-effort; never
+    raises. Called from any fetcher that returns 0 items because the
+    donated cookie session is missing or has been rejected by the
+    site. The dashboard tile only ever sees `_WARMING_UP_HINT`."""
+    try:
+        from .cookie_gap_notify import notify_cookie_gap
+        notify_cookie_gap(source, domain, reason=reason)
+    except Exception as e:
+        logger.info("cookie_gap notify failed for %s/%s: %s",
+                     source, domain, e)
+
 
 # ---------------------------------------------------------------------------
 # Apple Podcasts Top 100 US  (public marketing RSS)
@@ -276,11 +297,11 @@ def _fetch_amazon_podcasts(limit: int = 100) -> tuple[list[dict], str]:
     if not donated:
         logger.warning(
             "amazon podcasts: no donated cookies for music.amazon.com. "
-            "Run `python3 scripts/trends_scrapers/donate_cookies.py "
-            "music.amazon.com` from a logged-in laptop."
+            "Firing cookie-gap SES notification."
         )
-        return [], ('Log into Amazon Music once in your laptop Chrome, then '
-                    'run donate_cookies.py music.amazon.com.')
+        _mark_cookie_gap('amazon_podcasts', 'music.amazon.com',
+                          reason='no donated cookies on S3')
+        return [], _WARMING_UP_HINT
 
     items: list[dict] = []
     try:
@@ -327,13 +348,14 @@ def _fetch_amazon_podcasts(limit: int = 100) -> tuple[list[dict], str]:
                 )
             except Exception:
                 logger.warning("amazon podcasts: tiles never hydrated - "
-                               "cookies likely expired, re-donate")
+                               "cookies likely expired, firing SES notify")
                 try:
                     ctx.close(); browser.close()
                 except Exception:
                     pass
-                return [], ('Log into Amazon Music once in your laptop Chrome, '
-                            'then run donate_cookies.py music.amazon.com.')
+                _mark_cookie_gap('amazon_podcasts', 'music.amazon.com',
+                                  reason='tiles never hydrated - cookies likely expired')
+                return [], _WARMING_UP_HINT
 
             # Scroll to force lazy carousels below the fold to load.
             for _ in range(8):
@@ -467,11 +489,11 @@ def _fetch_audible_podcasts(limit: int = 100) -> tuple[list[dict], str]:
     if not cookies:
         logger.warning(
             "audible podcasts: no donated cookies for audible.com. "
-            "From your laptop: "
-            "`python3 scripts/trends_scrapers/donate_cookies.py audible.com`"
+            "Firing cookie-gap SES notification."
         )
-        return [], ('Log into Audible in your laptop Chrome, then '
-                    'run donate_cookies.py audible.com.')
+        _mark_cookie_gap('audible_podcasts', 'audible.com',
+                          reason='no donated cookies on S3')
+        return [], _WARMING_UP_HINT
 
     try:
         r = requests.get(
@@ -499,9 +521,10 @@ def _fetch_audible_podcasts(limit: int = 100) -> tuple[list[dict], str]:
     # Explicitly check we got the US storefront before parsing.
     if 'lang="de-DE"' in html[:2000] or 'lang="de"' in html[:2000]:
         logger.warning("audible podcasts: got de-DE storefront despite "
-                       "cookies - cookies may be stale, re-donate")
-        return [], ('Log into Audible in your laptop Chrome, then '
-                    'run donate_cookies.py audible.com.')
+                       "cookies - cookies may be stale, firing SES notify")
+        _mark_cookie_gap('audible_podcasts', 'audible.com',
+                          reason='de-DE storefront returned despite cookies - session likely expired')
+        return [], _WARMING_UP_HINT
     if len(html) < 50_000:
         logger.warning("audible podcasts: html too small (%d bytes) - "
                        "likely served an anti-bot shell", len(html))
