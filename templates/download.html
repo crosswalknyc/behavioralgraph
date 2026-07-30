@@ -103,6 +103,53 @@
         }
         .meta strong { color: var(--text-primary); font-weight: 600; }
         .meta-row { display: flex; justify-content: space-between; margin-bottom: 0.25rem; }
+        .trouble {
+            margin-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1rem;
+        }
+        .trouble summary {
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: var(--accent-cyan);
+            font-weight: 600;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0;
+        }
+        .trouble summary::-webkit-details-marker { display: none; }
+        .trouble summary::before {
+            content: "+";
+            display: inline-flex;
+            width: 16px; height: 16px;
+            align-items: center; justify-content: center;
+            font-weight: 700;
+            font-size: 1rem;
+            line-height: 1;
+            color: var(--accent-cyan);
+        }
+        .trouble[open] summary::before { content: "\2212"; }
+        .trouble summary:hover { opacity: 0.85; }
+        .trouble-body {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            padding: 0.5rem 0 0 1.5rem;
+        }
+        .trouble-body p { margin-bottom: 0.75rem; }
+        .trouble-body ol { padding-left: 1.1rem; }
+        .trouble-body li { margin-bottom: 0.5rem; }
+        .trouble-body strong { color: var(--text-primary); }
+        .trouble-body code {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+            background: rgba(102, 217, 239, 0.08);
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            color: var(--accent-cyan);
+        }
         .footer {
             text-align: center;
             margin-top: 1.5rem;
@@ -144,6 +191,40 @@
                 <div class="meta-row"><span>macOS</span><strong>12 (Monterey) or newer</strong></div>
                 <div class="meta-row"><span>Windows</span><strong>10 / 11 (64-bit)</strong></div>
             </div>
+
+            <!--
+              First-run bypass instructions. We ship unsigned installers
+              until Apple/Microsoft code-signing certs are provisioned, so
+              new users hit Gatekeeper (macOS) / SmartScreen (Windows) on
+              first launch. Both sections are hidden by default; the JS
+              at the bottom reveals whichever one matches the detected OS
+              so we don't clutter the page for users on the "wrong" OS.
+              Once the installers are signed + notarized this whole block
+              can be deleted.
+            -->
+            <details class="trouble" id="troubleMac" hidden>
+                <summary>Trouble opening on macOS?</summary>
+                <div class="trouble-body">
+                    <p>If macOS shows <em>"Apple could not verify CrosswalkIQ-Mac.pkg is free of malware"</em>, that's Gatekeeper's default warning for apps not yet notarized by Apple. The installer is safe; here's how to open it:</p>
+                    <ol>
+                        <li>Click <strong>Done</strong> on the warning (not "Move to Trash").</li>
+                        <li>Open <strong>System Settings → Privacy &amp; Security</strong>.</li>
+                        <li>Scroll to the bottom. You'll see a line about the blocked file with an <strong>Open Anyway</strong> button. Click it and authenticate with Touch ID or your password.</li>
+                        <li>Double-click <code>CrosswalkIQ-Mac.pkg</code> again. Click <strong>Open</strong> on the confirmation dialog and the installer will run normally.</li>
+                    </ol>
+                </div>
+            </details>
+            <details class="trouble" id="troubleWin" hidden>
+                <summary>Trouble opening on Windows?</summary>
+                <div class="trouble-body">
+                    <p>If Windows shows <em>"Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting"</em>, that's the default warning for apps not yet signed with a Microsoft-recognized certificate. The installer is safe; here's how to open it:</p>
+                    <ol>
+                        <li>Click <strong>More info</strong> on the SmartScreen dialog.</li>
+                        <li>Click <strong>Run anyway</strong> at the bottom.</li>
+                        <li>The installer will proceed normally.</li>
+                    </ol>
+                </div>
+            </details>
         </div>
 
         <p class="footer">
@@ -175,17 +256,32 @@
             var label      = document.getElementById('primaryLabel');
             var secondary  = document.getElementById('secondaryLink');
             var secHint    = document.getElementById('secondaryHint');
+            var troubleMac = document.getElementById('troubleMac');
+            var troubleWin = document.getElementById('troubleWin');
+
+            // Reveal only the OS-appropriate "Trouble opening?" section
+            // so we don't clutter the page with the wrong bypass steps.
+            function showTrouble(which) {
+                if (which === 'mac' && troubleMac) troubleMac.hidden = false;
+                if (which === 'windows' && troubleWin) troubleWin.hidden = false;
+                if (which === 'both') {
+                    if (troubleMac) troubleMac.hidden = false;
+                    if (troubleWin) troubleWin.hidden = false;
+                }
+            }
 
             if (os === 'mac') {
                 primary.href = MAC_URL;
                 label.textContent = 'Download for macOS';
                 secondary.href = WINDOWS_URL;
                 secondary.textContent = 'Download for Windows';
+                showTrouble('mac');
             } else if (os === 'windows') {
                 primary.href = WINDOWS_URL;
                 label.textContent = 'Download for Windows';
                 secondary.href = MAC_URL;
                 secondary.textContent = 'Download for macOS';
+                showTrouble('windows');
             } else if (os === 'mobile') {
                 // Mobile can't install the desktop app; show both options
                 // with a note explaining why the primary button is disabled.
@@ -201,6 +297,7 @@
                 label.textContent = 'Download for macOS';
                 secondary.href = WINDOWS_URL;
                 secondary.textContent = 'Download for Windows';
+                showTrouble('both');
             }
         })();
     </script>
