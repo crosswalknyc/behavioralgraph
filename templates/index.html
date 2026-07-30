@@ -50155,7 +50155,15 @@
                     cpm:          rate,
                     bench_cpm:    benchByPlat[p.platform] || 0,
                     emv:          look.emv[p.platform] || 0,
-                    _dim:         ((p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)) === 0
+                    // Dim a row only when it has NO engagement in ANY of
+                    // the user-count fields. Some profiles (e.g. rerun /
+                    // counterfactual builds) populate pre_users/post_users
+                    // instead of the *_on_platform variants; checking only
+                    // the *_on_platform fields dimmed those whole tables
+                    // even though they carry real Pre/Post/EMV values.
+                    // Mirrors the `hasAny` presence check above.
+                    _dim:         ((p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)
+                                    + (p.pre_users || 0) + (p.post_users || 0)) === 0
                 };
             });
             var sk = _bpiqState.sortKey;
