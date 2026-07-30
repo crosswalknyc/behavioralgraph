@@ -4267,11 +4267,24 @@ _WIKI_PAGEIMAGES_URL = 'https://en.wikipedia.org/w/api.php'
 
 
 def _norm_title_for_poster(title: str) -> str:
-    """Strip trailing "(S1)" / "Season 1" / ": Season 2" style suffixes
-    and year tags so the Wikipedia match rate is higher."""
+    """Strip trailing "(S1)" / "Season 1" / ": Season 2" style suffixes,
+    year tags, and marketing suffixes like "Trailer" / "Sneak Peek" /
+    "Official Trailer" so the poster lookup match rate is higher."""
     t = str(title or '').strip()
     if not t:
         return ''
+    # Marketing suffixes ("Trailer", "Official Trailer", "Sneak Peek",
+    # "Behind the Scenes", "Teaser") - streaming platforms slot these
+    # into their Top-10 alongside real titles. Strip the noun after
+    # optional year so "Shark Week 2026 Trailer" resolves to "Shark Week".
+    t = re.sub(
+        r'\s*\d{4}\s*(?:official\s+)?(?:trailer|teaser|sneak\s+peek|'
+        r'behind\s+the\s+scenes|first\s+look|clip|featurette)\s*$',
+        '', t, flags=re.IGNORECASE)
+    t = re.sub(
+        r'\s*(?:official\s+)?(?:trailer|teaser|sneak\s+peek|'
+        r'behind\s+the\s+scenes|first\s+look|clip|featurette)\s*$',
+        '', t, flags=re.IGNORECASE)
     # ": Season 3" or " Season 3"
     t = re.sub(r'[:\s]+season\s+\d+.*$', '', t, flags=re.IGNORECASE)
     # " (S3)" / ": S3"
@@ -4356,6 +4369,98 @@ def _wiki_pageimages_thumb(title: str) -> str:
     return ''
 
 
+# ---------------------------------------------------------------------------
+# iTunes Search API poster fallback
+#
+# When Wikipedia misses (either no article, or article carries a logo
+# instead of a real poster like House of the Dragon, or infobox has no
+# free-license image like Euphoria's American TV series page), fall
+# through to iTunes Search - Apple's public catalog covers ~90% of
+# theatrical films and most TV series that sell digitally (which is
+# almost everything on the streaming Top-10 rails).
+#
+# No API key, no signup, no rate limit for light traffic. Poster URL is
+# returned as artworkUrl100 which we upgrade to 600x600 by URL rewrite
+# (Apple exposes multiple sizes at the same path with just a size token
+# swap).
+#
+# Coverage counter-examples (still miss):
+#   - HBO Max / Peacock / Paramount+ exclusives that never sold on iTunes
+#     (Life Larry & Pursuit of Unhappiness, Rick & Morty pre-Netflix)
+#   - Trailers / sneak peeks (they should have been normalized away by
+#     _norm_title_for_poster now)
+#   - Non-English titles with romanization mismatches
+#
+# For those, the frontend film-strip SVG placeholder still fires. That's
+# fine - it's the truest "no known art" signal and doesn't misrepresent.
+# ---------------------------------------------------------------------------
+
+_ITUNES_SEARCH_URL = 'https://itunes.apple.com/search'
+
+
+def _itunes_poster_lookup(title: str, kind: str) -> str:
+    """iTunes Search API poster lookup. Returns hi-res artwork URL or ''.
+
+    kind='Film' searches `media=movie`; kind='TV' searches
+    `media=tvShow`. We deliberately do NOT set the `entity` param -
+    Apple's tvSeason entity only surfaces season SKUs sold as digital
+    bundles, which excludes most current premium TV. Dropping the
+    entity restriction returns tv-episode entries whose
+    `collectionName` = the show name, which is what we want here.
+
+    Match strategy: normalized-substring guard against the candidate's
+    `collectionName`. For movies we additionally accept `trackName` as
+    a fallback since Apple sometimes ships a movie only as a trackName.
+    kind mismatch is rejected outright (a tv-episode row for a movie
+    query, or a feature-movie row for a TV query).
+    """
+    q = _norm_title_for_poster(title)
+    if not q:
+        return ''
+    is_film = str(kind or '').strip().lower() in ('film', 'films', 'movie', 'movies')
+    media   = 'movie' if is_film else 'tvShow'
+    accept_kinds = {'feature-movie'} if is_film else {'tv-episode', 'tv-season'}
+    try:
+        r = requests.get(
+            _ITUNES_SEARCH_URL,
+            params={'term': q, 'country': 'US', 'media': media, 'limit': 10},
+            headers={'User-Agent': _WIKI_POSTER_UA},
+            timeout=6,
+        )
+        if not r.ok:
+            return ''
+        results = (r.json() or {}).get('results') or []
+    except Exception as e:
+        logger.debug("itunes search failed for %r: %s", title, e)
+        return ''
+    tn = _norm_for_match(q)
+    for it in results:
+        # Kind guard: skip wrong-kind (audiobook, music, etc.) and
+        # cross-kind results.
+        row_kind = (it.get('kind') or '').lower()
+        if row_kind and row_kind not in accept_kinds:
+            continue
+        # Substring guard: match the show/movie name field that
+        # corresponds to `kind`.
+        if is_film:
+            candidates = [it.get('trackName') or '', it.get('collectionName') or '']
+        else:
+            candidates = [it.get('collectionName') or '', it.get('trackName') or '']
+        if not any(tn and tn in _norm_for_match(c) for c in candidates):
+            continue
+        art = (it.get('artworkUrl100')
+               or it.get('artworkUrl60')
+               or '')
+        if not art:
+            continue
+        # Upgrade the size token. iTunes serves the same asset at
+        # 100x100, 300x300, 600x600, 1200x1200, etc. via a path-segment
+        # swap; 600 is a reasonable ceiling for streaming thumbnails.
+        art = re.sub(r'/\d+x\d+bb\.\w+$', '/600x600bb.jpg', art)
+        return art
+    return ''
+
+
 # Disambiguation-tag whitelists on Wikipedia page titles. When a user is
 # looking at the streaming Top-10 they expect a movie/TV poster, not a
 # novel cover or a hip-hop song. These tags in a page's disambiguation
@@ -4397,17 +4502,26 @@ def _candidate_kind_hint(candidate: str) -> str:
 
 
 def _wiki_poster_lookup(title: str, kind: str) -> str:
-    """Wikipedia-driven poster lookup for a streaming title.
+    """Two-layer poster lookup: Wikipedia first, iTunes Search fallback.
+
+    Wikipedia's infobox art has the best resolution when it exists but
+    misses on streaming exclusives and shows whose infobox carries a
+    logo instead of a real poster (House of the Dragon, Rick and Morty).
+    iTunes Search catches those - Apple's catalog covers ~90% of
+    theatrical films and most digital-distribution TV series.
 
     kind: 'Film' or 'TV' - biases the OpenSearch disambiguation.
     Returns '' on miss. Cached in module scope.
 
-    Filter policy per candidate:
+    Wikipedia filter policy per candidate:
       - Substring guard: normalized query must be a substring of
         normalized candidate (rejects "Landman" -> "Lawman").
       - Kind guard: rejects novel/song/album/game/etc disambiguations
         outright. Allows the exact-kind disambiguation (film for films,
         tv for TV) and bare candidates (no disambiguator).
+      - Logo reject: Wikipedia often has a logo PNG in the infobox for
+        long-running series (House of the Dragon logo, Rick and Morty
+        anime logo). Those are downgraded below the iTunes result.
     """
     q = _norm_title_for_poster(title)
     if not q:
@@ -4465,7 +4579,26 @@ def _wiki_poster_lookup(title: str, kind: str) -> str:
             continue
         art = _wiki_summary_thumb(cand) or _wiki_pageimages_thumb(cand)
         if art:
-            break
+            # Wikipedia often carries a text-logo PNG in the infobox
+            # instead of a real poster (House of the Dragon, Rick and
+            # Morty, Squid Game). If the file name contains 'logo',
+            # we prefer to try iTunes for a real poster. Keep this
+            # candidate as a last-ditch fallback in case iTunes misses.
+            if 'logo' not in art.lower():
+                break
+            wiki_logo_fallback = art
+            art = ''
+    # Fallback: iTunes Search API. Catches shows with no Wikipedia
+    # article, articles missing infobox art, and articles that only
+    # have a logo. Streaming-exclusive originals that never sold on
+    # iTunes still miss here (correctly) - those fall through to the
+    # frontend film-strip placeholder.
+    if not art:
+        art = _itunes_poster_lookup(title, kind)
+    # If iTunes also misses AND Wikipedia had a logo, use the logo -
+    # a text-only show logo is better than the film-strip placeholder.
+    if not art:
+        art = locals().get('wiki_logo_fallback', '') or ''
     _WIKI_POSTER_CACHE[cache_key] = art
     return art
 
