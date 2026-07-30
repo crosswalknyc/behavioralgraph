@@ -50236,7 +50236,15 @@
                     cpm:          rate,
                     bench_cpm:    benchByPlat[p.platform] || 0,
                     emv:          look.emv[p.platform] || 0,
-                    _dim:         ((p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)) === 0
+                    // Dim a row only when it has NO engagement in ANY of
+                    // the user-count fields. Some profiles (e.g. rerun /
+                    // counterfactual builds) populate pre_users/post_users
+                    // instead of the *_on_platform variants; checking only
+                    // the *_on_platform fields dimmed those whole tables
+                    // even though they carry real Pre/Post/EMV values.
+                    // Mirrors the `hasAny` presence check above.
+                    _dim:         ((p.pre_users_on_platform || 0) + (p.post_users_on_platform || 0)
+                                    + (p.pre_users || 0) + (p.post_users || 0)) === 0
                 };
             });
             var sk = _bpiqState.sortKey;
@@ -92632,6 +92640,16 @@
             const container = document.getElementById('audienceShareBoxes');
             const tucCard = document.getElementById('tucCard');
             if (!container) return;
+            // User rule (2026-07-30): CONTENT-category profiles never show
+            // the Total Universe Composition box (MEDIA is 100% by
+            // definition, so the breakdown adds nothing). Hiding the whole
+            // card lets the Audience Snapshot rise to the top of the left
+            // column and align with the Behavioral Profile card on the right.
+            if (_currentProfileCategory() === 'CONTENT') {
+                container.style.display = 'none';
+                if (tucCard) tucCard.style.display = 'none';
+                return;
+            }
             // Subject is needed for the per-subject CONTENT override
             // (Cat in the Hat / Blue Crush / The Grinch). Fall back to
             // the dashboard header text or currentProfileData.name when
