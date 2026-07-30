@@ -2649,6 +2649,110 @@ def _cp_normalize(text: str) -> str:
     return ' '.join(tokens)
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# Stream-estimate annotators
+# ─────────────────────────────────────────────────────────────────────────
+# The daily `stream_estimates` scraper (Claude Sonnet + web_search per
+# item) writes a US-audience estimate + day-over-day trend for every
+# top podcast / song / streaming title. We stamp each of those fields
+# onto the matching chart row here so the frontend can render
+# "12.5M weekly US listeners · ↑20% vs yesterday" under the card.
+#
+# Keys are `podcast:<norm>` / `song:<norm(title+artist)>` /
+# `film:<norm>` / `tv:<norm>` — mirrored from
+# `scripts/trends_scrapers/stream_estimates._lookup_key`.
+
+_STREAM_FIELDS = (
+    'us_estimate', 'us_estimate_low', 'us_estimate_high',
+    'unit_label', 'confidence', 'method', 'sources',
+    'delta_pct', 'direction', 'prev_estimate',
+)
+
+
+def _stamp_stream_estimate(row: dict, entry: dict) -> None:
+    """Copy stream-estimate fields onto a chart row under the
+    `us_streams` namespace. Kept as a dict so the frontend can lazy-
+    render tooltip + arrow together."""
+    if not entry:
+        return
+    row['us_streams'] = {k: entry.get(k) for k in _STREAM_FIELDS
+                          if entry.get(k) is not None}
+
+
+def _annotate_music_with_streams(music_charts: dict, estimates: dict) -> None:
+    """Attach `us_streams` to every song row across every music
+    platform panel. Songs key by title+artist because "Home" appears
+    on multiple charts with different artists."""
+    if not music_charts or not estimates:
+        return
+    items_lookup = estimates.get('items') or {}
+    for panel in music_charts.values():
+        for row in (panel or {}).get('items') or []:
+            title  = (row.get('title')  or '').strip()
+            artist = (row.get('artist') or '').strip()
+            key = f'song:{_cp_normalize(f"{title} {artist}")}'
+            _stamp_stream_estimate(row, items_lookup.get(key))
+
+
+def _annotate_podcasts_with_streams(podcast_charts: dict, estimates: dict) -> None:
+    """Attach `us_streams` to every podcast row across every panel.
+    Keyed by normalized title alone (podcast titles are much more
+    unique than song titles)."""
+    if not podcast_charts or not estimates:
+        return
+    items_lookup = estimates.get('items') or {}
+    for panel in podcast_charts.values():
+        for row in (panel or {}).get('items') or []:
+            title = (row.get('title') or '').strip()
+            key = f'podcast:{_cp_normalize(title)}'
+            _stamp_stream_estimate(row, items_lookup.get(key))
+
+
+def _annotate_streaming_with_streams(streaming_trending: dict,
+                                       estimates: dict) -> None:
+    """Attach `us_streams` to every Film/TV row on every streaming
+    platform. Tries the film/tv key first (respecting
+    `category_display`), falls back to whichever variant the estimate
+    was stored under (the scraper stores by the same category label)."""
+    if not streaming_trending or not estimates:
+        return
+    items_lookup = estimates.get('items') or {}
+    for panel in streaming_trending.values():
+        if not panel:
+            continue
+        # Enrich `items`, `films`, and `tv` in one pass. Same item
+        # object appears in `items` + (`films`|`tv`) so stamping one
+        # also stamps the other, but we iterate all three lists for
+        # safety in case the app ever splits them.
+        for bucket_key in ('items', 'films', 'tv'):
+            for row in panel.get(bucket_key) or []:
+                title = (row.get('title') or '').strip()
+                cat   = (row.get('category_display') or '').lower()
+                norm  = _cp_normalize(title)
+                if not norm:
+                    continue
+                # Disney+ / ESPN+ don't ship `category_display` on
+                # every row (Disney's browse rail mixes films + shows
+                # under one carousel), so the scraper stores those
+                # under `title:<norm>`. Netflix / Hulu / Prime tag
+                # rows Film/TV so those keys use `film:`/`tv:`. Try
+                # every variant here so a classification mismatch
+                # between scraper and app never causes a silent miss.
+                order: list[str]
+                if 'film' in cat:
+                    order = [f'film:{norm}', f'tv:{norm}', f'title:{norm}']
+                elif 'tv' in cat:
+                    order = [f'tv:{norm}', f'film:{norm}', f'title:{norm}']
+                else:
+                    order = [f'title:{norm}', f'film:{norm}', f'tv:{norm}']
+                entry = None
+                for k in order:
+                    entry = items_lookup.get(k)
+                    if entry:
+                        break
+                _stamp_stream_estimate(row, entry)
+
+
 def _annotate_cross_platform_moments(
     trending_people:      list[dict],
     wikipedia_trending:   list[dict],
@@ -4536,6 +4640,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         'film_ticketing':      lambda: _read_snapshot('film_ticketing'),
         'libby_trends':        lambda: _read_snapshot('libby_trends'),
         'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
+        'stream_estimates':    lambda: _read_snapshot('stream_estimates'),
     }
 
     results: dict = {}
@@ -4597,6 +4702,17 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     phil_snap        = results.get('philanthropy_news') or {}
     philanthropy_news = list(phil_snap.get('national') or [])[:40]
     philanthropy_by_source = phil_snap.get('by_source') or {}
+
+    # Stamp US audience estimates (weekly listeners / streams / views)
+    # + day-over-day direction onto every song / podcast / streaming
+    # title row. Estimates come from a daily Claude Sonnet + web_search
+    # pass (see scripts/trends_scrapers/stream_estimates.py). Missing
+    # snapshot -> rows just don't carry `us_streams` and the frontend
+    # renders without the extra chip.
+    stream_estimates_snap = results.get('stream_estimates') or {}
+    _annotate_music_with_streams(music_charts,       stream_estimates_snap)
+    _annotate_podcasts_with_streams(podcast_charts,  stream_estimates_snap)
+    _annotate_streaming_with_streams(streaming_trending, stream_estimates_snap)
 
     trending_people = _fetch_trending_people(
         headlines,

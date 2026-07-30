@@ -24227,6 +24227,27 @@
                 background: linear-gradient(135deg, rgba(251,146,60,0.20) 0%, rgba(239,68,68,0.20) 100%);
                 color: #fdba74; border: 1px solid rgba(251,146,60,0.42);
             }
+            /* US-audience estimate chip. Sits in the row-meta line
+               (under the title) on Music / Podcasts / Streaming
+               cards. Neutral slate base + a colored arrow indicator
+               so the direction reads at a glance without the whole
+               chip changing color and drawing the eye. */
+            #trendsIQView .tiq-streams-chip {
+                display: inline-flex; align-items: center; gap: 4px;
+                padding: 1px 8px; border-radius: 999px;
+                background: rgba(148,163,184,0.12);
+                color: var(--text-secondary);
+                border: 1px solid rgba(148,163,184,0.22);
+                font-size: 0.7rem; font-weight: 500;
+                white-space: nowrap; cursor: help;
+            }
+            #trendsIQView .tiq-streams-chip .tiq-stream-arrow {
+                font-weight: 700;
+            }
+            #trendsIQView .tiq-streams-chip.tiq-stream-dir-up    .tiq-stream-arrow { color: #86efac; }
+            #trendsIQView .tiq-streams-chip.tiq-stream-dir-down  .tiq-stream-arrow { color: #fca5a5; }
+            #trendsIQView .tiq-streams-chip.tiq-stream-dir-stable .tiq-stream-arrow { color: #cbd5e1; }
+            #trendsIQView .tiq-streams-chip.tiq-stream-dir-new    .tiq-stream-arrow { color: #fde047; }
             /* Fold-in origin pills. Shown on category-card rows that
                were sourced from a non-search trending pool (news /
                wikipedia / people / movers). Kept subtle so real Google
@@ -45924,6 +45945,79 @@
                    _tiqEsc(tip) + '">\uD83D\uDD25 cultural moment</span>';
         }
 
+        // Format an integer as "12.5M" / "820K" / "1.2B". Keeps 1
+        // decimal for M / B when it fits, drops it when the number
+        // is >= 100 to reduce visual noise (100.0M -> 100M).
+        function _tiqFormatCount(n) {
+            if (typeof n !== 'number' || !isFinite(n) || n <= 0) return '';
+            if (n >= 1e9) {
+                var b = n / 1e9;
+                return (b >= 100 ? Math.round(b) : b.toFixed(1)) + 'B';
+            }
+            if (n >= 1e6) {
+                var m = n / 1e6;
+                return (m >= 100 ? Math.round(m) : m.toFixed(1)) + 'M';
+            }
+            if (n >= 1e3) {
+                var k = n / 1e3;
+                return (k >= 100 ? Math.round(k) : k.toFixed(1)) + 'K';
+            }
+            return String(Math.round(n));
+        }
+
+        // Chip that shows the US-audience estimate for a chart row
+        // (podcast / song / streaming title). Data comes from the
+        // daily stream_estimates snapshot (Claude Sonnet + web_search
+        // per item) which the backend stamps onto the row as
+        // `row.us_streams`. Empty when the estimate is missing so
+        // rows without a snapshot render cleanly. Includes a
+        // day-over-day arrow (up / down / stable / new) plus a
+        // tooltip carrying the method + sources so the reader can
+        // audit the estimate.
+        function _tiqStreamsBadge(row) {
+            var e = row && row.us_streams;
+            if (!e || typeof e.us_estimate !== 'number' || e.us_estimate <= 0) return '';
+            var mid   = _tiqFormatCount(e.us_estimate);
+            var unit  = e.unit_label || 'weekly US audience';
+            // Compact arrow: ↑ up / ↓ down / • stable / ✨ new. Never
+            // uses em-dashes per Jenna's rule.
+            var dir = e.direction || '';
+            var arrow = '';
+            var arrowCls = 'tiq-stream-dir-stable';
+            if (dir === 'up')     { arrow = '\u2191'; arrowCls = 'tiq-stream-dir-up';    }
+            else if (dir === 'down') { arrow = '\u2193'; arrowCls = 'tiq-stream-dir-down';  }
+            else if (dir === 'stable') { arrow = '\u2022'; arrowCls = 'tiq-stream-dir-stable'; }
+            else if (dir === 'new') { arrow = '\u2728'; arrowCls = 'tiq-stream-dir-new';    }
+            var deltaLabel = '';
+            if (typeof e.delta_pct === 'number' && isFinite(e.delta_pct) && dir !== 'new') {
+                var pct = Math.round(e.delta_pct * 100);
+                if (pct !== 0) deltaLabel = (pct > 0 ? '+' : '') + pct + '%';
+            }
+            // Range + method + sources travel via title attribute so
+            // hover reveals the reasoning without cluttering the row.
+            var range = '';
+            if (typeof e.us_estimate_low === 'number' && typeof e.us_estimate_high === 'number' &&
+                e.us_estimate_low > 0 && e.us_estimate_high > 0) {
+                range = 'Range: ' + _tiqFormatCount(e.us_estimate_low) +
+                         ' - ' + _tiqFormatCount(e.us_estimate_high);
+            }
+            var tipParts = [];
+            tipParts.push(mid + ' ' + unit);
+            if (range) tipParts.push(range);
+            if (typeof e.prev_estimate === 'number' && e.prev_estimate > 0) {
+                tipParts.push('Yesterday: ' + _tiqFormatCount(e.prev_estimate));
+            }
+            if (e.confidence) tipParts.push('Confidence: ' + e.confidence);
+            if (e.method) tipParts.push(e.method);
+            var tip = tipParts.join(' \u00b7 ');
+            return ' <span class="tiq-streams-chip ' + arrowCls +
+                   '" title="' + _tiqEsc(tip) + '">' +
+                   mid + ' ' + _tiqEsc(unit) +
+                   (arrow ? ' <span class="tiq-stream-arrow">' + arrow +
+                              (deltaLabel ? ' ' + deltaLabel : '') + '</span>' : '') +
+                   '</span>';
+        }
+
         function _tiqRenderPersonTrend(p) {
             var t = p.trend;
             if (!t) return '';
@@ -46157,13 +46251,17 @@
                                    ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
                                    : _tiqEsc(it.title);
                                var musicKey = it.title + ' - ' + (it.artist || '');
+                               var streamsChip = _tiqStreamsBadge(it);
+                               var metaParts = [];
+                               if (it.artist) metaParts.push('<span>' + _tiqEsc(it.artist) + '</span>');
+                               if (streamsChip) metaParts.push(streamsChip);
                                return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                                       '<div class="tiq-row-body">' +
                                       '<div class="tiq-row-title">' + titleLine +
                                       _tiqCrossPlatformBadge(it) +
                                       _tiqActions('music', k, musicKey, musicKey, 'National') +
                                       '</div>' +
-                                      (it.artist ? '<div class="tiq-row-meta">' + _tiqEsc(it.artist) + '</div>' : '') +
+                                      (metaParts.length ? '<div class="tiq-row-meta">' + metaParts.join(' ') + '</div>' : '') +
                                       '</div></div>';
                            }).join('') +
                            '</div>';
@@ -46225,13 +46323,17 @@
                                    ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
                                    : _tiqEsc(it.title);
                                var podKey = it.title + ' - ' + (it.artist || '');
+                               var streamsChipPod = _tiqStreamsBadge(it);
+                               var metaPartsPod = [];
+                               if (it.artist) metaPartsPod.push('<span>' + _tiqEsc(it.artist) + '</span>');
+                               if (streamsChipPod) metaPartsPod.push(streamsChipPod);
                                return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                                       '<div class="tiq-row-body">' +
                                       '<div class="tiq-row-title">' + titleLine +
                                       _tiqCrossPlatformBadge(it) +
                                       _tiqActions('podcast', k, podKey, podKey, 'National') +
                                       '</div>' +
-                                      (it.artist ? '<div class="tiq-row-meta">' + _tiqEsc(it.artist) + '</div>' : '') +
+                                      (metaPartsPod.length ? '<div class="tiq-row-meta">' + metaPartsPod.join(' ') + '</div>' : '') +
                                       '</div></div>';
                            }).join('') +
                            '</div>';
@@ -46745,11 +46847,13 @@
                             // still render the placeholder so the row's
                             // vertical rhythm matches the ones with art.
                             var img = _tiqPosterCell(it.image);
+                            var streamsChipTV = _tiqStreamsBadge(it);
                             return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
                                    img +
                                    '<div class="tiq-row-body">' +
                                    '<div class="tiq-row-title">' + _tiqEsc(it.title) +
                                    _tiqActions('streaming', k, streamKey, streamKey, 'National') + '</div>' +
+                                   (streamsChipTV ? '<div class="tiq-row-meta">' + streamsChipTV + '</div>' : '') +
                                    '</div></div>';
                         }).join('');
                         return '<div class="tiq-card"><h4>' + _tiqEsc(label) + '</h4>' +

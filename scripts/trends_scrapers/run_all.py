@@ -185,6 +185,29 @@ def main(argv: list[str] | None = None) -> int:
             logging.exception("run_all: why_trending post-step crashed")
             results.append({'source': 'why_trending', 'error': str(e), 'national': []})
 
+    # stream_estimates: US audience-size estimates (Claude Sonnet +
+    # web_search per item) for every top podcast / song / streaming
+    # title. Runs AFTER music_charts, podcast_charts, and the streaming
+    # snapshots have landed - it reads all of them and stamps each
+    # unique item with a `us_estimate` + day-over-day trend. Cost is
+    # ~55 web_search calls per day (~$1.10) so we gate on the same
+    # only/skip whitelist as why_trending. Streaming snapshots for
+    # Netflix / Disney+ / ESPN+ / Max / Hulu are written by
+    # local_residential_run.py on Jenna's laptop, so on the day the
+    # local batch hasn't run yet those platforms use yesterday's
+    # rankings; the next Hetzner run picks up the fresh ones.
+    if (not only or 'stream_estimates' in only) and 'stream_estimates' not in skip:
+        try:
+            results.append(_run_one(
+                'stream_estimates',
+                'scripts.trends_scrapers.stream_estimates',
+                'US Streams',
+                'meta',
+            ))
+        except Exception as e:
+            logging.exception("run_all: stream_estimates post-step crashed")
+            results.append({'source': 'stream_estimates', 'error': str(e), 'national': []})
+
     _write_index(results)
 
     # ------------------------------------------------------------------
