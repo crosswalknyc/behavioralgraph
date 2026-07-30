@@ -24449,6 +24449,14 @@
                 <span id="trendsIQMeta">Set filters and click Apply.</span>
                 <span class="tiq-meta-right">
                     <span id="trendsIQUpdatedAt"></span>
+                    <button type="button" id="trendsIQExportAllBtn"
+                            class="tiq-refresh-btn"
+                            title="Download every tab's data as a single CSV."
+                            onclick="tiqExportAllTabs()"
+                            style="display: none;">
+                        <span class="tiq-refresh-icon" aria-hidden="true">&#x2B07;</span>
+                        <span class="tiq-refresh-label">Export all</span>
+                    </button>
                     <button type="button" id="trendsIQRefreshBtn"
                             class="tiq-refresh-btn"
                             title="Refresh trends now. Any user's refresh updates the timestamp for everyone."
@@ -44913,6 +44921,10 @@
             // there's nothing to click before the first fetch lands.
             var refreshBtnShow = document.getElementById('trendsIQRefreshBtn');
             if (refreshBtnShow) refreshBtnShow.style.display = 'inline-flex';
+            // Same treatment for the Export-all button - only useful once
+            // there's a payload in memory to serialize.
+            var exportAllBtn = document.getElementById('trendsIQExportAllBtn');
+            if (exportAllBtn) exportAllBtn.style.display = 'inline-flex';
 
             var watchCount = (window.__trendsIQ.watchList || []).length;
             // "By news source" is nested inside Headlines as a pill
@@ -45019,8 +45031,471 @@
         }
 
         function _renderTIQPanel(key, inner) {
-            return '<div class="tiq-panel" data-tiq-panel="' + key + '">' + inner + '</div>';
+            // Small "Export CSV" action pinned to the top-right of every
+            // panel. Serializes only THIS tab's rows via tiqExportTab(key).
+            // The Export-all button in the meta bar handles the everything-
+            // in-one-file case.
+            var actions = '<div class="tiq-panel-actions" style="display:flex;justify-content:flex-end;margin:-4px 0 8px;">' +
+                          '<button type="button" class="tiq-refresh-btn"' +
+                          ' style="padding:0.25rem 0.6rem;font-size:0.72rem;"' +
+                          ' title="Download this tab as a CSV."' +
+                          ' onclick="tiqExportTab(\'' + key + '\')">' +
+                          '<span class="tiq-refresh-icon" aria-hidden="true">&#x2B07;</span>' +
+                          '<span class="tiq-refresh-label">Export CSV</span>' +
+                          '</button></div>';
+            return '<div class="tiq-panel" data-tiq-panel="' + key + '">' + actions + inner + '</div>';
         }
+
+        // ============================================================
+        // CSV export.
+        //
+        // Pure client-side: walks `window.__trendsIQ.lastData.cards` and
+        // emits a common row shape per tab. Deliberately does NOT include
+        // methodology copy, tooltip text, or the "how to read this"
+        // captions - only the raw row data users see on the page.
+        //
+        // Common schema (10 columns):
+        //   Tab, Section, Rank, Title, Subtitle, Source, Value, Unit,
+        //   Change, Why, URL
+        //
+        // Empty cells are '' - never null. Numeric values are stringified.
+        // Streams-estimate value is picked from the same _tiqStreamsBadge
+        // ladder the UI uses so what the CSV shows matches what a user
+        // sees in the row chip. Trend direction (up/down/flat) folds
+        // into Change so a spreadsheet sort by Change makes sense.
+        // ============================================================
+        var _TIQ_EXPORT_HEADERS = [
+            'Tab', 'Section', 'Rank', 'Title', 'Subtitle',
+            'Source', 'Value', 'Unit', 'Change', 'Why', 'URL'
+        ];
+
+        function _tiqCsvCell(v) {
+            if (v == null || v === undefined) return '';
+            var s = String(v);
+            // Strip newlines / tabs so a single logical row stays on one
+            // CSV line. Excel and Numbers both treat CRLF inside a
+            // quoted field weirdly, so flatten preemptively.
+            s = s.replace(/[\r\n\t]+/g, ' ').trim();
+            if (s === '') return '';
+            // Escape only when needed - keeps the CSV readable.
+            if (/[",]/.test(s)) {
+                return '"' + s.replace(/"/g, '""') + '"';
+            }
+            return s;
+        }
+
+        function _tiqRowsToCsv(rows) {
+            var out = [_TIQ_EXPORT_HEADERS.join(',')];
+            rows.forEach(function(r) {
+                out.push(_TIQ_EXPORT_HEADERS.map(function(h) {
+                    return _tiqCsvCell(r[h]);
+                }).join(','));
+            });
+            return out.join('\r\n');
+        }
+
+        function _tiqDownloadCsv(filename, csv) {
+            // BOM for Excel compatibility - without it Excel guesses at
+            // encoding and mangles non-ASCII titles (movie names, etc.).
+            var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            var url  = URL.createObjectURL(blob);
+            var a    = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+        }
+
+        function _tiqTodayStamp() {
+            var d = new Date();
+            var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+        }
+
+        // Pick the same stream-estimate value the row chip shows. Mirrors
+        // _tiqStreamsBadge's field priority so what a user sees on-screen
+        // is what lands in the CSV.
+        function _tiqExtractStreamValue(row) {
+            if (!row || typeof row !== 'object') return { value: '', unit: '' };
+            var e = row.us_streams || row.stream_estimate || row.us_audience || null;
+            if (!e) return { value: '', unit: '' };
+            var v = e.estimate || e.value || e.count || '';
+            var u = e.unit_label || e.unit || '';
+            return { value: v === 0 ? 0 : (v || ''), unit: u || '' };
+        }
+
+        // Fold a mover row's rank_change / delta_pct into a single Change
+        // string like '+565' / '-831' / 'new' / 'dropped' so the CSV is
+        // sortable.
+        function _tiqMoverChange(row) {
+            if (!row) return '';
+            var rc = row.rank_change;
+            if (rc == null && row.rank_today && !row.rank_prev)  return 'new';
+            if (rc == null && row.rank_prev  && !row.rank_today) return 'dropped';
+            if (rc == null) return '';
+            if (rc > 0) return '+' + rc;
+            if (rc < 0) return String(rc);
+            return 'flat';
+        }
+
+        function _tiqDirectionLabel(row) {
+            var t = (row && row.trend) || '';
+            var d = (row && row.delta_pct);
+            if (d != null && typeof d === 'number') {
+                var sign = d > 0 ? '+' : '';
+                return sign + Math.round(d) + '%';
+            }
+            return t || '';
+        }
+
+        // -------------- per-tab row builders --------------
+        //
+        // Each returns an array of {Tab, Section, Rank, Title, Subtitle,
+        // Source, Value, Unit, Change, Why, URL} in whatever order makes
+        // sense for that tab. All builders share the same output shape
+        // so tiqExportAllTabs can concatenate them with zero fixups.
+
+        function _tiqExportRowsTrending(cards, tabLabel) {
+            var out = [];
+            (cards.fused_trending || []).forEach(function(r, i) {
+                var sources = (r.sources || []).map(function(s) {
+                    return (s.tab_label || s.tab || '') + ' #' + (s.rank || '');
+                }).join('; ');
+                out.push({
+                    Tab: tabLabel, Section: 'Fused feed',
+                    Rank: i + 1,
+                    Title: r.name || '',
+                    Subtitle: (r.platform_count >= 3 ? 'cultural moment' : ''),
+                    Source: sources,
+                    Value: (typeof r.score === 'number') ? r.score.toFixed(2) : (r.score || ''),
+                    Unit: 'score',
+                    Change: 'on ' + (r.platform_count || 0) + ' tabs',
+                    Why: r.why || '',
+                    URL: r.url || ''
+                });
+            });
+            return out;
+        }
+
+        function _tiqExportRowsMovers(cards, tabLabel) {
+            var out = [];
+            var movers = cards.movers || {};
+            var buckets = [
+                { key: 'breakout',  label: 'Breakout' },
+                { key: 'rising',    label: 'Climbing' },
+                { key: 'falling',   label: 'Cooling' },
+                { key: 'sustained', label: 'Sustained heat' }
+            ];
+            buckets.forEach(function(b) {
+                (movers[b.key] || []).forEach(function(r, i) {
+                    var mix = r.platform_mix || {};
+                    var driven = mix.primary ? ('driven by ' + mix.primary) : '';
+                    out.push({
+                        Tab: tabLabel, Section: b.label,
+                        Rank: r.rank_today || (i + 1),
+                        Title: r.term || '',
+                        Subtitle: r.rank_prev ? ('was #' + r.rank_prev) : '',
+                        Source: driven,
+                        Value: r.score || '',
+                        Unit: r.score ? 'signal score' : '',
+                        Change: _tiqMoverChange(r),
+                        Why: r.why || ((r.related || [])[0] || ''),
+                        URL: ''
+                    });
+                });
+            });
+            return out;
+        }
+
+        function _tiqExportRowsHeadlines(cards, tabLabel) {
+            var out = [];
+            (cards.trending_headlines || []).forEach(function(r, i) {
+                out.push({
+                    Tab: tabLabel, Section: 'Top trending',
+                    Rank: i + 1,
+                    Title: r.title || '',
+                    Subtitle: r.seendate || '',
+                    Source: r.source || '',
+                    Value: '', Unit: '', Change: '',
+                    Why: '', URL: r.url || ''
+                });
+            });
+            (cards.articles_by_source || []).forEach(function(src) {
+                (src.articles || []).forEach(function(a, i) {
+                    out.push({
+                        Tab: tabLabel, Section: 'By source - ' + (src.source || ''),
+                        Rank: i + 1,
+                        Title: a.title || '',
+                        Subtitle: a.seendate || '',
+                        Source: src.source || '',
+                        Value: '', Unit: '', Change: '',
+                        Why: '', URL: a.url || ''
+                    });
+                });
+            });
+            (cards.philanthropy_news || []).forEach(function(r, i) {
+                out.push({
+                    Tab: tabLabel, Section: 'Philanthropy',
+                    Rank: i + 1,
+                    Title: r.title || '',
+                    Subtitle: r.published || '',
+                    Source: r.source_label || r.source || '',
+                    Value: '', Unit: '', Change: '',
+                    Why: '', URL: r.url || ''
+                });
+            });
+            return out;
+        }
+
+        function _tiqExportRowsSearches(cards, tabLabel) {
+            var out = [];
+            var byCat = cards.trending_searches_by_category || {};
+            var pushList = function(sectionLabel, rows) {
+                (rows || []).forEach(function(r, i) {
+                    out.push({
+                        Tab: tabLabel, Section: sectionLabel,
+                        Rank: r.rank || (i + 1),
+                        Title: r.term || '',
+                        Subtitle: (r.related || []).slice(0, 1).join(''),
+                        Source: 'Google Trends',
+                        Value: r.score || r.volume || '',
+                        Unit: 'search volume',
+                        Change: (typeof r.volume_growth_pct === 'number')
+                                    ? (r.volume_growth_pct > 0 ? '+' : '') + Math.round(r.volume_growth_pct) + '%'
+                                    : '',
+                        Why: r.why || '',
+                        URL: ''
+                    });
+                });
+            };
+            pushList('All', cards.trending_searches);
+            Object.keys(byCat).forEach(function(catKey) {
+                pushList(catKey.charAt(0).toUpperCase() + catKey.slice(1),
+                          byCat[catKey]);
+            });
+            return out;
+        }
+
+        function _tiqExportRowsPeople(cards, tabLabel) {
+            var out = [];
+            (cards.wikipedia_trending || []).forEach(function(r, i) {
+                out.push({
+                    Tab: tabLabel, Section: 'Wikipedia',
+                    Rank: i + 1,
+                    Title: r.title || '',
+                    Subtitle: r.description || '',
+                    Source: 'Wikipedia',
+                    Value: r.views_today || '',
+                    Unit: 'views today',
+                    Change: _tiqDirectionLabel(r),
+                    Why: r.why || '',
+                    URL: r.url || ''
+                });
+            });
+            (cards.trending_people || []).forEach(function(p, i) {
+                out.push({
+                    Tab: tabLabel, Section: 'Trending people',
+                    Rank: i + 1,
+                    Title: p.name || '',
+                    Subtitle: p.description || '',
+                    Source: 'GDELT',
+                    Value: p.mentions || '',
+                    Unit: 'mentions',
+                    Change: _tiqDirectionLabel(p),
+                    Why: p.why || '',
+                    URL: p.url || ''
+                });
+            });
+            return out;
+        }
+
+        function _tiqExportRowsPanelDict(dict, tabLabel, sectionPrefix) {
+            // Generic per-platform panel exporter used by Music /
+            // Podcasts / Books / Social / Films / Streaming (single-list
+            // per platform). Streaming's film+tv split needs a dedicated
+            // builder below.
+            var out = [];
+            Object.keys(dict || {}).forEach(function(slug) {
+                var panel = dict[slug] || {};
+                var label = panel.label || slug;
+                (panel.items || []).forEach(function(it, i) {
+                    var se = _tiqExtractStreamValue(it);
+                    out.push({
+                        Tab: tabLabel,
+                        Section: (sectionPrefix ? (sectionPrefix + ' - ') : '') + label,
+                        Rank: it.rank || (i + 1),
+                        Title: it.title || '',
+                        Subtitle: it.artist || it.author || it.publisher ||
+                                  it.subtitle || '',
+                        Source: label,
+                        Value: se.value,
+                        Unit: se.unit,
+                        Change: it.weeks_in_top10
+                                    ? ('week ' + it.weeks_in_top10)
+                                    : '',
+                        Why: it.why || '',
+                        URL: it.url || ''
+                    });
+                });
+            });
+            return out;
+        }
+
+        function _tiqExportRowsBooks(cards, tabLabel) {
+            var out = _tiqExportRowsPanelDict(
+                cards.books_trending || {}, tabLabel, 'Books');
+            out = out.concat(_tiqExportRowsPanelDict(
+                cards.libby_trending || {}, tabLabel, 'Libby'));
+            return out;
+        }
+
+        function _tiqExportRowsStreaming(cards, tabLabel) {
+            var out = [];
+            var dict = cards.streaming_trending || {};
+            Object.keys(dict).forEach(function(slug) {
+                var panel = dict[slug] || {};
+                var label = panel.label || slug;
+                var pushList = function(kind, rows) {
+                    (rows || []).forEach(function(it, i) {
+                        var se = _tiqExtractStreamValue(it);
+                        out.push({
+                            Tab: tabLabel,
+                            Section: label + ' - ' + kind,
+                            Rank: it.rank || (i + 1),
+                            Title: it.title || '',
+                            Subtitle: '',
+                            Source: label,
+                            Value: se.value,
+                            Unit: se.unit,
+                            Change: it.weeks_in_top10
+                                        ? ('week ' + it.weeks_in_top10)
+                                        : '',
+                            Why: it.why || '',
+                            URL: it.url || ''
+                        });
+                    });
+                };
+                pushList('Film', panel.films);
+                pushList('TV',   panel.tv);
+            });
+            return out;
+        }
+
+        function _tiqExportRowsSocial(cards, tabLabel) {
+            var out = [];
+            var social = cards.social_trending || {};
+            Object.keys(social).forEach(function(slug) {
+                var panel = social[slug] || {};
+                var label = panel.label || slug;
+                (panel.items || []).forEach(function(it, i) {
+                    out.push({
+                        Tab: tabLabel,
+                        Section: label,
+                        Rank: it.rank || (i + 1),
+                        Title: it.title || it.text || '',
+                        Subtitle: it.author || it.channel || it.subreddit || '',
+                        Source: label,
+                        Value: it.score || it.views || it.upvotes || '',
+                        Unit: it.views ? 'views' : (it.upvotes ? 'upvotes' : (it.score ? 'score' : '')),
+                        Change: '',
+                        Why: '',
+                        URL: it.url || ''
+                    });
+                });
+            });
+            return out;
+        }
+
+        function _tiqExportRowsWatchlist() {
+            var out = [];
+            var items = (window.__trendsIQ && window.__trendsIQ.watchList) || [];
+            items.forEach(function(w, i) {
+                out.push({
+                    Tab: 'Watchlist', Section: w.kind || '',
+                    Rank: i + 1,
+                    Title: w.title || w.name || '',
+                    Subtitle: w.geo || '',
+                    Source: w.source || '',
+                    Value: '', Unit: '', Change: '',
+                    Why: '', URL: ''
+                });
+            });
+            return out;
+        }
+
+        function _tiqBuildRowsForTab(tabKey, cards) {
+            var tabLabel = _TIQ_TAB_LABELS[tabKey] || tabKey;
+            switch (tabKey) {
+                case 'trending':  return _tiqExportRowsTrending(cards, tabLabel);
+                case 'movers':    return _tiqExportRowsMovers(cards, tabLabel);
+                case 'headlines': return _tiqExportRowsHeadlines(cards, tabLabel);
+                case 'searches':  return _tiqExportRowsSearches(cards, tabLabel);
+                case 'people':    return _tiqExportRowsPeople(cards, tabLabel);
+                case 'music':     return _tiqExportRowsPanelDict(cards.music_trending, tabLabel, '');
+                case 'podcasts':  return _tiqExportRowsPanelDict(cards.podcasts_trending, tabLabel, '');
+                case 'books':     return _tiqExportRowsBooks(cards, tabLabel);
+                case 'social':    return _tiqExportRowsSocial(cards, tabLabel);
+                case 'streaming': return _tiqExportRowsStreaming(cards, tabLabel);
+                case 'films':     return _tiqExportRowsPanelDict(cards.films_ticketing, tabLabel, '');
+                case 'watchlist': return _tiqExportRowsWatchlist();
+                default:          return [];
+            }
+        }
+
+        var _TIQ_TAB_LABELS = {
+            trending:  'Trending',
+            movers:    'Movers',
+            headlines: 'Headlines',
+            searches:  'Search',
+            people:    'People',
+            music:     'Music',
+            podcasts:  'Podcasts',
+            books:     'Books',
+            social:    'Social',
+            streaming: 'Streaming',
+            films:     'Films',
+            watchlist: 'Watchlist'
+        };
+
+        // -------------- public entry points --------------
+        window.tiqExportTab = function(tabKey) {
+            var data = (window.__trendsIQ && window.__trendsIQ.lastData) || null;
+            if (!data || !data.cards) {
+                alert('No trends data loaded yet. Click Apply first.');
+                return;
+            }
+            var rows = _tiqBuildRowsForTab(tabKey, data.cards);
+            if (!rows.length) {
+                alert('This tab has no rows to export in the current window.');
+                return;
+            }
+            var csv = _tiqRowsToCsv(rows);
+            var label = (_TIQ_TAB_LABELS[tabKey] || tabKey).toLowerCase().replace(/\s+/g, '-');
+            _tiqDownloadCsv('trends-iq-' + label + '-' + _tiqTodayStamp() + '.csv', csv);
+        };
+
+        window.tiqExportAllTabs = function() {
+            var data = (window.__trendsIQ && window.__trendsIQ.lastData) || null;
+            if (!data || !data.cards) {
+                alert('No trends data loaded yet. Click Apply first.');
+                return;
+            }
+            var order = ['trending', 'movers', 'headlines', 'searches',
+                          'people', 'music', 'podcasts', 'books', 'social',
+                          'streaming', 'films', 'watchlist'];
+            var all = [];
+            order.forEach(function(k) {
+                all = all.concat(_tiqBuildRowsForTab(k, data.cards));
+            });
+            if (!all.length) {
+                alert('Nothing to export yet.');
+                return;
+            }
+            var csv = _tiqRowsToCsv(all);
+            _tiqDownloadCsv('trends-iq-all-' + _tiqTodayStamp() + '.csv', csv);
+        };
 
         // ============================================================
         // Post-render tooltip sweep.
