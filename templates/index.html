@@ -44828,13 +44828,12 @@
             document.getElementById('trendsIQLoading').style.display = 'flex';
             document.getElementById('trendsIQTabStrip').style.display = 'none';
             document.getElementById('trendsIQPanels').innerHTML = '';
-            var scopeLabel = (filters.geo_type === 'National' ? 'National' : filters.geo_value);
+            var _lbLoad = filters.lookback_days || 1;
+            var _lbLoadLabel = (_lbLoad === 1) ? 'Last 24 Hours' : ('Last ' + _lbLoad + ' Days');
             var asOfLabel = filters.asof ? (' as of ' + filters.asof) : '';
             document.getElementById('trendsIQMeta').textContent =
-                (forceRefresh ? 'Refreshing trends for ' : 'Fetching trends for ')
-                + scopeLabel
-                + ' (last ' + filters.lookback_days + 'd'
-                + asOfLabel + ')...';
+                (forceRefresh ? 'Refreshing US Trends - ' : 'Fetching US Trends - ')
+                + _lbLoadLabel + asOfLabel + '...';
             try {
                 if (window.__trendsIQ.inFlight) { try { window.__trendsIQ.inFlight.abort(); } catch (e) {} }
                 var ctrl = new AbortController();
@@ -44989,10 +44988,9 @@
             var updatedAt = document.getElementById('trendsIQUpdatedAt');
             if (meta) {
                 var _lb = filters.lookback_days || 1;
-                var _windowLabel = (_lb === 1) ? 'last 24 hours' : ('last ' + _lb + ' days');
+                var _windowLabel = (_lb === 1) ? 'Last 24 Hours' : ('Last ' + _lb + ' Days');
                 var _asOfLabel = filters.historic ? (' | Viewing ' + filters.asof) : '';
-                meta.textContent = 'Trending for ' + (filters.geo_label || 'National')
-                                    + ' - ' + _windowLabel + _asOfLabel;
+                meta.textContent = 'US Trends - ' + _windowLabel + _asOfLabel;
                 // Historic-mode styling: a small purple pill on the meta
                 // line makes it obvious the user is time-travelling and
                 // that live surfaces (Search / Movers / Social /
