@@ -89,8 +89,12 @@ _HISTORY_LOOKBACK_DAYS = 4
 #   Wikipedia          -> top 30
 #   GDELT people       -> top 12
 #   Search             -> top 15
-#   Movers (b + r)     -> top 20  (breakout + rising, the momentum core
-#                                   of the fused feed)
+#   Movers (b+r+f+s)   -> top 100 (breakout + rising + falling + sustained,
+#                                   the momentum surface. bumped 2026-07-30
+#                                   from 30 so every bucket gets full
+#                                   why-line coverage; each bucket carries
+#                                   up to 25 rows so 30 dropped 3 of the
+#                                   4 buckets almost entirely.)
 #   Films              -> top 15  (dedupe across ticketing platforms)
 #   Streaming          -> top 15  (dedupe across streaming platforms)
 #   Music              -> top 15  (dedupe across music charts)
@@ -98,7 +102,7 @@ _HISTORY_LOOKBACK_DAYS = 4
 _MAX_WIKI_ITEMS      = 30
 _MAX_PEOPLE_ITEMS    = 12
 _MAX_SEARCH_ITEMS    = 15
-_MAX_MOVER_ITEMS     = 30
+_MAX_MOVER_ITEMS     = 100
 _MAX_FILM_ITEMS      = 15
 _MAX_STREAMING_ITEMS = 15
 _MAX_MUSIC_ITEMS         = 15
