@@ -21,6 +21,7 @@ string.
 Top-level surface used by app.py:
     get_filter_options() -> dict
     compute_view(filters: dict) -> dict
+    list_available_dates(max_days: int = 120) -> list[str]
 
 Card output shape:
 {
@@ -318,6 +319,12 @@ STREAMING_PLATFORMS = [
 _SNAPSHOT_MAX_AGE_S = int(os.environ.get('TRENDS_IQ_SNAPSHOT_MAX_AGE_S',
                                             str(2 * 24 * 3600)))
 _SNAPSHOT_PREFIX    = 'trends_iq_snapshots/latest/'
+# Historic snapshots (dated). Every scraper writes to BOTH
+# `latest/{source}.json` and `{YYYY-MM-DD}/{source}.json` via
+# scripts/trends_scrapers/_base.py::write_snapshot, so the daily archive
+# accumulates automatically. `_read_snapshot(source, asof=DATE)` reads
+# from the dated prefix; asof=None keeps the current "latest" behavior.
+_SNAPSHOT_DATED_PREFIX = 'trends_iq_snapshots/{date}/'
 
 
 # ============================================================================
@@ -359,8 +366,25 @@ def _s3_client():
         return None
 
 
+def _today_iso() -> str:
+    """Today's UTC date as YYYY-MM-DD. Cache-day boundary."""
+    return datetime.now(timezone.utc).date().isoformat()
+
+
 def _cache_key(filters: dict) -> str:
+    """Build the S3 cache key for the given filter tuple.
+
+    The `asof` field participates in the hash so:
+      - "Live / today" queries hit ONE cache entry that rotates daily
+        (the daily scraper cron warms tomorrow's entry before users hit
+        it; today's entry gets read all day).
+      - Historic queries (asof=YYYY-MM-DD) each get their own permanent
+        cache entry. Once populated, that entry never rotates - it IS
+        the historic view of that day.
+    """
+    asof = filters.get('asof') or _today_iso()
     payload = json.dumps({
+        'asof':          asof,
         'geo_type':      filters.get('geo_type') or 'National',
         'geo_value':     filters.get('geo_value') or '',
         'lookback_days': int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
@@ -369,14 +393,32 @@ def _cache_key(filters: dict) -> str:
     return f"{S3_CACHE_PREFIX}{h}.json"
 
 
+def _is_historic(filters: dict) -> bool:
+    """True when filters['asof'] refers to a past UTC day.
+
+    Live/today queries have TTL semantics; historic queries do NOT -
+    the payload is a permanent snapshot of that day.
+    """
+    asof = filters.get('asof')
+    if not asof:
+        return False
+    return asof < _today_iso()
+
+
 def _cache_get(filters: dict) -> Optional[dict]:
     s3 = _s3_client()
     if s3 is None:
         return None
+    historic = _is_historic(filters)
     try:
         resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=_cache_key(filters))
         raw = resp['Body'].read().decode('utf-8')
         data = json.loads(raw)
+        # Historic queries: any cached entry is authoritative. There's
+        # nothing "stale" about a snapshot of a past day - that IS the
+        # data we want to return.
+        if historic:
+            return data
         stale = data.get('stale_until')
         if stale:
             try:
@@ -409,11 +451,28 @@ def _cache_put(filters: dict, payload: dict) -> None:
 # `s3://dashboard-inputs/trends_iq_snapshots/latest/{source}.json` every
 # morning. The read side is best-effort: missing or stale snapshots fall
 # back to the "coming soon" placeholder for that tile.
-def _read_snapshot(source: str) -> Optional[dict]:
+def _read_snapshot(source: str, asof: Optional[str] = None) -> Optional[dict]:
+    """Read a scraper snapshot from S3.
+
+    asof:
+      None  -> read `latest/{source}.json` and enforce the max-age
+               freshness gate (returns None if the snapshot is stale).
+      DATE  -> read `{YYYY-MM-DD}/{source}.json` and SKIP the freshness
+               gate. Historic snapshots are meant to be old; the gate
+               would reject every historic read otherwise.
+
+    Every scraper writes to both the `latest/` and the dated prefix via
+    scripts/trends_scrapers/_base.py::write_snapshot, so any date the
+    scraper was healthy on has a dated copy on S3.
+    """
     s3 = _s3_client()
     if s3 is None:
         return None
-    key = f'{_SNAPSHOT_PREFIX}{source}.json'
+    if asof:
+        prefix = _SNAPSHOT_DATED_PREFIX.format(date=asof)
+    else:
+        prefix = _SNAPSHOT_PREFIX
+    key = f'{prefix}{source}.json'
     try:
         resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=key)
     except Exception:
@@ -423,17 +482,21 @@ def _read_snapshot(source: str) -> Optional[dict]:
     except Exception as e:
         logger.debug("trends_iq _read_snapshot %s parse failed: %s", source, e)
         return None
-    fetched_at = data.get('fetched_at')
-    if fetched_at:
-        try:
-            fetched_dt = datetime.fromisoformat(fetched_at.replace('Z', '+00:00'))
-            age_s = (datetime.now(timezone.utc) - fetched_dt).total_seconds()
-            if age_s > _SNAPSHOT_MAX_AGE_S:
-                logger.info("trends_iq snapshot %s is %.0fh old; treating as unavailable",
-                             source, age_s / 3600.0)
-                return None
-        except Exception:
-            pass
+    # Freshness gate only applies to the "live" latest/ read. Dated
+    # historic reads deliberately bypass it - the whole point of asof
+    # queries is to see stale data.
+    if asof is None:
+        fetched_at = data.get('fetched_at')
+        if fetched_at:
+            try:
+                fetched_dt = datetime.fromisoformat(fetched_at.replace('Z', '+00:00'))
+                age_s = (datetime.now(timezone.utc) - fetched_dt).total_seconds()
+                if age_s > _SNAPSHOT_MAX_AGE_S:
+                    logger.info("trends_iq snapshot %s is %.0fh old; treating as unavailable",
+                                 source, age_s / 3600.0)
+                    return None
+            except Exception:
+                pass
     return data
 
 
@@ -4936,6 +4999,55 @@ def _fetch_trending_products(keywords: Optional[list[str]] = None) -> list[dict]
 # ============================================================================
 # Public API
 # ============================================================================
+def list_available_dates(max_days: int = 120) -> list[str]:
+    """List UTC dates (YYYY-MM-DD, descending) that have historic data.
+
+    Walks the S3 prefix `trends_iq_snapshots/` for date-shaped
+    directories. Only includes dates that have at least one snapshot
+    file (i.e. we won't advertise an empty day). `max_days` caps how
+    far back we look - the daily archive can grow unbounded, but the
+    picker doesn't need years of data.
+
+    Today is always included first regardless of what's on S3; the
+    live path serves it out of the `latest/` prefix.
+    """
+    today  = _today_iso()
+    dates: set[str] = {today}
+    s3 = _s3_client()
+    if s3 is None:
+        return sorted(dates, reverse=True)
+    try:
+        # Delimiter='/' returns CommonPrefixes = the top-level "sub-
+        # folders" under `trends_iq_snapshots/`. Each looks like
+        # `trends_iq_snapshots/2026-07-30/`. Filter to date-shaped
+        # prefixes to skip `latest/`.
+        paginator = s3.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_CACHE_BUCKET,
+                                          Prefix='trends_iq_snapshots/',
+                                          Delimiter='/'):
+            for cp in (page.get('CommonPrefixes') or []):
+                pfx = cp.get('Prefix') or ''
+                # Extract the segment between the two slashes.
+                # 'trends_iq_snapshots/2026-07-30/' -> '2026-07-30'
+                parts = pfx.strip('/').split('/')
+                if len(parts) != 2:
+                    continue
+                day = parts[1]
+                if len(day) == 10 and day[4] == '-' and day[7] == '-':
+                    dates.add(day)
+    except Exception as e:
+        logger.debug("list_available_dates s3 walk failed: %s", e)
+        return sorted(dates, reverse=True)
+    # Cap at max_days looking back from today
+    try:
+        cutoff = (datetime.now(timezone.utc).date()
+                   - timedelta(days=max_days)).isoformat()
+        dates = {d for d in dates if d >= cutoff}
+    except Exception:
+        pass
+    return sorted(dates, reverse=True)
+
+
 def get_filter_options() -> dict:
     """Filter dropdown choices for the Trends view.
 
@@ -4965,6 +5077,16 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     Every surface fans out in a background thread so a slow feed on one
     outlet doesn't block the rest. Result is cached in S3 for
     CACHE_TTL_S seconds keyed on the filters hash.
+
+    filters.asof (YYYY-MM-DD, optional): historic-view date. When set
+    AND < today, snapshot-based cards read from the dated prefix
+    (`trends_iq_snapshots/{asof}/{source}.json`) instead of `latest/`.
+    Live-fetch surfaces (searches / headlines / social / streaming
+    aggregators / movers) are omitted from historic reconstructions -
+    the frontend renders "not available for historic view" in their
+    place. The whole payload is cached in S3 forever under a
+    date-scoped key so a historic view is a single-read after the
+    first user hits it.
     """
     if not force_refresh:
         cached = _cache_get(filters)
@@ -4972,31 +5094,53 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             cached['from_cache'] = True
             return cached
 
+    asof     = filters.get('asof') or None
+    historic = _is_historic(filters)
+
     label, state, dma_value = _resolve_geo(filters)
     lookback_days = int(filters.get('lookback_days') or DEFAULT_LOOKBACK_DAYS)
     geo_kws = _geo_keywords(state, dma_value)
 
-    tasks = {
-        'trending_searches':   lambda: _fetch_trending_searches(state, lookback_days),
-        'headlines_pack':      lambda: _fetch_trending_headlines_and_sources(geo_kws),
-        'social_trending':     lambda: _fetch_social_trending(state, lookback_days,
-                                                                 keywords=geo_kws),
-        'streaming_trending':  lambda: _fetch_streaming_trending(state, lookback_days,
-                                                                    keywords=geo_kws),
-        # Products by retailer removed from the dashboard 2026-07-28.
-        # Aggregator + scrapers preserved in code so re-enabling is
-        # a one-line change - just re-add the task here and the panel
-        # in index.html.
-        'movers':              lambda: compute_search_movers(state),
-        'wikipedia_trending':  lambda: _read_snapshot('wikipedia_trending'),
-        'music_charts':        lambda: _read_snapshot('music_charts'),
-        'podcast_charts':      lambda: _read_snapshot('podcast_charts'),
-        'book_charts':         lambda: _read_snapshot('book_charts'),
-        'film_ticketing':      lambda: _read_snapshot('film_ticketing'),
-        'libby_trends':        lambda: _read_snapshot('libby_trends'),
-        'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
-        'stream_estimates':    lambda: _read_snapshot('stream_estimates'),
-    }
+    if historic:
+        # Historic view: every surface reads from the dated snapshot
+        # prefix. Live-fetch aggregators (trending searches / headlines
+        # / social / streaming / movers) can't reach into the past
+        # cheaply, so we serve the snapshot-based cards for that day
+        # and return empty placeholders for the live surfaces. Users
+        # know they're in the time machine because the UI stamps a
+        # "Viewing YYYY-MM-DD" banner from the payload's `asof` field.
+        tasks = {
+            'wikipedia_trending':  lambda: _read_snapshot('wikipedia_trending', asof),
+            'music_charts':        lambda: _read_snapshot('music_charts',       asof),
+            'podcast_charts':      lambda: _read_snapshot('podcast_charts',     asof),
+            'book_charts':         lambda: _read_snapshot('book_charts',        asof),
+            'film_ticketing':      lambda: _read_snapshot('film_ticketing',     asof),
+            'libby_trends':        lambda: _read_snapshot('libby_trends',       asof),
+            'philanthropy_news':   lambda: _read_snapshot('philanthropy_news',  asof),
+            'stream_estimates':    lambda: _read_snapshot('stream_estimates',   asof),
+        }
+    else:
+        tasks = {
+            'trending_searches':   lambda: _fetch_trending_searches(state, lookback_days),
+            'headlines_pack':      lambda: _fetch_trending_headlines_and_sources(geo_kws),
+            'social_trending':     lambda: _fetch_social_trending(state, lookback_days,
+                                                                     keywords=geo_kws),
+            'streaming_trending':  lambda: _fetch_streaming_trending(state, lookback_days,
+                                                                        keywords=geo_kws),
+            # Products by retailer removed from the dashboard 2026-07-28.
+            # Aggregator + scrapers preserved in code so re-enabling is
+            # a one-line change - just re-add the task here and the panel
+            # in index.html.
+            'movers':              lambda: compute_search_movers(state),
+            'wikipedia_trending':  lambda: _read_snapshot('wikipedia_trending'),
+            'music_charts':        lambda: _read_snapshot('music_charts'),
+            'podcast_charts':      lambda: _read_snapshot('podcast_charts'),
+            'book_charts':         lambda: _read_snapshot('book_charts'),
+            'film_ticketing':      lambda: _read_snapshot('film_ticketing'),
+            'libby_trends':        lambda: _read_snapshot('libby_trends'),
+            'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
+            'stream_estimates':    lambda: _read_snapshot('stream_estimates'),
+        }
 
     results: dict = {}
     with ThreadPoolExecutor(max_workers=len(tasks), thread_name_prefix='trends-iq') as ex:
@@ -5167,6 +5311,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'geo_value':     filters.get('geo_value') or '',
             'geo_label':     label,
             'lookback_days': lookback_days,
+            'asof':          asof or _today_iso(),
+            'historic':      historic,
         },
         'generated_at': now.isoformat(),
         'stale_until':  (now + timedelta(seconds=CACHE_TTL_S)).isoformat(),

@@ -24441,6 +24441,21 @@
                     </select>
                 </div>
                 <div>
+                    <label for="trendsIQAsOf">As of</label>
+                    <input type="date" id="trendsIQAsOf"
+                           title="Pick a past date to see what was trending then. Defaults to today (live)."
+                           style="min-width: 150px;">
+                </div>
+                <div>
+                    <label>&nbsp;</label>
+                    <button type="button" class="tiq-apply-btn"
+                            onclick="tiqResetAsOf()"
+                            title="Return to today's live view."
+                            style="background: rgba(255,255,255,0.06); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.12);">
+                        Today
+                    </button>
+                </div>
+                <div>
                     <label>&nbsp;</label>
                     <button type="button" class="tiq-apply-btn" onclick="applyTrendsIQFilters()">Apply</button>
                 </div>
@@ -44779,10 +44794,20 @@
         async function applyTrendsIQFilters(opts) {
             opts = opts || {};
             var forceRefresh = !!opts.forceRefresh;
+            // As-of date. Empty (or today) => live path. Anything else =>
+            // historic view: backend reads dated snapshots and returns
+            // whatever surfaces had data on that day. The picker only
+            // accepts dates in the past because the future doesn't
+            // exist yet.
+            var asOfInput = document.getElementById('trendsIQAsOf');
+            var asOfVal = (asOfInput && asOfInput.value) || '';
+            var todayISO = _tiqTodayISO();
+            if (asOfVal === todayISO) asOfVal = '';  // treat "today" as live
             var filters = {
                 geo_type:      document.getElementById('trendsIQGeoType').value || 'National',
                 geo_value:     document.getElementById('trendsIQGeoValue').value || '',
                 lookback_days: parseInt(document.getElementById('trendsIQLookback').value || '1', 10),
+                asof:          asOfVal || null,
             };
             if ((filters.geo_type === 'State' || filters.geo_type === 'DMA') && !filters.geo_value) {
                 document.getElementById('trendsIQMeta').textContent = 'Pick a region or switch to National.';
@@ -44803,10 +44828,13 @@
             document.getElementById('trendsIQLoading').style.display = 'flex';
             document.getElementById('trendsIQTabStrip').style.display = 'none';
             document.getElementById('trendsIQPanels').innerHTML = '';
+            var scopeLabel = (filters.geo_type === 'National' ? 'National' : filters.geo_value);
+            var asOfLabel = filters.asof ? (' as of ' + filters.asof) : '';
             document.getElementById('trendsIQMeta').textContent =
                 (forceRefresh ? 'Refreshing trends for ' : 'Fetching trends for ')
-                + (filters.geo_type === 'National' ? 'National' : filters.geo_value)
-                + ' (last ' + filters.lookback_days + 'd)...';
+                + scopeLabel
+                + ' (last ' + filters.lookback_days + 'd'
+                + asOfLabel + ')...';
             try {
                 if (window.__trendsIQ.inFlight) { try { window.__trendsIQ.inFlight.abort(); } catch (e) {} }
                 var ctrl = new AbortController();
@@ -44846,6 +44874,58 @@
         // this returns gets the same fresh data (24h TTL).
         function refreshTrendsIQNow() {
             applyTrendsIQFilters({ forceRefresh: true });
+        }
+
+        // Today (UTC) as YYYY-MM-DD. Matches the backend's cache-day
+        // rollover so "today's date" in the As-of picker maps to the
+        // live cache tuple, not a historic-mode round-trip.
+        function _tiqTodayISO() {
+            var d = new Date();
+            var y = d.getUTCFullYear();
+            var m = String(d.getUTCMonth() + 1).padStart(2, '0');
+            var day = String(d.getUTCDate()).padStart(2, '0');
+            return y + '-' + m + '-' + day;
+        }
+
+        // "Today" button: clear the As-of picker and re-run the fetch.
+        function tiqResetAsOf() {
+            var el = document.getElementById('trendsIQAsOf');
+            if (el) el.value = '';
+            applyTrendsIQFilters();
+        }
+
+        // On first mount, ask the backend which past dates have data
+        // so we can constrain the As-of picker. The <input type="date">
+        // widget respects `min` + `max` in every modern browser; we
+        // set `max` to today (nothing in the future) and `min` to the
+        // oldest available snapshot. Users can still type any value,
+        // but the calendar UI enforces the range.
+        async function _tiqLoadAvailableDates() {
+            try {
+                var resp = await fetch('/api/trends-iq/available-dates',
+                                        { credentials: 'same-origin' });
+                var data = await resp.json();
+                if (!data || !data.success) return;
+                var dates = data.dates || [];
+                var picker = document.getElementById('trendsIQAsOf');
+                if (!picker) return;
+                var today = _tiqTodayISO();
+                picker.max = today;
+                if (dates.length) {
+                    // dates is sorted descending; last entry is oldest.
+                    picker.min = dates[dates.length - 1];
+                }
+            } catch (e) {
+                // Best-effort - falling back to an unconstrained picker
+                // is fine; the backend still validates the format.
+            }
+        }
+        // Fire once when the Trends IQ view first mounts. Guard with a
+        // module flag so page-view switches don't re-fetch every time.
+        window.__trendsIQ = window.__trendsIQ || {};
+        if (!window.__trendsIQ._datesLoaded) {
+            window.__trendsIQ._datesLoaded = true;
+            document.addEventListener('DOMContentLoaded', _tiqLoadAvailableDates);
         }
 
         function _tiqEsc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -44910,7 +44990,16 @@
             if (meta) {
                 var _lb = filters.lookback_days || 1;
                 var _windowLabel = (_lb === 1) ? 'last 24 hours' : ('last ' + _lb + ' days');
-                meta.textContent = 'Trending for ' + (filters.geo_label || 'National') + ' - ' + _windowLabel;
+                var _asOfLabel = filters.historic ? (' | Viewing ' + filters.asof) : '';
+                meta.textContent = 'Trending for ' + (filters.geo_label || 'National')
+                                    + ' - ' + _windowLabel + _asOfLabel;
+                // Historic-mode styling: a small purple pill on the meta
+                // line makes it obvious the user is time-travelling and
+                // that live surfaces (Search / Movers / Social /
+                // Streaming aggregators / Headlines) are intentionally
+                // empty for that day.
+                meta.style.color = filters.historic ? '#c084fc' : '';
+                meta.style.fontWeight = filters.historic ? '600' : '';
             }
             if (updatedAt && data.generated_at) {
                 var d = new Date(data.generated_at);

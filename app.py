@@ -15166,20 +15166,52 @@ def api_trends_iq_filter_options():
 @app.route('/api/trends-iq/data', methods=['POST'])
 @requires_auth
 def api_trends_iq_data():
-    """Compute (or fetch cached) Trends IQ view for the given filters."""
+    """Compute (or fetch cached) Trends IQ view for the given filters.
+
+    `asof` (optional, YYYY-MM-DD): historic-view date. When set and in
+    the past, the response is served from that day's cached view (or
+    reconstructed from dated snapshot reads) so users can time-travel.
+    """
     ok, err = _require_trends_iq()
     if not ok:
         return err
     try:
         req = request.get_json(silent=True) or {}
+        # Only accept 10-char YYYY-MM-DD strings; anything else is
+        # dropped so we can't be tricked into weird S3 keys.
+        asof_raw = (req.get('asof') or '').strip()
+        asof = asof_raw if (len(asof_raw) == 10
+                             and asof_raw[4] == '-' and asof_raw[7] == '-'
+                             and asof_raw.replace('-', '').isdigit()) else None
         filters = {
             'geo_type':      req.get('geo_type'),
             'geo_value':     req.get('geo_value'),
             'lookback_days': req.get('lookback_days'),
+            'asof':          asof,
         }
         force = bool(req.get('force_refresh'))
         payload = _trends_iq.compute_view(filters, force_refresh=force)
         return jsonify(payload)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/trends-iq/available-dates', methods=['GET'])
+@requires_auth
+def api_trends_iq_available_dates():
+    """List UTC dates (descending) that have historic snapshot data.
+
+    The frontend feeds this into the "As of" date picker so a user
+    can't pick a day we don't have data for.
+    """
+    ok, err = _require_trends_iq()
+    if not ok:
+        return err
+    try:
+        dates = _trends_iq.list_available_dates()
+        return jsonify({'success': True, 'dates': dates,
+                         'today': dates[0] if dates else None})
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
