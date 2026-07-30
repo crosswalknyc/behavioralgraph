@@ -57,6 +57,28 @@ import requests
 logger = logging.getLogger(__name__)
 
 
+# User rule 2026-07-29: NEVER surface operator-facing text to the
+# dashboard. When a bot-walled or cookie-gated source can't be
+# scraped, show a neutral "warming up" line and let
+# `cookie_gap_notify.notify_cookie_gap()` handle the offline
+# re-donation ask via SES to jenna+jessie (deduped to one email per
+# source/domain per day).
+_WARMING_UP_HINT = 'Warming up. Check back later.'
+
+
+def _mark_cookie_gap(source: str, domain: str, reason: str = '') -> None:
+    """Fire the operator-facing SES notification. Best-effort; never
+    raises. Called from any fetcher that returns 0 items because the
+    donated cookie session is missing or has been rejected by the
+    site. The dashboard tile only ever sees `_WARMING_UP_HINT`."""
+    try:
+        from .cookie_gap_notify import notify_cookie_gap
+        notify_cookie_gap(source, domain, reason=reason)
+    except Exception as e:
+        logger.info("cookie_gap notify failed for %s/%s: %s",
+                     source, domain, e)
+
+
 _UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) '
         'Gecko/20100101 Firefox/120.0')
 
@@ -875,7 +897,9 @@ def _fetch_amazon_music(limit: int = 100) -> tuple[list[dict], str]:
         from ._base import load_donated_cookies_playwright, cookie_donation_status
     except Exception as e:
         logger.info("amazon music: playwright helpers unavailable: %s", e)
-        return [], 'Warming up.'
+        _mark_cookie_gap('amazon_music', 'music.amazon.com',
+                          reason=f'playwright helpers unavailable: {e}')
+        return [], _WARMING_UP_HINT
 
     sp = _lazy_playwright()
     if sp is None:
@@ -883,7 +907,9 @@ def _fetch_amazon_music(limit: int = 100) -> tuple[list[dict], str]:
             "amazon music: playwright not installed - install with "
             "`pip3 install --break-system-packages playwright playwright-stealth`"
         )
-        return [], 'Warming up.'
+        _mark_cookie_gap('amazon_music', 'music.amazon.com',
+                          reason='playwright not installed on scraper host')
+        return [], _WARMING_UP_HINT
 
     donated = load_donated_cookies_playwright('music.amazon.com')
     if not donated:
@@ -894,8 +920,10 @@ def _fetch_amazon_music(limit: int = 100) -> tuple[list[dict], str]:
             "donate_cookies.py music.amazon.com` from a logged-in laptop.",
             status,
         )
-        return [], ('Log into Amazon Music once in your laptop Chrome, then '
-                    'run donate_cookies.py music.amazon.com.')
+        _mark_cookie_gap('amazon_music', 'music.amazon.com',
+                          reason=('no donated cookies present for '
+                                  f'music.amazon.com (status={status})'))
+        return [], _WARMING_UP_HINT
 
     items: list[dict] = []
     try:
@@ -904,7 +932,9 @@ def _fetch_amazon_music(limit: int = 100) -> tuple[list[dict], str]:
                 browser, _channel = _launch_browser(pw, prefer_chrome=True)
             except Exception as e:
                 logger.warning("amazon music: playwright launch failed: %s", e)
-                return [], 'Warming up.'
+                _mark_cookie_gap('amazon_music', 'music.amazon.com',
+                                  reason=f'playwright launch failed: {e}')
+                return [], _WARMING_UP_HINT
 
             ctx = browser.new_context(
                 user_agent=UA,
@@ -947,8 +977,12 @@ def _fetch_amazon_music(limit: int = 100) -> tuple[list[dict], str]:
                     ctx.close(); browser.close()
                 except Exception:
                     pass
-                return [], ('Log into Amazon Music once in your laptop Chrome, '
-                            'then run donate_cookies.py music.amazon.com.')
+                _mark_cookie_gap('amazon_music', 'music.amazon.com',
+                                  reason=('All Hits playlist hydration '
+                                          'timed out after 25s; donated '
+                                          'session likely stale or '
+                                          'missing session cookie'))
+                return [], _WARMING_UP_HINT
 
             # Virtualized list: repeatedly scroll the last row into view
             # to fetch the next page. Bail out when the row count stops
@@ -1008,10 +1042,16 @@ def _fetch_amazon_music(limit: int = 100) -> tuple[list[dict], str]:
                 })
     except Exception as e:
         logger.warning("amazon music: playwright pass failed: %s", e)
-        return [], 'Warming up.'
+        _mark_cookie_gap('amazon_music', 'music.amazon.com',
+                          reason=f'playwright pass failed: {e}')
+        return [], _WARMING_UP_HINT
 
     if not items:
-        return [], 'Warming up.'
+        _mark_cookie_gap('amazon_music', 'music.amazon.com',
+                          reason=('All Hits playlist returned 0 rows '
+                                  'after scroll+extract; session likely '
+                                  'valid but page structure changed'))
+        return [], _WARMING_UP_HINT
     return items, ''
 
 
