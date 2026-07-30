@@ -46659,7 +46659,9 @@
             if (dir === 'up')     { arrow = '\u2191'; arrowCls = 'tiq-stream-dir-up';    }
             else if (dir === 'down') { arrow = '\u2193'; arrowCls = 'tiq-stream-dir-down';  }
             else if (dir === 'stable') { arrow = '\u2022'; arrowCls = 'tiq-stream-dir-stable'; }
-            else if (dir === 'new') { arrow = '\u2728'; arrowCls = 'tiq-stream-dir-new';    }
+            // 'new' entries used to trail a ✨ sparkle after the unit
+            // label; removed per user 2026-07-30 (visual noise).
+            else if (dir === 'new') { arrow = ''; arrowCls = 'tiq-stream-dir-new';    }
             var deltaLabel = '';
             if (typeof e.delta_pct === 'number' && isFinite(e.delta_pct) && dir !== 'new') {
                 var pct = Math.round(e.delta_pct * 100);
@@ -47853,18 +47855,11 @@
             var watched = window.__trendsIQ.watchSet.has(wk);
             var esc = function(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); };
             var args = "'" + esc(kind) + "','" + esc(source) + "','" + esc(key) + "','" + esc(label || key) + "','" + esc(geo || 'National') + "'";
-            // Music / Podcasts / Books hide the watchlist star per design
-            // (2026-07-30) - those ranker rows read cleaner as title +
-            // artist + streams line only. The historical-arc button stays.
-            var k = String(kind || '').toLowerCase();
-            var showStar = (k !== 'music' && k !== 'podcast' && k !== 'book');
             return '<span class="tiq-actions">' +
-                   (showStar
-                       ? '<span class="tiq-action-btn' + (watched ? ' watched' : '') + '"' +
-                         ' title="' + (watched ? 'Remove from watchlist' : 'Add to watchlist') + '"' +
-                         ' onclick="event.stopPropagation(); tiqToggleWatch(' + args + ')">' +
-                         (watched ? '★' : '☆') + '</span>'
-                       : '') +
+                   '<span class="tiq-action-btn' + (watched ? ' watched' : '') + '"' +
+                   ' title="' + (watched ? 'Remove from watchlist' : 'Add to watchlist') + '"' +
+                   ' onclick="event.stopPropagation(); tiqToggleWatch(' + args + ')">' +
+                   (watched ? '★' : '☆') + '</span>' +
                    '<span class="tiq-action-btn" title="View historical arc"' +
                    ' onclick="event.stopPropagation(); tiqShowDrilldown(' + args + ')">📈</span>' +
                    '</span>';
@@ -135605,27 +135600,4 @@
     <!-- Profile Picture Upload Modal -->
     <div id="avatarUploadModal" class="avatar-upload-modal" onclick="if(event.target === this) closeAvatarUpload()">
         <div class="avatar-upload-content">
-            <h3>📷 Profile Picture</h3>
-            <div class="avatar-preview" id="avatarPreview">
-                {% if profile_picture %}
-                <img src="{{ profile_picture }}" alt="Current avatar">
-                {% else %}
-                <span class="avatar-preview-initials">{{ username[:2] }}</span>
-                {% endif %}
-            </div>
-            <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem;">Click to upload a new picture (PNG, JPG, GIF - max 500KB)</p>
-            <input type="file" id="avatarFileInput" class="avatar-upload-input" accept="image/*" onchange="handleAvatarUpload(this)">
-            <div>
-                <button class="avatar-upload-btn" onclick="triggerAvatarUpload()">📤 Upload New</button>
-                <button class="avatar-upload-btn danger" onclick="removeAvatar()">🗑️ Remove</button>
-                <button class="avatar-upload-btn secondary" onclick="closeAvatarUpload()">Cancel</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Chat Widget - REMOVED 2026-06-18 per user request: floating 💬
-         bubble was overlapping dashboard content in the bottom-right
-         corner and had no clear product home. Entire block is preserved
-         here as an HTML comment so we can restore it (uncomment the
-         block below) without re-deriving the markup, status menu, group
-         chat handler, etc. The .chat-widg
+            <h3>📷 Pr
