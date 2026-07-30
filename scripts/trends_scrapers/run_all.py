@@ -224,7 +224,11 @@ def main(argv: list[str] | None = None) -> int:
         sys.path.insert(0, os.path.abspath(
             os.path.join(os.path.dirname(__file__), '..', '..')))
         import trends_iq  # type: ignore
-        for lookback in (7, 30):
+        # Warm the three windows the dashboard actually renders. 1-day
+        # is the new default ("live as of now") so it's warmed first
+        # and most frequently checked by users; 7d and 30d cover the
+        # medium-term views that some users still switch to.
+        for lookback in (1, 7, 30):
             filters = {
                 'geo_type':      'National',
                 'geo_value':     '',
