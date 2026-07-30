@@ -4693,6 +4693,19 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     film_snap    = results.get('film_ticketing') or {}
     film_sources = film_snap.get('sources') or {}
 
+    # Stamp Wikipedia posters on any film-ticketing tile that lacks one.
+    # AMC in particular never carries a poster: its /movies page keeps
+    # posters behind Queue-It, so both the curl_cffi path and the
+    # sitemap fallback return items with `image=''`. Fandango/Cinemark/
+    # Regal already carry their own poster URLs, so the enricher's
+    # skip-when-image-already-present guard keeps them untouched. Runs
+    # thread-pooled (max_workers=8) so a full 4-platform enrichment
+    # (~100 unique titles) settles in <=5s on a cold cache.
+    for _plat, _block in list(film_sources.items()):
+        _items = _block.get('items') or []
+        if _items:
+            _enrich_streaming_with_posters(_items, 'Film')
+
     # Libby popular for LA County (ebook / audiobook / magazine split).
     libby_snap    = results.get('libby_trends') or {}
     libby_trends  = libby_snap.get('sources') or {}

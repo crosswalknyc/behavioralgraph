@@ -543,6 +543,22 @@ def _parse_generic_movie_list(html: str, host_prefix: str,
 _AMC_URL      = 'https://www.amctheatres.com/movies'
 _AMC_HOMEPAGE = 'https://www.amctheatres.com/'
 
+# Un-gated fallback: AMC's XML sitemap of every movie in their catalog.
+# `www.amctheatres.com/movies` is behind Queue-It (their virtual
+# waiting-room bot filter, `queue.amctheatres.com/?e=globalsafetynetweb`).
+# Queue-It cookies are IP-bound + short-TTL, so curl_cffi from any host
+# fails as soon as the donated session goes stale (typically within a
+# few hours). `/sitemaps/*` bypasses Queue-It entirely - they need to
+# stay reachable for Googlebot/Bingbot indexing so SEO doesn't die, and
+# they carry the same `<Attribute name="movie">Title</Attribute>` +
+# `<Attribute name="movieId">ID</Attribute>` payload we need.
+#
+# Ranking signal: movieId is monotonically increasing at AMC (higher
+# ID = more recently added to the catalog). Sorting descending gives
+# a "newest additions first" order that closely tracks Now Playing +
+# soon-to-release since AMC only adds titles ~2-6 weeks before opening.
+_AMC_SITEMAP_URL = 'https://www.amctheatres.com/sitemaps/sitemap-movies.xml'
+
 # Anchor pattern for AMC slugs. Numeric-id suffix is required so we
 # don't match `/movies/uxrow` (chrome) or `/movies/now-playing`
 # (rail nav).
@@ -638,7 +654,247 @@ def _amc_titlecase_tail(s: str) -> str:
     return title
 
 
-def _fetch_amc(limit: int = 25) -> tuple[list[dict], str]:
+# Slug fragments that identify sitemap catalog entries we NEVER want
+# to surface as "trending". Applied to the sitemap-fallback path only;
+# the /movies-page path already ranks by merchandising count so these
+# never get near the top there.
+_AMC_SITEMAP_SKIP_TOKENS = (
+    'private-theatre-rental', 'private-rental', 'anniversary-studio',
+    'meet-up', 'ghibli-fest', '-fan-event', '-opening-night',
+    'dci-20', 'sensory-friendly', '-open-caption', '-subtitled',
+    '-with-subs', '-dubbed-', 'big-loud-and-live', 'grateful-dead',
+    'katseye', '-day-2026', 'texas-chainsaw-day', 'the-musical-live',
+    '-live-in-theaters', 'wnba-', '-nba-', 'mlb-',
+    # Restore-classics + Fan Faves + rep programming. AMC keeps these
+    # in the catalog year-round so they'd otherwise leak into "newest".
+    'rocky-horror', 'wizard-of-oz', 'sound-of-music',
+    # Q&A / director / crew special screenings. These get high movieIds
+    # (frequently added, one per city per screening) so they'd flood the
+    # sitemap-ordered list if we didn't filter.
+    '-live-intro', '-live-q-a', '-special-q-a', '-with-cast',
+    '-with-crew', '-with-director', '-with-special-guest',
+    '-q-a-with', '-intro-with', '-preview-with',
+    'popcorn-reef',                 # AMC's midnight-preview banner
+    'ohio-goes-to-the-movies',      # local-market series
+    'private-events',
+    'ready-player-one-ohio',        # ditto
+)
+
+
+# Coarse title-shape rejects. Any title matching any of these regexes
+# gets dropped before ranking. Meant to catch Q&A / event tiles that
+# slip past the slug-token filter (e.g. AMC re-uses the film's real
+# slug but appends the event as freeform title text). These variant
+# tiles bloat the list when the base title is already present.
+_AMC_TITLE_REJECT_RE = re.compile(
+    r'(?:'
+    r'\bQ\s*&\s*A\b'                     # Q&A / Q & A
+    r'|\bLIVE\s+INTRO\b'
+    r'|\bSPECIAL\s+Q\b'
+    r'|Cast\s*&\s*Crew'
+    r'|\bDIR\.\s*\('                     # "Jimmy (dir. Owens)"
+    r'|Private\s+Theatre'
+    r'|Early\s+Access\s+Screening'
+    r'|Sponsored\s+Screening'
+    r'|Special\s+Introduction'
+    r'|Special\s+Show'
+    r'|Special\s+Screening'
+    r'|Fan\s+Event'
+    r'|Opening\s+Night\s+Fan'
+    r'|Preview\s+Screening'
+    r'|Advance\s+Screening'
+    r'|Encore\s+Screening'
+    r'|(?:with|w/)\s+Bonus\s+Foo'        # "Backrooms w/ Bonus Foo..." concert-style tie-ins
+    r'|Amazon\s+Prime\s+Early\s+Access'
+    r'|An\s+Angel\s+Sponsored'
+    r'|Fan\s+First\s+Screenings?'
+    r'|Fan\s+Faves?:'                    # "Fan Faves: Michael" rep programming
+    r'|Met\s+Summer\s+Encore'
+    r'|Met\s+Live\s+in\s+HD'
+    r')',
+    re.IGNORECASE,
+)
+
+
+def _amc_title_norm(t: str) -> str:
+    """Lowercase, strip punctuation, collapse spaces. For matching AMC
+    sitemap titles against Fandango titles (which use different
+    punctuation / colon placement / release-year suffixes)."""
+    t = re.sub(r'\(\s*\d{4}\s*\)', '', t)           # drop "(2026)"
+    t = re.sub(r'[^\w\s]', ' ', t.lower())
+    return re.sub(r'\s+', ' ', t).strip()
+
+
+def _fetch_amc_sitemap(hint_titles: Optional[list[str]] = None,
+                        limit: int = 25) -> list[dict]:
+    """Fallback source: parse the un-gated AMC sitemap and rank the
+    catalog by:
+
+      1. RELEASE-WINDOW: only titles with a `releaseDate` in
+         [today - 45d, today + 90d] survive - the theatrical window.
+      2. HINT MATCH: if `hint_titles` (typically Fandango's ranked
+         list) is passed, titles whose normalized form matches a hint
+         get a large score boost. Match direction is bidirectional
+         substring so "Spider-Man: Brand New Day" matches
+         "Spider-Man: Brand New Day (2026)".
+      3. DAYS-TO-RELEASE: within matched vs unmatched groups, closer
+         to today = higher score.
+
+    Returns [] on any failure; caller falls through to _WARMING_UP_HINT.
+    """
+    from datetime import datetime, timedelta
+    try:
+        from curl_cffi import requests as _ccr  # type: ignore
+    except Exception:
+        return []
+    try:
+        resp = _ccr.get(_AMC_SITEMAP_URL, impersonate='chrome131',
+                         timeout=20)
+    except Exception as e:
+        logger.info("amc sitemap fetch failed: %s", e)
+        return []
+    xml = resp.text or ''
+    if resp.status_code != 200 or len(xml) < 100_000:
+        logger.info("amc sitemap: status=%d bytes=%d - skipping",
+                     resp.status_code, len(xml))
+        return []
+
+    today = datetime.utcnow().date()
+    win_lo = today - timedelta(days=45)
+    win_hi = today + timedelta(days=90)
+
+    url_block_re = re.compile(r'<url>(.*?)</url>', re.DOTALL)
+    loc_re       = re.compile(r'<loc>([^<]+)</loc>')
+    title_re     = re.compile(r'<Attribute\s+name="movie">([^<]+)</Attribute>')
+    release_re   = re.compile(r'<Attribute\s+name="releaseDate">([^<]+)</Attribute>')
+
+    # Preserve hint order so #1 hint (top of Fandango) ranks above #10.
+    # De-dupe while preserving order.
+    hint_norms: list[str] = []
+    seen_hint: set[str] = set()
+    for h in (hint_titles or []):
+        hn = _amc_title_norm(h)
+        if hn and len(hn) >= 3 and hn not in seen_hint:
+            hint_norms.append(hn)
+            seen_hint.add(hn)
+
+    def _hint_index(title_norm: str) -> Optional[int]:
+        """Return index of first matching hint (lower = higher priority),
+        or None if no hint matches. Bidirectional substring so
+        "Spider-Man: Brand New Day" ~ "Spider-Man: Brand New Day (2026)".
+        """
+        for i, hn in enumerate(hint_norms):
+            if hn in title_norm or title_norm in hn:
+                return i
+        return None
+
+    # Parse every candidate into (hint_idx | None, days_to_release,
+    # title, slug, url). Titles with a hint match go into one bucket
+    # (ranked by hint order); non-matched into another (ranked by
+    # release proximity). We return the hint-matched bucket first and
+    # only top up with proximity-ranked items if the hint bucket is
+    # short.
+    hint_matched: list[tuple[int, str, str, str]] = []   # (hint_idx, title, slug, url)
+    unmatched:    list[tuple[int, str, str, str]] = []   # (days, title, slug, url)
+    for m in url_block_re.finditer(xml):
+        block = m.group(1)
+        loc_m     = loc_re.search(block)
+        title_m   = title_re.search(block)
+        release_m = release_re.search(block)
+        if not (loc_m and title_m):
+            continue
+        url = loc_m.group(1).strip()
+        slug_m = re.search(r'/movies/([a-z0-9][a-z0-9\-]{2,120}-\d+)', url)
+        if not slug_m:
+            continue
+        slug = slug_m.group(1)
+        if any(tok in slug for tok in _AMC_SITEMAP_SKIP_TOKENS):
+            continue
+        title = _html.unescape(title_m.group(1).strip())
+        if title.lower().startswith('amc theatres'):
+            continue
+        if _AMC_TITLE_REJECT_RE.search(title):
+            continue
+        if not _is_title(title):
+            continue
+
+        release_ok = False
+        days_to_release = 365
+        if release_m and release_m.group(1).strip():
+            try:
+                rd = datetime.strptime(release_m.group(1).strip()[:10],
+                                        '%Y-%m-%d').date()
+                days_to_release = abs((rd - today).days)
+                release_ok = (win_lo <= rd <= win_hi)
+            except Exception:
+                pass
+        if not release_ok:
+            continue
+
+        tn = _amc_title_norm(title)
+        idx = _hint_index(tn)
+        if idx is not None:
+            hint_matched.append((idx, title, slug, url))
+        else:
+            unmatched.append((days_to_release, title, slug, url))
+
+    # Order hint-matched by hint priority; unmatched by proximity.
+    hint_matched.sort(key=lambda t: t[0])
+    unmatched.sort(key=lambda t: t[1])
+
+    # Emit hint-matched first; only fall back to unmatched if the hint
+    # bucket is thin (fewer than 10 real overlaps). This keeps AMC's
+    # list editorially aligned to what's actually driving box office.
+    ordered: list[tuple[str, str, str]] = []
+    seen_titles: set[str] = set()
+    for _idx, title, slug, url in hint_matched:
+        tn = title.lower()
+        if tn in seen_titles:
+            continue
+        seen_titles.add(tn)
+        ordered.append((title, slug, url))
+    if len(ordered) < 10:
+        for _dtr, title, slug, url in unmatched:
+            tn = title.lower()
+            if tn in seen_titles:
+                continue
+            seen_titles.add(tn)
+            ordered.append((title, slug, url))
+            if len(ordered) >= max(10, limit):
+                break
+
+    items: list[dict] = []
+    for title, slug, url in ordered[:limit]:
+        items.append({
+            'rank':  len(items) + 1,
+            'title': title,
+            'url':   url,
+            # Posters come from Wikipedia enrichment downstream in
+            # trends_iq._enrich_streaming_with_posters. Sitemap doesn't
+            # carry an <image:image> block.
+            'image': '',
+        })
+    return items
+
+
+def _fetch_amc(limit: int = 25,
+               hint_titles: Optional[list[str]] = None) -> tuple[list[dict], str]:
+    """Two-stage AMC fetch:
+
+    Stage 1 (preferred): curl_cffi TLS-impersonation hit against
+    `/movies` with donated Chrome cookies. When it works, we get 25
+    titles ranked by AMC's own merchandising signal (how many times
+    each title's tile is repeated across their editorial rails).
+
+    Stage 2 (fallback): un-gated `/sitemaps/sitemap-movies.xml`.
+    Filters to titles releasing in the theatrical window (-45d to
+    +90d) and ranks with Fandango titles (passed as `hint_titles`) as
+    a boost signal. Fires when Queue-It rejects the /movies request
+    OR when no cookies exist. Requires no cookie / IP.
+
+    Empty result from BOTH stages -> `_WARMING_UP_HINT` + a cookie-gap
+    email fires. Rare now that the sitemap path exists as a real
+    fallback."""
     # Lazy-import curl_cffi so machines without it (older Hetzner
     # boxes) still boot the module and just skip AMC.
     try:
@@ -649,27 +905,43 @@ def _fetch_amc(limit: int = 25) -> tuple[list[dict], str]:
 
     from ._base import load_donated_cookies
     cookies = load_donated_cookies('amctheatres.com')
-    if not cookies:
-        _mark_cookie_gap('amc', 'amctheatres.com',
-                          reason='no donated cookies for amctheatres.com')
-        return [], _WARMING_UP_HINT
 
-    try:
-        resp = _ccr.get(_AMC_URL, impersonate='chrome131',
-                         cookies=cookies, timeout=20)
-    except Exception as e:
-        logger.info("amc curl_cffi request failed: %s", e)
+    # Stage 1: /movies with cookies. Skip straight to Stage 2 if
+    # cookies are missing rather than firing curl_cffi against a page
+    # that we already know will Queue-It-bounce us.
+    if cookies:
+        try:
+            resp = _ccr.get(_AMC_URL, impersonate='chrome131',
+                             cookies=cookies, timeout=20)
+        except Exception as e:
+            logger.info("amc curl_cffi request failed: %s", e)
+            resp = None
+    else:
+        resp = None
+
+    html = (resp.text or '') if resp is not None else ''
+    stage1_blocked = (
+        resp is None
+        or resp.status_code != 200
+        or len(html) < 20_000
+        or 'queue.amctheatres.com' in html
+    )
+
+    if stage1_blocked:
+        logger.info("amc: /movies unavailable (%s), falling back to sitemap",
+                     'no cookies' if not cookies
+                     else f'status={resp.status_code} bytes={len(html)}'
+                            + (' queue-shell' if resp and 'queue.amctheatres.com' in html else ''))
+        sitemap_items = _fetch_amc_sitemap(hint_titles=hint_titles,
+                                             limit=limit)
+        if sitemap_items:
+            return sitemap_items, ''
+        # Both stages empty -> fire the cookie-gap notification. The
+        # dashboard tile shows the neutral warming-up line either way.
         _mark_cookie_gap('amc', 'amctheatres.com',
-                          reason=f'curl_cffi request failed: {e}')
-        return [], _WARMING_UP_HINT
-    html = resp.text or ''
-    if resp.status_code != 200 or len(html) < 20000:
-        logger.info("amc: got status=%d bytes=%d (looks like a bot challenge)",
-                     resp.status_code, len(html))
-        _mark_cookie_gap('amc', 'amctheatres.com',
-                          reason=(f'AMC returned status={resp.status_code} '
-                                  f'bytes={len(html)} - likely bot-challenge '
-                                  f'shell; cookies may be stale'))
+                          reason=('/movies Queue-It-blocked AND '
+                                  '/sitemaps/sitemap-movies.xml empty; '
+                                  'both routes down'))
         return [], _WARMING_UP_HINT
 
     # Count slug occurrences. AMC's SSR HTML repeats each merchandised
@@ -912,7 +1184,32 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
 
     fandango_items = _fetch_fandango(limit=30) if _wanted('fandango') else []
     cinemark_items = _fetch_cinemark(limit=30) if _wanted('cinemark') else []
-    amc_items, amc_sub     = (_fetch_amc(limit=25)   if _wanted('amc')   else ([], ''))
+    # Fandango + Cinemark's ranked lists feed AMC's sitemap-fallback as
+    # a popularity hint. When AMC's /movies page is Queue-It-blocked
+    # (typical case), the sitemap alone can't tell "Spider-Man opening
+    # this Friday" apart from a same-day regional-language release;
+    # cross-referencing against the wider-release chains supplies that
+    # signal.
+    #
+    # Interleave by rank position (Fandango #1, Cinemark #1, Fandango
+    # #2, Cinemark #2, ...) so a title merchandised #1 by Cinemark
+    # doesn't get buried under every Fandango title. Sometimes Fandango
+    # is missing a blockbuster the same day Cinemark leads with it
+    # (Spider-Man on 2026-07-31, e.g.); the round-robin captures both.
+    hint_titles: list[str] = []
+    seen_h: set[str] = set()
+    for a, b in zip(
+            fandango_items + [None] * len(cinemark_items),
+            cinemark_items + [None] * len(fandango_items)):
+        for src in (a, b):
+            if not src:
+                continue
+            t = src.get('title') or ''
+            if t and t.lower() not in seen_h:
+                hint_titles.append(t)
+                seen_h.add(t.lower())
+    amc_items, amc_sub     = (_fetch_amc(limit=25, hint_titles=hint_titles)
+                               if _wanted('amc')   else ([], ''))
     regal_items, regal_sub = (_fetch_regal(limit=25) if _wanted('regal') else ([], ''))
 
     return {
