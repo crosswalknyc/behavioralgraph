@@ -1061,12 +1061,20 @@ def _fetch_amc(limit: int = 25,
 # `<a href="/movies/...">` anchors. Parse that blob directly - the
 # anchor-scraping path finds zero movie links even on a fully rendered
 # page (verified 2026-07-29).
-# 2026-07-29: switched from `/movies/all-movies-in-theatres` (which now
-# returns HTTP 404 and serves a stale "now playing only" list missing
-# the top marquee pre-release like Spider-Man: Brand New Day) to
-# `/movies` (HTTP 200, ~140 titles in MovieFeedEntries with the top
-# marquee title at position #1). Verified 2026-07-29.
-_REGAL_URL      = 'https://www.regmovies.com/movies'
+# 2026-07-30: switched from `/movies` (which returns 9 separate
+# `MovieFeedEntries` blocks - one per shelf: Special Engagements,
+# Fathom Events, Now Playing, Coming Soon, etc.) to `/movies/now-
+# playing` which returns EXACTLY ONE MovieFeedEntries block containing
+# the actual now-playing lineup ordered by Regal's merchandising rank.
+# The old code was blindly picking the FIRST regex match on the multi-
+# shelf page, which happened to be the Fathom/Limited-Engagements
+# shelf. That produced a top-5 of "One Night Only, Avengers: Doomsday,
+# Super Troopers 3, Ice Cream Man, Sheep in the Box" instead of the
+# real blockbuster lineup (Spider-Man: Brand New Day, The Odyssey,
+# Toy Story 5, Moana, Minions & Monsters). Verified 2026-07-30.
+# (Historical: `/movies/all-movies-in-theatres` was tried on
+# 2026-07-29 but returns HTTP 404 as of that date.)
+_REGAL_URL      = 'https://www.regmovies.com/movies/now-playing'
 _REGAL_HOMEPAGE = 'https://www.regmovies.com/'
 _REGAL_FEED_KEY_RE = re.compile(r'"MovieFeedEntries"\s*:\s*\[')
 
@@ -1211,6 +1219,30 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
     amc_items, amc_sub     = (_fetch_amc(limit=25, hint_titles=hint_titles)
                                if _wanted('amc')   else ([], ''))
     regal_items, regal_sub = (_fetch_regal(limit=25) if _wanted('regal') else ([], ''))
+
+    # AMC's SSR HTML does not expose poster URLs, so its rows ship
+    # with `image=''`. Fandango / Cinemark / Regal all DO expose
+    # posters. For every AMC title that also appears on any of those
+    # sources, borrow the poster URL (Fandango preferred - highest
+    # resolution and most consistent aspect ratio). Match by
+    # normalized title (slugified + year-stripped). Zero effect on
+    # AMC titles that don't overlap; ~100% hit rate on blockbusters.
+    poster_by_key: dict[str, str] = {}
+    def _key(t: str) -> str:
+        norm = re.sub(r'\(\d{4}\)', '', t or '').lower()
+        norm = re.sub(r'[^a-z0-9]+', '', norm)
+        return norm
+    for src_list in (fandango_items, cinemark_items, regal_items):
+        for row in src_list or []:
+            k = _key(row.get('title') or '')
+            img = row.get('image') or ''
+            if k and img and k not in poster_by_key:
+                poster_by_key[k] = img
+    for row in amc_items:
+        if not row.get('image'):
+            k = _key(row.get('title') or '')
+            if k in poster_by_key:
+                row['image'] = poster_by_key[k]
 
     return {
         # Mirror Fandango as the "national" list because it has the
