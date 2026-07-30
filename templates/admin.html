@@ -3440,25 +3440,29 @@
                         </div>
                     </div>
 
-                    <!-- Share of Time Access -->
+                    <!-- Share of Time Access (2026-07-30: refactored to
+                         match the collapsible pattern used by Profile IQ /
+                         Fin IQ / Analysis IQ). Primary "Can View" grant
+                         lives in the header so the bulk-grant / bulk-revoke
+                         toolbar buttons can toggle it uniformly with every
+                         other product card; the "Can Run" nuance + helper
+                         text move into an on-demand drawer. -->
                     <div class="dashboard-access-item" data-access-group="core">
-                        <div class="dashboard-access-header">
-                            <span style="font-weight: 600;">⏱️ SHARE OF TIME</span>
+                        <div class="dashboard-access-header" onclick="toggleDashboardSection('shareOfTime')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="hasShareOfTimeAccess" checked onchange="syncShareOfTimeAccess()">
+                                <span style="font-weight: 600;">⏱️ SHARE OF TIME</span>
+                            </label>
+                            <span class="collapse-icon rotated" id="shareOfTimeIcon">▼</span>
                         </div>
-                        <div class="dashboard-access-content" style="display:block;">
-                            <div style="padding:0.85rem 1rem;background:var(--bg-dark);border-radius:8px;margin-top:0.5rem;">
-                                <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-                                    <label class="checkbox-group" style="margin:0;">
-                                        <input type="checkbox" id="hasShareOfTimeAccess" checked onchange="syncShareOfTimeAccess()">
-                                        <span>Can View</span>
-                                    </label>
-                                    <label class="checkbox-group" style="margin:0;">
-                                        <input type="checkbox" id="hasShareOfTimeRunAccess" checked>
-                                        <span>Can Run</span>
-                                    </label>
-                                </div>
+                        <div id="shareOfTimeSection" class="dashboard-access-content" style="display:none;">
+                            <div style="padding:0.7rem 0.9rem;background:var(--bg-dark);border-radius:8px;margin-top:0.4rem;">
+                                <label class="checkbox-group" style="margin:0;">
+                                    <input type="checkbox" id="hasShareOfTimeRunAccess" checked>
+                                    <span>Can Run (submit new pulls)</span>
+                                </label>
                                 <small style="color:var(--text-secondary);font-size:0.68rem;display:block;margin-top:0.45rem;">
-                                    Users without Run access can open Share of Time in read-only mode, but run controls are hidden.
+                                    Users without Run access can open Share of Time in read-only mode, but the run controls are hidden.
                                 </small>
                             </div>
                         </div>
@@ -3479,16 +3483,13 @@
                          each user"). ROAS IQ is a live product in the
                          SELECT PRODUCT dropdown (index.html:18285); admins
                          need a per-user grant toggle for it. -->
-                    <div class="dashboard-access-item" data-access-group="conversion">
+                    <div class="dashboard-access-item" data-access-group="conversion" title="Grants this user access to the ROAS IQ view in the SELECT PRODUCT dropdown.">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasROASIQAccess">
                                 <span style="font-weight: 600;">💰 ROAS IQ</span>
                             </label>
                         </div>
-                        <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; padding: 0 0.5rem 0.5rem 1.75rem;">
-                            Grants this user access to the ROAS IQ view in the SELECT PRODUCT dropdown.
-                        </small>
                     </div>
 
                     <!-- E-Commerce IQ Access - section hidden (E-Commerce IQ
@@ -3533,16 +3534,13 @@
                          each user"). Flywheel Conversion is a live product in
                          the SELECT PRODUCT dropdown (index.html:18287); admins
                          need a per-user grant toggle for it. -->
-                    <div class="dashboard-access-item" data-access-group="conversion">
+                    <div class="dashboard-access-item" data-access-group="conversion" title="Grants access to the Flywheel Conversion view + the Flywheel Conversion module inside Analysis IQ.">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasFlywheelConversionAccess">
                                 <span style="font-weight: 600;">🔄 FLYWHEEL CONVERSION</span>
                             </label>
                         </div>
-                        <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; padding: 0 0.5rem 0.5rem 1.75rem;">
-                            Grants access to the Flywheel Conversion view + the Flywheel Conversion module inside Analysis IQ.
-                        </small>
                     </div>
 
                     <!-- Brand Partnership IQ Access -->
@@ -3557,11 +3555,12 @@
 
                     <!-- Digital Journey IQ Access -->
                     <div class="dashboard-access-item" data-access-group="core">
-                        <div class="dashboard-access-header">
-                            <label class="checkbox-group">
+                        <div class="dashboard-access-header" onclick="toggleDashboardSection('journeyIqRunAccess')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
                                 <input type="checkbox" id="hasJourneyIQAccess" onchange="syncJourneyIqRunAccessVisibility()">
                                 <span style="font-weight: 600;">🗺️ DIGITAL JOURNEY IQ</span>
                             </label>
+                            <span class="collapse-icon rotated" id="journeyIqRunAccessIcon">▼</span>
                         </div>
                         <div class="dashboard-access-content" id="journeyIqRunAccessContent" style="display:none;">
                             <div style="padding:0.85rem 1rem;background:var(--bg-dark);border-radius:8px;margin-top:0.5rem;">
@@ -3586,11 +3585,12 @@
 
                     <!-- Intent IQ Access -->
                     <div class="dashboard-access-item" data-access-group="conversion">
-                        <div class="dashboard-access-header">
-                            <label class="checkbox-group">
+                        <div class="dashboard-access-header" onclick="toggleDashboardSection('intentIqRunAccess')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
                                 <input type="checkbox" id="hasIntentIQAccess" onchange="syncIntentIqRunAccessVisibility()">
                                 <span style="font-weight: 600;">🎬 INTENT IQ</span>
                             </label>
+                            <span class="collapse-icon rotated" id="intentIqRunAccessIcon">▼</span>
                         </div>
                         <div class="dashboard-access-content" id="intentIqRunAccessContent" style="display:none;">
                             <div style="padding:0.85rem 1rem;background:var(--bg-dark);border-radius:8px;margin-top:0.5rem;">
@@ -9446,13 +9446,16 @@
             document.getElementById('userModal').classList.add('show');
             // 2026-07-30: seed the new streamlined access UI on every
             // open — reset to "Everything" tab, populate tab count
-            // badges, clear the search filter, apply visibility.
+            // badges, clear the search filter, apply visibility, and
+            // force every product-detail drawer closed so the modal
+            // opens in a compact state.
             try {
                 if (typeof setAccessGroupTab === 'function') setAccessGroupTab('everything');
                 if (typeof updateAccessGroupTabCounts === 'function') updateAccessGroupTabCounts();
                 const _searchEl = document.getElementById('dashboardAccessFilter');
                 if (_searchEl) _searchEl.value = '';
                 if (typeof filterDashboardAccessItems === 'function') filterDashboardAccessItems('');
+                if (typeof _collapseAllProductDrawers === 'function') _collapseAllProductDrawers();
             } catch (_) { /* toolbar helpers are best-effort */ }
         }
 
@@ -9667,13 +9670,17 @@
 
             // 2026-07-30: seed the new streamlined access UI on every
             // open — reset to "Everything" tab, populate tab count
-            // badges, clear the search filter, apply visibility.
+            // badges, clear the search filter, apply visibility, and
+            // force every product-detail drawer closed so an existing
+            // user with 5 enabled products doesn't open the modal to
+            // 5 stacked expanded panels.
             try {
                 if (typeof setAccessGroupTab === 'function') setAccessGroupTab('everything');
                 if (typeof updateAccessGroupTabCounts === 'function') updateAccessGroupTabCounts();
                 const _searchEl = document.getElementById('dashboardAccessFilter');
                 if (_searchEl) _searchEl.value = '';
                 if (typeof filterDashboardAccessItems === 'function') filterDashboardAccessItems('');
+                if (typeof _collapseAllProductDrawers === 'function') _collapseAllProductDrawers();
             } catch (_) { /* toolbar helpers are best-effort */ }
         }
 
@@ -10841,6 +10848,47 @@
             if (typeof showToast === 'function') {
                 showToast(`${target ? 'Granted' : 'Revoked'} ${count} product${count === 1 ? '' : 's'}`);
             }
+            // Collapse any drawers that were auto-opened by the change
+            // events above (Profile IQ / Fin IQ / Analysis IQ / Journey
+            // IQ / Intent IQ toggle their drawers open when their
+            // parent checkbox is checked). Bulk actions are about
+            // grants, not configuration — keep the view compact.
+            if (typeof _collapseAllProductDrawers === 'function') {
+                _collapseAllProductDrawers();
+            }
+        }
+
+        // 2026-07-30 (Jenna): every product-access card that has a
+        // sub-options drawer (Profile IQ, Fin IQ, Analysis IQ, Journey
+        // IQ, Intent IQ, Impact IQ, Rankers IQ, Share of Time) starts
+        // COLLAPSED when the modal opens, no matter whether the parent
+        // checkbox is currently ticked. Old UX auto-opened every drawer
+        // for a user with several enabled products — a wall of nested
+        // panels the admin had to scroll past. Now each drawer only
+        // opens when the admin explicitly clicks the header chevron.
+        // Called from showAddUserModal(), editUser(), and after every
+        // bulk grant/revoke so the visual state stays predictable.
+        function _collapseAllProductDrawers() {
+            const drawers = [
+                { section: 'profileIQSection',           icon: 'profileIQIcon' },
+                { section: 'hedgeFundIQSection',         icon: 'hedgeFundIQIcon' },
+                { section: 'analysisIQSection',          icon: 'analysisIQIcon' },
+                { section: 'rankersIQSection',           icon: 'rankersIQIcon' },
+                { section: 'shareOfTimeSection',         icon: 'shareOfTimeIcon' },
+                { section: 'journeyIqRunAccessContent',  icon: 'journeyIqRunAccessIcon' },
+                { section: 'intentIqRunAccessContent',   icon: 'intentIqRunAccessIcon' },
+                { section: 'impactIQJourneysSection',    icon: 'impactIQJourneysIcon' },
+            ];
+            drawers.forEach(({ section, icon }) => {
+                const s = document.getElementById(section);
+                if (s) s.style.display = 'none';
+                const i = document.getElementById(icon);
+                if (!i) return;
+                i.classList.add('rotated');
+                // Impact IQ uses textContent-based arrows (▲/▼) instead
+                // of the .rotated class. Reset to the collapsed glyph.
+                if (i.textContent === '▲' || i.textContent === '▼') i.textContent = '▼';
+            });
         }
 
         // Reset ALL product access toggles (across every group, ignoring
@@ -10885,17 +10933,23 @@
             }
         }
 
-        // Collapsible Dashboard Section Toggle
+        // Collapsible Dashboard Section Toggle. Looks up `${name}Section`
+        // first (used by Profile IQ / Fin IQ / Analysis IQ / Share of Time),
+        // then falls back to `${name}Content` (used by Journey IQ / Intent
+        // IQ where the drawer div already had a `...Content` id before we
+        // started using this helper). Icon lookup is `${name}Icon` in both
+        // cases. Safe no-op if either element is missing.
         function toggleDashboardSection(sectionName) {
-            const section = document.getElementById(`${sectionName}Section`);
+            const section = document.getElementById(`${sectionName}Section`)
+                || document.getElementById(`${sectionName}Content`);
             const icon = document.getElementById(`${sectionName}Icon`);
-            
+            if (!section) return;
             if (section.style.display === 'none' || section.style.display === '') {
                 section.style.display = 'block';
-                icon.classList.remove('rotated');
+                if (icon) icon.classList.remove('rotated');
             } else {
                 section.style.display = 'none';
-                icon.classList.add('rotated');
+                if (icon) icon.classList.add('rotated');
             }
         }
         
