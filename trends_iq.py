@@ -2669,61 +2669,160 @@ _STREAM_FIELDS = (
 )
 
 
-def _stamp_stream_estimate(row: dict, entry: dict) -> None:
+# Default unit label per kind - used as fallback when the per-platform
+# block doesn't carry its own unit (which it doesn't - we derive from
+# kind). Matches `stream_estimates._default_unit_for_kind`.
+_DEFAULT_UNIT_BY_KIND = {
+    'song':    'weekly US streams',
+    'podcast': 'weekly US listeners',
+    'film':    'weekly US views',
+    'tv':      'weekly US views',
+    'title':   'weekly US views',
+}
+
+
+def _stamp_stream_estimate(row: dict, entry: dict,
+                            platform_key: str = '',
+                            kind_hint: str = '') -> None:
     """Copy stream-estimate fields onto a chart row under the
-    `us_streams` namespace. Kept as a dict so the frontend can lazy-
-    render tooltip + arrow together."""
+    `us_streams` namespace.
+
+    When `platform_key` is provided AND `entry.by_platform[platform_key]`
+    exists, we stamp THAT platform's number (Spotify song row shows
+    Spotify-only US streams; Apple Music row shows Apple-Music-only;
+    etc.). When the per-platform block is missing we fall back to the
+    aggregate estimate so old-shape snapshots still render.
+
+    `kind_hint` fills in `unit_label` when the entry didn't carry one
+    (per-platform blocks don't - the frontend derives it from kind
+    via `_DEFAULT_UNIT_BY_KIND`)."""
     if not entry:
         return
-    row['us_streams'] = {k: entry.get(k) for k in _STREAM_FIELDS
-                          if entry.get(k) is not None}
+
+    by_platform = entry.get('by_platform') or {}
+    per = by_platform.get(platform_key) if platform_key else None
+
+    if per and (per.get('us_estimate') or 0) > 0:
+        # Per-platform source of truth.
+        out = {
+            'us_estimate':      per.get('us_estimate'),
+            'us_estimate_low':  per.get('us_estimate_low'),
+            'us_estimate_high': per.get('us_estimate_high'),
+            'confidence':       per.get('confidence'),
+            'direction':        per.get('direction'),
+            'delta_pct':        per.get('delta_pct'),
+            'prev_estimate':    per.get('prev_estimate'),
+            # Note is per-platform reasoning. Aggregate `method` +
+            # `sources` still travel for completeness but the frontend
+            # tooltip is simplified.
+            'method':           per.get('note') or entry.get('method'),
+            'sources':          entry.get('sources'),
+            'unit_label':       (_DEFAULT_UNIT_BY_KIND.get(kind_hint)
+                                  or entry.get('unit_label')
+                                  or 'weekly US audience'),
+            'platform':         platform_key,
+        }
+    else:
+        # Fallback to aggregate. This still preserves old-snapshot
+        # rendering while the daily cron picks up the new schema.
+        out = {k: entry.get(k) for k in _STREAM_FIELDS
+                if entry.get(k) is not None}
+        if kind_hint and not out.get('unit_label'):
+            out['unit_label'] = _DEFAULT_UNIT_BY_KIND.get(kind_hint,
+                                                            'weekly US audience')
+
+    row['us_streams'] = {k: v for k, v in out.items() if v is not None}
+
+
+# Panel-slug -> platform key for the stream_estimates.by_platform block.
+# See `stream_estimates._SONG_PLATFORMS` / `_PODCAST_PLATFORMS` /
+# `_STREAMING_PLATFORMS_META` - the `key` value there must match.
+# Panels that don't have a per-platform anchor (TikTok, Shazam) fall
+# back to the aggregate estimate.
+_MUSIC_PANEL_TO_PLATFORM = {
+    'spotify': 'spotify',
+    'apple':   'apple',
+    'youtube': 'youtube',
+    'amazon':  'amazon',
+    # tiktok + shazam intentionally omitted - they don't represent
+    # per-track streams, so they get the aggregate (or nothing).
+}
+_PODCAST_PANEL_TO_PLATFORM = {
+    'apple':   'apple',
+    'spotify': 'spotify',
+    'netflix': 'netflix',
+    'amazon':  'amazon',
+    'audible': 'audible',
+}
+_STREAMING_PANEL_TO_PLATFORM = {
+    'netflix':    'netflix',
+    'disneyplus': 'disneyplus',
+    'hulu':       'hulu',
+    'max':        'max',
+    'primevideo': 'primevideo',
+    'espnplus':   'espnplus',
+}
 
 
 def _annotate_music_with_streams(music_charts: dict, estimates: dict) -> None:
-    """Attach `us_streams` to every song row across every music
-    platform panel. Songs key by title+artist because "Home" appears
-    on multiple charts with different artists."""
+    """Attach per-platform `us_streams` to every song row: a row on
+    the Spotify panel gets the Spotify-only US weekly stream count;
+    a row on the Apple Music panel gets the Apple-Music-only count.
+    Songs key by title+artist because "Home" appears on multiple
+    charts with different artists.
+
+    TikTok / Shazam panels don't have per-platform anchors (they
+    don't represent streams), so those rows fall back to the
+    aggregate estimate."""
     if not music_charts or not estimates:
         return
     items_lookup = estimates.get('items') or {}
-    for panel in music_charts.values():
+    for panel_slug, panel in (music_charts or {}).items():
+        platform_key = _MUSIC_PANEL_TO_PLATFORM.get(panel_slug, '')
         for row in (panel or {}).get('items') or []:
             title  = (row.get('title')  or '').strip()
             artist = (row.get('artist') or '').strip()
             key = f'song:{_cp_normalize(f"{title} {artist}")}'
-            _stamp_stream_estimate(row, items_lookup.get(key))
+            _stamp_stream_estimate(row, items_lookup.get(key),
+                                     platform_key=platform_key,
+                                     kind_hint='song')
 
 
 def _annotate_podcasts_with_streams(podcast_charts: dict, estimates: dict) -> None:
-    """Attach `us_streams` to every podcast row across every panel.
-    Keyed by normalized title alone (podcast titles are much more
-    unique than song titles)."""
+    """Attach per-platform `us_streams` to every podcast row: Apple
+    Podcasts panel shows Apple-Podcasts-only US weekly listeners;
+    Spotify panel shows Spotify-only. Keyed by normalized title."""
     if not podcast_charts or not estimates:
         return
     items_lookup = estimates.get('items') or {}
-    for panel in podcast_charts.values():
+    for panel_slug, panel in (podcast_charts or {}).items():
+        platform_key = _PODCAST_PANEL_TO_PLATFORM.get(panel_slug, '')
         for row in (panel or {}).get('items') or []:
             title = (row.get('title') or '').strip()
             key = f'podcast:{_cp_normalize(title)}'
-            _stamp_stream_estimate(row, items_lookup.get(key))
+            _stamp_stream_estimate(row, items_lookup.get(key),
+                                     platform_key=platform_key,
+                                     kind_hint='podcast')
 
 
 def _annotate_streaming_with_streams(streaming_trending: dict,
                                        estimates: dict) -> None:
-    """Attach `us_streams` to every Film/TV row on every streaming
-    platform. Tries the film/tv key first (respecting
+    """Attach per-platform `us_streams` to every Film/TV row: Netflix
+    panel shows Netflix-only US weekly views; Disney+ panel shows
+    Disney-only; etc. Tries the film/tv key first (respecting
     `category_display`), falls back to whichever variant the estimate
-    was stored under (the scraper stores by the same category label)."""
+    was stored under (Disney/ESPN don't ship per-row category_display
+    consistently, so scraper stores those under `title:<norm>`)."""
     if not streaming_trending or not estimates:
         return
     items_lookup = estimates.get('items') or {}
-    for panel in streaming_trending.values():
+    for panel_slug, panel in (streaming_trending or {}).items():
         if not panel:
             continue
-        # Enrich `items`, `films`, and `tv` in one pass. Same item
-        # object appears in `items` + (`films`|`tv`) so stamping one
-        # also stamps the other, but we iterate all three lists for
-        # safety in case the app ever splits them.
+        platform_key = _STREAMING_PANEL_TO_PLATFORM.get(panel_slug, '')
+        # Same item object appears in `items` + (`films`|`tv`) so
+        # stamping one also stamps the other, but we iterate all
+        # three for safety in case the app ever splits them.
         for bucket_key in ('items', 'films', 'tv'):
             for row in panel.get(bucket_key) or []:
                 title = (row.get('title') or '').strip()
@@ -2731,13 +2830,6 @@ def _annotate_streaming_with_streams(streaming_trending: dict,
                 norm  = _cp_normalize(title)
                 if not norm:
                     continue
-                # Disney+ / ESPN+ don't ship `category_display` on
-                # every row (Disney's browse rail mixes films + shows
-                # under one carousel), so the scraper stores those
-                # under `title:<norm>`. Netflix / Hulu / Prime tag
-                # rows Film/TV so those keys use `film:`/`tv:`. Try
-                # every variant here so a classification mismatch
-                # between scraper and app never causes a silent miss.
                 order: list[str]
                 if 'film' in cat:
                     order = [f'film:{norm}', f'tv:{norm}', f'title:{norm}']
@@ -2746,11 +2838,17 @@ def _annotate_streaming_with_streams(streaming_trending: dict,
                 else:
                     order = [f'title:{norm}', f'film:{norm}', f'tv:{norm}']
                 entry = None
+                kind_hint = 'title'
                 for k in order:
                     entry = items_lookup.get(k)
                     if entry:
+                        # First key that resolved wins; use its kind
+                        # (drop the `<kind>:` prefix).
+                        kind_hint = k.split(':', 1)[0]
                         break
-                _stamp_stream_estimate(row, entry)
+                _stamp_stream_estimate(row, entry,
+                                         platform_key=platform_key,
+                                         kind_hint=kind_hint)
 
 
 def _annotate_cross_platform_moments(

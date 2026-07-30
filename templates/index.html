@@ -45994,23 +45994,16 @@
                 var pct = Math.round(e.delta_pct * 100);
                 if (pct !== 0) deltaLabel = (pct > 0 ? '+' : '') + pct + '%';
             }
-            // Range + method + sources travel via title attribute so
-            // hover reveals the reasoning without cluttering the row.
-            var range = '';
-            if (typeof e.us_estimate_low === 'number' && typeof e.us_estimate_high === 'number' &&
-                e.us_estimate_low > 0 && e.us_estimate_high > 0) {
-                range = 'Range: ' + _tiqFormatCount(e.us_estimate_low) +
-                         ' - ' + _tiqFormatCount(e.us_estimate_high);
-            }
-            var tipParts = [];
-            tipParts.push(mid + ' ' + unit);
-            if (range) tipParts.push(range);
-            if (typeof e.prev_estimate === 'number' && e.prev_estimate > 0) {
-                tipParts.push('Yesterday: ' + _tiqFormatCount(e.prev_estimate));
-            }
-            if (e.confidence) tipParts.push('Confidence: ' + e.confidence);
-            if (e.method) tipParts.push(e.method);
-            var tip = tipParts.join(' \u00b7 ');
+            // Tooltip is intentionally minimal - Jenna's rule 2026-07-30:
+            // just "Number of streams" / "Number of listeners" /
+            // "Number of views". Derived from the last word of the
+            // unit label so podcasts read "listeners", music reads
+            // "streams", video reads "views" automatically.
+            var noun = (function () {
+                var m = unit.match(/(streams|listeners|views|audience|plays)\b/i);
+                return (m && m[1]) ? m[1].toLowerCase() : 'streams';
+            })();
+            var tip = 'Number of ' + noun;
             return ' <span class="tiq-streams-chip ' + arrowCls +
                    '" title="' + _tiqEsc(tip) + '">' +
                    mid + ' ' + _tiqEsc(unit) +

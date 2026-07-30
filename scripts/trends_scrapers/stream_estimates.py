@@ -291,54 +291,329 @@ def _lookup_key(kind: str, display_title: str, artist: str = '') -> str:
 
 _PROMPT_HEADER = (
     "You are a senior media analyst estimating the CURRENT weekly US "
-    "audience size for a piece of content. Use the web_search tool "
-    "AT LEAST ONCE (up to 3 times) to find the freshest data before "
-    "you reason.\n"
+    "audience size for a piece of content, BROKEN OUT PER PLATFORM. "
+    "Use the web_search tool AT LEAST ONCE (up to 3 times) to find the "
+    "freshest data before you reason.\n"
+    "\n"
+    "GUIDING PRINCIPLE - CONSERVATIVE AND DEFENSIBLE:\n"
+    "  Every number you return must be one you could defend in a room "
+    "with an ad-agency data-lead who asks 'where did that come from?'. "
+    "When in doubt, choose the LOWER defensible estimate. It is much "
+    "worse to overstate reach than to understate it. Prefer numbers "
+    "you can trace to a specific published source over numbers you "
+    "extrapolated. If you cannot find a defensible anchor for a "
+    "platform, return 0 for that platform - do NOT guess.\n"
     "\n"
     "RANKING OF SOURCES (prefer higher-tier when available):\n"
-    "  Tier 1: Nielsen streaming top-10, Luminate week-over-week (Billboard "
-    "reports it Wednesday), Edison Podcast Metrics / Podtrac Ranker, MRC "
-    "Podcast Ratings, Chartmetric, official platform press releases.\n"
+    "  Tier 1: Nielsen streaming top-10 US, Luminate week-over-week US "
+    "(Billboard reports Wednesday), Edison Podcast Metrics US, Podtrac "
+    "US Top 20 Ranker, MRC Podcast Ratings US, Chartmetric US streams, "
+    "official platform press releases with a real US number.\n"
     "  Tier 2: Variety, Deadline, Hollywood Reporter, The Verge, "
     "Billboard Chart Beat, publisher press releases with real numbers.\n"
-    "  Tier 3: Reddit / Twitter with a Nielsen screenshot, third-party "
-    "aggregators (Whip Media, Samba TV, Parrot Analytics), Spotify for "
-    "Artists screenshots.\n"
+    "  Tier 3: Third-party aggregators (Whip Media, Samba TV, Parrot "
+    "Analytics), Chartmetric per-DSP estimates, Spotify for Artists "
+    "screenshots.\n"
     "  AVOID: SEO listicles, YouTube reaction videos, unattributed blogs.\n"
     "\n"
+    "CHART LABELS ARE REAL-TIME TIER-1 SIGNAL:\n"
+    "  The chart labels supplied for each item are CURRENT trending-rail "
+    "positions this week on those specific platforms (scraped today "
+    "from the platform's own charts / editorial rails). That means: if "
+    "the item is labeled 'Netflix #3' or 'Spotify Daily Top 200 (US) #7', "
+    "you can trust that the item is IN TIER for that platform this "
+    "week. Chart position alone is a defensible Tier-1 anchor: apply "
+    "the per-platform anchor tier corresponding to the rank and return "
+    "a non-zero estimate. Only return 0 for a platform if the item is "
+    "NOT in that platform's chart labels AND you have no other data.\n"
+    "\n"
     "REASONING RULES:\n"
-    "  1. If direct US weekly numbers exist (Nielsen top-10 minutes, "
-    "Luminate US streams, Podtrac US downloads), USE THEM. Cite the "
-    "source in `method`.\n"
-    "  2. If only global numbers exist, apply a US share benchmark "
-    "(US typically = 35-55% of Spotify streams, 40-60% of Nielsen "
-    "streaming minutes, 55-70% of Podtrac downloads for English-language "
-    "podcasts). State the share you used.\n"
-    "  3. If only chart position is available, reason from tier "
-    "benchmarks: #1 on Spotify US ~ 15-30M weekly streams, top-10 "
-    "Nielsen streaming Original ~ 8-25M households/week, #1 Podtrac "
-    "US ~ 8-15M weekly listeners.\n"
+    "  1. For each platform in TARGET_PLATFORMS below:\n"
+    "     - If the item has a chart label on this platform: use the "
+    "per-platform anchors + rank to place it in-tier, biased LOW. "
+    "Always return a non-zero estimate in this case.\n"
+    "     - If the item has NO chart label on this platform: return "
+    "0 unless you find Tier-1/Tier-2 press specifically citing that "
+    "platform's US weekly reach for this item.\n"
+    "  2. If only a global number exists, apply a US share benchmark "
+    "(US = 35-45% of Spotify global streams, 30-40% of Apple Music "
+    "global, 20-30% of YouTube Music global for English-language "
+    "songs, 35-45% of Netflix global views for English-language "
+    "titles). Bias to the low end. State the share used.\n"
+    "  3. Chart-position sizing (bias LOW, not to the middle): "
+    "#1 = anchor high-third; #2-5 = anchor middle-third; #6-20 = "
+    "anchor low-third; #21+ = below the anchor's low.\n"
     "  4. Return a RANGE (low, mid, high) that reflects real "
-    "uncertainty. Do not compress the range to make the estimate look "
-    "confident. Low = worst-case defensible, High = best-case defensible.\n"
-    "  5. `confidence` tag: 'high' if you cited Tier-1 data with a real "
-    "number this week; 'medium' if you extrapolated from Tier-1 chart "
-    "position or Tier-2 press; 'low' if you inferred from Tier-3 or bare "
-    "chart position with no benchmark.\n"
+    "uncertainty. Low = worst-case defensible, High = best-case "
+    "defensible. Mid = your best-guess conservative number (closer to "
+    "low than to high in ambiguous cases).\n"
+    "  5. `confidence` tag per platform: 'high' if you cited a Tier-1 "
+    "US number this week; 'medium' if extrapolated from Tier-1 chart "
+    "rank OR Tier-2 press; 'low' if inferred from Tier-3 or bare chart "
+    "position without a fresh press cite. Aggregate confidence = min "
+    "of per-platform confidences you actually reported.\n"
+    "  6. NEVER exceed the per-platform sanity ceilings listed in "
+    "TARGET_PLATFORMS. Ceilings represent the historical US peak for "
+    "the platform's #1 slot - your item cannot outrank the peak.\n"
     "\n"
     "OUTPUT FORMAT: Return ONLY a JSON object with these exact keys, "
     "no prose, no markdown fence:\n"
     "  {\n"
-    "    \"us_estimate\":       <int, US weekly audience mid-estimate>,\n"
-    "    \"us_estimate_low\":   <int, defensible low>,\n"
-    "    \"us_estimate_high\":  <int, defensible high>,\n"
-    "    \"unit_label\":        <string, e.g. \"weekly US listeners\">,\n"
+    "    \"by_platform\": {\n"
+    "      \"<platform_key>\": {\n"
+    "        \"us_estimate\":       <int, US weekly on THIS platform>,\n"
+    "        \"us_estimate_low\":   <int, defensible low>,\n"
+    "        \"us_estimate_high\":  <int, defensible high>,\n"
+    "        \"confidence\":        \"high\" | \"medium\" | \"low\",\n"
+    "        \"note\":              <string, 1 short sentence: what "
+    "you found or how you inferred it. If you couldn't find data, say "
+    "so explicitly.>\n"
+    "      },\n"
+    "      ...\n"
+    "    },\n"
+    "    \"us_estimate\":       <int, all-platforms US total (sum of "
+    "per-platform mids, or a defensible aggregate)>,\n"
+    "    \"us_estimate_low\":   <int, defensible aggregate low>,\n"
+    "    \"us_estimate_high\":  <int, defensible aggregate high>,\n"
+    "    \"unit_label\":        <string, e.g. \"weekly US streams\">,\n"
     "    \"confidence\":        \"high\" | \"medium\" | \"low\",\n"
-    "    \"method\":            <string, 1-3 sentences: what you found + "
-    "how you converted it to weekly US>,\n"
-    "    \"sources\":           [<url1>, <url2>, ...]   // 1-4 URLs you actually consulted\n"
+    "    \"method\":            <string, 2-4 sentences: what you found "
+    "for each platform, how you handled gaps, how conservative your "
+    "final number is>,\n"
+    "    \"sources\":           [<url1>, <url2>, ...]   // 1-4 URLs actually consulted\n"
     "  }\n"
 )
+
+
+# ------------------------------------------------------------------
+# Per-platform benchmarks passed into the prompt.
+#
+# `key`      -> the JSON key we expect back from Claude (must match
+#               the panel slug in music_charts / podcast_charts /
+#               streaming so the annotate side can look them up)
+# `label`    -> human-readable label in the prompt
+# `ceiling`  -> conservative US-weekly hard cap for the platform's
+#               #1 slot. Used both in the prompt as a boundary and
+#               post-parse to clamp hallucinations.
+# `anchors`  -> paragraph text summarising real-world reference
+#               points for that platform's audience tiers.
+#
+# Ceilings are anchored to public benchmarks (Luminate US, Nielsen
+# streaming top-10, Podtrac Ranker, Edison Q2 2026, official platform
+# press releases) and biased conservative - deliberately below the
+# aggressive-case high so a #1 hit doesn't get inflated. When in
+# doubt these read low.
+# ------------------------------------------------------------------
+_SONG_PLATFORMS = [
+    {'key': 'spotify',
+     'label': 'Spotify',
+     'ceiling': 25_000_000,
+     'anchors': (
+         'Luminate US weekly on-demand audio: Spotify #1 US typically '
+         '8-14M weekly US streams; top-10 5-9M; top-50 2-4M; top-200 '
+         '0.6-1.5M. Spotify is ~55-60% of US on-demand audio streams.'
+     )},
+    {'key': 'apple',
+     'label': 'Apple Music',
+     'ceiling': 8_000_000,
+     'anchors': (
+         'Apple Music US = ~15-20% of on-demand audio. #1 Apple Music '
+         'US typically 2-5M weekly; top-10 1-3M; top-100 0.2-0.6M. '
+         'Rarely exceeds 5M weekly except for a Drake / Taylor / '
+         'Kendrick blockbuster week.'
+     )},
+    {'key': 'youtube',
+     'label': 'YouTube Music',
+     'ceiling': 12_000_000,
+     'anchors': (
+         'YouTube Music US = ~10-15% of on-demand audio, but YouTube '
+         'video views (which YT Music aggregates) push totals higher. '
+         'Big #1 song: 2-6M weekly YT Music US audio streams; music '
+         'video views add another 3-8M weekly US. Combined ceiling '
+         '~12M weekly US on a mega-hit week.'
+     )},
+    {'key': 'amazon',
+     'label': 'Amazon Music',
+     'ceiling': 5_000_000,
+     'anchors': (
+         'Amazon Music US = ~10-13% of on-demand audio. #1 Amazon '
+         'Music US typically 1-3M weekly; top-10 0.5-1.5M; top-100 '
+         '<0.3M. Amazon does not publish per-track US numbers so '
+         'estimates rely on share benchmarks from Chartmetric / MIDiA.'
+     )},
+]
+
+_PODCAST_PLATFORMS = [
+    {'key': 'apple',
+     'label': 'Apple Podcasts',
+     'ceiling': 8_000_000,
+     'anchors': (
+         'Podtrac Ranker US weekly downloads (Apple + web): #1 '
+         'typically 5-8M weekly US listeners (Rogan / Daily / Crime '
+         'Junkie tier); top-10 2-4M; top-50 0.5-1.5M. Apple Podcasts '
+         'itself is ~45-55% of total US podcast listenership.'
+     )},
+    {'key': 'spotify',
+     'label': 'Spotify Podcasts',
+     'ceiling': 8_000_000,
+     'anchors': (
+         'Spotify Podcasts US ~25-35% share. Rogan alone (Spotify-'
+         'exclusive era) was 5-8M weekly US on Spotify. Non-exclusive '
+         '#1: 2-5M weekly US on Spotify; top-10 1-2.5M; top-50 <1M.'
+     )},
+    {'key': 'netflix',
+     'label': 'Netflix Video Podcasts',
+     'ceiling': 3_000_000,
+     'anchors': (
+         'Netflix video podcasts are a new format (2026). Netflix does '
+         'not publish per-podcast reach. Estimate from Nielsen Tudum '
+         'video views (video podcast episodes are counted as short-'
+         'form watches): #1 ~ 1-3M weekly US views; long tail <0.5M. '
+         'Prefer 0 unless a specific press release exists.'
+     )},
+    {'key': 'amazon',
+     'label': 'Amazon Music Podcasts',
+     'ceiling': 2_000_000,
+     'anchors': (
+         'Amazon Music US podcast share <10%. #1 podcast on Amazon '
+         'Music: 0.3-1M weekly US; top-10 <0.5M. Amazon does not '
+         'publish per-podcast numbers; bias LOW.'
+     )},
+    {'key': 'audible',
+     'label': 'Audible Podcasts',
+     'ceiling': 1_500_000,
+     'anchors': (
+         'Audible podcast tier is small (Audible is primarily audio-'
+         'book). Audible Originals top podcasts: 0.1-0.5M weekly US '
+         'downloads. Bias LOW - if no press release exists, return '
+         '0 or minimal.'
+     )},
+]
+
+_STREAMING_PLATFORMS_META = [
+    {'key': 'netflix',
+     'label': 'Netflix',
+     'ceiling': 30_000_000,
+     'anchors': (
+         'Nielsen US Streaming Top-10 households/week. Netflix top-2 '
+         'title in a big week: 10-20M households (Squid Game 2, '
+         'Wednesday). Steady-state top-10: 3-8M households/week. '
+         'Netflix Tudum publishes global weekly views; US = ~35-45% '
+         'of global views for English-language titles.'
+     )},
+    {'key': 'disneyplus',
+     'label': 'Disney+',
+     'ceiling': 15_000_000,
+     'anchors': (
+         'Nielsen: Disney+ #1 (Mandalorian / Loki / Marvel tentpole) '
+         '3-8M US households/week; steady-state top-10 1-3M. Disney '
+         'does not disclose per-title numbers - estimates from '
+         'Whip Media / Samba TV / Nielsen Top-10.'
+     )},
+    {'key': 'hulu',
+     'label': 'Hulu',
+     'ceiling': 15_000_000,
+     'anchors': (
+         'Nielsen: Hulu #1 (Bear, Only Murders): 3-6M US households/'
+         'week. Ad-tier bumps reach but not necessarily views. Long '
+         'tail 0.5-2M. Hulu is ~15% of US streaming minutes.'
+     )},
+    {'key': 'max',
+     'label': 'HBO Max',
+     'ceiling': 12_000_000,
+     'anchors': (
+         'Nielsen: Max #1 (House of the Dragon, White Lotus): 3-7M '
+         'US households/week. Long tail 0.5-2M. Max/HBO combined = '
+         '~8-10% of US streaming minutes.'
+     )},
+    {'key': 'primevideo',
+     'label': 'Prime Video',
+     'ceiling': 15_000_000,
+     'anchors': (
+         'Nielsen: Prime #1 (Reacher, Boys, Rings of Power): 4-8M '
+         'US households/week. Ads-tier launch inflated 2024 numbers. '
+         'Steady-state 1-3M for top-10.'
+     )},
+    {'key': 'espnplus',
+     'label': 'ESPN+',
+     'ceiling': 3_000_000,
+     'anchors': (
+         'ESPN+ per-title reach is small (sport-specific, event-'
+         'driven). Big UFC PPV weekend: 1-2.5M US buyers. Non-event '
+         'programming <0.5M weekly US.'
+     )},
+]
+
+
+def _platforms_for_kind(kind: str) -> list[dict]:
+    if kind == 'song':
+        return _SONG_PLATFORMS
+    if kind == 'podcast':
+        return _PODCAST_PLATFORMS
+    if kind in ('film', 'tv', 'title'):
+        return _STREAMING_PLATFORMS_META
+    return []
+
+
+def _format_target_platforms(platforms: list[dict], focus_keys: set[str]) -> str:
+    """Format the TARGET_PLATFORMS section of the prompt. `focus_keys`
+    is the subset of platform keys the item actually charts on (based
+    on chart_labels); those platforms get marked *[on chart]* so
+    Claude prioritises returning numbers for them. Non-chart
+    platforms still appear so the aggregate makes sense - Claude
+    returns 0 for them if it can't defend a number."""
+    lines = []
+    for p in platforms:
+        marker = ' *[on chart]*' if p['key'] in focus_keys else ''
+        lines.append(
+            f'  - "{p["key"]}"{marker}: {p["label"]} - '
+            f'ceiling {p["ceiling"]:,} US weekly. {p["anchors"]}'
+        )
+    return '\n'.join(lines)
+
+
+# Map chart-label prefix -> platform key. Used to convert
+# `chart_labels` (e.g. ['Spotify Daily Top 200 (US) #3', 'Apple '
+# 'Music Top 100 (US) #7']) into the set of platform keys the item
+# actually appears on. Kept case-insensitive and forgiving so a label
+# reword doesn't silently break the highlight.
+_CHART_LABEL_TO_PLATFORM = (
+    ('spotify podcast',  'spotify'),   # podcast panel - Spotify Podcast Charts (US)
+    ('spotify',          'spotify'),   # Spotify Daily Top 200 (US), Spotify Podcast Charts (US)
+    ('apple podcasts',   'apple'),
+    ('apple music',      'apple'),
+    ('apple',            'apple'),
+    ('youtube music',    'youtube'),
+    ('youtube',          'youtube'),
+    ('amazon music podcasts', 'amazon'),
+    ('amazon music',     'amazon'),
+    ('amazon',           'amazon'),
+    ('audible',          'audible'),
+    ('netflix',          'netflix'),
+    ('disney',           'disneyplus'),
+    ('hulu',             'hulu'),
+    ('hbo max',          'max'),
+    ('max',              'max'),
+    ('prime video',      'primevideo'),
+    ('prime',            'primevideo'),
+    ('espn+',            'espnplus'),
+    ('espn',             'espnplus'),
+    ('shazam',           'shazam'),
+    ('tiktok',           'tiktok'),
+)
+
+
+def _focus_keys_from_charts(chart_labels: list[str]) -> set[str]:
+    """Which platform keys does this item actually chart on? Returns
+    a set of platform keys matching `_CHART_LABEL_TO_PLATFORM`."""
+    out: set[str] = set()
+    for label in chart_labels or []:
+        lo = label.lower()
+        for prefix, key in _CHART_LABEL_TO_PLATFORM:
+            if lo.startswith(prefix) or prefix in lo:
+                out.add(key)
+                break
+    return out
 
 
 def _build_prompt(item: dict) -> str:
@@ -347,32 +622,52 @@ def _build_prompt(item: dict) -> str:
     artist        = item.get('artist') or ''
     charts        = item.get('chart_labels') or []
     chart_str     = ', '.join(charts[:6]) if charts else '(no chart context)'
+    focus_keys    = _focus_keys_from_charts(charts)
 
     if kind == 'podcast':
         unit  = 'weekly US listeners'
-        query = f'"{display_title} podcast" weekly listeners US'
+        query = (f'"{display_title} podcast" Podtrac US weekly '
+                 f'listeners Edison Podcast Metrics 2026')
         item_line = f'PODCAST TITLE: {display_title}\nPUBLISHER: {artist or "(unknown)"}'
     elif kind == 'song':
-        unit  = 'weekly US streams (all DSPs combined)'
-        query = f'"{display_title}" "{artist}" Luminate US streams weekly'
+        unit  = 'weekly US streams'
+        query = (f'"{display_title}" "{artist}" Luminate US streams '
+                 f'weekly Chartmetric per DSP')
         item_line = f'SONG TITLE: {display_title}\nARTIST: {artist or "(unknown)"}'
     elif kind == 'film':
-        unit  = 'weekly US household views (or US minutes watched)'
-        query = f'"{display_title}" Nielsen streaming top 10 weekly'
+        unit  = 'weekly US views'
+        query = (f'"{display_title}" Nielsen streaming top 10 US '
+                 f'households weekly 2026')
         item_line = f'FILM TITLE: {display_title}'
     elif kind == 'tv':
-        unit  = 'weekly US household views (or US minutes watched)'
-        query = f'"{display_title}" Nielsen streaming top 10 weekly TV series'
+        unit  = 'weekly US views'
+        query = (f'"{display_title}" Nielsen streaming top 10 US TV '
+                 f'series weekly 2026')
         item_line = f'TV SERIES TITLE: {display_title}'
     else:
-        unit  = 'weekly US viewers'
-        query = f'"{display_title}" weekly viewers US streaming'
+        unit  = 'weekly US views'
+        query = f'"{display_title}" weekly viewers US streaming 2026'
         item_line = f'TITLE: {display_title}'
+
+    platforms = _platforms_for_kind(kind)
+    if not platforms:
+        # Fallback - shouldn't happen with current callers but keep
+        # graceful degrade.
+        target_section = ''
+    else:
+        target_section = (
+            '\nTARGET_PLATFORMS (return one entry in by_platform for '
+            'each; platforms marked *[on chart]* are where this item '
+            'actually appears - those numbers matter MOST):\n'
+            + _format_target_platforms(platforms, focus_keys)
+            + '\n'
+        )
 
     return (
         _PROMPT_HEADER
-        + f'\nTARGET METRIC: {unit}\n\n'
-        + item_line
+        + f'\nTARGET METRIC (per platform): {unit}\n'
+        + target_section
+        + '\n' + item_line
         + f'\nCHART CONTEXT: {chart_str}\n'
         + f'\nSUGGESTED SEARCH QUERY (feel free to refine): {query}\n\n'
         + 'JSON output:'
@@ -402,88 +697,166 @@ def _extract_json_blob(text: str) -> Optional[dict]:
     return None
 
 
-# Per-kind ceilings on the US weekly audience estimate. Prevents runaway
-# hallucinations (Claude occasionally returns total-audience-ever or
-# global streams for low-signal items). Anchored to real-world highs:
-#   - Podcast: Podtrac #1 (Rogan) ~ 15M weekly US listeners; ceiling 40M
-#   - Song:    Luminate #1 ~ 30-40M weekly US on-demand streams; ceiling 200M
-#   - Film/TV: Nielsen streaming #1 peaks ~ 45-55M US households/week; ceiling 120M
-# Anything above the ceiling is capped + flagged as low confidence so the
-# reader knows to discount it.
+# AGGREGATE per-kind ceilings on the all-platforms US weekly total.
+# Sum of the per-platform ceilings for the kind, biased slightly
+# conservative (we never expect a real item to peg every platform at
+# its historical peak simultaneously). Aggressive hallucinations get
+# clamped + flagged 'low' confidence.
+#
+# Individual platform ceilings live on the platform records in
+# _SONG_PLATFORMS / _PODCAST_PLATFORMS / _STREAMING_PLATFORMS_META.
 _MAX_ESTIMATE_BY_KIND = {
-    'podcast': 40_000_000,
-    'song':    200_000_000,
-    'film':    120_000_000,
-    'tv':      120_000_000,
-    'title':   120_000_000,
+    'podcast': 20_000_000,     # Podtrac #1 US ~ 8M; ceiling generous 2x
+    'song':    50_000_000,     # Sum of song platform ceilings (~50M)
+    'film':    75_000_000,     # Sum of streaming platform ceilings (~90M) biased down
+    'tv':      75_000_000,
+    'title':   75_000_000,
 }
-# Any estimate above the per-kind ceiling gets clamped to this fraction
-# of the ceiling and flagged 'low' confidence. Keeps the visual ordering
-# roughly right without letting a hallucination dominate the row.
-_CLAMP_TO_FRACTION = 0.5
+_CLAMP_TO_FRACTION = 0.4         # Bias clamped values conservative (was 0.5)
 
 
-def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
-    """Normalize Claude's JSON output. Returns the enriched item dict
-    or None if the estimate is missing / clearly bogus."""
+def _default_unit_for_kind(kind: str) -> str:
+    """Default unit label per kind. Kept short for the dashboard chip."""
+    if kind == 'podcast':
+        return 'weekly US listeners'
+    if kind == 'song':
+        return 'weekly US streams'
+    return 'weekly US views'
+
+
+def _sanitize_platform_block(kind: str, key: str, raw: Any) -> Optional[dict]:
+    """Validate + clamp one per-platform sub-block. Returns a
+    normalized dict or None if the block is empty / bogus."""
+    if not isinstance(raw, dict):
+        return None
     try:
-        mid  = int(parsed.get('us_estimate') or 0)
-        low  = int(parsed.get('us_estimate_low') or 0)
-        high = int(parsed.get('us_estimate_high') or 0)
+        mid  = int(raw.get('us_estimate') or 0)
+        low  = int(raw.get('us_estimate_low') or 0)
+        high = int(raw.get('us_estimate_high') or 0)
     except Exception:
         return None
     if mid <= 0:
         return None
     if low <= 0:
-        low = int(mid * 0.7)
+        low = int(mid * 0.75)          # conservative-side default
     if high <= 0:
-        high = int(mid * 1.3)
+        high = int(mid * 1.20)         # smaller upside than downside
     if low > mid:
         low = mid
     if high < mid:
         high = mid
 
-    # Clamp obvious hallucinations. If the mid is 3x+ the per-kind
-    # ceiling, force it down and force `confidence = low`. Don't just
-    # discard the row: a clamped estimate still gives the user a
-    # rough sense of relative scale, and the tooltip flags the low
-    # confidence.
-    ceiling  = _MAX_ESTIMATE_BY_KIND.get(item['kind'], 120_000_000)
-    conf     = (parsed.get('confidence') or 'medium').strip().lower()
-    clamped  = False
+    # Look up this platform's ceiling.
+    ceiling = None
+    for p in _platforms_for_kind(kind):
+        if p['key'] == key:
+            ceiling = p['ceiling']
+            break
+    if ceiling is None:
+        # Unknown platform key - drop it. Claude may have invented a
+        # platform we don't render.
+        return None
+
+    conf = (raw.get('confidence') or 'medium').strip().lower()
+    if conf not in ('high', 'medium', 'low'):
+        conf = 'medium'
+    clamped = False
     if mid > ceiling:
-        clamped_val = int(ceiling * _CLAMP_TO_FRACTION)
-        # Preserve rank order among clamped items by scaling proportional
-        # to how far past the ceiling they were, but never letting the
-        # clamped value exceed the ceiling itself.
-        mid  = min(ceiling, clamped_val)
+        # Bias down aggressively - hallucinations at this level
+        # discredit the whole panel.
+        mid  = int(ceiling * _CLAMP_TO_FRACTION)
         low  = min(low,  mid)
         high = min(high, ceiling)
         conf = 'low'
         clamped = True
 
+    note = (raw.get('note') or '').strip()
+    if clamped:
+        note = (note + ' [clamped: raw estimate exceeded platform '
+                        'sanity ceiling]').strip()
+
+    return {
+        'us_estimate':      mid,
+        'us_estimate_low':  low,
+        'us_estimate_high': high,
+        'confidence':       conf,
+        'note':             note,
+    }
+
+
+def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
+    """Normalize Claude's JSON output including per-platform block.
+    Returns the enriched item dict or None if nothing usable came back."""
+    kind = item['kind']
+
+    # 1. Per-platform block: validate + clamp each sub-entry.
+    by_platform_raw = parsed.get('by_platform') or {}
+    by_platform: dict[str, dict] = {}
+    if isinstance(by_platform_raw, dict):
+        for k, v in by_platform_raw.items():
+            k = (k or '').strip().lower()
+            if not k:
+                continue
+            block = _sanitize_platform_block(kind, k, v)
+            if block:
+                by_platform[k] = block
+
+    # 2. Aggregate: prefer Claude's top-level number, else sum the
+    #    per-platform mids. Aggregate can NEVER exceed the per-kind
+    #    ceiling (deliberately conservative - hitting the aggregate
+    #    ceiling is a very rare "peak week" event).
+    try:
+        agg_mid  = int(parsed.get('us_estimate') or 0)
+        agg_low  = int(parsed.get('us_estimate_low') or 0)
+        agg_high = int(parsed.get('us_estimate_high') or 0)
+    except Exception:
+        agg_mid = agg_low = agg_high = 0
+    if agg_mid <= 0 and by_platform:
+        agg_mid  = sum(b['us_estimate']      for b in by_platform.values())
+        agg_low  = sum(b['us_estimate_low']  for b in by_platform.values())
+        agg_high = sum(b['us_estimate_high'] for b in by_platform.values())
+    if agg_mid <= 0:
+        return None
+    if agg_low  <= 0: agg_low  = int(agg_mid * 0.75)
+    if agg_high <= 0: agg_high = int(agg_mid * 1.20)
+    if agg_low  > agg_mid:  agg_low  = agg_mid
+    if agg_high < agg_mid:  agg_high = agg_mid
+
+    ceiling = _MAX_ESTIMATE_BY_KIND.get(kind, 75_000_000)
+    conf    = (parsed.get('confidence') or 'medium').strip().lower()
+    if conf not in ('high', 'medium', 'low'):
+        conf = 'medium'
+    clamped = False
+    if agg_mid > ceiling:
+        agg_mid  = int(ceiling * _CLAMP_TO_FRACTION)
+        agg_low  = min(agg_low,  agg_mid)
+        agg_high = min(agg_high, ceiling)
+        conf = 'low'
+        clamped = True
+
     method = (parsed.get('method') or '').strip()
     if clamped:
-        method = (method + ' [clamped: raw estimate exceeded per-kind '
+        method = (method + ' [clamped: raw aggregate exceeded per-kind '
                             'sanity ceiling]').strip()
 
     return {
-        'kind':             item['kind'],
+        'kind':             kind,
         'display_title':    item['display_title'],
         'artist':           item.get('artist') or '',
         'chart_labels':     item.get('chart_labels') or [],
         'best_rank':        item.get('best_rank'),
         'image':            item.get('image'),
         'url':              item.get('url'),
-        'us_estimate':      mid,
-        'us_estimate_low':  low,
-        'us_estimate_high': high,
+        'us_estimate':      agg_mid,
+        'us_estimate_low':  agg_low,
+        'us_estimate_high': agg_high,
         'unit_label':       (parsed.get('unit_label') or '').strip()
-                              or 'weekly US audience',
+                              or _default_unit_for_kind(kind),
         'confidence':       conf,
         'method':           method,
         'sources':          [s for s in (parsed.get('sources') or [])
                               if isinstance(s, str)][:4],
+        'by_platform':      by_platform,
     }
 
 
@@ -566,31 +939,44 @@ def _research_all(items: list[dict]) -> dict[str, dict]:
 _TREND_STABLE_PCT = 0.05    # <5% change = stable arrow
 
 
+def _direction_and_delta(cur_mid: int, prev_mid: int) -> tuple[str, float]:
+    """Shared logic: given current + previous mid estimates, return
+    (direction, delta_pct). direction is 'up' / 'down' / 'stable' /
+    'new'. Missing prior -> 'new' with 0."""
+    if prev_mid <= 0 or cur_mid <= 0:
+        return 'new', 0.0
+    delta = (cur_mid - prev_mid) / prev_mid
+    if abs(delta) < _TREND_STABLE_PCT:
+        return 'stable', round(delta, 4)
+    return ('up' if delta > 0 else 'down'), round(delta, 4)
+
+
 def _attach_dod_trend(current: dict[str, dict],
                        yesterday: Optional[dict]) -> dict[str, dict]:
-    """Mutate `current` to add `delta_pct` and `direction` fields for
-    every key that also exists in yesterday's snapshot. Missing prior
-    values leave the fields at 0 / 'new'."""
+    """Mutate `current` to add `delta_pct` / `direction` at the
+    aggregate level AND on every per-platform sub-block. Missing
+    prior values leave the aggregate fields at 0 / 'new' and drop
+    trend fields off the platform blocks."""
     prior_items = ((yesterday or {}).get('items') or {})
     for key, cur in current.items():
         prev = prior_items.get(key) or {}
         prev_mid = prev.get('us_estimate') or 0
-        if prev_mid <= 0:
-            cur['delta_pct']  = 0.0
-            cur['direction']  = 'new'
-            cur['prev_estimate'] = None
-            continue
-        mid = cur.get('us_estimate') or 0
-        delta = (mid - prev_mid) / prev_mid if prev_mid else 0.0
-        if abs(delta) < _TREND_STABLE_PCT:
-            direction = 'stable'
-        elif delta > 0:
-            direction = 'up'
-        else:
-            direction = 'down'
-        cur['delta_pct']     = round(delta, 4)
+        cur_mid  = cur.get('us_estimate')  or 0
+        direction, delta = _direction_and_delta(cur_mid, prev_mid)
         cur['direction']     = direction
-        cur['prev_estimate'] = prev_mid
+        cur['delta_pct']     = delta
+        cur['prev_estimate'] = prev_mid if prev_mid > 0 else None
+
+        # Same for each per-platform block.
+        prev_by_plat = (prev.get('by_platform') or {})
+        for plat_key, plat_block in (cur.get('by_platform') or {}).items():
+            prev_plat = prev_by_plat.get(plat_key) or {}
+            p_prev_mid = prev_plat.get('us_estimate') or 0
+            p_cur_mid  = plat_block.get('us_estimate') or 0
+            pdir, pdelta = _direction_and_delta(p_cur_mid, p_prev_mid)
+            plat_block['direction']     = pdir
+            plat_block['delta_pct']     = pdelta
+            plat_block['prev_estimate'] = p_prev_mid if p_prev_mid > 0 else None
     return current
 
 
