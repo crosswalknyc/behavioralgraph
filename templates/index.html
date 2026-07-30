@@ -24313,13 +24313,14 @@
                chip changing color and drawing the eye. */
             #trendsIQView .tiq-streams-chip {
                 display: inline-flex; align-items: center; gap: 4px;
-                padding: 1px 8px; border-radius: 999px;
-                background: rgba(148,163,184,0.12);
                 color: var(--text-secondary);
-                border: 1px solid rgba(148,163,184,0.22);
                 font-size: 0.7rem; font-weight: 500;
                 white-space: nowrap; cursor: help;
             }
+            /* Streams/listeners/borrows estimate rendered as its own
+               3rd line beneath the title + artist on Music / Podcasts /
+               Books rows (no pill outline - see .tiq-streams-chip). */
+            #trendsIQView .tiq-row-streams { margin-top: 0.2rem; line-height: 1.2; }
             #trendsIQView .tiq-streams-chip .tiq-stream-arrow {
                 font-weight: 700;
             }
@@ -47136,7 +47137,6 @@
                                var streamsChip = _tiqStreamsBadge(it);
                                var metaParts = [];
                                if (it.artist) metaParts.push('<span>' + _tiqEsc(it.artist) + '</span>');
-                               if (streamsChip) metaParts.push(streamsChip);
                                return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                                       '<div class="tiq-row-body">' +
                                       '<div class="tiq-row-title">' + titleLine +
@@ -47144,6 +47144,7 @@
                                       _tiqActions('music', k, musicKey, musicKey, 'National') +
                                       '</div>' +
                                       (metaParts.length ? '<div class="tiq-row-meta">' + metaParts.join(' ') + '</div>' : '') +
+                                      (streamsChip ? '<div class="tiq-row-streams">' + streamsChip + '</div>' : '') +
                                       '</div></div>';
                            }).join('') +
                            '</div>';
@@ -47208,7 +47209,6 @@
                                var streamsChipPod = _tiqStreamsBadge(it);
                                var metaPartsPod = [];
                                if (it.artist) metaPartsPod.push('<span>' + _tiqEsc(it.artist) + '</span>');
-                               if (streamsChipPod) metaPartsPod.push(streamsChipPod);
                                return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                                       '<div class="tiq-row-body">' +
                                       '<div class="tiq-row-title">' + titleLine +
@@ -47216,6 +47216,7 @@
                                       _tiqActions('podcast', k, podKey, podKey, 'National') +
                                       '</div>' +
                                       (metaPartsPod.length ? '<div class="tiq-row-meta">' + metaPartsPod.join(' ') + '</div>' : '') +
+                                      (streamsChipPod ? '<div class="tiq-row-streams">' + streamsChipPod + '</div>' : '') +
                                       '</div></div>';
                            }).join('') +
                            '</div>';
@@ -47273,11 +47274,11 @@
                     return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                            '<div class="tiq-row-body">' +
                            '<div class="tiq-row-title">' + titleLine +
-                           streamsChipBook +
                            _tiqCrossPlatformBadge(it) +
                            _tiqActions('book', sourceSlug, rowKey, rowKey, 'National') +
                            '</div>' +
                            (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
+                           (streamsChipBook ? '<div class="tiq-row-streams">' + streamsChipBook + '</div>' : '') +
                            '</div></div>';
                 }).join('');
             }
@@ -47852,11 +47853,18 @@
             var watched = window.__trendsIQ.watchSet.has(wk);
             var esc = function(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); };
             var args = "'" + esc(kind) + "','" + esc(source) + "','" + esc(key) + "','" + esc(label || key) + "','" + esc(geo || 'National') + "'";
+            // Music / Podcasts / Books hide the watchlist star per design
+            // (2026-07-30) - those ranker rows read cleaner as title +
+            // artist + streams line only. The historical-arc button stays.
+            var k = String(kind || '').toLowerCase();
+            var showStar = (k !== 'music' && k !== 'podcast' && k !== 'book');
             return '<span class="tiq-actions">' +
-                   '<span class="tiq-action-btn' + (watched ? ' watched' : '') + '"' +
-                   ' title="' + (watched ? 'Remove from watchlist' : 'Add to watchlist') + '"' +
-                   ' onclick="event.stopPropagation(); tiqToggleWatch(' + args + ')">' +
-                   (watched ? '★' : '☆') + '</span>' +
+                   (showStar
+                       ? '<span class="tiq-action-btn' + (watched ? ' watched' : '') + '"' +
+                         ' title="' + (watched ? 'Remove from watchlist' : 'Add to watchlist') + '"' +
+                         ' onclick="event.stopPropagation(); tiqToggleWatch(' + args + ')">' +
+                         (watched ? '★' : '☆') + '</span>'
+                       : '') +
                    '<span class="tiq-action-btn" title="View historical arc"' +
                    ' onclick="event.stopPropagation(); tiqShowDrilldown(' + args + ')">📈</span>' +
                    '</span>';
