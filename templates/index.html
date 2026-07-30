@@ -45066,8 +45066,8 @@
                     all:         cards.trending_searches             || [],
                     by_category: cards.trending_searches_by_category || {},
                 })) +
-                _renderTIQPanel('people',    renderTIQWikipedia(cards.wikipedia_trending || []) +
-                                              renderTIQPeople(cards.trending_people || [])) +
+                _renderTIQPanel('people',    renderTIQPeopleMerged(cards.wikipedia_trending || [],
+                                                                     cards.trending_people || [])) +
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
                 _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
@@ -45362,30 +45362,32 @@
         }
 
         function _tiqExportRowsPeople(cards, tabLabel) {
+            // Export the SAME fused/ranked list the merged card renders,
+            // so a CSV download matches what the user sees on screen -
+            // one row per person, no duplicate wiki+gdelt entries. Uses
+            // the current sort mode ('combined' by default).
+            var wikiRows  = cards.wikipedia_trending || [];
+            var gdeltRows = cards.trending_people    || [];
+            var fused = _tiqFusePeople(wikiRows, gdeltRows);
+            var mode  = (window.__trendsIQ && window.__trendsIQ.peopleSort) || 'combined';
+            var sorted = _tiqSortMergedPeople(fused, mode);
             var out = [];
-            (cards.wikipedia_trending || []).forEach(function(r, i) {
-                out.push({
-                    Tab: tabLabel, Section: 'Wikipedia',
-                    Rank: i + 1,
-                    Title: r.title || '',
-                    Subtitle: r.description || '',
-                    Source: 'Wikipedia',
-                    Value: r.views_today || '',
-                    Unit: 'views today',
-                    Change: _tiqDirectionLabel(r),
-                    Why: r.why || '',
-                    URL: r.url || ''
-                });
-            });
-            (cards.trending_people || []).forEach(function(p, i) {
+            sorted.forEach(function(p, i) {
+                var mentionsProj  = (p.mentions_projected  != null) ? Number(p.mentions_projected)  : (Number(p.mentions)  || 0) * 329990000;
+                var pageviewsProj = (p.pageviews_projected != null) ? Number(p.pageviews_projected) : (Number(p.pageviews) || 0) * 329990000;
+                var viewsToday    = Number(p.views_today) || 0;
+                var value = mentionsProj || pageviewsProj || viewsToday || '';
+                var unit  = mentionsProj ? 'mentions (projected)'
+                                          : pageviewsProj ? 'pageviews (projected)'
+                                          : viewsToday ? 'views today' : '';
                 out.push({
                     Tab: tabLabel, Section: 'Trending people',
                     Rank: i + 1,
                     Title: p.name || '',
                     Subtitle: p.description || '',
-                    Source: 'GDELT',
-                    Value: p.mentions || '',
-                    Unit: 'mentions',
+                    Source: '',                 // Merged: no source split
+                    Value: value,
+                    Unit: unit,
                     Change: _tiqDirectionLabel(p),
                     Why: p.why || '',
                     URL: p.url || ''
@@ -46511,11 +46513,12 @@
 
         // Set the sort mode and re-render just the trending-people panel.
         window.setTrendsIQPeopleSort = function(mode) {
-            window.__trendsIQ.peopleSort = mode || 'mentions';
-            var rows = (window.__trendsIQ.lastData && window.__trendsIQ.lastData.cards
-                        && window.__trendsIQ.lastData.cards.trending_people) || [];
+            window.__trendsIQ.peopleSort = mode || 'combined';
+            var cards = (window.__trendsIQ.lastData && window.__trendsIQ.lastData.cards) || {};
+            var wikiRows  = cards.wikipedia_trending || [];
+            var gdeltRows = cards.trending_people    || [];
             var panel = document.querySelector('#trendsIQPanels .tiq-panel[data-tiq-panel="people"]');
-            if (panel) panel.innerHTML = renderTIQPeople(rows);
+            if (panel) panel.innerHTML = renderTIQPeopleMerged(wikiRows, gdeltRows);
         };
 
         // Renders the up/down/flat/new pill next to a person's name.
@@ -46852,6 +46855,224 @@
                         '</div>' +
                         whyHtml +
                         '</div>';
+            });
+            html += '</div></div>';
+            return html;
+        }
+
+        // Normalize a name for cross-source dedupe. Lowercases, strips
+        // punctuation/diacritics, and collapses whitespace so
+        // "Beyoncé Knowles-Carter" and "beyonce knowles carter" fuse
+        // into the same merged row.
+        function _tiqPersonKey(s) {
+            if (!s) return '';
+            var t = String(s).normalize ? String(s).normalize('NFKD') : String(s);
+            t = t.replace(/[\u0300-\u036f]/g, '');       // strip combining marks
+            t = t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+            return t.replace(/\s+/g, ' ');
+        }
+
+        // Fuse Wikipedia + GDELT trending-people signals into a single
+        // ranked list. Dedupes by normalized name. Score = sum of
+        // inverse ranks across both sources (top of either list = 1.0,
+        // #10 = 0.1), with a 1.5x boost when a person appears in BOTH -
+        // cross-signal presence is a much stronger cultural moment
+        // than either list alone. No per-row source chips: readers see
+        // one authoritative "who is trending" ranking, not two
+        // competing sub-lists.
+        function _tiqFusePeople(wikiRows, gdeltRows) {
+            var byKey = Object.create(null);
+            (wikiRows || []).forEach(function(r, i) {
+                var key = _tiqPersonKey(r.title);
+                if (!key) return;
+                if (!byKey[key]) byKey[key] = { _key: key };
+                byKey[key]._wiki = r;
+                byKey[key]._wikiRank = i;
+            });
+            (gdeltRows || []).forEach(function(p, i) {
+                var key = _tiqPersonKey(p.name);
+                if (!key) return;
+                if (!byKey[key]) byKey[key] = { _key: key };
+                byKey[key]._gdelt = p;
+                byKey[key]._gdeltRank = i;
+            });
+            var out = [];
+            Object.keys(byKey).forEach(function(k) {
+                var e = byKey[k];
+                var w = e._wiki, g = e._gdelt;
+                var wRank = (typeof e._wikiRank  === 'number') ? e._wikiRank  : null;
+                var gRank = (typeof e._gdeltRank === 'number') ? e._gdeltRank : null;
+                var wScore = (wRank != null) ? 1 / (wRank + 1) : 0;
+                var gScore = (gRank != null) ? 1 / (gRank + 1) : 0;
+                var score  = wScore + gScore;
+                if (wRank != null && gRank != null) score *= 1.5;
+
+                // Prefer GDELT's canonical name shape (usually
+                // "First Last" already; Wikipedia titles sometimes
+                // include disambiguation like "John Smith (director)").
+                var displayName = (g && g.name) || (w && w.title) || '';
+                // Strip parenthetical disambiguation on wiki-only rows.
+                if (!g && displayName) {
+                    displayName = displayName.replace(/\s*\([^)]*\)\s*$/, '').trim();
+                }
+
+                // Trend pill: GDELT has richer signal (mentions_change_pct
+                // + rank_delta). Wiki-only rows synthesize a compatible
+                // trend shape from delta_pct / is_new so we can reuse
+                // _tiqRenderPersonTrend unchanged.
+                var trendSource = g;
+                if (!trendSource && w) {
+                    var t = null, pct = null;
+                    if (w.is_new) t = 'new';
+                    else if (typeof w.delta_pct === 'number' && isFinite(w.delta_pct)) {
+                        pct = w.delta_pct;
+                        if (Math.round(pct * 100) > 0) t = 'rising';
+                        else if (Math.round(pct * 100) < 0) t = 'falling';
+                        else t = 'stable';
+                    }
+                    if (t) {
+                        trendSource = { trend: t, mentions_change_pct: pct,
+                                         trend_baseline_day: 'yesterday' };
+                    }
+                }
+
+                // Watchlist key: prefer 'gdelt' so watchlists already
+                // saved against the old separate GDELT card keep working.
+                // Wiki-only entries fall back to 'wikipedia'.
+                var actionsSource = g ? 'gdelt' : 'wikipedia';
+
+                var merged = {
+                    name:       displayName,
+                    _key:       k,
+                    _score:     score,
+                    _wikiRank:  wRank,
+                    _gdeltRank: gRank,
+                    thumbnail:  (w && w.thumbnail) || (g && g.thumbnail) || '',
+                    url:        (w && w.url) || (g && g.url) || '',
+                    // GDELT signal
+                    mentions:            g ? g.mentions            : undefined,
+                    mentions_projected:  g ? g.mentions_projected  : undefined,
+                    pageviews:           g ? g.pageviews           : undefined,
+                    pageviews_projected: g ? g.pageviews_projected : undefined,
+                    context_meta:        g ? g.context_meta        : undefined,
+                    context:             g ? g.context             : undefined,
+                    // Wikipedia signal
+                    views_today:  w ? w.views_today  : undefined,
+                    views_prior:  w ? w.views_prior  : undefined,
+                    delta_pct:    w ? w.delta_pct    : undefined,
+                    is_new:       w ? w.is_new       : undefined,
+                    description: (g && g.description) || (w && w.description) || '',
+                    // Merged why: Claude one-liner from either source wins.
+                    why: (g && g.why) || (w && w.why) || '',
+                    // Trend shape (for _tiqRenderPersonTrend)
+                    trend:                trendSource ? trendSource.trend                : undefined,
+                    mentions_change_pct:  trendSource ? trendSource.mentions_change_pct  : undefined,
+                    rank_delta:           trendSource ? trendSource.rank_delta           : undefined,
+                    trend_baseline_day:   trendSource ? trendSource.trend_baseline_day   : undefined,
+                    // Cross-platform badge: whichever source flagged it wins.
+                    cross_platform:         (g && g.cross_platform) || (w && w.cross_platform) || false,
+                    cross_platform_sources: (g && g.cross_platform_sources) ||
+                                             (w && w.cross_platform_sources) || [],
+                    cross_platform_count:   (g && g.cross_platform_count) ||
+                                             (w && w.cross_platform_count) || 0,
+                    _actionsSource: actionsSource
+                };
+                out.push(merged);
+            });
+            return out;
+        }
+
+        // Sort the fused people list. Adds a 'combined' mode (the new
+        // default) on top of the existing mentions / pageviews / name
+        // options handled by _tiqSortPeople.
+        function _tiqSortMergedPeople(rows, mode) {
+            if (mode === 'combined' || !mode) {
+                var arr = (rows || []).slice();
+                arr.sort(function(a, b) {
+                    var d = (b._score || 0) - (a._score || 0);
+                    if (d !== 0) return d;
+                    // Tiebreak: better rank in either source wins.
+                    var ar = Math.min(
+                        a._wikiRank  == null ? 1e9 : a._wikiRank,
+                        a._gdeltRank == null ? 1e9 : a._gdeltRank
+                    );
+                    var br = Math.min(
+                        b._wikiRank  == null ? 1e9 : b._wikiRank,
+                        b._gdeltRank == null ? 1e9 : b._gdeltRank
+                    );
+                    return ar - br;
+                });
+                return arr;
+            }
+            return _tiqSortPeople(rows, mode);
+        }
+
+        // Merged Trending People card. Combines Wikipedia's pageview
+        // signal with GDELT's news-mention signal into ONE ranked list -
+        // no per-row source chips, no side-by-side sub-cards. Rows are
+        // scored by inverse rank across both sources with a 1.5x boost
+        // for cross-signal presence. Renders as a scrollable card
+        // sized to match the top-of-tab cards.
+        function renderTIQPeopleMerged(wikiRows, gdeltRows) {
+            var fused = _tiqFusePeople(wikiRows, gdeltRows);
+            if (!fused.length) {
+                return '<div class="tiq-empty">No trending people surfaced for this filter yet.</div>';
+            }
+            var mode = window.__trendsIQ.peopleSort || 'combined';
+            var sorted = _tiqSortMergedPeople(fused, mode);
+            var opts = [
+                { v: 'combined',  label: 'Combined score (default)' },
+                { v: 'mentions',  label: 'Mentions (high to low)' },
+                { v: 'pageviews', label: 'Pageviews (high to low)' },
+                { v: 'name',      label: 'Name (A to Z)' },
+            ].map(function(o) {
+                var sel = (o.v === mode) ? ' selected' : '';
+                return '<option value="' + o.v + '"' + sel + '>' + o.label + '</option>';
+            }).join('');
+            var html = '<div class="tiq-card"><h4>👤 Trending people</h4>' +
+                       '<div class="tiq-card-sub" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">' +
+                       '<span>Who is trending across news mentions and search interest. Projected to US gen pop (329.99M) where available.</span>' +
+                       '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;opacity:0.85;">' +
+                         'Sort:&nbsp;' +
+                         '<select onchange="setTrendsIQPeopleSort(this.value)" ' +
+                                 'style="background:#111827;color:#fff;border:1px solid #374151;' +
+                                        'border-radius:6px;padding:4px 8px;font-size:12px;">' +
+                           opts +
+                         '</select>' +
+                       '</span>' +
+                       '</div>' +
+                       '<div class="tiq-headline-list" style="max-height:640px;overflow-y:auto;">';
+            sorted.slice(0, 60).forEach(function(p, i) {
+                var mentionsProj  = (p.mentions_projected  != null) ? Number(p.mentions_projected)  : (Number(p.mentions)  || 0) * 329990000;
+                var pageviewsProj = (p.pageviews_projected != null) ? Number(p.pageviews_projected) : (Number(p.pageviews) || 0) * 329990000;
+                var viewsToday    = Number(p.views_today) || 0;
+                var trendPill     = _tiqRenderPersonTrend(p);
+                var crossPill     = _tiqCrossPlatformBadge(p);
+                var whyHtml       = _tiqPersonWhyLine(p);
+                var thumb = '<div class="tiq-people-image" style="' +
+                            _tiqMusicImgStyle(p.thumbnail || '') + '"></div>';
+                // Meta line: mentions from GDELT + pageviews (projected
+                // GDELT or raw Wikipedia views for wiki-only rows). Only
+                // shows the segments we have data for.
+                var metaBits = [];
+                if (mentionsProj > 0)  metaBits.push(_tiqNum(mentionsProj)  + ' mentions');
+                if (pageviewsProj > 0) metaBits.push(_tiqNum(pageviewsProj) + ' pageviews');
+                else if (viewsToday > 0) metaBits.push(_tiqNum(viewsToday) + ' views today');
+                var nameNode = p.url
+                    ? '<a href="' + _tiqEsc(p.url) + '" target="_blank" rel="noopener">' + _tiqEsc(p.name) + '</a>'
+                    : _tiqEsc(p.name);
+                html += '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
+                        thumb +
+                        '<div class="tiq-row-body">' +
+                        '<div class="tiq-row-title">' + nameNode +
+                        (trendPill ? ' ' + trendPill : '') +
+                        crossPill +
+                        _tiqActions('person', p._actionsSource || 'gdelt',
+                                     p.name, p.name, 'National') +
+                        '</div>' +
+                        whyHtml +
+                        (metaBits.length ? '<div class="tiq-row-meta">' + metaBits.join(' &middot; ') + '</div>' : '') +
+                        '</div></div>';
             });
             html += '</div></div>';
             return html;
@@ -47716,8 +47937,8 @@
                     all:         cards.trending_searches             || [],
                     by_category: cards.trending_searches_by_category || {},
                 })) +
-                _renderTIQPanel('people',    renderTIQWikipedia(cards.wikipedia_trending || []) +
-                                              renderTIQPeople(cards.trending_people || [])) +
+                _renderTIQPanel('people',    renderTIQPeopleMerged(cards.wikipedia_trending || [],
+                                                                     cards.trending_people || [])) +
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
                 _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
@@ -135399,140 +135620,4 @@
          corner and had no clear product home. Entire block is preserved
          here as an HTML comment so we can restore it (uncomment the
          block below) without re-deriving the markup, status menu, group
-         chat handler, etc. The .chat-widget* CSS in the <style> block
-         and the toggleChatWindow / setMyChatStatus / sendChatMessage JS
-         helpers are intentionally LEFT IN PLACE - they no-op safely
-         when the DOM elements are absent, and keeping them means the
-         restore is a single uncomment.
-    <div class="chat-widget" id="chatWidget">
-        <button class="chat-widget-btn" onclick="toggleChatWindow()" id="chatWidgetBtn">
-            CHAT
-            <span class="unread-badge" id="chatUnreadBadge" style="display: none;">0</span>
-        </button>
-        <div class="chat-window" id="chatWindow">
-            <div class="chat-header">
-                <h3>Team Chat</h3>
-                <div class="chat-header-actions" style="display: flex; align-items: center; gap: 0.5rem;">
-                    <div class="chat-status-dropdown" style="position: relative;">
-                        <button id="chatStatusBtn" onclick="toggleChatStatusMenu()" title="Your status" style="background: transparent; border: none; cursor: pointer; padding: 0.25rem; display: flex; align-items: center;">
-                            <span id="chatMyStatusIndicator" class="status-indicator available" style="width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--bg-card);"></span>
-                        </button>
-                        <div id="chatStatusMenu" style="display: none; position: absolute; bottom: 100%; right: 0; margin-bottom: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 140px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); z-index: 10;">
-                            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Your status</div>
-                            <button onclick="setMyChatStatus('available'); document.getElementById('chatStatusMenu').style.display='none';" style="width: 100%; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: transparent; border: none; color: var(--text-primary); cursor: pointer; font-size: 0.85rem; border-radius: 4px; text-align: left;">
-                                <span class="status-indicator available" style="width: 10px; height: 10px;"></span> Available
-                            </button>
-                            <button onclick="setMyChatStatus('busy'); document.getElementById('chatStatusMenu').style.display='none';" style="width: 100%; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: transparent; border: none; color: var(--text-primary); cursor: pointer; font-size: 0.85rem; border-radius: 4px; text-align: left;">
-                                <span class="status-indicator busy" style="width: 10px; height: 10px;"></span> Busy
-                            </button>
-                        </div>
-                    </div>
-                    <button onclick="startNewGroupChat()" title="New Group Chat">+G</button>
-                    <button onclick="toggleChatWindow()" title="Minimize">-</button>
-                </div>
-            </div>
-            <div class="chat-body">
-                <div class="chat-contacts" id="chatContactsView">
-                    <div class="chat-contacts-search">
-                        <input type="text" id="chatSearchInput" placeholder="Search team members..." oninput="filterChatContacts(this.value)">
-                    </div>
-                    <div class="chat-new-group">
-                        <button onclick="startNewGroupChat()">+ New Group Chat</button>
-                    </div>
-                    <div id="chatContactsList"></div>
-                </div>
-                <div class="chat-conversation" id="chatConversationView">
-                    <div class="chat-conversation-header">
-                        <button class="chat-back-btn" onclick="backToChatContacts()">&lt;</button>
-                        <div class="chat-conversation-avatar" id="chatConvoAvatar">
-                            <div class="avatar-initials">?</div>
-                        </div>
-                        <span class="chat-conversation-name" id="chatConvoName">Chat</span>
-                    </div>
-                    <div class="chat-messages" id="chatMessages"></div>
-                    <div class="chat-input-area">
-                        <input type="text" id="chatMessageInput" placeholder="Type a message..." onkeypress="handleChatKeyPress(event)">
-                        <button class="chat-send-btn" onclick="sendChatMessage()">send</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    -->
-    
-    <!-- Left-justified footer with data source - hidden 2026-06-03 because the
-         fixed-position bar was overlaying the bottom of dashboard views and
-         clipping content (request: "remove this navy bar so I can see more").
-         Kept in DOM (display:none) so we can flip it back on by removing the
-         style if attribution is needed again. -->
-    <footer class="app-footer" style="display: none;">
-        <img src="/static/crosswalk-logo-small.png" alt="Crosswalk" class="app-footer-logo" onerror="this.src='/static/crosswalk-logo.png'; this.style.height='24px';">
-        <span class="app-footer-text">Data Source: Crosswalk's Intelligence Platform, a 10M Gen Pop Digital Behavioral Panel</span>
-    </footer>
-
-    <!-- Mobile-only: "Data & Analysis Tools" dropdown wiring (added 2026-07-28).
-         Builds the dropdown from the live tab buttons and reuses their click
-         handlers, so tab switching + feature/access gating behave identically.
-         Globals are assigned to window so the inline onfocus/onchange resolve. -->
-    <script id="mobile-nav-enhancements">
-        (function () {
-            window._buildMobileToolsNav = function () {
-                var sel = document.getElementById('mobileToolsNav');
-                if (!sel) return;
-                var groups = document.querySelectorAll('#toolbarContent .dashboard-tabs');
-                var groupLabels = ['Data', 'Analysis Tools'];
-                var btns = [];
-                var html = '<option value="" selected disabled>Data &amp; Analysis Tools</option>';
-                for (var g = 0; g < groups.length; g++) {
-                    var groupBtns = groups[g].querySelectorAll('.tab-btn');
-                    var opts = '';
-                    for (var i = 0; i < groupBtns.length; i++) {
-                        var b = groupBtns[i];
-                        if (b.style.display === 'none') continue; // access-gated / hidden
-                        var labelEl = b.querySelector('.tab-label');
-                        var txt = ((labelEl ? labelEl.textContent : b.textContent) || '').trim();
-                        if (!txt) continue;
-                        opts += '<option value="' + btns.length + '">' + txt + '</option>';
-                        btns.push(b);
-                    }
-                    if (opts) {
-                        html += '<optgroup label="' + (groupLabels[g] || 'Tools') + '">' + opts + '</optgroup>';
-                    }
-                }
-                window._mobileToolsBtns = btns;
-                sel.innerHTML = html;
-                sel.selectedIndex = 0;
-            };
-            window._onMobileToolsNav = function (sel) {
-                var idx = parseInt(sel.value, 10);
-                var btns = window._mobileToolsBtns || [];
-                if (!isNaN(idx) && btns[idx]) { btns[idx].click(); }
-                sel.selectedIndex = 0; // keep the label reading "Data & Analysis Tools"
-            };
-            // Make every "Select Profile" sidebar a collapsible accordion on
-            // phones. Gated to mobile so the desktop DOM is never touched.
-            window._initMobileSidebarCollapse = function () {
-                document.querySelectorAll('.persistent-sidebar').forEach(function (sb) {
-                    if (sb._mobileCollapseInit) return;
-                    var header = sb.querySelector('.sidebar-header-section');
-                    var h3 = header && header.querySelector('h3');
-                    if (!h3) return;
-                    sb.classList.add('mobile-collapsible', 'mobile-collapsed');
-                    h3.addEventListener('click', function () {
-                        sb.classList.toggle('mobile-collapsed');
-                    });
-                    sb._mobileCollapseInit = true;
-                });
-            };
-            var _isMobileViewport = function () {
-                return !window.matchMedia || window.matchMedia('(max-width: 768px)').matches;
-            };
-            document.addEventListener('DOMContentLoaded', function () {
-                try { window._buildMobileToolsNav(); } catch (e) {}
-                try { if (_isMobileViewport()) window._initMobileSidebarCollapse(); } catch (e) {}
-            });
-        })();
-    </script>
-
-</body>
-</html>
+         chat handler, etc. The .chat-widg
